@@ -382,6 +382,18 @@ Speculative plays (SP3 inference-time settling) run only as slack interstitials
 
 ## §10 — Completion Criteria for TODO13b
 
+> **Status (2026-09-07, post Session 6):** 1 ✅ (two-sided verdict,
+> confound resolved), 2 ✅ (SP6 measured; falsified at this budget —
+> muon keeps the arm), 4 ✅ (ψ closed-form boundary mapped — the
+> allowed branch), 5 ✅ (depth 32 @ 0.867 + zero-shot LR transfer
+> confirmed), 6 ✅ (SP2 promoted, geometry-boundary revised).
+> **3: BUILT and adjudicated** — the transformer composition exists,
+> the O(1)-memory half holds (P4c PASS), the LM-learning half is
+> FALSIFIED at probe scale (mechanism, not budget; defect trail +
+> retry levers recorded, the optimizer lever the most promising).
+> TODO13b's completion criteria are otherwise met; the retry is a
+> successor plan's first item, not a TODO13b item.
+
 1. **Bombshell verdict rendered** — verified against a healthy baseline,
    matched-step, multi-seed, pinned (or killed with the mechanism named).
    *(Expected, per §0: sick baseline, honest re-promotion.)*
@@ -828,4 +840,150 @@ d8 EMA with 3× budget (450 steps, seeds 0–2): β=0.99 flat (0.229),
 at 0.40). The d8 frontier is budget-starved, not walled: longer
 training + slower EMA both trend up. Proper d8 campaign = budget×β
 grid with ≥3 seeds — Tier-2, not urgent.
+
+### 2026-09-07 — Session 6: W2 P4 transformer composition BUILT; P4 FALSIFIED (mechanism, not budget); P4c memory ratchet PASS
+
+**The build landed** (`LocalContrastiveCredit` tf path,
+`computronium/ontology/credit.py`; probe
+`scripts/probes/w2_p4_transformer_local.py`): per-layer targets on
+`TransformerGeometry` with zero global signals — credit-owned FIXED
+random label projection injected at the embedding output (pos = true
+next tokens, neg = batch-rolled); every linear (embed, per-block
+in_proj/out_proj/ffn1/ffn2) descends a softplus-gated goodness
+contrast on its own output via no-grad prefix recompute (O(1) peak,
+sequential_lr step-views by param name); head trains local
+per-position CE on the LABEL-FREE stream (train/eval distribution
+match — never the true label at eval). Full pipeline dispatch via
+`_tf_gradient_if_applicable`; head bias-free → bias hook no-ops.
+Targeted credit/compose/checkpoint suite + wiring locks green; ruff
+now BELOW baseline on credit.py (7 legacy findings, none new).
+
+**Results (d128/L2/H4, ctx 32, V 65, seeds 0–2; ~35 min CPU):**
+
+| arm | top-1 | val CE |
+|---|---|---|
+| unigram anchor | 0.153 | ~3.4 |
+| local_contrastive 600 steps | 0.129–0.146 | 3.40–3.43 |
+| **bp reference 600 steps (same cell)** | **0.152** | **3.329** |
+| **bp reference 3000 steps** | **0.219** | **2.936** |
+| local_contrastive 3000 steps | 0.109 | 3.686 (drifting down) |
+| shuffled-label control 600 | 0.149 | 3.354 |
+| **P4c memory: local peak 0 KiB vs bp 256 KiB** | — | **PASS** |
+
+- **Unigram anchor correction:** this vocab's unigram top-1 is 0.153,
+  not the 9.4% quoted in the plan (different probe's vocab). Bar
+  re-anchored; all comparisons above use 0.153.
+- **P4 FALSIFIED, mechanism not budget:** at 600 steps NOTHING
+  (including bp) is out of the marginal regime — parity. At 3000
+  steps bp learns context (0.219) while local_contrastive drifts
+  DOWN (0.109, CE rising monotonically) — the goodness dynamics
+  actively destroy readout-useful features at this scale. The
+  pre-registered falsification clause ("per-layer targets do not
+  transfer to the transformer at probe scale") triggers; W2 P4 is
+  the boundary, named with a full defect trail.
+- **P4c ✅ — the F5 transformer ratchet holds:** O(1) peak is
+  structural (per-layer graphs built and released; 0 saved bytes vs
+  bp's 256 KiB). The memory half of criterion 3 is real; the learning
+  half failed honestly.
+- **Defect trail (all measured, load-bearing for any retry):**
+  (1) RMS-normalizing the goodness stream pins G==1 for both phases —
+  structurally zero contrast; measure on the raw stream. (2) A
+  LEARNED label injection is runaway positive feedback (norm 8→349 in
+  200 steps); the label projection must be FIXED. (3) pe (±1 entries)
+  swamps the label contrast in G (~1.0 vs ~0.008) — exclude pe from
+  the embed goodness. (4) The MLP raw-CE readout contract does not
+  transfer (head raw grad RMS ~1e-5 vs hidden ~0.65 — ~5e4
+  imbalance); the head rides the EMA-normalized axis. (5) Train/eval
+  injection mismatch — readout trains label-free (fixed, though
+  immaterial at this signal scale).
+- **Surviving mechanism hypothesis:** the fixed injection (RMS 0.088)
+  modulates a 0.79-RMS stream by ~1% — the contrast direction is
+  noise-dominated, and unit-RMS EMA-normalized hidden steps random-
+  walk features faster than the signal organizes them.
+
+**Queued retry levers (none claimed):** (a) gain-matched per-block
+label re-injection; (b) **the SP2/D17 lesson is the big one** — local
+credit needed the right optimizer (Muon rescues weak credit ~2×);
+a Muon/OrthoAdam update on these pseudo-gradients is the obvious
+lever (per-step SVD on 128×512 matrices — GPU cell); (c) normalized
+streams at matched contrast scale.
+
+### 2026-09-07 — Session 5: W3 closed-form ψ landed — boundary EXACTLY mapped; W4 depth frontier + zero-shot LR transfer CONFIRMED
+
+**W3 (`scripts/probes/w3_closed_form_psi.py`, ~2.6 s CPU; pre-registered).**
+Two artifacts landed:
+
+1. **Pipeline contract change (the D22 root-cause repair):**
+   `run_train_step` now steps ψ on the NUDGED settle when the primitive
+   declares `psi_phase = "nudged"`; z then carries the target AND the
+   pre-readout stream `h` (`computronium/core/pipeline.py::_step_psi`).
+   **Latent P-axis defect fixed en route:** ψ stepped inside
+   `run_train_step` was never written back to the caller's dict — the
+   P-axis silently reset every call. In-place sync added; 78 pipeline/
+   plasticity tests + 5 z3/pareto integration tests green.
+2. **`ClosedFormRidgePlasticity`** (`core/plasticity/closed_form.py`,
+   exported via root `_LAZY`/`__all__` + ontology.plasticity): ridge
+   sufficient statistics G=ΣHᵀH, C=ΣHᵀ(onehot−softmax(post))
+   accumulated per episode; ψ = M = (G+λI)⁻¹C solved exactly
+   (bias-augmented column). No gradients anywhere.
+
+**Verdict (d22 skeleton, parity→last-symbol, stage A 0.977):**
+ψ-only B 0.644→**0.699** (θ bitwise frozen, SHA-verified, through the
+REAL pipeline with step_size=0); fine-tune 0.992 @112 episodes;
+retention ψ 0.973 ≈ null 0.973 ≫ fine-tune 0.660.
+
+- **P1 falsified (strong form):** 0.699 is EXACTLY the frozen-feature
+  linear-probe ceiling — the ridge solve IS that probe. Closed-form ψ
+  = instant optimal linear readout on frozen features; it cannot
+  synthesize features. The A→B switch needs feature reorganization,
+  which requires θ change.
+- **P2 falsified:** ψ never reaches 0.984; bounded-instant vs
+  slow-unbounded.
+- **P3 ✅ decisively:** zero forgetting by construction, as predicted.
+- **Promotable (bounded) finding:** "a closed-form ridge ψ recovers
+  exactly the frozen-feature linear-probe ceiling — no more. It
+  composes with, and cannot substitute for, θ plasticity."
+- **Open lever (queued, not claimed):** hidden-layer closed-form ψ
+  corrections (per-layer, W2-style recompute) — the readout-only law
+  can't reorganize features; a hidden-layer ψ might.
+
+**W4 (`scripts/probes/w4_depth_frontier.py`, ~25 min CPU; pre-registered).**
+D14 jpc-faithful regime (width 128 residual, beta 10, gamma 0.1,
+150 batches), mupc × OrthoAdam (SVD, ortho_lr on its own axis):
+
+| depth | mupc×ortho (zero-shot lr 1e-3, seeds 0–2) | control |
+|---|---|---|
+| 8 | 0.928 (lr pick) | — |
+| 20 | **0.920** | D14 mupc+Adam 0.78 |
+| 32 | **0.867** | mupc+Adam 0.420; ortho lr 3e-3 0.689 |
+| 50 | 0.397 (memorization, train ~0.97) | — |
+
+- **P1 ✅ at 32** (mean 0.867 ≥ 0.8); **the frontier's real limit is
+  between 32 and 50** (depth-50 collapse is memorization, not
+  divergence). Depth-100 compute gate stayed closed.
+- **P2 ✅ DECISIVELY — "tune once, run anywhere" is REAL:** the
+  depth-8-selected lr, run unchanged, is best at 20 AND 32 — it even
+  BEATS the per-depth retune at 32 (0.867 vs 0.689). S1's headline.
+- **P3 ✗:** default-init × OrthoAdam at 32 = 0.450 — the D16 rescue is
+  depth-bounded below 32; μPC init stays load-bearing at depth.
+- Also re-confirmed: OrthoAdam lifts depth-20 0.78→0.92; Adam
+  depth-fragility reproduced (0.420 at 32).
+
+**New improvement opportunities:**
+1. **Hidden-layer closed-form ψ** (W3 lever): per-layer ridge
+   corrections on recomputed hidden streams — the only route to
+   feature-synthesizing gradient-free adaptation. Natural W2×W3
+   composition; medium build.
+2. **Depth-50 frontier autopsy:** memorization under 150-batch budget;
+   longer budget or stronger reg (beta sweep) at depth 50 would locate
+   whether the wall is data-budget or architecture. Cheap-ish (CPU).
+3. **Zero-shot transfer breadth:** does the depth-8 lr also transfer
+   to width changes (64→128→256)? Same probe, one axis. Ties W4 to
+   μPC's paper claim directly.
+4. **W2 P4 (transformer composition) remains the main Tier-1 build
+   ahead** — needs the label-channel design decision (fixed-shape
+   transformer weights vs a credit-owned label-embedding matrix at the
+   embedding output). F5 re-pin rides on it.
+5. **D17 late-regime 3M-token cell** (gated): only if a headline needs
+   the >3M side of the crossover (Session-4 open axis).
 

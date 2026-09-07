@@ -96,6 +96,44 @@ def _scalar(value: Tensor | float) -> float:
     return value.item() if isinstance(value, Tensor) else float(value)
 
 
+def _step_psi(
+    plasticity: object,
+    psi: dict[str, Tensor],
+    settled: SystemState,
+    x: Tensor,
+    y: Tensor,
+    phase: Phase,
+    credit: CreditAssignment,
+    context: object | None,
+) -> dict[str, Tensor]:
+    """One P-axis step (see ``run_train_step`` — the ψ contract)."""
+    psi_phase = getattr(plasticity, "psi_phase", None)
+    step_here = (
+        phase is Phase.NUDGED if psi_phase == "nudged" else phase is credit.phases[0]
+    )
+    if not step_here or context is None:
+        return psi
+    from computronium.state import CompositeState
+
+    acts = settled.activations
+    act_list = acts if isinstance(acts, list) else None
+    post = acts[-1] if isinstance(acts, list) else acts
+    activity: dict[str, object] = {"x": x, "y": post}
+    if act_list is not None and len(act_list) >= 2:
+        activity["h"] = act_list[-2]
+    if phase is Phase.NUDGED:
+        activity["target"] = y
+    z = CompositeState(activity=activity, plastic=psi, substrate={})
+    new_psi = plasticity.step(psi, z, context)
+    # Writeback: the caller's psi dict must observe the stepped state
+    # across episodes (plasticity.step may return a fresh dict — without
+    # the in-place sync the P-axis silently resets every call).
+    if new_psi is not psi:
+        psi.clear()
+        psi.update(new_psi)
+    return new_psi
+
+
 def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
@@ -139,20 +177,14 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
             target = y if phase is Phase.NUDGED else None
             settled = dynamics.settle(state, geometry, substrate, target=target)
 
-            # P-axis: ψ steps ONCE per episode, on the first phase's settled
-            # activity (real fast-weight content: the Hebbian outer over
-            # settled pre/post, not the raw target). Modulation applies to
-            # every phase after the step.
+            # P-axis: ψ steps ONCE per episode. Default phase is the credit's
+            # first phase (target-free settled activity); a primitive may
+            # declare ``psi_phase = "nudged"`` to step on the NUDGED settle
+            # instead — the z state then also carries the target (D22's
+            # missing-supervised-term: no ψ law can consume a loss term it
+            # never sees). Modulation applies to every phase after the step.
             if plasticity is not None and psi is not None:
-                if phase is credit.phases[0] and context is not None:
-                    from computronium.state import CompositeState
-
-                    acts = settled.activations
-                    post = acts[-1] if isinstance(acts, list) else acts
-                    z = CompositeState(
-                        activity={"x": x, "y": post}, plastic=psi, substrate={}
-                    )
-                    psi = plasticity.step(psi, z, context)
+                psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
                 modulate = getattr(plasticity, "modulate", None)
                 if modulate is not None:
                     settled.activations = modulate(settled.activations, psi)

@@ -7,6 +7,7 @@ to provide a unified ontology import surface.
 
 # Re-export from computronium.state (core joint primitives)
 # Re-export from computronium.core.plasticity (implementations)
+from computronium.core.plasticity.closed_form import ClosedFormRidgePlasticity
 from computronium.core.plasticity.fast_weights import FastWeightPlasticity
 from computronium.core.plasticity.routing import RoutingPlasticity
 from computronium.core.plasticity.rule_state import RuleStatePlasticity
@@ -25,6 +26,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "PlasticityPrimitive",
     "TransitionFn",
     # Implementations from core.plasticity
+    "ClosedFormRidgePlasticity",
     "FastWeightPlasticity",
     "RoutingPlasticity",
     "RuleStatePlasticity",

@@ -7,6 +7,11 @@ from computronium.core.joint.transition import (
     PlasticityConfig,
     PlasticityPrimitive,
 )
+from computronium.core.plasticity.closed_form import (
+    ClosedFormRidgeConfig,
+    ClosedFormRidgePlasticity,
+    create_closed_form_ridge_plasticity,
+)
 from computronium.core.plasticity.fast_weights import (
     FastWeightPlasticity,
     FastWeightPlasticityConfig,
@@ -32,6 +37,10 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "PlasticityConfig",
     "PlasticityPrimitive",
     "NullPlasticity",
+    # Closed Form (W3 — ψ computed, not trained)
+    "ClosedFormRidgePlasticity",
+    "ClosedFormRidgeConfig",
+    "create_closed_form_ridge_plasticity",
     # Routing
     "RoutingPlasticity",
     "RoutingPlasticityConfig",

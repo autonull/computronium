@@ -204,6 +204,7 @@ if TYPE_CHECKING:
         TransformerGeometry,
     )
     from computronium.ontology.plasticity import (
+        ClosedFormRidgePlasticity,
         FastWeightPlasticity,
         RoutingPlasticity,
         RuleStatePlasticity,
@@ -349,6 +350,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     ),
     "TileGeometry": ("computronium.ontology.geometry", "TileGeometry"),
     # Plasticity Primitives (from computronium.state)
+    "ClosedFormRidgePlasticity": (
+        "computronium.ontology.plasticity",
+        "ClosedFormRidgePlasticity",
+    ),
     "FastWeightPlasticity": (
         "computronium.ontology.plasticity",
         "FastWeightPlasticity",
@@ -507,6 +512,7 @@ __all__ = [
     "AnalogSubstrate",
     "AttentionGeometry",
     "BackpropCredit",
+    "ClosedFormRidgePlasticity",
     "CompositeState",
     "ComputroniumLinear",
     "ConvGeometry",
@@ -535,9 +541,9 @@ __all__ = [
     "LocalContrastiveCredit",
     "LocalGoodnessCredit",
     "LongestPathDepth",
+    "MeanNormUpdate",
     "MemristiveSubstrate",
     "ModelConfig",
-    "MeanNormUpdate",
     "NeuromorphicSubstrate",
     "NullPlasticity",
     "OpticalSubstrate",

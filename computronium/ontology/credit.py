@@ -6,7 +6,7 @@ import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -16,7 +16,7 @@ from computronium.ontology.utils import _learnable_weight_names
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from computronium.ontology.geometry import Geometry
+    from computronium.ontology.geometry import Geometry, TransformerGeometry
     from computronium.ontology.system import SystemState
 
 
@@ -1037,7 +1037,9 @@ class LocalContrastiveCredit:
     layer propagation — measured 2026-09-07 as the load-bearing depth
     mechanism (Jacobi ordering collapses d4 to 0.27, d8 to 0.14).
 
-    Supports linear-stack geometries (``FeedforwardGeometry``); any other
+    Supports linear-stack geometries (``FeedforwardGeometry``) and
+    ``TransformerGeometry`` (per-layer targets through the credit-owned
+    label injection; the head trains local per-position CE). Any other
     topology raises at first use rather than silently mis-recomputing.
     """
 
@@ -1049,7 +1051,8 @@ class LocalContrastiveCredit:
         self._ema: dict[str, Tensor] = {}
         self._step = 0
         self._step_view: dict[int, nn.Linear] = {}
-        self._step = 0
+        self._tf_views: dict[str, Tensor] = {}
+        self._tf_label_emb: Tensor | None = None
 
     def _stack(self, geometry: Geometry) -> list[nn.Module]:
         layers = getattr(geometry, "_layers", None)
@@ -1143,7 +1146,7 @@ class LocalContrastiveCredit:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "local-contrastive credit state is missing the step counter"
-            raise RuntimeError(msg)  # noqa: TRY004 — snapshot protocol precedent
+            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error] — snapshot protocol precedent
         self._step = int(step.item())
         self._ema = {
             name: tensor.detach().clone()
@@ -1213,6 +1216,8 @@ class LocalContrastiveCredit:
         """
         if self.config.readout_scale <= 0.0:
             return {}
+        if self._tf_linears(geometry):
+            return {}  # transformer head is bias-free — nothing to train
         free_state = states.get(Phase.FREE)
         if free_state is None or free_state.x is None or free_state.y is None:
             return {}
@@ -1232,7 +1237,7 @@ class LocalContrastiveCredit:
             )
         return {bias_name: self.config.readout_scale * gb}
 
-    def compute_pseudo_gradient(  # noqa: PLR0914 — protocol axis assembly, kept linear
+    def compute_pseudo_gradient(  # ruff: ignore[too-many-locals] — protocol axis assembly, kept linear
         self,
         states: Mapping[Phase, SystemState],
         loss: Tensor | None,
@@ -1241,6 +1246,9 @@ class LocalContrastiveCredit:
         free_state = states.get(Phase.FREE)
         if free_state is None:
             return []
+        tf_grads = self._tf_gradient_if_applicable(free_state, geometry)
+        if tf_grads is not None:
+            return tf_grads
         x = free_state.x
         y = free_state.y
         if x is None or y is None or self.config.label_dim <= 0:
@@ -1305,6 +1313,240 @@ class LocalContrastiveCredit:
         geometry: Geometry,
     ) -> Tensor:
         return torch.tensor(0.0)
+
+    # ---------------------------------------------------------------
+    # TransformerGeometry path (W2 P4): per-layer targets with zero
+    # global signals. The label enters as a credit-owned embedding
+    # injected additively at the embedding output (pos = true next
+    # tokens, neg = batch-rolled) — the phase contrast is structurally
+    # starved under instantaneous settle, so the contrast lives in the
+    # label channel exactly as in the MLP contract. Head trains local
+    # per-position CE (raw magnitude, readout_scale) — calibrated, so
+    # val CE is reportable. Each weight's graph is built and released
+    # alone (O(1) peak); sequential_lr propagates within-batch updates
+    # through the recompute, keyed by parameter NAME (transformer
+    # weights have no positional index contract).
+    # ---------------------------------------------------------------
+
+    _tf_label_emb: Tensor | None
+
+    def _tf_linears(self, geometry: Geometry) -> list[tuple[str, nn.Linear]]:
+        from computronium.ontology.geometry import TransformerGeometry
+
+        if not isinstance(geometry, TransformerGeometry):
+            return []
+        seq: list[tuple[str, nn.Linear]] = [("embed.weight", geometry.embed)]
+        for j, block in enumerate(geometry.blocks):
+            seq += [
+                (f"blocks.{j}.in_proj.weight", block.in_proj),
+                (f"blocks.{j}.out_proj.weight", block.out_proj),
+                (f"blocks.{j}.ffn1.weight", block.ffn1),
+                (f"blocks.{j}.ffn2.weight", block.ffn2),
+            ]
+        seq.append(("head.weight", geometry.head))
+        return seq
+
+    def _tf_weight(self, geometry: Geometry, name: str, lin: nn.Linear) -> Tensor:
+        view = self._tf_views.get(name)
+        return lin.weight if view is None else view
+
+    def _tf_label_embedding(
+        self, vocab: int, d: int, device: torch.device, dtype: torch.dtype
+    ) -> Tensor:
+        if self._tf_label_emb is None or self._tf_label_emb.shape != (vocab, d):
+            gen = torch.Generator(device="cpu").manual_seed(
+                zlib.crc32(b"local_contrastive_label_emb")
+            )
+            emb = torch.empty(vocab, d, dtype=torch.float32).normal_(generator=gen)
+            emb /= emb.shape[1] ** 0.5
+            self._tf_label_emb = emb.to(device=device, dtype=dtype)
+        return self._tf_label_emb
+
+    def _tf_recompute(
+        self,
+        geometry: Geometry,
+        x: Tensor,
+        y_lab: Tensor,
+        upto: int,
+        b: int,
+        t: int,
+        linears: list[tuple[str, nn.Linear]],
+        inject: bool = True,
+    ) -> Tensor:
+        """no-grad sweep to the input stream of ordered linear ``upto``.
+
+        O(depth) compute, O(1) memory. ``upto == 0`` returns the one-hot
+        token matrix (the embedding's input).
+        """
+        tf = cast("TransformerGeometry", geometry)
+        with torch.no_grad():
+            if upto == 0:
+                onehot = torch.nn.functional.one_hot(x, geometry.config.input_dim)
+                return onehot.reshape(b * t, -1).to(tf.embed.weight.dtype)
+            d = tf.d_model
+            w = {name: self._tf_weight(geometry, name, lin) for name, lin in linears}
+            onehot = torch.nn.functional.one_hot(x, geometry.config.input_dim)
+            flat = onehot.reshape(b * t, -1).to(w["embed.weight"].dtype)
+            h = torch.nn.functional.linear(flat, w["embed.weight"])
+            label = self._tf_label_embedding(
+                geometry.config.input_dim, d, h.device, h.dtype
+            )[y_lab]
+            h += tf.pe[:t].reshape(1, t, d).expand(b, t, d).reshape(b * t, d)
+            h += label
+            # No stream norm here: the blocks' own LayerNorms normalize
+            # every deeper input, and a norm on the goodness stream would
+            # pin G == 1 for both phases — a structurally zero contrast
+            # (measured 2026-09-07: embed/label gradients exactly 0).
+            for j, block in enumerate(tf.blocks):
+                a1 = torch.nn.functional.layer_norm(
+                    h, (d,), block.ln1.weight, block.ln1.bias
+                )
+                if upto == 1 + 4 * j:  # in_proj's input = a1
+                    return a1
+                qkv = torch.nn.functional.linear(a1, w[f"blocks.{j}.in_proj.weight"])
+                ctx1 = tf._attention(qkv, b, t)
+                if upto == 2 + 4 * j:  # out_proj's input = ctx1
+                    return ctx1
+                h += torch.nn.functional.linear(ctx1, w[f"blocks.{j}.out_proj.weight"])
+                a2 = torch.nn.functional.layer_norm(
+                    h, (d,), block.ln2.weight, block.ln2.bias
+                )
+                if upto == 3 + 4 * j:  # ffn1's input = a2
+                    return a2
+                f1 = torch.nn.functional.gelu(
+                    torch.nn.functional.linear(a2, w[f"blocks.{j}.ffn1.weight"])
+                )
+                if upto == 4 + 4 * j:  # ffn2's input = f1
+                    return f1
+                h += torch.nn.functional.linear(f1, w[f"blocks.{j}.ffn2.weight"])
+            return h  # head's input (upto == last)
+
+    def _tf_layer_grad(
+        self,
+        geometry: Geometry,
+        x: Tensor,
+        y_lab: Tensor,
+        i: int,
+        b: int,
+        t: int,
+        linears: list[tuple[str, nn.Linear]],
+    ) -> Tensor:
+        """Goodness-contrast gradient for ordered linear ``i`` (its own
+        graph, built and released here)."""
+        tf = cast("TransformerGeometry", geometry)
+        lin = linears[i][1]
+        a_pos = self._tf_recompute(geometry, x, y_lab, i, b, t, linears)
+        y_neg = y_lab.view(b, t).roll(1, 0).reshape(b * t)
+        a_neg = self._tf_recompute(geometry, x, y_neg, i, b, t, linears)
+        with torch.enable_grad():
+            w = lin.weight.detach().requires_grad_(True)
+            g_pos = torch.nn.functional.linear(a_pos, w)
+            g_neg = torch.nn.functional.linear(a_neg, w)
+            if i == 0:
+                # Goodness excludes pe: the sinusoidal entries (+-1) would
+                # swamp the label contrast (pe alone contributes ~1.0 to G,
+                # the label ~0.008). pe stays in the recompute stream for
+                # the deeper layers; the contrast measures this layer's
+                # own output against the (fixed) label injection.
+                label_emb = self._tf_label_embedding(
+                    geometry.config.input_dim, tf.d_model, a_pos.device, a_pos.dtype
+                )
+                g_pos += label_emb[y_lab]
+                g_neg += label_emb[y_neg]
+            elif (i - 1) % 4 == 0:  # in_proj: goodness on attention output
+                g_pos = tf._attention(g_pos, b, t)
+                g_neg = tf._attention(g_neg, b, t)
+            elif i == len(linears) - 1:  # head handled by the readout path
+                msg = "head gradients take the readout path"
+                raise AssertionError(msg)
+            loss = torch.nn.functional.softplus(
+                self.config.contrast_threshold
+                - (g_pos.pow(2).mean() - g_neg.pow(2).mean())
+            )
+            (gw,) = torch.autograd.grad(loss, w)
+        return gw
+
+    def _tf_readout_grad(
+        self,
+        geometry: Geometry,
+        x: Tensor,
+        y: Tensor,
+        b: int,
+        t: int,
+        linears: list[tuple[str, nn.Linear]],
+    ) -> Tensor:
+        lin = linears[-1][1]
+        a = self._tf_recompute(geometry, x, y, len(linears) - 1, b, t, linears)
+        with torch.enable_grad():
+            w = lin.weight.detach().requires_grad_(True)
+            logits = torch.nn.functional.linear(a, w)
+            (gw,) = torch.autograd.grad(torch.nn.functional.cross_entropy(logits, y), w)
+        return gw
+
+    def _tf_gradient_if_applicable(
+        self, free_state: SystemState, geometry: Geometry
+    ) -> list[Tensor] | None:
+        """Transformer-path dispatch: the label channel is the credit-owned
+        injection (label_dim is an MLP-contract knob, unused here); None
+        selects the linear-stack path."""
+        if not self._tf_linears(geometry):
+            return None
+        x, y = free_state.x, free_state.y
+        if x is None or y is None or x.dim() != 2:
+            return []
+        return self._tf_gradient(free_state, geometry)
+
+    def _tf_gradient(
+        self,
+        free_state: SystemState,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        x = free_state.x
+        y = free_state.y
+        if x is None or y is None or x.dim() != 2:
+            return []
+        b, t = x.shape
+        y_flat = y.reshape(-1)
+        linears = self._tf_linears(geometry)
+        n_weight = len(linears) - 1  # head is the readout, not a hidden layer
+        self._step += 1
+        self._tf_views = {}
+        weight_names = _learnable_weight_names(geometry.params)
+        name_to_idx = {name: i for i, (name, _) in enumerate(linears)}
+        grad_by_name: dict[str, Tensor] = {}
+        for name in weight_names:
+            i = name_to_idx.get(name)
+            if i is None or i >= n_weight:
+                grad_by_name[name] = torch.zeros_like(geometry.params[name])
+                continue
+            gw = self._tf_layer_grad(geometry, x, y_flat, i, b, t, linears)
+            grad_by_name[name] = self._ema_normalize(name, gw)
+            if self.config.sequential_lr > 0.0:
+                self._tf_views[name] = (
+                    linears[i][1].weight.detach() - self.config.sequential_lr * gw
+                )
+        # Head: local per-position CE on the EMA-normalized axis — the
+        # MLP raw-CE contract does NOT transfer to the transformer scale
+        # (measured 2026-09-07: raw CE grad RMS ~1e-5 vs hidden ~0.65 —
+        # a ~5e4 imbalance the readout can never win; EMA normalization
+        # puts both on the same unit-RMS step axis, readout_scale sets
+        # the readout's share).
+        head_name = linears[-1][0]
+        if head_name in grad_by_name or head_name in weight_names:
+            grad_by_name[head_name] = self.config.readout_scale * self._ema_normalize(
+                head_name,
+                self._tf_readout_grad(geometry, x, y_flat, b, t, linears),
+            )
+        # Label embedding stays FIXED (a random label projection): the
+        # MLP contract's label channel is a constant one-hot feature —
+        # never learned. A learned injection magnitude is a runaway
+        # positive feedback (measured 2026-09-07: norm 8 -> 349 in 200
+        # steps, CE diverging in lockstep).
+        # Pseudo-gradients in the geometry's declared weight order.
+        return [
+            grad_by_name.get(n, torch.zeros_like(geometry.params[n]))
+            for n in weight_names
+        ]
 
 
 class TemporalTraceCredit:
