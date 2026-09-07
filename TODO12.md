@@ -4,6 +4,10 @@
 > [TODO11.md](TODO11.md) (R11 core complete; D1–D16 + F1–F3 demonstrated;
 > 2026-09-06 sprint closed P1a/P3/P1b positive, P2 open-negative, P4/P5
 > resolved). Research catalog: [RESEARCH4.md](RESEARCH4.md).
+> **Rev 14: [TODO12b.md](TODO12b.md) executed — the defect hunt is done
+> (4 CONFIRMED / 1 partial / 3 REFUTED). Binding follow-ups for every
+> future measurement are in "Applying the TODO12b Defect Hunt" below;
+> do not quote pre-TODO12b numbers without those caveats/re-pins.**
 >
 > **Identity (unchanged):** Computronium is an ML library whose every claim
 > is a live demonstration. Tests are the evidence system. A claim stands
@@ -173,9 +177,11 @@
 (no parked item may read as silently dropped):**
 - **PEPITA (anything further):** revive only via a new probe with a
   pre-registered prediction about the *weight-trajectory* growth channel
-  (the one unexplained observation left: output-weight magnitude grows
-  ~1e4 in ~600 steps even with unit-normalized steps — a ‖W_out‖-vs-‖B‖
-  per-step tracker would close it) or about the
+  (**CLOSED by TODO12b H6: the ~1e4 ‖W_out‖ growth was the pre-p5
+  fixed-B width-scale channel — at HEAD the update path is exactly
+  lr-bounded and the learned-B EMA never touches θ;
+  `h6_pepita_tracker.py`. Sane learned-B feedback_lr if ever re-pinned:
+  0.01–0.05**) or about the
   faithful-forward-modulation realization. The five-cause audit chain is
   otherwise complete and closed.
 - **Z3-terminology defense:** revive never as prose; the D22 exact-θ
@@ -230,6 +236,85 @@ parked claim can be resurrected only through a new probe with a
 pre-registered prediction.
 
 ---
+
+## 🔧 Applying the TODO12b Defect Hunt (rev 14 — binding follow-ups)
+
+> TODO12b.md executed 2026-09-06: all eight suspicion probes ran
+> (`scripts/probes/h1..h8_*.py`), verdicts + measured numbers live in
+> the probe docstrings, standing locks landed in
+> `tests/unit/core/test_defect_hunt_locks.py`. Four verdicts CONFIRMED
+> (H1, H2, H4, H8), one partial (H3), three REFUTED (H5, H6, H7).
+> This section is the instruction sheet for folding those results into
+> every future measurement. **Do not quote any pre-TODO12b number
+> without the caveat or re-pin listed here.**
+
+### R1 — unit_rms lr semantics (H1 CONFIRMED — overturns V1)
+
+- unit_rms's `step_size` is **per-element displacement** (‖Δθ‖ =
+  lr·√n per tensor; locked in `test_defect_hunt_locks.py`). Every
+  unit_rms/mean_norm/Muon-family cell measured with an lr grid
+  borrowed from euclid is **invalid as a convergence statement**.
+- **Before any new unit_rms arm:** pre-register lr on unit_rms's own
+  axis (MNIST-quick mlp working lr ≈ **1e-3**, beats euclid 0.878 with
+  0.900 — `h1_unit_rms_mnist.py`). Never sweep {0.002..0.1} for it.
+- **Re-pin queue:** D16's unit_rms row; A6's canonical-family map;
+  `test_demo_uaxis_coverage.py`'s "unit_rms stays near chance at
+  matched lr" assertion (lr 0.02) + its lr-note — re-pin these with
+  the demo figure/manifest locks in the same landing (do not edit the
+  assertions piecemeal).
+- **V1 verdict:** "convergence noise floor" is dead. D16's chance cell
+  was an lr mislabel, not a property of the rule.
+
+### R2 — Muon lr on ePC cells (H4 CONFIRMED — re-scopes V2/D18/A6)
+
+- Muon at registered lr 0.01 on ePC w64 LM lands **worse than chance**
+  (ppl 92 vs 65) — an overshoot collapse, NOT divergence (‖Δθ‖
+  exactly lr-proportional; `h4_muon_lr.py`). Muon trains at **lr
+  0.003** (ppl 36.4); unit_rms 3e-4 remains best (33.4).
+- **Instruction:** quote D18/A6 Muon columns as *registered-config
+  readiness*, never as "the crutch is dead". Re-pin Muon rows at lr
+  0.003 under the P3 matched-step protocol. The F3 instrument (‖Δθ‖
+  logging) is mandatory on any "explodes" claim — divergence language
+  is forbidden without it.
+
+### R3 — Standing caveats on every bp baseline (H2 + H8 CONFIRMED)
+
+- **H2:** all "backprop" baselines are **weights-only backprop** —
+  biases never receive pseudo-gradients in any credit (locked).
+  Measured impact at demo scale: 0.000 (0.904 vs 0.904). One-line
+  caveat in RESULTS-grade artifacts; no re-runs.
+- **H8:** bp's nudged loss is the **target-blended CE** — (1−β)-scaled
+  on the output weight (0.461 at β=0.5), cos ≥ 0.99 direction
+  preserved. **β=1.0 with an autograd credit is a DEAD loss surface
+  (exactly zero pseudo-gradient) — forbidden, locked.** Add a
+  config-time guard when convenient (validate() branch).
+
+### R4 — Compatibility facts now locked (H3/H5/H7 — cite, don't re-derive)
+
+- thermodynamic × instantaneous hidden-layer pseudo-gradient is
+  **exactly zero** (f5b fact, now a standing lock); the
+  credit × dynamics nonzero matrix is recorded in
+  `h3_zombie_matrix.py` — consult it before pairing a credit with a
+  new dynamics, and extend the lock when a credit lands.
+- F5's instrument is audited (bp packed count = 3L−1; thermo = 0);
+  local-ff packs **~3× bp** because `LocalGoodnessCredit.requires_autograd=True`
+  at HEAD — reinforces the Claim A scope audit above. Quote the ff
+  memory story only through that scope.
+- D22's routing-mode flip is defect-audited (bitwise no-op); D22's
+  contract finding stands unchanged.
+
+### R5 — Structural fix worth prioritizing (new, from the hunt)
+
+The root cause behind V1 AND the H4 confound is one defect class:
+**update rules carry incompatible step-size semantics with no
+metadata**. Land `step_semantics` on `ParameterUpdateConfig`
+(`"gradient_relative"` vs `"per_element_displacement"`) + a
+validate()-level lr sanity check, then derive lr grids from it. This
+single change makes the R1/R2 re-pins mechanical and prevents
+recurrence. (Full opportunity list in TODO12b.md.)
+
+---
+
 
 ## 🎯 The Unifying Diagnosis (from RESEARCH4)
 

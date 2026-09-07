@@ -87,3 +87,76 @@ unit lock so they can never silently regress.
 **Budget:** everything CPU and minutes-scale; nothing here needs the
 GPU or long runs (H4's D18 cell reproduction is CPU demo scale by the
 device policy).
+
+---
+
+## 🏁 Verdicts (executed 2026-09-06; probes in `scripts/probes/h*.py`,
+unit locks in `tests/unit/core/test_defect_hunt_locks.py`)
+
+| # | Verdict | One-line finding |
+|---|---------|------------------|
+| **H1** | **CONFIRMED (measurement defect)** | The rule's code is bitwise-exact vs the normalize-the-momentum reference, cos(step, −grad)→1, no divergence on a quadratic — but unit_rms's `step_size` is **per-element displacement** (‖Δθ‖ = lr·√n per tensor, locked). The D16/A6 grids borrowed euclid's lr scale: on MNIST-quick bp×mlp, unit_rms **lr 0.001 → 0.900, BEATING euclid lr 0.1 (0.878)**, while the pinned lr 0.02 → 0.104 (chance). V1's "convergence noise floor" is dead — the rung was never defective, its lr axis was mislabeled. |
+| **H2** | **CONFIRMED (contract fact, negligible impact)** | Biases never train in ANY arm — `_learnable_weight_names` filters to 2-D weights, `GradientCredit` inherits it, `apply_pseudo_gradients` is the single choke point. All "backprop" baselines are weights-only backprop. Impact on MNIST-quick (pure-torch reference, 150 steps): 0.904 vs 0.904 — **delta 0.000**. One-line caveat on all margins; no re-runs. |
+| **H3** | **PARTIALLY CONFIRMED (no new zombie)** | Full 7-credit × 3-dynamics matrix (h3 probe): exactly one zero-entry — `thermodynamic × instantaneous` hidden layer ([ZERO, live]), which IS the already-registered f5b/F5-Claim-A scope. No registered cell produces an all-zero pseudo-gradient list; the compatibility whitelist agrees with the matrix. Standing unit lock landed. |
+| **H4** | **CONFIRMED (lr confound)** | ePC w64 LM at HEAD: Muon lr 0.01 → val ppl 92.1 (**worse than chance 65** — an overshoot collapse, not NaN divergence; ‖Δθ‖/step exactly lr-proportional and finite in every arm). Muon lr 0.003 → 36.4 (trains). unit_rms 3e-4 control → 33.4 (best). D18's headline survives only as a registered-config readiness statement; "crutch dead" re-scoped to lr-matched footing. |
+| **H5** | **REFUTED (instrument sound)** + bonus | Packed count for bp = 3L−1 (each Linear packs input AND weight, each ReLU its output) — analytic, depth-scaled. EqProp thermo count = 0 through settle AND update (no optimizer-state leak). Bonus finding: local-ff packs **26 > bp's 8** because `LocalGoodnessCredit.requires_autograd=True` at HEAD — a memory-angle corroboration of F5 Claim A. F5's miss stands on a valid counter. |
+| **H6** | **REFUTED at HEAD** | The ~1e4 ‖W_out‖ growth does not reproduce: per-step dW_out = lr·√n exactly (lr-bounded update path only); the learned-B EMA mutates only the credit-internal `self._learned` dict (L3-locked, never geometry.params). The historical growth was the PRE-p5 fixed-B width-scale channel (P4's mechanism), removed by the landed fixes. PEPITA parking stands. Side finding: feedback_lr 0.5 collapses ‖B‖ ~10× in 150 steps — sane regime is 0.01–0.05. |
+| **H7** | **REFUTED (flip did not matter)** | The eval-branch flip only changes `active_routes`; `modulate` reads `gate_logits` only and the logits update is branch-independent. 200-step probe: gate trajectories and modulate outputs **bitwise identical** (max diff 0.0) between eval and forced-training branches. D22's miss upgraded to defect-audited. Note: a real `SystemContext` can never take the eval branch (`__post_init__` forces `requires_grad=True`) — frozen-θ episodes only arise via duck-typed contexts. |
+| **H8** | **CONFIRMED (quantified, benign at default)** | bp's nudged loss is the target-blended CE: scale(last layer) ≈ (1−β) (0.461 at β=0.5), cos ≥ 0.99 direction preserved. **β=1.0 gives an EXACTLY ZERO pseudo-gradient** (dead loss surface — the output is fully clamped, loss constant in θ). Locked to forbid β=1.0 configs. One-line caveat on absolute bp numbers; relative margins unaffected. |
+
+### Re-evaluation ledger (claims affected by CONFIRMED defects)
+
+1. **V1 dies (H1):** D16's unit_rms row + A6's canonical-family claim
+   re-baseline on unit_rms's own lr axis (working lr ≈ 1e-3 on
+   MNIST-quick mlp). `test_demo_uaxis_coverage.py`'s "unit_rms stays
+   near chance at matched lr" assertion (lr 0.02) and its lr-note
+   encode the mislabeled scale — queued for the re-pin, not silently
+   edited here (demo figure/manifest locks depend on it).
+2. **D18/A6 re-scope (H4):** Muon columns re-pinned at lr 0.003
+   (P3 matched-step protocol); "crutch dead" → "registered lr wrong
+   for the cell; Muon fine at 0.003, unit_rms still best at 3e-4".
+3. **All margins (H2/H8):** standing caveats — bp baselines are
+   weights-only (H2, ~0 impact at demo scale) and (1−β)-scaled
+   target-blended backprop (H8, ~2× last-layer scale at β=0.5).
+4. **F5 (H5/H3):** upgraded — instrument audited (count = 3L−1),
+   Claim A now corroborated from the memory angle (ff packs ~3× bp).
+
+### Unchanged verdicts (survive the hunt)
+
+f5b structural fact; F5 Claim-A wording; D14 faithful-regime result;
+F4 mechanism cells; D5 bitwise θ; D22 contract finding (now
+defect-audited via H7).
+
+### New improvement opportunities (discovered during the hunt)
+
+- **lr-semantics metadata:** update rules carry incompatible step-size
+  semantics (euclid: gradient-scale-relative; unit_rms/mean_norm/muon:
+  absolute/per-element). A `step_semantics` field on
+  `ParameterUpdateConfig` + a validate()-level lr sanity check would
+  have prevented V1 and the H4 confound entirely.
+- **`InstantaneousDynamics` β=1.0 guard:** raise at config time when a
+  GradientCredit-style autograd credit is paired with beta=1.0 (H8's
+  dead surface). Cheap, prevents a silent no-op training run.
+- **Bias training option:** a `train_biases: bool = False` on the
+  credit contract would make the weights-only choice explicit instead
+  of incidental (H2).
+- **learned-B feedback_lr default:** 0.5 collapses ‖B‖ ~10× in 150
+  steps (H6); 0.01–0.05 is the measured sane regime.
+
+### Details for future work
+
+- Probes: `scripts/probes/h1_unit_rms_analytic.py` (bitwise + quadratic),
+  `h1_unit_rms_mnist.py` (lr grid), `h2_bias_freeze.py`,
+  `h3_zombie_matrix.py`, `h4_muon_lr.py` (~100 s, the only multi-minute
+  probe), `h5_instrument_lock.py`, `h6_pepita_tracker.py`,
+  `h7_routing_flip.py`, `h8_clamped_ce.py` — every verdict number is in
+  the probe docstring.
+- Unit lock: `tests/unit/core/test_defect_hunt_locks.py` (8 tests,
+  3.8 s) — locks H1's bitwise/per-element-displacement identities, H2's
+  weights-only contract, H3's thermodynamic×instantaneous hidden zero,
+  H8's β=1.0 dead surface.
+- Probe gotchas for re-runs: `apply_pseudo_gradients` only routes names
+  containing "weight" (filter your probe tensors accordingly);
+  `SystemContext` cannot represent frozen θ (duck-type it); geometry
+  param names for 2-layer mlp are `0.weight`/`2.weight` (bias
+  interleaving); `task_loss` lives in `computronium.core.pipeline`.
