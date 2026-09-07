@@ -2,7 +2,184 @@
 
 > **Opened 2026-09-07.**
 >
-> TODO13b made the instrument honest. TODO14 asks what happens when we apply
+
+## PROGRESS LOG (2026-09-07, Session 1 — W0.1 + §8 infrastructure)
+
+**Status: W0 (transformer local credit) REOPENED — 3-seed-confirmed rescue
+at 600 steps; W6 CLOSED (Tier C headline: recipe transfers across depth ×
+width × task, §22 #5 MET); W0.2 gain sweep falsified/deprioritized; §8
+infrastructure fix LANDED.**
+
+### §8 infrastructure fix — LANDED
+
+- `actual_parameter_displacement(update, params, grads, ...)` added to
+  `computronium/ontology/update.py`: snapshot-replay (get_state → step →
+  load_state) yielding the optimizer's REAL per-parameter Δθ without consuming
+  state. Snapshot protocol covers momentum buffers AND step counters for every
+  rule, so replays are exact.
+- `LocalContrastiveCredit.set_update_rule()` +
+  `_sequential_view()`: `sequential_lr` recompute views (both linear-stack and
+  transformer paths) now use the actual displacement when an update rule is
+  registered; plain-SGD fallback otherwise. Wired automatically for ALL
+  compositions in `factory.compose_system` (duck-typed, credit-optional).
+- Fixed `compose_system_from_configs` missing `adam` / `ortho_adam` branches
+  (pre-existing gap — ortho_adam was unbuildable from configs).
+- Contract change (intentional): euclid+momentum views previously used
+  step_size·grad; now use the real momentum displacement. Parity probes that
+  assumed `sequential_lr == step_size` with momentum>0 will shift.
+- Gates: ruff clean on changed files, pyright 0 errors (update.py, probe),
+  94 targeted unit/property tests pass.
+
+### W0.1 optimizer matrix (§3) — screen + short cells, seed 0
+
+Probe: `scripts/probes/w0_tf_local_optimizers.py` (screen 300 steps; short
+cells via `full --skip-screen --arm=X --steps=N`). Logs: `logs/w0_*.log`.
+Unigram anchor 0.153; chance 0.015; bp 600-step reference at the identical
+cell: top-1 0.152 / CE 3.329.
+
+| arm (300 steps)          | top-1  | CE      | verdict                          |
+| ------------------------ | ------ | ------- | -------------------------------- |
+| euclid (0.005, clip 1.0) | 0.150  | 3.505   | matches w2_p4's marginal regime  |
+| adam 0.005 / 0.01        | 0.025 / 0.046 | 604 / 93 | DIVERGES — see mechanism below |
+| muon 0.01                | 0.183  | 3.337   | best at 300; collapses by 1000   |
+| muon 0.02                | 0.113  | 6.596   | diverges                         |
+| ortho_adam (0.003/0.01)  | 0.178 / 0.143 | 3.716 / 5.580 | top-1 ok, CE miscalibrated |
+| **muon 0.005** (600)     | **0.190** | **3.225** | **BEATS bp at matched tokens** |
+| muon 0.005 (1000)        | 0.169  | 3.971   | degrades, does NOT collapse      |
+| muon 0.01 (1000)         | 0.105  | 8.511   | collapsed (cf. 300-step peak)    |
+
+### Mechanism findings (reusable beyond W0)
+
+1. **I(C,U) confirmed directionally**: same credit/data, optimizer flips the
+   trajectory sign (euclid ↓, adam ↑↑ divergent, muon ↑ then slow decay).
+2. **Double-normalization blowup**: Adam (per-coordinate rescale) on
+   EMA-normalized pseudo-gradients amplifies small coordinates → divergence.
+   Rules that ORTHOGONALIZE compose with local credit; rules that
+   PER-COORDINATE RESCALE don't. Predicts: local_adam also diverges here;
+   spectral_constrained safe.
+3. **Muon rescue is real but non-monotone**: 0.005 degrades gently past its
+   600-step peak, 0.01 collapses hard — the decay is LR-dependent, so a
+   decayed/scheduled muon step or early-stop-at-peak is the obvious lever.
+
+### W0 3-seed confirmation (muon 0.005, 600 steps, seeds 0-2)
+
+| seed | top-1 | val CE |
+| ---- | ----- | ------ |
+| 0    | 0.190 | 3.225  |
+| 1    | 0.180 | 3.354  |
+| 2    | 0.181 | 3.304  |
+
+All 3 seeds above the unigram anchor (0.153); mean top-1 0.184 vs the bp
+600-step reference 0.152 at the identical cell (w2_p4). **§3's overturn
+criterion is MET at the 600-step budget**: CE materially down, top-1 above
+unigram, 3 seeds. NOT yet the headline: bp at 3000 steps still wins
+(0.219/2.936), and the muon trajectory decays past its ~600-step peak
+(non-monotone). Honest state: **local_contrastive × muon > bp at matched
+600-step tokens, 3 seeds; the open question is the post-peak decay, not
+the rescue itself.**
+
+### W0.2 gain diagnostic (§4) — prediction FALSIFIED, gain sweep deprioritized
+
+Probe: `scripts/probes/w0_gain_diagnostic.py` (2.5 s, measurement only).
+Per-block contrast r_i = ‖G+−G−‖/‖G+‖ on fresh weights: embed 1.08; all
+deeper blocks **0.10–0.20**. The w2_p4 "~1% noise-domination" hypothesis is
+WRONG at the goodness-stream level — the label contrast is 10–20% everywhere
+(injection contrast ~11% by RMS). The failure mechanism is therefore NOT
+signal starvation; suspicion shifts to (a) the EMA-normalized random-walk
+dynamics, (b) contrast direction quality (not magnitude), (c) the softplus
+gate. The §4 kill condition ("scaling above 1% produces runaway") is moot at
+these measured contrasts. **W0.2 as a gain sweep is deprioritized; W0's
+lever is the decay-past-peak schedule, not injection gain.**
+
+### W6 width transfer (§12) — P1 PASS, Tier C headline EXTENDED
+
+Probe: `scripts/probes/w6_width_transfer.py` (reuses `w4_depth_frontier.run_arm`
+verbatim, WIDTH monkey-patched per arm; ~5 min total). Depth 8, mupc init,
+residual, OrthoAdam ortho_lr 1e-3 (the depth-8-selected value), 150 batches,
+seed 0, no retuning of anything per width:
+
+| width | train | test |
+| ----- | ----- | ---- |
+| 64    | 0.831 | 0.898 |
+| 128   | 0.857 | 0.928 |
+| 256   | 0.881 | 0.942 |
+
+Spread 0.044 ≤ 0.05 -> **P1 PASS**: the single depth-8-selected recipe
+transfers across width 64→256 (and, with w4_depth_frontier, across depth
+8→32). Monotone improvement with width — no width-fragility in this recipe.
+
+### W6 promotion round (3 seeds + task axis) — P1s PASS, P3 PASS: Tier C CLOSED
+
+Promotion run (same probe, extension): 9 mnist arms + 3 fashion_mnist arms.
+
+- **P1s PASS**: per-width 3-seed spreads ≤ 0.044; width-mean spread 0.035 —
+  seed-robust.
+- **P3 PASS**: fashion_mnist (784→10, width 128, recipe COMPLETELY
+  untouched — same lr, init, optimizer, batches) seeds 0-2: 0.834/0.827/0.838,
+  mean 0.833, range 0.011.
+
+**Headline Tier C, final form: one tuned recipe (mupc init + residual +
+OrthoAdam ortho_lr 1e-3, 150 batches, tuned once at depth 8 / width 128 /
+mnist) transfers across depths {8,20,32} × widths {64,128,256} × tasks
+{mnist, fashion_mnist} with zero retuning.** This is §22 success
+condition #5, met. Remaining rigor for full promotion protocol: the
+3-seed criterion is satisfied per cell; a defect-audit pass on the w4/w6
+harnesses (measurement-integrity items: seed-before-loader-draw OK,
+matched batches OK) is queued for the hygiene pass.
+
+### Other fronts (breadth notes, no new runs this session)
+
+- W6 zero-shot transfer: w4_depth_frontier.py already CONFIRMED depth
+  8→20/32 lr transfer ("tune once, run anywhere") — §12's remaining open
+  axis is WIDTH (64/128/256, no retune) and one non-MNIST task. The
+  jpc harness (`w4_depth_frontier.run_arm`) is directly reusable for the
+  width cells; est. ~5 min/arm.
+- W5 depth-50: w4_depth_frontier measured the 150-batch collapse
+  (0.397). W5.1's budget cell (300–600 batches) is the cheapest next
+  lever but ~30+ min CPU — schedule for a long-run session, not a
+  short-cell one.
+- W1 credit ladder / W4 hidden ψ: not started; both need new probe code
+  (W1 can reuse the hunt harness; W4 needs the ψ statistics mechanism).
+
+### W0 decay + readout_scale cells (next-step menu #1 executed)
+
+- **readout_scale is a NO-OP under Muon for matrix weights** (ro 0.3/1.0/3.0
+  @ 600 steps: all exactly 0.190/3.225). Mechanism: the SVD polar factor is
+  scale-invariant — `polar(s·M) = polar(M)` — so the head/hidden step share
+  CANNOT be tuned via readout_scale on the muon axis (only the eps term in
+  the EMA normalizer leaks scale). Under euclid/OrthoAdam (which rescales to
+  the Adam norm) it would matter. §17 update-integrity finding: the w2_p4
+  head/hidden imbalance worry is structurally unfixable by readout_scale
+  under Muon; the lever is the sequential_lr axis or an OrthoAdam head rule.
+- **Cosine decay CURES the post-peak degradation** (muon 0.005, decayed to 0
+  over the run): @1200 steps top-1 0.194 / CE 3.152 and still climbing, vs
+  0.169/3.971 (constant LR, degrading) at the same budget. The decay was a
+  constant-LR artifact, not a dynamics boundary. Decisive 3000-step cell vs
+  bp (0.219/2.936) RUNNING — logs/w0_decay3k.log.
+- **3000-step decayed VERDICT (seed 0): 0.131 / 4.716 — degradation returns
+  despite the schedule.** Decay extends the useful regime (~600 → ~1200
+  steps) but the trajectory still turns down before 3000; bp wins at that
+  budget. W0 stays REOPENED with a firming boundary: **local goodness
+  contrast on the transformer loses usable signal past ~1–2k steps under
+  ANY muon schedule tested.** Not yet run: an instrumented run logging the
+  per-block goodness CONTRAST MAGNITUDE over training — if the contrast
+  itself decays as the stream organizes (moving-target drift), the boundary
+  is the objective, not the optimizer, and W0.3's component ablation
+  (§5) becomes the primary lever.
+
+### Next (short-cell menu, ≤10 min each, breadth first)
+
+- ~~W6 promotion~~ DONE — Tier C closed (see above).
+- W0: muon_mid with cosine-decayed step past 600 steps (tests the
+  decay-past-peak lever directly); readout_scale sweep 0.3/3.0.
+- W4 (§10): hidden-layer closed-form ψ, one layer, MNIST Task A→B; the
+  ‖Δθ‖=0 bitwise gate is cheap to assert (~10 min).
+- W1 (§7): credit ladder under muon — random-projection + noisy arms on
+  MNIST d4, 150 batches (reuses hunt harness; ~5 min/cell).
+- W0.2 (§4): DONE — falsified, deprioritized (see above).
+- W5 (§11): depth-50 budget cell (300–600 batches) — long-run session.
+
+>> TODO13b made the instrument honest. TODO14 asks what happens when we apply
 > that honesty symmetrically to the negative results:
 >
 > **Do not protect the falsifications. Attack them with the strongest mechanisms

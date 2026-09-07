@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from computronium.ontology.geometry import Geometry, TransformerGeometry
     from computronium.ontology.system import SystemState
+    from computronium.ontology.update import ParameterUpdate
 
 
 # ============================================================
@@ -1053,6 +1054,32 @@ class LocalContrastiveCredit:
         self._step_view: dict[int, nn.Linear] = {}
         self._tf_views: dict[str, Tensor] = {}
         self._tf_label_emb: Tensor | None = None
+        self._update_rule: ParameterUpdate | None = None
+
+    def set_update_rule(self, update: ParameterUpdate) -> None:
+        """Register the system's update rule (wired by ``compose_system``).
+
+        With a rule registered, ``sequential_lr`` recomputation views use
+        the rule's ACTUAL per-parameter displacement (TODO14 §8) instead
+        of assuming displacement ≈ step_size — a plain-SGD identity that
+        is false for the matrix rules and made a failed
+        local_contrastive × Muon/OrthoAdam cell ambiguous.
+        """
+        self._update_rule = update
+
+    def _sequential_view(self, name: str, weight: Tensor, gw: Tensor) -> Tensor:
+        """Post-update weight for within-batch (Hinton) propagation.
+
+        Snapshot-replay through the registered update rule when present;
+        the legacy plain-SGD step (``sequential_lr`` × grad) otherwise.
+        """
+        weight = weight.detach()
+        if self._update_rule is None:
+            return weight - self.config.sequential_lr * gw
+        from computronium.ontology.update import actual_parameter_displacement
+
+        disp = actual_parameter_displacement(self._update_rule, {name: weight}, [gw])
+        return weight - disp[name]
 
     def _stack(self, geometry: Geometry) -> list[nn.Module]:
         layers = getattr(geometry, "_layers", None)
@@ -1298,11 +1325,11 @@ class LocalContrastiveCredit:
                 lin_view = nn.Linear(
                     lin_i.in_features, lin_i.out_features, bias=lin_i.bias is not None
                 )
-                lin_view.weight = nn.Parameter(lin_i.weight.detach().clone())
+                lin_view.weight = nn.Parameter(
+                    self._sequential_view(name, lin_i.weight, gw)
+                )
                 if lin_i.bias is not None:
                     lin_view.bias = nn.Parameter(lin_i.bias.detach().clone())
-                with torch.no_grad():
-                    lin_view.weight -= self.config.sequential_lr * gw
                 self._step_view[stack_idx] = lin_view
         return grads
 
@@ -1522,8 +1549,8 @@ class LocalContrastiveCredit:
             gw = self._tf_layer_grad(geometry, x, y_flat, i, b, t, linears)
             grad_by_name[name] = self._ema_normalize(name, gw)
             if self.config.sequential_lr > 0.0:
-                self._tf_views[name] = (
-                    linears[i][1].weight.detach() - self.config.sequential_lr * gw
+                self._tf_views[name] = self._sequential_view(
+                    name, linears[i][1].weight, gw
                 )
         # Head: local per-position CE on the EMA-normalized axis — the
         # MLP raw-CE contract does NOT transfer to the transformer scale

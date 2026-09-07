@@ -334,6 +334,14 @@ def compose_system[  # ruff: ignore[complex-structure]
             self._training = False
             return self
 
+    # TODO14 §8: credits with sequential recomputation (LocalContrastive)
+    # consume the update rule's ACTUAL displacement for their within-batch
+    # views; set_update_rule is credit-optional (duck-typed, no Protocol
+    # change for credits that don't propagate).
+    set_update_rule = getattr(credit, "set_update_rule", None)
+    if callable(set_update_rule):
+        set_update_rule(update)
+
     system = _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,
         geometry=geometry,
@@ -624,6 +632,10 @@ def compose_system_from_configs(
         update_instance = ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)
+    elif update_type == "adam":
+        update_instance = AdamUpdate(update)
+    elif update_type == "ortho_adam":
+        update_instance = OrthoAdamUpdate(update)
     elif update_type == "unit_rms":
         update_instance = UnitRMSUpdate(update)
     elif update_type == "local_adam":

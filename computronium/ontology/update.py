@@ -357,6 +357,60 @@ class ParameterUpdate(Protocol):
         ...
 
 
+class _StatefulUpdate(Protocol):
+    """Snapshot-protocol surface every ParameterUpdate implements."""
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry | None,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]: ...
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]: ...
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None: ...
+
+
+def actual_parameter_displacement(
+    update: _StatefulUpdate,
+    params: dict[str, Tensor],
+    pseudo_grads: list[Tensor],
+    geometry: Geometry | None = None,
+    bias_grads: dict[str, Tensor] | None = None,
+) -> dict[str, Tensor]:
+    """The optimizer-induced per-parameter change, WITHOUT consuming
+    optimizer state (TODO14 §8 / W2: ``sequential_lr`` recomputation
+    views assumed displacement ≈ step_size — a plain-SGD identity that
+    is false for the matrix rules (Muon orthogonalizes the momentum,
+    OrthoAdam rescales to the Adam norm), leaving a failed
+    local_contrastive × Muon/OrthoAdam cell ambiguous. The recompute
+    view must use the ACTUAL displacement).
+
+    Snapshot-replay: the update rule's state is snapshotted via the
+    snapshot protocol (``get_state``/``load_state`` — all rules expose
+    momentum buffers AND step counters), ``step`` runs on the requested
+    parameter subset, and the state is restored. Per-parameter update
+    state is independent (momentum/moments keyed by name), so a
+    single-parameter replay is exact; a rule with cross-parameter
+    coupling (global-norm clip over the full stack) must be called with
+    the full grad list, or configured with ``grad_clip=0`` for
+    per-layer replays.
+
+    Returns:
+        Displacement per requested weight name (``new - old``).
+    """
+    snapshot = update.get_state()
+    try:
+        new_params = update.step(params, pseudo_grads, geometry, bias_grads)
+    finally:
+        update.load_state(snapshot)
+    return {
+        name: new_params[name] - params[name] for name in params if name in new_params
+    }
+
+
 # ============================================================
 # Default/Reference ParameterUpdate Implementations
 # ============================================================
