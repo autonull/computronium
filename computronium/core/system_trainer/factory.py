@@ -51,6 +51,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
     from computronium.ontology import (
         BackpropCredit,
         HomeostaticCredit,
+        LocalContrastiveCredit,
         LocalGoodnessCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
@@ -66,6 +67,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return RandomProjectionsCredit(config)
         case "local_goodness" | "forward_only":
             return LocalGoodnessCredit(config)
+        case "local_contrastive" | "per_layer_ff":
+            return LocalContrastiveCredit(config)
         case "temporal_trace" | "spiking":
             return TemporalTraceCredit(config)
         case "target_inversion" | "target_prop":

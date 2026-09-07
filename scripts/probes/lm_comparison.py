@@ -65,6 +65,38 @@ run, per the E-11 discipline; do not edit after seeing results):
   configuration. Claim A (credit locality) and Claim B (physical
   advantage: no stored activations, no backward sweep) are reported
   on separate lines.
+
+D17 REGIME RECONCILIATION (2026-09-07, W0 steps 0–1 — read from
+benchmark_results/d17_seed0.json, free; pre-registered in TODO13b §0):
+
+- The "5.5× bombshell" is DEAD as an endpoint-vs-endpoint claim. The
+  bp/adam denominator is healthy but OVERTRAINED: train_loss descends
+  monotonically (1.74 → 0.30) while val_ppl rises (7.0 → 27.55) —
+  classic memorization of the 1.0M-char Shakespeare train split under
+  a matched-WALLTIME protocol. bp/adam sees 62.3M tokens (~62 epochs)
+  vs ff_hybrid's 9.0M (~9 epochs) because of the throughput asymmetry
+  (69.2k vs 10.0k chars/s). NOT lr collapse (val descends healthily
+  to a 4.56 minimum), NOT the mixed-ctx val defect (transformer val
+  windows were cut at max(ctx)=128 = the transformer's own ctx, so
+  this arm's eval was never affected).
+- Matched-token reconciliation: at bp/adam's ~9–11M-token mark
+  (t ≈ 130–160 s), bp/adam val_ppl = 4.56–4.63, BETTER than
+  ff_hybrid's best-ever 4.83 / endpoint 5.05. Per token, backprop
+  wins; per walltime the arms are within the parity band:
+  (5.05 − 4.56) / 4.56 = 10.7% < 15%.
+- Throughput accounting (explains the 7× step gap): both arms draw
+  4096 tokens/step (batch 32 × ctx 128); ff_hybrid's per-step cost is
+  6.9× bp/adam's (69.2k/10.0k chars/s at identical shape) — the
+  forward-local credit pays forward + goodness + hybrid autograd
+  overhead. Structural (Claim A cost), recorded, not hidden.
+- HONEST DENOMINATOR RULE (binding for all future D17 runs): budget
+  both arms to the SAME token count (--tokens), or report bp/adam's
+  best-val (early-stopped) alongside its endpoint. Endpoint-vs-
+  endpoint walltime comparisons across the 6.9× throughput gap are
+  forbidden in quoted results.
+- RECOMPUTED BAND: parity (<15%). Wording: "forward-local hybrid
+  credit matches backprop on a transformer LM at matched walltime,
+  using ~7× fewer token-passes." The 5.5× framing is retired.
 """
 
 from __future__ import annotations
@@ -135,6 +167,10 @@ LR: dict[str, float] = {
     "*/bp/ortho_adam": 1e-3,
     "*/ff/muon": 0.01,
     "*/ff/ortho_adam": 1e-3,
+    # SP6 cells (TODO13b W1): ortho_lr on OrthoAdam's OWN axis (1e-3,
+    # the measured plateau) — never Muon's 0.01 / 0.02.
+    "transformer/ff_hybrid/ortho_adam": 1e-3,
+    "mlp/epc_thermo/ortho_adam": 1e-3,
 }
 
 
@@ -275,7 +311,7 @@ def _eval(system, val: list[tuple[torch.Tensor, torch.Tensor]], geom: str) -> di
     return {"val_loss": round(avg, 4), "val_ppl": round(math.exp(min(avg, 20)), 2)}
 
 
-def run_arm(
+def run_arm(  # noqa: PLR0913 — one arg per protocol axis (geom/credit/update/budget)
     geom: str,
     credit: str,
     update: str,
@@ -285,6 +321,8 @@ def run_arm(
     seed: int,
     cfg: dict,
     batch: int = 32,
+    *,
+    token_budget: int = 0,
 ) -> dict:
     torch.manual_seed(seed)
     system = _build(geom, credit, update, cfg)
@@ -295,7 +333,9 @@ def run_arm(
     curve: list[dict] = []
     t0 = time.time()
     step = tokens_seen = 0
-    while time.time() - t0 < minutes * 60:
+    while time.time() - t0 < minutes * 60 and (
+        not token_budget or tokens_seen < token_budget
+    ):
         idx = torch.randint(0, len(tokens) - ctx - 1, (batch,), generator=gen)
         win = tokens[idx.unsqueeze(1) + torch.arange(ctx + 1)]
         if geom == "transformer":
@@ -345,10 +385,12 @@ CELLS = [
     ("transformer", "bp", "adam"),
     ("transformer", "bp", "muon"),
     ("transformer", "ff_hybrid", "muon"),
+    ("transformer", "ff_hybrid", "ortho_adam"),
     ("transformer", "pepita", "muon"),
     ("mlp", "bp", "adam"),
     ("mlp", "ff_hybrid", "muon"),
     ("mlp", "epc_thermo", "muon"),
+    ("mlp", "epc_thermo", "ortho_adam"),
     ("mlp", "ff", "muon"),
     ("mlp", "ff", "ortho_adam"),
     ("mlp", "pepita", "muon"),
@@ -401,6 +443,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--arms", type=str, default="")
+    parser.add_argument(
+        "--tokens",
+        type=int,
+        default=0,
+        help="matched-token budget per arm (honest denominator; 0 = walltime)",
+    )
     args = parser.parse_args(argv)
     minutes = args.minutes or (1.0 if args.smoke else 60.0)
 
@@ -416,7 +464,7 @@ def main(argv: list[str] | None = None) -> int:
 
     cells = _gated_cells(args.arms, tcfg, mcfg)
 
-    results = _run_cells(geoms, cells, minutes, args.seed, train_t)
+    results = _run_cells(geoms, cells, minutes, args.seed, train_t, args.tokens)
 
     _print_table(results)
     return 0
@@ -428,13 +476,24 @@ def _run_cells(
     minutes: float,
     seed: int,
     train_t: torch.Tensor,
+    token_budget: int = 0,
 ) -> list[dict]:
     results: list[dict] = []
     for geom, credit, update in cells:
         cfg, val = geoms[geom]
         arm = f"{geom}/{credit}/{update}"
         print(f"=== {arm} ({minutes} min, {DEVICE}) ===", flush=True)
-        r = run_arm(geom, credit, update, train_t, val, minutes, seed, cfg)
+        r = run_arm(
+            geom,
+            credit,
+            update,
+            train_t,
+            val,
+            minutes,
+            seed,
+            cfg,
+            token_budget=token_budget,
+        )
         results.append(r)
         print(
             f"  params {r['params']:,}  steps {r['steps']}  "
