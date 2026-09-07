@@ -17,6 +17,7 @@ silently regress:
   to forbid beta=1.0 configs.
 """
 
+import pytest
 import torch
 from torch import nn
 
@@ -33,7 +34,7 @@ from computronium import (
 )
 from computronium.core.pipeline import forward_pass, task_loss
 from computronium.ontology.credit import Phase
-from computronium.ontology.system import SystemState
+from computronium.ontology.system import SystemConfig, SystemState
 from computronium.ontology.update import ParameterUpdateConfig, UnitRMSUpdate
 from computronium.ontology.utils import _learnable_weight_names
 
@@ -199,3 +200,50 @@ class TestH8ClampedCE:
         for a, b in zip(g_free, g_clamp, strict=True):
             cos = torch.dot(a.flatten(), b.flatten()) / (a.norm() * b.norm() + 1e-12)
             assert cos.item() > 0.98
+
+
+def _config(credit, update):
+    from computronium import CreditAssignmentConfig
+
+    return SystemConfig(
+        substrate=SubstrateConfig.digital(),
+        geometry=GeometryConfig.feedforward(
+            input_dim=20, output_dim=8, hidden_dims=(16,)
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=credit.config
+        if credit is not None
+        else CreditAssignmentConfig.gradient(),
+        update=update,
+    )
+
+
+class TestR5StepSemantics:
+    def test_family_classification(self) -> None:
+        assert ParameterUpdateConfig.euclidean().step_semantics == "gradient_relative"
+        for cfg in (
+            ParameterUpdateConfig.adam(),
+            ParameterUpdateConfig.local_adam(),
+            ParameterUpdateConfig.ortho_adam(),
+            ParameterUpdateConfig.unit_rms(),
+            ParameterUpdateConfig.mean_norm(),
+            ParameterUpdateConfig.riemannian_orthogonal(),
+            ParameterUpdateConfig.spectral_constrained(),
+            ParameterUpdateConfig.elastic_consolidation(),
+        ):
+            assert cfg.step_semantics == "per_element_displacement", cfg.update_type
+
+    def test_validate_warns_on_borrowed_lr_grid(self) -> None:
+        with pytest.warns(UserWarning, match="per-element-displacement"):
+            _config(None, ParameterUpdateConfig.unit_rms(step_size=0.1)).validate()
+
+    def test_validate_silent_at_working_lr(self) -> None:
+        _config(None, ParameterUpdateConfig.unit_rms(step_size=0.02)).validate()
+
+
+class TestH8ConfigGuard:
+    def test_validate_rejects_beta_one(self) -> None:
+        system = _config(BackpropCredit(), ParameterUpdateConfig.euclidean())
+        object.__setattr__(system.credit, "beta", 1.0)
+        with pytest.raises(ValueError, match="exactly-zero pseudo-gradient"):
+            system.validate()

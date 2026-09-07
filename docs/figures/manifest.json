@@ -195,7 +195,7 @@
     {
       "capability_id": "D16",
       "capability_name": "uaxis_coverage",
-      "data_sha256": "b95903d91e5a374fec0e60a89dabe9e271d97a2949a6a628ac2abe466f2a7f6f",
+      "data_sha256": "b47538d7795d3de096e5a64dff7fe47bda1ca04b351a4986f0c701f75b5524d1",
       "demo_test": "tests/integration/test_demo_uaxis_coverage.py",
       "figure": "d16_uaxis_coverage.png",
       "provenance": {
@@ -231,7 +231,7 @@
     {
       "capability_id": "D18",
       "capability_name": "update_ladder",
-      "data_sha256": "52a76bf7f288c2c3979c40ef391bcf4b84e12d1520b09cac75ea10f21474c4eb",
+      "data_sha256": "631e23f3c1a6de245e1077e69f6a7ab0df56eb92fe0d295587a621d1a3df9ff4",
       "demo_test": "tests/integration/test_demo_update_ladder.py",
       "figure": "d18_update_ladder.png",
       "provenance": {

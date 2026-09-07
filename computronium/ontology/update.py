@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor
@@ -18,6 +18,28 @@ if TYPE_CHECKING:
 # ============================================================
 # ParameterUpdate Configuration
 # ============================================================
+
+type StepSemantics = Literal["gradient_relative", "per_element_displacement"]
+
+# TODO12b R5 (H1/H4): update rules carry incompatible step-size
+# semantics. `gradient_relative` rules multiply step_size by a
+# gradient-scale quantity; `per_element_displacement` rules normalize
+# magnitude so step_size IS the per-element displacement (‖Δθ‖ =
+# step_size·√n per tensor). An lr grid borrowed across the boundary is
+# a category error (V1's "noise floor" and H4's Muon "divergence" were
+# both exactly this).
+_STEP_SEMANTICS: dict[str, StepSemantics] = {
+    "euclidean": "gradient_relative",
+    "adam": "per_element_displacement",
+    "local_adam": "per_element_displacement",
+    "ortho_adam": "per_element_displacement",
+    "unit_rms": "per_element_displacement",
+    "mean_norm": "per_element_displacement",
+    "riemannian_orthogonal": "per_element_displacement",
+    "muon": "per_element_displacement",
+    "spectral_constrained": "per_element_displacement",
+    "elastic_consolidation": "per_element_displacement",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +69,11 @@ class ParameterUpdateConfig:
     beta2: float = 0.999
     eps: float = 1e-8
     ortho_lr: float = 0.003
+
+    @property
+    def step_semantics(self) -> StepSemantics:
+        """What ``step_size`` displaces (see ``_STEP_SEMANTICS``)."""
+        return _STEP_SEMANTICS.get(self.update_type, "gradient_relative")
 
     @classmethod
     def euclidean(

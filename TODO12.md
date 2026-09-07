@@ -9,6 +9,66 @@
 > future measurement are in "Applying the TODO12b Defect Hunt" below;
 > do not quote pre-TODO12b numbers without those caveats/re-pins.**
 >
+> **Rev 17 (2026-09-06): B4 composition + LM rungs measured — boundary
+> mapped.** (1) **A4 credit_norm does NOT transfer to per-layer
+> contrastive targets** (`b4_per_layer_ff.py` P4/P5 FALSIFIED):
+> per-layer unit-RMS normalization of the goodness gradient collapses
+> learning at every depth AND displacement (d2 0.56 vs 0.827 plain,
+> d4 ~0.20, d8 ~0.10-0.16; per-element axis 1e-3..1e-2 AND an
+> invalid-lr sweep both) — the gradient's magnitude CARRIES
+> information in the contrastive objective (softplus gating), and
+> instantaneous normalization erases it. Levers do not naively
+> compose (A4×D14 precedent); the B4 library pull must not promise
+> depth repair. (2) **Per-layer FF LEARNS on LM without any readout
+> CE** (`b4_per_layer_lm.py` P6): top-1 next-char 15.8/15.6/16.0%
+> (seeds 0-2) vs unigram 9.4%, chance 1.5%; leak controls pass
+> (untrained 1.7%, shuffled-label 5.3%). The pre-registered CE-ppl
+> bar was NOT adjudicable (FF posterior is calibration-bound; two
+> earlier eval drafts — true-label-append leak, 1/acc "ppl" — were
+> caught and discarded). (3) P8: per-layer memory advantage needs
+> depth ≥ 4 — at depth 2 the input layer's own graph ≈ bp's whole
+> graph (614.7 vs 521.9 KiB), consistent with the MNIST probe.
+> Untried: the momentum-EMA normalizer for this class (the canonical
+> magnitude family per A6), and a same-metric ff_hybrid LM comparison.
+>
+> **Rev 16 (2026-09-06): B4 probe executed — the Claim B lever is REAL
+> at probe scale.** `scripts/probes/b4_per_layer_ff.py` (pre-registered):
+> a true per-layer contrastive FF (detached/recomputed inter-layer
+> inputs, per-layer local backward) gets nonzero hidden credit with NO
+> cross-layer sweep (P1 ✓) and its per-layer peak saved-for-backward
+> bytes (268.8 KiB max at depth 4) BEATS bp's whole graph (569.3 KiB)
+> — flipping the direction F5 pinned at HEAD (P3 ✓). Learning: depth-2
+> MNIST-quick 0.827 (> 0.80 bar) but depth-attenuated (d4 0.764) and
+> behind repo ff_hybrid (0.899) — **the depth wall appears in the
+> per-layer-target class too** (P2 split); the unifying diagnosis now
+> covers B3/B4, and the indicated repair is credit_norm composed with
+> per-layer targets. Key realization lessons: per-layer stream
+> normalization is load-bearing at depth 3+; the O(1)-peak claim
+> requires no-grad RECOMPUTE (detached-carry keeps all graphs alive,
+> measured worse than bp). Verdicts + numbers in the probe docstring.
+>
+> **Rev 15 (2026-09-06): the defect-hunt follow-ups are LANDED.**
+> (1) **R5 structural fix:** `ParameterUpdateConfig.step_semantics`
+> property (`"gradient_relative"` for euclidean; `"per_element_displacement"`
+> for adam/local_adam/ortho_adam/unit_rms/mean_norm/muon/spectral/elastic —
+> derived from `update_type` in `_STEP_SEMANTICS`, cannot desync) +
+> `SystemConfig.validate()` warns on a per-element rule with
+> step_size > 0.05 (the classic borrowed-euclid-grid mislabel).
+> (2) **H8 config guard:** `validate()` RAISES on gradient/backprop
+> credit × beta ≥ 1.0 (the exactly-zero pseudo-gradient dead surface).
+> (3) **R1 re-pinned:** D16/uaxis unit_rms cell moved to its own
+> per-element lr axis (1e-3) — it now TRAINS on every geometry
+> (mlp 0.878, attention 0.859, graph 0.354, lattice 0.882, seeds 0–2)
+> and still trails Muon everywhere; the "convergence noise floor"
+> assertion is replaced by a must-learn lock; gallery lock green ×2,
+> manifest re-pinned (single-sha change, additive).
+> (4) **R2 re-pinned:** D18 Muon arms moved to working lr 0.003 —
+> measured w32 45.35 / w64 36.76 (seeds 0–2), training but still
+> trailing unit_rms (42.48 / 32.51); the demo now locks "Muon must
+> train at 0.003" + "unit_rms beats Muon at both widths"; gallery lock
+> green ×2, manifest re-pinned. (5) **R3 caveats:** standing H2/H8/H1/H4
+> caveat block added to `docs/RESULTS.md`.
+>
 > **Identity (unchanged):** Computronium is an ML library whose every claim
 > is a live demonstration. Tests are the evidence system. A claim stands
 > only while the current code re-demonstrates it, on demand, in under two
@@ -248,7 +308,7 @@ pre-registered prediction.
 > every future measurement. **Do not quote any pre-TODO12b number
 > without the caveat or re-pin listed here.**
 
-### R1 — unit_rms lr semantics (H1 CONFIRMED — overturns V1)
+### R1 — unit_rms lr semantics (H1 CONFIRMED — overturns V1) — ✅ RE-PINNED rev 15
 
 - unit_rms's `step_size` is **per-element displacement** (‖Δθ‖ =
   lr·√n per tensor; locked in `test_defect_hunt_locks.py`). Every
@@ -257,25 +317,30 @@ pre-registered prediction.
 - **Before any new unit_rms arm:** pre-register lr on unit_rms's own
   axis (MNIST-quick mlp working lr ≈ **1e-3**, beats euclid 0.878 with
   0.900 — `h1_unit_rms_mnist.py`). Never sweep {0.002..0.1} for it.
-- **Re-pin queue:** D16's unit_rms row; A6's canonical-family map;
-  `test_demo_uaxis_coverage.py`'s "unit_rms stays near chance at
-  matched lr" assertion (lr 0.02) + its lr-note — re-pin these with
-  the demo figure/manifest locks in the same landing (do not edit the
-  assertions piecemeal).
+- **Re-pin queue: DONE rev 15.** D16's unit_rms row + the
+  `test_demo_uaxis_coverage.py` lr-0.02 assertion + its lr-note were
+  re-pinned in one landing (unit_rms lr 1e-3: learns on every
+  geometry, trails Muon; gallery lock ×2 + manifest single-sha
+  re-pin). The A6 map's canonical-family wording is re-scoped by the
+  D18/H4 re-pin below. New guard: `validate()` warns when a
+  per-element-displacement update carries step_size > 0.05
+  (`step_semantics` property, locked in `TestR5StepSemantics`).
 - **V1 verdict:** "convergence noise floor" is dead. D16's chance cell
   was an lr mislabel, not a property of the rule.
 
-### R2 — Muon lr on ePC cells (H4 CONFIRMED — re-scopes V2/D18/A6)
+### R2 — Muon lr on ePC cells (H4 CONFIRMED — re-scopes V2/D18/A6) — ✅ RE-PINNED rev 15
 
 - Muon at registered lr 0.01 on ePC w64 LM lands **worse than chance**
   (ppl 92 vs 65) — an overshoot collapse, NOT divergence (‖Δθ‖
   exactly lr-proportional; `h4_muon_lr.py`). Muon trains at **lr
   0.003** (ppl 36.4); unit_rms 3e-4 remains best (33.4).
-- **Instruction:** quote D18/A6 Muon columns as *registered-config
-  readiness*, never as "the crutch is dead". Re-pin Muon rows at lr
-  0.003 under the P3 matched-step protocol. The F3 instrument (‖Δθ‖
-  logging) is mandatory on any "explodes" claim — divergence language
-  is forbidden without it.
+- **Re-pin DONE rev 15:** D18's Muon arms re-pinned at lr 0.003
+  (w32 45.35 / w64 36.76, seeds 0–2) — Muon trains but unit_rms still
+  wins both widths (42.48 / 32.51); demo locks enforce the
+  matched-budget reading. D18/A6 Muon columns are *registered-config
+  readiness at their working lr*, never "the crutch is dead".
+  The F3 instrument (‖Δθ‖ logging) is mandatory on any "explodes"
+  claim — divergence language is forbidden without it.
 
 ### R3 — Standing caveats on every bp baseline (H2 + H8 CONFIRMED)
 
@@ -286,8 +351,10 @@ pre-registered prediction.
 - **H8:** bp's nudged loss is the **target-blended CE** — (1−β)-scaled
   on the output weight (0.461 at β=0.5), cos ≥ 0.99 direction
   preserved. **β=1.0 with an autograd credit is a DEAD loss surface
-  (exactly zero pseudo-gradient) — forbidden, locked.** Add a
-  config-time guard when convenient (validate() branch).
+  (exactly zero pseudo-gradient) — forbidden, locked.** ✅ Config-time
+  guard LANDED rev 15: `SystemConfig.validate()` raises on
+  gradient/backprop credit × beta ≥ 1.0 (locked in
+  `TestH8ConfigGuard`).
 
 ### R4 — Compatibility facts now locked (H3/H5/H7 — cite, don't re-derive)
 
@@ -303,15 +370,16 @@ pre-registered prediction.
 - D22's routing-mode flip is defect-audited (bitwise no-op); D22's
   contract finding stands unchanged.
 
-### R5 — Structural fix worth prioritizing (new, from the hunt)
+### R5 — Structural fix worth prioritizing (new, from the hunt) — ✅ LANDED rev 15
 
 The root cause behind V1 AND the H4 confound is one defect class:
 **update rules carry incompatible step-size semantics with no
-metadata**. Land `step_semantics` on `ParameterUpdateConfig`
-(`"gradient_relative"` vs `"per_element_displacement"`) + a
-validate()-level lr sanity check, then derive lr grids from it. This
-single change makes the R1/R2 re-pins mechanical and prevents
-recurrence. (Full opportunity list in TODO12b.md.)
+metadata**. ✅ LANDED rev 15: `ParameterUpdateConfig.step_semantics`
+(derived property over `_STEP_SEMANTICS`; `"gradient_relative"` =
+euclidean only) + the `validate()` per-element lr sanity warning. The
+R1/R2 re-pins are now mechanical for any future rule; extend
+`_STEP_SEMANTICS` when a new update primitive lands. (Full
+opportunity list in TODO12b.md.)
 
 ---
 
@@ -423,7 +491,10 @@ local rules work without the Muon/OrthoAdam crutch.
 | NaturalGradientUpdate | — | Mean-\|grad\| magnitude normalizer, not Fisher (A0) | ✅ **RESOLVED 2026-09-06 — renamed `MeanNormUpdate`/`mean_norm`** (touching `_UPDATE_CLASSES`, factory, joint, CLI listings, evaluation map, probes/tests; fake `"fisher"` alias dropped). No diag-Fisher was implemented — the A6 map shows the momentum-EMA family (unit_rms) dominates it, so the honest resolution is the rename |
 
 **Map-level conclusions:** (1) the optimizer crutch is dead for ePC on
-the width axis and dead outright in the faithful regime; (2) Muon's
+the width axis and dead outright in the faithful regime — re-scoped
+rev 15 (H4): unit_rms beats Muon *at Muon's working lr* on both
+fragile widths (42.5 vs 45.4, 32.5 vs 36.8), so the dominance claim
+survives the lr confound but the margin is budget-sized, not 2×; (2) Muon's
 irreplaceable signal, where it exists, is depth-side — but A4/A5 show
 credit/activity-side normalization does not substitute for it yet;
 (3) the momentum-EMA normalizer (unit_rms) beats instantaneous
@@ -444,8 +515,8 @@ separate storage).
 | **B0-legacy-row** | *(original description)* **Audit the legacy seam first.** `computronium/core/local_learning/rules/fa.py:148` has `AdaptiveFA` (Akrout et al. 2019) — but its `_update_feedback_weights` pulls `fb` toward `param.data` (or `param.data.T`): **it reads forward weights, i.e. soft weight transport**; its bio-alignment property test sits xfail'd (`tests/property/biology/test_biology_axioms.py:365`, "feedback LR too small to show alignment in 50 steps"). Extract what's reusable (slow feedback timescale, alignment metric) and record the transport verdict | Probe note + `b0` docstring citing this file | The ontology port must NOT inherit the transport; the xfail stays xfail until a transport-free rule passes it |
 | **B1** | ✅ **LANDED 2026-09-06** — `CreditAssignmentConfig.local_goodness(learned_feedback=, feedback_lr=0.5, feedback_update_every=1)`; extended `local_goodness`, NOT a new credit_type (registry surfaces untouched). Learned B is credit-internal state (`LocalGoodnessCredit._learned`, same deterministic CRC-seeded init as fixed B): per weight, closed-form ridge regression `post @ C ≈ e1` with `B = Cᵀ·feedback_scale` (autoencoder-style, autograd-free, reads only settled activations + the e₁ broadcast — never `param.data`, L3 honored), EMA-blended at `feedback_lr` every `feedback_update_every` steps; non-finite settles skip the update (diverged-step precedent). `get_state()`/`load_state()` per the A1 protocol (learned-B matrices + step counter, string keys, fail-loud shape-mismatch reuse); **TrainerSnapshot now captures credit state** (`credit_state` named-group axis, restore fails loud — carried-queue lesson closed for credits too). **PROBE VERDICT (pre-registered prediction FALSIFIED):** `p4_width_fragility.py --learned-feedback --update unit_rms` — pepita w32/w128 STILL explode (val_ppl 4.8e8; act_std ~20×/layer at lrs 1e-4/3e-4, ~5 min on RTX 3080). Learned B changes the update's row space and the runaway persists ⇒ the fixed-B row space is exonerated; the driver is the unbounded settle-activity loop. **A5 (settle-path gain homeostasis) is the indicated PEPITA repair**, per the pre-registration's else-branch. Library-side B1 stands as honest infrastructure (unit locks + bitwise resume green) | `computronium/ontology/credit.py` + `tests/unit/core/test_learned_feedback.py` (5 locks: B moves + reconstruction strictly improves, transport-free trajectory vs perturbed W, bitwise state round-trip, fail-loud reuse, fixed path untouched) + `tests/integration/test_learned_feedback_resume.py` (snapshot carries credit state; resume bitwise) | Full property suite 679 passed (credit-semantics gate); ruff clean on new code; pyright clean on new code (legacy findings unchanged) |
 | **B2** | 🅿️ **PARKED (rev 11 — PEPITA family).** Fixed-vs-learned B at depths 4/8/16, capacity-matched, MNIST + LM cells | `scripts/probes/b2_learned_feedback_depth.py` | Does the depth-attenuation problem dissolve for the FA/PEPITA family? |
-| **B3** | ▶️ **PROMOTED rev 13 — the Claim A repair** (see the scope audit above): per-layer targets give each hidden layer its own nudged pass, the only honest route to a true layer-local ff with the physical advantage. **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1) | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
-| **B4** | **Per-layer contrastive targets:** each layer sees its activity under (a) correct-class input, (b) corrupted-class input; the activity difference is the layer-local signal (FF's original idea, made per-layer) | `computronium/ontology/credit.py` | Does it beat ff_hybrid on LM (where pure FF's global-goodness fails)? |
+| **B3** | ▶️ **PROMOTED rev 13 — the Claim A repair** (see the scope audit above): per-layer targets give each hidden layer its own nudged pass, the only honest route to a true layer-local ff with the physical advantage. **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1). **Rev 16 probe evidence:** the contrastive cousin (B4) is probed and works — see the B4 row | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
+| **B4** | ▶️ **PROBE EXECUTED rev 16 (`scripts/probes/b4_per_layer_ff.py`)** — per-layer contrastive FF verdict: P1 CONFIRMED (nonzero hidden credit, layer-local graphs), P3 CONFIRMED (per-layer peak 268.8 KiB < bp whole-graph 569.3 KiB at depth 4 — **the F5 ratchet direction flips**), P2 SPLIT (d2 0.827 > 0.80 bar; d4 0.764; behind ff_hybrid 0.899 — **the depth wall extends to per-layer targets**). Library pull, when scheduled: a `local_contrastive`-style credit whose pseudo-gradient path uses the per-layer recompute pattern (the O(1)-peak requirement) + per-layer stream normalization, composed with A4 credit_norm for the depth axis | probe → `computronium/ontology/credit.py` | Does it beat ff_hybrid on LM (where pure FF's global-goodness fails)? |
 | **B5** | 🅿️ **PARKED (rev 11 — naive-STDP rescue).** **Reward-modulated STDP** — the supervised error term `TemporalTraceCredit` lacks by construction (F2: "declares `phases=(FREE,)` and never consumes `loss`"). Add a config-gated reward/error term on the timing-STDP path; closes F2's OPEN verdict either way | `credit.py` + F2 test re-audit | Collapse stops + readout ≥ random-init ⇒ F2 was a missing term; persists ⇒ a verified constraint of timing-STDP, honestly closed |
 | **B6** | *(optional, last)* **Temporal targets:** use the settling trajectory (not just the final equilibrium) as credit — EqProp-adjacent; only if B3–B5 leave the target-delivery question open | probe only | — |
 
@@ -594,8 +665,15 @@ paragraph with numbers. Pre-registered targets: ~10× memory bandwidth,
 
 ---
 
-## 🎯 The Next-Session Plan (Ordered, rev 11 — Highlight Reel)
+## 🎯 The Next-Session Plan (Ordered, rev 15 — post-defect-hunt)
 
+0. ✅ **DONE rev 15 — all TODO12b binding follow-ups landed:** R5
+   `step_semantics` + validate() guards (lr sanity warning, β=1.0
+   raise), R1 (D16/uaxis unit_rms re-pin at lr 1e-3, lock ×2,
+   manifest), R2 (D18 Muon re-pin at lr 0.003, lock ×2, manifest),
+   R3 (RESULTS.md standing caveats). New locks:
+   `TestR5StepSemantics`, `TestH8ConfigGuard` in
+   `tests/unit/core/test_defect_hunt_locks.py`.
 1. **D17 ladder (Step 1) — PAUSED at seed 0.** Seed-0 salvaged:
    ff_hybrid 5.05 vs bp/adam 27.55 (single-seed). Resume = seeds 1–2
    only, after explicit user approval of the ~90-min GPU budget:
@@ -606,10 +684,19 @@ paragraph with numbers. Pre-registered targets: ~10× memory bandwidth,
    pre-registered band mechanically, then promote to the fixed-step D17
    demo (scaled pinned regime — walltime-budgeted arms can never be
    gallery-pinned) + gallery lock.
-2. **F5 resource-vector demo (Step 2)** — winner of Step 1 through the
-   capstone accounting: extend the D4 memory profiler to ff_hybrid,
-   simulated-energy per substrate terms, per-episode compute; one
-   FrontierRecord table + Pareto figure; static-arms convention.
+2. **Claim A/B repair — per-layer contrastive targets (B3/B4)**, the top
+   lever from the rev-13 scope audit. Probe record (revs 16–17): the
+   mechanism is real (nonzero layer-local credit; per-layer peak memory
+   beats bp at depth ≥ 4; LM signal without any readout CE — top-1
+   15.8% vs unigram 9.4%, leak-controlled) but bounded (depth wall in
+   this class; A4 credit_norm does NOT compose; per-layer memory
+   advantage absent at depth 2). Next rungs: (a) **momentum-EMA
+   normalizer** for the per-layer goodness gradient (the canonical
+   magnitude family per A6 — the instantaneous rung is falsified); (b)
+   **same-metric ff_hybrid vs per-layer-FF LM comparison** (both at
+   top-1 accuracy/CE under a stated calibration) before any library
+   pull; (c) the library pull itself is a credit-realization change —
+   per-layer recompute pattern, registry wiring checklist applies.
 3. ✅ **D22 probe verdict (Step 3) — HONEST MISS, 2026-09-06.** Both
    pre-registered predictions falsified (`scripts/probes/d22_psi_only.py`,
    ~2 s CPU): ψ-only adaptation cannot acquire Task B with θ bitwise
@@ -757,6 +844,92 @@ green if a demo was promoted.
 | Does ψ-only adaptation solve the switch (D1)? | The plasticity payoff is demonstrated, not claimed | **ANSWERED (2026-09-06, rev 13, NO — `d22_psi_only.py`):** routing-ψ and FastWeight-ψ both fail to acquire Task B with θ bitwise frozen (the ψ contract carries no task-loss signal); fine-tune acquires B at real forgetting cost. The ψ-timescale boundary is mapped; the next lever is a supervised ψ term (B5-generalization to the P-axis) or metaplasticity (D2) |
 
 ---
+
+## 💡 New Improvement Opportunities (surfaced rev 15 — re-pin work, 2026-09-06)
+
+- **Bias training option (H2 follow-up, from TODO12b):** a
+  `train_biases: bool = False` on the credit contract would make the
+  weights-only choice explicit instead of incidental. Cheap, touches
+  the credit Protocol + `_learnable_weight_names`; pre-register the
+  impact measurement (H2 measured 0.000 at demo scale — the option is
+  about contract honesty, not performance).
+- **learned-B `feedback_lr` default is 0.5 — measured insane (H6):**
+  ‖B‖ collapses ~10× in 150 steps; sane regime 0.01–0.05. Change the
+  `local_goodness()` default to 0.05 next time the credit is touched
+  (bitwise record churn: any demo pinning learned-B behavior would
+  need a re-pin — none does at HEAD, B1's probe-only verdict stands).
+- **`_STEP_SEMANTICS` extension point:** new update primitives must add
+  a row (and their classmethod must not silently inherit
+  `gradient_relative`); the `TestR5StepSemantics` lock enumerates the
+  landed rules — extend it with each new rule.
+- **uaxis/D18 lrs are now per-family self-axis:** future lr sweeps on
+  normalized rules must pre-register on the rule's own axis
+  (per-element displacement); `validate()`'s >0.05 warning is the
+  tripwire, not the boundary — unit_rms's stability edge on
+  MNIST-quick sits near 0.005–0.01 (H1 grid).
+- **`validate()` complexity debt:** the two new branches push
+  `SystemConfig.validate` to 36 branches / 56 statements (C901/PLR0912/
+  PLR0915 already legacy-flagged) — extract `_validate_credit_update`
+  in the hygiene pass, not now.
+
+## 💡 New Improvement Opportunities (surfaced rev 16 — B4 probe, 2026-09-06)
+
+- **The F5 capstone ratchet is flippable with the recompute pattern** —
+  the probe's no-grad-stream per-layer realization beats bp's saved
+  bytes at depth 4 (268.8 vs 569.3 KiB) with nonzero hidden credit. A
+  library-grade `local_contrastive`/`local_predictive` credit using
+  the same pattern (per-layer recompute, no global graph) would turn
+  F5's pinned miss into the ~10×/~5× headline. This is now the
+  concrete design for the capstone rerun — pre-register the F5 schema
+  extension before building.
+- **Per-layer stream normalization is a new load-bearing primitive** —
+  layers 1+ die without it (G contrast ~0) at depth 3+. It is the
+  activity-side cousin of A5's gain_control, applied per-layer on the
+  credit's own forward stream rather than at settle emit. If the B4
+  credit lands, its normalization should share A5's vocabulary
+  (`unit_rms`/`spectral` modes).
+- **The depth wall generalizes to per-layer targets** — a third
+  algorithm class (after ePC and ff_hybrid) shows depth attenuation
+  (d2 0.827 → d4 0.764 at matched budget). Strengthens the unifying
+  diagnosis; any "per-layer targets fix depth" claim is now
+  pre-falsified at probe scale.
+- **Quick-mode loader draws are global-RNG-driven (D8 trap confirmed
+  outside the demo suite)** — probes that draw data before seeding
+  get ±0.04 accuracy replays. h1's probe seed-before-draw pattern
+  should be audited into the other h*/b* probes if their numbers are
+  ever re-quoted (h1 seeded per-arm, b4 now seeds before `_data()`).
+- **`Peak-vs-total saved bytes` instrument (carried from rev 13)** —
+  the b4 probe's `saved_tensors_hooks` per-layer peak measurement is
+  the time-resolved instrument that rev 13 asked for; reusable
+  verbatim when the F5 rerun happens.
+
+## 💡 New Improvement Opportunities (surfaced rev 17 — B4 rungs, 2026-09-06)
+
+- **Contrastive-objective gradient magnitude is load-bearing
+  information** — a new measured fact: in goodness-contrast objectives,
+  per-step gradient magnitude encodes "local margin satisfied"
+  (softplus gating); instantaneous normalization (A4 rms-style) erases
+  it and destroys learning at every scale. Contrastive credit_norm
+  modes must be EMA-based or margin-aware if ever built — never
+  instantaneous. This is a standing design constraint for B3/B4.
+- **FF readout instrumentation is leak-prone in two distinct ways** —
+  (a) appending the TRUE label at eval (conditioning side-door; the
+  first LM draft scored a fake ppl 14.7 this way); (b) reporting 1/acc
+  as "ppl" (mislabeled; second draft). Standing pattern for any
+  FF-style demo: argmax over per-candidate goodness, top-1 accuracy as
+  the primary metric, CE only with a stated posterior calibration.
+- **Per-layer memory advantage has a depth floor** — at depth 2 the
+  input layer's own local graph ≈ bp's whole graph (LM d2: 614.7 vs
+  521.9 KiB; MNIST d2: 367.1 vs 240.6 KiB), while at MNIST d4 the
+  per-layer peak wins (268.8 vs 569.3 KiB). Any F5 rerun must sweep
+  depth (4/8/16), never quote depth-2 cells.
+- **The momentum-EMA normalizer is the last untried magnitude rung for
+  the per-layer class** — pre-register: does the unit_rms-style EMA
+  (which beat instantaneous normalizers on ePC, A6 map) lift the
+  per-layer depth wall where A4-style instantaneous could not?
+- **`_val_pairs`/loader draws in probes must seed before every
+  draw** — third confirmation of the D8 trap; audit remaining probes
+  (a3, p4, h*) before quoting any of their numbers in demos.
 
 ## 💡 New Improvement Opportunities (surfaced rev 13 — F5, 2026-09-06)
 

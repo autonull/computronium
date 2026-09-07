@@ -1,19 +1,26 @@
-"""D18 — The optimizer crutch, killed or mapped: the ablation-ladder verdict.
+"""D18 — The optimizer requirement, mapped: the ablation-ladder verdict.
 
-TODO12 Workstream A (A0–A2). The unifying hypothesis — *the credit
-direction is approximately right; only the magnitude is broken* —
-measured on the P4 width-fragile LM cells (the recorded explosion
-regime: ePC w32/w64 under Muon at its registered lr; PEPITA w32
-everywhere), with per-tensor magnitude normalization only:
+TODO12 Workstream A (A0–A2), re-pinned per TODO12b H4. The unifying
+hypothesis — *the credit direction is approximately right; only the
+magnitude is broken* — measured on the P4 width-fragile LM cells (the
+recorded failure regime: ePC w32/w64 under Muon at its registered lr;
+PEPITA w32 everywhere), with per-tensor magnitude normalization only:
 
 1. **ePC is width-robust without Muon under UnitRMS (seeds 0-2):**
    momentum-EMA normalized to unit RMS per tensor (NO
    orthogonalization) trains ePC at the fragile widths —
-   val_ppl w64: 28.1/28.4/28.5 across seeds (chance 65), w32 ~35 —
-   where Muon at its registered lr explodes (P4: act std -> 2028).
-   The magnitude-only rung REPLACES the orthogonalizer for ePC in
-   this band: the crutch is dead for ePC at w32-64.
-2. **PEPITA's runaway is structural (audit-backed):** under UnitRMS
+   val_ppl w64: 28.1/28.4/28.5 across seeds (chance 65), w32 ~35.
+   The magnitude-only rung is the best rule for ePC in this band.
+2. **Muon's registered lr was an overshoot confound (TODO12b H4
+   re-pin):** at lr 0.01 Muon lands WORSE than chance on ePC w64
+   (ppl 92) — an overshoot collapse, not divergence (‖Δθ‖/step exactly
+   lr-proportional; `scripts/probes/h4_muon_lr.py`). At its working lr
+   0.003 Muon trains (measured here: w64 36.8, w32 45.4, seeds 0-2)
+   but still trails UnitRMS at BOTH widths (unit_rms 32.5 / 42.5) —
+   the crutch verdict survives as a matched-budget comparison:
+   normalize-the-momentum beats orthogonalize-the-momentum for ePC
+   at w32-64.
+3. **PEPITA's runaway is structural (audit-backed):** under UnitRMS
    the fixed-B DFA realization explodes at every lr; the defect audit
    ruled out feedback_scale tuning (inert under per-tensor
    normalization — it scales the pseudo-gradient linearly), the
@@ -70,8 +77,8 @@ DEVICE = "cpu"
 ARMS = {
     "epc_w32_unit_rms": ("epc_thermo", "unit_rms", 32, 3e-4),
     "epc_w64_unit_rms": ("epc_thermo", "unit_rms", 64, 3e-4),
-    "epc_w32_muon": ("epc_thermo", "muon", 32, 0.01),
-    "epc_w64_muon": ("epc_thermo", "muon", 64, 0.01),
+    "epc_w32_muon": ("epc_thermo", "muon", 32, 0.003),
+    "epc_w64_muon": ("epc_thermo", "muon", 64, 0.003),
     "pepita_w32_unit_rms": ("pepita", "unit_rms", 32, 3e-4),
 }
 
@@ -217,12 +224,21 @@ def test_demo_update_ladder(emit_run_record) -> None:
         assert max(arms[name]["seeds"]) < 60.0, (
             f"{name}: every seed must train (seeds {arms[name]['seeds']})"
         )
-    # The crutch comparison: Muon at its registered lr explodes at w32
-    # (P4's recorded failure mode) — UnitRMS strictly dominates there.
-    assert arms["epc_w32_muon"]["mean"] > arms["epc_w32_unit_rms"]["mean"] * 2, (
-        f"Muon w32 ({arms['epc_w32_muon']['mean']:.2f}) must clearly trail "
-        f"UnitRMS ({arms['epc_w32_unit_rms']['mean']:.2f})"
-    )
+    # H4 re-pin: Muon at its working lr 0.003 must TRAIN (the old
+    # lr-0.01 cells were an overshoot confound, worse than chance) and
+    # UnitRMS must still beat it at both fragile widths.
+    for name in ("epc_w32_muon", "epc_w64_muon"):
+        assert arms[name]["mean"] < CHANCE, (
+            f"{name}: Muon must train at its working lr 0.003 (mean "
+            f"{arms[name]['mean']:.2f}, chance {CHANCE}) — the H4 "
+            "registered-lr confound must stay dead"
+        )
+        unit = arms[name.replace("muon", "unit_rms")]["mean"]
+        assert unit < arms[name]["mean"], (
+            f"{name}: UnitRMS ({unit:.2f}) must beat Muon at its working "
+            f"lr ({arms[name]['mean']:.2f}) — the crutch verdict is a "
+            "matched-budget comparison, not an lr artifact"
+        )
     # PEPITA control: the audit-backed structural runaway persists.
     assert arms["pepita_w32_unit_rms"]["mean"] > 100.0, (
         f"PEPITA w32 control must explode at HEAD (mean "

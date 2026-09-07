@@ -495,8 +495,39 @@ class SystemConfig:
             and self.substrate.sparsity > 0.5
         ):
             warnings.warn(
-                f"Tile mesh geometry with sparse substrate (sparsity={self.substrate.sparsity}) "
-                f"may benefit from structured sparsity (N:M or block) for efficient matmul.",
+                f"Sparse substrate (sparsity={self.substrate.sparsity}) "
+                f"with tile mesh geometry may benefit from structured sparsity (N:M or block) "
+                f"for efficient matmul.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # TODO12b H8: beta=1.0 fully clamps the nudged output to the
+        # target — GradientCredit's pseudo-gradient is EXACTLY zero (dead
+        # loss surface, locked in test_defect_hunt_locks.py).
+        if (
+            self.credit.credit_type in {"gradient", "backprop"}
+            and self.credit.beta >= 1.0
+        ):
+            raise ValueError(
+                f"credit_type={self.credit.credit_type!r} with beta={self.credit.beta} "
+                f"has an exactly-zero pseudo-gradient (the nudged output is fully "
+                f"clamped to the target); use beta < 1.0."
+            )
+
+        # TODO12b R5: per-element-displacement update rules take step_size
+        # as an absolute displacement — an lr grid borrowed from a
+        # gradient-relative rule (0.05–0.1 scale) overshoots into collapse
+        # (H1/H4 measured confounds). Loud-check the classic mislabel.
+        if (
+            self.update.step_semantics == "per_element_displacement"
+            and self.update.step_size > 0.05
+        ):
+            warnings.warn(
+                f"update_type={self.update.update_type!r} uses per-element-displacement "
+                f"step semantics (step_size IS the displacement); "
+                f"step_size={self.update.step_size} is in the gradient-relative lr range "
+                f"and likely an overshoot mislabel.",
                 UserWarning,
                 stacklevel=2,
             )

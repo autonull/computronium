@@ -44,6 +44,32 @@
 | **The physical advantage, measured honestly (F5 — the capstone miss pinned)** | The pre-registered resource-vector schema (`scripts/probes/f5_resource_vector.py`, written before any measurement) executed with MEASURED saved-for-backward bytes and MEASURED per-step FLOPs at demo scale (depths 4/16, width 16, batch 16). **The ~10x memory target is FALSIFIED at HEAD for the ff_hybrid realization**: its per-layer local losses run through autograd, which stores MORE than backprop (177.5 vs 143.5 KiB at depth 16, peak == total — every layer's graph alive simultaneously). The O(1)-memory class is nonetheless real: thermo (`requires_autograd=False`) saves EXACTLY 0 bytes at every depth. **The ~5x energy target is FALSIFIED too**: ff_hybrid costs ~1.3x bp/adam FLOPs (1.349 vs 0.939 M at depth 16), with the ortho optimizer a real premium (muon 1.349 vs euclid 1.218 M — "the optimizer is the cost"); thermo/euclid ties bp/adam (0.943 M). Claim A (credit locality — "forward-local credit with a single readout supervision term — no backward sweep through the hidden layers") is an algorithmic statement and stands; Claim B (physical advantage) is NOT demonstrated at HEAD — pinned as a ratchet a non-autograd local-goodness realization must flip (standing caution: implementation artifact, not an in-principle failure) | `test_demo_resource_vector.py` (schema: `scripts/probes/f5_resource_vector.py`) | [f5](figures/f5_resource_vector.png) |
 | **The spiking plateau, audited (R11.5.5 slot filled)** | Two separated claims, same pipeline: (1) **the confound** — with default init, hidden LIF layers are silent (spike fraction < 1e-4 past layer 1) so every hidden weight matrix receives exactly zero STDP gradient and the readout is frozen: historic "spiking at chance" numbers measured a silent network, not STDP; (2) **the plateau, after the fix** — with `init_scale=1.0` every layer spikes (0.15–0.45) and gradients reach every matrix, yet supervised accuracy stays at chance (pure STDP has no error path: `TemporalTraceCredit` never consumes the loss — a category fact, not a defect) and unsupervised STDP training actively collapses class structure (centroid readout 0.36 → 0.18): the runaway-gain pathology, spiking edition. **The collapse survives known fix #1 (2026-09-05 homeostatic audit):** synaptic scaling (`homeostatic_scaling=True`) holds hidden row norms at their init value, yet the readout still collapses (0.36 → 0.18) — the STDP fixed point itself destroys class structure, not norm growth. A supervised spiking claim needs an error term (e.g. reward-modulated STDP) — OPEN, and no wall verdict before that audit (R11.5.5a) | `test_demo_spiking_plateau.py` | [f2](figures/f2_spiking_plateau.png) |
 
+### Standing caveats on every quoted number (TODO12b defect hunt, 2026-09-06)
+
+> Applied to every RESULTS-grade artifact above and below; probes in
+> `scripts/probes/h*.py`, locks in `tests/unit/core/test_defect_hunt_locks.py`.
+
+- **All "backprop" baselines are weights-only backprop (H2):** biases
+  never receive pseudo-gradients in any credit (`_learnable_weight_names`
+  filters to 2-D weights). Measured impact at demo scale: 0.000
+  (0.904 vs 0.904). Absolute bp numbers carry the caveat; relative
+  margins unaffected.
+- **bp's nudged loss is the target-blended CE (H8):** the output is
+  clamped `out + β(onehot − out)`, so the last-layer gradient is
+  (1−β)-scaled (0.461 at β=0.5) with cos ≥ 0.99 direction preserved.
+  β=1.0 is an exactly-zero pseudo-gradient (dead loss surface) — now
+  rejected at config time by `SystemConfig.validate()`.
+- **unit_rms / mean_norm / Muon / Adam-family lr is per-element
+  displacement, not gradient scale (H1, R5):** lr grids borrowed from
+  euclidean are invalid as convergence statements. Every such cell now
+  quotes its own-axis working lr; `ParameterUpdateConfig.step_semantics`
+  exposes the axis and `SystemConfig.validate()` warns on the classic
+  mislabel. The D16 "convergence noise floor" verdict is dead (V1).
+- **D18/A6 Muon cells are quoted at their working lr 0.003 (H4):** the
+  registered lr 0.01 on ePC LM was an overshoot collapse (worse than
+  chance), not divergence; "crutch dead" is scoped to the matched-budget
+  comparison (unit_rms still beats Muon at both fragile widths).
+
 ## Back: historical corroboration
 
 > **Everything below is history.** These are registered research-track runs
