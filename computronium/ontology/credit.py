@@ -151,6 +151,7 @@ class CreditAssignmentConfig:
     stream_norm: bool = True
     contrast_threshold: float = 2.0
     readout_scale: float = 1.0
+    sequential_lr: float = 0.0
 
     @classmethod
     def local_contrastive(
@@ -161,19 +162,28 @@ class CreditAssignmentConfig:
         stream_norm: bool = True,
         contrast_threshold: float = 2.0,
         readout_scale: float = 1.0,
+        sequential_lr: float = 0.0,
     ) -> CreditAssignmentConfig:
         """Per-layer recomputed FF contrast with EMA-magnitude normalization.
 
         The O(1)-peak-memory forward-local class (TODO13b W2). Contract:
         inputs must be **label-augmented** (last ``label_dim`` features =
         the one-hot target; b4/`scripts/probes/w2_ema_rung.py` pattern) —
-        the good/bad contrast lives in the input label channel, NOT in the
-        FREE/NUDGED phases (which are structurally identical at hidden
+        the good/bad contrast lives in the input label channel, NOT in
+        the FREE/NUDGED phases (which are structurally identical at hidden
         layers under instantaneous settle — verified 2026-09-07: hidden
         max|free−nudged| = 0.0 exactly). The output readout layer trains
         on local CE; hidden layers on the softplus-gated goodness
         contrast; every pseudo-gradient is EMA-normalized (the probe-
         confirmed repair for the instantaneous-norm depth collapse).
+
+        ``sequential_lr``: Hinton within-batch layer propagation. When > 0,
+        each hidden layer's EMA-normalized update is applied to the
+        credit's recompute view before later layers' inputs are formed —
+        the b4/`w2_ema_rung` recipe, and the load-bearing mechanism for
+        depth (Jacobi ordering collapses d4 0.757 → 0.27, d8 0.512 → 0.14,
+        measured 2026-09-07). Must equal the update rule's step size;
+        ``0`` gives simultaneous (Jacobi) ordering.
         """
         return cls(
             credit_type="local_contrastive",
@@ -189,6 +199,7 @@ class CreditAssignmentConfig:
             stream_norm=stream_norm,
             contrast_threshold=contrast_threshold,
             readout_scale=readout_scale,
+            sequential_lr=sequential_lr,
         )
 
     @classmethod
@@ -1017,11 +1028,14 @@ class LocalContrastiveCredit:
     (threshold ``contrast_threshold``, Hinton-length stream normalization
     when ``stream_norm``); the readout (last linear) descends local CE on
     its recomputed logits. Every pseudo-gradient is divided by a
-    bias-corrected per-layer EMA of its squared magnitude (``ema_beta``;
+    bias-corrected per-element EMA of its squared magnitude (``ema_beta``;
     ``ema_beta=0`` disables) — the probe-confirmed repair for the
     instantaneous-normalization depth collapse
     (``scripts/probes/w2_ema_rung.py``: d4 0.757 vs 0.19 instantaneous,
-    raw parity; depth 8 trains for the first time in this class).
+    raw parity; depth 8 trains for the first time in this class). With
+    ``sequential_lr`` > 0 the credit also reproduces Hinton's within-batch
+    layer propagation — measured 2026-09-07 as the load-bearing depth
+    mechanism (Jacobi ordering collapses d4 to 0.27, d8 to 0.14).
 
     Supports linear-stack geometries (``FeedforwardGeometry``); any other
     topology raises at first use rather than silently mis-recomputing.
@@ -1033,6 +1047,8 @@ class LocalContrastiveCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_contrastive()
         self._ema: dict[str, Tensor] = {}
+        self._step = 0
+        self._step_view: dict[int, nn.Linear] = {}
         self._step = 0
 
     def _stack(self, geometry: Geometry) -> list[nn.Module]:
@@ -1053,10 +1069,16 @@ class LocalContrastiveCredit:
         return k
 
     def _recompute_prefix(self, x: Tensor, stack: list[nn.Module], upto: int) -> Tensor:
-        """no-grad sweep to layer ``upto``'s input (O(depth) compute, O(1) memory)."""
+        """no-grad sweep to layer ``upto``'s input (O(depth) compute, O(1) memory).
+
+        Prefix layers already updated this step (``sequential_lr`` > 0) are
+        read from ``_step_view`` so later layers see the propagated input —
+        Hinton within-batch ordering.
+        """
         with torch.no_grad():
             h = x
-            for layer in stack[:upto]:
+            for j, prefix_layer in enumerate(stack[:upto]):
+                layer = self._step_view.get(j, prefix_layer)
                 h = layer(h)
                 if self.config.stream_norm and not isinstance(layer, nn.Linear):
                     h = h / (h.norm(dim=-1, keepdim=True) + 1e-12) * h.shape[-1] ** 0.5
@@ -1087,15 +1109,26 @@ class LocalContrastiveCredit:
     def _ema_normalize(self, name: str, gw: Tensor) -> Tensor:
         if self.config.ema_beta <= 0.0:
             return gw
-        # Scalar EMA of mean(gw^2), warm-started at 1.0, NO bias correction —
-        # the exact recipe the w2_ema_rung probe confirmed (bias-corrected /
-        # cold-started EMA shrinks early steps ~10x and fails to train).
-        sq = gw.pow(2).mean().detach()
+        # Element-wise EMA of gw^2, zeros-warm-started, Adam-style bias
+        # correction (ema/(1-beta^t)) — the exact recipe the w2_ema_rung
+        # probe confirmed (d4 0.757, d8 0.512 at lr 0.3). A ones-warm-start
+        # uncorrected EMA leaves the first ~100 steps mis-normalized (t=1
+        # step is raw gw) and destabilizes the high-lr regime the EMA rung
+        # exists for; a scalar mean likewise distorts the label-channel
+        # columns whose gradient magnitude differs from the data columns.
+        sq = gw.detach().pow(2)
         cached = self._ema.get(name)
-        ema = cached if cached is not None else torch.ones_like(sq)
-        ema = self.config.ema_beta * ema + (1 - self.config.ema_beta) * sq
+        ema = (
+            self.config.ema_beta * cached + (1 - self.config.ema_beta) * sq
+            if cached is not None
+            else (1 - self.config.ema_beta) * sq
+        )
         self._ema[name] = ema
-        return gw / (ema.sqrt() + 1e-12)
+        bias = 1 - self.config.ema_beta**self._step
+        # eps INSIDE the sqrt (probe-exact): near-zero gradients must stay
+        # near-zero — an outside eps re-amplifies satisfied-gate ~0 grads
+        # into full-size destructive steps (the collapse the EMA rung fixes).
+        return gw / (ema / bias + 1e-12).sqrt()
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         if not self._ema:
@@ -1139,6 +1172,66 @@ class LocalContrastiveCredit:
             (gw,) = torch.autograd.grad(torch.nn.functional.cross_entropy(logits, y), w)
         return gw
 
+    def _augment(self, d: Tensor, lab: Tensor) -> Tensor:
+        """Hinton-normalized label-augmented stream: unit DIRECTION, length
+        sqrt(dim) — applied to the WHOLE augmented vector for BOTH streams
+        (b4 contract; a scale-mismatched negative halves accuracy at d2)."""
+        z = torch.cat((d, lab), dim=-1)
+        if not self.config.stream_norm:
+            return z
+        return z / (z.norm(dim=-1, keepdim=True) + 1e-12) * z.shape[-1] ** 0.5
+
+    def _resolve_readout(
+        self, geometry: Geometry
+    ) -> tuple[list[nn.Module], int, nn.Linear, str] | None:
+        """(stack, prefix index, readout linear, bias param name) or None."""
+        stack = self._stack(geometry)
+        n_linears = sum(isinstance(layer, nn.Linear) for layer in stack)
+        resolved = self._resolve_layer(stack, n_linears - 1)
+        if resolved is None:
+            return None
+        stack_idx, lin, _ = resolved
+        bias_names = [
+            n for n, p in geometry.params.items() if "bias" in n and p is lin.bias
+        ]
+        if not bias_names:
+            return None
+        return stack, stack_idx, lin, bias_names[0]
+
+    def compute_bias_pseudo_gradients(
+        self,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        """Readout-bias gradient (local CE, raw magnitude × ``readout_scale``).
+
+        The b4/w2_ema_rung recipe trains the readout bias — measured
+        2026-09-07 as load-bearing (freezing it collapses d2 0.824 → 0.52,
+        d4 0.757 → 0.29). Called by the pipeline after
+        ``compute_pseudo_gradient`` so the sequential step-view applies.
+        """
+        if self.config.readout_scale <= 0.0:
+            return {}
+        free_state = states.get(Phase.FREE)
+        if free_state is None or free_state.x is None or free_state.y is None:
+            return {}
+        resolved = self._resolve_readout(geometry)
+        if resolved is None:
+            return {}
+        stack, stack_idx, lin, bias_name = resolved
+        x = free_state.x
+        label = x[..., -self.config.label_dim :]
+        data = x[..., : -self.config.label_dim]
+        a_pos = self._recompute_prefix(self._augment(data, label), stack, stack_idx)
+        with torch.enable_grad():
+            bias = lin.bias.detach().requires_grad_(True)
+            logits = torch.nn.functional.linear(a_pos, lin.weight.detach(), bias)
+            (gb,) = torch.autograd.grad(
+                torch.nn.functional.cross_entropy(logits, free_state.y), bias
+            )
+        return {bias_name: self.config.readout_scale * gb}
+
     def compute_pseudo_gradient(  # noqa: PLR0914 — protocol axis assembly, kept linear
         self,
         states: Mapping[Phase, SystemState],
@@ -1160,19 +1253,10 @@ class LocalContrastiveCredit:
         label = x[..., -self.config.label_dim :]
         data = x[..., : -self.config.label_dim]
 
-        def _aug(d: Tensor, lab: Tensor) -> Tensor:
-            z = torch.cat((d, lab), dim=-1)
-            if not self.config.stream_norm:
-                return z
-            # Hinton: unit DIRECTION, length sqrt(dim) — applied to the
-            # WHOLE augmented vector for BOTH streams (b4 contract; a
-            # scale-mismatched negative halves accuracy at depth 2).
-            return z / (z.norm(dim=-1, keepdim=True) + 1e-12) * z.shape[-1] ** 0.5
-
-        x_pos = _aug(data, label)
-        x_neg = _aug(data, label.roll(1, 0))
-
+        x_pos = self._augment(data, label)
+        x_neg = self._augment(data, label.roll(1, 0))
         self._step += 1
+        self._step_view = {}
         n_linears = sum(isinstance(layer, nn.Linear) for layer in stack)
         grads: list[Tensor] = []
         for name in weight_names:
@@ -1197,7 +1281,21 @@ class LocalContrastiveCredit:
                 grads.append(self.config.readout_scale * gw)
                 continue
             gw = self._layer_grad(a_pos, a_neg, lin_i, act_i)
-            grads.append(self._ema_normalize(name, gw))
+            gw = self._ema_normalize(name, gw)
+            grads.append(gw)
+            if self.config.sequential_lr > 0.0 and i < n_linears - 1:
+                # Hinton within-batch propagation: later layers' inputs are
+                # formed against this layer's post-update weights (detached
+                # view; the real parameters are updated once by the pipeline).
+                lin_view = nn.Linear(
+                    lin_i.in_features, lin_i.out_features, bias=lin_i.bias is not None
+                )
+                lin_view.weight = nn.Parameter(lin_i.weight.detach().clone())
+                if lin_i.bias is not None:
+                    lin_view.bias = nn.Parameter(lin_i.bias.detach().clone())
+                with torch.no_grad():
+                    lin_view.weight -= self.config.sequential_lr * gw
+                self._step_view[stack_idx] = lin_view
         return grads
 
     def surrogate_objective(

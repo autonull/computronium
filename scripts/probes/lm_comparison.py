@@ -161,6 +161,7 @@ LR: dict[str, float] = {
     "transformer/pepita/muon": 5e-4,
     "mlp/pepita/muon": 5e-4,
     "*/ff_hybrid/muon": 0.02,
+    "*/ff_hybrid/adam": 1e-3,
     "mlp/epc_thermo/muon": 0.01,
     "*/bp/adam": 1e-3,
     "*/bp/muon": 0.01,
@@ -386,6 +387,7 @@ CELLS = [
     ("transformer", "bp", "muon"),
     ("transformer", "ff_hybrid", "muon"),
     ("transformer", "ff_hybrid", "ortho_adam"),
+    ("transformer", "ff_hybrid", "adam"),  # D17 confound cell: credit @ Adam (TODO13b S3)
     ("transformer", "pepita", "muon"),
     ("mlp", "bp", "adam"),
     ("mlp", "ff_hybrid", "muon"),

@@ -695,3 +695,137 @@ normalized input).
 gates P3-in-library at depth and all of P4), then W2 P4
 (TransformerGeometry composition) + F5 re-pin.
 
+### 2026-09-07 — Session 3: W2 defect CLOSED — three stacked root causes; `local_contrastive` is now the class's depth frontier
+
+**The discrepancy chase resolved into three independent findings, each
+with its own fix (all in-library, `uv run pytest` targeted suite 192
+passed + wiring lockstep green):**
+
+1. **EMA recipe drift** (`credit.py::_ema_normalize`): the wired version
+   was scalar (mean over the tensor), ones-warm-start, uncorrected, with
+   eps OUTSIDE the sqrt — at t=1 the step was raw gw, and outside-eps
+   re-amplified satisfied-gate ~0 gradients to full size. Fixed to
+   **element-wise, zeros-warm-start, bias-corrected, eps-inside-sqrt** —
+   verified bit-identical to the probe formula on shared weights.
+2. **Ordering semantics (the load-bearing one):** b4/w2 probes update
+   each hidden layer INSIDE the batch loop, so layer i+1's input stream
+   is formed against layer i's post-update weights. The library computed
+   all grads against pre-step weights (Jacobi). Measured: Jacobi
+   collapses the recipe (probe d4 0.76→0.27, d8 0.51→0.14). Landed as
+   **`sequential_lr`** on `CreditAssignmentConfig.local_contrastive()` —
+   the credit keeps a detached per-step view of updated layers for
+   recompute; must equal the update step_size; 0 = Jacobi.
+3. **Readout bias**: probe freezes hidden biases but trains the readout
+   bias via CE; the pipeline's `apply_pseudo_gradients` choke point only
+   paired 2-D weights. Landed: optional **`compute_bias_pseudo_gradients`**
+   hook on the credit (duck-typed in `run_train_step`), threaded through
+   every `ParameterUpdate.step` as `bias_grads: dict[str, Tensor] | None`
+   (Muon/spectral apply euclid fallback for ndim<2 — matrix rules must
+   not orthogonalize vectors). Absent → frozen (all other credits
+   unchanged; H2 weights-only bp baseline untouched).
+
+**THE RED HERRING, named honestly: the old "probe references" (d2
+0.824 / d4 0.757 / d8 0.512 @ EMA lr 0.3) are NOT reproducible from
+committed code** — `w2_ema_rung.train_acc` at lr 0.3 gives 0.507
+(beta 0.99) / 0.542 (0.999). Session-2's "in-library d4 0.654 /
+d8 frozen" numbers were measured against a phantom. The reproducible
+frontier is **b4's RAW recipe** (raw grads, lr 0.5, sequential):
+d2 0.827 / d4 0.764.
+
+**Two-regime verdict (`scripts/probes/w2_library_parity.py`, real
+pipeline, seeds 0–2, 150-step MNIST-quick):**
+
+| arm | d2 | d4 | d8 |
+|---|---|---|---|
+| **raw (ema_beta=0) lr 0.5 sequential** | **0.853** | **0.789** | 0.106 (chance) |
+| EMA 0.99 lr 0.3 sequential | 0.751 | 0.349 | **0.220** |
+
+- Raw+sequential BEATS the b4 frontier at d2/d4 (0.853/0.789 vs
+  0.827/0.764) — the library is now the class's best shallow-depth
+  instrument. **P3-in-library ✅ in its true form**: the EMA rung is the
+  depth-8 repair (0.220 vs raw chance), not a d2/d4 parity tool.
+- Consumer contract locked: RAW data + one-hot label (pre-normalized
+  input double-normalizes and perturbs label cols); euclid
+  grad_clip=0, momentum=0; `sequential_lr` = update step_size;
+  `readout_scale` folds the readout lr into the single axis
+  (raw lr 0.5 → ro_scale 0.2; EMA lr 0.3 → 1/3).
+- Pipeline note: the composed pipeline is far less init-sensitive than
+  the probe harness (0.75-stable vs 0.52–0.82 init lottery) — the
+  pipeline is the more trustworthy instrument; probe-only numbers at
+  this depth need an init-robustness caveat.
+
+**New improvement opportunities (surfaced this session):**
+1. **d8 headroom:** EMA 0.220 is above chance but far from useful —
+   longer budgets, matrix-shaped EMA, and beta/lr co-sweep at d8 are
+   the open axis (the honest next step for the depth-wall story).
+2. **Sequential×Adam interaction:** `sequential_lr` assumes plain SGD;
+   under OrthoAdam the view update should use the optimizer's actual
+   per-layer displacement — unmodeled. Flag before any OrthoAdam×
+   local_contrastive cell.
+3. **D17 optimizer-confound cells (user-directed, elevated priority):**
+   the D17 early-regime win may be Muon-vs-Adam, not locality — SP2's
+   "optimizer does the learning" finding makes this live. Three cheap
+   cells at `--tokens 1000000` (~2.5 min/arm): ff_hybrid/adam vs
+   bp/adam, ff_hybrid/muon vs bp/muon, ff_hybrid/muon vs
+   ff_hybrid/adam. Run before quoting any D17 headline.
+4. **OrthoAdam matched-steps LM cell** (W1 gate): one cell resolves the
+   warmup question before any further W1 expansion.
+
+### 2026-09-07 — Session 4: D17 confound RESOLVED — the 22% is ~half optimizer; credit share is 12% under a shared Muon
+
+**The user's SP2-vs-D17 tension, settled by the three pre-registered
+cells at the matched-token budget (transformer 7.41M, `--tokens
+1000000` = 245 steps, seeds 0–2; `benchmark_results/
+d17_confound_summary.md`, per-seed json `d17_confound_seed2.json`):**
+
+| arm (@1M tokens) | s0 | s1 | s2 | mean |
+|---|---|---|---|---|
+| ff_hybrid/muon | 6.36 | 6.40 | 6.54 | **6.43** |
+| bp/muon *(new)* | 7.21 | 7.40 | 7.26 | **7.29** |
+| bp/adam | 8.28 | 8.19 | 8.30 | **8.26** |
+| ff_hybrid/adam *(new)* | 8.68 | 8.58 | 8.54 | **8.60** |
+
+Full 2×2 factorial decomposition:
+
+- **Credit effect @ Muon (the fair cell): ff_hybrid 11.8% better.**
+- Credit effect @ Adam: ff_hybrid 4.1% *worse* — under Adam the local
+  credit does NOT beat backprop on LM.
+- Optimizer effect @ bp: Muon 11.7% better. Optimizer effect @
+  ff_hybrid: Muon 25.2% better — **Muon rescues the local credit
+  roughly twice as much as it rescues bp** (synergistic pairing, the
+  mechanistically interesting residue).
+
+**Verdict:** the D17 "22% better per token" (vs bp/adam) decomposes
+into ≈ half optimizer (Muon-vs-Adam) + ≈ half credit (12% under shared
+Muon). SP2 and D17 are reconciled: *the optimizer does much of the
+learning, and under the right optimizer the local credit still adds a
+real ~12% per-token early-regime win — but quoting the 22% figure as a
+locality result is forbidden.* **Binding honest wording:** "under a
+shared Muon update, the forward-local hybrid credit beats backprop by
+~12% per token at the 1M-token budget; against bp/adam the gap is 22%,
+but roughly half of that is the optimizer, not the credit." Also note
+the asymmetric optimizer sensitivity mirrors SP2's rung-sensitivity
+finding: weak/local credit is optimizer-sensitive, bp is not.
+
+Wiring: `ff_hybrid/adam` cell + LR entry (`*/ff_hybrid/adam: 1e-3`,
+smoke-plateaued: 7.34 @1e-3 vs 7.57 @3e-3) in `lm_comparison.py`;
+CELLS table row added.
+
+**New opportunities:**
+1. The synergy cell (Muon × local credit) is now the mechanistic
+   question: Muon's orthogonalized update may be repairing the local
+   credit's direction noise — same shape as SP2's "optimizer does the
+   learning" and W2's EMA story. A `local_contrastive × muon` LM cell
+   is the natural follow-on (W2 P4's optimizer axis).
+2. Late-regime confirmation: does the 12% credit share persist at 3M
+   (the crossover) under shared Muon? One `--tokens 3000000` pair
+   (~15 min) closes it if a headline ever needs it.
+
+### 2026-09-07 — Session 4b: d8 headroom probe (slack, ~1 min CPU)
+
+d8 EMA with 3× budget (450 steps, seeds 0–2): β=0.99 flat (0.229),
+**β=0.999 → 0.284** (seeds 0.399/0.241/0.211 — high variance, one seed
+at 0.40). The d8 frontier is budget-starved, not walled: longer
+training + slower EMA both trend up. Proper d8 campaign = budget×β
+grid with ≥3 seeds — Tier-2, not urgent.
+

@@ -22,6 +22,7 @@ def apply_pseudo_gradients(
     params: dict[str, Tensor],
     pseudo_grads: list[Tensor],
     transform: Callable[[str, Tensor, Tensor], Tensor],
+    bias_grads: dict[str, Tensor] | None = None,
 ) -> dict[str, Tensor]:
     """Pair pseudo-gradients with their parameters by learnable-weight order.
 
@@ -34,9 +35,16 @@ def apply_pseudo_gradients(
         params: Current parameters (name -> tensor).
         pseudo_grads: One pseudo-gradient per learnable weight.
         transform: ``(name, param, grad) -> updated_param`` for matched pairs.
+        bias_grads: Optional name-keyed gradients for 1-D bias parameters,
+            for credits whose readout trains a bias (LocalContrastive).
+            Applied through the same ``transform`` so the update rule's
+            lr/momentum/clip semantics cover them; absent means frozen.
     """
     updated = dict(params)
     for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
+        param = params[name]
+        updated[name] = transform(name, param, grad.detach().to(param.device))
+    for name, grad in (bias_grads or {}).items():
         param = params[name]
         updated[name] = transform(name, param, grad.detach().to(param.device))
     return updated

@@ -342,6 +342,7 @@ class ParameterUpdate(Protocol):
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         """Compute parameter updates from pseudo-gradients.
 
@@ -394,6 +395,7 @@ class EuclideanUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             if self.config.momentum > 0:
@@ -415,7 +417,9 @@ class EuclideanUpdate:
                 return param - self.config.step_size * buf
             return param - self.config.step_size * grad
 
-        return apply_pseudo_gradients(params, self._clip(list(pseudo_grads)), apply)
+        return apply_pseudo_gradients(
+            params, self._clip(list(pseudo_grads)), apply, bias_grads
+        )
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         """Snapshot protocol: named groups of state tensors (clones)."""
@@ -467,6 +471,7 @@ class UnitRMSUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             buf = self._buffer(name, param)
@@ -477,7 +482,7 @@ class UnitRMSUpdate:
             rms = buf.square().mean().sqrt().add_(1e-8)
             return param - self.config.step_size * buf / rms
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         return {
@@ -529,6 +534,7 @@ class LocalAdamUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         self._t += 1
         beta1 = self.config.momentum
@@ -546,7 +552,7 @@ class LocalAdamUpdate:
             denom = v_hat.mean().sqrt().add_(self.config.eps)
             return param - self.config.step_size * m_hat / denom
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
@@ -613,6 +619,7 @@ class AdamUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         grads = self._clip(list(pseudo_grads))
         self._t += 1
@@ -631,7 +638,7 @@ class AdamUpdate:
             denom = v_hat.sqrt().add_(self.config.eps)
             return param - self.config.step_size * m_hat / denom
 
-        return apply_pseudo_gradients(params, grads, apply)
+        return apply_pseudo_gradients(params, grads, apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
@@ -678,6 +685,7 @@ class OrthoAdamUpdate(AdamUpdate):
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         grads = self._clip(list(pseudo_grads))
         self._t += 1
@@ -718,7 +726,7 @@ class OrthoAdamUpdate(AdamUpdate):
                 return param - self.config.ortho_lr * ortho
             return param - self.config.step_size * adam_step
 
-        return apply_pseudo_gradients(params, grads, apply)
+        return apply_pseudo_gradients(params, grads, apply, bias_grads)
 
 
 class RiemannianOrthogonalUpdate:
@@ -755,6 +763,7 @@ class RiemannianOrthogonalUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             # Muon orthogonalizes the MOMENTUM, not the raw single-batch
@@ -772,6 +781,9 @@ class RiemannianOrthogonalUpdate:
                 # tensor's update instead of killing a long run (the run
                 # is already lost; the crash only destroys the evidence).
                 return param
+            if grad.ndim < 2:
+                # Muon is a matrix rule; vectors (biases) ride plain SGD.
+                return param - self.config.step_size * grad
             try:
                 ortho_grad = self._orthogonalize(grad)
             except RuntimeError:  # svd convergence failure surfaces as RuntimeError
@@ -780,7 +792,7 @@ class RiemannianOrthogonalUpdate:
                 return param
             return param - self.config.step_size * ortho_grad
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
     def get_state(self) -> dict[str, dict[str, Tensor]]:
         return {
@@ -806,15 +818,18 @@ class SpectralConstrainedUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            if grad.ndim < 2:
+                return param - self.config.step_size * grad
             # Normalize gradient to target spectral norm
             grad_norm = torch.linalg.matrix_norm(grad, ord=2)
             if grad_norm > self.config.spectral_norm:
                 grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # ruff: ignore[non-augmented-assignment]
             return param - self.config.step_size * grad
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
 
 class MeanNormUpdate:
@@ -828,12 +843,13 @@ class MeanNormUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             # Simplified: scale by inverse Fisher approximation
             return param - self.config.step_size * grad / (grad.abs().mean() + 1e-8)
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
 
 class ElasticConsolidationUpdate:
@@ -882,6 +898,7 @@ class ElasticConsolidationUpdate:
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             # EWC update: param - lr * grad - lr * ewc_lambda * fisher * (param - old_param)
@@ -898,4 +915,4 @@ class ElasticConsolidationUpdate:
                 )
             return param - self.config.step_size * grad
 
-        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)

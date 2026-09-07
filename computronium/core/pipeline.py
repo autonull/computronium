@@ -177,7 +177,13 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
             output.energy = dynamics.compute_energy(output, geometry)
 
         pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
-        geometry.update_params(update.step(geometry.params, pseudo_grads, geometry))
+        bias_getter = getattr(credit, "compute_bias_pseudo_gradients", None)
+        bias_grads = (
+            bias_getter(states, loss, geometry) if callable(bias_getter) else None
+        )
+        geometry.update_params(
+            update.step(geometry.params, pseudo_grads, geometry, bias_grads)
+        )
 
         # Post-update, target-free forward+settle for honest learning metrics.
         # This is the "free" readout: what the model actually predicts without
