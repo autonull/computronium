@@ -1,101 +1,68 @@
 # Computronium Epistemic Experiment Calculus  
-## CEEC v1.0 — A Formal Specification for Belief, Goal, Evidence, and Experiment Governance
+## CEEC-Core v1.0 — Final Core Specification
 
-**Status:** Final specification.  
-**Scope:** This document defines a self-contained, complete, and elegant formal system for planning, recording, analyzing, prioritizing, and promoting scientific experiments within Computronium or any comparable empirical research program.
+**Status:** Final core specification.  
+**Scope:** This document defines the normative core of CEEC: a self-contained formal governance system for evidence, beliefs, goals, experiments, statuses, scheduling, and audit in an empirical research program.
 
-The specification governs:
+CEEC-Core is intentionally compact. It defines the invariants and minimal object model required for capability, honesty, and auditability. Implementation details, mathematical methods, domain examples, and tooling conventions are outside the core and MAY be provided by profiles or appendices.
 
-1. **Evidence** — structured, immutable, vector-, range-, curve-, tensor-, and relation-valued experimental results.
-2. **Beliefs** — probabilistic, scoped, evidence-weighted claims about mechanisms, capabilities, boundaries, instruments, and generality.
-3. **Goals** — utility-bearing objectives with priority, cost, dependencies, and strategic value.
-4. **Experiments** — interventions selected to reduce important uncertainty or advance high-value goals.
-5. **Statuses** — disciplined transitions among `Open`, `Promoted`, `Boundary`, `Reopened`, and `Quarantined`.
-6. **Scheduling** — efficient selection of next experiments under budget, dependency, and integrity constraints.
+---
+
+## 1. Interpretation
+
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** in this document are to be interpreted as normative requirements.
+
+An implementation is CEEC-Core compliant only if it satisfies all mandatory requirements in this specification.
+
+---
+
+## 2. Purpose
+
+CEEC-Core governs:
+
+1. **Evidence** — immutable, structured experimental observations.
+2. **Derived objects** — summaries, contrasts, relations, and comparisons computed from evidence.
+3. **Beliefs** — scoped, probabilistic claims supported by evidence.
+4. **Goals** — valued objectives with utility, cost, and dependencies.
+5. **Experiments** — pre-registered interventions chosen to reduce uncertainty or advance goals.
+6. **Statuses** — governed transitions among epistemic states.
+7. **Decisions** — auditable records of experiment selection and status changes.
 
 The central design principle is:
 
-> **Evidence is primary. Beliefs are derived. Statuses are gated. Goals are separate. Experiments are chosen by expected value per cost.**
+> **Evidence is primary. Beliefs are derived. Statuses are gated. Goals are separate. Experiments are chosen by expected value per cost under hard constraints.**
 
 ---
 
-## 1. Design Principles
+## 3. Design Principles
 
-A compliant implementation MUST respect the following principles.
+A CEEC-Core implementation MUST respect the following principles.
 
 ### P1. Evidence before belief
 
-No scientific belief may exist without explicit evidence references.
+A scientific belief MUST NOT exist without explicit evidence references.
 
-\[
-\text{Belief} \Rightarrow \text{Evidence}
-\]
-
-A belief without evidence is a hypothesis, not a belief.
-
----
+A claim without evidence is a hypothesis, not a belief.
 
 ### P2. Structure before scalarization
 
-Experimental results MUST NOT be reduced to a single scalar before structured evidence has been recorded.
+Experimental results MUST NOT be reduced to a primary scalar when scientifically important structure exists.
 
-Scalars such as accuracy, loss, priority, or confidence are derived objects.
+If the underlying result is a curve, vector, tensor, relation, event, distribution, or frontier, that structure MUST be representable and preserved.
 
-The canonical order is:
-
-\[
-\text{Raw Evidence}
-\rightarrow
-\text{Structured Evidence}
-\rightarrow
-\text{Summaries / Relations}
-\rightarrow
-\text{Beliefs}
-\rightarrow
-\text{Priorities}
-\]
-
----
+Scalar summaries are derived objects.
 
 ### P3. Scope before generality
 
 Every belief MUST carry an explicit scope.
 
-A claim is never globally true merely because it was observed locally.
-
-Example:
-
-\[
-P(
-\text{local credit works}
-\mid
-\text{probe-scale transformer, tested schedules}
-)
-\]
-
-is distinct from:
-
-\[
-P(
-\text{local credit works}
-\mid
-\text{all transformer scales}
-)
-\]
-
----
+A local observation MUST NOT be treated as a general claim unless supported by explicit generality evidence.
 
 ### P4. Belief confidence is separate from goal desire
 
 The probability of a claim MUST NOT be inflated because the claim is strategically valuable.
 
-\[
-P(\phi)
-\neq
-U(\phi)
-\]
-
-Belief confidence answers:
+Belief probability answers:
 
 > How strongly is this supported by evidence?
 
@@ -103,75 +70,81 @@ Goal priority answers:
 
 > How valuable is it to pursue?
 
----
-
 ### P5. Hard gates are not negotiable by score
 
 Some conditions are logical constraints, not weighted features.
 
-For example:
-
-- A promoted result MUST have multi-seed confirmation.
-- A boundary MUST pass defect hunt.
-- A negative result MUST NOT be promoted to boundary if a known decisive control was omitted.
-- An instrument under suspected defect MUST be validated before dependent claims are trusted.
-
----
+A high expected value, priority, or utility score MUST NOT override a hard gate.
 
 ### P6. Progression and relationship are first-class
 
-Learning curves, optimization trajectories, factorial tensors, interaction surfaces, Pareto fronts, and mechanism events MUST be representable without collapsing into isolated datapoints.
+Learning curves, trajectories, factorial tensors, interaction surfaces, comparisons, dominance relations, and events MUST be representable without collapsing into isolated datapoints.
 
----
+### P7. Efficient decisions use compact derived summaries
 
-### P7. Efficient decision-making uses compact derived summaries
+Schedulers and prioritizers MAY use scalar summaries, but those summaries MUST reference structured evidence and MUST be recomputable.
 
-The scheduler MAY use scalarized summaries, but those summaries MUST reference structured evidence and MUST be recomputable.
+### P8. All important changes require provenance
 
----
+Every promotion, boundary assignment, reopening, quarantine, override, and experiment selection MUST record:
 
-### P8. All status changes require provenance
-
-Every promotion, boundary, reopening, or quarantine MUST record:
-
-- evidence used;
-- gates passed;
+- evidence or derived objects used;
+- gates passed or failed;
 - assumptions;
 - decision rationale;
-- code/config hash or equivalent provenance.
+- relevant provenance, such as artifact hashes, config hashes, code versions, or equivalent identifiers.
 
 ---
 
-## 2. Architecture Overview
+## 4. Core Invariants
 
-CEEC is organized as a six-layer epistemic architecture.
+The following invariants are mandatory.
 
 ```text
-Layer 5: Decisions / Experiment Selection
-Layer 4: Goals / Priorities
-Layer 3: Beliefs / Statuses
-Layer 2: Summaries / Relations
-Layer 1: Structured Evidence
-Layer 0: Immutable Raw Evidence
+No belief without evidence.
+No belief without scope.
+No scalar-only primary evidence when structure exists.
+No promotion without gates.
+No boundary without defect hunt and lever exhaustion.
+No reopening without a credible trigger.
+No trusted use of quarantined dependencies.
+No goal priority influencing belief probability.
+No experiment selection overriding hard constraints.
+No status change or selection decision without provenance.
 ```
 
-The operational loop is:
+---
 
-\[
-\text{Experiment}
-\rightarrow
-\text{Raw Evidence}
-\rightarrow
-\text{Structured Evidence}
-\rightarrow
-\text{Summaries}
-\rightarrow
-\text{Beliefs}
-\rightarrow
-\text{Goals}
-\rightarrow
-\text{Next Experiment}
-\]
+## 5. Object Model
+
+CEEC-Core defines the following primary objects:
+
+```text
+Scope
+Artifact
+Evidence
+Derived
+Belief
+Goal
+Experiment
+Decision
+StatusChange
+GateOutcome
+```
+
+The epistemic flow is:
+
+```text
+Experiment
+  → Artifact
+  → Evidence
+  → Derived
+  → Belief
+  → Status
+  → Goal Priority
+  → Next Experiment
+  → Decision
+```
 
 The system MUST support both directions:
 
@@ -180,1069 +153,894 @@ The system MUST support both directions:
 
 ---
 
-## 3. Core Objects
-
-### 3.1 Scope
+## 6. Scope
 
 A `Scope` defines the conditions under which evidence, beliefs, goals, or experiments apply.
 
-Formally:
+A scope MUST be a non-empty map from dimension names to values, ranges, sets, or patterns.
 
-\[
-\text{Scope} : K \rightarrow V
-\]
+Example:
 
-where \(K\) is a set of scope dimensions and \(V\) is a set of values or ranges.
+```yaml
+scope:
+  architecture: transformer
+  credit: local_contrastive
+  update: muon
+  task: next_token_probe
+  budget: 600_steps
+```
 
-Recommended scope dimensions include:
+Requirements:
 
-| Dimension | Examples |
-|---|---|
-| architecture | MLP, transformer, lattice, NCA, NTM |
-| geometry | feedforward, recurrent, tile mesh, spatial lattice |
-| credit | backprop, FA, FF, PEPITA, local contrastive |
-| update | Euclid, Adam, Muon, OrthoAdam, Lion |
-| task | MNIST, Fashion-MNIST, copy task, language modeling |
-| budget | steps, tokens, episodes, batches |
-| seed policy | single seed, 3 seeds, seed range |
-| evaluation | fixed batch, fresh draw, validation window |
-| code provenance | commit hash, config hash, probe ID |
-| substrate | digital, memristive, photonic, simulated physical |
+- Every belief MUST have an explicit scope.
+- Every experiment SHOULD have an explicit scope.
+- Every evidence object SHOULD have an explicit scope.
+- Scope MUST be sufficient to prevent accidental overgeneralization.
+- A scope MAY include dimensions such as architecture, task, substrate, optimizer, credit rule, budget, seed policy, evaluation policy, and code provenance.
 
-A belief without scope is invalid.
+A claim without scope is invalid as a CEEC belief.
 
 ---
 
-### 3.2 Raw Evidence
+## 7. Artifact
 
-Raw evidence is the immutable forensic layer.
+An `Artifact` is an immutable raw forensic object.
 
-\[
-E_{\text{raw}} =
-\{
-(x_i, y_i, \Sigma_i, c_i)
-\}_{i=1}^n
-\]
+Artifacts are the lowest layer of provenance.
 
-where:
+Minimal schema:
 
-- \(x_i\) = independent variables or coordinates;
-- \(y_i\) = observed values;
-- \(\Sigma_i\) = uncertainty, if known;
-- \(c_i\) = context/provenance.
+```yaml
+artifact:
+  id: string
+  uri_or_hash: string
+  type: log | tensor | curve | metrics | checkpoint | config | trace | other
+  provenance:
+    probe: optional string
+    run_id: optional string
+    code_commit: optional string
+    config_hash: optional string
+    timestamp: optional datetime
+```
 
-Raw evidence MUST be append-only.
+Requirements:
+
+- Artifacts MUST be append-only.
+- Artifacts MUST NOT be overwritten.
+- Artifacts SHOULD be content-addressed or hash-linked where practical.
+- Artifacts MUST be referenceable by evidence objects.
+- Raw artifacts MUST remain accessible for audit, even if scheduling uses derived summaries.
+
+Examples of artifacts:
+
+- training logs;
+- per-step curves;
+- seed-wise metric tables;
+- evaluation outputs;
+- config files;
+- code commit identifiers;
+- resource measurements;
+- probe outputs;
+- error traces.
+
+---
+
+## 8. Evidence
+
+An `Evidence` object is a structured scientific record referencing one or more artifacts.
+
+Minimal schema:
+
+```yaml
+evidence:
+  id: string
+  kind: scalar | interval | vector | tensor | curve | event | distribution | frontier | inert | missing
+  scope: {}
+  axes: {}
+  values_ref: string
+  uncertainties: optional
+  artifact_refs: []
+  quality:
+    seeds: optional integer
+    controls: optional boolean
+    instrument_valid: optional boolean
+    freshness: optional string
+    stale: boolean
+  defects: []
+  notes: optional string
+```
+
+### 8.1 Required evidence kinds
+
+A CEEC-Core implementation MUST support at least the following evidence kinds:
+
+| Kind | Meaning |
+|---|---|
+| `scalar` | A single value, ideally with uncertainty. |
+| `interval` | A range with confidence, credibility, or uncertainty semantics. |
+| `vector` | An ordered multi-metric result. |
+| `tensor` | A multi-axis factorial or grid result. Matrices are rank-2 tensors. |
+| `curve` | A value over a progression axis, such as step, time, budget, or sequence length. |
+| `event` | A discrete occurrence, such as gate shutdown, divergence, plateau, or failure. |
+| `inert` | An unrealizable or no-op condition. |
+| `missing` | An absent, failed, or unrun condition. |
+
+Optional but RECOMMENDED kinds:
+
+| Kind | Meaning |
+|---|---|
+| `distribution` | A posterior, bootstrap, sampling, or empirical distribution. |
+| `frontier` | A Pareto or multi-objective boundary. |
+
+### 8.2 Evidence rules
+
+- Evidence MUST reference at least one artifact or explicitly declare why no artifact exists.
+- Evidence MUST NOT be mutable in a way that destroys prior recorded values.
+- Evidence metadata MAY be versioned, but previous versions MUST remain recoverable.
+- If structure exists, evidence MUST preserve or reference that structure.
+- Missing or inert cells MUST be explicitly labeled.
+- Missing or inert cells MUST NOT be silently zeroed.
+- An inert or unrealizable cell MUST NOT be treated as negative capability evidence unless the claim is specifically about realizability.
+- Evidence SHOULD record quality information, including seeds, controls, staleness, and instrument validity.
+- Evidence quality SHOULD affect belief weighting.
+
+### 8.3 Structured evidence requirement
+
+If an experiment produces:
+
+- a learning curve,
+- a training trajectory,
+- a factorial tensor,
+- a multi-metric vector,
+- a relation,
+- an event sequence,
+- a distribution,
+- or a Pareto frontier,
+
+then the primary evidence MUST NOT be only a final scalar summary.
+
+Scalar summaries MAY exist as derived objects.
+
+---
+
+## 9. Derived
+
+A `Derived` object is a compact derived summary or relation computed from evidence.
+
+`Derived` unifies summaries and relations.
+
+Minimal schema:
+
+```yaml
+derived:
+  id: string
+  type: summary | relation
+  inputs: []
+  left: optional
+  right: optional
+  operator: string
+  parameters: {}
+  value: scalar | interval | vector | tensor | distribution | boolean
+  probability_positive: optional float
+  probability_material: optional float
+  assumptions: []
+  checks: []
+  scope: {}
+  provenance:
+    code_hash: optional string
+    method: optional string
+    timestamp: optional datetime
+```
+
+### 9.1 Summary objects
+
+A summary is a derived reduction or analysis of evidence.
 
 Examples:
 
-- per-step training curves;
-- per-layer diagnostics;
-- seed-wise final metrics;
-- resource measurements;
-- log excerpts;
-- probe outputs;
-- config hashes;
-- run IDs.
+- mean;
+- median;
+- variance;
+- credible interval;
+- confidence interval;
+- contrast;
+- interaction effect;
+- slope;
+- peak;
+- peak time;
+- asymptote;
+- decay rate;
+- area under curve;
+- change point;
+- realizability check.
 
-Raw evidence MUST NOT be overwritten.
+### 9.2 Relation objects
 
----
+A relation is a derived relationship between objects.
 
-### 3.3 Structured Evidence
+Relation inputs MAY include:
 
-Structured evidence organizes raw datapoints into meaningful scientific objects.
+- evidence objects;
+- other derived objects;
+- beliefs;
+- experiments;
+- goals;
+- scoped conditions.
 
-A `StructuredEvidence` object is:
+Examples:
 
-\[
-E =
-(
-\text{id},
-\text{kind},
-\text{axes},
-\text{values},
-\text{uncertainties},
-\text{provenance},
-\text{quality},
-\text{defects},
-\text{staleness}
-)
-\]
-
-Evidence kinds MUST include at least:
-
-| Kind | Meaning |
-|---|---|
-| scalar | single value with uncertainty |
-| interval | range with confidence/credibility |
-| vector | ordered multi-metric result |
-| matrix | two-axis factorial result |
-| tensor | multi-axis factorial result |
-| curve | value over progression axis |
-| distribution | posterior, bootstrap, or sampling distribution |
-| relation | comparison between evidence objects |
-| frontier | Pareto or multi-objective boundary |
-| event | discrete occurrence, e.g. gate shutdown |
-| inert | no-op or unrealizable cell, not capability evidence |
-
-The `inert` kind is mandatory. An unrealizable experiment is not evidence against a hypothesis unless it is evidence about realizability itself.
-
----
-
-### 3.4 Summary
-
-A `Summary` is a compact derived object used for belief update and scheduling.
-
-\[
-S =
-(
-\text{id},
-\text{evidence refs},
-\text{operator},
-\text{parameters},
-\text{value or distribution},
-\text{assumptions},
-\text{validity checks}
-)
-\]
-
-Summary operators MUST include at least:
-
-| Operator | Meaning |
-|---|---|
-| mean | central tendency |
-| median | robust central tendency |
-| variance / spread | seed or sample dispersion |
-| credible_interval | range with posterior mass |
-| confidence_interval | frequentist coverage estimate |
-| contrast | difference between two conditions |
-| interaction | factorial interaction effect |
-| slope | local progression derivative |
-| peak | maximum over progression |
-| peak_time | time of maximum |
-| asymptote | estimated limiting value |
-| decay_rate | post-peak degradation rate |
-| crossing_time | time when one curve overtakes another |
-| change_point | detected regime transition |
-| auc | integrated performance over progression |
-| dominance | pairwise or Pareto dominance |
-| realizability | whether a contract or pathway was live |
-
-A summary MUST reference the evidence from which it was derived.
-
----
-
-### 3.5 Relation
-
-A `Relation` represents a relationship between evidence objects, summaries, or beliefs.
-
-\[
-R =
-(
-\text{id},
-\text{left},
-\text{right},
-\text{operator},
-\text{distribution},
-\text{probability},
-\text{scope},
-\text{evidence refs}
-)
-\]
-
-Relation operators MUST include at least:
-
-| Operator | Meaning |
-|---|---|
-| greater_than | left exceeds right |
-| less_than | left is below right |
-| within_epsilon | left and right are practically equal |
-| dominates | left dominates right on all relevant axes |
-| pareto_dominates | left Pareto-dominates right |
-| curve_dominates | one curve exceeds another over an interval |
-| crosses_before | one curve crosses another before a threshold |
-| monotone | relationship preserves order |
-| sign_interaction | interaction has a given sign |
-| magnitude_interaction | interaction has a given magnitude |
-| generalizes | relation holds across scopes |
-| replicates | relation repeats under new seed/config |
-| contradicts | relation opposes another relation |
-| mechanism_for | one event or relation explains another |
-| controls | one condition acts as control for another |
+- greater than;
+- less than;
+- within epsilon;
+- dominance;
+- Pareto dominance;
+- curve dominance;
+- replication;
+- contradiction;
+- mechanism-for;
+- generalization;
+- control relation;
+- sign interaction;
+- magnitude interaction.
 
 Relations are first-class scientific objects.
 
+### 9.3 Required derived capabilities
+
+A CEEC-Core implementation MUST support derived operations sufficient to express at least:
+
+| Capability | Meaning |
+|---|---|
+| central tendency | mean, median, or equivalent |
+| dispersion | variance, spread, interval, or uncertainty |
+| contrast | difference between conditions |
+| interaction | factorial or conditional interaction effect |
+| progression summary | slope, peak, asymptote, change point, or equivalent |
+| comparison | greater than, less than, or practical equivalence |
+| dominance | pairwise or Pareto-style dominance |
+| validity check | realizability, control validity, or instrument validity |
+
+The operator vocabulary MAY be extensible.
+
+### 9.4 Derived-object rules
+
+- Every derived object MUST reference its input evidence or derived objects.
+- Every derived object MUST identify its operator or method.
+- Every derived object MUST be recomputable or include sufficient provenance to audit its computation.
+- Derived objects MUST NOT replace structured evidence as the primary scientific record when structure matters.
+- Derived objects MAY be used for scheduling, prioritization, and belief update.
+- Assumptions and validity checks SHOULD be recorded.
+
 ---
 
-### 3.6 Belief
+## 10. Belief
 
-A `Belief` is a probabilistic claim about the world, derived from evidence.
+A `Belief` is a scoped, probabilistic claim supported by evidence.
+
+Minimal schema:
+
+```yaml
+belief:
+  id: string
+  statement: string
+  type: capability | mechanism | boundary | instrument | generality | realizability | defect | hygiene | other
+  scope: {}
+  probability: float
+  uncertainty: float | interval | enum
+  evidence_weight: float | enum
+  generality: float | enum
+  evidence_refs: []
+  derived_refs: []
+  dependencies: []
+  status: open | promoted | boundary | quarantined
+  gates:
+    gate_outcome_refs: []
+  status_history: []
+  posterior_method: optional string
+```
+
+### 10.1 Belief requirements
+
+Every belief MUST have:
+
+- a unique identifier;
+- a statement or proposition;
+- an explicit scope;
+- a probability or probability estimate;
+- an uncertainty representation;
+- evidence weight;
+- generality estimate;
+- at least one evidence or derived reference;
+- a status;
+- status history;
+- gate information when status is `promoted` or `boundary`.
+
+A belief MUST NOT be stored as a bare scalar probability without scope and evidence references.
+
+### 10.2 Belief probability
+
+The probability of a belief MUST be a value in:
 
 \[
-B =
-(
-\text{id},
-\phi,
-\theta,
-p(\theta \mid E),
-P(\phi),
-\text{scope},
-\text{type},
-\text{evidence refs},
-\text{summary refs},
-\text{relation refs},
-\text{confidence vector},
-\text{status},
-\text{gates},
-\text{dependencies}
-)
+[0,1]
 \]
 
-Where:
+or an interval over that range.
 
-- \(\phi\) is the proposition.
-- \(\theta\) is the parameter, vector, function, or relation about which the belief is formed.
-- \(p(\theta \mid E)\) is the posterior or approximation.
-- \(P(\phi)\) is the probability of the proposition.
+If an implementation uses posterior distributions, bootstrap distributions, Bayes factors, or other methods, the method SHOULD be declared.
 
-The probability of a belief is:
+The implementation MUST declare at least one of:
 
-\[
-P(\phi)
-=
-\int
-\mathbb{I}[\phi(\theta)]
-p(\theta \mid E)
-d\theta
-\]
+- posterior method;
+- update rule;
+- evidence weighting policy;
+- uncertainty representation.
 
-For discrete or binary claims, this reduces to posterior probability.
+A belief probability MUST NOT be set or modified by goal priority, strategic value, or desired outcome alone.
 
-Belief types MUST include:
+### 10.3 Confidence representation
+
+Belief confidence MUST be represented using at least four components:
+
+| Component | Meaning |
+|---|---|
+| `probability` | Probability that the proposition is true under scope. |
+| `uncertainty` | Dispersion, credible range, or confidence uncertainty. |
+| `evidence_weight` | Strength, quality, or effective support from evidence. |
+| `generality` | Breadth of validated scope. |
+
+A scalar confidence MAY be used for scheduling, but the four components MUST be preserved for audit.
+
+### 10.4 Belief types
+
+The belief type MUST be recorded.
+
+Recommended vocabulary:
 
 | Type | Meaning |
 |---|---|
-| capability | a system can do something |
-| mechanism | a causal or explanatory structure exists |
-| boundary | a limitation holds under scope |
-| instrument | a measurement tool is valid |
-| generality | a claim transfers across scopes |
-| realizability | a contract or pathway is executable |
-| defect | a known flaw exists |
-| hygiene | a cleanup or audit claim |
+| `capability` | A system can do something under scope. |
+| `mechanism` | A causal or explanatory structure exists. |
+| `boundary` | A limitation holds under scope. |
+| `instrument` | A measurement tool or method is valid. |
+| `generality` | A claim transfers across scopes. |
+| `realizability` | A contract, pathway, or configuration is executable. |
+| `defect` | A known flaw exists. |
+| `hygiene` | A cleanup, audit, or validity claim. |
 
-A belief MUST NOT be stored as a bare scalar without scope and evidence references.
+Additional types MAY be used if documented.
 
----
+### 10.5 Belief dependencies
 
-### 3.7 Confidence Vector
+A belief MAY depend on:
 
-Belief confidence MUST be represented as a vector, not only as one scalar.
+- other beliefs;
+- instrument beliefs;
+- evidence objects;
+- derived objects;
+- code/config provenance;
+- measurement assumptions.
 
-\[
-C_B =
-(
-p,
-u,
-w,
-g
-)
-\]
+Dependencies MUST be explicit where known.
 
-where:
+If a dependency becomes invalid, suspect, or stale, dependent beliefs MUST be re-evaluated, discounted, or quarantined.
 
-- \(p\) = probability that the proposition is true under scope;
-- \(u\) = uncertainty, e.g. posterior variance or credible volume;
-- \(w\) = evidence weight, e.g. effective sample size or evidence quality;
-- \(g\) = generality, i.e. breadth of validated scope.
+### 10.6 Staleness and decay
 
-A scalar confidence MAY be used for scheduling, but the full vector MUST be preserved for audit.
+Beliefs dependent on implementation details SHOULD decay or be quarantined when relevant code, configuration, instrumentation, or environment changes.
+
+If an instrument belief is invalid or suspected invalid, dependent beliefs MUST NOT be used for promotion or boundary decisions until revalidated.
 
 ---
 
-### 3.8 Goal
+## 11. Goal
 
 A `Goal` is a desired outcome with strategic value.
 
-\[
-G =
-(
-\text{id},
-\psi,
-\text{kind},
-\mathbf{U},
-c,
-\text{prerequisites},
-\text{linked beliefs},
-\text{priority},
-\text{status}
-)
-\]
+Goals are separate from beliefs.
 
-Where:
+Minimal schema:
 
-- \(\psi\) is the desired proposition;
-- \(\mathbf{U}\) is a utility vector;
-- \(c\) is expected cost;
-- priority is recomputed dynamically.
+```yaml
+goal:
+  id: string
+  statement: string
+  kind: terminal | instrumental | hygiene | infrastructure | boundary | promotion | audit | custom
+  utility:
+    dimensions: map<string, float>
+  scalar_utility: optional float
+  cost_estimate: float | interval
+  prerequisites: []
+  linked_beliefs: []
+  priority: optional float
+  status: active | blocked | completed | deferred
+```
 
-Goal kinds MUST include:
+### 11.1 Goal requirements
 
-| Kind | Meaning |
+Every goal MUST have:
+
+- a unique identifier;
+- a statement;
+- a utility representation;
+- a cost estimate or cost range;
+- status.
+
+Goals SHOULD have:
+
+- dependencies or prerequisites;
+- linked beliefs;
+- priority;
+- kind.
+
+### 11.2 Utility
+
+A goal MUST NOT be represented only by a bare scalar priority unless the scalar is derived from a documented utility model.
+
+The goal utility MUST be stored as a structured map of dimensions or as an explicit documented scalarization.
+
+Recommended utility dimensions:
+
+| Dimension | Meaning |
 |---|---|
-| terminal | flagship or final objective |
-| instrumental | enables other goals |
-| hygiene | protects validity |
-| infrastructure | improves tooling |
-| boundary | establishes a true limit |
-| promotion | upgrades evidence to stronger status |
-| audit | checks instruments or defects |
+| `science` | Epistemic value or knowledge gain. |
+| `program` | Programmatic, flagship, or mission value. |
+| `resource` | Resource, efficiency, or substrate value. |
+| `optionality` | Future option value. |
+| `urgency` | Time sensitivity or blocking impact. |
 
-Goals MUST be separate from beliefs.
+Additional dimensions MAY be used.
+
+A scalar utility MAY be derived, but the underlying utility dimensions MUST be preserved.
+
+### 11.3 Goal probability and feasibility
+
+A goal MAY have a feasibility estimate derived from linked beliefs and prerequisites.
+
+Goal feasibility MUST NOT alter belief probabilities.
+
+Goal priority SHOULD depend on:
+
+- utility;
+- cost;
+- feasibility;
+- dependencies;
+- urgency;
+- epistemic debt;
+- blocked downstream work.
+
+### 11.4 Epistemic debt
+
+Epistemic debt is unresolved risk in the measurement, instrument, or inference foundation.
+
+Hygiene, audit, instrument-validation, and defect-resolution goals SHOULD receive priority increases proportional to epistemic debt.
 
 ---
 
-### 3.9 Experiment
+## 12. Experiment
 
 An `Experiment` is an action that generates evidence.
 
-\[
-X =
-(
-\text{id},
-q,
-\text{target beliefs},
-\text{target goals},
-\text{design},
-\text{prediction},
-\text{controls},
-\text{falsification},
-\text{overturn},
-\text{cost},
-\text{hard gates},
-\text{expected value}
-)
-\]
+Minimal schema:
+
+```yaml
+experiment:
+  id: string
+  question: string
+  rationale: string
+  scope: {}
+  target_beliefs: []
+  target_goals: []
+  design: {}
+  prediction: string
+  controls: []
+  metrics: []
+  budget: string
+  cost_estimate: float | interval
+  falsification_criterion: string
+  overturn_criterion: string
+  expected_value: optional float | interval
+  hard_gates: []
+  status: proposed | pre_registered | running | completed | abandoned
+```
+
+### 12.1 Experiment requirements
 
 Every experiment MUST have:
 
 1. a question;
-2. a mechanism or rationale;
-3. a pre-registered prediction;
-4. at least one control where applicable;
-5. a budget;
+2. a rationale or mechanism;
+3. at least one target belief or target goal;
+4. a design;
+5. a pre-registered prediction;
 6. metrics;
-7. falsification criterion;
-8. overturn or promotion criterion.
+7. a budget or cost estimate;
+8. a falsification criterion;
+9. an overturn or promotion criterion.
 
-This matches the TODO14 probe discipline.
+Where applicable, every experiment MUST have at least one control or an explicit justification for absence of control.
+
+### 12.2 Pre-registration
+
+Before execution, an experiment MUST be recorded in a `pre_registered` or equivalent state.
+
+Pre-registration MUST include:
+
+- question;
+- prediction;
+- controls;
+- metrics;
+- budget;
+- falsification criterion;
+- overturn criterion.
+
+### 12.3 Experiment execution
+
+During execution, the system SHOULD record:
+
+- seed or seed policy;
+- config hash;
+- code version;
+- budget consumed;
+- evaluation policy;
+- runtime environment if relevant;
+- deviations from the pre-registered design.
+
+Deviations MUST be recorded if they affect interpretation.
+
+### 12.4 Experiment evidence
+
+Completed experiments MUST produce evidence records or a documented reason for absence of evidence.
+
+If the experiment fails to run, the result SHOULD be recorded as `missing` or `inert` evidence, not as negative capability evidence unless realizability is the target claim.
 
 ---
 
-### 3.10 Decision
+## 13. Decision
 
-A `Decision` records why an experiment was selected.
+A `Decision` records why an experiment was selected, rejected, overridden, or postponed.
 
-\[
-D =
-(
-\text{id},
-\text{state hash},
-\text{candidate experiments},
-\text{scores},
-\text{selected experiment},
-\text{overrides},
-\text{rationale}
-)
-\]
+Minimal schema:
+
+```yaml
+decision:
+  id: string
+  timestamp: datetime
+  state_hash: string
+  candidate_experiments: []
+  scores: {}
+  selected_experiment: string | null
+  overrides: []
+  constraints_checked: []
+  rationale: string
+```
+
+### 13.1 Decision requirements
 
 Decisions MUST be append-only.
 
----
+Every selected experiment MUST have a decision record.
 
-## 4. Mathematical Foundations
+A decision record MUST include:
 
-### 4.1 Evidence Space
+- candidate set or reference to candidate generation process;
+- scores or ranking rationale;
+- selected experiment;
+- overrides, if any;
+- rationale;
+- state hash or equivalent snapshot identifier.
 
-Let:
-
-\[
-\mathcal{X}
-\]
-
-be the space of experimental coordinates, e.g. architecture, credit, update, seed, step, task.
-
-Let:
-
-\[
-\mathcal{Y}
-\]
-
-be the space of observations, e.g. accuracy, loss, resource usage, gate state.
-
-An evidence-generating process is modeled as:
-
-\[
-Y : \mathcal{X} \rightarrow \mathcal{Y}
-\]
-
-Observed evidence is:
-
-\[
-\mathcal{D}
-=
-\{
-(x_i, y_i, \Sigma_i)
-\}_{i=1}^n
-\]
+Manual overrides MUST be explicit and MUST NOT silently bypass hard gates.
 
 ---
 
-### 4.2 Latent Scientific Parameters
+## 14. StatusChange
 
-Many claims are not about individual datapoints but about latent parameters.
+A `StatusChange` records a change in belief status.
 
-Examples:
+Minimal schema:
 
-- mean performance difference;
-- interaction strength;
-- learning-curve asymptote;
-- decay rate;
-- peak time;
-- Pareto dominance probability;
-- causal effect of a mechanism intervention.
+```yaml
+status_change:
+  id: string
+  belief_id: string
+  timestamp: datetime
+  from_status: open | promoted | boundary | quarantined
+  to_status: open | promoted | boundary | quarantined
+  reason: string
+  trigger: string
+  gate_refs: []
+  evidence_refs: []
+  derived_refs: []
+  actor: optional string
+```
 
-Let:
+Status changes MUST be append-only.
 
-\[
-\theta
-\]
-
-be the latent parameter or structured object.
-
-The posterior is:
-
-\[
-p(\theta \mid \mathcal{D}, M)
-\]
-
-where \(M\) is the statistical or mechanistic model.
-
-A proposition \(\phi\) is a measurable statement about \(\theta\).
-
-The belief probability is:
-
-\[
-P(\phi \mid \mathcal{D}, M)
-=
-\int
-\mathbb{I}[\phi(\theta)]
-p(\theta \mid \mathcal{D}, M)
-d\theta
-\]
-
-This allows beliefs to be about scalars, ranges, vectors, curves, tensors, or relations.
+A status change MUST NOT occur without gate evidence when moving into `promoted` or `boundary`.
 
 ---
 
-### 4.3 Binary Belief Update
+## 15. GateOutcome
 
-For simple binary hypotheses, odds may be updated via Bayes factors.
+A `GateOutcome` records whether a gate passed, failed, or is unknown.
 
-Let:
+Minimal schema:
 
-\[
-O(H)
-=
-\frac{P(H)}{1-P(H)}
-\]
+```yaml
+gate_outcome:
+  id: string
+  gate: string
+  belief_id: optional string
+  experiment_id: optional string
+  status: passed | failed | unknown | waived_with_justification
+  evidence_refs: []
+  derived_refs: []
+  rationale: string
+  timestamp: datetime
+```
 
-Given evidence \(e\) with quality \(q \in [0,1]\) and Bayes factor \(\text{BF}(e)\):
+### 15.1 Gate rules
 
-\[
-O'(H)
-=
-O(H)
-\cdot
-\text{BF}(e)^q
-\]
-
-Then:
-
-\[
-P'(H)
-=
-\frac{O'(H)}{1 + O'(H)}
-\]
-
-Evidence quality SHOULD downweight evidence that is:
-
-- uncontrolled;
-- stale;
-- single-seed;
-- instrument-suspicious;
-- non-reproducible;
-- scope-mismatched.
+- Gates MUST be checkable against evidence, derived objects, or explicit declarations.
+- A gate MUST NOT pass by assertion alone when evidence is required.
+- Gate outcomes MUST be recorded for promotion and boundary decisions.
+- Hard gates MUST NOT be overridden by priority, expected value, or utility.
+- A gate MAY be waived only if the waiver is recorded, justified, and allowed by the governance profile.
 
 ---
 
-### 4.4 Continuous and Structured Belief Update
+## 16. Belief Status State Machine
 
-For continuous or structured claims, the system SHOULD use one of:
-
-1. hierarchical Bayesian models;
-2. bootstrap distributions;
-3. multivariate Normal or Student-t approximations;
-4. Gaussian processes for curves;
-5. Dirichlet or Beta models for categorical/binomial evidence;
-6. log-normal models for positive resource quantities;
-7. nonparametric credible intervals.
-
-The exact method is not mandatory, but the implementation MUST declare:
-
-- model assumptions;
-- uncertainty representation;
-- evidence weighting;
-- update rule.
-
----
-
-### 4.5 Belief Decay and Staleness
-
-Beliefs dependent on implementation details SHOULD decay when relevant code, config, or instruments change.
-
-Let:
-
-\[
-p_i(t+1)
-=
-p_i(t)
-\cdot
-\lambda_i
-\]
-
-where \(\lambda_i \in [0,1]\) is a persistence factor.
-
-Recommended defaults:
-
-| Belief dependency | Persistence \(\lambda\) |
-|---|---:|
-| formal invariant | 0.99–1.00 |
-| replicated mechanism | 0.90 |
-| probe-scale empirical result | 0.70 |
-| instrument belief after patch | 0.40 |
-| belief from suspected stale run | 0.10 |
-
-If an instrument belief is invalidated, dependent beliefs MUST be quarantined or discounted until revalidated.
-
----
-
-## 5. Representation of Ranges, Vectors, Curves, Tensors, and Relations
-
-This section is normative. CEEC is not compliant if it only supports isolated scalar datapoints.
-
----
-
-### 5.1 Scalars and Intervals
-
-A scalar result MUST be accompanied by uncertainty whenever possible.
-
-Minimal representation:
-
-\[
-y = \hat{y} \pm \delta
-\]
-
-Better representation:
-
-\[
-P(y \in [a,b] \mid E) = 1-\alpha
-\]
-
-A belief about a scalar range is:
-
-\[
-\phi =
-a \leq y \leq b
-\]
-
-with confidence:
-
-\[
-P(\phi)
-\]
-
-Example:
-
-\[
-P(
-\text{NTM fresh-draw accuracy} \in [0.65, 0.75]
-)
-= 0.80
-\]
-
----
-
-### 5.2 Vectors
-
-A vector-valued result is:
-
-\[
-\mathbf{y}
-=
-(y_1, y_2, \dots, y_k)
-\]
-
-with optional covariance:
-
-\[
-\Sigma
-\]
-
-Examples:
-
-\[
-\mathbf{y}
-=
-(
-\text{accuracy},
-\text{loss},
-\text{memory},
-\text{energy},
-\text{latency}
-)
-\]
-
-A vector belief may assert:
-
-\[
-P(
-\mathbf{y} \in R
-)
-\geq
-\tau
-\]
-
-where \(R\) is a credible region.
-
-Vector relations include:
-
-- dominance;
-- Pareto dominance;
-- componentwise improvement;
-- tradeoff detection.
-
----
-
-### 5.3 Matrices and Tensors
-
-Factorial experiments MUST be representable as matrices or tensors.
-
-For example, the credit–update interaction is represented as:
-
-\[
-Y_{c,u}
-\]
-
-where:
-
-- \(c\) = credit rule;
-- \(u\) = update rule.
-
-With geometry and seed:
-
-\[
-Y_{c,u,g,s}
-\]
-
-The canonical interaction contrast is:
-
-\[
-I(c,u)
-=
-Y_{c,u}
--
-Y_{c,u_0}
--
-Y_{c_0,u}
-+
-Y_{c_0,u_0}
-\]
-
-For geometry-dependent interactions:
-
-\[
-I(c,u,g)
-=
-Y_{c,u,g}
--
-Y_{c,u_0,g}
--
-Y_{c_0,u,g}
-+
-Y_{c_0,u_0,g}
-\]
-
-Beliefs about interaction tensors may include:
-
-\[
-P(I(c,u,g) > 0)
-\]
-
-\[
-P(
-\operatorname{sign}(I(c,u,g_1))
-=
-\operatorname{sign}(I(c,u,g_2))
-)
-\]
-
-\[
-P(
-|I(c,u,g_1)|
-\approx
-|I(c,u,g_2)|
-)
-\]
-
-This is the natural representation of TODO14’s \(I(C,U)\) law.
-
----
-
-### 5.4 Curves and Progressions
-
-A progression is a function:
-
-\[
-y(t)
-\]
-
-where \(t\) may be:
-
-- training step;
-- token count;
-- episode;
-- rollout length;
-- depth;
-- width;
-- feedback scale;
-- damage fraction;
-- sequence length.
-
-A curve evidence object MUST store at least:
-
-\[
-\{
-(t_i, y_i, \sigma_i)
-\}
-\]
-
-and SHOULD store derived events:
-
-| Event | Meaning |
-|---|---|
-| peak | maximum value |
-| peak_time | time of maximum |
-| decay_onset | beginning of degradation |
-| crossing | one curve passes another |
-| plateau | stabilization |
-| change_point | regime shift |
-| gate_shutdown | mechanism-specific freeze or zero-gradient event |
-| inversion | sign inversion or analogous diagnostic |
-
-Curve summaries MUST include at least:
-
-\[
-\text{slope}(t_1,t_2)
-=
-\frac{
-\mathbb{E}[y(t_2)] - \mathbb{E}[y(t_1)]
-}{
-t_2 - t_1
-}
-\]
-
-\[
-y_{\text{peak}}
-=
-\max_t y(t)
-\]
-
-\[
-t_{\text{peak}}
-=
-\arg\max_t y(t)
-\]
-
-Beliefs about curves may include:
-
-\[
-P(
-f_A(t) > f_B(t)
-\text{ for } t \in [t_1,t_2]
-)
-\]
-
-\[
-P(
-t_{\text{peak}} < T
-)
-\]
-
-\[
-P(
-y(3000) > y(600)
-)
-\]
-
-\[
-P(
-\text{curve still rising at cutoff}
-)
-\]
-
-This is essential for W0 transformer decay, W8 NTM learning curves, and rollout-length NCA experiments.
-
----
-
-### 5.5 Functional and Grid Approximations
-
-Full functional inference is optional. Implementations MAY approximate functional beliefs using:
-
-- discrete grids;
-- parametric curve fits;
-- Gaussian processes;
-- bootstrap confidence bands;
-- change-point detection;
-- monotonicity tests.
-
-If a functional claim is approximated on a grid, the grid resolution MUST be recorded.
-
----
-
-### 5.6 Pareto Fronts and Resource Vectors
-
-Resource claims MUST use vector representation.
-
-The Computronium resource vector is:
-
-\[
-\mathcal{C}
-=
-(
-\text{compute},
-\text{memory},
-\text{energy},
-\text{latency},
-\text{plastic-state capacity}
-)
-\]
-
-Let:
-
-\[
-(Q_A, \mathcal{C}_A)
-\]
-
-and:
-
-\[
-(Q_B, \mathcal{C}_B)
-\]
-
-be two systems, where \(Q\) is capability or quality.
-
-System \(A\) Pareto-dominates system \(B\) iff:
-
-\[
-Q_A \ge Q_B
-\]
-
-and:
-
-\[
-\mathcal{C}_A \le \mathcal{C}_B
-\]
-
-componentwise, with at least one strict inequality.
-
-Beliefs may assert:
-
-\[
-P(A \succ B)
-\]
-
-or:
-
-\[
-P(A \text{ is Pareto-optimal in tested set})
-\]
-
-Energy terminology MUST remain strict:
-
-- simulated energy;
-- estimated energy;
-- hardware-measured energy.
-
-These MUST NOT be collapsed into a generic “energy efficiency” claim.
-
----
-
-### 5.7 Efficient Storage Rules
-
-To remain efficient:
-
-1. Raw evidence MAY be large.
-2. Structured evidence SHOULD be stored in vectorized formats, e.g. Parquet, Arrow, SQLite, HDF5, or equivalent.
-3. Summaries MUST be compact.
-4. The scheduler MUST operate primarily on summaries, relations, and belief states.
-5. Raw evidence MUST be accessible for audit but need not be loaded for every scheduling decision.
-6. Parametric fits MAY replace dense curves if residual diagnostics pass.
-7. Missing or unrealizable cells MUST be marked as missing or inert, not silently zeroed.
-
----
-
-## 6. Belief Status State Machine
-
-CEEC defines five primary statuses:
+CEEC-Core defines four primary belief statuses:
 
 | Status | Meaning |
 |---|---|
-| `Open` | evidence exists but is insufficient for promotion or boundary |
-| `Promoted` | positive claim survives promotion gates |
-| `Boundary` | negative or limiting claim survives boundary gates |
-| `Reopened` | previous boundary or negative result is newly doubtful |
-| `Quarantined` | belief is suspect due to instrument or defect risk |
+| `open` | Evidence exists but the claim is not yet promoted or bounded. |
+| `promoted` | A positive claim has passed promotion gates. |
+| `boundary` | A negative or limiting claim has passed boundary gates. |
+| `quarantined` | The belief is suspect due to instrument, dependency, defect, or provenance risk. |
 
 A belief MUST have exactly one primary status.
 
+### 16.1 Reopening
+
+Reopening is a transition, not a primary status.
+
+A boundary belief that becomes doubtful MUST move to `open` with a recorded reopen trigger.
+
+Example:
+
+```yaml
+status_change:
+  belief_id: b_example
+  from_status: boundary
+  to_status: open
+  reason: reopened
+  trigger: strong_untested_mechanism
+```
+
+Valid reopen triggers include:
+
+- strong untested rescue mechanism;
+- new evidence materially raising rescue probability;
+- instrument defect invalidating the previous boundary;
+- provenance failure in supporting evidence;
+- discovery of a decisive omitted control.
+
 ---
 
-### 6.1 Open
+## 17. Hard Gates
 
-A belief begins as `Open` when:
+CEEC-Core defines four mandatory gate families:
 
-\[
-0 < w < w_{\text{min}}
-\]
+1. promotion gates;
+2. boundary gates;
+3. quarantine gates;
+4. reopen gates.
 
-or:
+Projects MAY define additional gates. Projects MUST NOT weaken mandatory gates.
 
-\[
-P(\phi)
-\]
+Default thresholds are RECOMMENDED, but alternate thresholds MAY be used if explicitly declared.
 
-is not decisive, or required gates are incomplete.
+Default values:
+
+```text
+τ_promote = 0.95
+τ_boundary = 0.05
+ε_reopen = 0.10
+```
 
 ---
 
-### 6.2 Promoted
+## 18. Promotion Gates
 
-A positive belief MAY become `Promoted` only if:
+A positive belief MAY become `promoted` only if all required promotion gates pass.
 
-\[
-P(\phi) \ge \tau_{\text{promote}}
-\]
-
-and all hard promotion gates pass.
-
-Default:
-
-\[
-\tau_{\text{promote}} = 0.95
-\]
-
-Promotion gates:
+Required promotion gates:
 
 ```text
 Promoted(φ) requires:
     Probability(φ) ≥ τ_promote
     ∧ MultiSeed(φ)
     ∧ MatchedControl(φ)
-    ∧ FixedStepEvaluation(φ)
+    ∧ EvaluationPolicyValid(φ)
     ∧ DefectAudit(φ)
     ∧ Reproduction(φ)
     ∧ ScopeExplicit(φ)
 ```
 
-For empirical learning results, `MultiSeed` SHOULD require at least three seeds unless a formal justification exists.
+### 18.1 MultiSeed
+
+For empirical learning results, `MultiSeed` SHOULD require at least three seeds unless a formal justification is recorded.
+
+Single-seed results MAY support `open` beliefs but MUST NOT normally support promotion.
+
+### 18.2 MatchedControl
+
+A promoted positive claim SHOULD have a matched control condition, unless absence of control is explicitly justified.
+
+Examples of controls:
+
+- gold-standard baseline;
+- known-working configuration;
+- negative control;
+- instrument calibration control;
+- matched training or evaluation condition.
+
+### 18.3 EvaluationPolicyValid
+
+Evaluation MUST be valid for the claim.
+
+Where relevant, this includes:
+
+- fixed-step or fixed-budget evaluation;
+- fresh-draw evaluation;
+- separated training and evaluation data;
+- consistent metric definitions;
+- no evaluation contamination.
+
+### 18.4 DefectAudit
+
+A promoted claim MUST pass a defect audit.
+
+A defect audit SHOULD check:
+
+- known defects;
+- config errors;
+- implementation mistakes;
+- measurement issues;
+- stale code or stale artifacts;
+- suspicious instrument behavior.
+
+### 18.5 Reproduction
+
+A promoted claim SHOULD be reproduced under at least one independent or repeated condition, such as:
+
+- additional seed;
+- rerun;
+- alternate config hash;
+- alternate environment;
+- independent probe.
+
+### 18.6 ScopeExplicit
+
+The promoted claim MUST state the scope in which it is promoted.
+
+A promotion MUST NOT imply global truth beyond scope.
 
 ---
 
-### 6.3 Boundary
+## 19. Boundary Gates
 
-A negative or limiting belief MAY become `Boundary` only if:
+A negative or limiting belief MAY become `boundary` only if all required boundary gates pass.
 
-\[
-P(\text{rescue} \mid \text{known mechanisms}) \le \tau_{\text{boundary}}
-\]
-
-Default:
-
-\[
-\tau_{\text{boundary}} = 0.05
-\]
-
-Boundary gates:
+Required boundary gates:
 
 ```text
 Boundary(φ) requires:
-    DefectHuntPassed(φ)
-    ∧ OptimizerMatrixComplete(φ)
-    ∧ SignalIntegrity(φ)
-    ∧ StateIntegrity(φ)
-    ∧ UpdateIntegrity(φ)
-    ∧ MeasurementIntegrity(φ)
+    RescueProbability(φ) ≤ τ_boundary
+    ∧ DefectHuntPassed(φ)
+    ∧ IntegrityChecksPassed(φ)
     ∧ KnownLeversExhausted(φ)
     ∧ MatchedControl(φ)
-    ∧ MultiSeed(φ)
+    ∧ MultiSeedWhereFeasible(φ)
     ∧ ScopeExplicit(φ)
 ```
 
-A negative result obtained without a known decisive control MUST NOT be promoted to `Boundary`.
+### 19.1 RescueProbability
+
+`RescueProbability` is the estimated probability that a plausible rescue mechanism, configuration, or untested lever would materially change the negative result.
+
+A boundary claim requires low rescue probability.
+
+### 19.2 DefectHuntPassed
+
+A boundary claim MUST pass a defect hunt.
+
+A defect hunt is stronger than a defect audit. It SHOULD include active search for plausible failure causes, such as:
+
+- broken gradients;
+- dead gates;
+- incorrect initialization;
+- invalid state updates;
+- measurement leakage;
+- optimizer misconfiguration;
+- numerical instability;
+- accidental clipping;
+- incorrect evaluation pairing;
+- stale code or config.
+
+### 19.3 IntegrityChecksPassed
+
+Integrity checks SHOULD include, where relevant:
+
+- signal integrity;
+- state integrity;
+- update integrity;
+- measurement integrity;
+- optimizer integrity;
+- data integrity;
+- evaluation integrity.
+
+The specific checks MUST be appropriate to the claim and scope.
+
+### 19.4 KnownLeversExhausted
+
+A boundary MUST NOT be declared while known decisive levers remain untested.
+
+Known levers MAY include:
+
+- alternative optimizers;
+- alternative learning rates;
+- alternative schedules;
+- alternative initializations;
+- alternative architectures;
+- alternative credit assignments;
+- alternative controls;
+- known rescue mechanisms.
+
+If a strong lever is untested, the claim SHOULD remain `open` or be reopened.
+
+### 19.5 Negative result rule
+
+A negative result obtained without a known decisive control MUST NOT be promoted to `boundary`.
 
 ---
 
-### 6.4 Reopened
+## 20. Quarantine Gates
 
-A belief in status `Boundary` MUST be moved to `Reopened` if:
-
-\[
-\exists m \in \mathcal{M}_{\text{strong}}
-:
-\neg \text{Tested}(m,\phi)
-\]
-
-or if new evidence satisfies:
-
-\[
-P(\text{rescue} \mid \text{new evidence}) > \epsilon_{\text{reopen}}
-\]
-
-Recommended default:
-
-\[
-\epsilon_{\text{reopen}} = 0.10
-\]
-
-This formalizes the overturnability principle.
-
----
-
-### 6.5 Quarantined
-
-A belief MUST be quarantined if a required instrument, measurement, or dependency is suspected invalid.
+A belief MUST be quarantined if a required instrument, measurement, dependency, or provenance element is suspected invalid.
 
 Examples:
 
-- stale process suspected;
+- instrument belief is stale;
+- measurement defect suspected;
 - patch not verified live;
-- silent inert contract detected;
-- evaluation uses same generator draw as training;
-- global clipping destroys learning-rate sensitivity;
-- covariate pairing misalignment suspected.
+- silent inert contract suspected;
+- evaluation uses training data incorrectly;
+- covariate pairing misalignment suspected;
+- code/config provenance mismatch;
+- dependent evidence is quarantined.
+
+Quarantine rule:
+
+```text
+Quarantined(b) if:
+    depends_on(b, i)
+    AND NOT valid(i)
+```
 
 While quarantined:
+
+- the belief MUST NOT be used to promote other claims;
+- the belief MUST NOT be used to establish boundaries;
+- dependent beliefs SHOULD be quarantined or discounted;
+- experiments relying on the belief SHOULD be blocked or re-scored.
+
+If instrument validity is unknown, dependent beliefs MUST NOT be used for promotion or boundary decisions until validity is restored.
+
+Effective probability under quarantine MAY be computed as:
 
 \[
 P_{\text{effective}}(\phi)
@@ -1252,228 +1050,115 @@ P(\phi)
 P(\text{instrument valid})
 \]
 
-If instrument validity is unknown, dependent beliefs MUST NOT be used for promotion or boundary decisions.
+but this MUST NOT replace the requirement to quarantine or block dependent decisions when validity is unknown.
 
 ---
 
-## 7. Goal Model
+## 21. Reopen Gates
 
-### 7.1 Goal Utility Vector
+A boundary belief MUST be reopened if any of the following holds:
 
-A goal MUST carry a utility vector:
+```text
+there exists a strong untested mechanism
+OR new evidence materially raises rescue probability
+OR an instrument defect invalidates the old boundary
+OR a decisive control was later found to be omitted or invalid
+```
 
-\[
-\mathbf{U}_g
-=
-(
-U_{\text{science}},
-U_{\text{flagship}},
-U_{\text{generality}},
-U_{\text{resource}},
-U_{\text{optionality}},
-U_{\text{urgency}}
-)
-\]
-
-A scalar utility MAY be derived:
+Recommended trigger threshold:
 
 \[
-U_g
-=
-\mathbf{w} \cdot \mathbf{U}_g
+P(\text{rescue} \mid \text{new evidence}) > \epsilon_{\text{reopen}}
 \]
 
-but the vector MUST be preserved.
+Default:
+
+\[
+\epsilon_{\text{reopen}} = 0.10
+\]
+
+A reopened belief MUST move to `open` with a recorded trigger.
 
 ---
 
-### 7.2 Goal Probability
+## 22. Experiment Selection
 
-The probability of achieving a goal is derived from linked beliefs and prerequisites.
+Experiment selection MUST proceed in two phases:
 
-Let:
+1. hard-constraint validation;
+2. ranking or selection among valid candidates.
 
-\[
-\mathcal{B}_g
-\]
+### 22.1 Candidate generation
 
-be the set of beliefs that gate goal \(g\).
-
-A simple lower-bound estimate is:
-
-\[
-P(g)
-=
-\prod_{b_i \in \mathcal{B}_g}
-P(b_i)^{\rho_i}
-\]
-
-where \(\rho_i\) is the dependency strength.
-
-For OR-style dependencies:
-
-\[
-P(g)
-=
-1 -
-\prod_i
-(1 - P(b_i))^{\rho_i}
-\]
-
-More sophisticated dependency models MAY be used.
-
----
-
-### 7.3 Goal Priority
-
-Goal priority is dynamic.
-
-A canonical priority formula is:
-
-\[
-\pi_g
-=
-\frac{
-\left[
-U_g
-+
-\lambda_o V_{\text{option}}(g)
-\right]
-\cdot
-P_{\text{progress}}(g)
-\cdot
-D_g
-}{
-c_g^\gamma
-}
--
-\lambda_r R_g
-\]
-
-where:
-
-- \(U_g\) = utility;
-- \(V_{\text{option}}(g)\) = future option value;
-- \(P_{\text{progress}}(g)\) = probability that action makes progress;
-- \(D_g\) = dependency/unblocking multiplier;
-- \(c_g\) = estimated cost;
-- \(\gamma\) = cost penalty;
-- \(R_g\) = risk of misleading evidence or wasted budget.
-
-Hard constraints MAY override priority.
-
----
-
-### 7.4 Epistemic Debt
-
-Epistemic debt is unresolved risk in the measurement or inference foundation.
-
-\[
-D_{\text{epi}}
-=
-\sum_i
-w_i
-\cdot
-u_i
-\cdot
-\text{dependence}_i
-\]
-
-where:
-
-- \(w_i\) = severity;
-- \(u_i\) = uncertainty;
-- \(\text{dependence}_i\) = number or weight of dependent beliefs/goals.
-
-Hygiene and instrument-validation goals SHOULD receive priority boosts proportional to epistemic debt.
-
----
-
-## 8. Experiment Selection
-
-### 8.1 Candidate Experiments
-
-Candidate experiments are generated from:
+Candidate experiments MAY arise from:
 
 - uncertain high-value beliefs;
 - blocked goals;
-- untested overturn mechanisms;
 - pending promotion gates;
-- suspected defects;
 - boundary challenges;
+- suspected defects;
+- untested overturn mechanisms;
 - generality tests;
-- resource Pareto tests.
+- resource or Pareto tests;
+- hygiene or instrument-validation needs.
 
----
+### 22.2 Hard constraints
 
-### 8.2 Expected Value of Information
+Before scoring, candidate experiments MUST be checked against hard constraints.
 
-For experiment \(x\), let \(o\) be a possible observation.
+Hard constraints include:
 
-The utility-weighted value of information is:
+- missing required control;
+- missing required seed plan;
+- missing required evaluation policy;
+- missing required defect audit for boundary-related claims;
+- quarantined dependency;
+- impossible or inert configuration without realizability framing;
+- budget violation;
+- dependency violation;
+- missing pre-registration fields.
 
-\[
-\text{UVOI}(x)
-=
-\mathbb{E}_{o \mid x}
-[
-V(B_{t+1}(o), G_t)
-]
--
-V(B_t, G_t)
-\]
+Candidates failing hard constraints MUST NOT be selected unless a recorded waiver is permitted by the governance profile.
 
-where \(V(B,G)\) is the value of the epistemic-goal state.
+Hard constraints MUST NOT be overridden by score.
 
-A practical value function is:
+### 22.3 Scoring
 
-\[
-V(B,G)
-=
-\sum_g
-U_g
-\cdot
-P(g \mid B)
--
-\lambda_d D_{\text{epi}}(B)
--
-\lambda_s S_{\text{stale}}(B)
-\]
+Valid candidate experiments SHOULD be ranked by expected value per cost.
 
----
-
-### 8.3 Experiment Score
-
-The scheduler SHOULD rank experiments by:
+A minimal scoring form is:
 
 \[
 \text{Score}(x)
 =
 \frac{
-\text{UVOI}(x)
-+
-\lambda_h H(x)
-+
-\lambda_b B(x)
+\text{ExpectedValue}(x)
 }{
-c_x^\gamma
+\text{Cost}(x)^\gamma
 }
 \]
 
 where:
 
-- \(H(x)\) = hygiene or defect-reduction value;
-- \(B(x)\) = boundary-overturn value;
-- \(c_x\) = expected cost;
-- \(\gamma\) = cost penalty.
+- `ExpectedValue(x)` estimates epistemic or goal value;
+- `Cost(x)` estimates budget, compute, time, or resource cost;
+- \(\gamma\) is a cost penalty parameter.
 
-Hard constraints are applied before ranking.
+Expected value MAY include:
 
----
+- value of information;
+- goal utility;
+- hygiene value;
+- defect-reduction value;
+- boundary-overturn value;
+- promotion value;
+- optionality value.
 
-### 8.4 Selection Rule
+The scoring model MUST be documented.
 
-The next experiment is:
+### 22.4 Selection rule
+
+The selected experiment SHOULD maximize score subject to budget and dependency constraints:
 
 \[
 x^*
@@ -1490,233 +1175,28 @@ subject to:
 
 and dependency constraints.
 
-For short sessions, greedy selection by score is acceptable.
+For short sessions, greedy selection is acceptable.
 
 For campaigns, portfolio optimization MAY be used.
 
----
+### 22.5 Overrides
 
-## 9. Logical Rule Language
+Manual overrides MUST be recorded.
 
-CEEC MAY be implemented using a weighted or deterministic rule language.
+An override MUST NOT silently bypass a hard gate.
 
-Minimal predicates:
+If an override changes the normal ranking, the decision record MUST include:
 
-```text
-belief(id)
-goal(id)
-experiment(id)
-evidence(id)
-summary(id)
-relation(id)
-
-supports(evidence, belief)
-refutes(evidence, belief)
-depends_on(belief, belief)
-enables(goal, goal)
-tests(experiment, belief)
-serves(experiment, goal)
-requires(status, gate)
-passed(gate)
-```
-
-Status rules:
-
-```text
-Promoted(b) :-
-    probability(b, p), p >= τ_promote,
-    gate_passed(multi_seed, b),
-    gate_passed(matched_control, b),
-    gate_passed(defect_audit, b),
-    gate_passed(reproduction, b).
-
-Boundary(b) :-
-    rescue_probability(b, p), p <= τ_boundary,
-    gate_passed(defect_hunt, b),
-    gate_passed(optimizer_matrix, b),
-    gate_passed(signal_integrity, b),
-    gate_passed(update_integrity, b),
-    gate_passed(measurement_integrity, b),
-    gate_passed(known_levers_exhausted, b).
-
-Reopened(b) :-
-    status(b, boundary),
-    exists(mechanism, m),
-    strong_mechanism(m),
-    not tested(m, b).
-
-Quarantined(b) :-
-    depends_on(b, instrument),
-    not valid(instrument).
-```
-
-Weighted rules MAY be used for soft prioritization, but MUST NOT override hard gates.
+- reason;
+- responsible actor or process;
+- affected constraints or scores;
+- justification.
 
 ---
 
-## 10. Canonical Schema
+## 23. Operational Loop
 
-The following is a normative minimal schema. Implementations MAY use YAML, JSON, SQLite, Parquet, or equivalent.
-
----
-
-### 10.1 Evidence Schema
-
-```yaml
-evidence:
-  id: string
-  kind: scalar | interval | vector | matrix | tensor | curve | distribution | relation | frontier | event | inert
-  axes:
-    name: values
-  values_ref: string
-  uncertainties: optional
-  provenance:
-    probe: string
-    log: string
-    config_hash: string
-    code_commit: string
-  quality:
-    seeds: integer
-    controls: boolean
-    freshness: string
-    instrument_valid: boolean
-  defects: []
-  stale: boolean
-```
-
----
-
-### 10.2 Summary Schema
-
-```yaml
-summary:
-  id: string
-  evidence_refs: []
-  operator: mean | median | ci | contrast | interaction | slope | peak | auc | dominance | change_point | realizability
-  parameters: {}
-  value: scalar | interval | vector | tensor
-  distribution: optional
-  assumptions: []
-  checks: []
-```
-
----
-
-### 10.3 Relation Schema
-
-```yaml
-relation:
-  id: string
-  left: string
-  right: string
-  operator: greater_than | within_epsilon | dominates | curve_dominates | sign_interaction | magnitude_interaction | replicates | contradicts | mechanism_for
-  distribution: optional
-  probability_positive: float
-  probability_material: float
-  scope: {}
-  evidence_refs: []
-```
-
----
-
-### 10.4 Belief Schema
-
-```yaml
-belief:
-  id: string
-  statement: string
-  type: capability | mechanism | boundary | instrument | generality | realizability | defect | hygiene
-  scope: {}
-  proposition: string
-  probability: float
-  uncertainty: float
-  evidence_weight: float
-  generality: float
-  posterior_method: string
-  evidence_refs: []
-  summary_refs: []
-  relation_refs: []
-  dependencies: []
-  status: open | promoted | boundary | reopened | quarantined
-  gates:
-    multi_seed: boolean
-    matched_control: boolean
-    defect_audit: boolean
-    reproduction: boolean
-    fixed_step_evaluation: boolean
-```
-
----
-
-### 10.5 Goal Schema
-
-```yaml
-goal:
-  id: string
-  statement: string
-  kind: terminal | instrumental | hygiene | infrastructure | boundary | promotion | audit
-  utility_vector:
-    science: float
-    flagship: float
-    generality: float
-    resource: float
-    optionality: float
-    urgency: float
-  scalar_utility: optional
-  cost_estimate: float
-  prerequisites: []
-  linked_beliefs: []
-  priority: float
-  status: active | blocked | completed | deferred
-```
-
----
-
-### 10.6 Experiment Schema
-
-```yaml
-experiment:
-  id: string
-  question: string
-  mechanism: string
-  target_beliefs: []
-  target_goals: []
-  design: {}
-  prediction: string
-  controls: []
-  budget: string
-  metrics: []
-  falsification_criterion: string
-  overturn_criterion: string
-  cost_estimate: float
-  expected_value: float
-  hard_gates: []
-  status: proposed | pre_registered | running | completed | abandoned
-```
-
----
-
-### 10.7 Decision Schema
-
-```yaml
-decision:
-  id: string
-  timestamp: datetime
-  state_hash: string
-  candidate_experiments: []
-  scores: {}
-  selected_experiment: string
-  overrides: []
-  rationale: string
-```
-
----
-
-## 11. Operational Protocol
-
-A compliant CEEC session MUST follow this loop.
-
----
+A compliant CEEC-Core session MUST follow this lifecycle.
 
 ### Step 1 — Load epistemic state
 
@@ -1725,148 +1205,95 @@ Load:
 - beliefs;
 - goals;
 - evidence summaries;
+- derived objects;
 - defects;
-- quarantine list;
-- previous decisions.
+- quarantines;
+- previous decisions;
+- relevant provenance.
 
-Verify staleness and code/config hashes.
+Verify staleness where practical.
 
----
+### Step 2 — Check hygiene and quarantine
 
-### Step 2 — Resolve hygiene first
+If any high-dependency instrument or measurement is invalid or suspected stale:
 
-If any high-dependency instrument belief is invalid or suspected stale:
-
-\[
-\text{Hygiene priority} \leftarrow \text{boost}
-\]
-
-Do not interpret dependent negative results until instruments are validated.
-
----
+- quarantine or discount dependent beliefs;
+- boost hygiene or audit goals;
+- do not interpret dependent negative results as boundaries.
 
 ### Step 3 — Generate candidate experiments
 
-Candidates arise from:
+Generate candidates from:
 
 - uncertain beliefs;
 - blocked goals;
-- pending promotions;
+- pending gates;
 - boundary challenges;
 - defect audits;
-- untested strong mechanisms.
-
----
+- untested strong mechanisms;
+- generality tests;
+- resource tests.
 
 ### Step 4 — Apply hard constraints
 
-Reject candidates missing mandatory controls.
+Reject or block candidates that fail hard constraints.
 
-Examples:
+### Step 5 — Score valid candidates
 
-- no BPTT/gold-standard control where required;
-- no matched control;
-- no seed plan for promotion;
-- no fresh-draw evaluation when required;
-- no defect audit for boundary claims.
+Score valid candidates using a documented expected-value-per-cost method.
 
----
+### Step 6 — Select and pre-register
 
-### Step 5 — Score candidates
-
-Compute:
-
-\[
-\text{Score}(x)
-\]
-
-using UVOI, goal utility, hygiene value, overturnability, and cost.
-
----
-
-### Step 6 — Pre-register selected experiment
-
-Before execution, record:
+Select an experiment and record:
 
 - question;
 - prediction;
 - controls;
 - metrics;
+- budget;
 - falsification criterion;
 - overturn criterion.
 
----
+### Step 7 — Execute
 
-### Step 7 — Execute experiment
+Run the experiment with explicit provenance.
 
-Run with explicit provenance:
+Record deviations if they occur.
 
-- seed;
-- config hash;
-- code version;
-- budget;
-- evaluation policy.
+### Step 8 — Record evidence
 
----
+Store artifacts and structured evidence.
 
-### Step 8 — Record structured evidence
+Do not store only final scalar values when structure exists.
 
-Store raw and structured evidence.
-
-Do not store only final scalar values when progression or factorial structure exists.
-
----
-
-### Step 9 — Update summaries and relations
+### Step 9 — Update derived objects
 
 Compute:
 
+- summaries;
 - intervals;
 - contrasts;
 - interactions;
 - curve summaries;
-- dominance relations;
+- relations;
+- dominance checks;
 - event detections.
-
----
 
 ### Step 10 — Update beliefs
 
-Update:
+Update belief probabilities, uncertainties, weights, and generality estimates.
 
-\[
-p(\theta \mid E)
-\]
-
-and:
-
-\[
-P(\phi)
-\]
-
-Apply quarantine if instruments are suspect.
-
----
+Apply quarantine where needed.
 
 ### Step 11 — Update statuses
 
-Apply state machine gates.
+Apply the status state machine and gates.
 
-No manual status change without gate evidence.
-
----
+No manual status change without recorded gate evidence.
 
 ### Step 12 — Update goals and priorities
 
-Recompute:
-
-\[
-\pi_g
-\]
-
-for all affected goals.
-
----
+Recompute goal priorities where relevant.
 
 ### Step 13 — Record decision
 
@@ -1874,75 +1301,22 @@ Append a decision record.
 
 ---
 
-## 12. Default Gates and Checklists
+## 24. Calibration and Honesty
 
-### 12.1 Promotion Gate
+CEEC-Core requires mechanisms for calibration and self-review.
 
-For positive claims:
+For pre-registered predictions with explicit probabilities, the system SHOULD record:
 
-```text
-≥3 seeds
-+ matched control
-+ fixed-step or fixed-budget evaluation
-+ defect audit
-+ reproduction
-+ explicit scope
-+ structured evidence
-```
+- prediction;
+- probability or confidence;
+- outcome;
+- timestamp;
+- scope;
+- related belief or experiment.
 
----
+Recommended scoring rules:
 
-### 12.2 Boundary Gate
-
-For negative claims:
-
-```text
-defect hunt passed
-+ signal integrity
-+ state integrity
-+ update integrity
-+ measurement integrity
-+ appropriate optimizer matrix
-+ known levers exhausted
-+ matched controls
-+ multi-seed where feasible
-+ explicit scope
-```
-
----
-
-### 12.3 Reopen Gate
-
-A boundary is reopened if:
-
-```text
-there exists a strong untested mechanism
-OR new evidence materially raises rescue probability
-OR an instrument defect invalidates the old boundary
-```
-
----
-
-### 12.4 Quarantine Gate
-
-Quarantine if:
-
-```text
-instrument may be stale
-OR measurement defect suspected
-OR silent inert contract suspected
-OR dependent belief relies on invalid evidence
-```
-
----
-
-## 13. Calibration and Honesty
-
-CEEC requires calibration.
-
-For each pre-registered prediction with probability \(p\), record outcome \(y \in \{0,1\}\).
-
-Use Brier score:
+Brier score:
 
 \[
 \text{Brier}
@@ -1950,7 +1324,7 @@ Use Brier score:
 (p-y)^2
 \]
 
-or log score:
+Log score:
 
 \[
 \text{LogScore}
@@ -1958,432 +1332,202 @@ or log score:
 y \log p + (1-y)\log(1-p)
 \]
 
-Over time, the system SHOULD track:
-
-- predicted confidence vs observed success rate;
-- boundary durability;
-- promotion durability;
-- reopen rate;
-- defect discovery rate.
-
-If calibration drifts, priors, evidence weights, or thresholds SHOULD be adjusted.
-
----
-
-## 14. Integration with Computronium
-
-CEEC is designed to integrate naturally with Computronium’s existing structures.
-
----
-
-### 14.1 Six-Axis Ontology as Scope
-
-The six axes:
-
-\[
-S \times G \times D \times P \times C \times U
-\]
-
-are scope dimensions.
-
-Example:
-
-```yaml
-scope:
-  substrate: digital
-  geometry: transformer
-  state_dynamics: instantaneous
-  plasticity: null
-  credit: local_contrastive
-  parameter_update: muon
-  task: next_token_probe
-  budget: 600_steps
-```
-
----
-
-### 14.2 \(I(C,U)\) as Tensor Relation
-
-The central TODO14 interaction:
-
-\[
-I(C,U)
-\]
-
-is represented as an interaction tensor.
-
-Evidence:
-
-\[
-Y_{c,u,g,s}
-\]
-
-Summary:
-
-\[
-I_{c,u,g}
-=
-Y_{c,u,g}
--
-Y_{c,u_0,g}
--
-Y_{c_0,u,g}
-+
-Y_{c_0,u_0,g}
-\]
-
-Beliefs:
-
-```text
-I(C,U) is positive for degenerate credit under Muon.
-I(C,U) sign-generalizes across tested geometries.
-I(C,U) magnitude-generalizes across tested geometries.
-```
-
-These are separate beliefs with separate scopes and confidence vectors.
-
----
-
-### 14.3 W0 Transformer Local Credit
-
-W0 evidence includes:
-
-- learning curve over steps;
-- per-layer contrast curves;
-- gate saturation events;
-- component ablation contrasts;
-- supervision-alignment contrasts.
-
-Relevant structured objects:
-
-| Object | Representation |
-|---|---|
-| performance trajectory | curve |
-| degradation onset | event/change point |
-| layer freeze | event |
-| ablation effect | contrast vector |
-| boundary claim | scoped belief |
-
-Example belief:
-
-\[
-P(
-\text{post-peak decay occurs under tested schedules at probe scale}
-)
-\]
-
-is distinct from:
-
-\[
-P(
-\text{local contrastive fails at all transformer scales}
-)
-\]
-
----
-
-### 14.4 W8 NTM Copy Task
-
-W8.5 evidence includes:
-
-- learning curve over steps;
-- BPTT control curve;
-- local-factorization curve;
-- seed distribution;
-- fresh-draw eval distribution;
-- length-generalization decay curve.
-
-Promotion belief:
-
-\[
-P(
-\text{local factorization fresh-draw accuracy} > 0.60
-\text{ across 3 seeds}
-)
-\]
-
-Goal:
-
-```text
-Promote NTM local factorization.
-```
-
-Experiment:
-
-```text
-Run 3 seeds with fresh-draw evaluation and matched BPTT control.
-```
-
-This is a canonical CEEC promotion loop.
-
----
-
-### 14.5 Resource Pareto Work
-
-For substrate/resource claims, evidence MUST be vector-valued:
-
-\[
-(Q, \mathcal{C})
-\]
-
 where:
 
-\[
-\mathcal{C}
-=
-(
-\text{compute},
-\text{memory},
-\text{energy},
-\text{latency},
-\text{plastic-state capacity}
-)
-\]
+- \(p\) is predicted probability;
+- \(y \in \{0,1\}\) is the outcome.
 
-Beliefs SHOULD be about Pareto dominance or frontier position, not scalar efficiency.
+The system SHOULD track:
+
+- predicted confidence versus observed success rate;
+- promotion durability;
+- boundary durability;
+- reopen rate;
+- defect discovery rate;
+- quarantine rate;
+- override rate.
+
+If calibration drifts materially, the system SHOULD review:
+
+- priors;
+- evidence weights;
+- thresholds;
+- gate definitions;
+- cost estimates;
+- expected-value models.
+
+A full CEEC implementation SHOULD make calibration tracking mandatory. CEEC-Core requires that a calibration mechanism exist and be usable.
 
 ---
 
-## 15. Minimal Compliant Implementation
+## 25. Provenance and Audit
 
-A minimal compliant implementation consists of:
+Every important CEEC object MUST be auditable.
 
-1. **Evidence ledger**
+At minimum, auditability requires:
+
+- stable identifiers;
+- references from beliefs to evidence or derived objects;
+- references from derived objects to evidence;
+- references from evidence to artifacts;
+- status history;
+- gate outcomes;
+- decision records;
+- override records.
+
+Provenance SHOULD include, where relevant:
+
+- artifact hash;
+- config hash;
+- code commit;
+- probe identifier;
+- run identifier;
+- seed;
+- timestamp;
+- environment descriptor.
+
+A belief, status, or decision lacking required provenance SHOULD be treated as unverified.
+
+---
+
+## 26. Minimal Compliant Implementation
+
+A minimal CEEC-Core implementation MUST include:
+
+1. **Artifact ledger**
    - immutable raw artifacts;
-   - structured evidence metadata;
-   - provenance hashes.
+   - hashes or URIs;
+   - provenance metadata.
 
-2. **Summary ledger**
-   - means, intervals, contrasts, interactions, curve summaries.
+2. **Evidence ledger**
+   - structured evidence;
+   - evidence kind;
+   - axes or scope;
+   - artifact references;
+   - quality and defect flags.
 
-3. **Belief ledger**
+3. **Derived ledger**
+   - summaries;
+   - relations;
+   - operators;
+   - inputs;
+   - assumptions;
+   - checks.
+
+4. **Belief ledger**
    - scoped claims;
    - probability;
    - uncertainty;
-   - evidence references;
-   - status.
+   - evidence weight;
+   - generality;
+   - status;
+   - gates;
+   - status history.
 
-4. **Goal ledger**
-   - utility vector;
-   - cost;
+5. **Goal ledger**
+   - utility dimensions;
+   - cost estimates;
    - dependencies;
+   - linked beliefs;
    - priority.
 
-5. **Experiment ledger**
+6. **Experiment ledger**
    - pre-registration;
    - controls;
    - predictions;
-   - falsification criteria.
+   - metrics;
+   - falsification criteria;
+   - overturn criteria;
+   - execution status.
 
-6. **Decision log**
+7. **Decision ledger**
+   - candidate set;
+   - scores;
    - selected experiment;
-   - score;
-   - rationale.
+   - overrides;
+   - rationale;
+   - state hash.
 
-This can be implemented initially in YAML/Markdown plus Parquet/CSV artifacts.
+A minimal implementation MAY use:
 
----
+- YAML or JSON files;
+- Markdown ledgers;
+- SQLite databases;
+- Parquet or CSV artifacts;
+- plain-text logs.
 
-## 16. Full Implementation
-
-A full implementation SHOULD add:
-
-- automated posterior updating;
-- Bayesian active experiment selection;
-- tensor and curve fitting;
-- calibration dashboards;
-- dependency-aware belief propagation;
-- Pareto frontier analysis;
-- quarantine propagation;
-- campaign portfolio optimization;
-- CLI integration.
-
-Suggested CLI surface:
-
-```bash
-comp epistemic list-beliefs
-comp epistemic list-goals
-comp epistemic list-evidence
-comp epistemic summarize
-comp epistemic rank-experiments
-comp epistemic propose-next
-comp epistemic update-belief
-comp epistemic status-report
-comp epistemic calibration
-comp epistemic audit
-```
+The storage medium is not normative. The invariants are normative.
 
 ---
 
-## 17. Compliance Checklist
+## 27. Anti-Patterns
 
-An implementation is CEEC-compliant if:
+The following are CEEC anti-patterns.
+
+A compliant implementation SHOULD detect or prevent them.
 
 ```text
+Storing only a final scalar when a curve or tensor exists.
+Treating an unrealizable cell as negative capability evidence.
+Promoting a single-seed result without justification.
+Promoting a claim without a matched control.
+Declaring a boundary without defect hunt.
+Declaring a boundary while known levers remain untested.
+Using goal priority to increase belief probability.
+Using a high expected-value score to override a hard gate.
+Allowing quarantined instruments to support promotion or boundary decisions.
+Silently zeroing missing data.
+Changing belief status without recording gate evidence.
+Selecting an experiment without a decision record.
+Overgeneralizing a local result beyond its scope.
+```
+
+---
+
+## 28. Compliance Checklist
+
+An implementation is CEEC-Core compliant if:
+
+```text
+✓ Artifacts are immutable and provenance-tagged.
+✓ Evidence references artifacts.
+✓ Structured evidence preserves available structure.
+✓ Scalar summaries are derived, not primary, when structure exists.
+✓ Inert and missing cells are explicitly labeled.
+✓ Derived objects reference inputs and are recomputable.
+✓ Relations are first-class derived objects.
 ✓ Every belief has explicit scope.
-✓ Every belief references evidence.
-✓ Every belief stores probability and uncertainty.
-✓ Every positive promotion passes hard gates.
-✓ Every boundary passes defect hunt and lever exhaustion.
-✓ Raw evidence is immutable.
-✓ Structured evidence preserves vectors, ranges, curves, tensors where present.
-✓ Scalars are derived, not primary.
-✓ Inert or unrealizable cells are labeled as such.
-✓ Goals have utility vectors and dynamic priorities.
-✓ Experiments are pre-registered.
-✓ Decisions are logged.
+✓ Every belief references evidence or derived objects.
+✓ Every belief stores probability, uncertainty, evidence weight, and generality.
+✓ Belief confidence is separate from goal utility.
+✓ Belief status is one of open, promoted, boundary, quarantined.
+✓ Status changes are recorded.
+✓ Promotions pass promotion gates.
+✓ Boundaries pass boundary gates.
 ✓ Quarantine propagates to dependent beliefs.
-✓ Scheduler respects hard constraints.
-✓ Calibration is tracked over time.
+✓ Reopenings are recorded with triggers.
+✓ Goals have structured utility and cost estimates.
+✓ Goal priority does not alter belief probability.
+✓ Experiments are pre-registered.
+✓ Experiments include prediction, controls, metrics, budget, falsification, and overturn criteria.
+✓ Experiment selection applies hard constraints before scoring.
+✓ Selection decisions are logged.
+✓ Overrides are explicit and logged.
+✓ A calibration mechanism exists.
 ```
 
 ---
 
-## 18. Canonical Example: W1 Interaction Tensor
+## 29. Final Normative Statement
 
-A concise CEEC representation of the W1 credit ladder:
-
-```yaml
-evidence:
-  id: e_w1_mlp_ladder
-  kind: tensor
-  axes:
-    credit: [bp, ff, pepita, rp_weak, rp_ortho, rp_vweak]
-    update: [euclid, muon, ortho]
-    seed: [0, 1, 2]
-  values_ref: artifacts/w1_mlp_ladder.parquet
-  quality:
-    seeds: 3
-    controls: true
-    instrument_valid: true
-
-summary:
-  id: s_w1_interaction_muon
-  evidence_refs: [e_w1_mlp_ladder]
-  operator: interaction
-  parameters:
-    baseline_credit: bp
-    baseline_update: euclid
-    target_update: muon
-  value:
-    pepita: +0.103
-    rp_weak: +0.459
-    rp_ortho: +0.446
-    rp_vweak: +0.460
-
-relation:
-  id: r_w1_degenerate_credit_rescue
-  left: rp_weak/muon
-  right: rp_weak/euclid
-  operator: greater_than
-  probability_positive: 0.99
-  probability_material: 0.99
-  scope:
-    geometry: mlp
-    task: mnist
-    budget: 150_batches
-
-belief:
-  id: b_w1_muon_rescues_degenerate_credit
-  statement: >
-    Muon rescues heavily weakened random-projection credit on MLP.
-  type: capability
-  scope:
-    geometry: mlp
-    credit: random_projection_weak
-    update: muon
-  probability: 0.97
-  uncertainty: low
-  evidence_weight: high
-  generality: medium
-  status: promoted
-
-belief:
-  id: b_w1_magnitude_generality
-  statement: >
-    The strong magnitude of I(C,U) generalizes across geometries.
-  type: generality
-  scope:
-    geometries: [mlp, lattice]
-  probability: 0.25
-  uncertainty: high
-  evidence_weight: medium
-  generality: low
-  status: open
-```
-
-This separates the local result from the generality claim.
-
----
-
-## 19. Canonical Example: NTM Promotion
-
-```yaml
-belief:
-  id: b_ntm_local_copy
-  statement: >
-    Zero-history local factorization learns NTM copy above chance under fresh-draw evaluation.
-  type: capability
-  scope:
-    architecture: ntm_minimal
-    task: copy_L6
-    credit: local_factorized
-    update: adam
-    eval: fresh_draw
-  probability: 0.60
-  uncertainty: medium
-  evidence_weight: low
-  generality: low
-  status: open
-
-goal:
-  id: g_promote_ntm_local
-  statement: >
-    Promote NTM local factorization to a robust positive result.
-  kind: promotion
-  utility_vector:
-    science: 8
-    flagship: 9
-    generality: 7
-    resource: 5
-    optionality: 8
-    urgency: 9
-  cost_estimate: low
-  linked_beliefs: [b_ntm_local_copy]
-  priority: high
-
-experiment:
-  id: x_ntm_local_promotion
-  question: >
-    Is NTM local factorization seed-robust and fresh-draw robust?
-  target_beliefs: [b_ntm_local_copy]
-  target_goals: [g_promote_ntm_local]
-  design:
-    arms: [bptt_adam_control, local_factorized_adam]
-    seeds: [0, 1, 2]
-    eval: fresh_draw
-    steps: 3000
-  prediction: >
-    Local factorization exceeds 0.60 fresh-draw mean and remains below BPTT control.
-  controls: [bptt_adam_control]
-  falsification_criterion: >
-    Local factorization fresh-draw mean < 0.55.
-  overturn_criterion: >
-    If local × muon materially exceeds local × adam, reopen optimizer axis.
-  cost_estimate: low
-  expected_value: high
-```
-
----
-
-## 20. Final Normative Statement
-
-The Computronium Epistemic Experiment Calculus is satisfied when the research process is represented as:
+CEEC-Core is satisfied when the research process is represented as:
 
 \[
+\text{Artifact}
+\rightarrow
 \text{Evidence}
 \rightarrow
-\text{Structured Summaries}
+\text{Derived}
 \rightarrow
 \text{Scoped Probabilistic Beliefs}
 \rightarrow
@@ -2392,6 +1536,8 @@ The Computronium Epistemic Experiment Calculus is satisfied when the research pr
 \text{Goal Priorities}
 \rightarrow
 \text{Expected-Value Experiments}
+\rightarrow
+\text{Auditable Decisions}
 \]
 
 and when the following invariants hold:
@@ -2401,7 +1547,11 @@ and when the following invariants hold:
 \]
 
 \[
-\text{No scalar without structured source.}
+\text{No belief without scope.}
+\]
+
+\[
+\text{No scalar-only primary evidence when structure exists.}
 \]
 
 \[
@@ -2413,7 +1563,15 @@ and when the following invariants hold:
 \]
 
 \[
-\text{No reopening without untested strong mechanism.}
+\text{No boundary while decisive levers remain untested.}
+\]
+
+\[
+\text{No reopening without a credible trigger.}
+\]
+
+\[
+\text{No trusted use of quarantined dependencies.}
 \]
 
 \[
@@ -2424,5 +1582,4 @@ and when the following invariants hold:
 \text{No scientific conclusion without explicit scope.}
 \]
 
-This specification preserves the richness of experimental trajectories while enabling efficient, honest, and elegant experiment selection.
-
+This core specification preserves the full epistemic capability of CEEC while remaining compact, implementable, and auditable.
