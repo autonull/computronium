@@ -43,7 +43,9 @@ import time
 import torch
 from torch import Tensor, nn
 
-REV = "2026-09-07-r2"  # fresh-draw eval + length generalization + flags
+from computronium.core.optimization.strategies.update import newton_schulz5
+
+REV = "2026-09-08-r4"  # --lr flag for the muon screen
 
 MEM_SLOTS = 16
 MEM_WIDTH = 8
@@ -153,7 +155,7 @@ def _run_bptt(steps: int, lr: float, seed: int = 0):
             fg = _greedy_copy_acc(controller, heads, _eval_batch())
             best_fg = max(best_fg, fg)
             print(
-                f"bptt step {step + 1}: loss {float(loss):.4f} "
+                f"bptt step {step + 1}: loss {float(loss.detach()):.4f} "
                 f"copy-acc(fresh) {fg:.3f}",
                 flush=True,
             )
@@ -258,7 +260,60 @@ def _run_local(steps: int, lr: float, seed: int = 0):
             fg = _greedy_copy_acc(controller, heads, _eval_batch())
             best_fg = max(best_fg, fg)
             print(
-                f"local step {step + 1}: loss {float(loss):.4f} "
+                f"local step {step + 1}: loss {float(loss.detach()):.4f} "
+                f"copy-acc(fresh) {fg:.3f}",
+                flush=True,
+            )
+    return controller, heads, best_fg
+
+
+class _Muon(torch.optim.Optimizer):
+    """Orthogonalized-SGD (Muon) on 2D params; plain SGD on the rest.
+
+    Uses the ontology's shipped Newton-Schulz kernel as the U axis.
+    """
+
+    def __init__(self, params, lr: float, momentum: float = 0.95):
+        super().__init__(list(params), {"lr": lr, "momentum": momentum})
+
+    @torch.no_grad()
+    def step(self) -> None:
+        for group in self.param_groups:
+            lr, mom = group["lr"], group["momentum"]
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                g = p.grad
+                st = self.state[p]
+                if g.ndim == 2:
+                    buf = st.get("m")
+                    buf = g.clone() if buf is None else buf.mul(mom).add(g)
+                    st["m"] = buf
+                    p.add_(newton_schulz5(buf), alpha=-lr)
+                else:
+                    p.add_(g, alpha=-lr)
+
+
+def _run_local_muon(steps: int, lr: float, seed: int = 0):
+    torch.manual_seed(seed)
+    controller = nn.LSTM(1 + MEM_WIDTH, HIDDEN, batch_first=True)
+    heads = _Heads()
+    params = list(controller.parameters()) + list(heads.parameters())
+    opt = _Muon(params, lr)
+    gen = torch.Generator().manual_seed(7)
+    code = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    best_fg = 0.0
+    for step in range(steps):
+        bits = _batch(gen)
+        loss = _local_episode(controller, heads, bits, code)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        if (step + 1) % max(steps // 5, 1) == 0:
+            fg = _greedy_copy_acc(controller, heads, _eval_batch())
+            best_fg = max(best_fg, fg)
+            print(
+                f"local-muon step {step + 1}: loss {float(loss.detach()):.4f} "
                 f"copy-acc(fresh) {fg:.3f}",
                 flush=True,
             )
@@ -272,13 +327,18 @@ def main() -> int:
     opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)
     steps = int(opt.get("steps", 3000))
     seed = int(opt.get("seed", 0))
+    lr = float(opt.get("lr", 1e-3))
     arms = [opt["arm"]] if "arm" in opt else ["bptt", "local"]
-    print(f"w8_ntm_copy {REV}; steps {steps} seed {seed} arms {arms}")
-    run = {"bptt": _run_bptt, "local": _run_local}
+    print(f"w8_ntm_copy {REV}; steps {steps} seed {seed} lr {lr:g} arms {arms}")
+    run = {
+        "bptt": _run_bptt,
+        "local": _run_local,
+        "local-muon": _run_local_muon,
+    }
     trained = None
     for arm in arms:
-        print(f"=== W8.5 {arm} (adam 1e-3), {steps} steps ===")
-        trained = run[arm](steps, 1e-3, seed)
+        print(f"=== W8.5 {arm} (lr {lr:g}), {steps} steps ===")
+        trained = run[arm](steps, lr, seed)
     if trained is not None and "--len-eval" in args:
         controller, heads, _ = trained
         for L in (SEQ_LEN, 12, 18, 24):

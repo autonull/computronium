@@ -55,13 +55,17 @@ import time
 from dataclasses import replace
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 from computronium import ParameterUpdateConfig
-from computronium.ontology.update import EuclideanUpdate, RiemannianOrthogonalUpdate
+from computronium.ontology.update import (
+    EuclideanUpdate,
+    OrthoAdamUpdate,
+    RiemannianOrthogonalUpdate,
+)
 
-REV = "2026-09-07-r2"  # per-step BPTT credit + arm/seed flags
+REV = "2026-09-08-r8"  # W8.2: ortho_adam arm added
 
 GRID = 16
 CHANNELS = 4
@@ -71,8 +75,7 @@ ROLLOUT = 32
 EPISODES = 400
 EVAL_EVERY = 40
 BATCH = 8
-GATE_THETA = 2.0
-STATE_MAX = 10.0  # above the target range so no channel saturates the clamp
+DELTA_SCALE = 0.5  # P-A: |delta| <= 0.5/step; state is UNBOUNDED (no clamp)
 EVAL_ROLLOUTS = (24, 48, 96)
 SEEDS = (0, 1, 2)
 
@@ -100,12 +103,12 @@ def _sprites() -> Tensor:
 def _params(seed: int) -> dict[str, Tensor]:
     g = torch.Generator().manual_seed(seed)
     p = {
-        "w1": torch.randn(HIDDEN, IN_DIM, generator=g) * IN_DIM**-0.5,
-        "w2": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
-        "wr": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
-        "b1": torch.zeros(HIDDEN),
-        "b2": torch.zeros(CHANNELS),
-        "br": torch.zeros(CHANNELS),
+        "weight1": torch.randn(HIDDEN, IN_DIM, generator=g) * IN_DIM**-0.5,
+        "weight2": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
+        "weight_readout": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
+        "bias1": torch.zeros(HIDDEN),
+        "bias2": torch.zeros(CHANNELS),
+        "bias_readout": torch.zeros(CHANNELS),
     }
     return {k: v.requires_grad_(True) for k, v in p.items()}
 
@@ -123,9 +126,9 @@ def _perceive(states: Tensor, labels: Tensor) -> Tensor:
 
 def _cell_forward(p: dict[str, Tensor], states: Tensor, labels: Tensor):
     x = _perceive(states, labels)
-    h = F.relu(F.linear(x, p["w1"], p["b1"]))
-    delta = F.linear(h, p["w2"], p["b2"])
-    logits = F.linear(h, p["wr"], p["br"])
+    h = F.relu(F.linear(x, p["weight1"], p["bias1"]))
+    delta = DELTA_SCALE * torch.tanh(F.linear(h, p["weight2"], p["bias2"]))
+    logits = F.linear(h, p["weight_readout"], p["bias_readout"])
     return h, delta, logits
 
 
@@ -140,70 +143,67 @@ def _seed_states(targets: Tensor, gen: torch.Generator) -> Tensor:
 
 def _rollout_states(
     p: dict[str, Tensor], targets: Tensor, steps: int, gen: torch.Generator, grad: bool
-) -> Tensor:
-    """Runs `steps` updates; labels are the true target ids (the target
-    is part of the regeneration environment)."""
+) -> tuple[Tensor, list[Tensor]]:
+    """P-A dynamics (§11.3): unbounded additive state, tanh-bounded small
+    deltas, per-step state-space MSE credit (the clamp + CE-on-states
+    design produced the clamped-integrator saturation attractor). With
+    grad=True, also returns the per-step MSE terms."""
+    target_states = _target_states(targets)
     states = _seed_states(targets, gen)
+    step_losses: list[Tensor] = []
     for _ in range(steps):
         mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
         ctx = torch.enable_grad() if grad else torch.no_grad()
         with ctx:
-            _, delta, _ = _cell_forward(p, states, targets)
+            _, delta, _logits = _cell_forward(p, states, targets)
         delta_grid = _unflatten(delta, targets.size(0), *targets.shape[1:])
-        states = (states + delta_grid * mask.unsqueeze(1)).clamp(0.0, STATE_MAX)
-    return states
+        states += delta_grid * mask.unsqueeze(1)
+        if grad:
+            step_losses.append((states - target_states).pow(2).mean())
+    return states, step_losses
 
 
-def _nca_step_terms(
-    p: dict[str, Tensor], states: Tensor, targets: Tensor, neg_labels: Tensor
-) -> tuple[list[tuple[str, Tensor]], Tensor, dict[str, float]]:
-    """Per-step local-credit loss terms (readout CE + gated goodness per
-    layer), the positive-pass delta, and P3/P4 diagnostics (per-site
-    inversion counts, label-injection contrast r)."""
-    xp = torch.cat([states, targets.unsqueeze(1).float()], dim=1)
-    xn = torch.cat([states, neg_labels.unsqueeze(1).float()], dim=1)
-    inject_r = float(((xp - xn).norm() / (xp.norm() + 1e-8)).item())
-    h_p, d_p, logits = _cell_forward(p, xp[:, :-1], xp[:, -1])
-    h_n, d_n, _ = _cell_forward(p, xn[:, :-1], xn[:, -1])
-    ce = _weighted_ce(logits, targets)
-    gate_terms, inversions, sites = _goodness_terms((
-        ("w1", h_p, h_n),
-        ("w2", d_p, d_n),
-    ))
-    return (
-        [("wr", ce), *gate_terms],
-        d_p,
-        {
-            "inversions": inversions,
-            "sites": sites,
-            "inject_r": inject_r,
-        },
-    )
+def _target_states(targets: Tensor) -> Tensor:
+    """One-hot state-space target (bg cells: channel 0 = 1)."""
+    return F.one_hot(targets, CHANNELS).permute(0, 3, 1, 2).float()
 
 
-def _accumulate(
-    terms: list[tuple[str, Tensor]],
+def _distill_init(
     p: dict[str, Tensor],
-    weight_grads: dict[str, Tensor],
-    bias_grads: dict[str, Tensor],
-) -> None:
-    """Sums per-term weight/bias gradients into the episode accumulators."""
-    for i, (name, loss) in enumerate(terms):
-        params = [p[name], p["b" + name[1]]]
-        grads = torch.autograd.grad(loss, params, retain_graph=i < len(terms) - 1)
-        for key, g in zip((name, "b" + name[1]), grads, strict=True):
-            out = weight_grads if key.startswith("w") else bias_grads
-            out[key] = out.get(key, 0) + g.detach()
-
-
-def _weighted_ce(logits: Tensor, targets: Tensor) -> Tensor:
-    """Inverse-frequency-weighted CE (the sprites are ~87% bg — unweighted
-    CE has a trivial all-background attractor)."""
-    flat = targets.reshape(-1)
-    counts = torch.bincount(flat, minlength=CHANNELS).float().clamp(min=1)
-    w = (1.0 / counts)[flat]
-    w *= flat.numel() / w.sum()
-    return (F.cross_entropy(logits, flat, reduction="none") * w).mean()
+    targets: Tensor,
+    n_mixes: int = 10,
+    steps: int = 1500,
+    lr: float = 1e-2,
+) -> float:
+    """Supervised distillation of the ideal proportional controller
+    delta* = clamp(target - state, +/-DELTA_SCALE) into the cell MLP
+    (§11.4: BPTT-from-scratch cannot find a stable growth field from a
+    seed; a distilled field has the target as an exact fixed point and
+    seeds the four-arm comparison). Returns the final distillation MSE."""
+    target_states = _target_states(targets)
+    X, Y = [], []
+    for _ in range(n_mixes):
+        m1 = torch.rand(1).item()
+        m3 = torch.rand(1).item()
+        st = (
+            m1 * target_states
+            + (1 - m1) * m3 * torch.rand_like(target_states) * 0.5
+            + (1 - m1) * (1 - m3) * _seed_states(targets, torch.Generator())
+        )
+        X.append(st)
+        Y.append((target_states - st).clamp(-DELTA_SCALE, DELTA_SCALE))
+    x = _perceive(torch.cat(X), torch.cat([targets] * n_mixes))
+    yd = torch.cat(Y).permute(0, 2, 3, 1).reshape(-1, CHANNELS)
+    opt = torch.optim.Adam(list(p.values()), lr=lr)
+    loss = torch.zeros(())
+    for _ in range(steps):
+        h = F.relu(F.linear(x, p["weight1"], p["bias1"]))
+        pred = DELTA_SCALE * torch.tanh(F.linear(h, p["weight2"], p["bias2"]))
+        loss = (pred - yd).pow(2).mean()
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    return float(loss.detach())
 
 
 def _unflatten(cells: Tensor, B: int, H: int, W: int) -> Tensor:
@@ -211,65 +211,38 @@ def _unflatten(cells: Tensor, B: int, H: int, W: int) -> Tensor:
     return cells.view(B, H, W, CHANNELS).permute(0, 3, 1, 2)
 
 
-def _goodness_terms(act_pairs):
-    """Gated goodness loss terms plus the P3 per-site inversion counts."""
-    terms: list[tuple[str, Tensor]] = []
-    inversions = 0
-    sites = 0
-    for name, act_p, act_n in act_pairs:
-        d_g = (act_p.pow(2).sum(1) - act_n.pow(2).sum(1)).flatten()
-        inversions += int((d_g < -GATE_THETA).sum())
-        sites += d_g.numel()
-        terms.append((
-            name,
-            F.softplus(GATE_THETA - (act_p.pow(2).mean() - act_n.pow(2).mean())),
-        ))
-    return terms, inversions, sites
-
-
 def _local_episode(
     p: dict[str, Tensor], targets: Tensor, gen: torch.Generator
 ) -> tuple[dict[str, Tensor], dict[str, Tensor], dict[str, float]]:
-    """Per-step gated goodness credit, summed over the rollout."""
+    """Zero-history local credit (§11.4): per-step state-space MSE with
+    the state DETACHED — no gradient crosses a timestep (the NCA
+    analogue of the NTM zero-history factorization). Pseudo-grads are
+    summed over the rollout; the readout (wr) is outside the dynamics
+    and receives zero gradient."""
+    target_states = _target_states(targets)
     states = _seed_states(targets, gen)
-    neg_labels = targets.flatten(1).roll(1, dims=1).view_as(targets)
     weight_grads: dict[str, Tensor] = {}
     bias_grads: dict[str, Tensor] = {}
-    inversions = 0
-    sites = 0
-    inject_r = 0.0
     for _ in range(ROLLOUT):
         mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
-        terms, d_p, step_stats = _nca_step_terms(p, states, targets, neg_labels)
-        inversions += step_stats["inversions"]
-        sites += step_stats["sites"]
-        inject_r += step_stats["inject_r"]
-        _accumulate(terms, p, weight_grads, bias_grads)
-        with torch.no_grad():
-            d_grid = _unflatten(d_p, targets.size(0), *targets.shape[1:])
-            states = (states + d_grid * mask.unsqueeze(1)).clamp(0.0, STATE_MAX)
-    stats = {
-        "inversion_rate": inversions / max(sites, 1),
-        "inject_r": inject_r / ROLLOUT,
-    }
+        with torch.enable_grad():
+            _h, delta, _logits = _cell_forward(p, states.detach(), targets)
+        next_states = states.detach() + _unflatten(
+            delta, targets.size(0), *targets.shape[1:]
+        ) * mask.unsqueeze(1)
+        loss = (next_states - target_states).pow(2).mean()
+        grads = torch.autograd.grad(loss, list(p.values()), allow_unused=True)
+        for name, g in zip(p, grads, strict=True):
+            out = weight_grads if name.startswith("weight") else bias_grads
+            out[name] = torch.zeros_like(p[name]) if g is None else g.detach()
+        states = next_states.detach()
+    stats = {"inversion_rate": 0.0, "inject_r": 0.0}
     return weight_grads, bias_grads, stats
 
 
-def _ema_normalize(
-    grads: dict[str, Tensor], ema: dict[str, float]
-) -> dict[str, Tensor]:
-    out = {}
-    for name, g in grads.items():
-        rms = float(g.norm() / (g.numel() ** 0.5 + 1e-12))
-        prev = ema.get(name, rms)
-        ema[name] = 0.99 * prev + 0.01 * rms
-        out[name] = g / (ema[name] + 1e-8)
-    return out
-
-
 def _apply(update, p: dict[str, Tensor], grads: dict[str, Tensor]) -> None:
-    weights = [n for n in p if n.startswith("w")]
-    biases = {n: grads[n] for n in p if n.startswith("b") and n in grads}
+    weights = [n for n in p if n.startswith("weight")]
+    biases = {n: grads[n] for n in p if n.startswith("bias") and n in grads}
     # geometry=None: the update rules only read param shapes (probe-local use).
     new = update.step(
         p,
@@ -284,10 +257,10 @@ def _eval(
     p: dict[str, Tensor], targets: Tensor, steps: int
 ) -> tuple[float, float, float]:
     gen = torch.Generator().manual_seed(123)
-    final = _rollout_states(p, targets, steps, gen, grad=False)
-    ce = _weighted_ce(final.permute(0, 2, 3, 1).reshape(-1, CHANNELS), targets)
+    final = _rollout_states(p, targets, steps, gen, grad=False)[0]
+    mse = (final - _target_states(targets)).pow(2).mean()
     hit = final.argmax(1) == targets
-    return float(ce), float(hit.float().mean()), float(hit[targets > 0].float().mean())
+    return float(mse), float(hit.float().mean()), float(hit[targets > 0].float().mean())
 
 
 def _train(
@@ -303,8 +276,8 @@ def _train(
     gen = torch.Generator().manual_seed(seed)
     batch_idx = torch.randint(0, len(sprites), (BATCH,), generator=gen)
     p = _params(seed)
+    _distill_init(p, sprites[batch_idx])
     update = _updates(lr)[update_name]
-    ema: dict[str, float] = {}
     stats_last = {"inversion_rate": 0.0, "inject_r": 0.0}
     curve: list[tuple[int, float]] = []
     for ep in range(episodes):
@@ -313,8 +286,7 @@ def _train(
             grads = _bptt_grads(p, targets, gen)
         else:
             w_grads, b_grads, stats_last = _local_episode(p, targets, gen)
-            grads = _ema_normalize(w_grads, ema)
-            grads.update(b_grads)
+            grads = {**w_grads, **b_grads}
         _apply(update, p, grads)
         if (ep + 1) % eval_every == 0:
             curve.append((ep + 1, _eval(p, sprites[batch_idx], 48)[1]))
@@ -327,14 +299,14 @@ def _train(
         sprites[batch_idx],
         curve,
         stats_last,
-        arm == "local",
+        False,
     )
     return _eval(p, sprites[batch_idx], 48)[1]
 
 
 def _bptt_grads(p: dict[str, Tensor], targets: Tensor, gen: torch.Generator):
-    final = _rollout_states(p, targets, ROLLOUT, gen, grad=True)
-    loss = _weighted_ce(final.permute(0, 2, 3, 1).reshape(-1, CHANNELS), targets)
+    _final, step_losses = _rollout_states(p, targets, ROLLOUT, gen, grad=True)
+    loss = torch.stack(step_losses).mean()
     grads_all = torch.autograd.grad(loss, list(p.values()), allow_unused=True)
     return {
         n: g if g is not None else torch.zeros_like(p[n])
@@ -360,6 +332,13 @@ def _updates(lr: float) -> dict[str, object]:
                 ParameterUpdateConfig.riemannian_orthogonal(step_size=lr, momentum=0.9)
             )
         ),
+        "ortho_adam": OrthoAdamUpdate(
+            _no_clip(
+                ParameterUpdateConfig.ortho_adam(
+                    step_size=lr, ortho_lr=lr, momentum=0.9
+                )
+            )
+        ),
     }
 
 
@@ -383,7 +362,7 @@ def _report(
     )
     print(
         f"{arm:>5} x {update_name:>6} (lr {lr:g}) seed {seed}: "
-        f"CE {finals[48][0]:.3f} fg-acc {finals[48][2]:.3f}  curve {accs}{extra}",
+        f"MSE {finals[48][0]:.3f} fg-acc {finals[48][2]:.3f}  curve {accs}{extra}",
         flush=True,
     )
     horizons = "  ".join(f"h{s}: {finals[s][2]:.3f}" for s in EVAL_ROLLOUTS)
@@ -393,7 +372,10 @@ def _report(
 def _screen() -> dict[str, float]:
     """Tune bptt-euclid once, bptt-muon screened; frozen for the main cells."""
     best: dict[str, float] = {}
-    for update_name, lrs in (("euclid", (0.1, 0.3, 1.0)), ("muon", (0.02, 0.05, 0.1))):
+    for update_name, lrs in (
+        ("euclid", (0.001, 0.003, 0.01)),
+        ("muon", (0.003, 0.01, 0.03)),
+    ):
         results = {
             lr: _train("bptt", update_name, 0, lr, episodes=120, eval_every=60)
             for lr in lrs
@@ -417,11 +399,11 @@ def main() -> int:
         cells = [
             ("bptt", "euclid", lrs["euclid"]),
             ("bptt", "muon", lrs["muon"]),
-            ("local", "euclid", 0.2),
-            ("local", "muon", 0.02),
+            ("local", "euclid", 0.1),
+            ("local", "muon", 0.1),
         ]
     else:
-        cells = [(arm, u, lr) for u, lr in (("euclid", 0.1), ("muon", 0.02))]
+        cells = [(arm, u, lr) for u, lr in (("euclid", 0.003), ("muon", 0.01))]
     for cell_arm, update_name, lr in cells:
         for s_ in seeds:
             _train(cell_arm, update_name, s_, lr)

@@ -13,6 +13,7 @@
 - Purpose: professional, not explanatory/educational
 - Don't obsess over test coverage and other linty tediums: Working functionality is more important than coverage and cosmetic lint issues.
 - Prefer use of GPU over CPU where appropriate.
+- Be skeptical of low-performing experiments; this could indicate an implementation defect to fix. 
 
 ## Toolchain
 *   Language: **Python 3.14+**

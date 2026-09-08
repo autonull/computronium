@@ -18,6 +18,18 @@ def _learnable_weight_names(params: dict[str, Tensor]) -> list[str]:
     return [n for n, p in params.items() if "weight" in n and p.ndim == 2]
 
 
+class UnmatchedWeightNamesError(RuntimeError):
+    """No param key satisfied the 'weight'-substring pairing contract."""
+
+    def __init__(self, params: dict[str, Tensor]) -> None:
+        super().__init__(
+            "apply_pseudo_gradients: no learnable weight names matched "
+            "(keys must contain 'weight', ndim 2); a hand-rolled param "
+            f"dict like {sorted(params)[:3]} would silently skip every "
+            "weight update"
+        )
+
+
 def apply_pseudo_gradients(
     params: dict[str, Tensor],
     pseudo_grads: list[Tensor],
@@ -41,7 +53,10 @@ def apply_pseudo_gradients(
             lr/momentum/clip semantics cover them; absent means frozen.
     """
     updated = dict(params)
-    for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
+    weight_names = _learnable_weight_names(params)
+    if not weight_names and pseudo_grads and any(p.ndim == 2 for p in params.values()):
+        raise UnmatchedWeightNamesError(params)
+    for name, grad in zip(weight_names, pseudo_grads):
         param = params[name]
         updated[name] = transform(name, param, grad.detach().to(param.device))
     for name, grad in (bias_grads or {}).items():
