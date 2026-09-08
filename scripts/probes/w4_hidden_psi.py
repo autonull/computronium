@@ -302,7 +302,9 @@ class _LayerRidge:
             return None
         d = self._gram.shape[0]
         lam = RIDGE_LAMBDA * self._gram.diagonal().mean().clamp_min(1e-12)
-        m_aug = torch.linalg.solve(self._gram + lam * torch.eye(d), self._cross)
+        m_aug = torch.linalg.solve(
+            self._gram + lam * torch.eye(d, device=self._gram.device), self._cross
+        )
         return m_aug[:-1], m_aug[-1]
 
 

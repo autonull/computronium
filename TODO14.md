@@ -3,10 +3,124 @@
 > **Opened 2026-09-07.**
 >
 
-> **CURRENT FOCUS (2026-09-08, Session 11 directive): the flagship sprint,
-> §24 — Flagship B driven to a tangible deliverable at non-toy scale.
-> The queue is FROZEN per §24 until the flagship lands or earns a
-> boundary at scale.**
+> **CURRENT FOCUS (2026-09-08, Session 12): §24 CLOSED.** D1 (scaled
+> overturn cell) earned the flagship a **Boundary at scale** — the
+> §24.3 stop-loss fired with the §17 protocol complete; D3 (boosting)
+> falsified as the full repair; **D2 SHIPPED as gallery demo D17**
+> (`multi_psi_swap`) — the program's first tangible runnable
+> deliverable. The queue freeze is LIFTED.
+
+## PROGRESS LOG (2026-09-08, Session 12 — §24 CLOSED: D1 boundary at scale, D3 falsified-as-repair, D2 shipped as demo D17)
+
+**Status: the flagship sprint executed to completion in one session.
+The W4.1 hidden-ψ overturn was driven to MNIST→FashionMNIST scale
+(backbone 784→(128,128,128,128)→10, task A = MNIST mastery 0.957,
+task B = FashionMNIST, θ bitwise frozen via SHA-asserted snapshot
+restore, 9 arms × 3 seeds, GPU) and the overturn FAILED seed-robustly:
+no hidden arm beats the readout ceiling on any seed. hidden_s4 (Q-class,
+crosses no ReLU) ≈ ceiling (0.670 vs 0.674 mean — the same Q-identity
+as probe scale); deeper streams degrade MONOTONICALLY with reach
+(s3 0.387 / s2 0.292 / s1 0.217) — the probe-scale deep-reach gain
+INVERTS at scale. D3's boosting repair is real but bounded (0.388 vs
+stacked-raw 0.096 catastrophic, single-correction 0.670 not recovered).
+D2 is the session's positive deliverable: one frozen backbone + a
+per-task ψ library (MNIST/FashionMNIST/KMNIST), each ψ one ridge solve,
+swapped as a state variable — shipped as
+`tests/integration/test_demo_multi_psi_swap.py` + gallery row D17,
+locks re-pinned (23 figures). Two §17-class target-construction defects
+found and fixed en route (calibration-poisoned softmax residual;
+W Wᵀ≈I chain approximation → exact mask-aware Jacobian targets). Probe:
+`scripts/probes/w4_scaled_psi.py`. Logs: `logs/w4_scaled_psi{,_s1,_s2}.log`.**
+
+### D1 — scaled overturn cell: BOUNDARY at scale (stop-loss fired, §24.3)
+
+| b_best | seed 0 | seed 1 | seed 2 | mean |
+| --- | --- | --- | --- | --- |
+| null | 0.096 | 0.097 | 0.101 | 0.098 |
+| readout (ceiling replacement) | 0.667 | 0.676 | 0.679 | **0.674** |
+| finetune (control) | 0.783 | 0.782 | 0.783 | 0.783 |
+| hidden_s1 (deepest reach) | 0.227 | 0.166 | 0.259 | 0.217 |
+| hidden_s2 | 0.365 | 0.322 | 0.188 | 0.292 |
+| hidden_s3 | 0.525 | 0.316 | 0.318 | 0.387 |
+| hidden_s4 (Q-class) | 0.656 | 0.679 | 0.675 | 0.670 |
+| hidden_raw (stacked) | 0.138 | 0.102 | 0.048 | 0.096 |
+| hidden_boost (fit-on-corrected) | 0.410 | 0.326 | 0.429 | 0.388 |
+
+1. **P-A FALSIFIED (overturn fails at scale)**: the pre-registered
+   criterion (stream-1 beats the ceiling by ≥ +0.02, 3 seeds) fails by
+   ~0.45; the §17 protocol ran in full — 3 seeds, SHA-asserted matched
+   θ snapshot per arm, theta_invariant True everywhere, both
+   target-construction defects found and fixed, and the D3 repair
+   tested. **The W4.1 mechanism is a probe-scale phenomenon: closed-form
+   hidden ψ's class-expanding gain (+0.08-0.10, ReLU-crossing) does not
+   transfer to a confidently-wrong frozen backbone at MNIST scale.** The
+   winning closed-form move at scale is the readout-CEILING REPLACEMENT
+   (h_last → onehot ridge; same affine class as readout ψ, since the
+   readout is affine in h_last — this IS the frozen-feature linear-probe
+   ceiling, reached exactly).
+2. **P-D INVERTED**: at probe scale deeper injection = bigger gain; at
+   scale deeper injection = monotonically worse. Mechanism: the stream
+   correction must reproduce the ceiling's job through more ReLU mask
+   patterns — a single linear correction per stream is increasingly
+   invalid as the mask diversity it must average over grows.
+3. **Retention at scale (honest)**: every closed-form arm is
+   retention-expensive (readout replacement 0.07-0.10 on task A —
+   intrinsic to replacement; hidden arms 0.06-0.44, noisy, non-monotone).
+   The resolution is NOT a better correction but STATE MANAGEMENT —
+   exactly D2: swap ψ's, never overwrite.
+
+### D3 — stacking repair: FALSIFIED as the full repair
+
+Stacking raw (fit-on-uncorrected) is catastrophic at scale (0.096 mean,
+at/below null — worse than probe scale where stacking merely degraded).
+Fit-on-corrected (boost) repairs stacking to 0.388 but does NOT recover
+the single-correction level (0.670). **P-C falsified**: the
+one-correction boundary stands, now with the repair tested at scale.
+
+### D2 — multi-ψ demo SHIPPED (the tangible deliverable)
+
+`tests/integration/test_demo_multi_psi_swap.py` (gallery D17,
+`multi_psi_swap`): one frozen backbone (784→(64,64)→10, 300 stage-A
+episodes), per-task ψ library over MNIST/FashionMNIST/KMNIST, each ψ ONE
+ridge solve (instant acquisition, no episodes), swap = state variable.
+Guarantees asserted: θ SHA bitwise across the lifecycle; own-ψ ≫ null
+for the non-native tasks (0.65-0.83 vs ~0.10-0.25), own ≥ null − 0.02
+for the native task; own ≫ foreign mean (a keyed variable, not a
+blend). Gallery locks re-pinned (23 figures; `test_gallery_lock`
+passes). §22 #2's usable form is demonstrated; the §24 success
+criterion's D2 half is met.
+
+### §17-class findings recorded for reuse
+
+1. **Softmax-residual targets are calibration-poisoned at scale**: with
+   a confidently-wrong frozen readout (post RMS ~1.9), R = onehot −
+   softmax(post) swamps the ±1 onehot signal even IN-SAMPLE (0.088
+   train-fit acc; the onehot ridge on the same features: 0.66). Any
+   frozen-feature residual construction must first reach the CEILING
+   and target the difference FROM it.
+2. **W Wᵀ ≈ I chain propagation dies on trained weights**: the
+   probe-scale T_s = R @ W-chain targets are chain-exact only for
+   near-orthogonal weights. Fix (landed in the probe): exact mask-aware
+   Jacobian targets, T_s = R @ pinv(J_s), J_s built batched through the
+   ReLU masks (mask = post-ReLU stream > 0). This alone moved
+   hidden_s3 from 0.0 → 0.53 (seed 0) — the mask structure, not the
+   weight chain, is the carrier of deep credit at scale.
+3. **Piecewise-ψ opportunity (queued, not frozen-queue)**: since the
+   mask pattern is observable per settle, the natural rescue of the
+   depth story is a MASK-GATED ψ library (per-mask-pattern corrections,
+   keyed like D2's task library). That is a design session, not a cell.
+
+### §24 disposition
+
+- D1: Boundary at scale (§22 #2 NOT met at scale; the open question is
+  retired — the probe-scale result stands as the mechanism map).
+- D3: falsified-as-repair (recorded above).
+- D2: shipped (D17). **The §24 queue freeze is LIFTED.**
+- Next-session menu (Session-11 order resumes): W4.2 3-seed firming is
+  ABSORBED/closed by the D3 result; the retention lever is demonstrated
+  (D2); ontology promotion of `modulate_mid_stream` is MOOT (the
+  mechanism is scale-bounded); W5 depth-50 and the per-site FA design
+  session are the remaining frozen items, now unfrozen.
 
 ## PROGRESS LOG (2026-09-08, Session 11 — W4.1 hidden ψ: ceiling OVERTURNED seed-robust (§22 #2 MET); W4.2 depth-composition falsified (stacking); recurrent-family audit closes)
 
