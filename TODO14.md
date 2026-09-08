@@ -3,6 +3,242 @@
 > **Opened 2026-09-07.**
 >
 
+## PROGRESS LOG (2026-09-07, Session 4 — W0 hinge lever FALSIFIED: the gate is load-bearing)
+
+**Status: the hinge/signed objective made W0 WORSE at both budgets
+(0.077/3.705 @600, 0.083/4.629 @1200 vs gate's 0.190/3.225 and
+0.142/4.472). Sign-inverted layers keep-training is actively harmful —
+the softplus gate's shutdown is a PROTECTIVE mechanism, not a defect.
+The degeneration is in the contrast stream itself: W0.3 component
+ablation (§5) is unambiguously the primary W0 lever. W1's
+optimizer-specific recovery profile stands as the Tier D evidence.**
+
+### W0 hinge lever (§3 lever b) — FALSIFIED, gate shutdown vindicated
+
+Mechanism landed: `CreditAssignmentConfig.local_contrastive(
+contrast_objective="hinge")` — softplus(θ − |ΔG|) at BOTH loss sites
+(`_layer_grad` linear-stack, `_tf_layer_grad` transformer), default
+"gate" is unchanged. Probe: `w0_tf_local_optimizers.py --hinge`.
+Gates: ruff clean, pyright 0 errors, 91 targeted credit tests pass.
+
+| objective | 600 steps     | 1200 steps    |
+| --------- | ------------- | ------------- |
+| gate (θ2) | 0.190 / 3.225 | 0.142 / 4.472 |
+| gate (θ1) | 0.191 / 3.229 | 0.144 / 4.520 |
+| hinge     | **0.077 / 3.705** | **0.083 / 4.629** |
+
+1. Pre-registered criterion (beat CE 4.0 @1200) failed — and not
+   narrowly: hinge is worse ALREADY at 600 steps, long before the
+   gate-shutdown regime. The contrast sign inversions are not "layers
+   that need more training" — they are layers being pushed the wrong
+   way, and forcing them to keep moving corrupts the shared stream.
+2. **Refined mechanism statement**: the W0 boundary is now
+   three-sided — (i) per-layer sign inversions arise in the goodness
+   contrast (contrast_track), (ii) acting on them is harmful (hinge),
+   (iii) freezing them is only a partial mitigation that goes stale
+   (gate). The remaining question is WHICH components invert first and
+   why — exactly W0.3 (§5). The two out_proj layers inverted first;
+   the ablation arms (−PE / embed-excluded / attention-only / FFN-only)
+   map whether attention-output goodness is the inversion source.
+3. Optimizer axis remains honestly covered (euclid/adam/muon/ortho_adam,
+   schedules); the gate lever is now closed both ways (threshold +
+   objective shape). A negative result that passes this protocol
+   graduates toward a Boundary for local_contrastive on causal
+   transformers at probe scale.
+
+### Next (short-cell menu)
+
+- W0.3 (§5): component ablation — NOW the only open W0 lever. Arms:
+  baseline / −PE / embed-excluded / attention-only / FFN-only; log
+  WHICH layers invert (out_proj first) per arm. Needs a small probe
+  that restricts `compute_pseudo_gradient`'s per-layer targets (the
+  transformer path already special-cases pe/in_proj — the seams exist).
+- W1: feedback_scale 1e-5 / sign-flipped B under muon (does the
+  thresholdless rescue survive a channel with no usable signal?); then
+  the I(C,U) table on lattice (second geometry) for Tier D.
+- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
+  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W5 (§11): depth-50 budget cell — long-run session.
+- W6: DONE (Tier C, session 1). W0.2: DONE (falsified). W0 hinge:
+  DONE (falsified). W0 threshold: DONE (independent).
+
+### Session-3 events (kept for context)
+
+## PROGRESS LOG (2026-09-07, Session 3 — W1 ortho column + muon recovery edge; W0 gate threshold ruled out)
+
+**Status: W1's I(C,U) law now has an OPTIMIZER-SPECIFIC RECOVERY PROFILE
+(muon thresholdless ≥ 1e-4, ortho collapses between 1e-4 and 1e-3) —
+the strongest Tier D evidence yet. W0's gate shutdown is
+THRESHOLD-INDEPENDENT (θ 1.0 ≡ θ 2.0 at 1200 steps); the signed/hinge
+objective (small credit.py change) is the remaining cheap gate lever,
+then W0.3 component ablation.**
+
+### W1 extension (§7) — ortho column + feedback_scale 1e-4 rung
+
+Probe: `scripts/probes/w1_credit_ladder.py` (extended: `ortho` update
+registered into hunt_cells, `rp_vweak` = feedback_scale 1e-4 rung,
+`--only=` cell filter; session-2 euclid/muon means reused from
+`_SESSION2` — no re-measurement). Logs: `logs/w1_credit_ladder_ext.log`
+(30 s walltime).
+
+| credit (weakest → strongest) | euclid 0.2 | muon 0.02 | ortho (0.02, olr 1e-3) |
+| ---------------------------- | ---------- | --------- | ---------------------- |
+| bp (anchor)                  | 0.816      | 0.919     | 0.913                  |
+| ff (no feedback)             | 0.825      | 0.896     | 0.918                  |
+| pepita                       | 0.101      | 0.306     | 0.239                  |
+| rp_weak (1e-3)               | 0.308      | 0.870     | 0.757                  |
+| rp_ortho (0.01, ortho B)     | 0.326      | 0.873     | 0.780                  |
+| rp_vweak (1e-4)              | 0.309      | **0.871** | **0.464**              |
+
+I(C,U) vs euclid anchor: muon column {ff −0.03, pepita +0.10,
+rp_weak +0.46, rp_ortho +0.44, rp_vweak +0.46}; ortho column {ff −0.00,
+pepita +0.04, rp_weak +0.35, rp_ortho +0.36, **rp_vweak +0.06**}.
+
+1. **Muon's rescue edge is NOT at 1e-3**: 10,000×-weakened feedback
+   (rp_vweak) is rescued identically (0.871 ≈ rp_weak's 0.870). Under
+   muon the interaction is thresholdless over the whole 1e-4–1e-3
+   decade — the weak feedback channel contributes almost nothing
+   measurable, yet ff (channel ABSENT) is NOT rescued (0.896 < 0.919).
+   Open question: what does an effectively-zero-scale channel still
+   provide? Candidate: sign/structure of B suffices; next rung is
+   feedback_scale 1e-5 or a sign-flipped B.
+2. **Ortho_adam has a SHARP recovery boundary between 1e-4 and 1e-3**
+   (0.464 vs 0.757): the first measured cell where muon and ortho
+   DISAGREE on which credit they rescue. This is the quantitative
+   basis for a predictive I(C,U) law (Flagship C / Tier D): the
+   recovery profile is an optimizer fingerprint, not a generic
+   "matrix rules rescue weak credit" effect.
+3. ff × ortho (0.918) ≥ bp × ortho (0.913) on this harness — SP2's
+   MLP replication confirmed a second time under the extended grid.
+4. Hygiene landed: `CreditAssignmentConfig.random_projections`
+   docstring now warns it is inert under `LocalGoodnessCredit` (the
+   session-2 audit-note defect).
+
+### W0 gate-threshold sweep (§3 lever a) — THRESHOLD-INDEPENDENT
+
+Probe: `w0_tf_local_optimizers.py` gained `--threshold=` (plumbed into
+`_build`). muon_mid, seed 0, constant LR:
+
+| θ     | 600 steps        | 1200 steps      |
+| ----- | ---------------- | --------------- |
+| 2.0   | 0.190 / 3.225    | 0.142 / 4.472 (contrast-track) |
+| 1.0   | 0.191 / 3.229    | **0.144 / 4.520** |
+| 0.5   | 0.191 / 3.234    | —               |
+
+1. Lowering the gate threshold changes NOTHING at either budget — the
+   post-peak degradation is not the shutdown *threshold*; at 600 steps
+   the gate is open everywhere anyway (the contrast_track finding),
+   and at 1200 the layers that invert do so by far more than either θ.
+2. **The remaining gate lever is the signed/hinge objective** (train
+   on |G+−G−| or drop the gate so sign-inverted layers keep training).
+   Small, well-scoped `computronium/ontology/credit.py` change
+   (`local_contrastive` config knob + the softplus site ~line 1133) —
+   pre-register: if hinge @1200 beats 0.144/4.520 materially (CE
+   < 4.0), the objective shape was the boundary; if not, the
+   degeneration is in the contrast stream itself and W0.3 (§5)
+   component ablation is the primary lever.
+
+### Next (short-cell menu)
+
+- W0 hinge lever (above) — DONE (Session 4, falsified).
+- W0.3 (§5): component ablation (baseline / −PE / embed-excluded /
+  attention-only / FFN-only), logging which layers invert first.
+- W1: rp_vweak × muon 3-seed reproduction is DONE (±0.007); next rung
+  feedback_scale 1e-5 or sign-flipped B under muon (does the rescue
+  survive a channel with no usable signal?); then I(C,U) on lattice
+  (second geometry) for Tier D.
+- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
+  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W5 (§11): depth-50 budget cell — long-run session.
+
+### Session-2 events (kept for context)
+
+## PROGRESS LOG (2026-09-07, Session 2 — W0 mechanism found + W1 interaction law)
+
+**Status: W0's decay boundary has a MECHANISM (per-layer gate shutdown via
+goodness-sign inversion — the objective, not the optimizer); W1 (§7)
+major result MET in its strong form (degenerate credit rescued by muon,
+I(C,U) = +0.46); W0.3 component ablation is now the primary W0 lever.**
+
+### W0 contrast-track diagnostic — DECISIVE (the unrun instrument, run)
+
+Probe: `scripts/probes/w0_contrast_track.py` (muon_mid arm, checkpoints
+0–1200, per-linear r_i = ‖G+−G−‖/‖G+‖ and raw pre-EMA grad RMS logged
+alongside val top-1/CE). Log: `logs/w0_contrast_track.log`.
+
+| step | top-1 | CE    | finding                                                    |
+| ---- | ----- | ----- | ---------------------------------------------------------- |
+| 0    | 0.006 | 4.257 | init: r_embed 1.08, deeper 0.10–0.20 (gain-diag parity)    |
+| 200  | 0.156 | 3.256 | signals healthy, grads 1e-5 → 1e-4                          |
+| 400  | 0.193 | 3.128 | peak; deeper r 0.17–0.30, grads up to 5.7e-3               |
+| 600  | 0.190 | 3.225 | r_i all ≥ 0.18 — NO signal starvation                       |
+| 900  | 0.167 | 3.667 | **b0.out_proj, b1.out_proj grads EXACTLY 0**               |
+| 1200 | 0.142 | 4.472 | r_i still 0.19–0.54, **b1.ffn2 grad 1.3e-18**              |
+
+1. **The moving-target-drift hypothesis is FALSIFIED.** The raw label
+   contrast does NOT decay as the stream organizes — r_i holds at
+   0.15–0.54 through step 1200 (embed declines 1.08 → 0.245 but stays
+   the largest). W0.2's falsification stands for a second reason.
+2. **The real mechanism is per-layer GATE SHUTDOWN**: the softplus
+   gate `softplus(θ − (G+ − G−))` saturates to exact zero gradient on
+   individual layers once their goodness contrast INVERTS (G+ < G− by
+   more than θ = 2.0). Those layers freeze (zero update) while the
+   rest of the stack keeps moving — the trajectory then degrades as
+   the frozen layers' representations go stale relative to their
+   downstream consumers.
+3. **Verdict: the post-peak boundary is the OBJECTIVE (gate + sign
+   inversion), not the optimizer schedule.** Cosine decay only delays
+   the inversion; no LR schedule can fix a per-layer shutdown. This
+   converts W0's boundary from "loses signal past ~1–2k steps" into a
+   structural statement: **fixed-threshold softplus gating on a
+   moving stream self-freezes layers.**
+4. New concrete levers (in order of cost): (a) contrast_threshold
+   sweep 0.5/1.0 — is shutdown threshold-dependent? (b) signed/hinge
+   objective (train on |G+−G−| or drop the gate) — sign-inverted
+   layers keep training; (c) W0.3 component ablation (§5) to map
+   WHICH layers invert first (the two out_proj layers were first).
+
+### W1 credit ladder (§7) — MAJOR RESULT, strong form MET
+
+Probe: `scripts/probes/w1_credit_ladder.py` (~27 s; hunt_cells harness
+reused verbatim, credit rows extended; seeds 0-2, MNIST 150 batches,
+test acc). Logs: `logs/w1_credit_ladder.log`.
+
+| credit (weakest → strongest)   | euclid 0.2 | muon 0.02 |
+| ------------------------------ | ---------- | --------- |
+| pepita (fixed B, β 0.5)        | 0.101      | 0.306     |
+| rp_weak (FA, feedback_scale 1e-3) | 0.308   | **0.870** |
+| rp_ortho (FA, orthogonal B)    | 0.326      | **0.873** |
+| ff (no feedback)               | 0.825      | 0.896     |
+| bp (anchor)                    | 0.816      | 0.919     |
+
+Interaction I(C,U) = Δ_muon(credit) − Δ_muon(bp anchor):
+ff −0.031, pepita **+0.103**, rp_weak **+0.459**, rp_ortho **+0.446**.
+
+1. **§7's "major result" is MET in its strong form**: credit degraded
+   100× (feedback_scale 1e-3 vs the 0.01 default) collapses under
+   euclid (0.31) and is rescued to 0.87 under muon — within 0.03 of
+   ff and 0.05 of bp at the same optimizer. **Exact credit direction
+   is nearly dispensable once the parameter geometry is right.**
+2. The interaction is CONCENTRATED on degenerate credit (I grows
+   monotonically down the ladder: −0.03 → +0.10 → +0.46) — the
+   predicted sign and the quantitative basis for Flagship C
+   (predictive credit × optimizer compatibility).
+3. P2's "sharp boundary under ALL optimizers" is rejected: the
+   boundary is optimizer-DEPENDENT, which IS the interaction law.
+4. Defect-audit note (hygiene pass): `random_projections` configs
+   belong to `RandomProjectionsCredit` (FA/DFA); handing one to
+   `LocalGoodnessCredit` silently runs pure FF (first wiring of this
+   probe did; the byte-identical-to-ff numbers exposed it, and a
+   feedback_scale 0.01/1/10 identity confirmed the channel was inert).
+   A docstring warning belongs on `CreditAssignmentConfig.random_projections`.
+5. Reproduction: run twice, identical to 3 decimals. Cheap extension
+   queued: rp ladder × ortho_adam + feedback_scale 1e-4 rung (find the
+   muon recovery edge), then the I(C,U) table graduates toward a
+   Tier D headline if the law predicts on a second geometry (lattice).
+
+### Session-1 events (kept for context)
+
 ## PROGRESS LOG (2026-09-07, Session 1 — W0.1 + §8 infrastructure)
 
 **Status: W0 (transformer local credit) REOPENED — 3-seed-confirmed rescue
@@ -169,15 +405,17 @@ matched batches OK) is queued for the hygiene pass.
 
 ### Next (short-cell menu, ≤10 min each, breadth first)
 
-- ~~W6 promotion~~ DONE — Tier C closed (see above).
-- W0: muon_mid with cosine-decayed step past 600 steps (tests the
-  decay-past-peak lever directly); readout_scale sweep 0.3/3.0.
+- W0.3 (§5): component ablation — see Session-3 menu (hinge lever first,
+  then this).
+- W0 gate lever: RESOLVED as threshold-independent (Session 3); hinge/
+  signed objective is the remaining variant.
+- W1 extension: DONE (Session 3 — ortho column + 1e-4 rung); next:
+  1e-5 / sign-flipped B, then lattice for Tier D.
 - W4 (§10): hidden-layer closed-form ψ, one layer, MNIST Task A→B; the
-  ‖Δθ‖=0 bitwise gate is cheap to assert (~10 min).
-- W1 (§7): credit ladder under muon — random-projection + noisy arms on
-  MNIST d4, 150 batches (reuses hunt harness; ~5 min/cell).
-- W0.2 (§4): DONE — falsified, deprioritized (see above).
+  ‖Δθ‖=0 bitwise gate is cheap to assert (~10 min). NOT STARTED —
+  needs the hidden-ψ statistics code (w3_closed_form_psi skeleton).
 - W5 (§11): depth-50 budget cell (300–600 batches) — long-run session.
+- W6: DONE (Tier C closed, session 1). W0.2: DONE (falsified).
 
 >> TODO13b made the instrument honest. TODO14 asks what happens when we apply
 > that honesty symmetrically to the negative results:
