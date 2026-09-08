@@ -121,21 +121,30 @@ signatures):
 
 ## §2 — W8.1: Minimal NCA probe (the first experiment)
 
-### Task
+### Task (REVISED §11.4-§11.5: the executed design)
 
-Pattern regeneration (Mordvintsev-style, minimal): 16×16 grid, 4
-state channels + 1 target/label channel, per-cell shared MLP
-(neighborhood concat → hidden → Δstate), Adam-free init (unit-RMS style
-consistent with mupc practice), seed cell → grow → damage → regenerate.
+Pattern growth, Mordvintsev-minimal: 16×16 grid, 4 state channels, 4
+procedural sprites, per-cell shared MLP (3×3 neighborhood + label
+channel → hidden 32 → tanh Δ, |Δ| ≤ 0.5), unbounded additive state (NO
+clamp — the §11.3 clamped-integrator saturation attractor), 50%
+stochastic per-cell mask (functional damping: deterministic diverges),
+state-space MSE. **Matched `_distill_init`** (supervised regression of
+the ideal proportional controller Δ* = clamp(target − state, ±0.5))
+for ALL arms — BPTT-from-scratch never converged at probe budget (the
+canonical NCA itself is a 5000-step 96-step-rollout train); the fair
+I(C,U) question is fine-tuning quality from a working controller.
 
-### Arms (exactly four cells — no more)
+### Arms (the r8 reality; §2's original CE/goodness design is RETIRED)
 
-| arm | credit | update |
-| --- | ------ | ------ |
-| 1 (control) | BPTT (autograd through rollout, MSE/CE to target) | euclid, tuned once |
-| 2 (control) | BPTT | muon, screened |
-| 3 | local_contrastive (per-cell reshaping, §1) | euclid |
-| 4 | local_contrastive | muon |
+| arm | credit | update (recorded lr) |
+| --- | ------ | -------------------- |
+| 1 (control) | BPTT (per-step state MSE through 32-step rollout) | euclid 0.03 |
+| 2 (control) | BPTT | muon 0.01 |
+| 3 | zero-history local (per-step MSE, state DETACHED — no gradient crosses a timestep; raw summed pseudo-grads) | euclid 0.1 |
+| 4 | zero-history local | muon 0.1 |
+
+VERDICT (§11.5): local fg 1.000 on 3 seeds, rollout-flat at h24/48/96;
+BPTT×euclid diverged on seed 2; muon rescues BPTT, wobbles local.
 
 ### Pre-registered predictions (write results BEFORE running)
 
@@ -321,19 +330,13 @@ cell under §2's discipline.
    (local credit rejects per-coordinate normalization: adam-family
    wobbles, magnitude-annealing euclid and direction-only muon don't).
    Keep cells SHORT (300 eps) — ortho_adam is slow (SVD per step).
-4. **W8.3 damage curves — NEEDS A LABEL-FREE VARIANT FIRST** (§11.7:
-   with the label channel injected, damage regeneration is a
-   near-tautology — k=16 full-grid zeroing regenerates perfectly
-   because every cell independently knows its target). The informative
-   damage experiment requires removing the label channel so cells must
-   infer the pattern from neighbors (true autonomous growth);
-   regeneration from damage is then non-trivial.
-5. **W8.5 writer-surrogate improvement** — the local plateau at ~0.69
-   is writer-capacity-limited (§11.2 finding 2); a less task-shaped
-   write-local rule (e.g., expected-content MSE under the writer's own
-   addressing) is the lever toward ≥0.85 and a clean promotion case.
-6. **W8.4 shared vs unshared weights.**
-7. **W8.6** — combined cellular computer (moonshot; unscheduled).
+4. **W8.3 label-free variant first** (§11.7: with the label channel
+   on, damage regeneration is a near-tautology — k=16 full-grid
+   zeroing regenerates perfectly). Remove the label channel; cells
+   must infer the sprite from neighbors + seed memory; damage curves
+   and the P1 curve are then non-trivial and informative.
+5. **W8.4 shared vs unshared weights.**
+6. **W8.6** — combined cellular computer (moonshot; unscheduled).
 
 **Ontology promotion criteria (user goal: breadth via demonstrated
 usefulness)**: a primitive earns promotion when (i) its task shows a
@@ -359,17 +362,12 @@ The target end state, in one sentence:
 
 ---
 
-## §11 — W8.1 session record (2026-09-07, first pass — OPEN, not yet executed to a verdict)
+## §11 — W8.1 session record (2026-09-07 first pass → RESOLVED §11.5)
 
-**Status: the W8.1 harness is LANDED and instrumented
-(`scripts/probes/w8_nca_local.py`: 4 pre-registered arms, ontology
-update rules as the real U axis, P3 inversion-rate + P4 injection-
-contrast instrumentation, P1 horizon sweep). The four-cell verdict is
-NOT in. The first passes were consumed by three task-design
-pathologies, each found via its measurement signature and fixed; the
-remaining blocker is that the fixed task still trains toward the
-all-background attractor within the tested budget, so P1–P4 are
-UNRESOLVED.**
+**Status: RESOLVED. The four-cell verdict is in (§11.5) — via the
+P-A design pivot (§11.4) and distill-init, not the original CE design
+recorded below. The pathology log below is retained for its reusable
+§17-class signatures.**
 
 ### Pathologies found and fixed (each is a reusable §17-class finding)
 
@@ -388,7 +386,7 @@ UNRESOLVED.**
    additive state has a gradient-free confidently-wrong attractor
    (softmax gradient ~e^-gap) — MSE keeps a linear error signal.
 
-### Remaining blocker (next session's first move)
+### Remaining blocker (SUPERSEDED — resolved by the §11.4 P-A pivot and distill-init; retained for the lever-audit trail)
 
 Even with MSE + STATE_MAX = 10, the smoke did not show fg learning
 within 120 episodes; the last smoke output was ambiguous (identical to
@@ -721,34 +719,27 @@ W8.3 boundary claim, and where local-vs-BPTT could genuinely differ
 
 ## §12 — Next-sprint operational notes (for a fresh context)
 
-**REVISED 2026-09-08**: §11.2 (W8.5 promotion) and §11.3 (W8.1 unblock)
-are the authoritative session records; the r2-era notes below retain
-the file inventory and process guardrails.
+**REVISED 2026-09-08**: §11.4-§11.7 are the authoritative session
+records; the inventory below is refreshed in §14's change log.
 
 **File inventory (all gates green: ruff clean, pyright 0 errors):**
-- `scripts/probes/w8_nca_local.py` (REV 2026-09-08-r7) — W8.1 four-arm
-  harness, **P-A dynamics** (unbounded state, `DELTA_SCALE=0.5` tanh Δ,
-  state-space MSE), **`_distill_init`** wired as matched init for ALL
-  arms, **zero-history local credit** (per-step detached-state MSE,
-  raw summed pseudo-grads), weight-name-contract-compliant params,
-  P1 horizon sweep, `--arm=`/`--seed=` flags. Recorded lrs: bptt
-  euclid 0.03 / muon 0.01; local euclid/muon 0.1. VERDICT: §11.5.
-  CAUTION: screens (`_screen`) still use stale r2-era lr grids.
-- `scripts/probes/w8_ntm_copy.py` (REV 2026-09-08-r3) — W8.5 minimal
-  NTM with FRESH-DRAW eval (`_eval_batch`, seed 999), `--arm=`/`--seed=`
-  flags, `--len-eval` sweep, and the `local-muon` arm (`_Muon` wraps the
-  ontology's `newton_schulz5`; UNSCREENED lr 1e-3 — screen before use).
-  `_local_step` is the zero-history seam.
-- Logs: `logs/w8_nca_local.log` (stale — pre-fix run), `logs/w8_ntm_copy.log`,
-  `logs/w8_promotion.log` (the §11.2 round).
+- `scripts/probes/w8_nca_local.py` (REV 2026-09-08-r8) — as §2 REVISED;
+  adds the W8.2 `ortho_adam` arm. CAUTION: `_screen` still uses stale
+  r2-era lr grids — use `--arm=`/`--seed=` flags and the §13.1 lr tables.
+- `scripts/probes/w8_ntm_copy.py` (REV 2026-09-08-r4) — adds `--lr`
+  (the muon screen's interface); `_Muon` wraps the ontology's
+  `newton_schulz5`; `_local_step` is the zero-history seam.
+- Logs (this workstream): `w8_promotion.log`, `w8_nca_fourarm.log`,
+  `w8_nca_verdict.log`, `w8_ntm_muon_screen.log`, `w8_ntm_promo.log`.
+  (`w8_nca_local.log` / `w8_ntm_copy.log` are stale pre-fix runs.)
 
 **Sprint opener checklist:**
 1. Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`.
-2. Re-verify the W8.1 MSE path is live BEFORE trusting any old number —
-   the last W8.1 smoke printed pre-patch-identical output (suspected
-   stale process). Never trust a run whose numbers predate the patch.
-3. Run from repo root (`uv run python scripts/probes/...`); the probes
+2. Run from repo root (`uv run python scripts/probes/...`); the probes
    import siblings via `scripts/probes` layout.
+3. Pre-verdict gate (§13.2): one smoke cell asserting weights actually
+   move (‖Δw‖ > 0) and muon ≠ euclid step direction — 10 s, catches the
+   two verdict-invalidating defects this workstream already paid for.
 
 **Process guardrails learned this sprint:**
 - NEVER `pkill`/`pgrep -f` here (it can match and hang the invoking
@@ -763,10 +754,80 @@ the file inventory and process guardrails.
   gradient-free attractor) — check for each by signature before
   reading any flat curve as a boundary.
 
-**Decision points this sprint should resolve:**
-- Is the NTM local factorization's 0.708 seed-robust and fresh-draw
-  robust? (→ NTM promotion / ontology case)
-- Does local × muon beat local × adam on NTM memory credit? (→ the
-  I(C,U) axis on external memory; the fingerprint question)
-- Does W8.1 show any fg learning once per-step credit is live? (→
-  NCA verdict or a design pivot: conditional-NCA → pure-growth NCA)
+**Decision points — ALL RESOLVED (see §11.5-§11.7):** NTM 0.7 plateau
+is seed-robust but the muon edge was seed luck; W8.1 verdict landed via
+distill-init (local fg 1.000); the remaining open decisions live in
+§10's priority list.
+
+---
+
+## §13 — Method improvements (2026-09-08): efficiency + quality upgrades
+codified from three sessions of W8 execution
+
+### 13.1 The efficiency wins (what made cells 10-100× shorter)
+
+1. **Distill-init + finetune replaces from-scratch training** — the
+   single biggest lever. From-scratch BPTT never converged at any
+   probe budget (15 experiments, §11.4); distill-init gives a working
+   controller in ~5 s and the four-arm comparison becomes an ~45 s/cell
+   finetune. Legitimate for I(C,U): the arms compete on fine-tuning
+   from a matched, verified-working init (§20 discipline is on the
+   finetune, not the init). Any future recurrent/iterative substrate
+   should budget for an init protocol, not just a training loop.
+2. **Feasibility-isolation ladder (the §11.4 method — adopt
+   repo-wide as a §17 supplement)**: when training stalls, run in
+   order: (i) representation — can the model REGRESS the ideal
+   target signal? (supervised fit, minutes); (ii) wiring — does
+   1-step learning move the metric? (iii) horizon — T=1/2/4 vs full;
+   (iv) only then optimizer/lr. Each rung is minutes and localizes
+   the defect; skipping it cost §11.3 an entire session.
+3. **Pre-registered lr tables instead of screens**: screens (3 lrs ×
+   per arm) cost more than the verdict cells. Screen only when the lr
+   is unknown by an order of magnitude; otherwise record and reuse
+   (§2/§12 tables). W8.2 candidates: euclid {0.01, 0.03}, muon 0.01,
+   ortho_adam {0.003, 0.01} (adam-family scale).
+4. **Short-cell discipline**: 300-ep cells for screens/hard-case
+   probes; 800-ep for verdicts; matched-step controls only where the
+   comparison demands it (NTM adam plateaus by step 1500 — 3000-step
+   controls suffice; 6000 only for still-climbing arms).
+5. **Cost ledger (typical, CPU)**: NCA cell ~45-70 s (300-800 eps);
+   NTM cell ~2.5 min (3000 steps) / ~4 min (6000); ortho_adam is the
+   slow U (SVD per step) — 2-3× euclid; muon(SVD) similar. Budget
+   sessions in cells, not wall-clock hopes.
+
+### 13.2 The quality upgrades
+
+1. **Eval noise**: cells report a single fixed-batch eval (8 sprites /
+   seed-999 NTM batch). Add a 3-draw eval mean ± spread per verdict
+   cell (cheap: 3 no-grad rollouts) before any promotion-grade claim.
+2. **Freeze the harness before the verdict run**: every verdict this
+   workstream was preceded by a defect found DURING the run (weight
+   names, EMA). A pre-verdict gate — one smoke cell with weight-change
+   assertion (‖Δw‖ > 0) and muon≠euclid step diff — would have caught
+   both for ~10 s. Codify: run `assert update moves weights and rules
+   differ` before any multi-cell launch.
+3. **Zero-history per-module surrogate pattern is now transferable**:
+   both substrates converged with the same recipe — per-step loss,
+   every cross-module/recurrent input DETACHED, raw summed pseudo-
+   grads, no per-coordinate normalization (§11.5 defect 2 + §11.6
+   adam-family theory). Any new substrate (lattice, DNC, W8.6) starts
+   from this recipe, not from scratch design.
+4. **Label-free NCA variant (W8.3 prerequisite) design sketch**: drop
+   the label channel (IN_DIM = 36); identify the sprite by the seed
+   cell's one-hot (seed state = target one-hot at the center pixel);
+   cells must infer the pattern from neighbors. Growth is then real
+   pattern completion; damage curves become informative; BPTT's
+   inference-phase length makes the local-vs-BPTT P1 contrast sharp.
+   Pre-register before running.
+5. **P3 inversion instrument is ORPHANED** — the goodness-contrast
+   machinery was retired with the CE readout. Either rebuild it for
+   the state-space MSE design (contrast on per-layer activations
+   still definable) or strike W8.1-P3 from the claims; do not let it
+   silently rot (§11.5 finding 4).
+
+## §14 — Change log
+
+- 2026-09-08: §2 revised to the executed r8 design; §10 deduped
+  (writer-surrogate items merged; W8.3 flagged label-free-first);
+  §13 method improvements added; §12 inventory refreshed (nca r8,
+  ntm r4, verdict/screen/promo logs).
