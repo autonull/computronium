@@ -72,13 +72,33 @@ contrast in `LocalContrastiveCredit._tf_layer_grad`).
 
 ### Key ontology mapping facts (design constraints)
 
-- `local_contrastive` requires **label-augmented inputs** (last
-  `label_dim` features = one-hot target) and trains a readout head on
-  local CE; hidden layers on the softplus-gated goodness contrast with
-  EMA normalization. For the NCA, the natural mapping is: **each cell
-  (row of the flattened grid) is a "sample"** — reshape (B, H·W, C) →
-  (B·H·W, C) so the existing per-layer contrast machinery runs
-  unchanged; the target sprite occupies the label channels.
+**REVISED after the first execution passes (§11)** — the per-cell
+reshape into `local_contrastive` machinery was NOT the construction
+used; the W8.1 probe runs probe-local credit (per-layer goodness
+contrast on the shared cell MLP, per the local_contrastive RECIPE:
+softplus gate θ, EMA-RMS normalization, readout on raw CE) crossed
+with the REAL ontology update rules (`EuclideanUpdate` /
+`RiemannianOrthogonalUpdate` — the U axis is shipped code, not a
+reimplementation). Ontology promotion therefore requires an
+`NcaGeometry` whose settle/credit seam accepts this per-cell credit —
+the prerequisite evidence is now partially in hand (harness landed;
+verdict open).
+
+Constraints learned the hard way (each verified; see §11 for the full
+signatures):
+
+- **Additive state channels must live under MSE, never CE** (CE on
+  clamped additive state has a gradient-free confidently-wrong
+  attractor) and the state ceiling must sit ABOVE the target range
+  (`STATE_MAX = 10`) or every channel pins and argmax tie-breaks.
+- **Balanced (inverse-frequency) per-cell loss is mandatory** —
+  ~87%-background sprites have an all-background trivial attractor.
+- **`grad_clip` must be 0** on the update rules for rollout-trained
+  cells (the fixed-norm-jump lr-invariance signature), with the
+  substrate state bound as the explosion guard.
+- BPTT quality is budget-limited at the first-pass episode counts;
+  per-step loss averaging (32× denser credit) is the designated
+  unblock lever.
 - `sequential_lr` / `set_update_rule` wiring (TODO14 §8) uses
   `actual_parameter_displacement` snapshot-replay — with a **shared**
   cell weight the pseudo-gradients from all sites must be **aggregated
@@ -199,11 +219,15 @@ should structurally win.
 
 ---
 
-## §6 — NTM (W8.5): the memory stress test — CONDITIONAL
+## §6 — NTM (W8.5): the memory stress test — OPENED, first cell POSITIVE
 
-**Gate: starts only after W8.1–W8.3 produce at least one promoted
-positive or a clean boundary.** NTM without BPTT is a bigger lift than
-all of NCA; do not open it while NCA cells are still cheap.
+**Status revision (2026-09-07): the §6 gate was consciously overridden
+by user directive and the first cell EXECUTED — with a positive result
+(§11.1: BPTT control solves copy 1.000; zero-history local
+factorization 0.708 and climbing). NTM is no longer conditional; it is
+the WORKSTREAM'S CHEAPEST PROMOTION TARGET (~2.5 min/cell) and the
+ontological breadth case the user asked for (demonstrate usefulness →
+promote into the Ontology).**
 
 Minimal NTM (deliberately small):
 
@@ -246,10 +270,13 @@ result either earns or kills.
 | ------------ | :-----: | :-------: | :---------------: | :-----------: | :---------------: |
 | MLP          |    ✓    |     ✓     |         ✓         |       ✓       |         ✓         |
 | Transformer  |    ✓    |     ✓     |         ✓         |       —       |         —         |
-| Lattice/tile |    ✓    |     ✓     |      partial      |       ✓       |         —         |
-| NCA          |  W8.1   |   W8.1    |       W8.1        |       —       |       W8.2        |
-| NTM          |  W8.5   |     —     |       W8.5        |       —       |        —          |
+| Lattice/tile |    ✓    |     ✓     |      partial      |       ✓       | contract-inert (§ TODO14 S7) |
+| NCA          | harness |     —     |     harness       |       —       |         —         |
+| NTM          | ✓ 1.000 |     —     |    ✓ 0.708 1-seed |       —       |         —         |
 | DNC          | W8.5+   |     —     |       W8.5+       |       —       |        —          |
+
+(NCA row = harness landed, verdict open, §11; NTM row = §11.1, single
+seed, fixed-batch eval — promotion round pending.)
 
 Do not fill this table for its own sake — each ✓ must be a pre-registered
 cell under §2's discipline.
@@ -274,17 +301,30 @@ cell under §2's discipline.
 
 ---
 
-## §10 — Priority order (as actually executed)
+## §10 — Priority order (REVISED post-first-sprint, 2026-09-07)
 
-1. **W8.1** — minimal NCA probe, four cells, pre-registered P1–P4.
-   One session. Cheapest decisive information in the workstream.
-2. **W8.2** — optimizer/degenerate-credit interaction on NCA (only if
-   W8.1 shows a live signal worth interacting with).
-3. **W8.3** — long-horizon/damage curves (attacks the temporal-credit
-   objection directly; reuses W8.1 machinery, no new code).
-4. **W8.4** — shared vs unshared weights (new axis, moderate lift).
-5. **W8.5** — NTM copy (opens only on a W8.1–W8.3 result).
+1. **W8.5 promotion round** — 3 seeds + fresh-draw eval + extended
+   budget (the 0.708 curve was still climbing at 3000 steps) + the
+   local × muon cell (I(C,U) on memory credit; muon on per-module
+   pseudo-grads). Cheapest decisive information in the workstream; a
+   positive here is the ontology-promotion evidence for NTM.
+2. **W8.1 unblock** — the §11 lever list in order: (a) verify the MSE
+   path is live (per-episode loss print, 20 eps); (b) per-step loss
+   averaging; (c) 600+ episodes; (d) fixed mask schedule. Then the
+   four-cell verdict.
+3. **W8.2** — NCA optimizer interaction (after W8.1's verdict).
+4. **W8.3** — long-horizon/damage curves (reuses W8.1 machinery).
+5. **W8.4** — shared vs unshared weights.
 6. **W8.6** — combined cellular computer (moonshot; unscheduled).
+
+**Ontology promotion criteria (user goal: breadth via demonstrated
+usefulness)**: a primitive earns promotion when (i) its task shows a
+promoted positive per §20 discipline (3 seeds, fresh-draw eval,
+matched control, reproduction), AND (ii) at least one non-Adam update
+rule composes with it. Promotion then pays the full AGENTS.md
+checklist (registry, config classmethod, wiring lockstep lock,
+validate branches, export surfaces). NTM is closest; NCA follows its
+verdict.
 
 **Relative to the TODO14 queue**: W8.1 is a legitimate parallel track —
 it reuses the W0 instrument, needs no ontology surgery, and answers a
@@ -298,3 +338,130 @@ The target end state, in one sentence:
 > *Here is the maximum temporal/spatial complexity local credit can
 > learn, here is the optimizer dependence, here is where it fails — and
 > here is the regime where it structurally beats BPTT.*
+
+---
+
+## §11 — W8.1 session record (2026-09-07, first pass — OPEN, not yet executed to a verdict)
+
+**Status: the W8.1 harness is LANDED and instrumented
+(`scripts/probes/w8_nca_local.py`: 4 pre-registered arms, ontology
+update rules as the real U axis, P3 inversion-rate + P4 injection-
+contrast instrumentation, P1 horizon sweep). The four-cell verdict is
+NOT in. The first passes were consumed by three task-design
+pathologies, each found via its measurement signature and fixed; the
+remaining blocker is that the fixed task still trains toward the
+all-background attractor within the tested budget, so P1–P4 are
+UNRESOLVED.**
+
+### Pathologies found and fixed (each is a reusable §17-class finding)
+
+1. **Class-imbalance trivial attractor**: sprites are ~87% background;
+   unweighted CE converges to all-background (CE = ln 4 exactly,
+   fg-acc 0). Fixed: inverse-frequency-weighted CE (`_weighted_ce`).
+2. **Global-clip lr-invariance**: BPTT screens were byte-identical
+   across lr 0.01→1.0 — the §17 update-integrity signature (grad_clip
+   1.0 default makes every step a fixed-norm jump). Fixed: grad_clip 0
+   on both rules (substrate state bound replaces the explosion guard).
+3. **Clamp-ceiling saturation attractor**: with the state ceiling at
+   the target max (3.0), additive Δ dynamics saturate every channel at
+   the ceiling; argmax tie-breaks to channel 0 and CE floors at ln 4
+   with zero gradient. Fixed: STATE_MAX = 10 (above target range) and
+   BPTT loss switched to one-hot MSE (plan §2 "MSE/CE"); CE on clamped
+   additive state has a gradient-free confidently-wrong attractor
+   (softmax gradient ~e^-gap) — MSE keeps a linear error signal.
+
+### Remaining blocker (next session's first move)
+
+Even with MSE + STATE_MAX = 10, the smoke did not show fg learning
+within 120 episodes; the last smoke output was ambiguous (identical to
+the pre-MSE numbers — verify the patched module actually executed
+before anything else; rule out a stale-process/cache artifact).
+Candidate next levers, in order: (a) verify the MSE path is live by
+printing the bptt loss per episode for 20 eps (it should descend); (b)
+per-step loss averaging instead of final-step-only (32× denser credit);
+(c) 600+ episodes or per-step BPTT updates; (d) if still flat, suspect
+the mask stochasticity + single-sample-per-episode noise floor and use
+a fixed mask schedule. The harness itself passed all gates (ruff
+clean, pyright 0 errors) and every arm path is exercised end-to-end.
+
+### §11.1 — W8.5 first cell EXECUTED (2026-09-07): BPTT control SOLVES copy; zero-history local factorization reaches 0.71
+
+Probe: `scripts/probes/w8_ntm_copy.py` (minimal NTM: LSTM-32 controller,
+16x8 content-addressed memory, erase+add write; copy task L=6, 13
+timesteps; adam 1e-3, batch 16, 3000 steps, ~2.5 min/cell CPU).
+Pre-registered Q1/Q2 in the docstring; opened early by user directive
+(the §6 gate consciously overridden).
+
+| arm                        | copy-acc @3000 | note |
+| -------------------------- | -------------- | ---- |
+| bptt x adam (control)      | **1.000**      | loss 0.046; >0.9 by step 1500 |
+| local factorized x adam    | **0.708** (peak 0.708, still climbing) | ZERO history-backprop: LSTM state and memory detached every timestep |
+
+1. **Q1 MET**: the gold-standard BPTT control learns copy at CPU probe
+   budget (1.000 in 3000 steps / 2.5 min). The NTM cell is REAL — every
+   §9 non-negotiable is satisfiable here.
+2. **Q2 first answer**: the zero-history local factorization (per-step
+   CE for controller/out, read-head CE with h detached, writer on a
+   content-code MSE + addressing-KL toward the least-similar slot)
+   reaches 0.71 with no gradient ever crossing a timestep boundary —
+   far above chance (0.5) and still climbing at cutoff. The addressing
+   mechanism does NOT need backprop-through-time to become useful.
+   This is the first positive local-credit result on external memory.
+3. Honest caveats: single seed, batch-16 training bits (eval on the
+   same generator draw — a fixed-batch control, promotion requires
+   fresh-draw eval + 3 seeds); local arm peak may be budget-limited
+   (curve still rising at 3000). The writer addressing surrogate is
+   task-shaped (bit code in channels 0-1); a general write rule is the
+   open design question.
+4. Promotion path (§20): 3 seeds + fresh-draw eval + matched-step
+   control are cheap here (~2.5 min/cell); then the interesting cell is
+   local x muon (the I(C,U) axis — muon on the per-module pseudo-grads).
+
+---
+
+## §12 — Next-sprint operational notes (for a fresh context)
+
+**File inventory (all gates green: ruff clean, pyright 0 errors):**
+- `scripts/probes/w8_nca_local.py` (REV 2026-09-07-r2) — W8.1 four-arm
+  harness with ontology update rules, P1 horizon sweep, P3
+  inversion-rate, P4 inject-r; NOW with per-step BPTT credit (the §11
+  lever b, default on) and `--arm=`/`--seed=` single-cell flags (skip
+  screens; recorded lr picks euclid 0.1 / muon 0.02). Per-step credit
+  ALONE did not unblock fg learning (400-ep smoke still flat) — the
+  remaining levers are (c) 600+ episodes, (d) fixed mask schedule, or
+  the design pivot to pure-growth NCA.
+- `scripts/probes/w8_ntm_copy.py` (REV 2026-09-07-r2) — W8.5 minimal
+  NTM with FRESH-DRAW eval (`_eval_batch`, seed 999, independent of
+  training), `--arm=`/`--seed=` flags, and `--len-eval` length
+  generalization sweep (L=6/12/18/24; decays off-train-length at 600
+  steps as expected). `_local_step` is the zero-history seam.
+- Logs: `logs/w8_nca_local.log` (stale — pre-fix run), `logs/w8_ntm_copy.log`.
+
+**Sprint opener checklist:**
+1. Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`.
+2. Re-verify the W8.1 MSE path is live BEFORE trusting any old number —
+   the last W8.1 smoke printed pre-patch-identical output (suspected
+   stale process). Never trust a run whose numbers predate the patch.
+3. Run from repo root (`uv run python scripts/probes/...`); the probes
+   import siblings via `scripts/probes` layout.
+
+**Process guardrails learned this sprint:**
+- NEVER `pkill`/`pgrep -f` here (it can match and hang the invoking
+  shell); kill by explicit PID.
+- Background runs: `nohup uv run ... > logs/... 2>&1 &` then poll the
+  log with sleeps; the shell waits on children otherwise.
+- The ontology update rules (`EuclideanUpdate`/`RiemannianOrthogonalUpdate`)
+  accept plain `dict[str, Tensor]` params + pseudo-grad lists +
+  `bias_grads` dict — use them for the U axis in any standalone probe.
+- Local-arm loss designs must survive the three §11 pathologies
+  (imbalance attractor, clip lr-invariance, CE-on-additive-state
+  gradient-free attractor) — check for each by signature before
+  reading any flat curve as a boundary.
+
+**Decision points this sprint should resolve:**
+- Is the NTM local factorization's 0.708 seed-robust and fresh-draw
+  robust? (→ NTM promotion / ontology case)
+- Does local × muon beat local × adam on NTM memory credit? (→ the
+  I(C,U) axis on external memory; the fingerprint question)
+- Does W8.1 show any fg learning once per-step credit is live? (→
+  NCA verdict or a design pivot: conditional-NCA → pure-growth NCA)

@@ -3,6 +3,291 @@
 > **Opened 2026-09-07.**
 >
 
+## PROGRESS LOG (2026-09-07, Session 8 — W8.1 NCA harness landed; verdict OPEN)
+
+**Status: W8.1 (TODO.ntm_nca.md) harness LANDED with the full
+pre-registration (4 arms, ontology update rules as the real U axis,
+P3/P4 instrumentation, P1 horizon sweep) — but the four-cell verdict is
+NOT in. The session was consumed by three task-design pathologies,
+each found via its measurement signature and fixed (see TODO.ntm_nca.md
+§11 for the full chain): (1) class-imbalance trivial attractor →
+balanced CE; (2) global-clip lr-invariance (third §17 sighting this
+week) → grad_clip 0; (3) clamp-ceiling saturation / CE gradient-free
+attractor on additive state → STATE_MAX above target range + MSE loss.
+Remaining blocker: fg learning not demonstrated within budget; next
+session verifies the MSE path is live, then per-step loss averaging.
+TODO14's own menu is unchanged: W4 hidden ψ, W5 depth-50.**
+
+
+## PROGRESS LOG (2026-09-07, Session 7 — W1 lattice cell: the rescue profile is sign-general but NOT magnitude-general; FA/DFA is unrealizable on lattice; pepita covariate-pairing defect fixed)
+
+**Status: the W1 lattice cell (second geometry, Tier D qualification) is
+DONE. The optimizer-specific recovery profile does NOT quantitatively
+replicate: on lattice the only realizable degenerate rung (pepita)
+shows weak positive interaction (I = +0.047 muon / +0.007 ortho vs the
+MLP rp rungs' +0.44..0.46), and the rungs that carried the strong-form
+law (rp_weak/ortho/vweak) are CONTRACT-INERT on lattice — the layered
+FA/DFA walk cannot chain over a settle stream that omits the raw input
+and per-site weights, so those rows are byte-identical no-op runs at
+chance. A real pepita defect (index-paired covariates, correct only on
+stack geometries) was found and fixed en route.**
+
+### W1 lattice I(C,U) table (§7) — EXECUTED, Tier D narrows
+
+Probe: `scripts/probes/w1_lattice_ladder.py` (hunt_cells harness reused;
+lattice3d = SpatialLattice3DGeometry (4,3,3), hidden (2,), MNIST 150
+batches, seeds 0-2, test acc; credit ladder + update registry imported
+from w1_credit_ladder). Log: `logs/w1_lattice_ladder.log` (~7 min).
+External anchors: bp × muon 0.905 EXACTLY matches hunt_hybrid's
+recorded lattice bp × muon 0.905; harness verified.
+
+| credit            | euclid.2 | muon  | ortho |
+| ----------------- | -------- | ----- | ----- |
+| bp (anchor)       | 0.810    | 0.905 | 0.907 |
+| ff                | 0.844    | 0.871 | 0.903 |
+| pepita            | 0.071    | 0.214 | 0.175 |
+| rp_weak/ortho/vweak | 0.102 (all three byte-identical, every optimizer) | | |
+
+I(C,U) vs euclid.2 (anchor = bp): muon {ff −0.068, pepita **+0.047**,
+rp — no-op}; ortho {ff −0.038, pepita +0.007, rp — no-op}.
+
+1. **Pre-registered P1/P2 NOT falsified — UNREALIZABLE.** The rp rungs
+   (which carried the MLP strong-form law) return all-zeros on lattice:
+   the layered FA contract (`RandomProjectionsCredit.compute_pseudo_gradient`)
+   requires B_k to map act_{k+1} widths to act_k widths over a linear
+   stack that includes the raw input; lattice settles omit the input
+   (acts start at the 72-wide post-input features) and the per-site
+   (2,2) weights are not transition-ordered. The contract's designed
+   fallback is zeros — so the rp rows are NO-OP runs (0.102 ≈ chance,
+   byte-identical across feedback_scale 1e-3/0.01/1e-4 AND
+   orthogonal_init True/False — the inertness signature). Documented as
+   the second inertness mode on
+   `CreditAssignmentConfig.random_projections`. They are a no-op
+   control here, NOT credit evidence.
+2. **Defect found + fixed (measurement integrity, §17)**:
+   `_pepita_gradient` paired weight k with act k by INDEX — correct on
+   stack geometries (where acts[0] is the raw input), misaligned on
+   lattice (input_proj would pair with a 72-wide hidden act → (72,72)
+   grad vs (72,784) param; momentum crash, silent misalignment under
+   clipless rules). Fix: `_pepita_covariate_stream` (prepend the raw
+   input when the settle stream's first width disagrees) + monotone
+   in_features matching — reproduces the shipped acts[k] pairing on
+   stacks exactly (targeted credit/learned-feedback/parity tests,
+   demo_update_ladder + learned_feedback_resume integration, and a
+   0.071 exact re-run of pepita × lattice × euclid.2 after the
+   post-review refactor all pass; MLP behavior untouched).
+3. **Valid lattice reading (bp/ff/pepita only)**: the interaction's
+   SIGN-CONCENTRATION on degenerate credit replicates (pepita is the
+   only positive-I credit under both muon and ortho; ff and bp I ≤ 0)
+   but the magnitude collapses: pepita × muon reaches only 0.214 (MLP:
+   0.306) and I is +0.047 (MLP rp rungs: +0.44..0.46). **Tier D
+   narrows: the credit-optimizer interaction is sign-general across
+   geometries, but its strong-form magnitude is carried by FA-ladder
+   rungs that only exist on stack geometries.** "Predictive" holds
+   within geometry; cross-geometry it is qualitative, not quantitative.
+4. SP2's "ff ≥ bp under plain optimizers" replicates on a second
+   geometry: ff × euclid.2 0.844 > bp × euclid.2 0.810 (the third
+   independent replication after SP2 and the w1 MLP ladder).
+
+### Next (short-cell menu)
+
+- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
+  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W5 (§11): depth-50 budget cell — long-run session.
+- W8 (TODO.ntm_nca.md): NCA probe — independent arc; the W0.4
+  "right-or-absent" injection principle applies to its label-channel.
+- W0: BOUNDARY at probe scale. W0.2, hinge, W0.3, W0.4: falsified.
+  W6: Tier C closed. W1: MLP matrix done incl. lion; lattice cell DONE
+  (rp-realizability caveat recorded).
+
+### New improvement opportunities (queued, not invented ad hoc)
+
+- **Per-site FA feedback primitive**: a lattice-native FA/DFA variant
+  (per-site B shaped like each site weight, error walked over the
+  message-passing layout) would make the rp ladder realizable on
+  lattice and let the strong-form I(C,U) law be tested where it
+  currently cannot be. Design work — belongs in a dedicated session,
+  not a short cell.
+- **Inertness guard**: RandomProjectionsCredit could log/warn when the
+  layered contract fails (currently silent zeros — the lattice no-op
+  rows were only caught because they were byte-identical). Cheap
+  hygiene candidate for the Register C pass.
+- **Recurrent-family audit**: the same index-vs-settle-stream
+  assumption the pepita fix removed may misalign other index-paired
+  credit paths (RecurrentGeometry, GraphGeometry) — one probe rung per
+  geometry (any momentum update crashes loudly; euclid silently
+  misaligns) would close the class.
+
+### Session-6 events (kept for context)
+
+## PROGRESS LOG (2026-09-07, Session 6 — W0.4 causal targets: alignment is load-bearing; W0 → Boundary at probe scale)
+
+**Status: W0's LAST rescue hypothesis (§6 causal local targets) is
+CLOSED — every misalignment degrades, and a random task-uninformative
+channel (0.114/3.365) BEATS misaligned real labels (0.094/3.740,
+0.073/4.005). Real-but-wrong supervision poisons the injected stream;
+noise can be ignored, wrong labels cannot. W0 graduates to Boundary at
+probe scale: the full §17/§21 overturn protocol (optimizer matrix,
+schedules, gain, contrast tracking, threshold, hinge, component
+ablation, supervision geometry) has run with baseline best throughout.**
+
+### W0.4 causal local targets (§6) — EXECUTED, alignment is load-bearing
+
+Probe: `scripts/probes/w0_causal_targets.py` (TargetVariantCredit —
+hidden-layer y_lab transformed per arm; the readout keeps TRUE targets).
+Key realization recorded in the probe docstring: the shipped
+construction is ALREADY the token-local next-token arm of §6
+(`_tf_recompute` injects per-position `label_emb[y_lab]`), so the
+untried variants are the MISALIGNED ones. muon 0.005, 600 steps, seed 0.
+Log: `logs/w0_causal_targets.log`.
+
+| arm           | top-1 | CE    | reading |
+| ------------- | ----- | ----- | ------- |
+| baseline      | 0.190 | 3.225 | token-local next-token (replicates) |
+| shuffled_pos  | 0.094 | 3.740 | same token stats, wrong positions |
+| seq_label     | 0.073 | 4.005 | one label per window |
+| random_target | 0.114 | 3.365 | task-uninformative noise channel |
+
+1. **P-A confirmed (top-1)**: causal alignment carries real signal —
+   baseline > shuffled_pos > seq_label. The supervision geometry
+   question does NOT dissolve; the contrast learns position-aligned
+   next-token structure, not token statistics.
+2. **P-B FALSIFIED, and the falsification is the finding**: random
+   labels beat BOTH misaligned real-label arms. Mechanism: the label
+   embedding is injected into the stream for ALL deeper recomputes —
+   misaligned real labels write systematically wrong token information
+   into every layer's input; random labels are unstructured noise the
+   layers can discount. **A local supervision channel must be either
+   causally right or absent — "approximately right" is worse than
+   noise.** This is a reusable principle for any stream-injected
+   supervision design (the MLP label-channel contract, NCA W8.1
+   injection, etc.).
+3. **W0 verdict**: with W0.4 closed, every §2/§3 overturn lever has
+   been pulled (optimizers × schedules × gain × contrast instrument ×
+   threshold × objective shape × components × supervision geometry).
+   State: **local_contrastive on causal transformers at probe scale —
+   rescue real but bounded (beats bp at 600-step matched tokens, 3
+   seeds; decays past ~1–2k steps under every schedule tested);
+   mechanism mapped (per-layer sign inversions, protective gate,
+   load-bearing alignment). Boundary at probe scale.** Longer-context /
+   larger-model cells remain untested and are the only honest
+   generalization caveat.
+
+### Next (short-cell menu)
+
+- W1 lattice: I(C,U) table on lattice geometry (second geometry) —
+  Tier D qualification; the optimizer-specific recovery profile
+  (muon thresholdless / ortho sharp / lion sign-blind) is the
+  prediction to test. hunt_cells-style harness + lattice geometry.
+- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
+  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W5 (§11): depth-50 budget cell — long-run session.
+- W8 (TODO.ntm_nca.md): NCA probe — independent arc, plan revised;
+  the W0.4 "right-or-absent" injection principle applies directly to
+  its label-channel design.
+- W0: BOUNDARY at probe scale (all levers pulled). W0.2, hinge, W0.3,
+  W0.4: falsified. W6: Tier C closed. W1: optimizer matrix done incl.
+  lion fingerprint; lattice cell remains.
+
+### Session-5 events (kept for context)
+
+## PROGRESS LOG (2026-09-07, Session 5 — W0.3 ablation: baseline is locally optimal; Lion primitive lands)
+
+**Status: W0.3 (§5) EXECUTED and FALSIFIED in the rescue direction —
+every component ablation degrades (baseline 0.190/3.225 beats all four
+arms; attention-output goodness EXONERATED, preattn_good CE 3.867).
+Combined with threshold-independence + hinge falsification + full
+optimizer coverage, W0 graduates STRONGLY toward Boundary at probe
+scale. Lion added as an update primitive: diverges on the transformer
+cell (sign class = Adam class), rescues weak credit on MLP but its rp
+rungs are scale-invariant (sign makes sub-dominant credit invisible).**
+
+### W0.3 component ablation (§5) — EXECUTED, P-A falsified, boundary firms
+
+Probe: `scripts/probes/w0_component_ablation.py` (AblatedCredit subclass
+of LocalContrastiveCredit; per-arm `_tf_layer_grad` overrides — zeroed
+layers / pre-attention in_proj goodness). muon 0.005, 600 steps, seed 0.
+Log: `logs/w0_component_ablation.log`.
+
+| arm             | top-1 | CE    | vs baseline |
+| --------------- | ----- | ----- | ----------- |
+| baseline        | 0.190 | 3.225 | (replicates exactly) |
+| embed_excluded  | 0.141 | 3.287 | worse — embed is load-bearing |
+| preattn_good    | 0.175 | 3.867 | worse — attention output in the contrast is BENEFICIAL |
+| attention_only  | 0.161 | 4.105 | worse |
+| ffn_only        | 0.181 | 3.527 | worse on CE, near-parity top-1 |
+
+1. **P-A FALSIFIED**: the out_proj-first inversion is NOT attention-
+   output sabotage — removing attention from the in_proj goodness
+   degrades CE by 0.64. The inversions, whatever their origin, are
+   PART of what works.
+2. **P-B confirmed**: no single-component exclusion rescues. Among the
+   5 configurations the shipped objective is locally optimal. §5's
+   "highly valuable result" (a compatibility theorem via exclusion)
+   did not materialize in this direction — instead the negative is
+   itself valuable: local_contrastive on causal transformers survives
+   the full §17-style overturn protocol (optimizer matrix, schedules,
+   gain diagnostic, contrast tracking, threshold sweep, hinge variant,
+   component ablation) with baseline best throughout. **W0 graduates
+   toward Boundary at probe scale** (3 seeds on the rescue cell exist;
+   the ablation was seed 0, matching the base cell).
+3. Component map: the label-independent FFN representation is the
+   load-bearing part for top-1 (ffn_only 0.181 ≈ baseline 0.190);
+   attention-output goodness contributes calibration (CE), the embed
+   contributes both. The remaining W0 directions are architectural
+   (causal local targets, §6 W0.4 — never attempted) rather than
+   component surgery.
+
+### Lion primitive (added this session; TODO14 I(C,U) datapoint)
+
+`LionUpdate` + `ParameterUpdateConfig.lion(...)` landed across all five
+wiring surfaces (update.py, root/ontology exports, both factory
+dispatches, SystemConfig validation sweep). Measured calibration note in
+the docstring: canonical "3–10× Adam LR" does NOT transfer to local
+pseudo-gradients (MNIST ff peak at Adam-equal 1e-3 → 0.781 vs Adam
+0.739; collapse ≥1e-2); sign steps are global-clip-invariant above zero.
+
+- **W0 transformer cell (pre-registered: Lion diverges) — CONFIRMED,
+  and it is the worst diverger yet**: CE 1334 (2e-3) / 9921 (5e-3) /
+  115347 (1e-2) / 511 (1e-3) at 300 steps, all far above chance regime
+  (muon 3.3, euclid 3.5, adam 604). Sign-class joins Adam's rescale-
+  class as per-coordinate poison; orthogonalization remains the only
+  rescue class on this cell. Log: `logs/w0_lion_screen.log`.
+- **W1 ladder lion column** (`logs/w1_credit_ladder_lion.log`):
+  bp 0.863, ff 0.892, rp_weak 0.792, rp_ortho 0.792, rp_vweak 0.792 —
+  I(C,U) vs euclid anchor: ff +0.02, rp_weak +0.437, rp_ortho +0.419,
+  rp_vweak +0.436. **Critical caveat: the three rp rungs are
+  near-identical across a 100× feedback-scale range** (spread ≤1e-3;
+  seed 1 differs at the 4th decimal — channel live but negligible).
+  Under sign descent a sub-dominant credit component almost never flips
+  the sign: Lion's I(C,U) measures the BASE RP direction, not the
+  feedback channel. Sign-based rules are blind to weak-credit
+  structure — a new mechanism distinction (muon: magnitude-sensitive
+  rescue, thresholdless; lion: sign-blind).
+- Probe plumbing: `--only-arms=` filter in w0_tf_local_optimizers;
+  lion column in w1_credit_ladder `_register_updates`.
+
+### Next (short-cell menu)
+
+- W0.4 (§6): causal local targets — the ONLY untried W0 direction
+  (sequence-level label vs token-local next-token target vs block-local
+  target embedding, causal masking preserved). Needs a small
+  `_tf_layer_grad`-adjacent change (the label channel is currently the
+  class label embedding; a token-local target variant injects the
+  NEXT token's embedding). Decides whether local credit needs
+  causally-aligned supervision — the last rescue hypothesis.
+- W1 lattice: I(C,U) table on lattice geometry (second geometry) —
+  Tier D qualification; hunt_cells-style harness + lattice geometry.
+- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
+  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W5 (§11): depth-50 budget cell — long-run session.
+- W8 (TODO.ntm_nca.md): NCA probe — independent arc, plan revised.
+- DONE: W0.2 (falsified), W0 threshold (independent), W0 hinge
+  (falsified), W0.3 (falsified), W1 optimizer matrix incl. lion
+  (optimizer-specific recovery profile established), W6 (Tier C).
+
+### Session-4 events (kept for context)
+
 ## PROGRESS LOG (2026-09-07, Session 4 — W0 hinge lever FALSIFIED: the gate is load-bearing)
 
 **Status: the hinge/signed objective made W0 WORSE at both budgets
@@ -140,13 +425,11 @@ Probe: `w0_tf_local_optimizers.py` gained `--threshold=` (plumbed into
 
 ### Next (short-cell menu)
 
-- W0 hinge lever (above) — DONE (Session 4, falsified).
-- W0.3 (§5): component ablation (baseline / −PE / embed-excluded /
-  attention-only / FFN-only), logging which layers invert first.
-- W1: rp_vweak × muon 3-seed reproduction is DONE (±0.007); next rung
-  feedback_scale 1e-5 or sign-flipped B under muon (does the rescue
-  survive a channel with no usable signal?); then I(C,U) on lattice
-  (second geometry) for Tier D.
+- W0.3 (§5): component ablation — DONE (Session 5: falsified, baseline
+  locally optimal; boundary firms).
+- W1: 1e-5/sign-flipped-B rung (NOTE: lion column showed sign rules
+  are blind to sub-dominant credit — interpret future rungs
+  accordingly); then I(C,U) on lattice (second geometry) for Tier D.
 - W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
   hidden-ψ statistics code (w3_closed_form_psi skeleton).
 - W5 (§11): depth-50 budget cell — long-run session.

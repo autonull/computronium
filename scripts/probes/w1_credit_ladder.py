@@ -72,7 +72,11 @@ def _credit(name: str):
 def _register_updates() -> None:
     import hunt_cells
 
-    from computronium import OrthoAdamUpdate, ParameterUpdateConfig
+    from computronium import (
+        LionUpdate,
+        OrthoAdamUpdate,
+        ParameterUpdateConfig,
+    )
 
     base = hunt_cells._updates
     hunt_cells._updates = lambda: {
@@ -80,6 +84,7 @@ def _register_updates() -> None:
         "ortho": lambda: OrthoAdamUpdate(
             ParameterUpdateConfig.ortho_adam(step_size=0.02, ortho_lr=1e-3)
         ),
+        "lion": lambda: LionUpdate(ParameterUpdateConfig.lion(step_size=1e-3)),
     }
 
 
@@ -95,6 +100,11 @@ CELLS = [
     ("rp_vweak", "euclid.2"),
     ("rp_vweak", "muon"),
     ("rp_vweak", "ortho"),
+    ("bp", "lion"),
+    ("ff", "lion"),
+    ("rp_weak", "lion"),
+    ("rp_ortho", "lion"),
+    ("rp_vweak", "lion"),
 ]
 SEEDS = (0, 1, 2)
 
@@ -158,7 +168,7 @@ def main() -> int:
             flush=True,
         )
 
-    for update in ("muon", "ortho"):
+    for update in ("muon", "ortho", "lion"):
         a0 = results["bp", update] - results["bp", "euclid.2"]
         print(f"\n=== I(C,U) interaction ({update} vs euclid.2, anchor = bp) ===")
         for credit in ("ff", "pepita", "rp_weak", "rp_ortho", "rp_vweak"):

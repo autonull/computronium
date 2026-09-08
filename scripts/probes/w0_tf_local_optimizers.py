@@ -102,6 +102,13 @@ _ARMS: dict[str, ParameterUpdateConfig] = {
     "orthoadam_hi": ParameterUpdateConfig.ortho_adam(
         step_size=0.01, ortho_lr=0.01, grad_clip=0.0
     ),
+    # Lion (2026-09-07): sign-of-momentum class. MLP-calibrated peak was
+    # at Adam-equal lr (1e-3) with collapse >= 1e-2 — the transformer
+    # screen brackets around the muon-best 0.005.
+    "lion_vlo": ParameterUpdateConfig.lion(step_size=0.001),
+    "lion_lo": ParameterUpdateConfig.lion(step_size=0.002),
+    "lion_mid": ParameterUpdateConfig.lion(step_size=0.005),
+    "lion_hi": ParameterUpdateConfig.lion(step_size=0.01),
 }
 
 # Readout-scale share per arm (head CE's slice of the unit-RMS step axis;
@@ -145,7 +152,13 @@ def _evaluate(
     return correct / total, ce_sum / ce_n
 
 
-def _build(seed: int, update_cfg: ParameterUpdateConfig, ro_scale: float = RO_SCALE):
+def _build(
+    seed: int,
+    update_cfg: ParameterUpdateConfig,
+    ro_scale: float = RO_SCALE,
+    threshold: float = 2.0,
+    hinge: bool = False,
+):
     torch.manual_seed(seed)
     return compose_system_from_configs(
         SubstrateConfig.digital(),
@@ -161,7 +174,8 @@ def _build(seed: int, update_cfg: ParameterUpdateConfig, ro_scale: float = RO_SC
             ema_beta=0.99,
             readout_scale=ro_scale,
             sequential_lr=SEQ_LR,
-            contrast_threshold=2.0,
+            contrast_threshold=threshold,
+            contrast_objective="hinge" if hinge else "gate",
         ),
         update_cfg,
     )
@@ -205,76 +219,126 @@ def _unigram(train_t: torch.Tensor) -> float:
     return max(counts.values()) / sum(counts.values())
 
 
-def _args() -> tuple[bool, bool, int, int]:
-    """(full, skip_screen, steps, seed) from argv (short-run friendly)."""
+def _args() -> tuple[bool, bool, int, int, float, bool]:
+    """(full, skip_screen, steps, seed, threshold, hinge) from argv."""
     full = "full" in sys.argv
     skip = "--skip-screen" in sys.argv
     steps = SCREEN_STEPS
     seed = 0
+    threshold = 2.0
+    hinge = "--hinge" in sys.argv
     for a in sys.argv:
         if a.startswith("--steps="):
             steps = int(a.removeprefix("--steps="))
         if a.startswith("--seed="):
             seed = int(a.removeprefix("--seed="))
-    return full, skip, steps, seed
+        if a.startswith("--threshold="):
+            threshold = float(a.removeprefix("--threshold="))
+    return full, skip, steps, seed, threshold, hinge
+
+
+def _ppl(ce: float) -> float:
+    try:
+        return min(2.718281828**ce, 1e6)
+    except OverflowError:
+        return 1e6
+
+
+def _only_arms() -> set[str] | None:
+    for a in sys.argv:
+        if a.startswith("--only-arms="):
+            return set(a.removeprefix("--only-arms=").split(","))
+    return None
+
+
+def _screen_arm(
+    name: str,
+    cfg: ParameterUpdateConfig,
+    train_t: torch.Tensor,
+    val: list[tuple[torch.Tensor, torch.Tensor]],
+    threshold: float,
+    hinge: bool,
+) -> tuple[float, float]:
+    print(f"=== arm {name} ===", flush=True)
+    system = _build(0, cfg, threshold=threshold, hinge=hinge)
+    _train(system, train_t, 0, SCREEN_STEPS)
+    acc, ce = _evaluate(system, val)
+    print(
+        f"  seed 0 @ {SCREEN_STEPS}: top-1 {acc:.3f}  val CE {ce:.3f} "
+        f"(ppl {_ppl(ce):.1f})",
+        flush=True,
+    )
+    return acc, ce
+
+
+def _winners(results: dict[str, tuple[float, float]], skip_screen: bool) -> list[str]:
+    if skip_screen:
+        # Pre-registered winner from the recorded screen run
+        # (logs/w0_screen.log): muon_lo CE 3.337, the only arm under
+        # the 3.35 gate and the only one above the unigram anchor.
+        winners = ["muon_lo"]
+        for a in sys.argv:
+            if a.startswith("--arm="):
+                winners = [a.removeprefix("--arm=")]
+        return winners
+    return [n for n, (_, ce) in results.items() if ce < 3.35 and n != "euclid"]
+
+
+def _full_arm(
+    name: str,
+    train_t: torch.Tensor,
+    val: list[tuple[torch.Tensor, torch.Tensor]],
+    full_steps: int,
+    full_seed: int,
+    threshold: float,
+    hinge: bool,
+) -> tuple[float, float]:
+    system = _build(
+        full_seed, _ARMS[name], _RO_SCALE.get(name, RO_SCALE), threshold, hinge
+    )
+    _train(system, train_t, full_seed, full_steps, decay="--decay" in sys.argv)
+    acc, ce = _evaluate(system, val)
+    print(
+        f"  {name} seed {full_seed}: top-1 {acc:.3f}  val CE {ce:.3f} "
+        f"(ppl {_ppl(ce):.1f})",
+        flush=True,
+    )
+    return acc, ce
 
 
 def main() -> int:
     t0 = time.time()
-    full, skip_screen, full_steps, full_seed = _args()
+    full, skip_screen, full_steps, full_seed, threshold, hinge = _args()
     train_t, val_t = _tokens()
     unigram = _unigram(train_t)
     val = _val_windows(val_t, 0)
     print(
         f"unigram top-1 {unigram:.3f}  chance {1 / VOCAB:.3f}  "
-        f"ctx {CTX} d {D_MODEL} L {N_LAYERS}  mode {'full' if full else 'screen'}",
+        f"ctx {CTX} d {D_MODEL} L {N_LAYERS}  contrast_threshold {threshold}  "
+        f"objective {'hinge' if hinge else 'gate'}  "
+        f"mode {'full' if full else 'screen'}",
         flush=True,
     )
 
     results: dict[str, tuple[float, float]] = {}
+    only_arms = _only_arms()
     if not skip_screen:
         for name, cfg in _ARMS.items():
-            print(f"=== arm {name} ===", flush=True)
-            system = _build(0, cfg)
-            _train(system, train_t, 0, SCREEN_STEPS)
-            acc, ce = _evaluate(system, val)
-            results[name] = (acc, ce)
-            print(
-                f"  seed 0 @ {SCREEN_STEPS}: top-1 {acc:.3f}  val CE {ce:.3f} "
-                f"(ppl {min(2.718281828**ce, 1e6):.1f})",
-                flush=True,
-            )
-
+            if only_arms is not None and name not in only_arms:
+                continue
+            results[name] = _screen_arm(name, cfg, train_t, val, threshold, hinge)
         print("\n=== screen summary (300 steps, seed 0) ===")
         for name, (acc, ce) in sorted(results.items(), key=lambda kv: kv[1][1]):
             print(f"  {name:>13}: top-1 {acc:.3f}  CE {ce:.3f}", flush=True)
 
     if full:
-        if skip_screen:
-            # Pre-registered winner from the recorded screen run
-            # (logs/w0_screen.log): muon_lo CE 3.337, the only arm under
-            # the 3.35 gate and the only one above the unigram anchor.
-            winners = ["muon_lo"]
-            for a in sys.argv:
-                if a.startswith("--arm="):
-                    winners = [a.removeprefix("--arm=")]
-        else:
-            winners = [
-                n for n, (_, ce) in results.items() if ce < 3.35 and n != "euclid"
-            ]
+        winners = _winners(results, skip_screen)
         print(
             f"\n=== full phase: winners {winners}"
             f" -> {full_steps} steps, seed {full_seed} ==="
         )
         for name in winners or ["muon_hi"]:
-            system = _build(full_seed, _ARMS[name], _RO_SCALE.get(name, RO_SCALE))
-            _train(system, train_t, full_seed, full_steps, decay="--decay" in sys.argv)
-            acc, ce = _evaluate(system, val)
-            print(
-                f"  {name} seed {full_seed}: top-1 {acc:.3f}  val CE {ce:.3f} "
-                f"(ppl {min(2.718281828**ce, 1e6):.1f})",
-                flush=True,
-            )
+            _full_arm(name, train_t, val, full_steps, full_seed, threshold, hinge)
 
     print(f"\nwalltime {time.time() - t0:.1f}s (printed, never recorded)")
     return 0

@@ -151,6 +151,7 @@ class CreditAssignmentConfig:
     ema_beta: float = 0.99
     stream_norm: bool = True
     contrast_threshold: float = 2.0
+    contrast_objective: Literal["gate", "hinge"] = "gate"
     readout_scale: float = 1.0
     sequential_lr: float = 0.0
 
@@ -162,6 +163,7 @@ class CreditAssignmentConfig:
         ema_beta: float = 0.99,
         stream_norm: bool = True,
         contrast_threshold: float = 2.0,
+        contrast_objective: Literal["gate", "hinge"] = "gate",
         readout_scale: float = 1.0,
         sequential_lr: float = 0.0,
     ) -> CreditAssignmentConfig:
@@ -185,6 +187,12 @@ class CreditAssignmentConfig:
         depth (Jacobi ordering collapses d4 0.757 → 0.27, d8 0.512 → 0.14,
         measured 2026-09-07). Must equal the update rule's step size;
         ``0`` gives simultaneous (Jacobi) ordering.
+
+        ``contrast_objective``: ``gate`` = softplus(θ − ΔG) — a layer whose
+        goodness contrast inverts (ΔG < −θ) gets exactly zero gradient and
+        freezes (the W0 gate-shutdown mechanism, 2026-09-07). ``hinge`` =
+        softplus(θ − |ΔG|) — sign-inverted layers keep training until the
+        absolute contrast clears θ.
         """
         return cls(
             credit_type="local_contrastive",
@@ -199,6 +207,7 @@ class CreditAssignmentConfig:
             ema_beta=ema_beta,
             stream_norm=stream_norm,
             contrast_threshold=contrast_threshold,
+            contrast_objective=contrast_objective,
             readout_scale=readout_scale,
             sequential_lr=sequential_lr,
         )
@@ -234,6 +243,23 @@ class CreditAssignmentConfig:
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
+        """Random-projection feedback credit (FA/DFA family).
+
+        Warning: this config's ``credit_type`` is only honored by
+        ``RandomProjectionsCredit``. Handing it to ``LocalGoodnessCredit``
+        silently runs pure FF — the feedback channel is inert there
+        (measured 2026-09-07: byte-identical to the ff rung at
+        feedback_scale {1e-3, 0.01, 1, 10}).
+
+        Second inertness mode (measured 2026-09-07, W1 lattice cell): on
+        geometries whose settle stream omits the raw input or whose
+        weight order is not transition-ordered (spatial-lattice family),
+        the layered FA contract cannot chain and the credit returns
+        all-zeros — a no-op run, indistinguishable from a trained
+        failure. Validate the channel is live (rp rows differing from
+        the no-training baseline) before reading rp cells on any new
+        geometry.
+        """
         return cls(
             credit_type="random_projections",
             beta=beta,
@@ -885,6 +911,39 @@ class LocalGoodnessCredit:
                 raise RuntimeError(msg)
             self._learned[t_key] = tensor.detach().clone()
 
+    @staticmethod
+    def _pepita_covariate_stream(
+        free_state: SystemState, nudged_acts: list[Tensor]
+    ) -> tuple[list[Tensor], int]:
+        """PEPITA covariate stream and its offset into the settle acts.
+
+        Stack geometries expose the input as acts[0]; lattice/recurrent
+        settles may not, so the raw input is prepended when the widths
+        disagree. Each weight then takes as covariate the first
+        unconsumed activation matching its in_features — monotone in
+        weight order (reproduces the shipped acts[k] pairing on stack
+        geometries).
+        """
+        stream = list(nudged_acts)
+        x_in = free_state.x
+        if x_in is not None and stream and x_in.shape[-1] != stream[0].shape[-1]:
+            stream.insert(0, x_in)
+        return stream, len(stream) - len(nudged_acts)
+
+    def _pepita_projection(
+        self, name: str, width: int, e1: Tensor, learned: bool, ref: Tensor | None
+    ) -> Tensor:
+        """Fixed/learned feedback projection of the output error, then
+        credit normalization against the covariate reference."""
+        out_dim = e1.shape[1]
+        if learned:
+            b = self._learned_projection(name, width, out_dim, str(e1.device), e1.dtype)
+        else:
+            b = self._inverse_projection(name, width, out_dim, str(e1.device), e1.dtype)
+        return _apply_credit_norm(
+            [e1 @ b], self.config.credit_norm, [ref] if ref is not None else None
+        )[0]
+
     def _pepita_gradient(
         self,
         free_state: SystemState,
@@ -894,48 +953,43 @@ class LocalGoodnessCredit:
         geometry: Geometry,
     ) -> list[Tensor]:
         n_trans = min(len(free_acts), len(nudged_acts)) - 1
-        out = free_acts[-1].detach()
         y = free_state.y
         if y is None:
             return [torch.zeros_like(geometry.params[n]) for n in weight_names]
-        num_classes = out.shape[-1]
-        onehot = torch.nn.functional.one_hot(y, num_classes).to(out.dtype)
+        out = free_acts[-1].detach()
         # Probability-space output error (PEPITA's e = y − ŷ). The raw
         # nudged differential is β·(onehot − logits) under
         # InstantaneousDynamics — dominated by the constant one-hot term,
         # which carries no per-sample error information.
-        e1 = (onehot - torch.softmax(out, dim=-1)).detach()
-        out_dim = e1.shape[1]
-        batch = e1.shape[0]
+        e1 = (
+            torch.nn.functional.one_hot(y, out.shape[-1]).to(out.dtype)
+            - torch.softmax(out, dim=-1)
+        ).detach()
         learned = self.config.learned_feedback
         if learned:
             self._update_learned_feedback(free_acts, e1, weight_names, n_trans)
+        stream, offset = self._pepita_covariate_stream(free_state, nudged_acts)
         grads: list[Tensor] = []
+        cursor = 0
         for k, name in enumerate(weight_names):
-            if k >= n_trans:
-                # Surplus weights (recurrent self-connections): no route.
-                grads.append(torch.zeros_like(geometry.params[name]))
+            param = geometry.params[name]
+            c = next(
+                (
+                    c
+                    for c in range(cursor, len(stream))
+                    if stream[c].shape[-1] == param.shape[1]
+                ),
+                None,
+            )
+            if c is None or k >= n_trans:
+                # No matching input activation (surplus / self-connection
+                # weights): no PEPITA route.
+                grads.append(torch.zeros_like(param))
                 continue
-            width = geometry.params[name].shape[0]
-            if learned:
-                b = self._learned_projection(
-                    name,
-                    width,
-                    out_dim,
-                    str(e1.device),
-                    e1.dtype,
-                )
-            else:
-                b = self._inverse_projection(
-                    name,
-                    width,
-                    out_dim,
-                    str(e1.device),
-                    e1.dtype,
-                )
-            err = e1 @ b  # (batch, width)
-            err = _apply_credit_norm([err], self.config.credit_norm, [free_acts[k]])[0]
-            grads.append(-(err.T @ nudged_acts[k].detach()) / batch)
+            cursor = c + 1
+            ref = free_acts[c - offset] if 0 <= c - offset < len(free_acts) else None
+            err = self._pepita_projection(name, param.shape[0], e1, learned, ref)
+            grads.append(-(err.T @ stream[c].detach()) / e1.shape[0])
         return grads
 
     def compute_pseudo_gradient(
@@ -1129,10 +1183,10 @@ class LocalContrastiveCredit:
             g_neg = torch.nn.functional.linear(a_neg, w, bias)
             if act is not None:
                 g_pos, g_neg = act(g_pos), act(g_neg)
-            loss = torch.nn.functional.softplus(
-                self.config.contrast_threshold
-                - (g_pos.pow(2).mean() - g_neg.pow(2).mean())
-            )
+            delta = g_pos.pow(2).mean() - g_neg.pow(2).mean()
+            if self.config.contrast_objective == "hinge":
+                delta = delta.abs()
+            loss = torch.nn.functional.softplus(self.config.contrast_threshold - delta)
             (gw,) = torch.autograd.grad(loss, w)
         return gw
 
@@ -1486,10 +1540,10 @@ class LocalContrastiveCredit:
             elif i == len(linears) - 1:  # head handled by the readout path
                 msg = "head gradients take the readout path"
                 raise AssertionError(msg)
-            loss = torch.nn.functional.softplus(
-                self.config.contrast_threshold
-                - (g_pos.pow(2).mean() - g_neg.pow(2).mean())
-            )
+            delta = g_pos.pow(2).mean() - g_neg.pow(2).mean()
+            if self.config.contrast_objective == "hinge":
+                delta = delta.abs()
+            loss = torch.nn.functional.softplus(self.config.contrast_threshold - delta)
             (gw,) = torch.autograd.grad(loss, w)
         return gw
 

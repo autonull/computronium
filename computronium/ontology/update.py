@@ -37,6 +37,7 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
     "mean_norm": "per_element_displacement",
     "riemannian_orthogonal": "per_element_displacement",
     "muon": "per_element_displacement",
+    "lion": "per_element_displacement",
     "spectral_constrained": "per_element_displacement",
     "elastic_consolidation": "per_element_displacement",
 }
@@ -266,6 +267,51 @@ class ParameterUpdateConfig:
             grad_clip=grad_clip,
             beta2=beta2,
             eps=eps,
+        )
+
+    @classmethod
+    def lion(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        momentum: float = 0.9,
+        beta2: float = 0.99,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Lion (Chen et al. 2023) update config: sign of the momentum
+        interpolant.
+
+        ``update = sign(β1·m + (1−β1)·g)``, then ``m ← β2·m + (1−β2)·g``
+        (β2 > β1; no bias correction, no second moment — one momentum
+        buffer, O(1)-memory). ``momentum`` is β1, ``beta2`` is β2.
+
+        NOTE: Lion's canonical "3–10× Adam's LR" guidance does NOT
+        transfer to local pseudo-gradients — measured 2026-09-07 (mnist
+        ff, local_goodness, 30 batches): peak at ADAM-EQUAL lr (1e-3 →
+        0.781 vs Adam 1e-3 → 0.739); collapses at ≥1e-2 (0.09) and
+        degrades below 3e-4. Sign steps are unit-norm per coordinate, so
+        the effective displacement is lr-driven and Adam's adaptive
+        shrinkage is absent — start at the Adam-calibrated lr and sweep
+        DOWN. Research role (TODO14 I(C,U)): per-coordinate SIGN
+        binarization is a third optimizer class between Adam's per-
+        coordinate rescale (diverges on EMA-normalized local pseudo-
+        gradients) and Muon's orthogonalization (rescues them) — the W0
+        transformer cell discriminates "magnitude discarding" vs
+        "normalization-ratio" as the blowup mechanism; the W1 ladder
+        reads its credit-recovery fingerprint. Note also: sign steps are
+        global-clip-invariant above zero — ``grad_clip`` only guards
+        exact-zero/non-finite gradients here.
+        """
+        return cls(
+            update_type="lion",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
         )
 
     @classmethod
@@ -781,6 +827,54 @@ class OrthoAdamUpdate(AdamUpdate):
             return param - self.config.step_size * adam_step
 
         return apply_pseudo_gradients(params, grads, apply, bias_grads)
+
+
+class LionUpdate(AdamUpdate):
+    """Lion (Chen et al. 2023): sign of the momentum interpolant.
+
+    ``update = sign(β1·m + (1−β1)·g)`` then ``m ← β2·m + (1−β2)·g`` —
+    one momentum buffer, no second moment, no bias correction. Memory
+    footprint is half of Adam's (O(1)-memory narrative). Reuses Adam's
+    clip/state/reuse-guard machinery; only the ``m`` buffer is live
+    (``v`` stays empty for snapshot-protocol compatibility).
+
+    Optimizer state is system-scoped (inherited fail-loud reuse check).
+    """
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads))
+        self._t += 1
+        beta1 = self.config.momentum
+        beta2 = self.config.beta2
+
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            if not torch.isfinite(grad).all():
+                # Non-finite gradient: poisoning the m buffer would be
+                # permanent (NaNs propagate through the EMA) — skip.
+                return param
+            m = self._state(name, param, self._m)
+            interp = m.mul(beta1).add(grad, alpha=1 - beta1)
+            m.mul_(beta2).add_(grad, alpha=1 - beta2)
+            return param - self.config.step_size * torch.sign(interp)
+
+        return apply_pseudo_gradients(params, grads, apply, bias_grads)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "m": {k: v.detach().clone() for k, v in self._m.items()},
+            "counters": {"t": torch.tensor(self._t)},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
+        t = state.get("counters", {}).get("t")
+        self._t = int(t.item()) if t is not None else 0
 
 
 class RiemannianOrthogonalUpdate:

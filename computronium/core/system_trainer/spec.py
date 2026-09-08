@@ -15,6 +15,7 @@ from computronium.ontology import (
     GeometryConfig,
     HomeostaticCredit,
     InstantaneousDynamics,
+    LionUpdate,
     LocalAdamUpdate,
     LocalGoodnessCredit,
     MeanNormUpdate,
@@ -125,6 +126,7 @@ _UPDATE_CLASSES: dict[str, type] = {
     "euclidean": EuclideanUpdate,
     "adam": AdamUpdate,
     "ortho_adam": OrthoAdamUpdate,
+    "lion": LionUpdate,
     "unit_rms": UnitRMSUpdate,
     "local_adam": LocalAdamUpdate,
 }

@@ -19,6 +19,7 @@ from computronium.ontology import (
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
+    LionUpdate,
     LocalAdamUpdate,
     MeanNormUpdate,
     OrthoAdamUpdate,
@@ -252,6 +253,8 @@ def compose_system[  # ruff: ignore[complex-structure]
                 update = AdamUpdate(update_cfg)
             elif update_type == "ortho_adam":
                 update = OrthoAdamUpdate(update_cfg)
+            elif update_type == "lion":
+                update = LionUpdate(update_cfg)
             else:
                 raise ValueError(f"Unknown update_type: {update_type!r}")
 
@@ -636,6 +639,8 @@ def compose_system_from_configs(
         update_instance = AdamUpdate(update)
     elif update_type == "ortho_adam":
         update_instance = OrthoAdamUpdate(update)
+    elif update_type == "lion":
+        update_instance = LionUpdate(update)
     elif update_type == "unit_rms":
         update_instance = UnitRMSUpdate(update)
     elif update_type == "local_adam":
