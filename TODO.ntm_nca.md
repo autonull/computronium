@@ -313,18 +313,18 @@ cell under §2's discipline.
 
 ## §10 — Priority order (REVISED 2026-09-08, post-§11.2/§11.3)
 
-1. **W8.1 promotion decision** — the evidence is in (§11.5): local
-   credit solves the growing NCA (fg 1.000, 3 seeds, rollout-flat) and
-   both promotion criteria are met. If confirmed, pay the AGENTS.md
-   new-primitive checklist for an `NcaGeometry` (registry row, config
-   classmethod, wiring lockstep lock, `SystemConfig.validate` branch,
-   export surfaces) — the distill-init + zero-history-credit recipe in
-   `w8_nca_local.py` REV r7 is the reference implementation.
-2. **W8.5 writer-surrogate redesign (now the decisive NTM task)** —
-   the 3-seed muon extension washed out (§11.6: ~0.7 for adam AND
-   muon); the plateau is writer-capacity-limited. Replace the
-   task-shaped content-code surrogate with expected-content MSE under
-   the writer's own addressing distribution.
+1. **W8.1 promotion — DONE (2026-09-08, §11.8)**: `NcaGeometry` +
+   `GeometryConfig.nca` landed behind the full AGENTS.md checklist
+   (dispatch, validate branch, export surfaces, new geometry wiring
+   lockstep lock, behavior tests incl. distill-then-grow). Reference
+   implementation: the r7 distill + zero-history-credit recipe, now
+   ontology-native via `NcaGeometry.distill_init`.
+2. **W8.5 VERDICT LANDED (§11.11)** — local 0.816 mean vs control 0.990,
+   3 seeds, mechanism chain verified; status OPEN-positive. Remaining
+   lever if pushed further: decode precision (acc_given_hit 0.78-0.86 →
+   β sharpness / content-MSE weight). Promotion of the
+   content-addressed-memory pattern into the ontology awaits user
+   confirmation; the cold-start corollary for DNC is on record.
 3. **W8.2 full screen** — {euclid, muon, ortho_adam} × {bptt, local} ×
    lr on seed-2-style hard cases; test the §11.6 theory candidate
    (local credit rejects per-coordinate normalization: adam-family
@@ -717,6 +717,177 @@ W8.3 boundary claim, and where local-vs-BPTT could genuinely differ
 (BPTT through the inference phase is much longer). Growth-from-seed
 (label on) confirmed 1.000.
 
+## §11.8 — W8.1 promotion EXECUTED (2026-09-08): `NcaGeometry` landed in
+the ontology behind the full new-primitive checklist
+
+Files touched:
+- `computronium/ontology/geometry.py` — `GeometryConfig.nca(...)` classmethod
+  (fields `grid_hw`, `delta_scale`, `mask_prob`, `label_channels`),
+  `NcaGeometry` (shared cell MLP: 3×3 neighborhood (+ optional label grid)
+  → hidden ReLU → tanh Δ, stochastic per-cell mask, unbounded additive
+  state), dispatch branch in `geometry_from_config`. API: `step`,
+  `rollout`, `perceive`, `params` (keys `cell_hidden_weight` /
+  `cell_delta_weight` / `..._bias` — satisfy the apply_pseudo_gradients
+  "weight"-substring contract), `update_params`, `transition_modules`,
+  `forward_with_intermediates`, and `distill_init(target_states, labels,
+  seed_states, ...)` — the §11.4 proportional-controller distillation,
+  with the exact target and seed pinned as training rows (zero output at
+  the target = the growth-and-hold guarantee).
+- `computronium/ontology/system.py` — `SystemConfig.validate` branch: nca
+  requires instantaneous dynamics (the rollout is a settle→update cycle,
+  not an energy settle).
+- Export surfaces: `ontology/__init__.py` + root `__init__.py`
+  (`__all__`, `_LAZY`, TYPE_CHECKING import block).
+- `tests/property/test_geometry_wiring_lock.py` — NEW lockstep lock for
+  the G axis (the dynamics-lock analogue): every GeometryConfig factory
+  classmethod dispatches and round-trips; every dispatch alias resolves
+  to a geometry class; every geometry class is on all export surfaces.
+- `tests/unit/core/test_nca_geometry.py` — behavior tests: delta bound,
+  spatially-exact masking, rollout/step consistency, update_params round
+  trip, pseudo-gradient composition through `apply_pseudo_gradients`
+  (weights move), validate-branch rejection, and distill-then-grow
+  (10×10 ring, label regime, acc > 0.7 from a one-hot seed).
+
+**A new §17-class defect found and fixed during promotion** (the
+scrambled-reshape trap): porting the probe into the geometry initially
+produced a controller that distills to near-zero MSE but FAILS to grow
+(rollout acc ~0.4 vs the probe's 1.000 with byte-identical weights).
+Root cause: `_delta` returns per-cell rows `(B·H·W, C)`; `view_as(states)`
+reshaped them directly to `(B, C, H, W)` — the probe's `_unflatten` goes
+through `(B, H, W, C).permute(0, 3, 1, 2)`. The direct reshape SCRAMBLES
+the spatial layout of every delta while all row-space checks (per-cell
+MSE, field comparisons in row space) still pass — the distill loss is
+layout-agnostic, so training looked perfect. Signature for the future:
+**a per-cell reshape mismatch is invisible to any loss computed in cell
+space; always test a spatial property (growth/mask exactness) end-to-end
+before trusting a ported iterative-local substrate.**
+
+Gates: ruff clean on changed files, pyright 0 new errors (5 legacy
+remain in geometry.py, Register C), 29 targeted tests pass (wiring locks
++ NCA behavior). The probe `w8_nca_local.py` is unchanged and remains the
+research harness; the geometry is the promoted substrate.
+
+## §11.9 — W8.5 writer-surrogate redesign EXECUTED (2026-09-08, r5):
+the 0.7 plateau is NOT writer-expressivity-limited — both redesign levers
+falsified in one session
+
+Probe `w8_ntm_copy.py` REV r5 adds two arms (`logs/w8_ntm_local2.log`,
+`logs/w8_ntm_local3.log`; all seed 0, 6000 steps, lr 1e-3, fresh-draw
+eval):
+
+| arm | writer surrogate | controller input-phase credit | copy-acc(fresh) @6000 |
+| --- | ---------------- | ----------------------------- | --------------------- |
+| local (r3 baseline) | task-shaped 2-bit code MSE + KL | none (h detached) | 0.688-0.719 (§11.2) |
+| local2 | expected-content MSE under a_w (order-carrying: bit sign on basis channel t) + overwrite (erase→1) + KL | none | **0.698** |
+| local3 | expected-content (same) | YES (writer losses through live hc; still zero-history — state inputs detached) | **0.719** |
+
+Findings against the pre-registered Q3:
+1. **FALSIFIED: "the plateau is writer-expressivity-limited."** The
+   order-carrying content target (which makes every slot uniquely
+   addressable — the exact capacity the 2-bit code lacked) moves
+   nothing: 0.698 vs 0.688-0.719.
+2. **FALSIFIED: "the plateau is missing input-phase controller
+   credit."** local3's writer losses DO train the controller (writer
+   loss 0.45→0.22 — the credit is live and learned) and copy-acc still
+   sits at 0.719. The controller learns to write on schedule; the
+   system still cannot copy past ~0.7.
+3. **Consequence: the bottleneck is on the READ/output side or is a
+   fundamental limit of the zero-history factorization itself.** The
+   decisive discrimination (next session, ONE diagnostic run): measure
+   the read hit-rate at output steps — does a_r place its mass on the
+   slot written for bit t−L−1? If hit-rate is high, the read head is
+   fine and the failure is the controller's output-step key sequence
+   (it must emit key e_k with zero input at output steps — counting
+   under detached state may be unlearnable from per-step CE alone); if
+   low, the read-local rule (CE with h detached) is the weak link.
+4. Promotion bar (≥0.85) NOT met; criterion (ii) (non-Adam composes)
+   already met (§11.2). NTM promotion stays parked pending the read
+   diagnostic.
+
+Method note (§13.1-5 discipline held): each lever was ONE 2.5-min cell;
+two falsifications cost ~5 minutes. The r5 harness also fixed a real
+bug found mid-session: the sed-threaded `credit_controller` flag
+initially did NOT reach the episode loop (the first "local3" run was a
+byte-identical rerun of local2 — caught by comparing per-eval numbers
+before drawing conclusions; re-run after the fix produced the distinct
+loss curve 0.22 vs 0.38).
+
+## §11.10 — W8.5 plateau BROKEN (2026-09-08, r6): 0.865 at 4800 steps —
+the promotion bar is met, via a chain of four §17-class findings, all from
+cells ≤2 min
+
+After §11.9's falsifications, the fork was resolved by SHORT experiments
+(1200-4800 steps, 30-135 s each; checkpoint + `--diagnose` so no
+experiment ever retrains). The chain:
+
+1. **No memory bypass**: `acc_read_zeroed = 0.5` (chance) — output goes
+   through the read. (1200-step cell)
+2. **SIGNED CONTENT IS UNRETRIEVABLE BY COSINE SOFTMAX** (zero-training
+   mechanics test): with perfect writes ±e_t and perfect keys, decode is
+   exactly 0.500 — a slot with cos = −1 sorts LAST in β·cos softmax. The
+   r5 order-carrying surrogate was structurally unreadable. Fix: content
+   = (0.5+0.5·bit)·e_t — non-negative, position = channel, bit =
+   magnitude.
+3. **WRITE COLLAPSE / COLD-START ADDRESSING IMPOSSIBILITY**: with ~0
+   memory init, all writes land on ONE slot (span 1.0) — pure content
+   addressing cannot target an empty slot (every ~0 slot has cos ~ 0
+   with any key; position is unobservable). The KL-toward-least-similar
+   rule never escapes. Fix: static slot embeddings at init (0.5·e_s) —
+   position becomes observable; writes spread to 6/6 slots. The KL was
+   also replaced by direct a_w supervision onto slot t (a local target,
+   same status as the content target).
+4. **READ-KEY SEQUENCE is the last bottleneck** — hit rate 0.083 after
+   1200 steps through softmax-addressing credit alone. Fix: supervise
+   kr(h) onto e_k at output step k (weight 10) — hit rate 0.958 at 1200,
+   1.000 at 2400.
+
+Verdict cells (seed 0, fresh-draw eval): 1200 steps 0.615 → 2400 steps
+**0.750** (old plateau was 0.70 at 6000) → 4800 steps **0.865 ≥ 0.85
+promotion bar**, with acc_given_hit 0.862 and acc_read_zeroed 0.562
+(memory causal throughout).
+
+**Promotion status (§10 criteria)**: (ii) non-Adam composes — met
+(§11.2); (i) promoted positive — 0.865 single-seed meets the bar value;
+the §20 round (3 seeds + fresh-draw eval + matched 3000-step BPTT
+control) is 3 × 2-min cells and the only remaining gate. The r6 recipe
+(retrievable content + slot embeddings + supervised addressing on BOTH
+heads) is the reference for any future content-addressed-memory
+promotion (DNC included — its allocation machinery has the same
+cold-start property).
+
+Process note: every finding above came from a ≤2-min cell or a
+zero-training mechanics test on a checkpoint; the "checkpoint first,
+diagnose second" rule (§12) is what made the chain affordable.
+
+## §11.11 — W8.5 §20 round EXECUTED (2026-09-08, r6): local 0.816 mean
+(3 seeds, fresh-draw) vs BPTT control 0.990; mechanism chain verified on
+every seed
+
+All six cells under the r6 substrate (slot-embedding memory), parallel,
+~2.5 min walltime (OMP_NUM_THREADS=2 per process — the first launch
+thrashed at load 46 on 16 cores; thread-cap concurrent probe launches).
+
+| arm | seed 0 | seed 1 | seed 2 | mean |
+| --- | ------ | ------ | ------ | ---- |
+| local3 (r6 recipe) | **0.865** | 0.771 | 0.812 | **0.816** |
+| bptt × adam (matched control) | 0.979 | 1.000 | 0.990 | 0.990 |
+
+Diagnostics per seed (all three): write_slot_diversity 0.375 (6/6 slots),
+read_hit_rate 0.906-1.000, acc_read_zeroed 0.50-0.583 — memory is causal
+and the full chain (spread writes → retrievable content → keyed reads →
+decode) verified on every seed.
+
+**Honest verdict**: the 0.70 plateau is broken (+0.12 mean) and the
+mechanism is fully explained — no unexplained residual. The strict ≥0.85
+bar is met by seeds 0/2, missed by seed 1 (0.771); the residual gap to
+the control is decode quality (acc_given_hit 0.78-0.86 — content MSE
+precision and β sharpness), a tuning surface, not a structural break.
+Status per §1: **OPEN-positive** — the strongest local-credit-on-external-
+memory result in the workstream, promotion decision on the
+content-addressed-memory pattern (slot embeddings + retrievable content +
+supervised addressing on both heads) is the user's call; the DNC
+cold-start corollary (§11.10) stands regardless.
+
 ## §12 — Next-sprint operational notes (for a fresh context)
 
 **REVISED 2026-09-08**: §11.4-§11.7 are the authoritative session
@@ -727,11 +898,34 @@ records; the inventory below is refreshed in §14's change log.
   adds the W8.2 `ortho_adam` arm. CAUTION: `_screen` still uses stale
   r2-era lr grids — use `--arm=`/`--seed=` flags and the §13.1 lr tables.
 - `scripts/probes/w8_ntm_copy.py` (REV 2026-09-08-r4) — adds `--lr`
-  (the muon screen's interface); `_Muon` wraps the ontology's
-  `newton_schulz5`; `_local_step` is the zero-history seam.
+   (the muon screen's interface); `_Muon` wraps the ontology's
+   `newton_schulz5`; `_local_step` is the zero-history seam.
+- PROMOTED (§11.8): `computronium/ontology/geometry.py` `NcaGeometry`
+  (+ `GeometryConfig.nca`), `tests/property/test_geometry_wiring_lock.py`,
+  `tests/unit/core/test_nca_geometry.py`. New substrates should start
+  from the geometry, not the probe.
 - Logs (this workstream): `w8_promotion.log`, `w8_nca_fourarm.log`,
   `w8_nca_verdict.log`, `w8_ntm_muon_screen.log`, `w8_ntm_promo.log`.
   (`w8_nca_local.log` / `w8_ntm_copy.log` are stale pre-fix runs.)
+
+**Restart protocol (for a fresh context — do this in order):**
+1. Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`.
+2. **Checkpoint first, diagnose second.** The §11.9 lesson: NEVER
+   retrain to re-run a diagnostic. Run
+   `uv run python scripts/probes/w8_ntm_copy.py --arm=local3 --steps=6000
+   --lr=1e-3 --seed=0 --diagnose` ONCE — it saves
+   `logs/w8_ntm_local3.pt` — then every diagnostic question runs in
+   seconds via `--load=logs/w8_ntm_local3.pt`.
+3. The one open question (§11.9 finding 3): read_hit_rate = 1.0 but
+   acc_given_hit = 0.719. Fork: (a) written content doesn't encode the
+   bit → inspect slot contents at write time (seconds, checkpoint); or
+   (b) output ignores the read (LSTM-state memory bypass) → the
+   `acc_read_zeroed` metric already implemented in `_diagnose` answers
+   it (seconds, checkpoint). Decide the next lever from those two
+   numbers before writing any new code.
+4. If NTM stays parked after (3): W8.3 label-free NCA is the next arc —
+   runs on the promoted `NcaGeometry` (`label_channels=0`), ~45 s/cell,
+   pre-register per §13.2-4 before running.
 
 **Sprint opener checklist:**
 1. Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`.
@@ -827,6 +1021,25 @@ codified from three sessions of W8 execution
 
 ## §14 — Change log
 
+- 2026-09-08 (final, §11.11): §20 round executed — local3 0.816 mean
+  (0.865/0.771/0.812) vs BPTT control 0.990 under the r6 substrate;
+  W8.5 OPEN-positive, mechanism chain verified on all seeds. Note:
+  thread-cap concurrent probe launches (OMP_NUM_THREADS=2) — 6 bare
+  launches hit load 46 and stalled.
+- 2026-09-08 (late, §11.10): plateau BROKEN — 0.865 @4800 vs 0.70 @6000
+  before, via four §17 findings (no bypass; signed content unreadable by
+  cosine softmax; cold-start addressing impossibility → slot embeddings;
+  read-key supervision). Probe REV r6. §10 item 2 = 3-seed §20 round only.
+- 2026-09-08 (night, §11.9): W8.5 writer-surrogate redesign executed and
+  falsified (local2 0.698, local3 0.719 vs baseline ~0.7) — plateau is
+  read-side or fundamental; §10 item 2 rewritten as the read hit-rate
+  diagnostic. Probe now REV r5 (arms bptt/local/local2/local3/local-muon).
+- 2026-09-08 (evening, §11.8): W8.1 promotion executed — `NcaGeometry` +
+  `GeometryConfig.nca` + validate branch + geometry wiring lockstep lock +
+  NCA behavior tests; scrambled-reshape §17 defect found and fixed.
+  §10 item 1 closed. Next session opens at §10 item 2 (W8.5
+  writer-surrogate redesign) or item 4 (W8.3 label-free NCA, now runnable
+  directly on `NcaGeometry` with `label_channels=0`).
 - 2026-09-08: §2 revised to the executed r8 design; §10 deduped
   (writer-surrogate items merged; W8.3 flagged label-free-first);
   §13 method improvements added; §12 inventory refreshed (nca r8,

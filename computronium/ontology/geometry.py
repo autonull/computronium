@@ -149,6 +149,11 @@ class GeometryConfig:
     # SpatialLattice3D topology
     lattice_dims: tuple[int, int, int] = (4, 4, 4)
     connectivity_radius: int = 1
+    # NCA topology
+    grid_hw: tuple[int, int] = (16, 16)
+    delta_scale: float = 0.5
+    mask_prob: float = 0.5
+    label_channels: int = 0
 
     @classmethod
     def feedforward(
@@ -375,6 +380,46 @@ class GeometryConfig:
             init_scale=init_scale,
             lattice_dims=lattice_dims,
             connectivity_radius=connectivity_radius,
+        )
+
+    @classmethod
+    def nca(
+        cls,
+        *,
+        channels: int,
+        hidden: int = 32,
+        grid_hw: tuple[int, int] = (16, 16),
+        delta_scale: float = 0.5,
+        mask_prob: float = 0.5,
+        label_channels: int = 0,
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        """Create a neural cellular automaton topology config.
+
+        Args:
+            channels: State channels per cell (also the cell output dim)
+            hidden: Shared cell MLP hidden width
+            grid_hw: Grid extent (height, width)
+            delta_scale: tanh bound on the per-step state delta
+            mask_prob: Probability that a cell updates on a given step
+                (functional damping; deterministic masks diverge, §11.4)
+            label_channels: Optional per-cell label grid channels appended
+                to the perception vector (0 = label-free regime, W8.3)
+            init_scale: Weight initialization scale
+        """
+        return cls(
+            input_dim=channels,
+            output_dim=channels,
+            hidden_dims=(hidden,),
+            num_layers=1,
+            topology_type="nca",
+            connectivity=None,
+            recurrent_weight=None,
+            init_scale=init_scale,
+            grid_hw=grid_hw,
+            delta_scale=delta_scale,
+            mask_prob=mask_prob,
+            label_channels=label_channels,
         )
 
 
@@ -2255,12 +2300,215 @@ class SpatialLattice3DGeometry(nn.Module):
         return modules
 
 
+class NcaGeometry(nn.Module):
+    """Neural cellular automaton: one shared cell MLP on a 2D grid (G-axis).
+
+    The W8.1 reference recipe (TODO.ntm_nca.md §11.4-§11.5): each cell
+    perceives the 3x3 neighborhood of every state channel (plus an
+    optional per-cell label grid) and a shared MLP emits a tanh-bounded
+    state delta (``|delta| <= delta_scale``) applied under a stochastic
+    per-cell mask — unbounded additive state (no clamp; a clamp at ANY
+    ceiling is a saturation attractor, §11.3). The rollout is a sequence
+    of ``step`` calls; credit is per-step state-space MSE with the state
+    DETACHED between steps (zero-history local) or BPTT through the
+    full unrolled graph. Because the weights are shared, the per-site
+    pseudo-gradients from all cells are summed into one update — the
+    update rules (EuclideanUpdate / RiemannianOrthogonalUpdate) see a
+    single matrix per weight, matching the "weight"-substring contract
+    in ``apply_pseudo_gradients``.
+    """
+
+    _cell_hidden: nn.Linear
+    _cell_delta: nn.Linear
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        hidden = config.hidden_dims[0] if config.hidden_dims else 32
+        in_dim = config.input_dim * 9 + config.label_channels
+        self._cell_hidden = nn.Linear(in_dim, hidden)
+        self._cell_delta = nn.Linear(hidden, config.output_dim)
+        # Probe-calibrated init (w8_nca_local `_params`): fan-in-scaled
+        # randn weights, zero biases — the small-delta tanh regime the
+        # W8.1 distill recipe was validated in.
+        nn.init.normal_(self._cell_hidden.weight, std=in_dim**-0.5)
+        nn.init.normal_(self._cell_delta.weight, std=hidden**-0.5)
+        nn.init.zeros_(self._cell_hidden.bias)
+        nn.init.zeros_(self._cell_delta.bias)
+        self._set_param_names()
+
+    def _set_param_names(self) -> None:
+        _set_param_name(self._cell_hidden.weight, "cell_hidden_weight")
+        if self._cell_hidden.bias is not None:
+            _set_param_name(self._cell_hidden.bias, "cell_hidden_bias")
+        _set_param_name(self._cell_delta.weight, "cell_delta_weight")
+        if self._cell_delta.bias is not None:
+            _set_param_name(self._cell_delta.bias, "cell_delta_bias")
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        return {
+            "cell_hidden_weight": self._cell_hidden.weight,
+            "cell_hidden_bias": self._cell_hidden.bias,
+            "cell_delta_weight": self._cell_delta.weight,
+            "cell_delta_bias": self._cell_delta.bias,
+        }
+
+    def perceive(self, states: Tensor, labels: Tensor | None = None) -> Tensor:
+        """(B, C, H, W) states (+ optional (B, L, H, W) labels) -> (B*H*W, C*9+L)."""
+        b, _c, h, w = states.shape
+        pad = nn.functional.pad(states, (1, 1, 1, 1))
+        nb = torch.cat(
+            [pad[:, :, y : y + h, x : x + w] for y in range(3) for x in range(3)],
+            dim=1,
+        )
+        if labels is not None and self.config.label_channels > 0:
+            nb = torch.cat([nb, labels[:, : self.config.label_channels]], dim=1)
+        return nb.permute(0, 2, 3, 1).reshape(b * h * w, -1)
+
+    def _delta(self, states: Tensor, labels: Tensor | None) -> Tensor:
+        x = self.perceive(states, labels)
+        h = torch.relu(self._cell_hidden(x))
+        return self.config.delta_scale * torch.tanh(self._cell_delta(h))
+
+    def step(
+        self, states: Tensor, labels: Tensor | None = None, mask: Tensor | None = None
+    ) -> Tensor:
+        """One CA update: states += mask * delta(states).
+
+        Args:
+            states: (B, C, H, W) state grid
+            labels: Optional (B, L, H, W) per-cell label grid
+            mask: Optional (B, H, W) update mask; sampled at ``mask_prob``
+                when absent (functional damping, §11.4)
+        """
+        if states.dim() != 4 or states.shape[-2:] != tuple(self.config.grid_hw):
+            raise ValueError(  # ruff: ignore[raise-vanilla-args]
+                f"NcaGeometry expects states (B, C, {self.config.grid_hw[0]}, "
+                f"{self.config.grid_hw[1]}), got {tuple(states.shape)}"
+            )
+        # rows are (B*H*W, C) in (b, h, w) order -> (B, C, H, W)
+        delta = (
+            self
+            ._delta(states, labels)
+            .view(*states.shape[:1], *states.shape[-2:], -1)
+            .permute(0, 3, 1, 2)
+        )
+        m = (
+            mask
+            if mask is not None
+            else (
+                torch.rand(states.shape[0], *states.shape[-2:]) < self.config.mask_prob
+            ).to(states.dtype)
+        )
+        return states + delta * m.reshape(-1, 1, *states.shape[-2:])
+
+    def rollout(
+        self,
+        states: Tensor,
+        steps: int,
+        labels: Tensor | None = None,
+        grad: bool = False,
+    ) -> Tensor:
+        """Run ``steps`` CA updates from ``states`` (autograd optional)."""
+        ctx = torch.enable_grad() if grad else torch.no_grad()
+        with ctx:
+            for _ in range(steps):
+                states = self.step(states, labels)
+        return states
+
+    def distill_init(
+        self,
+        target_states: Tensor,
+        labels: Tensor | None = None,
+        seed_states: Tensor | None = None,
+        n_mixes: int = 10,
+        steps: int = 1500,
+        lr: float = 1e-2,
+    ) -> float:
+        """Supervised distillation of the ideal proportional controller
+        ``delta* = clamp(target - state, +/- delta_scale)`` into the cell
+        MLP (§11.4: BPTT-from-scratch cannot find a stable growth field
+        from a seed; the distilled field has the target as an exact fixed
+        point). ``seed_states`` optionally anchors the mixture at the
+        rollout's initial condition. Returns the final distillation MSE."""
+        target = target_states.detach()
+        xs, ys = [], []
+        for _ in range(n_mixes):
+            m1 = torch.rand(()).item()
+            m3 = torch.rand(()).item()
+            st = (
+                m1 * target
+                + (1 - m1) * m3 * torch.rand_like(target) * 0.5
+                + (1 - m1) * (1 - m3) * seed_states.detach()
+                if seed_states is not None
+                else m1 * target + (1 - m1) * m3 * torch.rand_like(target) * 0.5
+            )
+            xs.append(st)
+            ys.append(
+                (target - st).clamp(-self.config.delta_scale, self.config.delta_scale)
+            )
+        # Pin the exact fixed point (and the seed) so the distilled field
+        # has ZERO output at the target — the growth-and-hold guarantee.
+        xs.append(target)
+        ys.append(torch.zeros_like(target))
+        if seed_states is not None:
+            xs.append(seed_states.detach())
+            ys.append(
+                (target - seed_states.detach()).clamp(
+                    -self.config.delta_scale, self.config.delta_scale
+                )
+            )
+        labels_mix = None
+        if labels is not None:
+            n_extra = 1 + (seed_states is not None)
+            labels_mix = torch.cat([labels] * (n_mixes + n_extra))
+        x = self.perceive(torch.cat(xs), labels_mix)
+        y = torch.cat(ys).permute(0, 2, 3, 1).reshape(-1, self.config.output_dim)
+        opt = torch.optim.Adam(self.parameters(), lr=lr)
+        loss = torch.zeros(())
+        for _ in range(steps):
+            loss = (self._delta_flat(x) - y).pow(2).mean()
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+        return float(loss.detach())
+
+    def _delta_flat(self, x: Tensor) -> Tensor:
+        h = torch.relu(self._cell_hidden(x))
+        return self.config.delta_scale * torch.tanh(self._cell_delta(h))
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        return self.step(x)
+
+    def route(self, activations: Tensor) -> Tensor:
+        return self.step(activations)
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        own = self.params
+        for name, param in new_params.items():
+            if name in own:
+                own[name].data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self._cell_hidden, self._cell_delta]
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        acts = [self.perceive(x)]
+        h = torch.relu(self._cell_hidden(acts[0]))
+        acts.append(h)
+        acts.append(self._delta_flat(h))
+        return acts
+
+
 # ============================================================
 # Geometry Dispatch
 # ============================================================
 
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[too-many-return-statements]
+def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[too-many-return-statements, complex-structure]
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
     if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
@@ -2281,6 +2529,8 @@ def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[to
         return AttentionGeometry(config)
     if topology_type == "spatial_lattice":
         return SpatialLattice3DGeometry(config)
+    if topology_type == "nca":
+        return NcaGeometry(config)
     if topology_type == "causal_transformer":
         return TransformerGeometry(config)
     if topology_type == "feedforward":

@@ -198,6 +198,7 @@ if TYPE_CHECKING:
         FeedforwardGeometry,
         GeometryConfig,
         GraphGeometry,
+        NcaGeometry,
         RecurrentGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
@@ -282,6 +283,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "ConvGeometry": ("computronium.ontology.geometry", "ConvGeometry"),
     "GraphGeometry": ("computronium.ontology.geometry", "GraphGeometry"),
     "AttentionGeometry": ("computronium.ontology.geometry", "AttentionGeometry"),
+    "NcaGeometry": ("computronium.ontology.geometry", "NcaGeometry"),
     "SpatialLattice3DGeometry": (
         "computronium.ontology.geometry",
         "SpatialLattice3DGeometry",
@@ -547,6 +549,7 @@ __all__ = [
     "MeanNormUpdate",
     "MemristiveSubstrate",
     "ModelConfig",
+    "NcaGeometry",
     "NeuromorphicSubstrate",
     "NullPlasticity",
     "OpticalSubstrate",
