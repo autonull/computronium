@@ -3,6 +3,140 @@
 > **Opened 2026-09-07.**
 >
 
+## PROGRESS LOG (2026-09-08, Session 11 — W4.1 hidden ψ: ceiling OVERTURNED seed-robust (§22 #2 MET); W4.2 depth-composition falsified (stacking); recurrent-family audit closes)
+
+**Status: three results. (1) The pre-registered W4.1 cell (§10, Session
+9) EXECUTED and the overturn criterion is MET on all 3 seeds —
+hidden-layer closed-form ψ exceeds the frozen-feature linear-probe
+ceiling (+0.093/+0.098/+0.100 b_best, spread 0.007) with θ bitwise
+frozen (SHA-verified per arm). Gradient-free adaptation that MODIFIES
+REPRESENTATIONS, not merely re-reads them — §22 success condition #2
+MET at probe scale; Flagship B has its first positive cell. The
+mechanism is fully attributed (bit-exact algebra, verified on every
+seed): a stream correction before a LINEAR readout ≡ the readout-ridge
+solution composed with Q = W_L W_Lᵀ (hidden_second ≡ readout_q
+byte-identical, 3 seeds; frozen-metric effect only +0.012-0.014), while
+the correction crossing ReLU(W₁·) adds +0.082-0.098 — the dominant,
+class-expanding component. Honest costs measured: feature reorganization
+is NOT forget-free (a_retained 0.786 mean vs 0.96 null — between
+readout-ψ 0.95 and fine-tune 0.69), and the backward-propagated target
+beats the raw readout residual for the same affine class (the mlp1
+degeneracy control's real finding: closed-form-FA targeting is a better
+regression target even where the class cannot expand). (2) W4.2 first
+rung (depth 4): composition across depth FALSIFIED — by correction
+STACKING (fit-on-uncorrected, applied-downstream mismatch), not depth;
+a single early-stream correction keeps the full gain; retention cost
+scales with the correction's REACH. (3) The recurrent-family audit
+closes the Session-7 pairing class with no defect — and surfaces that
+the self-connection credit route is credit-rule-dependent (pepita
+starves, rp feeds). Probes: `scripts/probes/w4_hidden_psi.py` (18-35
+s/seed), `scripts/probes/w1_recurrent_graph_audit.py` (0.2 s); ruff
+clean, pyright 0 on both. Logs: `logs/w4_hidden_psi{,_s1,_s2}.log`,
+`logs/w1_recurrent_graph_audit.log`.**
+
+### W4.1 cell record (§10) — EXECUTED, Tier B overturn evidence
+
+Cell: the W3 A→B switch task (parity→last-symbol, 300 stage-A episodes,
+frozen θ), hidden (32,32) mechanism cell + (32,) degeneracy control,
+16-batch (512-sample) fresh-draw eval, 200 stage-B episodes.
+
+- Arms: null / readout ψ (W3 replay through the real pipeline) /
+  hidden_raw (all hidden streams, raw targets) / hidden_norm
+  (RMS-matched) / hidden_first (stream 1 only) / hidden_second (stream 2
+  only, post-hoc) / readout_q (readout ridge @ Q, post-hoc) / θ
+  fine-tune control. Statistics: the D22 nudged-settle seam; targets
+  T_i = R propagated backward through FROZEN θ weights (closed-form FA,
+  no derivative masks); the same bias-augmented scale-free ridge as
+  `ClosedFormRidgePlasticity`.
+- Design necessity recorded BEFORE measurement: with ONE hidden layer a
+  hidden correction before a linear readout spans the readout ψ class —
+  the pre-registered mechanism sentence ("ReLU(L_{i+1}) sees the
+  CORRECTED stream") requires the correction to cross a nonlinearity;
+  the (32,) cell is therefore the degeneracy control and (32,32) is the
+  mechanism cell. This design choice is what made the attribution
+  possible.
+- P1 (control equality) FALSIFIED with explanation (the Q identity); P2
+  (overturn) MET seed-robust; P3 answered (raw ≥ norm — depth-2 chain
+  scale-neutral); P4 CONFIRMED (stream-2 inert); P5 all green (θ SHA
+  identical across arms after matched stage A; theta_invariant True
+  everywhere; target/correction RMS logged).
+- Readout-class numbers replicate W3's verdict in-run (ceiling ≈
+  0.71-0.74 best vs W3's 0.699 at 8-batch eval — protocol delta noted).
+
+### W4.2 first rung — EXECUTED same session (depth 4): composition across depth FALSIFIED — by correction STACKING, not depth
+
+Depth-4 cell (32,32,32,32), same harness, seed 0:
+
+| mlp4 arm | b_best/b_final | a_retained |
+| --- | --- | --- |
+| null | 0.693 / 0.662 | 0.945 |
+| readout | 0.719 / 0.680 | 0.951 |
+| hidden_raw (all 4 streams) | 0.762 / 0.707 | **0.494 (below chance)** |
+| hidden_first4 (stream 1 only, post-hoc) | **0.826 / 0.746** | 0.598 |
+| hidden_near4 (last hidden stream, post-hoc) | 0.721 / 0.682 | 0.941 |
+| finetune | 0.967 / 0.967 | 0.660 |
+
+1. **§10 W4.2's "local closed-form adaptation composes across depth" is
+   FALSIFIED at probe scale**: stacking all four corrections DEGRADES
+   acquisition below the single deep correction (0.762 < 0.826) and
+   destroys retention (0.494). Mechanism: each Δ is fit on
+   uncorrected-stream statistics but applied downstream of the other
+   corrections — the mismatch compounds with stack count.
+2. **A SINGLE early-stream correction at depth 4 (crossing three
+   ReLUs) KEEPS the full gain (0.826 ≈ mlp2's 0.816)** — the gain lives
+   in one well-placed deep-reach correction, not in the count of
+   corrected streams. Depth itself is not the enemy.
+3. **Retention cost scales with the correction's REACH**: last-hidden
+   (Q-class) 0.94 > stream-1@depth-2 0.79 > stream-1@depth-4 0.60 >
+   all-streams 0.49. Deeper reach steers more shared representation
+   toward task B.
+4. Status per §1: single-seed first rung — OPEN (3-seed + §17 before a
+   boundary claim); the mlp2 3-seed round anchors the depth-2 numbers.
+   Boundary candidate: **closed-form hidden ψ is a ONE-CORRECTION
+   mechanism (early stream, reach matched to the task), not a
+   depth-composable one.**
+
+### Recurrent-family audit — EXECUTED same session: the pairing class CLOSES
+
+`scripts/probes/w1_recurrent_graph_audit.py` (0.2 s; static audit first,
+then one dynamic rung per geometry × credit). The Session-7 queued
+improvement opportunity ("the index-vs-settle-stream assumption may
+misalign other index-paired credit paths") is RESOLVED — no defect:
+
+- recurrent × pepita: feedforward weights live, `recurrent_weight`
+  EXACTLY zero (the documented "self-connection: no PEPITA route"
+  fallback); recurrent × rp: ALL weights live including
+  `recurrent_weight` (rp's documented self-connection route). **The
+  self-connection credit route is credit-rule-dependent** (pepita
+  starves it, rp feeds it) — an I(C,U)-class observation for future
+  recurrent-substrate work.
+- graph × pepita / rp: all weights live on the 16→32→32→4 width chain
+  (smallest 2.4e-5, backward attenuation through the random B's —
+  nonzero and correctly shaped). The `_pepita_covariate_stream`
+  monotone-width cursor generalizes to both geometries; the layered FA
+  width-contract also passes.
+- Harness lessons: GraphGeometry is node-classification layout (batch
+  dim IS the node dim); RecurrentGeometry layer keys follow the
+  Linear/ReLU interleave convention ('0.weight'/'2.weight').
+
+### Remaining TODO14 menu (post-Session-11)
+
+- W4.2 3-seed firming of the stacking/REACH boundary (cheap: 3 × ~40 s
+  on the harness) if the boundary is to be promoted.
+- Retention lever (new, from the a_retained cost): the correction is
+  task-B-specific because its targets are task-B error fields;
+  multi-task or gated variants (per-phase ψ, or correction masked by a
+  learned task context) would target the 0.786 → 0.95 retention gap.
+  Design work, not a short cell.
+- Ontology promotion (§10's seam): "ontology promotion of a
+  modulate_mid_stream plasticity contract only if the cell is alive" —
+  the cell is ALIVE. Promotion would extend `ClosedFormRidgePlasticity`
+  with per-stream targets (the closed-form-FA backward chain) + a
+  mid-stream modulation hook; pay the AGENTS.md checklist only with the
+  user's breadth-goal confirmation.
+- W5 depth-50 (long-run session), per-site FA primitive (design
+  session) — the only untouched TODO14 menu items.
+
 ## PROGRESS LOG (2026-09-08, Session 10 — W8.4 weight-sharing verdict + NTM slot-identity collision fixed)
 
 **Status: TODO.ntm_nca.md §10 items 2-tail and 5 both executed.
@@ -1297,9 +1431,13 @@ single local rule dominates forever.
 
 # §10 — W4: Hidden-Layer Closed-Form ψ
 
-> **W4.1 PRE-REGISTERED (2026-09-08, Session 9) — design landed, execution
-> deferred to a dedicated session.** The mechanism below is the concrete
-> plan; nothing has been measured yet.
+> **W4.1 PRE-REGISTERED (2026-09-08, Session 9) — EXECUTED (2026-09-08,
+> Session 11): OVERTURN MET on 3 seeds; see the Session-11 log and
+> `scripts/probes/w4_hidden_psi.py` for the verdict. One design delta
+> from the mechanism below: the one-hidden-layer W3 cell is
+> mechanism-degenerate (a hidden correction before a LINEAR readout
+> spans the readout-ψ class), so the probe adds a second hidden layer —
+> (32,) kept as the degeneracy control, (32,32) as the mechanism cell.**
 
 ### W4.1 mechanism (per-layer closed-form correction INSIDE the settle graph)
 
@@ -1393,6 +1531,15 @@ That would establish:
 ---
 
 ## W4.2 — Per-layer ψ
+
+> **FIRST RUNG EXECUTED (2026-09-08, Session 11): "composes across
+> depth" FALSIFIED at probe scale — by correction STACKING (each Δ fit
+> on uncorrected-stream statistics, applied downstream of the others),
+> not by depth itself; a single early-stream correction retains the
+> full gain at depth 4 (0.826), stacked-all-4 degrades (0.762) and
+> destroys retention (0.494 below chance). Retention cost scales with
+> the correction's REACH. Single seed — OPEN pending 3-seed + §17.
+> See the Session-11 log.**
 
 Extend independently:
 
