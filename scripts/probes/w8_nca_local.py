@@ -44,6 +44,28 @@ Pre-registered predictions (plan §2, written before execution):
 - P4 (signal integrity): the label-channel injection contrast is
   MEASURED per step (r = ||x+ - x-|| / ||x+||), not assumed.
 
+W8.4 (``--unshared``, plan §5): per-site weight copies — the weight-
+sharing axis, never touched by I(C,U) anywhere in the repo. Unshared
+weights are stored flat as (SITES*out, in) 2-D matrices: the site dimension
+folds into the row space, so (a) the ontology update-rule contract
+("weight"-substring, 2-D) holds unchanged, (b) EuclidUpdate — elementwise —
+is EXACTLY per-site descent (each site's rows only receive that site's
+cells' gradient contributions), and (c) the grouped forward unifies both
+modes (shared weights broadcast over sites, unshared weights view to
+(SITES, out, in)). Muon-on-unshared is DEFERRED: orthogonalizing the
+(SITES*out, in) matrix mixes sites — it is a different rule, not the
+per-site muon; record before ever running it.
+
+Pre-registered (W8.4, written before execution):
+- P-shared-match: unshared x local x euclid solves (fg >= 0.95, 3 seeds)
+  — each site's problem is independently solvable (distill gives every
+  site its own proportional controller) and per-site credit volume is
+  unchanged. Falsified -> weight-sharing is LOAD-BEARING for local
+  credit at this scale (a new I(C,U)-adjacent finding).
+- P-bptt-fragile: unshared x bptt x euclid inherits the shared arm's
+  fragility (seed-level divergence at lr 0.03). Falsified -> per-site
+  parameters stabilize 32-step backprop.
+
 Budget: 240 train episodes (80 for screens), rollout 32 train, batch 8,
 seeds 0-2, CPU minutes per cell. Walltime printed, never recorded.
 
@@ -65,12 +87,14 @@ from computronium.ontology.update import (
     RiemannianOrthogonalUpdate,
 )
 
-REV = "2026-09-08-r8"  # W8.2: ortho_adam arm added
+REV = "2026-09-08-r10"  # W8.4 unshared per-site weights
 
 GRID = 16
 CHANNELS = 4
 HIDDEN = 32
 IN_DIM = CHANNELS * 9 + 1
+IN_DIM_LABEL_FREE = CHANNELS * 9
+SITES = GRID * GRID
 ROLLOUT = 32
 EPISODES = 400
 EVAL_EVERY = 40
@@ -100,64 +124,120 @@ def _sprites() -> Tensor:
     return ids.clamp(0, 3)
 
 
-def _params(seed: int) -> dict[str, Tensor]:
+def _params(
+    seed: int, in_dim: int = IN_DIM, unshared: bool = False
+) -> dict[str, Tensor]:
+    """Shared: one cell MLP. Unshared (W8.4): per-site weights stored flat
+    (SITES*out, in) — the site dimension folds into the row space so the
+    update-rule contract and per-site euclid both hold exactly."""
     g = torch.Generator().manual_seed(seed)
+    rows = SITES if unshared else 1
     p = {
-        "weight1": torch.randn(HIDDEN, IN_DIM, generator=g) * IN_DIM**-0.5,
-        "weight2": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
-        "weight_readout": torch.randn(CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
-        "bias1": torch.zeros(HIDDEN),
-        "bias2": torch.zeros(CHANNELS),
-        "bias_readout": torch.zeros(CHANNELS),
+        "weight1": torch.randn(rows * HIDDEN, in_dim, generator=g) * in_dim**-0.5,
+        "weight2": torch.randn(rows * CHANNELS, HIDDEN, generator=g) * HIDDEN**-0.5,
+        "weight_readout": torch.randn(rows * CHANNELS, HIDDEN, generator=g)
+        * HIDDEN**-0.5,
+        "bias1": torch.zeros(rows * HIDDEN),
+        "bias2": torch.zeros(rows * CHANNELS),
+        "bias_readout": torch.zeros(rows * CHANNELS),
     }
     return {k: v.requires_grad_(True) for k, v in p.items()}
 
 
-def _perceive(states: Tensor, labels: Tensor) -> Tensor:
-    """(B, C, H, W) states + (B, H, W) labels -> (B*H*W, IN_DIM)."""
-    B, _C, H, W = states.shape
+def _perceive(states: Tensor, labels: Tensor | None) -> Tensor:
+    """(B, C, H, W) states + (B, H, W) labels | None -> (B*H*W, in_dim)."""
+    _B, _C, H, W = states.shape
     pad = F.pad(states, (1, 1, 1, 1))
     nb = torch.cat(
         [pad[:, :, y : y + H, x : x + W] for y in range(3) for x in range(3)], dim=1
     )
-    feats = torch.cat([nb, labels.unsqueeze(1)], dim=1)
-    return feats.permute(0, 2, 3, 1).reshape(B * H * W, IN_DIM)
+    feats = nb if labels is None else torch.cat([nb, labels.unsqueeze(1)], dim=1)
+    return feats.permute(0, 2, 3, 1).reshape(-1, feats.size(1))
 
 
-def _cell_forward(p: dict[str, Tensor], states: Tensor, labels: Tensor):
-    x = _perceive(states, labels)
-    h = F.relu(F.linear(x, p["weight1"], p["bias1"]))
-    delta = DELTA_SCALE * torch.tanh(F.linear(h, p["weight2"], p["bias2"]))
-    logits = F.linear(h, p["weight_readout"], p["bias_readout"])
+def _grouped_forward(p: dict[str, Tensor], x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
+    """(G, S, in) grouped cell rows -> (G, S, H)/(G, S, C) streams.
+    Shared weights broadcast over groups (g=1); unshared weights view to
+    (SITES, out, in) — one weight set per site (W8.4)."""
+    uns = p["weight1"].size(0) != HIDDEN
+    w1 = (
+        p["weight1"].view(SITES, HIDDEN, x.size(-1))
+        if uns
+        else p["weight1"].view(1, HIDDEN, x.size(-1))
+    )
+    b1 = p["bias1"].view(SITES, HIDDEN) if uns else p["bias1"].view(1, HIDDEN)
+    h = F.relu(torch.einsum("gsi,soi->gso", x, w1) + b1)
+    wc = (
+        p["weight2"].view(SITES, CHANNELS, HIDDEN)
+        if uns
+        else p["weight2"].view(1, CHANNELS, HIDDEN)
+    )
+    bc = p["bias2"].view(SITES, CHANNELS) if uns else p["bias2"].view(1, CHANNELS)
+    delta = DELTA_SCALE * torch.tanh(torch.einsum("gso,sco->gsc", h, wc) + bc)
+    wr = (
+        p["weight_readout"].view(SITES, CHANNELS, HIDDEN)
+        if uns
+        else p["weight_readout"].view(1, CHANNELS, HIDDEN)
+    )
+    br = (
+        p["bias_readout"].view(SITES, CHANNELS)
+        if uns
+        else p["bias_readout"].view(1, CHANNELS)
+    )
+    logits = torch.einsum("gso,sco->gsc", h, wr) + br
     return h, delta, logits
 
 
-def _seed_states(targets: Tensor, gen: torch.Generator) -> Tensor:
+def _cell_forward(p: dict[str, Tensor], states: Tensor, labels: Tensor | None):
+    x = _perceive(states, labels)
+    g = states.size(0)
+    h, delta, logits = _grouped_forward(p, x.view(g, SITES, x.size(-1)))
+    return (
+        h.reshape(-1, HIDDEN),
+        delta.reshape(-1, CHANNELS),
+        logits.reshape(-1, CHANNELS),
+    )
+
+
+def _seed_states(targets: Tensor, gen: torch.Generator, center: bool = False) -> Tensor:
     B, H, W = targets.shape
     states = torch.zeros(B, CHANNELS, H, W)
-    y = int(torch.randint(4, 8, (1,), generator=gen))
-    x = int(torch.randint(4, 8, (1,), generator=gen))
+    if center:
+        y = x = GRID // 2
+    else:
+        y = int(torch.randint(4, 8, (1,), generator=gen))
+        x = int(torch.randint(4, 8, (1,), generator=gen))
     states[:, :, y, x] = torch.eye(CHANNELS)[targets[0, y, x]]
     return states
 
 
 def _rollout_states(
-    p: dict[str, Tensor], targets: Tensor, steps: int, gen: torch.Generator, grad: bool
+    p: dict[str, Tensor],
+    targets: Tensor,
+    steps: int,
+    gen: torch.Generator,
+    grad: bool,
+    labels: Tensor | None = None,
+    states: Tensor | None = None,
 ) -> tuple[Tensor, list[Tensor]]:
     """P-A dynamics (§11.3): unbounded additive state, tanh-bounded small
     deltas, per-step state-space MSE credit (the clamp + CE-on-states
     design produced the clamped-integrator saturation attractor). With
-    grad=True, also returns the per-step MSE terms."""
+    grad=True, also returns the per-step MSE terms. ``labels=None`` is
+    the label-free regime (W8.3); ``states`` continues an existing
+    rollout (damage regeneration)."""
     target_states = _target_states(targets)
-    states = _seed_states(targets, gen)
+    if states is None:
+        states = _seed_states(targets, gen, center=labels is None)
     step_losses: list[Tensor] = []
     for _ in range(steps):
         mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
         ctx = torch.enable_grad() if grad else torch.no_grad()
         with ctx:
-            _, delta, _logits = _cell_forward(p, states, targets)
+            _, delta, _logits = _cell_forward(p, states, labels)
         delta_grid = _unflatten(delta, targets.size(0), *targets.shape[1:])
-        states += delta_grid * mask.unsqueeze(1)
+        # non-augmented: states enters the autograd graph mid-rollout
+        states = states + delta_grid * mask.unsqueeze(1)  # noqa: PLR6104
         if grad:
             step_losses.append((states - target_states).pow(2).mean())
     return states, step_losses
@@ -168,38 +248,74 @@ def _target_states(targets: Tensor) -> Tensor:
     return F.one_hot(targets, CHANNELS).permute(0, 3, 1, 2).float()
 
 
-def _distill_init(
+def _distill_init(  # noqa: PLR0914 - probe harness; locals are orthogonal modes
     p: dict[str, Tensor],
     targets: Tensor,
     n_mixes: int = 10,
     steps: int = 1500,
     lr: float = 1e-2,
+    label_free: bool = False,
+    regen: bool = False,
 ) -> float:
     """Supervised distillation of the ideal proportional controller
     delta* = clamp(target - state, +/-DELTA_SCALE) into the cell MLP
     (§11.4: BPTT-from-scratch cannot find a stable growth field from a
     seed; a distilled field has the target as an exact fixed point and
-    seeds the four-arm comparison). Returns the final distillation MSE."""
+    seeds the four-arm comparison). Returns the final distillation MSE.
+
+    Label-free (W8.3): training states come from TEACHER rollouts (ideal
+    controller with labels, mask on) — the label-free-reachable manifold.
+    Regen mode: states are the TARGET with random k x k holes (k in
+    {2,4,6,8,10,12}), inputs label-free; the distill fit quality IS the
+    feasibility rung (§13.1-2)."""
     target_states = _target_states(targets)
-    X, Y = [], []
-    for _ in range(n_mixes):
-        m1 = torch.rand(1).item()
-        m3 = torch.rand(1).item()
-        st = (
-            m1 * target_states
-            + (1 - m1) * m3 * torch.rand_like(target_states) * 0.5
-            + (1 - m1) * (1 - m3) * _seed_states(targets, torch.Generator())
-        )
-        X.append(st)
-        Y.append((target_states - st).clamp(-DELTA_SCALE, DELTA_SCALE))
-    x = _perceive(torch.cat(X), torch.cat([targets] * n_mixes))
+    X: list[Tensor] = []
+    if regen:
+        rng = torch.Generator().manual_seed(7)
+        for _ in range(2 * n_mixes):
+            k = int(
+                torch.tensor([2, 4, 6, 8, 10, 12])[
+                    torch.randint(0, 6, (1,), generator=rng)
+                ]
+            )
+            st = target_states.clone()
+            y = int(torch.randint(0, GRID - k + 1, (1,), generator=rng))
+            x = int(torch.randint(0, GRID - k + 1, (1,), generator=rng))
+            st[:, :, y : y + k, x : x + k] = 0.0
+            X.append(st)
+    elif label_free:
+        gen = torch.Generator().manual_seed(7)
+        teacher = target_states.clone()
+        for t in range(33):
+            if t in {0, 1, 2, 4, 8, 16, 24, 32}:
+                X.append(teacher)
+            mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
+            # non-augmented: teacher enters the autograd-free distill set
+            teacher = teacher + (target_states - teacher).clamp(  # noqa: PLR6104
+                -DELTA_SCALE, DELTA_SCALE
+            ) * mask.unsqueeze(1)
+    else:
+        for _ in range(n_mixes):
+            m1 = torch.rand(1).item()
+            m3 = torch.rand(1).item()
+            st = (
+                m1 * target_states
+                + (1 - m1) * m3 * torch.rand_like(target_states) * 0.5
+                + (1 - m1) * (1 - m3) * _seed_states(targets, torch.Generator())
+            )
+            X.append(st)
+    x_labels = None if label_free or regen else torch.cat([targets] * len(X))
+    Y = [(target_states - st).clamp(-DELTA_SCALE, DELTA_SCALE) for st in X]
+    x = _perceive(torch.cat(X), x_labels)
     yd = torch.cat(Y).permute(0, 2, 3, 1).reshape(-1, CHANNELS)
+    n_batches = yd.size(0) // SITES
+    xg = x.view(n_batches, SITES, x.size(-1))
+    yg = yd.view(n_batches, SITES, CHANNELS)
     opt = torch.optim.Adam(list(p.values()), lr=lr)
     loss = torch.zeros(())
     for _ in range(steps):
-        h = F.relu(F.linear(x, p["weight1"], p["bias1"]))
-        pred = DELTA_SCALE * torch.tanh(F.linear(h, p["weight2"], p["bias2"]))
-        loss = (pred - yd).pow(2).mean()
+        _h, pred, _logits = _grouped_forward(p, xg)
+        loss = (pred - yg).pow(2).mean()
         opt.zero_grad()
         loss.backward()
         opt.step()
@@ -212,21 +328,30 @@ def _unflatten(cells: Tensor, B: int, H: int, W: int) -> Tensor:
 
 
 def _local_episode(
-    p: dict[str, Tensor], targets: Tensor, gen: torch.Generator
+    p: dict[str, Tensor],
+    targets: Tensor,
+    gen: torch.Generator,
+    labels: Tensor | None = None,
+    init_states: Tensor | None = None,
 ) -> tuple[dict[str, Tensor], dict[str, Tensor], dict[str, float]]:
     """Zero-history local credit (§11.4): per-step state-space MSE with
     the state DETACHED — no gradient crosses a timestep (the NCA
     analogue of the NTM zero-history factorization). Pseudo-grads are
     summed over the rollout; the readout (wr) is outside the dynamics
-    and receives zero gradient."""
+    and receives zero gradient. ``labels=None`` = label-free;
+    ``init_states`` = regeneration start (W8.3)."""
     target_states = _target_states(targets)
-    states = _seed_states(targets, gen)
+    states = (
+        init_states
+        if init_states is not None
+        else _seed_states(targets, gen, center=labels is None)
+    )
     weight_grads: dict[str, Tensor] = {}
     bias_grads: dict[str, Tensor] = {}
     for _ in range(ROLLOUT):
         mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
         with torch.enable_grad():
-            _h, delta, _logits = _cell_forward(p, states.detach(), targets)
+            _h, delta, _logits = _cell_forward(p, states.detach(), labels)
         next_states = states.detach() + _unflatten(
             delta, targets.size(0), *targets.shape[1:]
         ) * mask.unsqueeze(1)
@@ -254,58 +379,149 @@ def _apply(update, p: dict[str, Tensor], grads: dict[str, Tensor]) -> None:
 
 
 def _eval(
-    p: dict[str, Tensor], targets: Tensor, steps: int
+    p: dict[str, Tensor], targets: Tensor, steps: int, label_free: bool = False
 ) -> tuple[float, float, float]:
     gen = torch.Generator().manual_seed(123)
-    final = _rollout_states(p, targets, steps, gen, grad=False)[0]
+    final = _rollout_states(
+        p, targets, steps, gen, grad=False, labels=None if label_free else targets
+    )[0]
     mse = (final - _target_states(targets)).pow(2).mean()
     hit = final.argmax(1) == targets
     return float(mse), float(hit.float().mean()), float(hit[targets > 0].float().mean())
 
 
-def _train(
+def _hole_states(
+    targets: Tensor, target_states: Tensor, k: int, gen: torch.Generator
+) -> Tensor:
+    """W8.3 regeneration task: the TARGET organism with a random k x k
+    fully-zeroed hole (label-free pattern completion)."""
+    states = target_states.clone()
+    y = int(torch.randint(0, GRID - k + 1, (1,), generator=gen))
+    x = int(torch.randint(0, GRID - k + 1, (1,), generator=gen))
+    states[:, :, y : y + k, x : x + k] = 0.0
+    return states
+
+
+def _regen_eval(
+    p: dict[str, Tensor], targets: Tensor, k: int, steps: int = 48
+) -> float:
+    """Post-regeneration fg accuracy after filling a k x k hole (label-free)."""
+    gen = torch.Generator().manual_seed(123)
+    target_states = _target_states(targets)
+    states = _hole_states(targets, target_states, k, gen)
+    final = _rollout_states(
+        p, targets, steps, gen, grad=False, labels=None, states=states
+    )[0]
+    hit = final.argmax(1) == targets
+    return float(hit.float().mean())
+
+
+def _damage_eval(
+    p: dict[str, Tensor],
+    targets: Tensor,
+    k: int,
+    grow: int = 48,
+    regen: int = 48,
+    label_free_regen: bool = True,
+) -> float:
+    """W8.3: grow (labels on), zero a random k x k patch of the FULL
+    state, regenerate (labels off when label_free_regen), return
+    post-regeneration fg accuracy."""
+    gen = torch.Generator().manual_seed(123)
+    states = _rollout_states(p, targets, grow, gen, grad=False, labels=targets)[0]
+    states = _hole_states(targets, states, k, gen)
+    final = _rollout_states(
+        p,
+        targets,
+        regen,
+        gen,
+        grad=False,
+        labels=None if label_free_regen else targets,
+        states=states,
+    )[0]
+    hit = final.argmax(1) == targets
+    return float(hit[targets > 0].float().mean())
+
+
+def _episode_grads(
+    p: dict[str, Tensor],
+    arm: str,
+    targets: Tensor,
+    gen: torch.Generator,
+    labels: Tensor | None,
+    init: Tensor | None,
+) -> tuple[dict[str, Tensor], dict[str, float]]:
+    if arm == "bptt":
+        return _bptt_grads(p, targets, gen, labels, init), {}
+    w_grads, b_grads, stats = _local_episode(p, targets, gen, labels, init)
+    return {**w_grads, **b_grads}, stats
+
+
+def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
     arm: str,
     update_name: str,
     seed: int,
     lr: float,
     episodes: int = EPISODES,
     eval_every: int = EVAL_EVERY,
+    label_free: bool = False,
+    regen: bool = False,
+    damage: bool = False,
+    unshared: bool = False,
 ) -> float:
     torch.manual_seed(seed)
     sprites = _sprites()
     gen = torch.Generator().manual_seed(seed)
     batch_idx = torch.randint(0, len(sprites), (BATCH,), generator=gen)
-    p = _params(seed)
-    _distill_init(p, sprites[batch_idx])
+    targets0 = sprites[batch_idx]
+    in_dim = IN_DIM_LABEL_FREE if label_free or regen else IN_DIM
+    p = _params(seed, in_dim, unshared)
+    _distill_init(p, targets0, label_free=label_free, regen=regen)
     update = _updates(lr)[update_name]
     stats_last = {"inversion_rate": 0.0, "inject_r": 0.0}
     curve: list[tuple[int, float]] = []
+    hole_ks = (4, 6, 8, 10)
     for ep in range(episodes):
-        targets = sprites[batch_idx]
-        if arm == "bptt":
-            grads = _bptt_grads(p, targets, gen)
-        else:
-            w_grads, b_grads, stats_last = _local_episode(p, targets, gen)
-            grads = {**w_grads, **b_grads}
+        targets = targets0
+        labels = None if label_free or regen else targets
+        init = None
+        if regen:
+            k = hole_ks[ep % len(hole_ks)]
+            init = _hole_states(targets, _target_states(targets), k, gen)
+        grads, stats_last = _episode_grads(p, arm, targets, gen, labels, init)
         _apply(update, p, grads)
         if (ep + 1) % eval_every == 0:
-            curve.append((ep + 1, _eval(p, sprites[batch_idx], 48)[1]))
+            acc = (
+                _regen_eval(p, targets, 8)
+                if regen
+                else _eval(p, targets, 48, label_free)[1]
+            )
+            curve.append((ep + 1, acc))
     _report(
-        arm,
-        update_name,
-        seed,
-        lr,
+        (arm, update_name, seed, lr),
         p,
-        sprites[batch_idx],
+        targets0,
         curve,
         stats_last,
-        False,
+        label_free,
+        damage,
+        regen,
     )
-    return _eval(p, sprites[batch_idx], 48)[1]
+    return (
+        _regen_eval(p, targets0, 8) if regen else _eval(p, targets0, 48, label_free)[1]
+    )
 
 
-def _bptt_grads(p: dict[str, Tensor], targets: Tensor, gen: torch.Generator):
-    _final, step_losses = _rollout_states(p, targets, ROLLOUT, gen, grad=True)
+def _bptt_grads(
+    p: dict[str, Tensor],
+    targets: Tensor,
+    gen: torch.Generator,
+    labels: Tensor | None = None,
+    init_states: Tensor | None = None,
+):
+    _final, step_losses = _rollout_states(
+        p, targets, ROLLOUT, gen, grad=True, labels=labels, states=init_states
+    )
     loss = torch.stack(step_losses).mean()
     grads_all = torch.autograd.grad(loss, list(p.values()), allow_unused=True)
     return {
@@ -343,30 +559,54 @@ def _updates(lr: float) -> dict[str, object]:
 
 
 def _report(
-    arm: str,
-    update_name: str,
-    seed: int,
-    lr: float,
+    cell: tuple[str, str, int, float],
     p: dict[str, Tensor],
     targets: Tensor,
     curve: list[tuple[int, float]],
     stats: dict[str, float],
-    show_stats: bool,
+    label_free: bool = False,
+    damage: bool = False,
+    regen: bool = False,
+    show_stats: bool = False,
 ) -> None:
-    finals = {steps: _eval(p, targets, steps) for steps in EVAL_ROLLOUTS}
+    arm, update_name, seed, lr = cell
+    tag = " [label-free]" if label_free else (" [regen]" if regen else "")
+    finals = (
+        {}
+        if regen
+        else {steps: _eval(p, targets, steps, label_free) for steps in EVAL_ROLLOUTS}
+    )
     accs = " ".join(f"{a:.3f}" for _, a in curve)
     extra = (
         f"  inv {stats['inversion_rate']:.3f} inject_r {stats['inject_r']:.3f}"
         if show_stats
         else ""
     )
-    print(
-        f"{arm:>5} x {update_name:>6} (lr {lr:g}) seed {seed}: "
-        f"MSE {finals[48][0]:.3f} fg-acc {finals[48][2]:.3f}  curve {accs}{extra}",
-        flush=True,
-    )
-    horizons = "  ".join(f"h{s}: {finals[s][2]:.3f}" for s in EVAL_ROLLOUTS)
-    print(f"    P1 horizons: {horizons}", flush=True)
+    if regen:
+        head = f"regen-k8 acc {curve[-1][1]:.3f}" if curve else "regen-k8 acc ?"
+        print(
+            f"{arm:>5} x {update_name:>6} (lr {lr:g}) seed {seed}{tag}: "
+            f"{head}  curve {accs}",
+            flush=True,
+        )
+    else:
+        print(
+            f"{arm:>5} x {update_name:>6} (lr {lr:g}) seed {seed}{tag}: "
+            f"MSE {finals[48][0]:.3f} fg-acc {finals[48][2]:.3f}  curve {accs}{extra}",
+            flush=True,
+        )
+        horizons = "  ".join(f"h{s}: {finals[s][2]:.3f}" for s in EVAL_ROLLOUTS)
+        print(f"    P1 horizons: {horizons}", flush=True)
+    if damage or regen:
+        ks = (2, 4, 6, 8, 10, 12, 14, 16) if regen else (4, 8, 12, 16)
+        sweep = "  ".join(
+            f"k{k}: {_regen_eval(p, targets, k):.3f}"
+            if regen
+            else f"k{k}: {_damage_eval(p, targets, k):.3f}"
+            for k in ks
+        )
+        label = "regen holes (acc)" if regen else "damage sweep (fg-acc post-regen)"
+        print(f"    {label}: {sweep}", flush=True)
 
 
 def _screen() -> dict[str, float]:
@@ -386,14 +626,26 @@ def _screen() -> dict[str, float]:
     return best
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     args = __import__("sys").argv[1:]
     opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)
     seed = int(opt["seed"]) if "seed" in opt else None
     seeds = (seed,) if seed is not None else SEEDS
     arm = opt.get("arm")
-    print(f"w8_nca_local {REV}; arm {arm or 'all'} seeds {seeds}")
+    update_name = opt.get("update")
+    lr = float(opt["lr"]) if "lr" in opt else None
+    episodes = int(opt.get("episodes", EPISODES))
+    flags = {a.lstrip("-") for a in args}
+    label_free = "label-free" in flags
+    regen = "regen" in flags
+    damage = "damage" in flags
+    unshared = "unshared" in flags
+    print(
+        f"w8_nca_local {REV}; arm {arm or 'all'} seeds {seeds}"
+        f"{' [label-free]' if label_free else ''}{' [regen]' if regen else ''}"
+        f"{' [damage]' if damage else ''}{' [unshared]' if unshared else ''}"
+    )
     if arm is None:
         lrs = _screen()
         cells = [
@@ -403,10 +655,23 @@ def main() -> int:
             ("local", "muon", 0.1),
         ]
     else:
-        cells = [(arm, u, lr) for u, lr in (("euclid", 0.003), ("muon", 0.01))]
-    for cell_arm, update_name, lr in cells:
+        if update_name is None or lr is None:
+            print("usage: --arm requires --update= and --lr=")
+            return 2
+        cells = [(arm, update_name, lr)]
+    for cell_arm, u, cell_lr in cells:
         for s_ in seeds:
-            _train(cell_arm, update_name, s_, lr)
+            _train(
+                cell_arm,
+                u,
+                s_,
+                cell_lr,
+                episodes=episodes,
+                label_free=label_free,
+                regen=regen,
+                damage=damage,
+                unshared=unshared,
+            )
     print(f"\nwalltime {time.time() - t0:.1f}s (printed, never recorded)")
     return 0
 

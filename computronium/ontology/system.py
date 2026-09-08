@@ -309,14 +309,15 @@ class SystemConfig:
                     f"got {self.dynamics.dynamics_type!r}"
                 )
 
-        # NCA geometry: per-step additive state updates; the rollout is a
-        # settle→update cycle, not an energy settle (TODO.ntm_nca.md W8.1)
-        if self.geometry.topology_type == "nca" and (
+        # NCA / NTM geometries: per-step additive/recurrent state updates;
+        # the rollout is a settle→update cycle, not an energy settle
+        # (TODO.ntm_nca.md W8.1/W8.5)
+        if self.geometry.topology_type in {"nca", "ntm"} and (
             self.dynamics.dynamics_type != "instantaneous"
         ):  # ruff: ignore[raise-vanilla-args]
             raise ValueError(
-                f"NCA geometry requires instantaneous dynamics, "
-                f"got {self.dynamics.dynamics_type!r}"
+                f"{self.geometry.topology_type.upper()} geometry requires "
+                f"instantaneous dynamics, got {self.dynamics.dynamics_type!r}"
             )
 
         # Beta matching: StateDynamics.beta should match CreditAssignment.beta for energy-based systems

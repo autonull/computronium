@@ -90,7 +90,8 @@ class GeometryConfig:
         hidden_dims: List of hidden layer dimensions
         num_layers: Number of layers (alternative to hidden_dims)
         topology_type: "feedforward", "recurrent", "tile_mesh",
-            "neuromorphic", "spatial_lattice", "attention", "conv", "graph"
+            "neuromorphic", "spatial_lattice", "attention", "conv", "graph",
+            "nca", "ntm"
         connectivity: Optional adjacency specification
         recurrent_weight: Optional recurrent weight matrix (for recurrent topology)
         init_scale: Multiplicative scale on weight initialization (weights and
@@ -154,6 +155,11 @@ class GeometryConfig:
     delta_scale: float = 0.5
     mask_prob: float = 0.5
     label_channels: int = 0
+    # NTM topology (content-addressed external memory, TODO.ntm_nca.md
+    # §11.10-§11.11): controller hidden width is hidden_dims[0]
+    mem_slots: int = 16
+    mem_width: int = 8
+    beta_init: float = 10.0
 
     @classmethod
     def feedforward(
@@ -420,6 +426,53 @@ class GeometryConfig:
             delta_scale=delta_scale,
             mask_prob=mask_prob,
             label_channels=label_channels,
+        )
+
+    @classmethod
+    def ntm(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        hidden: int = 32,
+        mem_slots: int = 16,
+        mem_width: int = 8,
+        beta_init: float = 10.0,
+    ) -> GeometryConfig:
+        """Create a neural Turing machine topology config (G axis).
+
+        The W8.5 reference recipe (TODO.ntm_nca.md §11.10-§11.11): an LSTM
+        controller reads [input; read-vector] each step and drives read/
+        write heads over an external memory matrix. Memory initializes to
+        STATIC per-slot identity embeddings (NOT ~0: pure content
+        addressing cannot target an empty slot — every ~0 slot has cos ~ 0
+        with any key, so position is unobservable and writes collapse to
+        one slot); content is NON-NEGATIVE (a signed content is
+        unretrievable by beta*cosine softmax — cos = -1 sorts LAST).
+        Prefer ``mem_slots <= mem_width``: exact one-hot slot identities
+        (the validated 16-slot regime is mem_width 16; with fewer width
+        channels than slots the identities degrade to distinct-but-not-
+        orthogonal fixed vectors).
+
+        Args:
+            input_dim: Per-step controller input width
+            output_dim: Number of output logits per step
+            hidden: Controller LSTM hidden width
+            mem_slots: Number of memory slots
+            mem_width: Width of each memory slot
+            beta_init: Initial inverse-sharpness of the cosine addressing
+        """
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=(hidden,),
+            num_layers=1,
+            topology_type="ntm",
+            connectivity=None,
+            recurrent_weight=None,
+            mem_slots=mem_slots,
+            mem_width=mem_width,
+            beta_init=beta_init,
         )
 
 
@@ -2503,14 +2556,273 @@ class NcaGeometry(nn.Module):
         return acts
 
 
+class NtmGeometry(nn.Module):
+    """Neural Turing machine: LSTM controller + content-addressed external
+    memory (G-axis; TODO.ntm_nca.md W8.5, r6 recipe).
+
+    One step: the controller consumes ``[input; previous read]`` and emits
+    logits plus read/write keys, add and erase vectors; the read address is
+    ``softmax(beta * cos(mem, k_r))`` (retrievable content must be
+    non-negative — signed content is unretrievable by cosine softmax,
+    §11.10) and the write is erase-then-add weighted by the write address.
+    Memory initializes to static per-slot identity embeddings (cold-start
+    addressing impossibility: with ~0 init all writes land on ONE slot).
+
+    Credit seam: ``step`` accepts already-detached ``state``/``mem`` — the
+    zero-history local recipe (per-step losses, no tensor crosses the
+    timestep boundary) is a loop of detached ``step`` calls; BPTT is
+    ``episode(..., grad=True)`` through the full unrolled graph.
+    """
+
+    _controller: nn.LSTM
+    _read_key: nn.Linear
+    _write_key: nn.Linear
+    _add: nn.Linear
+    _erase: nn.Linear
+    _out: nn.Linear
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        hidden = config.hidden_dims[0] if config.hidden_dims else 32
+        self._controller = nn.LSTM(config.input_dim + config.mem_width, hidden)
+        self._read_key = nn.Linear(hidden, config.mem_width)
+        self._write_key = nn.Linear(hidden, config.mem_width)
+        self._add = nn.Linear(hidden, config.mem_width)
+        self._erase = nn.Linear(hidden, config.mem_width)
+        self._out = nn.Linear(hidden + config.mem_width, config.output_dim)
+        self._beta = nn.Parameter(torch.tensor(config.beta_init))
+        self._reset_buffers()
+        self._set_param_names()
+
+    def _reset_buffers(self) -> None:
+        self._state: tuple[Tensor, Tensor] | None = None
+        self._mem: Tensor | None = None
+        self._read: Tensor | None = None
+
+    def _set_param_names(self) -> None:
+        # nn.LSTM weight attributes are typed Tensor | Module in stubs
+        w_ih = cast("Tensor", self._controller.weight_ih_l0)
+        w_hh = cast("Tensor", self._controller.weight_hh_l0)
+        _set_param_name(w_ih, "controller_weight_ih_l0")
+        _set_param_name(w_hh, "controller_weight_hh_l0")
+        if self._controller.bias_ih_l0 is not None:
+            _set_param_name(
+                cast("Tensor", self._controller.bias_ih_l0), "controller_bias_ih_l0"
+            )
+        if self._controller.bias_hh_l0 is not None:
+            _set_param_name(
+                cast("Tensor", self._controller.bias_hh_l0), "controller_bias_hh_l0"
+            )
+        for mod, name in (
+            (self._read_key, "read_key"),
+            (self._write_key, "write_key"),
+            (self._add, "add"),
+            (self._erase, "erase"),
+            (self._out, "out"),
+        ):
+            _set_param_name(mod.weight, f"{name}_weight")
+            if mod.bias is not None:
+                _set_param_name(mod.bias, f"{name}_bias")
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        return {
+            "controller_weight_ih_l0": cast("Tensor", self._controller.weight_ih_l0),
+            "controller_weight_hh_l0": cast("Tensor", self._controller.weight_hh_l0),
+            "controller_bias_ih_l0": cast("Tensor", self._controller.bias_ih_l0),
+            "controller_bias_hh_l0": cast("Tensor", self._controller.bias_hh_l0),
+            "read_key_weight": self._read_key.weight,
+            "read_key_bias": self._read_key.bias,
+            "write_key_weight": self._write_key.weight,
+            "write_key_bias": self._write_key.bias,
+            "add_weight": self._add.weight,
+            "add_bias": self._add.bias,
+            "erase_weight": self._erase.weight,
+            "erase_bias": self._erase.bias,
+            "out_weight": self._out.weight,
+            "out_bias": self._out.bias,
+            "beta": self._beta,
+        }
+
+    def init_mem(self, batch: int) -> Tensor:
+        """Static per-slot identity embeddings (r6 cold-start fix, Q4
+        collision fix): with ``mem_slots <= mem_width`` slot ``s`` carries
+        0.5 on channel ``s`` — exact one-hot identities; with more slots
+        than width the folded ``s % mem_width`` embeddings COLLIDE (slots
+        s and s+mem_width tie cos=1.0 and split every read — the §11.14
+        decode-precision defect), so distinct fixed-seed unit vectors are
+        used instead. Position is retrievable before any write; erase+add
+        overwrites it."""
+        slots, width = self.config.mem_slots, self.config.mem_width
+        if slots <= width:
+            base = torch.zeros(slots, width)
+            base[torch.arange(slots), torch.arange(slots)] = 0.5
+        else:
+            g = torch.Generator().manual_seed(0)
+            base = torch.randn(slots, width, generator=g)
+            base = 0.5 * base / base.norm(dim=-1, keepdim=True)
+        return base.unsqueeze(0).expand(batch, slots, width)
+
+    def init_state(self, batch: int) -> tuple[Tensor, Tensor]:
+        return (
+            torch.zeros(1, batch, self._controller.hidden_size),
+            torch.zeros(1, batch, self._controller.hidden_size),
+        )
+
+    def _address(self, mem: Tensor, key: Tensor) -> Tensor:
+        cos = nn.functional.cosine_similarity(
+            mem, key.unsqueeze(1).expand_as(mem), dim=-1
+        )
+        return torch.softmax(self._beta * cos, dim=-1)
+
+    def step(
+        self,
+        x: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        mem: Tensor | None = None,
+        prev_read: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, tuple[Tensor, Tensor]]:
+        """One NTM timestep.
+
+        Args:
+            x: (B, input_dim) controller input for this step
+            state: Optional (h, c) LSTM state (zeros when absent)
+            mem: Optional (B, slots, width) memory (slot embeddings when
+                absent)
+            prev_read: Optional (B, mem_width) read vector from the
+                previous step (zeros when absent) — concatenated to ``x``
+                as the controller input, per the r6 recipe
+
+        Returns:
+            (logits, read, mem_next, a_w, a_r, state_next)
+        """
+        if x.dim() != 2 or x.shape[-1] != self.config.input_dim:
+            raise ValueError(  # noqa: TRY003 - caller-facing shape contract
+                f"NtmGeometry expects x (B, {self.config.input_dim}), "
+                f"got {tuple(x.shape)}"
+            )
+        if state is None:
+            state = self.init_state(x.shape[0])
+        if mem is None:
+            mem = self.init_mem(x.shape[0])
+        if prev_read is None:
+            prev_read = torch.zeros(x.shape[0], self.config.mem_width)
+        h_c, state_next = self._controller(
+            torch.cat([x, prev_read], dim=-1).unsqueeze(0), state
+        )
+        h = h_c.squeeze(0)
+        a_r = self._address(mem, self._read_key(h))
+        read = torch.einsum("bs,bsw->bw", a_r, mem)
+        a_w = self._address(mem, self._write_key(h))
+        add_v = torch.tanh(self._add(h))
+        erase_v = torch.sigmoid(self._erase(h))
+        mem_next = mem * (1 - a_w.unsqueeze(2) * erase_v.unsqueeze(1)) + (
+            a_w.unsqueeze(2) * add_v.unsqueeze(1)
+        )
+        logits = self._out(torch.cat([h, read], dim=-1))
+        return logits, read, mem_next, a_w, a_r, state_next
+
+    def episode(
+        self,
+        inputs: Tensor,
+        state: tuple[Tensor, Tensor] | None = None,
+        mem: Tensor | None = None,
+        grad: bool = False,
+    ) -> tuple[Tensor, Tensor]:
+        """Run a full sequence (B, T, input_dim) of controller+memory steps.
+
+        Returns (logits (B, T, output_dim), final mem). With ``grad=True``
+        the whole graph is retained (BPTT); each step's memory input is the
+        previous step's ``mem_next`` — detach between steps for the
+        zero-history local regime.
+        """
+        cur_mem = mem if mem is not None else self.init_mem(inputs.shape[0])
+        cur_read: Tensor | None = None
+        ctx = torch.enable_grad() if grad else torch.no_grad()
+        with ctx:
+            logits_list = []
+            for t in range(inputs.shape[1]):
+                logits, cur_read, cur_mem, _a_w, _a_r, state = self.step(
+                    inputs[:, t], state, cur_mem, cur_read
+                )
+                logits_list.append(logits)
+        return torch.stack(logits_list, dim=1), cur_mem
+
+    def reset(self, batch: int) -> None:
+        """Clear the stateful convenience buffers used by ``forward``."""
+        self._reset_buffers()
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if x.dim() == 2:
+            if self._state is None or self._state[0].shape[1] != x.shape[0]:
+                self._state = self.init_state(x.shape[0])
+                self._mem = self.init_mem(x.shape[0])
+                self._read = None
+            logits, self._read, self._mem, _a_w, _a_r, self._state = self.step(
+                x, self._state, self._mem, self._read
+            )
+            return logits
+        logits, _mem = self.episode(x)
+        return logits
+
+    def route(self, activations: Tensor) -> Tensor:
+        return self.forward(activations)
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        own = self.params
+        for name, param in new_params.items():
+            if name in own:
+                own[name].data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [
+            self._controller,
+            self._read_key,
+            self._write_key,
+            self._add,
+            self._erase,
+            self._out,
+        ]
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        if x.dim() != 2:
+            raise ValueError(  # noqa: TRY003 - caller-facing shape contract
+                "forward_with_intermediates expects one (B, input_dim) step"
+            )
+        state = self._state if self._state is not None else self.init_state(x.shape[0])
+        mem = self._mem if self._mem is not None else self.init_mem(x.shape[0])
+        read = self._read
+        h_c, _state_next = self._controller(
+            torch.cat(
+                [
+                    x,
+                    read
+                    if read is not None
+                    else torch.zeros(x.shape[0], self.config.mem_width),
+                ],
+                dim=-1,
+            ).unsqueeze(0),
+            state,
+        )
+        h = h_c.squeeze(0)
+        a_r = self._address(mem, self._read_key(h))
+        read = torch.einsum("bs,bsw->bw", a_r, mem)
+        return [x, h, read, self._out(torch.cat([h, read], dim=-1))]
+
+
 # ============================================================
 # Geometry Dispatch
 # ============================================================
 
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[too-many-return-statements, complex-structure]
+def geometry_from_config(config: GeometryConfig) -> Geometry:  # noqa: C901, PLR0911 - dispatch table
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
+    if topology_type == "ntm":
+        return NtmGeometry(config)
     if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
         hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
         recurrent_weight = None

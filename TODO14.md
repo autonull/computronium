@@ -3,6 +3,51 @@
 > **Opened 2026-09-07.**
 >
 
+## PROGRESS LOG (2026-09-08, Session 10 — W8.4 weight-sharing verdict + NTM slot-identity collision fixed)
+
+**Status: TODO.ntm_nca.md §10 items 2-tail and 5 both executed.
+W8.4 (§11.15): weight-sharing is LOAD-BEARING — unshared local × euclid
+fg 0.852 (3 seeds) vs shared 0.998; the ~13% fg sites' credit is pooled
+by sharing (the class-imbalance attractor re-appearing at per-site
+granularity); the rollout law INVERTS under unsharing (local h96 1.000 →
+0.62–0.79); unshared BPTT converts seed-2's catastrophic divergence into
+soft mediocrity (0.712, no explosion). Muon-on-unshared deferred (SVD on
+the flat matrix mixes sites). Parameter SHARING is now a third measured
+I(C,U)-adjacent axis. W8.5 Q4 (§11.16): the pre-registered slot-identity
+collision fix (mem_slots ≤ mem_width, probe `--width=16`) moves
+acc_given_hit 0.78–0.86 → 0.947 (mechanism MET) and local copy-acc mean
+0.816 → 0.886 (all seeds ≥0.84; BPTT control unchanged 0.993); promoted
+into `NtmGeometry.init_mem` (one-hot when mem_slots ≤ mem_width, distinct
+fixed vectors otherwise) with tests updated. The NTM residual
+(local 0.886 vs BPTT 0.993) is now fully decomposed: read_hit_rate 0.781
++ write precision — a tuning surface, no structural break.**
+
+TODO14's own menu unchanged: W4 hidden ψ (pre-registered, dedicated
+session), W5 depth-50 (long-run), per-site FA primitive (design
+session), recurrent-family audit rungs (deferred with W4).
+
+## PROGRESS LOG (2026-09-08, Session 9 — W8: NCA/NTM verdicts + two ontology promotions; NTM memory primitive lands)
+
+**Status: the W8 arc (TODO.ntm_nca.md) closed its main cells and promoted
+TWO new geometry primitives. W8.1 NCA: local credit SOLVES the growing
+NCA (fg 1.000, 3 seeds, rollout-flat) via distill-init — BPTT × euclid
+diverges on seed 2 while local is stable; `NcaGeometry` promoted (§11.8).
+W8.2: the "adam-family wobbles local" theory FALSIFIED (lr artifact).
+W8.3: label-free hole regeneration real (local 0.952 k8, 3 seeds) —
+I(C,U) stability signature replicates without labels; label-free growth
+from a point seed is a representation boundary (memoryless cell).
+W8.5 NTM: zero-history local factorization reaches 0.816 mean vs 0.990
+BPTT control (3 seeds, mechanism chain verified) and `NtmGeometry`
+(content-addressed memory: slot embeddings + retrievable non-negative
+content + supervised addressing) is PROMOTED (§11.14) with a short-BPTT
+copy learnability gate. I(C,U) breadth: the credit×update interaction is
+now measured on MLP, transformer, lattice, NCA, and NTM.**
+TODO14's own menu: W4 hidden ψ (PRE-REGISTERED, §10 — execute in a
+dedicated session), W5 depth-50 (long-run session), per-site FA
+primitive (design session), recurrent-family audit rungs (cheap probe
+code — the index-vs-settle-stream misalignment class check on
+RecurrentGeometry/GraphGeometry, one rung each; deferred with W4).
+
 ## PROGRESS LOG (2026-09-07, Session 8 — W8.1 NCA harness landed; verdict OPEN)
 
 **Status: W8.1 (TODO.ntm_nca.md) harness LANDED with the full
@@ -91,8 +136,8 @@ rp — no-op}; ortho {ff −0.038, pepita +0.007, rp — no-op}.
 
 ### Next (short-cell menu)
 
-- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
-  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W4 (§10): hidden-layer closed-form ψ — PRE-REGISTERED (Session 9,
+  §10), execution deferred to a dedicated session.
 - W5 (§11): depth-50 budget cell — long-run session.
 - W8 (TODO.ntm_nca.md): NCA probe — independent arc; the W0.4
   "right-or-absent" injection principle applies to its label-channel.
@@ -179,8 +224,8 @@ Log: `logs/w0_causal_targets.log`.
   Tier D qualification; the optimizer-specific recovery profile
   (muon thresholdless / ortho sharp / lion sign-blind) is the
   prediction to test. hunt_cells-style harness + lattice geometry.
-- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
-  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W4 (§10): hidden-layer closed-form ψ — PRE-REGISTERED (Session 9,
+  §10), execution deferred to a dedicated session.
 - W5 (§11): depth-50 budget cell — long-run session.
 - W8 (TODO.ntm_nca.md): NCA probe — independent arc, plan revised;
   the W0.4 "right-or-absent" injection principle applies directly to
@@ -278,8 +323,8 @@ pseudo-gradients (MNIST ff peak at Adam-equal 1e-3 → 0.781 vs Adam
   causally-aligned supervision — the last rescue hypothesis.
 - W1 lattice: I(C,U) table on lattice geometry (second geometry) —
   Tier D qualification; hunt_cells-style harness + lattice geometry.
-- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
-  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W4 (§10): hidden-layer closed-form ψ — PRE-REGISTERED (Session 9,
+  §10), execution deferred to a dedicated session.
 - W5 (§11): depth-50 budget cell — long-run session.
 - W8 (TODO.ntm_nca.md): NCA probe — independent arc, plan revised.
 - DONE: W0.2 (falsified), W0 threshold (independent), W0 hinge
@@ -341,8 +386,8 @@ Gates: ruff clean, pyright 0 errors, 91 targeted credit tests pass.
 - W1: feedback_scale 1e-5 / sign-flipped B under muon (does the
   thresholdless rescue survive a channel with no usable signal?); then
   the I(C,U) table on lattice (second geometry) for Tier D.
-- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
-  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W4 (§10): hidden-layer closed-form ψ — PRE-REGISTERED (Session 9,
+  §10), execution deferred to a dedicated session.
 - W5 (§11): depth-50 budget cell — long-run session.
 - W6: DONE (Tier C, session 1). W0.2: DONE (falsified). W0 hinge:
   DONE (falsified). W0 threshold: DONE (independent).
@@ -430,8 +475,8 @@ Probe: `w0_tf_local_optimizers.py` gained `--threshold=` (plumbed into
 - W1: 1e-5/sign-flipped-B rung (NOTE: lion column showed sign rules
   are blind to sub-dominant credit — interpret future rungs
   accordingly); then I(C,U) on lattice (second geometry) for Tier D.
-- W4 (§10): hidden-layer closed-form ψ — NOT STARTED, needs the
-  hidden-ψ statistics code (w3_closed_form_psi skeleton).
+- W4 (§10): hidden-layer closed-form ψ — PRE-REGISTERED (Session 9,
+  §10), execution deferred to a dedicated session.
 - W5 (§11): depth-50 budget cell — long-run session.
 
 ### Session-2 events (kept for context)
@@ -1251,6 +1296,52 @@ single local rule dominates forever.
 ---
 
 # §10 — W4: Hidden-Layer Closed-Form ψ
+
+> **W4.1 PRE-REGISTERED (2026-09-08, Session 9) — design landed, execution
+> deferred to a dedicated session.** The mechanism below is the concrete
+> plan; nothing has been measured yet.
+
+### W4.1 mechanism (per-layer closed-form correction INSIDE the settle graph)
+
+The readout-only ψ ceiling exists because a linear correction composed
+with a linear readout is still a linear probe. The overturn lever: apply
+the correction to the hidden stream BEFORE the next layer's nonlinearity,
+so downstream features reorganize nonlinearly:
+
+```text
+settled h_i  →  ψ_i correction  →  ReLU(L_{i+1}) sees the CORRECTED stream
+```
+
+- ψ_i = (G_i + λI)⁻¹ C_i, the same ridge sufficient-statistics machinery
+  as `ClosedFormRidgePlasticity` (G = Σ X_iᵀ X_i, C = Σ X_iᵀ T_i),
+  accumulated per stage-B episode with the input X_i = layer i's input
+  stream.
+- Local target T_i: the readout error (onehot − softmax post) propagated
+  backwards through FROZEN θ weights (closed-form, layer-local,
+  gradient-free — a "closed-form FA": frozen weights ARE the feedback
+  matrix, exact by construction, solving W1's FA-realizability critique
+  on stacks).
+- Δθ = 0 bitwise (SHA-256, the W3 instrument) — corrections live in ψ,
+  never in θ.
+- Seam: probe-local first (a probe that re-drives the MLP settle loop
+  with corrections injected between layers); ontology promotion of a
+  `modulate_mid_stream` plasticity contract only if the cell is alive.
+
+### Arms: null ψ / readout-only ψ (W3 replay) / hidden ψ (per-layer) / θ fine-tune (control)
+
+### Overturn criterion (unchanged)
+
+Task B accuracy exceeds the frozen-feature linear-probe ceiling (W3
+measured 0.699 at the same cell). Falsified → the ceiling is the
+composition depth, not the injection point — a second boundary for the
+closed-form family.
+
+### Leak controls
+
+Probes never see training batches (fresh seeded draws); null and
+readout arms re-measured in-run; θ SHA before/after every arm; hidden-ψ
+targets derived ONLY from the readout error + frozen weights (no label
+leakage into deeper targets beyond the error term itself).
 
 The readout-only ψ result should be preserved as a **confirmed boundary for that
 specific law**:

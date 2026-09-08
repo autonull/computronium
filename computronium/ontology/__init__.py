@@ -60,6 +60,7 @@ from computronium.ontology.geometry import (
     GeometryConfig,
     GraphGeometry,
     NcaGeometry,
+    NtmGeometry,
     RecurrentGeometry,
     SpatialLattice3DGeometry,
     TileGeometry,
@@ -162,6 +163,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "GraphGeometry",
     "AttentionGeometry",
     "NcaGeometry",
+    "NtmGeometry",
     "SpatialLattice3DGeometry",
     "geometry_from_config",
     # Depth metrics

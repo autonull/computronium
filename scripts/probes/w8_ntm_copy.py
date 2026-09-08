@@ -46,7 +46,21 @@ expected-content MSE under the writer's own addressing distribution
 + overwrite (erase→1 where written) + the addressing KL. Prediction:
 local2 breaks the plateau toward the ≥0.85 promotion bar; falsified
 if it stalls at ~0.7 → the plateau is NOT writer-expressivity-limited
-and the lever moves to the read/controller side.
+and the lever moves to the read/controller side. (RESOLVED §11.10: the
+signed content was unreadable by cosine softmax; the r6 recipe broke
+the plateau to 0.865.)
+
+Q4 (r7, the §11.14 slot-identity collision; pre-registered): with
+mem_slots 16 > mem_width 8 the static slot embeddings COLLIDE (slots s
+and s+8 share one-hot e_{s%8}), so a read key for slot k ties cos=1.0
+with the pristine slot k+8 — the tie-split read halves content magnitude
+and plausibly explains the residual decode gap (acc_given_hit 0.78-0.86,
+§11.11). ``--width=16`` gives mem_slots <= mem_width: exact orthogonal
+one-hot identities, no ties, content/key channels unchanged (L=6 uses
+channels 0-5). Prediction: acc_given_hit 0.78-0.86 -> >=0.9 and local
+copy-acc mean 0.816 -> >=0.85 at the same budget; falsified if decode
+precision is unchanged (the gap is content-precision or beta sharpness,
+not identity collision).
 """
 
 import time
@@ -56,7 +70,7 @@ from torch import Tensor, nn
 
 from computronium.core.optimization.strategies.update import newton_schulz5
 
-REV = "2026-09-08-r6"  # §11.10: retrievable content, slot embeddings, key supervision — plateau broken (0.865)
+REV = "2026-09-08-r7"  # Q4: --width (slot-identity collision fix, pre-registered)
 
 MEM_SLOTS = 16
 MEM_WIDTH = 8
@@ -213,7 +227,7 @@ def _writer_target(bits: Tensor, t: int) -> Tensor:
     return c
 
 
-def _local_step(  # ruff: ignore[too-many-locals, too-many-arguments, too-many-positional-arguments]
+def _local_step(  # noqa: PLR0913, PLR0914, PLR0917 - probe harness
     controller,
     heads,
     mem,
@@ -263,9 +277,7 @@ def _local_step(  # ruff: ignore[too-many-locals, too-many-arguments, too-many-p
             k_idx = (t - L - 1) % MEM_WIDTH
             key_target = torch.zeros(bits.size(0), MEM_WIDTH)
             key_target[:, k_idx] = 1.0
-            losses.append(
-                10.0 * (heads.kr(hc.squeeze(1)) - key_target).pow(2).mean()
-            )
+            losses.append(10.0 * (heads.kr(hc.squeeze(1)) - key_target).pow(2).mean())
     elif t < L:
         # writer losses; h_detached feeds every loss unless
         # credit_controller routes them through the live hc.
@@ -294,9 +306,12 @@ def _local_step(  # ruff: ignore[too-many-locals, too-many-arguments, too-many-p
             # least-similar slot NEVER spread writes (one-slot collapse,
             # span 1.0). Supervise a_w onto slot t directly (a local
             # target, same status as the content target c).
-            target_a = torch.nn.functional.one_hot(
-                torch.tensor(t % MEM_SLOTS), MEM_SLOTS
-            ).float().expand_as(a_w)
+            target_a = (
+                torch.nn.functional
+                .one_hot(torch.tensor(t % MEM_SLOTS), MEM_SLOTS)
+                .float()
+                .expand_as(a_w)
+            )
             losses.append(
                 (a_w * (a_w.clamp(min=1e-8).log() - target_a.clamp(min=1e-8).log()))
                 .sum(-1)
@@ -342,7 +357,7 @@ def _local_episode(
     return torch.stack(losses).mean()
 
 
-def _diagnose(  # ruff: ignore[too-many-locals]
+def _diagnose(  # noqa: PLR0914 - probe harness
     controller, heads, bits: Tensor
 ) -> dict[str, float]:
     """Read hit-rate diagnostic (§11.9 finding 3, the decisive split):
@@ -382,9 +397,9 @@ def _diagnose(  # ruff: ignore[too-many-locals]
                 accs_zero_read.append((logits0.argmax(-1) == bits[:, k]).float())
             mem = mem_next
     slot_seq = torch.stack([write_slot[k] for k in range(L)], 1)  # (B, L)
-    diversity = torch.tensor(
-        [float(len(set(row.tolist()))) / MEM_SLOTS for row in slot_seq]
-    ).mean()
+    diversity = torch.tensor([
+        float(len(set(row.tolist()))) / MEM_SLOTS for row in slot_seq
+    ]).mean()
     return {
         "read_hit_rate": float(torch.cat(hits).mean()) if hits else 0.0,
         "output_acc": float(torch.cat(accs).mean()) if accs else 0.0,
@@ -481,7 +496,7 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
     return controller, heads, best_fg
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0914 - probe harness
 
     t0 = time.time()
     args = __import__("sys").argv[1:]
@@ -489,8 +504,15 @@ def main() -> int:
     steps = int(opt.get("steps", 3000))
     seed = int(opt.get("seed", 0))
     lr = float(opt.get("lr", 1e-3))
+    # Q4 slot-identity fix: mem_slots <= mem_width gives exact one-hot
+    # slot embeddings (default 8 = the validated r6 config).
+    global MEM_WIDTH  # noqa: PLW0603 - probe CLI overrides the module constant
+    MEM_WIDTH = int(opt.get("width", 8))
     arms = [opt["arm"]] if "arm" in opt else ["bptt", "local"]
-    print(f"w8_ntm_copy {REV}; steps {steps} seed {seed} lr {lr:g} arms {arms}")
+    print(
+        f"w8_ntm_copy {REV}; steps {steps} seed {seed} lr {lr:g} "
+        f"width {MEM_WIDTH} arms {arms}"
+    )
     run = {
         "bptt": _run_bptt,
         "local": _run_local,
