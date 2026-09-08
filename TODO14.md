@@ -3,6 +3,11 @@
 > **Opened 2026-09-07.**
 >
 
+> **CURRENT FOCUS (2026-09-08, Session 11 directive): the flagship sprint,
+> §24 — Flagship B driven to a tangible deliverable at non-toy scale.
+> The queue is FROZEN per §24 until the flagship lands or earns a
+> boundary at scale.**
+
 ## PROGRESS LOG (2026-09-08, Session 11 — W4.1 hidden ψ: ceiling OVERTURNED seed-robust (§22 #2 MET); W4.2 depth-composition falsified (stacking); recurrent-family audit closes)
 
 **Status: three results. (1) The pre-registered W4.1 cell (§10, Session
@@ -119,23 +124,21 @@ misalign other index-paired credit paths") is RESOLVED — no defect:
   dim IS the node dim); RecurrentGeometry layer keys follow the
   Linear/ReLU interleave convention ('0.weight'/'2.weight').
 
-### Remaining TODO14 menu (post-Session-11)
+### Remaining TODO14 menu (post-Session-11) — SUPERSEDED by §24
 
-- W4.2 3-seed firming of the stacking/REACH boundary (cheap: 3 × ~40 s
-  on the harness) if the boundary is to be promoted.
-- Retention lever (new, from the a_retained cost): the correction is
-  task-B-specific because its targets are task-B error fields;
-  multi-task or gated variants (per-phase ψ, or correction masked by a
-  learned task context) would target the 0.786 → 0.95 retention gap.
-  Design work, not a short cell.
-- Ontology promotion (§10's seam): "ontology promotion of a
-  modulate_mid_stream plasticity contract only if the cell is alive" —
-  the cell is ALIVE. Promotion would extend `ClosedFormRidgePlasticity`
-  with per-stream targets (the closed-form-FA backward chain) + a
-  mid-stream modulation hook; pay the AGENTS.md checklist only with the
-  user's breadth-goal confirmation.
+The menu below is **FROZEN** by the §24 flagship sprint; it resumes only
+on §24's stop-loss (flagship boundary at scale) or completion. Full
+definitions live in §24; the frozen items, for the record:
+
+- W4.2 3-seed firming of the stacking/REACH boundary — ABSORBED into
+  §24 P-C (the stacking fix is a flagship deliverable, not a side cell).
+- Retention lever (task-gated ψ / multi-ψ library) — ABSORBED into §24
+  P-B/D2 (the multi-ψ library IS the retention lever, demonstrated).
+- Ontology promotion of `modulate_mid_stream` — deferred until the
+  scaled cell (§24 D1) confirms the mechanism transfers; promotion pays
+  the checklist once, on scaled evidence.
 - W5 depth-50 (long-run session), per-site FA primitive (design
-  session) — the only untouched TODO14 menu items.
+  session) — deferred with the queue freeze.
 
 ## PROGRESS LOG (2026-09-08, Session 10 — W8.4 weight-sharing verdict + NTM slot-identity collision fixed)
 
@@ -1808,6 +1811,12 @@ This is the highest-probability huge win.
 
 ## Flagship B — Gradient-Free Representation Adaptation
 
+> **STATUS (2026-09-08, Session 11): FIRST POSITIVE CELL. The
+> frozen-feature ceiling is OVERTURNED at probe scale (§10 W4.1, 3
+> seeds, mechanism attributed bit-exactly — see the Session-11 log and
+> `scripts/probes/w4_hidden_psi.py`). Promoted to the program's
+> FLAGSHIP OF RECORD; §24 is its sprint plan.**
+
 ```text
 θ frozen
 +
@@ -1941,6 +1950,10 @@ A negative result that passes this protocol becomes substantially more valuable.
 Sessions 1–4 are the core.
 
 Everything else is subordinate until a flagship emerges.
+
+> **REVISED (2026-09-08, Session 11): a flagship emerged — Flagship B
+> (§15 status note). The spine for the next sessions is §24's table
+> (D1 → D3 → D2), which supersedes sessions 11+ of this table.**
 
 ---
 
@@ -2137,3 +2150,102 @@ It would demonstrate a qualitatively different training regime.
 >
 > **The objective is to discover the largest true capability hiding behind
 > the current boundaries.**
+
+---
+
+# §24 — The Forcing Function: Flagship B to a Tangible Deliverable
+
+> **Opened 2026-09-08 (Session 11).** The program has crossed from
+> "scattered negatives" to "a small set of verified, mechanistically
+> understood capabilities." The remaining step from verified capability
+> to beneficial result is consolidation and scale — and it does not
+> happen by running more short cells. This section is the forcing
+> function: one flagship, concrete deliverables, a frozen queue, and a
+> stop-loss.
+
+## §24.0 — What is at stake (one paragraph)
+
+W4.1 established, at probe scale, the program's most product-shaped
+result: a frozen network plus a *solved, stored correction* (ψ) acquires
+a new task instantly, without gradients, without weight transport, with
+retention as an explicit placement dial. The claims are mechanistically
+attributed (the Q-identity and the ReLU-crossing attribution are exact).
+What is missing is everything an outsider would care about: non-toy
+scale, real tasks, a runnable demonstration, and the retention story
+made operational (swap, don't overwrite). This sprint closes that gap or
+records the boundary at scale — either outcome retires the open question
+permanently.
+
+## §24.1 — Deliverables (define before executing)
+
+- **D1 — Scaled overturn cell (MNIST-class)**: the W4.1 construction on
+  a real task pair (e.g., MNIST digit-swap A→B, or MNIST→FashionMNIST)
+  on a real MLP (width ≥ 128, depth ≥ 4). Arms: null / readout ψ
+  (in-run ceiling) / hidden ψ (pre-registered placement: the deepest
+  stream that crosses the most nonlinearities — the Session-11
+  attribution rule) / θ fine-tune control. Overturn criterion
+  unchanged: hidden ψ > readout ceiling by ≥ +0.02, 3 seeds, θ SHA
+  bitwise, §20 round. The **reach dial** is a measured curve: a_retained
+  and b_acc vs injection depth — the probe-scale "retention cost scales
+  with reach" claim must replicate or break here.
+- **D2 — Multi-ψ demo (adaptation as a state variable)**: one frozen
+  backbone; a library of per-task solved corrections (≥ 3 tasks);
+  swapping ψ's shows (i) each task at its own solved accuracy under its
+  own ψ, (ii) off-task retention at the null level by construction (no
+  overwrite — the probe-scale 0.786 retention cost is an artifact of
+  overwriting, and this demonstrates it), (iii) instant acquisition
+  (one ridge solve per task). Ships as a repo demo following the static
+  `_ARMS` table pattern (walltime printed, never recorded), one
+  `DEMOS` registry row in `computronium/visualization/gallery.py`, and
+  the gallery lock re-pinned. This is the tangible artifact.
+- **D3 — Stacking repair (the boosting hypothesis)**: fit deeper
+  corrections on the *corrected* stream (re-settle between solves) —
+  pre-registered prediction: depth-4 stacked performance recovers to ≥
+  the single-correction level (probe-scale 0.762 → ≥ 0.826) while
+  retention recovers toward the single-correction level. Falsified →
+  the one-correction boundary is confirmed with the fix tested; that is
+  also a clean result.
+
+## §24.2 — Pre-registered predictions (written before execution)
+
+- **P-A (scale transfer)**: the overturn replicates at MNIST scale
+  (criterion in D1). Falsified after the full §17 protocol → **the
+  flagship earns a boundary at scale**, §24 lifts, the queue resumes at
+  the Session-11 menu. Either way the question is retired.
+- **P-B (swap > overwrite)**: the multi-ψ library eliminates the
+  retention cost (off-task retention at null level) while preserving
+  per-task acquisition. This is the §22 #2 capability in its usable
+  form.
+- **P-C (boosting fixes stacking)**: D3's prediction above. Connects to
+  the project-wide "stale statistics corrupt" theme — third independent
+  test of the mechanism.
+- **P-D (reach dial)**: retention varies monotonically with injection
+  depth at scale (the dial is real and tunable on real tasks).
+
+## §24.3 — Queue freeze and stop-loss
+
+- **FROZEN while §24 runs**: no new geometries, no new credit rungs, no
+  W5, no W7, no per-site FA, no W8.6, no recurrence-family extensions.
+- **Permitted during the freeze**: §17 defect hunts on §24's own
+  harnesses (instrument honesty outranks the freeze — the EMA,
+  weight-name, and slot-collision catches all happened mid-run), the
+  demo/gallery gate for D2, and targeted tests for touched modules.
+- **Stop-loss**: if P-A fails after the full §17 protocol at scale, the
+  boundary is written (probe result preserved as the mechanism map),
+  the freeze lifts, and the program returns to the Session-11 menu with
+  the ontology-promotion decision re-opened on the scaled evidence.
+- **Success criterion for §24**: §22 #2 demonstrated at scale (D1) plus
+  a runnable demo in the gallery (D2). That is the program's first
+  tangible deliverable that a person outside the project can run.
+
+## §24.4 — Budget and sequencing
+
+| Session | Deliverable | Est. cost |
+| ------- | ----------- | --------- |
+| 1 | D1 scaled cell (arm plumbing + 3-seed round) | ~1-2 h |
+| 2 | D3 stacking repair + reach-dial curve | ~1 h |
+| 3 | D2 multi-ψ demo + gallery lock + promotion decision | ~2 h |
+
+Cell costs at probe scale were 18-35 s; the scaled cells are the first
+non-toy runs — budget in cells, not wall-clock hopes (§13.1-5), and
+checkpoint before diagnosing (TODO.ntm_nca.md §12 rule, adopted here).
