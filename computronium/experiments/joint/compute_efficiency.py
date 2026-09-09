@@ -23,7 +23,10 @@ from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
-from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+from computronium.experiments.joint import (
+    CLAIMS_SCOPE_PSI_ENGAGED,
+    CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+)
 
 
 def create_moe_task(
@@ -87,10 +90,16 @@ class ComputeEfficiencyModel(nn.Module):
     """Model for compute efficiency benchmark."""
 
     def __init__(
-        self, input_dim: int, num_experts: int, plasticity, hidden_dim: int = 32
+        self,
+        input_dim: int,
+        num_experts: int,
+        plasticity,
+        plasticity_type: str,
+        hidden_dim: int = 32,
     ):
         super().__init__()
         self.plasticity = plasticity
+        self.plasticity_type = plasticity_type
         self.input_dim = input_dim
         self.num_experts = num_experts
         self.psi = plasticity.initial_psi(None, batch_size=1)
@@ -196,7 +205,6 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
     if len(parts) != 6:
         raise ValueError(f"Invalid coordinate: {coordinate}")
 
-    global plasticity_type  # ruff: ignore[global-statement]
     plasticity_type = parts[3]
 
     # Build plasticity primitive
@@ -224,7 +232,9 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
-    model = ComputeEfficiencyModel(input_dim, num_experts, plasticity).to(device)
+    model = ComputeEfficiencyModel(
+        input_dim, num_experts, plasticity, plasticity_type
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
 
@@ -256,6 +266,46 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
                 active, entropy = count_active_routes(gate_logits, top_k=1)
                 active_routes_history.append(active)
                 gate_entropy_history.append(entropy)
+
+    # ψ-only adaptation control: θ FROZEN, only ψ adapts (the clean
+    # routing-efficiency question: can the gate reconfigure compute
+    # allocation without any θ update?). Audited with ThetaInvarianceAudit.
+    from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
+
+    psi_epochs = 10
+    psi_before = {k: v.detach().clone() for k, v in model.psi.items()}
+    for p_ in model.parameters():
+        p_.requires_grad_(False)
+    psi_active_history: list[float] = []
+    psi_entropy_history: list[float] = []
+
+    with ThetaInvarianceAudit(model) as psi_audit:
+        for _ in range(psi_epochs):
+            x, _y = create_moe_task(batch_size, input_dim, num_experts, device=device)
+            model.train()
+            logits = model(x)  # ψ steps inside forward; θ frozen, no optimizer
+            with torch.no_grad():
+                if model.psi and "gate_logits" in model.psi:
+                    gate = model.psi["gate_logits"]
+                    if gate.shape[0] != x.shape[0]:
+                        gate = gate[:1].expand(x.shape[0], -1)
+                    active, entropy = count_active_routes(gate, top_k=1)
+                    psi_active_history.append(active)
+                    psi_entropy_history.append(entropy)
+            del logits
+
+    theta_audit_report = {
+        "invariant": psi_audit.report.invariant,
+        "max_abs_change": psi_audit.report.max_abs_change,
+        "frozen_on_entry": psi_audit.report.frozen_on_entry,
+    }
+    for p_ in model.parameters():
+        p_.requires_grad_(True)
+    psi_moved = any(
+        not torch.equal(psi_before[k], model.psi[k].detach().to(psi_before[k].device))
+        for k in psi_before
+        if k in model.psi
+    )
 
     # Final evaluation
     correct = 0
@@ -303,7 +353,11 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
     )
 
     return {
-        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+        "claims_scope": (
+            CLAIMS_SCOPE_PSI_ENGAGED
+            if theta_audit_report["invariant"] and psi_moved
+            else CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+        ),
         "coordinate": coordinate,
         "final_accuracy": final_accuracy,
         "final_loss": losses[-1],
@@ -312,6 +366,13 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
         "dense_flops": dense_flops,
         "effective_flops": routing_flops,
         "flops_reduction": flops_reduction,
+        "psi_only_adaptation": {
+            "epochs": psi_epochs,
+            "theta_audit": theta_audit_report,
+            "psi_moved": psi_moved,
+            "active_routes_history": psi_active_history,
+            "gate_entropy_history": psi_entropy_history,
+        },
         "losses": losses,
         "active_routes_history": active_routes_history,
         "gate_entropy_history": gate_entropy_history,

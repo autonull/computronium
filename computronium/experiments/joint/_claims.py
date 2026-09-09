@@ -30,9 +30,18 @@ CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
 # |                       |                           | flag; pooling defect that |
 # |                       |                           | collapsed A/B fixed); θ   |
 # |                       |                           | still trains concurrently |
-# | L2 compute_efficiency | psi_wired_uncontrolled    | gate entropy/FLOPs        |
-# |                       |                           | discriminate routing, but |
-# |                       |                           | θ trains concurrently     |
+# | L2 compute_efficiency | psi_engaged (2026-09-09)  | ψ-only adaptation        |
+# |                       |                           | phase added: θ frozen +  |
+# |                       |                           | ThetaInvarianceAudit, ψ  |
+# |                       |                           | stepped in forward, gate |
+# |                       |                           | metrics tracked under    |
+# |                       |                           | frozen θ; scope upgrades |
+# |                       |                           | iff audit invariant AND  |
+# |                       |                           | ψ moved (measured:       |
+# |                       |                           | routing psi_engaged,     |
+# |                       |                           | active 1.0/8 → 87.5%     |
+# |                       |                           | FLOPs reduction with     |
+# |                       |                           | frozen θ)                |
 # | L3 robustness         | psi_engaged (2026-09-09)  | frozen-θ ψ-only recovery  |
 # |                       |                           | arm added with            |
 # |                       |                           | ThetaInvarianceAudit;     |

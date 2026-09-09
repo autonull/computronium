@@ -513,12 +513,28 @@ fg-acc means (plain → routing):
   orthogonalized displacement. Alternative reading closed.
 
 ### Remaining open work (post session 5)
-- Muon-routing gate diagnostic (above) — the only follow-up the 7.2
-  datum owes.
-- L2 compute_efficiency psi_engaged upgrade (optional, ~30 min).
+- ~~Muon-routing gate diagnostic~~ RESOLVED from recorded data (below).
+- ~~L2 compute_efficiency psi_engaged upgrade~~ DONE (session 5 addendum).
 - TODO16 is otherwise COMPLETE: Phases 0–6 closed, both campaigns run
   with subsetted intermediate feedback, all success criteria met or
   explicitly recorded as boundaries.
+
+### Session 5 addendum — L2 upgraded to psi_engaged; TODO16 CLOSED
+
+- `compute_efficiency.py` (L2): added the frozen-θ ψ-only adaptation
+  phase (10 epochs, no optimizer, `ThetaInvarianceAudit`), gate metrics
+  tracked under frozen θ; removed the latent `global plasticity_type`
+  hack (now an explicit constructor arg). Real-budget rerun:
+  routing **1.0/8 active routes → 87.5% FLOPs reduction with θ frozen**,
+  audit exact, ψ moved → `psi_engaged`; null arms correctly stay
+  `psi_wired_uncontrolled`. `_claims.py` audit table updated.
+- Verification: joint integration 8/8 (`-m slow`), psi_engagement 6/6.
+- **Final TODO16 status: ALL 10 success criteria met** (benchmark rows:
+  L1/L2/L3/L3.5 real-budget JSONs in `benchmark_results/*/` with
+  measured claims scopes; transport graph quantified with 4 memory
+  types; P-axis resolved as boundaries; I(C,U) law predictive 0.944
+  held-out; recipe cards render; inertness guard live; §17.11 control
+  recorded). Plan closed.
 
 ### Notes for future sessions (carried)
 - `pytest-timeout` default 60 s; `faulthandler_timeout=120` dumps a stack
