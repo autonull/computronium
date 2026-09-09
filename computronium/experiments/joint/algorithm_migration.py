@@ -20,9 +20,13 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
+from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
-from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+from computronium.experiments.joint import (
+    CLAIMS_SCOPE_PSI_ENGAGED,
+    CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+)
 from computronium.experiments.joint._plasticity_wiring import (
     modulate_hidden,
     step_psi,
@@ -121,15 +125,18 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
             super().__init__()
             self.plasticity = plasticity_primitive
             self.psi = plasticity_primitive.initial_psi(None)
-            self.input_proj = nn.Linear(input_dim, 64)
+            # Flattened sequence input: A1 depends on the LAST timestep;
+            # mean-pooling over the sequence destroys that feature and
+            # collapses A0/A1 onto the same pooled function.
+            self.input_proj = nn.Linear(seq_len * input_dim, 64)
             self.hidden = nn.Linear(64, 64)
             self.output = nn.Linear(64, 2)
 
         def forward(self, x):
-            # x: [batch, seq_len, input_dim] -> average over seq
+            # x: [batch, seq_len, input_dim] -> flattened sequence
             if self.psi:
                 self.psi = {k: v.to(x.device) for k, v in self.psi.items()}
-            x = x.mean(dim=1)  # [batch, input_dim]
+            x = x.reshape(x.shape[0], -1)
             x = torch.relu(self.input_proj(x))
             x = modulate_hidden(self.plasticity, x, self.psi)
             x = torch.relu(self.hidden(x))
@@ -149,11 +156,6 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # Record θ before Task A0
-    theta_before_a0 = {  # ruff: ignore[unused-variable]
-        name: param.data.clone()
-        for name, param in model.named_parameters()
-        if param.requires_grad
-    }
 
     # Train on Task A0
     model.train()
@@ -163,7 +165,7 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
         model.psi = step_psi(
             plasticity,
             model.psi,
-            x.mean(dim=1),
+            x.reshape(x.shape[0], -1),
             y=nn.functional.one_hot(y, 2).float(),
             training=True,
             live_param=next(model.parameters()),
@@ -175,110 +177,121 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
         optimizer.step()
         a0_losses.append(loss.item())
 
-    # Record θ after Task A0 (before migration)
-    theta_after_a0 = {
-        name: param.data.clone()
-        for name, param in model.named_parameters()
-        if param.requires_grad
-    }
-
     # Evaluate on Task A0
     model.eval()
+    eval_batches_a0 = [
+        create_task_a0(batch_size, seq_len, input_dim, device) for _ in range(10)
+    ]
+    a0_accuracy = 0.0
     correct = 0
     total = 0
     with torch.no_grad():
-        for _ in range(10):
-            x, y = create_task_a0(batch_size, seq_len, input_dim, device)
-            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
-            logits = model(x)
-            pred = logits.argmax(dim=-1)
-            correct += (pred == y).sum().item()
-            total += y.shape[0]
+        for ex, ey in eval_batches_a0:
+            model.psi = step_psi(plasticity, model.psi, ex.reshape(ex.shape[0], -1))
+            pred = model(ex).argmax(dim=-1)
+            correct += (pred == ey).sum().item()
+            total += ey.shape[0]
     a0_accuracy = correct / total
 
-    # PR-1 optimizer-phase hygiene: fresh Adam at the A0→A1 task boundary —
-    # carried A0 momentum would bias the migration-time measurement.
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # ψ-only migration: θ is FROZEN for the entire A1 phase (pure ψ-mediated
+    # strategy switch), audited with ThetaInvarianceAudit. migration_time is
+    # measured on held-out A1 accuracy, not the training batch's loss.
+    model.eval()
+    eval_batches_a1 = [
+        create_task_a1(batch_size, seq_len, input_dim, device) for _ in range(10)
+    ]
 
-    # Migrate to Task A1 (ψ adapts, θ should stay frozen for pure migration)
-    # For true migration test, we freeze θ and only allow ψ to adapt
-    # But here we allow full training to see how fast it adapts
+    def eval_task(batches: list) -> float:
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for ex, ey in batches:
+                model.psi = step_psi(plasticity, model.psi, ex.reshape(ex.shape[0], -1))
+                pred = model(ex).argmax(dim=-1)
+                correct += (pred == ey).sum().item()
+                total += ey.shape[0]
+        return correct / total
+
+    psi_before_migration = {k: v.detach().clone() for k, v in model.psi.items()}
+
+    for p in model.parameters():
+        p.requires_grad_(False)
+
     model.train()
     a1_losses = []
-    migration_times = []
+    phase_b_eval_accs = []
+    migration_time: int | None = None
 
-    for epoch in range(epochs_a1):
-        x, y = create_task_a1(batch_size, seq_len, input_dim, device)
-        model.psi = step_psi(
-            plasticity,
-            model.psi,
-            x.mean(dim=1),
-            training=True,
-            live_param=next(model.parameters()),
-        )
-        optimizer.zero_grad()
-        logits = model(x)
-        loss = criterion(logits, y)
-        loss.backward()
-        optimizer.step()
-        a1_losses.append(loss.item())
+    with ThetaInvarianceAudit(model) as audit:
+        for epoch in range(epochs_a1):
+            x, y = create_task_a1(batch_size, seq_len, input_dim, device)
+            model.psi = step_psi(
+                plasticity,
+                model.psi,
+                x.reshape(x.shape[0], -1),
+                y=nn.functional.one_hot(y, 2).float(),
+                training=True,
+            )
+            logits = model(x)
+            loss = criterion(logits, y)
+            # θ frozen: ψ is the only adapting state; ψ laws are local
+            # (non-optimizer) updates, so no backward/optimizer step.
+            a1_losses.append(loss.item())
 
-        if loss.item() < 0.5 and len(migration_times) == 0:
-            migration_times.append(epoch)
+            acc = eval_task(eval_batches_a1)
+            phase_b_eval_accs.append(acc)
+            if migration_time is None and acc >= 0.9:
+                migration_time = epoch
 
-    migration_time = migration_times[0] if migration_times else epochs_a1
-
-    # Record θ after Task A1
-    theta_after_a1 = {
-        name: param.data.clone()
-        for name, param in model.named_parameters()
-        if param.requires_grad
+    theta_audit_report = {
+        "invariant": audit.report.invariant if audit.report else False,
+        "max_abs_change": audit.report.max_abs_change if audit.report else float("nan"),
+        "frozen_on_entry": audit.report.frozen_on_entry if audit.report else False,
     }
 
-    # Evaluate on Task A1
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for _ in range(10):
-            x, y = create_task_a1(batch_size, seq_len, input_dim, device)
-            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
-            logits = model(x)
-            pred = logits.argmax(dim=-1)
-            correct += (pred == y).sum().item()
-            total += y.shape[0]
-    a1_accuracy = correct / total
+    psi_moved = any(
+        not torch.equal(
+            psi_before_migration[k],
+            model.psi[k].detach().to(psi_before_migration[k].device),
+        )
+        for k in psi_before_migration
+        if k in model.psi
+    )
 
-    # Compute θ change (should be 0 for pure ψ-mediated migration)
-    theta_change = 0
-    for name in theta_after_a0:
-        if name in theta_after_a1:
-            diff = (theta_after_a1[name] - theta_after_a0[name]).norm().item()
-            theta_change += diff**2
-    theta_change = theta_change**0.5  # ruff: ignore[non-augmented-assignment]
+    adapted = migration_time is not None
+    if not adapted:
+        migration_time = epochs_a1  # explicit budget cap
+
+    a1_accuracy = eval_task(eval_batches_a1)
+
+    # θ change is read directly from the audit (exact; supersedes the old
+    # snapshot diff, which silently compared empty dicts once θ was frozen).
+    theta_change = theta_audit_report["max_abs_change"]
 
     # Also check if we can recover Task A0 after Task A1 (catastrophic forgetting)
-    model.eval()
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for _ in range(10):
-            x, y = create_task_a0(batch_size, seq_len, input_dim, device)
-            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
-            logits = model(x)
-            pred = logits.argmax(dim=-1)
-            correct += (pred == y).sum().item()
-            total += y.shape[0]
-    a0_accuracy_after_a1 = correct / total
+    a0_accuracy_after_a1 = eval_task(eval_batches_a0)
+
+    # psi_engaged requires: exact θ invariance across the whole migration
+    # phase (audit) AND ψ actually moved during it.
+    claims_scope = (
+        CLAIMS_SCOPE_PSI_ENGAGED
+        if theta_audit_report["invariant"] and psi_moved
+        else CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+    )
 
     return {
-        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+        "claims_scope": claims_scope,
         "coordinate": coordinate,
         "a0_accuracy": a0_accuracy,
         "a1_accuracy": a1_accuracy,
         "a0_accuracy_after_a1": a0_accuracy_after_a1,
         "migration_time": migration_time,
+        "adapted": adapted,
+        "adapt_threshold": 0.9,
+        "phase_b_eval_accs": phase_b_eval_accs,
         "theta_change": theta_change,
+        "theta_audit": theta_audit_report,
+        "psi_moved": psi_moved,
         "theta_change_normalized": theta_change / model.get_theta_norm()
         if model.get_theta_norm() > 0
         else 0,

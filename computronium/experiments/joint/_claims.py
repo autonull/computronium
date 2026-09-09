@@ -24,21 +24,33 @@ CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
 #
 # | Suite                 | Verdict                   | Blocking gap              |
 # |-----------------------|---------------------------|---------------------------|
-# | L1 adaptation         | psi_wired_uncontrolled    | adapt-time metric is      |
-# |                       |                           | θ-optimizer-driven (caps  |
-# |                       |                           | at the epoch budget for   |
-# |                       |                           | every arm)                |
+# | L1 adaptation         | psi_wired_uncontrolled    | adapt-time metric redone  |
+# |                       | (2026-09-09)              | (held-out eval-acc        |
+# |                       |                           | threshold + `adapted`     |
+# |                       |                           | flag; pooling defect that |
+# |                       |                           | collapsed A/B fixed); θ   |
+# |                       |                           | still trains concurrently |
 # | L2 compute_efficiency | psi_wired_uncontrolled    | gate entropy/FLOPs        |
 # |                       |                           | discriminate routing, but |
 # |                       |                           | θ trains concurrently     |
-# | L3 robustness         | psi_wired_uncontrolled    | ψ stepped per batch via   |
-# | (2026-09-09)          |                           | _plasticity_wiring and    |
-# |                       |                           | modulates hidden forward; |
-# |                       |                           | θ trains concurrently, no |
-# |                       |                           | frozen-θ control          |
-# | L3.5 migration        | psi_wired_uncontrolled    | ψ stepped per batch and   |
-# | (2026-09-09)          |                           | modulates forward; full-  |
-# |                       |                           | training simpl. remains   |
+# | L3 robustness         | psi_engaged (2026-09-09)  | frozen-θ ψ-only recovery  |
+# |                       |                           | arm added with            |
+# |                       |                           | ThetaInvarianceAudit;     |
+# |                       |                           | scope upgrades to         |
+# |                       |                           | psi_engaged iff every     |
+# |                       |                           | frozen audit is invariant |
+# |                       |                           | AND ψ moved (no-op laws   |
+# |                       |                           | stay uncontrolled)        |
+# | L3.5 migration        | psi_engaged (2026-09-09)  | migration phase is now    |
+# |                       |                           | ψ-only by construction: θ |
+# |                       |                           | frozen + audited, ψ-moved |
+# |                       |                           | check; measured verdict   |
+# |                       |                           | (2026-09-09 real budget): |
+# |                       |                           | frozen-ψ migration does   |
+# |                       |                           | NOT solve A1 (0.55-0.59   |
+# |                       |                           | vs A0 0.64-0.73) —        |
+# |                       |                           | representation-limited,   |
+# |                       |                           | consistent with z3_full   |
 # | Z3 flagship           | psi_engaged (R8 gate      | gate is embedded per run  |
 # |                       | landed 2026-09-01)        | (``psi_gate``: exact θ    |
 # |                       |                           | invariance, ψ non-const., |

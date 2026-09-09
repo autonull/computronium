@@ -62,17 +62,25 @@ class CompositeState:
 class PlasticityModulatedModel(nn.Module):
     """Model where plasticity directly modulates the forward pass."""
 
-    def __init__(self, input_dim: int, plasticity, hidden_dim: int = 64):
+    def __init__(
+        self, input_dim: int, plasticity, hidden_dim: int = 64, seq_len: int = 10
+    ):
         super().__init__()
         self.plasticity = plasticity
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+        # Flattened sequence input: the Phase-B target depends on the LAST
+        # timestep, so mean-pooling over the sequence destroys the very
+        # feature the distribution switch is about (TODO16 Phase 5 defect:
+        # every arm capped at chance because A and B collapsed to the
+        # same pooled function).
+        self.seq_len = seq_len
         self.psi = plasticity.initial_psi(
             None, batch_size=1
         )  # Will be expanded in forward
 
         # Base weights (θ)
-        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc1 = nn.Linear(input_dim * seq_len, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, 2)
 
         # Plasticity-specific components
@@ -87,7 +95,8 @@ class PlasticityModulatedModel(nn.Module):
             self.operator_proj = nn.Linear(plasticity.operator_dim, hidden_dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        # x: [batch, input_dim]  # ruff: ignore[commented-out-code]
+        # x: [batch, seq_len, input_dim] -> flattened sequence
+        x = x.reshape(x.shape[0], -1)
         batch_size = x.shape[0]
         device = x.device
 
@@ -173,7 +182,7 @@ class PlasticityModulatedModel(nn.Module):
 
 def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     coordinate: str,
-    epochs_per_phase: int = 50,
+    epochs_per_phase: int = 200,
     batch_size: int = 64,
     seq_len: int = 10,
     input_dim: int = 32,
@@ -224,22 +233,38 @@ def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
-    model = PlasticityModulatedModel(input_dim, plasticity).to(device)
+    model = PlasticityModulatedModel(input_dim, plasticity, seq_len=seq_len).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = nn.CrossEntropyLoss()
+
+    # Fixed Phase-B eval set: adaptation time is measured on held-out
+    # accuracy, not the single training batch's loss (the old loss<0.5
+    # trigger capped at the epoch budget for every arm).
+    model.eval()
+    eval_batches = [
+        create_switching_task(batch_size, seq_len, input_dim, "B", device)
+        for _ in range(10)
+    ]
+
+    def eval_phase_b() -> float:
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for ex, ey in eval_batches:
+                logits = model(ex)
+                correct += (logits.argmax(dim=-1) == ey).sum().item()
+                total += ey.shape[0]
+        return correct / total
 
     # Phase A training
     phase_a_losses = []
     for epoch in range(epochs_per_phase):
         x, y = create_switching_task(batch_size, seq_len, input_dim, "A", device)
-        x = x.mean(dim=1)
-
+        model.train()
         optimizer.zero_grad()
-        logits = model(x)
-        loss = criterion(logits, y)
+        loss = criterion(model(x), y)
         loss.backward()
         optimizer.step()
-
         phase_a_losses.append(loss.item())
 
     # PR-1 optimizer-phase hygiene: fresh Adam at the A→B boundary — no stale
@@ -248,38 +273,28 @@ def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too
 
     # Phase B training (adaptation phase)
     phase_b_losses = []
-    adaptation_times = []
+    phase_b_eval_accs = []
+    adaptation_time: int | None = None
 
     for epoch in range(epochs_per_phase):
         x, y = create_switching_task(batch_size, seq_len, input_dim, "B", device)
-        x = x.mean(dim=1)
-
+        model.train()
         optimizer.zero_grad()
-        logits = model(x)
-        loss = criterion(logits, y)
+        loss = criterion(model(x), y)
         loss.backward()
         optimizer.step()
-
         phase_b_losses.append(loss.item())
 
-        if loss.item() < 0.5 and len(adaptation_times) == 0:
-            adaptation_times.append(epoch)
+        acc = eval_phase_b()
+        phase_b_eval_accs.append(acc)
+        if adaptation_time is None and acc >= 0.9:
+            adaptation_time = epoch
 
-    adaptation_time = adaptation_times[0] if adaptation_times else epochs_per_phase
+    adapted = adaptation_time is not None
+    if not adapted:
+        adaptation_time = epochs_per_phase  # explicit budget cap
 
-    # Final accuracy on Phase B
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for _ in range(10):
-            x, y = create_switching_task(batch_size, seq_len, input_dim, "B", device)
-            x = x.mean(dim=1)
-            logits = model(x)
-            pred = logits.argmax(dim=-1)
-            correct += (pred == y).sum().item()
-            total += y.shape[0]
-
-    final_accuracy = correct / total
+    final_accuracy = phase_b_eval_accs[-1] if phase_b_eval_accs else 0.0
 
     return {
         "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
@@ -287,9 +302,12 @@ def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too
         "phase_a_final_loss": phase_a_losses[-1],
         "phase_b_final_loss": phase_b_losses[-1],
         "adaptation_time": adaptation_time,
+        "adapted": adapted,
+        "adapt_threshold": 0.9,
         "final_accuracy": final_accuracy,
         "phase_a_losses": phase_a_losses,
         "phase_b_losses": phase_b_losses,
+        "phase_b_eval_accs": phase_b_eval_accs,
         "resources": measure_suite_resources(
             model=model,
             coordinate=coordinate,
@@ -328,13 +346,18 @@ def run_adaptation_efficiency_suite(
             )
             coord_results["seeds"].append(result)
             print(
-                f"    Adaptation time: {result['adaptation_time']}, Acc: {result['final_accuracy']:.4f}"
+                f"    Adaptation time: {result['adaptation_time']}"
+                f" ({'adapted' if result['adapted'] else 'BUDGET CAP'}),"
+                f" Acc: {result['final_accuracy']:.4f}"
             )
 
         if coord_results["seeds"]:
             adapt_times = [s["adaptation_time"] for s in coord_results["seeds"]]
             accuracies = [s["final_accuracy"] for s in coord_results["seeds"]]
             coord_results["mean_adaptation_time"] = sum(adapt_times) / len(adapt_times)
+            coord_results["fraction_adapted"] = sum(
+                s["adapted"] for s in coord_results["seeds"]
+            ) / len(adapt_times)
             coord_results["std_adaptation_time"] = (
                 (
                     sum(
@@ -396,7 +419,7 @@ def main():
         default="benchmark_results/adaptation_efficiency",
         help="Output directory",
     )
-    parser.add_argument("--epochs", type=int, default=50, help="Epochs per phase")
+    parser.add_argument("--epochs", type=int, default=200, help="Epochs per phase")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
     parser.add_argument("--seeds", type=int, default=3, help="Number of seeds")
     parser.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")

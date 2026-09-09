@@ -20,7 +20,10 @@ import torch
 
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
-from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+from computronium.experiments.joint import (
+    CLAIMS_SCOPE_PSI_ENGAGED,
+    CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+)
 from computronium.experiments.joint._plasticity_wiring import (
     modulate_hidden,
     step_psi,
@@ -74,7 +77,7 @@ def create_damage_scenarios(
     return original_state
 
 
-def evaluate_recovery(
+def evaluate_recovery(  # ruff: ignore[complex-structure, too-many-statements]
     model: torch.nn.Module,
     original_state: dict,
     damage_type: str,
@@ -83,8 +86,16 @@ def evaluate_recovery(
     criterion,
     optimizer,
     device: torch.device,
+    frozen_theta: bool = False,
 ) -> dict:
-    """Evaluate recovery after damage."""
+    """Evaluate recovery after damage.
+
+    With ``frozen_theta=True`` the recovery loop is ψ-only: all θ
+    parameters are frozen and wrapped in a ``ThetaInvarianceAudit``; no
+    optimizer step runs. This is the frozen-θ control that upgrades the
+    suite's claims scope.
+    """
+    from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 
     # Measure initial performance after damage
     model.eval()
@@ -97,42 +108,78 @@ def evaluate_recovery(
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
             total += y.shape[0]
-    initial_accuracy = correct / total if total > 0 else 0
+    initial_accuracy = correct / total
+
+    psi_before = {k: v.detach().clone() for k, v in model.psi.items()}
+
+    if frozen_theta:
+        for p in model.parameters():
+            p.requires_grad_(False)
+
+    def psi_moved_during() -> bool:
+        return any(
+            not torch.equal(
+                psi_before[k],
+                model.psi[k].detach().to(psi_before[k].device),
+            )
+            for k in psi_before
+            if k in model.psi
+        )
 
     # Recovery training
     model.train()
     recovery_losses = []
     recovery_accuracies = []
+    theta_audit_report: dict = {}
+    psi_moved = False
 
-    for step in range(recovery_steps):
-        epoch_loss = 0
-        epoch_correct = 0
-        epoch_total = 0
+    def run_recovery() -> None:
+        for step in range(recovery_steps):
+            epoch_loss = 0
+            epoch_correct = 0
+            epoch_total = 0
 
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
-            psi = step_psi(
-                model.plasticity,
-                model.psi,
-                x,
-                training=True,
-                live_param=next(model.parameters()),
+            for x, y in train_loader:
+                x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
+                psi = step_psi(
+                    model.plasticity,
+                    model.psi,
+                    x,
+                    training=True,
+                    live_param=next(model.parameters()),
+                )
+                model.psi = psi
+                logits = model(x)
+                loss = criterion(logits, y)
+                if not frozen_theta:
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+
+                epoch_loss += loss.item()
+                epoch_correct += (logits.argmax(dim=-1) == y).sum().item()
+                epoch_total += y.shape[0]
+
+            recovery_losses.append(epoch_loss / len(train_loader))
+            recovery_accuracies.append(
+                epoch_correct / epoch_total if epoch_total > 0 else 0
             )
-            model.psi = psi
-            optimizer.zero_grad()
-            logits = model(x)
-            loss = criterion(logits, y)
-            loss.backward()
-            optimizer.step()
 
-            epoch_loss += loss.item()
-            epoch_correct += (logits.argmax(dim=-1) == y).sum().item()
-            epoch_total += y.shape[0]
-
-        recovery_losses.append(epoch_loss / len(train_loader))
-        recovery_accuracies.append(
-            epoch_correct / epoch_total if epoch_total > 0 else 0
-        )
+    if frozen_theta:
+        with ThetaInvarianceAudit(model) as audit:
+            run_recovery()
+        # Restore trainability — the caller may run standard recovery next.
+        for p in model.parameters():
+            p.requires_grad_(True)
+        theta_audit_report = {
+            "invariant": audit.report.invariant if audit.report else False,
+            "max_abs_change": audit.report.max_abs_change
+            if audit.report
+            else float("nan"),
+        }
+        psi_moved = psi_moved_during()
+    else:
+        run_recovery()
 
     # Final accuracy
     final_accuracy = recovery_accuracies[-1] if recovery_accuracies else 0
@@ -141,16 +188,20 @@ def evaluate_recovery(
     # We need original accuracy - approximate from pre-damage
     recovery_ratio = final_accuracy / initial_accuracy if initial_accuracy > 0 else 0
 
-    return {
+    out = {
         "initial_accuracy": initial_accuracy,
         "final_accuracy": final_accuracy,
         "recovery_ratio": recovery_ratio,
         "recovery_losses": recovery_losses,
         "recovery_accuracies": recovery_accuracies,
     }
+    if frozen_theta:
+        out["theta_audit"] = theta_audit_report
+        out["psi_moved"] = psi_moved
+    return out
 
 
-def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, unused-variable]
+def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
     coordinate: str,
     epochs: int = 10,
     batch_size: int = 64,
@@ -286,6 +337,7 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     # Apply multiple damage types and measure recovery
     damage_types = ["zero_weights", "remove_nodes", "noise"]
     damage_results = {}
+    psi_only_recovery = {}
 
     for damage_type in damage_types:
         # Restore original model
@@ -297,6 +349,21 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
         # PR-1 optimizer-phase hygiene: fresh optimizer per scenario — recovery
         # of one damage type must not inherit momentum from another.
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+        # Frozen-θ ψ-only recovery FIRST (it does not mutate θ, so the
+        # standard recovery below starts from the same pristine damaged
+        # state it always did).
+        psi_only_recovery[damage_type] = evaluate_recovery(
+            model,
+            original_state,
+            damage_type,
+            recovery_steps,
+            train_loader,
+            criterion,
+            optimizer,
+            device,
+            frozen_theta=True,
+        )
 
         # Evaluate recovery
         recovery = evaluate_recovery(
@@ -320,14 +387,30 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
         r["final_accuracy"] for r in damage_results.values()
     ) / len(damage_results)
 
+    avg_psi_only_recovery_ratio = sum(
+        r["recovery_ratio"] for r in psi_only_recovery.values()
+    ) / len(psi_only_recovery)
+
+    all_audits_invariant = all(
+        r["theta_audit"]["invariant"] for r in psi_only_recovery.values()
+    )
+    psi_moved_all = all(r["psi_moved"] for r in psi_only_recovery.values())
+    claims_scope = (
+        CLAIMS_SCOPE_PSI_ENGAGED
+        if all_audits_invariant and psi_moved_all
+        else CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+    )
+
     return {
-        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+        "claims_scope": claims_scope,
         "coordinate": coordinate,
         "pre_damage_accuracy": pre_damage_accuracy,
         "damage_severity": damage_severity,
         "damage_results": damage_results,
+        "psi_only_recovery": psi_only_recovery,
         "avg_recovery_ratio": avg_recovery_ratio,
         "avg_final_accuracy": avg_final_accuracy,
+        "avg_psi_only_recovery_ratio": avg_psi_only_recovery_ratio,
         "resources": measure_suite_resources(
             model=model,
             coordinate=coordinate,
