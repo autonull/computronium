@@ -801,3 +801,56 @@ Mechanism-bound closure; no γ sweep/learned-B rescue queued.
   on classification only; PEPITA×other fixed-input tasks (CIFAR head,
   graph node classification); nothing else without a new mechanism
   hypothesis.
+
+---
+
+# §16 — FF and EqProp Under the Harvest Instrument: One Datum, One Deferred (2026-09-09)
+
+`w9_family_depth_grid.py` (6 arms, MNIST, 150 batches, best-snapshot +
+EMA probes, seed 0). Three wiring iterations were needed to stop
+applying ePC-grid geometry to families with different contracts (μPC +
+residual collapsed BOTH families; EqProp also requires the 0.1
+small-init convention — scale 1.0 kills it). Final per-family
+constructors are copied from the recipes of record.
+
+## §16.1 EqProp — peak-then-collapse datum (law extends)
+
+| arm | best @ step | EMA final |
+|-----|-------------|-----------|
+| eqprop d2 | **0.627 @ 60** | 0.087 |
+| eqprop d4 | 0.377 @ 10 | 0.087 |
+| eqprop d32 | 0.108 @ 0 | 0.087 |
+
+The energy family shows the SAME signature as ePC/FF: an early peak
+(d2 @ 60) followed by near-total collapse (EMA 0.087 ≈ chance) — and
+its depth wall is the most severe of the three families (d4 already
+0.377, d32 chance from step 0). **The §14 depth law — train peaks
+early, then memorizes/collapses; harvest, don't train-longer — extends
+to EqProp**, and the depth frontier is family-ordered: ePC/FF ≫ FF ≫
+EqProp at width 128 (caveat: EqProp's absolute d2 level 0.627 sits
+below the swap-credit demo's 0.86 on a different geometry — the datum
+is the SHAPE, not the level).
+
+## §16.2 FF — grid DEFERRED on an unresolved harness gap
+
+FF reproduces d2 (0.698-0.738, vs w2's 0.824 3-seed mean) but NOT d4
+(0.402 vs 0.757 recorded) even with the w2_library_parity constructor
+copied verbatim; d32/d50 at chance. The remaining delta is an
+unresolved harness difference (seed-level variance, probe cadence, or
+a recipe subtlety in the d4 rung). **No FF depth-boundary claim is
+made from this probe** — FF's depth numbers remain w2's (d2 0.824 /
+d4 0.757 / d8 0.512); the open question "does FF peak-then-memorize
+under harvest?" is DEFERRED until the FF d4 rung reproduces. Stuck
+protocol invoked after 3 iterations; the probe is in the tree with the
+gap documented.
+
+## §16.3 Hygiene lessons (queued for Register C)
+
+1. **Geometry is not family-portable**: μPC init + residual are ePC
+   conventions; FF needs plain/manual init; EqProp needs the 0.1
+   small-init convention. A "recipe card" mapping family → validated
+   geometry/optimizer/config constructors would have saved three
+   iterations — candidate for a small registry or docs table.
+2. Any cross-family grid must first reproduce each family's SHALLOW
+   recorded number as a harness control before running depth arms
+   (the controls caught both defects — cheap and decisive).
