@@ -144,12 +144,34 @@
 >     rule capacity (22→16→1). Verdict: the frontier is real and
 >     pattern-structured, per §5.2's hypothesis; Muon-vs-optimizer
 >     comparison (campaign 7.2 transfer) left to the paper round.
-> - **§5.1 I(C,U,P) refit: NOT RUN (correctly deferred).** E2/E3/E4
->   probes are closed-form/NCA mechanism probes and produce no I(C,U)
->   measurement rows; refitting now would be a premature refit (the
->   Phase B verdict's own words). The right next cell remains a
->   §5.3-style measurement campaign on the E2/E3 task class with
->   harvest-eligible credit×update arms.
+> - **§5.1 I(C,U,P) refit: RUN (session 6) — via the recorded-data
+>   harvest path, not a new measurement campaign.** Added a campaign-7.1
+>   parser to `scripts/analysis/harvest_icu_table.py` (`_parse_campaign`;
+>   defect found en route: the log's arms are column-aligned with
+>   variable whitespace, so the first regex silently matched only the
+>   `pepita x ortho` cells — 9 rows instead of 72; a split-based parse
+>   recovers all 72). CSV 186 → 258 rows; the schema's `plasticity`
+>   field is now non-trivial (null/routing/fastweight × 4 credits ×
+>   2 updates × 3 seeds on d32 MNIST, lg→local_contrastive per
+>   ARM_CREDIT). Findings:
+>   - **ψ-null result CONFIRMED at 3 seeds, quantified:** max
+>     ψ-modulation of the credit×update surface across all 6 matched
+>     (credit × update) cells is 9.1 pts (fa × muon routing), mean
+>     2.0 pts; every other cell < 2.2 pts. Campaign 7.1's single-seed
+>     headline ("ψ is a passenger on the credit×update surface") is
+>     now a 3-seed recorded verdict, citable.
+>   - **Model impact (honest):** adding 72 rows DEGRADES global fit
+>     quality — logistic CV 0.892→0.849, held-out lattice 0.944→0.722
+>     (`logs/w17_icu_fit.log`). Mechanism: the campaign rows are d32
+>     (train-depth distribution was {1,2,100}) and ψ-wired cells have
+>     compressed accuracy ranges the one-hot features cannot
+>     separate; plasticity as a feature does NOT improve CV
+>     (0.922 without vs 0.911 with — ψ is orthogonal, the feature
+>     only adds noise). The `icu_law` paper's 0.944 claim remains
+>     pinned to `w16_icu_fit.log` (claim lock green, 3 passed); the
+>     w17 refit is recorded as evidence that I(C,U) generalization
+>     does not extend to d32 rows without a depth-matched training
+>     set — a *sampling* boundary of the fit, not a ψ effect.
 > - **§5.3 campaign: NOT RUN (design-gated).** The pre-registered sweep
 >   (P × memory_write_rule on `NtmGeometry`) tests E1's task, which
 >   falsified — the sweep is gated on an E1 follow-up design that
@@ -187,6 +209,11 @@
 > MEASURED via E3 r2 σ_max(J_F) instrumentation (see session-5 progress
 > block); §5.1 deferred with reason; §5.3 design-gated on an E1
 > follow-up. `p_axis_expressiveness` unblocked → active_draft.]**
+> **[Session 6: §5.1 RUN via recorded-data harvest — campaign-7.1 rows
+> (72) in the CSV; ψ-orthogonality confirmed at 3 seeds (max
+> modulation 9.1 pts, fa×muon routing); global fit degrades (0.944 →
+> 0.722 held-out lattice) — depth-sampling boundary of the fit, not a
+> ψ effect; see session-6 notes in the E1 verdict block.]**
 >
 > **CURRENT FOCUS:** TODO16 mapped the P-axis as an *adaptation-and-efficiency
 > layer* and found boundaries. TODO17 re-frames and re-tests the P-axis as a

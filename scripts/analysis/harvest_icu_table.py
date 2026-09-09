@@ -89,6 +89,48 @@ ORD_MEAN_RE = re.compile(
 )
 
 
+def _parse_campaign(path: Path) -> list[ICURecord]:
+    """Campaign 7.1 cells (TODO16 §7.1): 3 plasticities × 4 credits ×
+    2 updates × 3 seeds on d32 MNIST — the ψ-modulation rows the CSV
+    schema's plasticity field was created for."""
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        # arms are column-aligned with variable whitespace — parse by split
+        parts = line.split()
+        if len(parts) != 8 or parts[1] != "x" or parts[3] != "x" or parts[5] != "seed":
+            continue
+        plasticity, credit_raw, update, seed, acc = (
+            parts[0],
+            parts[2],
+            parts[4],
+            parts[6].rstrip(":"),
+            parts[7],
+        )
+        if not seed.isdigit():
+            continue
+        credit = ARM_CREDIT.get(credit_raw, credit_raw)
+        rows.append(
+            ICURecord(
+                credit=credit,
+                update="muon" if update == "muon" else "ortho",
+                geometry="mlp",
+                depth=32,
+                width=128,
+                task="mnist",
+                seed=int(seed),
+                accuracy=float(acc),
+                interaction_i=0.0,
+                mechanism_class=MECHANISM.get(credit, "other"),
+                plasticity=plasticity,
+                status="promoted" if float(acc) >= 0.75 else "boundary",
+                source=path.name,
+            )
+        )
+    return rows
+
+
 def _seeds(raw: str) -> list[tuple[int, float]]:
     accs = [float(a.strip().strip(chr(39))) for a in raw.split(",")]
     return list(enumerate(accs))
@@ -379,6 +421,15 @@ def collect() -> list[ICURecord]:
     rows += _parse_pepita_breadth(LOGS / "w16_pepita_cifar10.log", "cifar10", 3072, 10)
     rows += _parse_pepita_breadth(LOGS / "w16_pepita_cora.log", "cora", 1433, 7)
     rows += _parse_ordinary_mean(LOGS / "w8_lstm_control.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_A_s0.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_A_s1.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_A_s2.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_B_s0.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_B_s1.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_B_s2.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_C_s0.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_C_s1.log")
+    rows += _parse_campaign(LOGS / "w16_campaign_C_s2.log")
     return rows
 
 

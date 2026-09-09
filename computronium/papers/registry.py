@@ -72,6 +72,10 @@ PAPERS: dict[str, dict] = {
             "E3 stability budget: cross-pattern rules require "
             "σ_max(J_F) ∈ [1.4, 2.8]; 6/8 patterns are stable "
             "attractors (TODO17 session 5)",
+            "ψ-orthogonality confirmed at 3 seeds: campaign-7.1 rows "
+            "in icu_measurements.csv, max surface modulation 9.1 pts "
+            "(fa×muon routing), mean 2.0 (logs/w17_icu_fit.log, "
+            "TODO17 session 6)",
         ],
     },
     "p_axis_boundaries": {
