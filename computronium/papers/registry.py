@@ -50,19 +50,25 @@ PAPERS: dict[str, dict] = {
             "Plasticity as Computation: Unfolding Kolmogorov Complexity "
             "on a Fixed Substrate"
         ),
-        "status": "blocked",
+        "status": "active_draft",
         "claim_tiers": ["E2", "E3", "E4"],  # E1 falsified (TODO17 §Phase B)
         "evidence": {
             "run_records": [
                 "logs/w17_e2.log",
                 "logs/w17_e3.log",
+                "logs/w17_e3_seed0.log",
+                "logs/w17_e3_seed1.log",
+                "logs/w17_e3_seed2.log",
                 "logs/w17_e4.log",
             ],
         },
         "gaps": [
-            "headline needs the §20 3-seed round",
+            "headline writing in progress",
             "E1 boundary: composition-error compounding on chaotic "
             "unfolding (TODO17 progress block)",
+            "E3 stability budget: cross-pattern rules require "
+            "σ_max(J_F) ∈ [1.4, 2.8]; 6/8 patterns are stable "
+            "attractors (TODO17 session 5)",
         ],
     },
     "p_axis_boundaries": {

@@ -89,6 +89,58 @@
 >        ψ ≪ null (E1: 21× vs 4×, worse; E1b: 56× vs 4×, still worse in
 >        rate though better in absolute endpoint).
 >
+> **PROGRESS (2026-09-10, session 5 — Phase C disposition + E3 §20
+> round): TODO17 CLOSED.**
+>
+> - **E3 §20 3-seed round COMPLETE — 3/3 ALIVE** (r2 revision,
+>   `scripts/probes/w17_e3_rule_reconfig.py`, ~199 s/seed, logs
+>   `logs/w17_e3_seed{0,1,2}.log`): distinct patterns K/K for
+>   K∈{2,4,8}, single_rule control regenerates P1 only, θ bitwise
+>   invariant at every seed.
+>   - **r2 defect found en route (honest revision):** the r1 probe
+>     seeded every rule head with the same init (`manual_seed(0)`),
+>     masking init-sensitivity. With distinct inits, thin-structure
+>     patterns (cross, diagonal) sometimes converge to unstable rules
+>     that fail match — undertraining ruled out first (300/1000/3000
+>     steps: cross never reaches 0.9 at stable σ_max; diagnosis before
+>     verdict, §8 protocol).
+>   - **r2 fix:** candidate-init screening (6 inits per pattern,
+>     best-match head kept; screening recorded, not hidden) +
+>     per-candidate σ_max(J_F) power iteration (autograd jvp, 16-step
+>     attractor relax, 12 power iters; σ_max ≥ ρ, an upper bound).
+>   - **§5.2 stability-expressiveness frontier — MEASURED, not
+>     assumed:** 6/8 patterns (checker, stripes, plaid, dotgrid) are
+>     stable attractors (σ_max ≈ 0.00, match 1.000) at every seed —
+>     expressiveness costs nothing there. Diagonal is mixed
+>     (σ_max 0.74–2.32 across seeds). Cross REQUIRES σ_max(J_F) ∈
+>     [1.4, 2.8] in all 18 candidates across 3 seeds — thin symmetric
+>     structure is unreachable inside a contractive budget at this
+>     rule capacity (22→16→1). Verdict: the frontier is real and
+>     pattern-structured, per §5.2's hypothesis; Muon-vs-optimizer
+>     comparison (campaign 7.2 transfer) left to the paper round.
+> - **§5.1 I(C,U,P) refit: NOT RUN (correctly deferred).** E2/E3/E4
+>   probes are closed-form/NCA mechanism probes and produce no I(C,U)
+>   measurement rows; refitting now would be a premature refit (the
+>   Phase B verdict's own words). The right next cell remains a
+>   §5.3-style measurement campaign on the E2/E3 task class with
+>   harvest-eligible credit×update arms.
+> - **§5.3 campaign: NOT RUN (design-gated).** The pre-registered sweep
+>   (P × memory_write_rule on `NtmGeometry`) tests E1's task, which
+>   falsified — the sweep is gated on an E1 follow-up design that
+>   survives (follow-ups 2/3, unrun). Do not run it against a dead task.
+> - **Paper pipeline:** `p_axis_expressiveness` UNBLOCKED →
+>   `active_draft` with scoped claims (E2/E3/E4 mechanisms; E1
+>   boundary + E3 stability budget recorded as gaps). Claim lock green
+>   (3 passed). `icu_law` untouched (already active_draft, held-out
+>   0.944 resolves).
+>
+> **Session-5 housekeeping:** E3 probe r2 passed ruff format/lint +
+> pyright; paper-claim lock re-run after the registry edit. E1
+> follow-ups 2 (contractive-with-margin recurrences) and 3
+> (operator-space closed-form chunks) remain the recorded next designs
+> — both are pre-specified in the E1 verdict above and must not be
+> improvised.
+>
 > **Runtime note:** E-probe scripts are single-process multi-arm (not the
 > planned cell grid); E1 ≈ 21 min (6000 steps × 4 N × 3 arms × 3 seeds),
 > E2 ≈ 3 min, E3 ≈ 1 min, E4 < 1 s. All backgrounded with OMP=2.
@@ -105,6 +157,10 @@
 > session: E2/E3/E4 are NCA/counter-machine mechanism probes and add no
 > I(C,U) measurement rows yet — a §5.3-style campaign on the winning
 > (E2/E3) task is the right next cell, not a premature refit.
+> **[Session 5 disposition: §20 round DONE — E3 3/3 ALIVE; §5.2 frontier
+> MEASURED via E3 r2 σ_max(J_F) instrumentation (see session-5 progress
+> block); §5.1 deferred with reason; §5.3 design-gated on an E1
+> follow-up. `p_axis_expressiveness` unblocked → active_draft.]**
 >
 > **CURRENT FOCUS:** TODO16 mapped the P-axis as an *adaptation-and-efficiency
 > layer* and found boundaries. TODO17 re-frames and re-tests the P-axis as a
@@ -534,6 +590,11 @@ tasks, where the answer may differ).
 **Cost:** ~10 min (the one 10-min exception).
 
 ### §5.2 The stability-plasticity-expressiveness frontier
+
+> **[Session 5: frontier MEASURED — σ_max(J_F) data in the session-5
+> progress block + `logs/w17_e3_seed{0,1,2}.log`. Frontier is real and
+> pattern-structured; icu_report.py extension deferred to the paper
+> round.]**
 
 Combine campaign 7.2 (stability cost is optimizer-conditional) with E3's
 ρ(J_F) measurements. The hypothesis: **expressiveness (rule reconfiguration,
