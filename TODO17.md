@@ -82,12 +82,38 @@
 >     2. non-chaotic but deep recurrences (e.g. contractive-with-margin
 >        maps) where composition error is bounded — but then verify null
 >        cannot shortcut (v1 lesson);
->     3. ψ-sequenced closed-form chunks (operator learned in "operator
->        space", e.g. fit the Jacobian field) instead of a state map;
+>     3. ~~ψ-sequenced closed-form chunks~~ RUN (E1c, session 5):
+>        operator-space fit composes benignly (linear ~N·ε²,
+>        chunking-invariant) — the boundary is a precision-scaling
+>        budget, see the E1c verdict above;
 >     4. criterion note: "accuracy independent of N" is the wrong shape for
 >        chaotic unfolding — the right criterion is error growth rate
 >        ψ ≪ null (E1: 21× vs 4×, worse; E1b: 56× vs 4×, still worse in
 >        rate though better in absolute endpoint).
+     **E1c follow-up #3 RUN (operator-space closed-form chunks —
+     `scripts/probes/w17_e1c_operator_chunks.py`, 0.2 s, 3 seeds,
+     θ training steps 0):** linear operator Ŵ closed-form ridge fit on
+     (r_t → r_{t+h}) pairs, ψ sequences exact matrix powers. Verdict:
+     **BOUNDARY SHARPENED into a quantitative law.** (a) Composition
+     error is LINEAR accumulation ~N·ε² of per-step operator precision,
+     not multiplicative: fit ε²=0.066 → N=4 MSE 0.24, N=32 0.89,
+     growth 3.7× (vs E1's multiplicative 21×, E1b's 56×). σ_max(Ŵ)
+     0.998 — contractive, no blowup. (b) Chunking is horizon-INVARIANT:
+     h=1 vs h=4 fits give identical N=32 MSE (0.893 vs 0.892) — 8
+     chunks × bigger ε = 32 steps × smaller ε. (c) The learned state
+     map (per-step 0.004) BEATS the linear operator per step but
+     compounds multiplicatively; the linear operator has an
+     irreducible model-class floor (the mixing map is genuinely
+     nonlinear) yet accumulates benignly. **Law candidate:** depth is
+     unbounded iff per-step operator precision scales as ε² ≲
+     MSE_budget/N — a precision-scaling requirement, independent of
+     credit horizon (E1b) and chunking (E1c). Local credit must be
+     made to fit operators AND their composition, not state maps.
+     Remaining follow-up: 2 (contractive-with-margin recurrences,
+     with the v1 null-shortcut check) — the only unrun design; a
+     hybrid (closed-form operator + learned state-dependent
+     correction composed under the N·ε² budget) is the natural next
+     mechanism.
 >
 > **PROGRESS (2026-09-10, session 5 — Phase C disposition + E3 §20
 > round): TODO17 CLOSED.**
@@ -136,10 +162,10 @@
 >
 > **Session-5 housekeeping:** E3 probe r2 passed ruff format/lint +
 > pyright; paper-claim lock re-run after the registry edit. E1
-> follow-ups 2 (contractive-with-margin recurrences) and 3
-> (operator-space closed-form chunks) remain the recorded next designs
-> — both are pre-specified in the E1 verdict above and must not be
-> improvised.
+> follow-ups 3 (operator-space closed-form chunks — RUN, see E1c
+> verdict: linear ~N·ε² law, chunking invariant) and 2
+> (contractive-with-margin recurrences) — 2 remains the recorded next
+> design and must not be improvised.
 >
 > **Runtime note:** E-probe scripts are single-process multi-arm (not the
 > planned cell grid); E1 ≈ 21 min (6000 steps × 4 N × 3 arms × 3 seeds),
@@ -301,28 +327,27 @@ Create `computronium/papers/registry.py`:
 PAPERS = {
     "icu_law": {
         "title": "The Geometry of Local Credit: How Optimizer Displacement "
-                 "Dictates Learnability",
+        "Dictates Learnability",
         "status": "active_draft",
         "claim_tiers": ["Tier D"],
         "evidence": {
             "figures": ["d19_depth_harvest", "d2_swap_credit"],
-            "run_records": ["logs/w1_credit_ladder.log",
-                            "data/icu_measurements.csv"],
+            "run_records": ["logs/w1_credit_ladder.log", "data/icu_measurements.csv"],
             "held_out_validation": 0.944,
         },
         "gaps": [],
     },
     "p_axis_expressiveness": {
         "title": "Plasticity as Computation: Unfolding Kolmogorov Complexity "
-                 "on a Fixed Substrate",
-        "status": "blocked",   # blocked on E1–E4
+        "on a Fixed Substrate",
+        "status": "blocked",  # blocked on E1–E4
         "claim_tiers": ["E1", "E2", "E3", "E4"],
         "evidence": {},
         "gaps": ["E1 algorithmic-depth cell", "E4 sequential-composition cell"],
     },
     "p_axis_boundaries": {
         "title": "What Frozen Weights Can and Cannot Do",
-        "status": "parked",   # folds into icu_law as negative result
+        "status": "parked",  # folds into icu_law as negative result
         "claim_tiers": ["L2/L3 benchmarks", "Z3 toy", "campaign 7.1"],
         "evidence": {"figures": ["d17_multi_psi_swap"]},
         "gaps": ["needs a positive headline or folds into icu_law"],

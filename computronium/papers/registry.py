@@ -65,7 +65,10 @@ PAPERS: dict[str, dict] = {
         "gaps": [
             "headline writing in progress",
             "E1 boundary: composition-error compounding on chaotic "
-            "unfolding (TODO17 progress block)",
+            "unfolding, sharpened by E1b (credit horizon) and E1c "
+            "(operator-space fit: linear ~N·ε² accumulation, "
+            "chunking-invariant) into a precision-scaling law — "
+            "ε² ≲ MSE_budget/N (TODO17 progress block)",
             "E3 stability budget: cross-pattern rules require "
             "σ_max(J_F) ∈ [1.4, 2.8]; 6/8 patterns are stable "
             "attractors (TODO17 session 5)",
