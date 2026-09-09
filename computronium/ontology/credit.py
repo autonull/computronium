@@ -791,6 +791,15 @@ class LocalGoodnessCredit:
     from the modulated (nudged) pass — forward differential + inverse
     propagation modulation, closed form, no autograd through the settle.
 
+    NAMING (TODO15 §11): this is NOT the published PEPITA algorithm
+    (arXiv 2201.11665 — one input-space B, modulated *second forward
+    pass*, autograd update; faithfully replicated at BP parity in
+    scripts/probes/pepita_faithful_replication.py, γ=0.05). This
+    per-layer closed-form variant is recorded as **LEMMA** (Layer-wise
+    Error-Modulated local credit); its measured boundaries (0.306
+    fixed-B, 0.107 learned-B × Muon) apply to LEMMA only. API rename
+    deferred to the hygiene pass.
+
     The two are genuinely different algorithms: FF's gradient is the
     autograd derivative of the per-layer goodness contrast; PEPITA's is a
     fixed-random-feedback error modulation. They are NOT interchangeable

@@ -69,6 +69,11 @@
 *   **`UV_LINK_MODE=copy`**: set in the shell env (or `.env`) on this
     filesystem layout — the uv cache hardlink falls back to copy with a
     warning on every `uv run` otherwise (cosmetic, R4.3).
+*   **Cell walltime**: a single foreground command runs **≤5 min** with
+    streaming output (never pipe a long run through `tail`/buffering).
+    Longer cells go to background before launch:
+    `nohup uv run python … > logs/<name>.log 2>&1 &` and are polled at
+    ≤2-min intervals with a pre-registered kill time.
 
 ## Testing
 *   **pytest + pytest-cov**: Coverage is opt-in (`--cov`); no floor until the API stabilizes.

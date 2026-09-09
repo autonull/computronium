@@ -3,7 +3,55 @@
 > **Opened 2026-09-07.**
 >
 
-> **CURRENT FOCUS (2026-09-08, Session 12): §24 CLOSED.** D1 (scaled
+> **CURRENT FOCUS (2026-09-09, Session 13 = TODO15 sprint, CLOSED).
+> Resumption pointer for fresh context — the authoritative session log
+> is TODO15.md §8–§12; the deltas that change THIS file's plan:**
+>
+> 1. **§11 (W5 depth frontier) — REOPENED.** The depth-50 "collapse"
+>    (0.397 @ 150 batches) was an evaluation-protocol artifact: the val
+>    trajectory peaks at 0.797/0.827/0.848 (seeds 0-2, mean 0.824) at
+>    batches 30-70, then declines into memorization. Harvesting the
+>    peak (max-snapshot or EMA-of-weights, EMA 0.819 ≥ snapshot on
+>    seed 0) passes §22's 0.75 gate 3/3. Depth-32 peak 0.917 @ 110;
+>    depth-100 peak ≥ 0.828 @ 30 (single partial seed). §22 #4 MET.
+>    Consequence: the §11 frontier is now peak-limited, not depth-
+>    limited; the instrument is EMA/best-snapshot harvest, NOT longer
+>    training or regularization.
+> 2. **PEPITA vs LEMMA split (§13 W7.1) — W7.1's history re-scoped.**
+>    The library's LocalGoodnessCredit "pepita" mode is NOT the
+>    published PEPITA (arXiv 2201.11665); it is now named **LEMMA**
+>    (per-layer closed-form B pseudo-gradient). LEMMA is closed
+>    mechanism-bound: its pseudo-gradient has cos ≈ 0 (sign-flipping)
+>    vs BP at every layer INCLUDING the readout
+>    (`lemma_alignment_probe.py`). Faithful PEPITA was implemented and
+>    VALIDATED at BP parity (0.884 vs 0.890, γ=0.05 — γ is the
+>    sensitive knob). Queue: promote `PepitaCredit` (needs substrate
+>    passthrough into compute_pseudo_gradient), then PEPITA × Muon at
+>    γ=0.05. Prior "PEPITA" verdicts (D13, w1_credit_ladder, §7)
+>    measured LEMMA — re-scoped, not voided.
+> 3. **W7.3 (STDP) CLOSED structural** — `phases=(FREE,)`, no error
+>    term exists for any optimizer to rescue; W7.3b recommended kill.
+> 4. **Flagship B at scale re-closed with a LAW** — mask-entropy:
+>    ~1 distinct ReLU mask per image at width 128 (both tasks), 0.354
+>    at width 32 — mask-conditioned corrections have no pooling support
+>    at any measured width (`mask_entropy_law.py`). §10's piecewise-ψ
+>    path is dead; §16's caution stands.
+> 5. **"OrthoAdam chaos" retracted** — twin-trajectory probe (ε=1e-7):
+>    val gap 0.006; §8.2's chaos claim was a mis-comparison. Depth
+>    readings are trustworthy; the §12 depth-100 gate is unblocked.
+> 6. **New instrument of record: EMA/best-snapshot harvest + the
+>    0.4 s BP-gradient alignment probe.** Any Overturn-Table boundary
+>    recorded from final-step accuracy on a declining trajectory is
+>    suspect — retroactive harvest audit queued.
+>
+> **Next-session queue (details TODO15 §12.3):** PepitaCredit library
+> promotion; PEPITA × Muon γ=0.05; 3-seed depth-100 harvest (background
+> — AGENTS walltime policy: ≤5 min foreground, else nohup+poll);
+> probe-free EMA harvest default; retroactive harvest audit; LEMMA API
+> rename (hygiene pass). Uncommitted session work: 10 probes, TODO15,
+> AGENTS policy, credit.py naming note.
+
+> **PRIOR FOCUS (2026-09-08, Session 12): §24 CLOSED.** D1 (scaled
 > overturn cell) earned the flagship a **Boundary at scale** — the
 > §24.3 stop-loss fired with the §17 protocol complete; D3 (boosting)
 > falsified as the full repair; **D2 SHIPPED as gallery demo D17**
@@ -1114,12 +1162,12 @@ The following are the highest-value negative results to challenge.
 | Falsification                                       | Why it may not be fundamental                                                                                                                                                        | Overturning experiment                                                                      |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
 | **W2 P4: `local_contrastive` fails transformer LM** | Tested with SGD on EMA-normalized pseudo-gradients; never with Muon/OrthoAdam. Label injection produced only ~1% stream modulation; readout/hidden update scales differed by ~5×10⁴. | `local_contrastive × {Muon, OrthoAdam}` + gain-matched injection + representation ablations |
-| **PEPITA fixed-projection collapse**                | Learned-feedback alignment and co-adaptation were not tested; learned-B × Muon remains open.                                                                                         | Learned-feedback PEPITA × Muon; then co-adaptive feedback                                   |
+| **PEPITA fixed-projection collapse**                | Learned-feedback alignment and co-adaptation were not tested; learned-B × Muon remains open. **SUPERSEDED (Session 13, TODO15 §10-11): this rung is LEMMA, not published PEPITA. Learned-B × Muon 0.107 (scale-invariant, 3 seeds) — CLOSED; LEMMA mechanism-bound (BP-gradient cos ≈ 0 at all layers). Published PEPITA validated at BP parity 0.884.** | ~~Learned-feedback~~ → done; `PepitaCredit` promotion + PEPITA × Muon γ=0.05 queued |
 | **P2 frozen-error LM failure**                      | Exact inference-network ε, γ, width-512, and steps > H cells remain untried.                                                                                                         | Targeted ε × γ × width × depth-horizon cells                                                |
 | **D17 BP late-regime advantage**                    | The late deficit may be the Muon axis rather than credit.                                                                                                                            | ff_hybrid × OrthoAdam/Adam at ≥3M tokens                                                    |
-| **STDP collapse**                                   | Reward-/error-modulated STDP is the missing supervised term.                                                                                                                         | TemporalTraceCredit + reward/error modulation                                               |
+| **STDP collapse**                                   | Reward-/error-modulated STDP is the missing supervised term. **CLOSED structural (Session 13, TODO15 §9.3): `phases=(FREE,)` — no error term exists for any optimizer; Muon 0.110 boundary. W7.3b recommended kill.** | ~~TemporalTraceCredit + modulation~~ → new credit design or nothing |
 | **Closed-form ψ ceiling**                           | The demonstrated law is readout-only; frozen features necessarily impose a linear-probe ceiling.                                                                                     | Per-layer hidden closed-form ψ                                                              |
-| **Depth-50 collapse**                               | Measured under a finite data/budget regime; classified as memorization, not a fundamental dynamical failure.                                                                         | Budget × regularization × depth-50 autopsy                                                  |
+| **Depth-50 collapse**                               | Measured under a finite data/budget regime; classified as memorization, not a fundamental dynamical failure. **SUPERSEDED (Session 13, TODO15 §9.5): the collapse was a final-step evaluation artifact — val peaks 0.80-0.85 @ batches 30-70 (3/3 seeds), harvest passes the 0.75 gate. Depth-50 REOPENED.** | ~~Budget × regularization~~ → harvest instrument; 3-seed round DONE |
 | **Attention “credit boundary”**                     | Initial failure disappeared substantially after optimizer retuning.                                                                                                                  | Replicate with optimizer-aware local-credit protocol                                        |
 
 The rows are deliberately not weighted equally.
@@ -1698,6 +1746,15 @@ This is potentially the most novel capability in the whole project.
 
 # §11 — W5: Break the Depth-32 Frontier
 
+> **SUPERSEDED IN PART (Session 13, TODO15 §9.5/§10.4): the depth
+> frontier is peak-limited, not depth-limited. Depth 32/50/100 all
+> pass the 0.75 gate under val-peak harvesting (0.917 / 0.824-mean /
+> ≥0.828); the "collapse at depth" is peak-then-memorize read at the
+> final step. The live question is no longer "can depth-50 learn" but
+> "how does the peak shape scale with depth" — instrument: EMA
+> harvest. The 150/300/600-batch cells below are obsolete as
+> prescriptions; re-read them as peak-harvest cells.**
+
 Current:
 
 ```text
@@ -1800,6 +1857,13 @@ That could become a concrete systems advantage.
 # §13 — W7: Reopen Other Major Negative Results
 
 These should remain secondary to W0/W2/W4 but are high-upside.
+
+> **SESSION 13 STATUS (TODO15 §9-§11): W7.1 ANSWERED and REFRAMED.**
+> W7.3 (STDP) closed structural; W7.1's rungs measured LEMMA (closed
+> mechanism-bound), and the *published* PEPITA was implemented and
+> validated at BP parity (0.884 vs 0.890). W7.2 (frozen-error LM ×
+> Muon 0.02) recorded boundary val_ppl 28.01 — boundary-locked this
+> session.
 
 ## W7.1 — PEPITA
 
@@ -2200,6 +2264,13 @@ measured rescue mechanism was omitted.
 ---
 
 # §22 — TODO14 Success Condition
+
+> **STATUS (2026-09-09, Session 13): #4 MET — Depth ≥ 50 is viable**
+> (val-peak harvest: 0.797/0.827/0.848 @ seeds 0-2, depth 32 → 0.917,
+> depth 100 → ≥ 0.828; TODO15 §9.5). Validation shape: 3 seeds at
+> depth 50, single-seed at 32/100, held-out eval shared with the
+> original frontier sweep; snapshot selected on the 20-batch eval draw
+> (mild selection optimism, absorbed by the 3-seed margin).
 
 TODO14 succeeds if it produces at least one of the following:
 
