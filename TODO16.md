@@ -361,6 +361,103 @@ ran; two verdicts changed.
 
 ---
 
+## Session 4 (2026-09-09, continued)
+
+### Phase 5 COMPLETE — claims upgraded; one latent task defect found
+
+- **L1 defect (task design, not just metric):** `PlasticityModulatedModel`
+  consumed `x.mean(dim=1)` (mean-pooled sequence), which DESTROYS the
+  Phase-B target (last-symbol) — A and B collapsed onto the same pooled
+  function, hence acc ≈ chance and adapt time pinned at the budget for
+  every arm. Fixed: flattened sequence input (`fc1` on
+  `seq_len*input_dim`).
+- **L1 metric redesign:** adaptation time = first epoch where held-out
+  Phase-B eval accuracy (fixed 10-batch eval set) ≥ 0.9; records
+  `adapted: bool` (explicit budget-cap flag), `adapt_threshold`,
+  `phase_b_eval_accs` curve, `fraction_adapted` per coordinate. Default
+  budget 50 → 200 epochs (one batch/epoch, trivial cost) — at 200 the
+  metric DISCRIMINATES: null/fast_weights/substrate adapt @ ~158;
+  routing CAPS (acc 0.866). Real-budget results JSON regenerated in
+  `benchmark_results/adaptation_efficiency/`.
+- **L3.5 now ψ-only by construction:** migration phase freezes θ
+  (requires_grad=False, no optimizer), wraps the whole A1 loop in
+  `ThetaInvarianceAudit`; migration_time on held-out A1 eval acc;
+  records `theta_audit` report + `psi_moved`. claims_scope →
+  `psi_engaged` iff audit invariant AND ψ moved. Superseded the old
+  snapshot-diff θ-change (which compared empty dicts once frozen).
+- **L3 frozen-θ control:** per damage type, a ψ-only recovery arm runs
+  FIRST (does not mutate θ, so the standard recovery still starts from
+  the pristine damaged state); audited; requires_grad restored after.
+  claims_scope → psi_engaged iff all three audits invariant AND ψ moved
+  (Null/substrate_coupled correctly stay `psi_wired_uncontrolled` — their
+  laws are no-ops, psi_moved False). Routing: ψ-only recovery ratio
+  0.997, audits exact.
+- **Measured L3.5 verdict (real budget 30/30, 3 seeds): frozen-θ ψ-only
+  migration FAILS** — A1 0.556/0.576/0.588 vs A0 0.684/0.644/0.728,
+  θ-change exactly 0.0. ψ modulation cannot re-target a mean-trained
+  readout onto the last-symbol feature: representation-limited,
+  consistent with z3_full's operator-coverage boundary. Audit table in
+  `_claims.py` updated for all three suites.
+- Latent device bug fixed en route: ψ-moved checks used
+  `.detach().cpu()` vs cuda-resident ψ → same-device comparison.
+- Verification: `test_psi_engagement` + `test_z3_engagement` 25 passed;
+  `tests/integration/joint/test_benchmarks.py` 8/8 green (run with
+  `-m slow` — the file is slow-marked and addopts deselects it by
+  default); ruff clean on touched files except repo-wide legacy
+  `raise-vanilla-args` (Register C).
+
+### Phase 6.1 — Transport-graph reduced grid on recall: COMPLETE, decisive
+
+- New probe `scripts/probes/w16_transport_grid.py`: 3 fixed-write memory
+  types on the explicit-key recall rung (task layout identical to
+  `w8_ntm_copy` recall; zero-history local CE; fixed parameter-free
+  write rules; only controller LSTM + output head train). The
+  sparse-addressed (NTM) arm is CITED, not re-run:
+  local3 recall acc_given_hit 0.625–0.646 (§5.4 logs).
+- **Results (1200 steps, 3 seeds, bit-acc on fresh eval):**
+  - slot_capped (exact one-hot slot addressing): **1.000 / 1.000 / 1.000**
+  - linear_read (non-decaying sum, normalized linear attention): **1.000 × 3**
+  - hebbian_dense (FIXED ±1 dense key projections, decayed outer-product
+    trace): **0.778 / 0.771 / 0.781** → defect-hunt: budget extension
+    (2400 steps) → 0.833; decay screen (0.99 vs 0.9) → **0.865**.
+    Both budget and temporal blur contribute; plateaus ~0.83–0.87 < 0.90.
+- **Verdict:** with explicit keys, fixed writes STRICTLY DOMINATE learned
+  addressing (1.000 exact-addressing vs 0.63 NTM). No retrieval-demand
+  threshold where learned addressing reasserts itself — the deficit is
+  structural (zero-history value binding, §5.4). The fixed-write limit is
+  key orthogonality + trace decay (dense ±1 keys + decay 0.9 ≈ 0.83).
+  Success criterion "≥3 memory types on ≥1 retrieval task" MET (4 types).
+- §6.2 design doc shipped: `docs/transport_graph_credit_design.md` —
+  `TransportGraphCredit` (reader-error-transported writer targets) is
+  DESIGNED but NOT implemented: its precondition (transport graph is the
+  binding constraint) is falsified by 6.1; the lever is simpler fixed
+  writes, not richer credit. Blocked pending user confirmation anyway
+  (Execution Rule 8).
+
+### Remaining open work (post session 4)
+- Phase 7 campaigns (7.1 72-cell, 7.2 48-cell) — only remaining plan
+  items; both are long background runs.
+- L2 compute_efficiency still `psi_wired_uncontrolled` (θ trains
+  concurrently) — same frozen-θ pattern would upgrade it if wanted.
+- Success-criteria table: all rows now met except "Benchmark hierarchy
+  FrontierRecords at real budget" is PARTIAL (L1/L3/L3.5 real-budget
+  JSONs regenerated this session; no FrontierRecord objects persisted —
+  results live in `benchmark_results/*/`).
+
+### Notes for future sessions (carried)
+- `pytest-timeout` default 60 s; `faulthandler_timeout=120` dumps a stack
+  but does not kill — >2-min demo tests need `@pytest.mark.timeout(900)`.
+- Demo IDs: plan D18→D19 `depth_harvest`, plan D19→D20 `ntm_local`.
+  Manifest re-pin recipe: render_gallery over run_records, carry each
+  record's own git_commit, never stamp HEAD.
+- Joint suites are slow-marked: run
+  `uv run python -m pytest tests/integration/joint/test_benchmarks.py -m slow`.
+- `w16_transport_grid.py` takes `--types/--steps/--seeds/--decay`;
+  `hebbian_dense` decay is the temporal-blur instrument for trace-based
+  fixed memories.
+
+---
+
 ## Guiding Doctrine
 
 - **Composition before invention.** No new primitives. Compose existing ones across untouched axes.
