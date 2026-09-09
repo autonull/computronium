@@ -32,6 +32,10 @@
 >    Harvest law transfers to FashionMNIST (0.767) but fails on digits
 >    (0.128). Depth-100 MIXED (1/2/1, seed 2 = 0.489) — NOT §22 #4.
 >    GPU port measured: works but ~3× slower than CPU (launch-bound).
+>    PEPITA LM cell: BOUNDARY with mechanism (§15) — eval leak caught
+>    and retracted (0.988 → 0.24 clean); label-modulation trains a
+>    label-copier, not a sequence model; family is classification-
+>    bound.
 >
 > **Open queue (all optional extensions, nothing blocking):** PEPITA on
 > the LM/transformer cell; PEPITA paper-ablation variants (B

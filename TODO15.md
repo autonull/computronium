@@ -747,3 +747,57 @@ deep-quality degradation is task-independent, and depth 20 stays flat
 (0.922 digits). The local-credit operating point is depth ≤ 32, full
 budget, EMA harvest. Loader-cycling is now the probe default; any future
 small-dataset cell must assert batches_seen ≥ budget.
+
+---
+
+# §15 — PEPITA on the LM Cell: Boundary (with a leak post-mortem) (2026-09-09)
+
+## §15.1 EVAL-LEAK RETRACTION (the 0.988)
+
+First `w9_pepita_lm.py` run showed pepita γ=0.1 at **0.988 top-1 / CE
+0.046 — a 3× BP beat that was too good to be true and was** : the
+evaluator computed the modulation from the SAME batch's targets before
+predicting them — the answer was injected into the input at eval.
+Training-time modulation is the PEPITA rule itself (legitimate); eval
+must be a CLEAN forward (as the MNIST probe correctly did). Fixed;
+clean numbers below. Lesson recorded: any eval of a
+target-consuming-training-rule must assert the eval path consumes no
+target-derived tensor.
+
+## §15.2 Clean verdict: PEPITA does NOT transfer to the LM cell
+
+`w9_pepita_lm.py` (600 steps, batch 32, ctx 32, d128 2-layer causal
+transformer, tiny_shakespeare, seeds 0-2, embedding-output modulation
+— token ids are discrete, so x̃ = emb(x) + γδBᵀ with ONE B: (V, d_model)):
+
+| arm | top-1 | val CE |
+|-----|-------|--------|
+| bp/adam | **0.338** | **2.254** |
+| pepita/adam γ=0.05 | 0.236 | 13.379 |
+| pepita/adam γ=0.1 | 0.188 | 17.730 |
+| unigram reference | 0.153 | 3.30 |
+
+Top-1 clears unigram (0.236 > 0.153) but **val CE is catastrophically
+worse than even unigram** (13.4 ≫ 3.30) — the model that forms under
+label-modulated training is miscalibrated and not a sequence model on
+clean inputs; γ degradation is monotone. **Boundary: the
+input-modulation family is classification-bound (fixed input, small
+perturbation); on LM the modulated pass injects the POSITION'S OWN
+target into its input, so the optimal solution to the modulated
+objective is label-copying, not sequence modeling — W0.4's
+"right-or-absent" principle reappearing one level up (supervision
+consumed by the dynamics must not be depended on at inference).**
+Mechanism-bound closure; no γ sweep/learned-B rescue queued.
+
+## §15.3 State after this block
+
+- **PEPITA: validated and promoted on classification (MNIST 0.884,
+  parity); LM boundary-locked with mechanism. The family's home is
+  fixed-input tasks.**
+- Depth program closed (frontier ~32, digits = data-budget, Fashion
+  transfer confirmed). LEMMA/STDP/mask-ψ closed. All of this session's
+  queue items are now executed or boundary-locked.
+- Open for next session (all optional): PEPITA paper-ablation variants
+  on classification only; PEPITA×other fixed-input tasks (CIFAR head,
+  graph node classification); nothing else without a new mechanism
+  hypothesis.
