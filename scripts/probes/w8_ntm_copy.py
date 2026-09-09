@@ -81,6 +81,12 @@ COPY_BATCH = 16
 INPUT_STEPS = SEQ_LEN + 1
 TOTAL_STEPS = SEQ_LEN * 2 + 1
 
+# Task-ladder rung (TODO15 §17): REPEATS=1 is the validated copy task;
+# REPEATS=R emits the sequence R times after the delimiter (fixed R, not
+# flag-conditioned — the algorithmic step up is output-phase counting
+# under detached state, which R directly stresses). Set via --repeats=R.
+REPEATS = 1
+
 
 def _batch(gen: torch.Generator, L: int = SEQ_LEN) -> Tensor:
     """Random bit sequences (B, L) for one copy episode."""
@@ -88,7 +94,7 @@ def _batch(gen: torch.Generator, L: int = SEQ_LEN) -> Tensor:
 
 
 def _total_steps(L: int) -> int:
-    return L * 2 + 1
+    return L + 1 + REPEATS * L
 
 
 class _Heads(nn.Module):
@@ -139,7 +145,7 @@ def _zero_mem(batch: int) -> Tensor:
 
 def _episode_targets(bits: Tensor, L: int) -> Tensor:
     targets = torch.full((bits.size(0), _total_steps(L)), -100, dtype=torch.long)
-    targets[:, L + 1 :] = bits
+    targets[:, L + 1 :] = bits.repeat(1, REPEATS)
     return targets
 
 
@@ -227,7 +233,7 @@ def _writer_target(bits: Tensor, t: int) -> Tensor:
     return c
 
 
-def _local_step(  # noqa: PLR0913, PLR0914, PLR0917 - probe harness
+def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments] - probe harness
     controller,
     heads,
     mem,
@@ -258,23 +264,24 @@ def _local_step(  # noqa: PLR0913, PLR0914, PLR0917 - probe harness
     L = bits.size(1)
     losses = []
     if t >= L + 1:
-        losses.append(nn.functional.cross_entropy(logits, bits[:, t - L - 1]))
+        k = (t - L - 1) % L
+        losses.append(nn.functional.cross_entropy(logits, bits[:, k]))
         # read head: the same CE with h detached — the read vector itself
         # carries the gradient into (kr, beta) only.
         losses.append(
             nn.functional.cross_entropy(
                 heads.out(torch.cat([hc.detach().squeeze(1), read], dim=-1)),
-                bits[:, t - L - 1],
+                bits[:, k],
             )
         )
         if writer == "expected":
-            # r6: supervise the READ KEY onto e_k (the slot written for
-            # bit k is k by construction). Through the softmax addressing
-            # alone the key sequence learns ~2x slower than the 30 s cell
-            # budget allows (hit rate 0.083 -> 0.167 over 1200 steps); the
-            # direct local target teaches the controller's output-step
-            # counting in the same pass.
-            k_idx = (t - L - 1) % MEM_WIDTH
+            # r6: supervise the READ KEY onto e_{k mod L} (the slot written
+            # for bit k is k mod L by construction). Through the softmax
+            # addressing alone the key sequence learns ~2x slower than the
+            # 30 s cell budget allows (hit rate 0.083 -> 0.167 over 1200
+            # steps); the direct local target teaches the controller's
+            # output-step counting in the same pass.
+            k_idx = k % MEM_WIDTH
             key_target = torch.zeros(bits.size(0), MEM_WIDTH)
             key_target[:, k_idx] = 1.0
             losses.append(10.0 * (heads.kr(hc.squeeze(1)) - key_target).pow(2).mean())
@@ -357,7 +364,7 @@ def _local_episode(
     return torch.stack(losses).mean()
 
 
-def _diagnose(  # noqa: PLR0914 - probe harness
+def _diagnose(  # ruff: ignore[too-many-locals] - probe harness
     controller, heads, bits: Tensor
 ) -> dict[str, float]:
     """Read hit-rate diagnostic (§11.9 finding 3, the decisive split):
@@ -386,15 +393,15 @@ def _diagnose(  # noqa: PLR0914 - probe harness
                 write_slot[t] = a_w.argmax(-1)
             elif t >= L + 1:
                 k = t - L - 1
-                hit = a_r.argmax(-1) == write_slot[k]
-                correct = logits.argmax(-1) == bits[:, k]
+                hit = a_r.argmax(-1) == write_slot[k % L]
+                correct = logits.argmax(-1) == bits[:, k % L]
                 hits.append(hit.float())
                 accs.append(correct.float())
                 hit_accs.append(correct[hit].float())
                 # memory-ablation control: does the output depend on the
                 # read at all? Zero the read vector and re-decode.
                 logits0 = heads.out(torch.cat([hc.squeeze(1), read * 0.0], dim=-1))
-                accs_zero_read.append((logits0.argmax(-1) == bits[:, k]).float())
+                accs_zero_read.append((logits0.argmax(-1) == bits[:, k % L]).float())
             mem = mem_next
     slot_seq = torch.stack([write_slot[k] for k in range(L)], 1)  # (B, L)
     diversity = torch.tensor([
@@ -496,7 +503,7 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
     return controller, heads, best_fg
 
 
-def main() -> int:  # noqa: PLR0914 - probe harness
+def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
 
     t0 = time.time()
     args = __import__("sys").argv[1:]
@@ -506,12 +513,13 @@ def main() -> int:  # noqa: PLR0914 - probe harness
     lr = float(opt.get("lr", 1e-3))
     # Q4 slot-identity fix: mem_slots <= mem_width gives exact one-hot
     # slot embeddings (default 8 = the validated r6 config).
-    global MEM_WIDTH  # noqa: PLW0603 - probe CLI overrides the module constant
+    global MEM_WIDTH, REPEATS  # ruff: ignore[global-statement] - probe CLI overrides module constants
     MEM_WIDTH = int(opt.get("width", 8))
+    REPEATS = int(opt.get("repeats", 1))
     arms = [opt["arm"]] if "arm" in opt else ["bptt", "local"]
     print(
         f"w8_ntm_copy {REV}; steps {steps} seed {seed} lr {lr:g} "
-        f"width {MEM_WIDTH} arms {arms}"
+        f"width {MEM_WIDTH} repeats {REPEATS} arms {arms}"
     )
     run = {
         "bptt": _run_bptt,

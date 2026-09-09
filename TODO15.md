@@ -860,3 +860,167 @@ repair itself has a depth wall. Grid closed.
 2. Any cross-family grid must first reproduce each family's SHALLOW
    recorded number as a harness control before running depth arms
    (the controls caught both defects — cheap and decisive).
+
+---
+
+# §17 — Breadth Block: Optimizer / Task-Ladder / Ordinary-Task Axes (2026-09-09)
+
+User directives: not exclusively PEPITA, not exclusively depth. This block
+spends its cells on the U axis (optimizer), the memory-task ladder, and
+the ordinary-task transfer question.
+
+## §17.1 NCA local×muon wobble — LR ARTIFACT (W8.2's last thin cell closes)
+
+`w8_nca_local.py --arm=local --update=muon --seed=0` (72 s/cell): lr 0.03
+→ **fg 1.000, rollout-flat h24/48/96**; lr 0.3 → 0.436 (mis-scaled). The
+§11.5/§11.13 "muon wobbles at the fixed point" (0.634 @ lr 0.1) was an
+lr artifact, per the §11.12 lesson — screen before theorizing. **On NCA
+every rule now solves every seed at its proper lr for both credit types;
+the only remaining I(C,U) separation on the substrate is bptt×euclid
+divergence.**
+
+## §17.2 Depth-64 notch — REAL but mild (3 seeds)
+
+`d50_autopsy.py --depth 64 --probe-free --seed {1,2}` (~6 min/cell):
+seeds 0/1/2 = 0.628 / 0.702 / 0.791 — none pass 0.75. The §14 "surprise
+failure" is not seed noise: depth-64 sits in the degradation zone
+between the flat-to-32 frontier (0.917) and the depth-100 scatter
+(~0.49-0.80). Frontier law unchanged; operating point stays ≤32.
+
+## §17.3 NTM width-16 @ 8000 steps — 0.958 (the "plateau" was budget again)
+
+`w8_ntm_copy.py --arm=local3 --steps=8000 --width=16 --seed=0` (4 min):
+flat at 0.844 through step 4800, then **0.927 @ 6400, 0.958 @ 8000**.
+The §11.16 read ("curves still rising") was right — local copy is
+0.816 → 0.886 → **0.958** as budget grows, closing most of the gap to
+BPTT 0.993. Lesson repeated: a horizontal stretch ≠ a plateau on this
+substrate; never close on a still-climbing curve.
+
+## §17.4 NTM task ladder rung: repeat-2 — local factorization degrades
+
+`--repeats=2` added to the probe (fixed R, output phase emits the
+sequence twice; total steps L+1+R·L). Seeds 0, width 16:
+**bptt 0.958 @ 3000; local3 0.849 @ 6000** (vs copy's 0.993/0.886).
+The gap widens when output-phase counting gets longer — consistent
+with supervised read-key counting under detached state being the
+binding constraint. Ladder stays open (associative recall is the next
+rung; flag-conditioned R is the rung after).
+
+## §17.5 Ordinary-task cell — NEW probe, BOUNDARY with mechanism
+
+`scripts/probes/w8_ordinary_task.py` (new): NTM-as-classifier, MNIST
+rows as a 28-step sequence, r6-style heads + slot-embedding memory,
+matched nets/budget.
+
+| arm | budget | acc (fresh, 3 seeds unless noted) |
+|-----|--------|-----------------------------------|
+| bptt × adam | 600 steps | **0.897** (0.899/0.878/0.915) |
+| local (zero-history, per-step label CE) | 600 | 0.357 (0.295/0.403/0.374) |
+| local, seed 0 | 4800 | 0.584 best / 0.552 final — plateau forming |
+
+Pre-registered "far below bptt" branch fires. Mechanism: on copy, each
+per-step target IS the task (bit identity per output step), so the
+zero-history factorization had task-shaped credit everywhere; an
+ordinary task has NO per-step target, and deep supervision (label CE
+at every step, detached) gives the controller the *label* but no signal
+for *what to carry* — the memory trace is position-supervised but
+content-free, and the readout cannot exploit it. **The W8 memory-task
+positives were target-structure-dependent: local credit on external
+memory needs task-shaped per-step targets; it does not transfer to
+tasks without them.** The substrate is not the limiter (bptt solves it
+in 600 steps); the credit is.
+
+§17-class hazards found and fixed while building it: (1) quick-mode
+loader caps at 600 batches — `islice(train, N>600)` silently truncates
+(the §14.1 digits hazard resurfacing); fixed with cycling + an
+assertion; (2) my first cycle list itself capped below the requested
+budget — a "4800-step" run that trained 2400. Rule: assert
+batches_seen ≥ budget inside the training loop, not just at the loader.
+
+## §17.6 Plasticity axis (P) — composition status + queued rung
+
+The P-axis (ψ state stepping per episode, modulating activity; θ
+untouched intra-episode — J2) has NEVER been composed with
+NcaGeometry/NtmGeometry: every W8 cell ran NullPlasticity. Natural
+first composition: **FastWeightPlasticity modulating the NTM
+controller's hidden activity** — fast-weight memory alongside external
+memory (two memory systems interacting), rung-paired against the new
+ordinary-task baseline (§17.5) where ψ has something to plausibly
+contribute (carrying/classifying features over a sequence) rather than
+on copy (already memory-bound, confounded). Queued, not run this
+block.
+
+## §17.7 State after this block
+
+- **U axis on NCA: closed** (all rules solve at proper lr; §17.1).
+- **Depth axis: closed** (frontier ≤32 confirmed 3-seed; §17.2).
+- **NTM: open-positive and still climbing** (0.958 copy @ 8000);
+  ladder open (recall rung); ordinary task = boundary with mechanism
+  (target-structure dependence); P-axis composition queued.
+- FF raw depth wall (between d2 and d4; d4 raw 0.295, d8+ chance)
+  recorded via the parameterized `w9_family_depth_grid.py --family=ff
+  --depth=N --lr=F --raw` interface.
+- Queue: (1) FastWeightPlasticity × NTM ordinary-task baseline;
+  (2) associative-recall ladder rung; (3) NTM copy 3-seed @ 8000 to
+  firm 0.958 (single-seed today).
+
+## §17.8 Design note: fast weights vs NTM memory — same substrate, different write rule
+
+The queued P-composition (§17.6) sharpened into an equivalence question.
+NTM external memory (B, slots, width; learned key/erase/add heads;
+content-addressed softmax reads) and FastWeightPlasticity (A ← decay·A +
+lr·proj(outer(pre, post)); linear modulation reads) are the same
+CATEGORY — episode-local, non-θ state written by a fast rule — and are
+formally related: addressed memory ≈ sparse/normalized/slot-capped fast
+weights; ψ ≈ the dense, unnormalized, address-free limit (linear-
+transformer correspondence). The load-bearing difference is the WRITE
+RULE: NTM writes are learned (credit-shaped); ψ writes are a fixed
+Hebbian rule with no credit path.
+
+Sharpened experiment (supersedes the "ψ alongside memory" framing):
+make ONE tensor serve both roles on the §17.5 ordinary-task baseline —
+Hebbian-write memory (fixed rule, no credit) vs head-write memory
+(learned, credit-shaped) at matched budget. Pre-registered prediction
+(via the §17.5 target-structure boundary): the credit-free Hebbian
+write underperforms the addressed memory; a result the other way means
+addressing buys nothing and the field's learned/fixed-write distinction
+is empty here.
+
+## §17.9 EXECUTED — single-tensor experiment: fixed Hebbian write ≥ learned
+addressed write; the learned/fixed-write distinction is EMPTY here
+
+`w8_ordinary_task.py --arm=hebbian` (new arm per §17.8): the memory is a
+fast-weight matrix A ← 0.95·A + outer(tanh(F_v h), tanh(F_q h)) with F_v/
+F_q FIXED random projections — no learned write head, no learned
+addressing; only the final classifier trains. Same controller, budget,
+optimizer as the bptt arm.
+
+| arm | acc @600 (3 seeds) | walltime |
+|-----|--------------------|----------|
+| bptt (learned heads, addressed memory) | 0.897 (0.899/0.878/0.915) | 129 s |
+| hebbian (fixed projections, no learned memory ops) | **0.916** (0.900/0.922/0.924) | 72 s |
+| local (zero-history, §17.5) | 0.357 | — |
+
+Pre-registered prediction (credit-free write underperforms) FALSIFIED:
+parity, actually +0.02, at ~2× speed. Ablation control: zeroing A before
+the final read drops acc to 0.31-0.47 — the Hebbian trace is causal and
+load-bearing; the controller's hidden state alone is NOT carrying the
+sequence.
+
+Honest scope: the hebbian arm keeps the FULL autograd graph through h
+into the memory (it is a bptt variant, not zero-history), so this does
+NOT rescue local credit — it removes *learned addressing* from the list
+of what the credit buys. Combined reading of §17.5 + §17.9: on the
+ordinary task, what matters is the TRANSPORT GRAPH (gradients reaching
+the controller through the memory read), not the sophistication of the
+memory machinery — fixed outer-product writes match learned addressed
+writes at matched budget. The P/U distinction blurs here: a credit-free
+fixed rule written into the P-axis slot does the work of the learned
+geometry-level memory. NTM-with-Hebbian-writes (a linear-transformer
+read) is now the cheaper memory recipe of record for this task class.
+
+Associative-recall ladder rung: still queued. Open question from the
+ablation numbers: the LSTM-alone baseline (no memory at all, matched
+budget) was not measured — the 0.31-0.47 ablated figures are readout-
+crippled, not a clean no-memory control; run that cell before citing
+"the memory carries the sequence" as quantitative.

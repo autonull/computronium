@@ -21,7 +21,8 @@ like ePC's extends the §14 law to three families; a family that degrades
 monotonically with depth (no peak) carries a DIFFERENT depth mechanism —
 the distinction is the datum, not either outcome alone.
 
-uv run python scripts/probes/w9_family_depth_grid.py
+uv run python scripts/probes/w9_family_depth_grid.py          # the 6-arm grid
+uv run python scripts/probes/w9_family_depth_grid.py --family=ff --depth=8 --lr=0.5 --raw
 Walltime printed, never recorded.
 """
 
@@ -112,8 +113,8 @@ def _ff_augment(x: Tensor, y: Tensor, good: bool) -> Tensor:
     return torch.cat([x, onehot], dim=-1)
 
 
-def _run(  # noqa: C901
-    family: str, depth: int, train, test
+def _run(  # ruff: ignore[complex-structure]
+    family: str, depth: int, train, test, lr: float | None = None, raw: bool = False
 ) -> dict[str, float]:
     torch.manual_seed(0)
     substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
@@ -128,7 +129,7 @@ def _run(  # noqa: C901
             )
         )
         update = EuclideanUpdate(
-            ParameterUpdateConfig.euclidean(step_size=0.3, grad_clip=0.0)
+            ParameterUpdateConfig.euclidean(step_size=lr or 0.3, grad_clip=0.0)
         )
         dynamics: StateDynamics = InstantaneousDynamics()
 
@@ -147,7 +148,7 @@ def _run(  # noqa: C901
             CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
         )
         update = EuclideanUpdate(
-            ParameterUpdateConfig.euclidean(step_size=0.1, grad_clip=0.0)
+            ParameterUpdateConfig.euclidean(step_size=lr or 0.1, grad_clip=0.0)
         )
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=30, beta=0.5)
@@ -170,6 +171,8 @@ def _run(  # noqa: C901
     for step, (x, y) in enumerate(train):
         xin = _ff_augment(x, y, True) if family == "ff" else x
         run_train_step(substrate, geometry, dynamics, credit, update, xin, y)
+        if raw:
+            continue
         with torch.no_grad():
             for w, e in zip(weights, ema, strict=True):
                 e.mul_(0.99).add_(w.detach(), alpha=0.01)
@@ -181,6 +184,13 @@ def _run(  # noqa: C901
                     copy.deepcopy(weights),
                     step,
                 )
+    if raw:
+        return {
+            "best": evaluate(),
+            "best_step": len(train),
+            "restored": 0.0,
+            "ema": 0.0,
+        }
     if best_params is not None:
         with torch.no_grad():
             for w, p in zip(weights, best_params, strict=True):
@@ -200,6 +210,23 @@ def _run(  # noqa: C901
 
 def main() -> int:
     t0 = time.time()
+    args = sys.argv[1:]
+    opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)
+    flags = {a.lstrip("-") for a in args}
+    raw = "raw" in flags
+    if opt:
+        family = opt.get("family", "ff")
+        depth = int(opt.get("depth", 8))
+        lr = float(opt["lr"]) if "lr" in opt else None
+        train, test = _data(opt.get("task", "mnist"))
+        r = _run(family, depth, train, test, lr=lr, raw=raw)
+        print(
+            f"{family:>6} d{depth:>3}{(' raw' if raw else '')}: best {r['best']:.3f} "
+            f"@ {r['best_step']:>3}  restored {r['restored']:.3f}  EMA {r['ema']:.3f}",
+            flush=True,
+        )
+        print(f"walltime {time.time() - t0:.1f}s (printed, never recorded)")
+        return 0
     train, test = _data("mnist")
     for family, depth in (
         ("ff", 2),
