@@ -204,6 +204,72 @@ def _run_hebbian(steps: int, lr: float, seed: int, train, test) -> float:
     return best
 
 
+def _fastweight_episode(
+    controller, out: nn.Linear, rows: Tensor, ablate: bool = False
+) -> Tensor:
+    """TODO16 §2.1: ψ = fast-weight matrix modulating the controller
+    hidden, h_mod = h + ψ @ h, written by a FIXED Hebbian rule
+    (ψ ← 0.95·ψ + 0.01·outer(h, h_mod)) and decayed at episode boundary
+    (ψ starts each episode at zero — lifecycle fast_plastic). The
+    autograd graph is PRESERVED through h into ψ (bptt variant, matched
+    to §17.9's hebbian arm): this is NOT a local-credit rescue — it
+    tests whether a learned-ish ψ modulation adds value over fixed
+    writes when the transport graph is intact."""
+    B = rows.size(0)
+    state = (torch.zeros(1, B, HIDDEN), torch.zeros(1, B, HIDDEN))
+    psi = torch.zeros(B, HIDDEN, HIDDEN)
+    h_mod = None
+    for t in range(SEQ):
+        x_t = rows[:, t].unsqueeze(1)
+        hc, state = controller(x_t, state)
+        h = hc.squeeze(1)
+        h_mod = h if ablate else h + torch.bmm(psi, h.unsqueeze(2)).squeeze(2)
+        psi = _FW_DECAY * psi + _FW_LR * torch.bmm(h.unsqueeze(2), h_mod.unsqueeze(1))
+    return out(h_mod)
+
+
+_FW_DECAY = 0.95
+_FW_LR = 0.01
+
+
+@torch.no_grad()
+def _fastweight_eval(controller, out: nn.Linear, test, ablate: bool = False) -> float:
+    ok = tot = 0
+    for rows, y in test:
+        logits = _fastweight_episode(controller, out, rows, ablate=ablate)
+        ok += (logits.argmax(1) == y).sum().item()
+        tot += y.size(0)
+    return ok / tot
+
+
+def _run_fastweight(steps: int, lr: float, seed: int, train, test) -> float:
+    torch.manual_seed(seed)
+    controller = nn.LSTM(SEQ, HIDDEN, batch_first=True)
+    out = nn.Linear(HIDDEN, CLASSES)
+    params = [*controller.parameters(), *out.parameters()]
+    opt = torch.optim.Adam(params, lr=lr)
+    best = 0.0
+    for step, (rows, y) in enumerate(islice(train, steps)):
+        logits = _fastweight_episode(controller, out, rows)
+        loss = nn.functional.cross_entropy(logits, y)
+        opt.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(params, 5.0)
+        opt.step()
+        if step >= len(train):
+            raise BudgetError(BudgetError.MSG)
+        if (step + 1) % max(steps // 5, 1) == 0:
+            acc = _fastweight_eval(controller, out, test)
+            ablated = _fastweight_eval(controller, out, test, ablate=True)
+            best = max(best, acc)
+            print(
+                f"fastweight step {step + 1}: loss {loss:.4f} acc(fresh) {acc:.3f} "
+                f"[ψ-ablated {ablated:.3f}]",
+                flush=True,
+            )
+    return best
+
+
 def _episode(controller, heads: _Heads, rows: Tensor):
     """One episode; returns per-step (h, read) and the final logits."""
     B = rows.size(0)
@@ -358,6 +424,7 @@ def main() -> int:
         "local": _run_local,
         "hebbian": _run_hebbian,
         "lstm": _run_lstm,
+        "fastweight": _run_fastweight,
     }
     results: dict[str, list[float]] = {}
     for arm in arms:

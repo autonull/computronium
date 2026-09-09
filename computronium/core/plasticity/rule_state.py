@@ -190,7 +190,7 @@ class RuleStatePlasticity:
         """
         operator_logits = psi["operator_logits"]
         controller_state = psi["controller_state"]
-        batch_size = operator_logits.shape[0]  # ruff: ignore[unused-variable]
+        batch_size = operator_logits.shape[0]
 
         # Decay operator logits
         new_operator_logits = self._config.decay * operator_logits
@@ -202,6 +202,19 @@ class RuleStatePlasticity:
             # Flatten input if needed
             if x.dim() > 2:
                 x = x.flatten(1)
+
+            # Match psi batch to the data batch: expand() only grows
+            # singleton dims, so growth uses repeat+truncate.
+            if x.shape[0] != batch_size:
+                if x.shape[0] > batch_size:
+                    reps = -(-x.shape[0] // batch_size)
+                    new_operator_logits = new_operator_logits.repeat(reps, 1)[
+                        : x.shape[0]
+                    ]
+                    controller_state = controller_state.repeat(reps, 1)[: x.shape[0]]
+                else:
+                    new_operator_logits = new_operator_logits[: x.shape[0]]
+                    controller_state = controller_state[: x.shape[0]]
 
             # Project input to the controller's declared slot width (operator_dim):
             # the controller is a fixed-width network; wider inputs are truncated,

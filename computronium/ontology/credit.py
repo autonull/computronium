@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -699,6 +700,26 @@ class RandomProjectionsCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
         self._feedback_weights: dict[str, Tensor] = {}
+        self._inert_warned = False
+
+    def _inert_zeros(self, geometry: Geometry, weight_names: list[str]) -> list[Tensor]:
+        """All-zeros pseudo-gradient with a once-per-instance inertness guard.
+
+        The layered FA contract silently returns zeros when the settle graph
+        is detached or feedback shapes break the act-width chain; warn so
+        no-op runs are never mistaken for flat-learning runs (TODO16 §0.3).
+        """
+        if not self._inert_warned:
+            self._inert_warned = True
+            warnings.warn(
+                f"{type(self).__name__}: layered FA contract returned an "
+                f"all-zero pseudo-gradient for {len(weight_names)} weights "
+                "(detached settle graph or feedback/act width mismatch) — "
+                "training is a no-op.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        return [torch.zeros_like(geometry.params[n]) for n in weight_names]
 
     def _init_feedback_weights(
         self, geometry: Geometry, device: torch.device | None = None
@@ -737,7 +758,7 @@ class RandomProjectionsCredit:
         if not logits.requires_grad:
             # Settle graph not preserved (e.g. detached settle paths): no
             # error signal exists — zeros, never fabricated signal.
-            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+            return self._inert_zeros(geometry, weight_names)
 
         delta_out = torch.autograd.grad(loss, logits)[0].detach()
         n_trans = len(acts) - 1
@@ -766,7 +787,7 @@ class RandomProjectionsCredit:
         for k in range(n_trans):
             b = self._feedback_weights[weight_names[k]]
             if b.shape[0] != acts[k + 1].shape[-1] or b.shape[1] != acts[k].shape[-1]:
-                return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+                return self._inert_zeros(geometry, weight_names)
 
         # Feedback-propagated error at each act layer:
         # err_at[L] = ∂L/∂a_L; err_at[k] = err_at[k+1] @ B_k.

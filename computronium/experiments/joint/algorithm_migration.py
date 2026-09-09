@@ -22,7 +22,11 @@ from torch import Tensor
 
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
-from computronium.experiments.joint import CLAIMS_SCOPE_PLUMBING_ONLY
+from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+from computronium.experiments.joint._plasticity_wiring import (
+    modulate_hidden,
+    step_psi,
+)
 
 
 def create_task_a0(
@@ -123,9 +127,13 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
 
         def forward(self, x):
             # x: [batch, seq_len, input_dim] -> average over seq
+            if self.psi:
+                self.psi = {k: v.to(x.device) for k, v in self.psi.items()}
             x = x.mean(dim=1)  # [batch, input_dim]
             x = torch.relu(self.input_proj(x))
+            x = modulate_hidden(self.plasticity, x, self.psi)
             x = torch.relu(self.hidden(x))
+            x = modulate_hidden(self.plasticity, x, self.psi)
             return self.output(x)
 
         def get_theta_norm(self):
@@ -152,6 +160,14 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     a0_losses = []
     for epoch in range(epochs_a0):
         x, y = create_task_a0(batch_size, seq_len, input_dim, device)
+        model.psi = step_psi(
+            plasticity,
+            model.psi,
+            x.mean(dim=1),
+            y=nn.functional.one_hot(y, 2).float(),
+            training=True,
+            live_param=next(model.parameters()),
+        )
         optimizer.zero_grad()
         logits = model(x)
         loss = criterion(logits, y)
@@ -173,6 +189,7 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     with torch.no_grad():
         for _ in range(10):
             x, y = create_task_a0(batch_size, seq_len, input_dim, device)
+            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -192,6 +209,13 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
 
     for epoch in range(epochs_a1):
         x, y = create_task_a1(batch_size, seq_len, input_dim, device)
+        model.psi = step_psi(
+            plasticity,
+            model.psi,
+            x.mean(dim=1),
+            training=True,
+            live_param=next(model.parameters()),
+        )
         optimizer.zero_grad()
         logits = model(x)
         loss = criterion(logits, y)
@@ -218,6 +242,7 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     with torch.no_grad():
         for _ in range(10):
             x, y = create_task_a1(batch_size, seq_len, input_dim, device)
+            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -239,6 +264,7 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     with torch.no_grad():
         for _ in range(10):
             x, y = create_task_a0(batch_size, seq_len, input_dim, device)
+            model.psi = step_psi(plasticity, model.psi, x.mean(dim=1))
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -246,7 +272,7 @@ def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, to
     a0_accuracy_after_a1 = correct / total
 
     return {
-        "claims_scope": CLAIMS_SCOPE_PLUMBING_ONLY,
+        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
         "coordinate": coordinate,
         "a0_accuracy": a0_accuracy,
         "a1_accuracy": a1_accuracy,

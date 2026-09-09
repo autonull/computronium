@@ -1,5 +1,366 @@
 # Computronium: Unified Execution Plan — Final
 
+## Progress Log (2026-09-09, Session 1)
+
+### Done — Phase 0 (Infrastructure Lock) ✅
+- **0.1 Harvest instrument in `SystemTrainer`**: `SystemTrainerConfig.harvest_mode`
+  (`"ema"` / `"best_snapshot"` / `None`), `harvest_decay` (0.99/batch),
+  `harvest_every_n`. EMA streams per batch and is restored at end of
+  `fit()`; best_snapshot tracks best val_acc every N batches (epoch-end
+  train-acc fallback when no val data). Lock test
+  `tests/integration/test_harvest_trainer.py` (3 tests, ~5 s): None-mode
+  bitwise reproducible; EMA/best_snapshot restore distinct weights.
+- **0.2 I(C,U) extraction**: `scripts/analysis/harvest_icu_table.py` →
+  `data/icu_measurements.csv`, **186 rows**. Parsers: w1 ladder logs
+  (mlp+lattice, seeds expanded, I(C,U) deltas attached), w8 NCA
+  verdict/ortho screens, NTM promo r6 + copy8k 3-seed, w9 family depth
+  grid, d100/breadth_d50 harvest, PEPITA CIFAR-10/Cora breadth,
+  w8 LSTM control. Missing (no recorded log): w7 STDP, w0 transformer
+  locals.
+- **0.3 Recipe cards**: `computronium/analysis/recipe_cards.py`
+  (`RECIPE_CARDS`, `lookup_recipe_card`, wildcard fallback; exported from
+  `computronium.analysis`). **Inertness guard live**:
+  `RandomProjectionsCredit._inert_zeros` warns (RuntimeWarning, once per
+  instance) on all-zero pseudo-gradients from detached settle graphs or
+  feedback/act width mismatch. D2 swap-credit demo re-run clean.
+
+### Done — Phase 1 (Ship Proven Results)
+- **1.1 Depth headline demo → gallery D19 `depth_harvest`** (plan's "D18"
+  id taken by `update_ladder`; shifted to D19/D20). PASSED 5:04.
+  **depth-32: final 0.916 / EMA 0.917. depth-50: final 0.784 / EMA
+  0.917** — harvest gains +0.13 at depth 50; both pre-registrations met
+  (EMA ≥ final everywhere; depth-50 EMA ≥ 0.75). Record:
+  `docs/figures/run_records/d19_depth_harvest.json`.
+- **1.2 NTM local-credit demo → gallery D20 `ntm_local`** PASSED (2:26):
+  bptt 0.979 / local3 0.833 at 3000 steps (r6 recipe, width 8). local3's
+  3000-step value oscillates 0.79–0.87 in the recorded logs; demo assert
+  floor is 0.80, and the firm capability claim is the 8000-step 3-seed
+  record (mean 0.944). Record: `docs/figures/run_records/d20_ntm_local.json`.
+- **Gallery manifest re-pinned: 25 figures** (+D19 depth_harvest, +D20
+  ntm_local); `test_gallery_lock` green. Per-record provenance commits
+  preserved on re-pin — reuse the inline pin recipe (render_gallery over
+  run_records, carry each record's own git_commit, do NOT stamp HEAD).
+- **1.3 PEPITA breadth (recorded)**: CIFAR-10 (3072→256→10): bp 0.378,
+  pepita 0.362, pepita×Muon 0.227 — parity gap 0.015 ≤ 0.03. Cora
+  (1433→64→7, flattened node features, no graph): bp 0.120 ≈ pepita
+  0.120, pepita×Muon 0.448. Pre-registration pepita ≥ 0.55/0.65
+  FALSIFIED in absolute terms but **parity vs matched control holds on
+  both** — the boundary is the under-trained flat-MLP control at this
+  budget, not the modulation. Mechanism recorded: modulation works at
+  high-dimensional input; Muon ≫ Adam at 1433-d input on Cora. Script
+  extended with `--task {mnist,cifar10,cora}` (Cora loads Planetoid
+  masks directly; graph domain has no dataloader API).
+- **1.4 NTM copy 3-seed @ 8000 (recorded, no re-run)**:
+  0.958/0.917/0.958 → mean 0.944 ≥ 0.93, all seeds ≥ 0.90 →
+  pre-registration MET (§17.3 firmed).
+- **1.5 LSTM-alone control (recorded)**: `w8_ordinary_task --arm=lstm`,
+  3 seeds → **0.894** (0.889/0.897/0.894) ≈ bptt 0.897 ≈ hebbian 0.916.
+  §17.11 prerequisite satisfied: memory is superfluous on the ordinary
+  task; transport-graph claims must be scoped to retrieval-demanding
+  tasks only. In `data/icu_measurements.csv`.
+
+### Notes for future sessions
+- `pytest-timeout` default is 60 s and `faulthandler_timeout = 120` s
+  (pyproject) dumps a stack mid-run but does NOT kill — a >2-min demo
+  test needs `@pytest.mark.timeout(900)` (as on D15/D19) and its 2-min
+  dump in the log is cosmetic.
+- Demo ID convention: plan D18→shipped as **D19** (`depth_harvest`),
+  plan D19→shipped as **D20** (`ntm_local`); both registered in
+  `gallery.py` DEMOS. Manifest re-pin required after new records.
+- EPC settle contract used by D19 mirrors `d50_autopsy.py` exactly
+  (double settle, `_last_errors`, `_build_forward_with_errors`,
+  `_OrthoAdamWeights`); reuse for any new depth cell.
+
+### Session 2 (2026-09-09, continued)
+
+### Phase 2 — P-Axis Frontier Probes (scoreboard: 1 alive / 3 falsified)
+
+- **2.3 Z3 toy: ALIVE.** `scripts/probes/z3_toy.py` (1.9 s, 3 seeds):
+  parity 1.000 / last-symbol 1.000, θ bitwise invariant (SHA-asserted).
+  Frozen 32→16→2 backbone + three fixed operator callables + one-hot ψ
+  + closed-form ridge readout. Pre-registration MET. Design note: ψ is
+  DISCRETE operator selection, not continuous affine correction.
+- **2.1 FastWeight×NTM ordinary: FALSIFIED (exact parity).**
+  `w8_ordinary_task --arm=fastweight` (new arm; ψ = Hebbian-written
+  fast-weight matrix modulating controller hidden, h_mod = h + ψ@h,
+  graph preserved — bptt variant): mean **0.897** (0.897/0.900/0.896)
+  vs bptt 0.897, hebbian 0.916. Mean lands EXACTLY on the falsification
+  boundary (≤ 0.897 → closed): the learned/fixed-write distinction is
+  EMPTY even with the transport graph intact. **P-axis contribution to
+  ordinary-task memory CLOSED.** Muon variant skipped per stop-loss.
+- **2.2 Routing×depth: FALSIFIED (representation-limited).**
+  `scripts/probes/w16_routing_depth.py` (joint systems, EPC max_steps 5,
+  mupc+residual, OrthoAdam, 150 batches, seed 0): Null×d32 **0.830**,
+  Routing×d32 0.814, Routing×d50 **0.798**. Routing×d50 < 0.83 → the
+  depth boundary is representation-limited; routing does not solve
+  peak-then-memorize (and slightly hurts at d32).
+- **2.4 Routing×NCA: FALSIFIED as pre-registered; confirms the
+  stability-plasticity boundary.** `w8_nca_local --routing` (new
+  per-site growth gate g = sigmoid(W_g·x), Δ = g·Δ; gate-activity metric
+  added). Matched baseline local×euclid = 1.000 (3 seeds). Routing:
+  s0 fg 0.558 @ gate 0.062 (late collapse), s1 fg 1.000 @ gate 1.000
+  (gate never closes), s2 fg 0.904 @ gate 0.128. Where the gate closes,
+  stability loss (10–44%) exceeds the 5% margin; where stability holds,
+  the gate never closes. **The biconditional is the §7.2 hypothesis
+  data point: useful rule reconfiguration does require sacrificing
+  contraction margin.** Log: `logs/w16_nca_routing.log`.
+
+### Phase 3A — Z3 Full (gated alive by 2.3; executed)
+
+- **FALSIFIED as pre-registered.** `scripts/probes/z3_full.py` (8
+  operators, 4 tasks, closed-form ψ, θ SHA-invariant): parity 1.000 and
+  last-symbol 1.000, but threshold 0.58–0.60 and cumulative-sum
+  0.74–0.75 < 0.90. **Failure mode: OPERATOR COVERAGE, not the
+  selection machinery** — no fixed operator in the set carries the
+  global-mean or full-cumsum feature; selection/θ-invariance remain
+  exact. Operator diversity 3/8 selected. Boundary recorded; a
+  GlobalMean operator would be post-hoc operator design to pass the
+  bar and is deliberately NOT added. Benchmark Level 3.5 verdict:
+  ψ-switching works for operators present in the library; migration to
+  strategies whose sufficient statistics are not represented fails —
+  the library must be grown BEFORE the switch, which is a representation
+  budget, not a plasticity problem.
+- Phase 3B/3C/3D: dead by gate (2.2/2.1 falsified) — skipped, no compute.
+
+### Phase 4.2 — Predictive model (started)
+
+- `scripts/analysis/fit_icu_model.py` on the 186-row CSV (52.7% viable):
+  tree CV acc **0.871 ± 0.055**, logistic **0.892 ± 0.051** (5-fold
+  stratified) — above the 70% bar; top features: projected_pseudo credit
+  (0.49), sign_based update (Lion hurts), width, interaction_i.
+  §4.3 held-out geometry validation (lattice) still queued.
+
+### Defect-Hunt Revisions (same session, pre-wrap-up — Rule 2 audit)
+
+The user asked whether the falsifications were premature. Three hunts
+ran; two verdicts changed.
+
+- **2.1 REVISED — ψ is CAUSAL, not a passenger.** Added a ψ-ablation
+  control (zero ψ at eval): seed 2 ablated **0.675** vs 0.904 with ψ —
+  a 23-point drop. The Hebbian fast-weight trace does real work. What
+  stands: ψ (0 trainable memory params) only reaches bptt parity
+  (0.888 mean vs 0.897), so "learned ψ-projections add value over fixed
+  writes" remains falsified. What is RETRACTED: any claim that the
+  fast-weight state is inert. Combined with the hebbian arm (0.916 at
+  0 learned memory params), the refined law: **a parameter-free Hebbian
+  trace is causal and sufficient to match a 4,971-param learned write
+  head on this task class.** Log: `logs/w16_fastweight_ablation.log`.
+- **2.2 REVISED to ALIVE (compute-limited) after 3 seeds + gate fix.**
+  Two defects in the original falsification: (a) single seed; (b) the
+  verdict code hardcoded 0.83 instead of the pre-registered formula
+  `0.90 × Null×d32` (0.83 came from the D19-family harness whose d32
+  frontier is 0.916; this joint-system harness's frontier is lower).
+  3 seeds: Null×d32 **0.841 ± 0.022**, Routing×d32 0.831 ± 0.026,
+  Routing×d50 **0.791 ± 0.016**. Gate 0.90 × 0.841 = 0.757 →
+  Routing×d50 **PASSES** with **94% frontier retention** at 2× depth.
+  Routing neither hurts (d32 parity) nor rescues — it *holds* the
+  frontier at depth 50. **Phase 3B gate OPEN**: depth-64/100 with
+  routing (3 seeds, background, batches=40, kill at 8 min) is the next
+  session's first cell. Logs: `logs/w16_routing_depth*.log`.
+- **2.4 mechanism diagnosed; one alternative explanation still open.**
+  Inline diagnostic on seed 0: the 76 wrong fg cells predict channel 1
+  in 73 cases (sprite-channel collapse, not stuck-at-bg); gates frozen
+  nearly shut at the final state (fg 0.046 / bg 0.009 open); gate-open
+  fraction higher at correct fg sites (0.069) than wrong (0.016) — gate
+  closure causally locks in the channel bias present at freeze time. No
+  code defect found (grads flow, distill-init trains the gate, eval
+  reproducible). Residual alternative: euclid lr 0.1 on gate logits may
+  saturate sigmoids (dead-gate training artifact, not an intrinsic
+  tradeoff). Run a gate-lr screen (gate lr ~0.01 vs cell lr 0.1)
+  BEFORE citing §2.4 as stability-plasticity evidence.
+- **Z3 full: no defect found.** Operator-coverage and
+  linear-readout-capacity diagnoses both point at expressiveness, not
+  selection (selection stayed exact, θ invariant). Boundary stands.
+
+### Notes for future sessions
+- `pytest-timeout` default is 60 s and `faulthandler_timeout = 120` s
+  (pyproject) dumps a stack mid-run but does NOT kill — a >2-min demo
+  test needs `@pytest.mark.timeout(900)` (as on D15/D19) and its 2-min
+  dump in the log is cosmetic.
+- Demo ID convention: plan D18→shipped as **D19** (`depth_harvest`),
+  plan D19→shipped as **D20** (`ntm_local`); both registered in
+  `gallery.py` DEMOS. Manifest re-pinned (25 figures); re-pin recipe:
+  render_gallery over run_records, carry each record's own git_commit,
+  do NOT stamp HEAD.
+- EPC settle contract used by D19 mirrors `d50_autopsy.py` exactly
+  (double settle, `_last_errors`, `_build_forward_with_errors`,
+  `_OrthoAdamWeights`); reuse for any new depth cell. For joint-system
+  depth cells use `w16_routing_depth.py` (EPC max_steps 5 keeps d50
+  cells at ~40 s).
+- NCA routing arm: `w8_nca_local --routing` (gate params distill-init
+  trained too); gate activity = per-site-step open fraction.
+- Remaining open work: **§3B depth-64/100 with routing (gate OPEN —
+  first cell next session)**, §4.3 held-out lattice prediction, §4.4
+  report, Phase 5 (benchmarks: L1 adaptation, L3.5 migration reuses
+  z3_full machinery but needs operator-library growth first), §5.4 NTM
+  recall levers (a)+(b), §6.1 transport-graph reduced grid (recall
+  only), Phase 7 campaigns, 2.4 gate-lr screen.
+- P-axis status after defect-hunt: 2.1 falsified-but-ψ-causal (learned
+  adds nothing over fixed); 2.2 ALIVE (3 seeds, relative gate); 2.4
+  boundary-conditional (pending gate-lr screen). Do not reopen 2.1;
+  do run 3B and the 2.4 screen.
+
+---
+
+## Session 3 (2026-09-09, continued)
+
+### Phase 3B — Depth-64/100 with Routing: FALSIFIED (3 seeds, both budgets)
+
+- `w16_routing_depth.py` extended: `--arms=` selector adds routing_d64 /
+  routing_d100; stale hardcoded 0.83 verdict replaced with the
+  pre-registered formula `0.90 × Null×d32` (session-2 defect-hunt fix,
+  previously only applied to the manual re-read).
+- 40 batches, 3 seeds: Null×d32 0.831 ± 0.002; Routing×d64
+  0.722 ± 0.051 (gate 0.748, 2/3 seeds fail); Routing×d100 0.517
+  (0.641/0.373/0.537).
+- Defect-hunt (budget truncation?): 150 batches, 3 seeds — Routing×d64
+  0.745/0.742/0.709 (mean 0.732) vs gates 0.747/0.744/0.779: fails on
+  all seeds. Not a budget artifact. Logs: `logs/w16_depth64_100_s*.log`,
+  `logs/w16_d64_150b.log`.
+- **Refined law (with session-2 d50 94% retention):** routing is a
+  decaying partial mitigant — ~94% frontier retention @ d50, ~91% @ d64
+  (just under the 0.90 gate), ~62% @ d100. It slows depth collapse but
+  does not prevent it. **Depth boundary: representation-limited.**
+  Phase 3B CLOSED; 3C/3D remain dead.
+
+### Phase 2.4 — Gate-lr screen: alternative explanation CLOSED
+
+- `w8_nca_local.py` gained `--gate-lr-scale=` (scales gate-param grads
+  relative to the cell update before `_apply`).
+- Seed 0, local×euclid lr 0.1: scale ×0.1 (gate lr 0.01) → fg 0.552 @
+  gate activity 0.063; scale ×0.01 (gate lr 0.001) → fg 0.552 @ 0.063.
+  Matched scale-1.0 record: fg 0.558 @ 0.062. Dose-response FLAT.
+- **The dead-gate saturation artifact is ruled out; gate closure is
+  learned dynamics, not an lr artifact. §2.4 stands as intrinsic
+  stability-plasticity evidence for §7.2.** (Note: distill-init still
+  trains gate params at full lr — irrelevant given the flat response.)
+
+### Phase 4.3 — Held-out lattice prediction: PASSED (0.944)
+
+- `fit_icu_model.py` gained `heldout_geometry()` (+ shared `_featurize`,
+  `load()` deduplicated): logistic trained on {mlp, nca, ntm}, encoder
+  fit on train only, predicts all 54 lattice rows.
+- **Held-out accuracy 0.944 ≥ 0.80 bar.** Predictions track mechanism:
+  bp×ortho 0.87 p → 0.904–0.911 actual (viable); fa/pepita×ortho
+  0.45–0.48 p → 0.07–0.20 actual (not). **The I(C,U) law transfers
+  across geometry** — success criterion met.
+
+### Phase 4.4 — I(C,U) report shipped
+
+- Plan's `comp frontier --study icu_law` does not exist (frontier CLI
+  takes a probe JSONL). Shipped instead:
+  `scripts/analysis/icu_report.py` → `docs/reports/icu_law.html`
+  (self-contained): credit × update accuracy surface (mean, n, heat
+  colored), recipe-card table (via `lookup_recipe_card`), §4.2/§4.3
+  model results. Success criterion "queryable recipe cards render" met
+  in substance.
+
+### Phase 5 — Benchmark hierarchy: DEFERRED (harness defect, all levels)
+
+- Suites exist and run: adaptation_efficiency (L1),
+  structural_robustness (L3), algorithm_migration (L3.5) — all complete
+  in quick mode (§5.0 feasibility executed).
+- **Defect found in all three:** `computronium/experiments/joint/*.py`
+  build a plain nn.Sequential MLP + vanilla Adam; the plasticity object
+  is constructed (and discarded — `create_rule_state_plasticity` is
+  even marked unused) but never injected into training/recovery. Result:
+  L3 returns bit-identical metrics for all 4 coordinates (0.926 /
+  1.219 / 0.996 incl. memristive/neuromorphic); L3.5 reports identical
+  θ-change 0.215729 for routing AND fast_weights (which must differ);
+  L1 adapt time capped at 10.0 everywhere, acc ≈ chance.
+- Suites self-declare `claims_scope: "plumbing_only"`. Per §5.0 ("if it
+  fails: defer that level") — **Phase 5 deferred until the joint-experiment
+  harnesses wire plasticity into their training loops.** Fix is a real
+  engineering task (which hook plasticity uses in the recovery/adaptation
+  loop), not a probe.
+- Results JSONs: `benchmark_results/{adaptation_efficiency,
+  structural_robustness,algorithm_migration}/`.
+
+### Notes for future sessions
+- `pytest-timeout` default is 60 s and `faulthandler_timeout = 120` s
+  (pyproject) dumps a stack mid-run but does NOT kill — a >2-min demo
+  test needs `@pytest.mark.timeout(900)` (as on D15/D19) and its 2-min
+  dump in the log is cosmetic.
+- Demo ID convention: plan D18→shipped as **D19** (`depth_harvest`),
+  plan D19→shipped as **D20** (`ntm_local`); both registered in
+  `gallery.py` DEMOS. Manifest re-pin (25 figures); re-pin recipe:
+  render_gallery over run_records, carry each record's own git_commit,
+  do NOT stamp HEAD.
+- EPC settle contract used by D19 mirrors `d50_autopsy.py` exactly
+  (double settle, `_last_errors`, `_build_forward_with_errors`,
+  `_OrthoAdamWeights`); reuse for any new depth cell. For joint-system
+  depth cells use `w16_routing_depth.py` (`--arms=` now selects
+  {null_d32, routing_d32, routing_d50, routing_d64, routing_d100};
+  EPC max_steps 5 keeps d64 cells at ~80 s/150 batches).
+- `w8_nca_local --gate-lr-scale=<f>` multiplies gate-param grads (screen
+  instrument for §2.4-type questions).
+- Remaining open work: **Phase 5 unblock (wire plasticity into
+  `computronium/experiments/joint/` training loops)**, §5.4 NTM recall
+  levers (a)+(b), §6.1 transport-graph reduced grid (recall only),
+  Phase 7 campaigns. Phase 4 is COMPLETE (4.2 ✓, 4.3 ✓ 0.944, 4.4 ✓).
+- P-axis final status: 2.1 falsified-but-ψ-causal; 2.2 → superseded by
+  3B (routing = decaying partial mitigant, closed); 2.4 boundary
+  CONFIRMED intrinsic (gate-lr screen). No Phase 2 axis survived as a
+  new-capability winner; the boundaries are the contribution.
+- Phase 5 fix sketch (for whoever unblocks it): `evaluate_recovery` /
+  adaptation loops should accept the coordinate's plasticity primitive
+  and apply it inside the recovery training loop (per-batch, matching
+  `_apply` semantics in the probe harnesses), then re-derive the
+  identical-across-arms symptom as the regression test.
+
+### Session 3 addendum — Phase 5 UNBLOCKED; §5.4 recall levers falsified
+
+- **Phase 5 wiring fix (done, same session).** New shared adapter
+  `computronium/experiments/joint/_plasticity_wiring.py`
+  (`step_psi`/`modulate_hidden`): drives the REAL plasticity law per
+  batch (shim context — laws only read `context.theta.requires_grad` —
+  and `CompositeState(activity={"x", "y"})`), modulates hidden
+  activations, handles device/batch sync. Wired into:
+  - `structural_robustness.py` (L3): ψ steps in pre-train, pre-damage
+    eval, and recovery; forward modulates both hidden layers. Arms now
+    differentiate: routing pre-damage 0.665 / recovery 1.49 vs null
+    0.926 / 1.22 (quick mode). substrate_coupled ≡ null is now
+    SEMANTICALLY correct (its law is a substrate-side no-op; the plain-MLP
+    harness has no substrate state).
+  - `algorithm_migration.py` (L3.5): ψ steps per A0/A1 epoch (Hebbian
+    y=one-hot labels for fast_weights) + eval; arms differentiate
+    (θ-change 0.231 routing vs 0.219 fast_weights at quick budget).
+  - `adaptation_efficiency.py` (L1): left as-is — its inline ψ already
+    modulates forward; residual defect is the adapt-time METRIC (caps at
+    the epoch budget for every arm), a metric-design item.
+- **Latent ontology defects found & fixed (reactive ratchet):**
+  - `RoutingPlasticity.step` batch-growth used `expand()` — only valid
+    from singleton dims; now repeat+truncate (routing.py).
+  - `rule_state.step` had NO batch-mismatch handling at all (cat of
+    ψ[1,...] with x[64,...] crashed); added the same repeat/truncate
+    adaptation (rule_state.py).
+- **Claims-scope upgrade:** L3 and L3.5 `plumbing_only` →
+  `psi_wired_uncontrolled` (ψ steps + modulates forward; θ trains
+  concurrently, no frozen-θ control — that remains the gap to
+  `psi_engaged`). `_claims.py` audit table updated; `psi_engagement`
+  lock 6/6 green; `tests/integration/joint/test_benchmarks.py` (slow)
+  8/8 green; migration/plasticity smokes 5/5 green.
+- **§5.4 NTM recall levers (a)+(b): FALSIFIED.** New arm `local4` in
+  `w8_ntm_copy.py` = local3 + (a) writer-loss re-weight ×3 +
+  (b) live-hc value-channel supervision at the cued-read step
+  (`credit_read` routes the read-head CE through hc). Recall task,
+  4800 steps, 3 seeds: **acc_given_hit 0.625 / 0.625 / 0.646 — all
+  < 0.85 bar.** Read hit-rate is 1.0 by construction (explicit keys), so
+  the failure is purely value binding: output 0.63–0.65 with the read
+  causally contributing (read-zeroed 0.47–0.65). **Value binding is a
+  structural limit of zero-history factorization** — §17.10 resolved;
+  lever (c) extended budget NOT run (pre-registration says structural).
+  Logs: `logs/w16_recall_levers_s*.log`.
+
+### Updated remaining open work
+- L1 adapt-time metric redesign (caps at epoch budget) → then L1/L3/L3.5
+  rerun at real budget (not quick) for FrontierRecords.
+- Frozen-θ + `ThetaInvarianceAudit` in L3/L3.5 to reach `psi_engaged`.
+- §6.1 transport-graph reduced grid (recall only); Phase 7 campaigns.
+- Phase 4 COMPLETE; P-axis resolved; §5.4 resolved (structural limit).
+
+---
+
 ## Guiding Doctrine
 
 - **Composition before invention.** No new primitives. Compose existing ones across untouched axes.

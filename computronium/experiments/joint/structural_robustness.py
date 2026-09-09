@@ -20,7 +20,11 @@ import torch
 
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
-from computronium.experiments.joint import CLAIMS_SCOPE_PLUMBING_ONLY
+from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
+from computronium.experiments.joint._plasticity_wiring import (
+    modulate_hidden,
+    step_psi,
+)
 
 
 def create_damage_scenarios(
@@ -107,6 +111,14 @@ def evaluate_recovery(
 
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
+            psi = step_psi(
+                model.plasticity,
+                model.psi,
+                x,
+                training=True,
+                live_param=next(model.parameters()),
+            )
+            model.psi = psi
             optimizer.zero_grad()
             logits = model(x)
             loss = criterion(logits, y)
@@ -138,7 +150,7 @@ def evaluate_recovery(
     }
 
 
-def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
+def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments, unused-variable]
     coordinate: str,
     epochs: int = 10,
     batch_size: int = 64,
@@ -194,11 +206,15 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     elif plasticity_type == "substrate_coupled":
         plasticity = create_substrate_coupled_plasticity(plasticity_config)
     elif plasticity_type == "rule_state":
-        plasticity = create_rule_state_plasticity(plasticity_config)  # ruff: ignore[unused-variable]
+        plasticity = create_rule_state_plasticity(plasticity_config)
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
-    # Simple MLP model
+    psi = {k: v.to(device) for k, v in plasticity.initial_psi(None, batch_size).items()}
+
+    # Simple MLP model. Hidden activations are modulated by the
+    # coordinate's plasticity state ψ (stepped per batch in the loops
+    # below) so recovery measurably conditions on the P-axis.
     class SimpleMLP(nn.Module):
         def __init__(self):
             super().__init__()
@@ -209,9 +225,15 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
                 nn.ReLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
+            self.psi: dict = {}
+            self.plasticity = plasticity
 
         def forward(self, x):
-            return self.net(x)
+            h = torch.relu(self.net[0](x))
+            h = modulate_hidden(self.plasticity, h, self.psi)
+            h = torch.relu(self.net[2](h))
+            h = modulate_hidden(self.plasticity, h, self.psi)
+            return self.net[4](h)
 
     model = SimpleMLP().to(device)
 
@@ -230,6 +252,14 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     model.train()
     for _ in range(epochs):
         for x, y in train_loader:
+            psi = step_psi(
+                plasticity,
+                psi,
+                x.to(device),
+                training=True,
+                live_param=next(model.parameters()),
+            )
+            model.psi = psi
             optimizer.zero_grad()
             logits = model(x)
             loss = criterion(logits, y)
@@ -245,6 +275,8 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     total = 0
     with torch.no_grad():
         for x, y in train_loader:
+            psi = step_psi(plasticity, psi, x.to(device))
+            model.psi = psi
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -289,7 +321,7 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     ) / len(damage_results)
 
     return {
-        "claims_scope": CLAIMS_SCOPE_PLUMBING_ONLY,
+        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
         "coordinate": coordinate,
         "pre_damage_accuracy": pre_damage_accuracy,
         "damage_severity": damage_severity,

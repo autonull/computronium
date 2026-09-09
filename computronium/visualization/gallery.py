@@ -115,6 +115,8 @@ DEMOS: dict[str, DemoSpec] = {
     "credit_channel_map": DemoSpec("F4", _fig_declared),
     "resource_vector": DemoSpec("F5", _fig_declared),
     "multi_psi_swap": DemoSpec("D17", _fig_declared),
+    "depth_harvest": DemoSpec("D19", _fig_declared),
+    "ntm_local": DemoSpec("D20", _fig_declared),
 }
 
 

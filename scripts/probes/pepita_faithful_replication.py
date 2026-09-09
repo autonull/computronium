@@ -53,13 +53,21 @@ SEEDS = (0, 1, 2)
 GAMMA = 0.05  # paper's regime — parity knob (see §11.2, TODO15)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# task -> (input_dim, hidden_dim, num_classes) (TODO16 §1.3 breadth)
+TASK_DIMS = {
+    "mnist": (784, 256, 10),
+    "cifar10": (3072, 256, 10),
+    "cora": (1433, 64, 7),
+}
 
-def _net(seed: int) -> nn.Sequential:
+
+def _net(seed: int, dims: tuple[int, int, int]) -> nn.Sequential:
+    din, h, dout = dims
     torch.manual_seed(seed)
     return nn.Sequential(
-        nn.Linear(784, 256),
+        nn.Linear(din, h),
         nn.ReLU(),
-        nn.Linear(256, 10),
+        nn.Linear(h, dout),
     ).to(DEVICE)
 
 
@@ -74,13 +82,18 @@ def _eval(net: nn.Sequential, batches) -> float:
 
 
 def _train(
-    rule: str, seed: int, train_data, lr: float = 1e-3, gamma: float = GAMMA
+    rule: str,
+    seed: int,
+    train_data,
+    lr: float = 1e-3,
+    gamma: float = GAMMA,
+    dims: tuple[int, int, int] = TASK_DIMS["mnist"],
 ) -> nn.Sequential:
     torch.manual_seed(seed)
-    net = _net(seed)
+    net = _net(seed, dims)
     opt = torch.optim.Adam(net.parameters(), lr=lr)
     gen = torch.Generator(device=DEVICE).manual_seed(seed)
-    b_fixed = torch.randn(10, 784, generator=gen, device=DEVICE)
+    b_fixed = torch.randn(dims[2], dims[0], generator=gen, device=DEVICE)
     for xb, yb in train_data:
         x = xb.to(DEVICE).view(xb.size(0), -1)
         y = yb.to(DEVICE)
@@ -92,7 +105,7 @@ def _train(
             opt.step()
         else:  # faithful pepita
             with torch.no_grad():
-                delta = torch.nn.functional.one_hot(y, 10).float() - torch.softmax(
+                delta = torch.nn.functional.one_hot(y, dims[2]).float() - torch.softmax(
                     logits1, dim=-1
                 )
             x_tilde = x + gamma * (delta @ b_fixed)
@@ -103,21 +116,26 @@ def _train(
     return net
 
 
-def _train_muon_pepita(seed: int, train_data, gamma: float = GAMMA) -> nn.Sequential:
+def _train_muon_pepita(
+    seed: int,
+    train_data,
+    gamma: float = GAMMA,
+    dims: tuple[int, int, int] = TASK_DIMS["mnist"],
+) -> nn.Sequential:
     torch.manual_seed(seed)
-    net = _net(seed)
+    net = _net(seed, dims)
     weights = [p for p in net.parameters() if p.ndim == 2]
     from jpc_ortho_adam import _OrthoAdamWeights
 
     opt = _OrthoAdamWeights(weights, lr=0.02)
     gen = torch.Generator(device=DEVICE).manual_seed(seed)
-    b_fixed = torch.randn(10, 784, generator=gen, device=DEVICE)
+    b_fixed = torch.randn(dims[2], dims[0], generator=gen, device=DEVICE)
     for xb, yb in train_data:
         x = xb.to(DEVICE).view(xb.size(0), -1)
         y = yb.to(DEVICE)
         with torch.no_grad():
             logits1 = net(x)
-            delta = torch.nn.functional.one_hot(y, 10).float() - torch.softmax(
+            delta = torch.nn.functional.one_hot(y, dims[2]).float() - torch.softmax(
                 logits1, dim=-1
             )
         x_tilde = (x + gamma * (delta @ b_fixed)).requires_grad_(True)
@@ -127,30 +145,57 @@ def _train_muon_pepita(seed: int, train_data, gamma: float = GAMMA) -> nn.Sequen
     return net
 
 
+def _cora_split(batch: int = 64):
+    """Flattened node features on the Planetoid train/val masks (no graph)."""
+    from torch_geometric.datasets import Planetoid
+
+    data = Planetoid(root="./data", name="Cora")[0]
+    idx = data.train_mask.nonzero(as_tuple=True)[0]
+    perm = torch.randperm(idx.size(0))
+    train = [
+        (data.x[idx[perm[i : i + batch]]], data.y[idx[perm[i : i + batch]]])
+        for i in range(0, idx.size(0), batch)
+    ][:BATCHES]
+    test = [
+        (data.x[data.val_mask | data.test_mask], data.y[data.val_mask | data.test_mask])
+    ]
+    return train, test
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gamma", type=float, default=GAMMA)
+    parser.add_argument("--task", choices=sorted(TASK_DIMS), default="mnist")
     args = parser.parse_args()
     t0 = time.time()
-    task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
+    dims = TASK_DIMS[args.task]
+    task = create_task(args.task, device="cpu", quick_mode=True, num_workers=0)
     task.setup()
     torch.manual_seed(0)
-    train_data = [
-        (xb.view(xb.size(0), -1).to(DEVICE), yb.to(DEVICE))
-        for _, (xb, yb) in zip(range(BATCHES), task.get_dataloader("train"))
-    ]
-    test_batches = [
-        (xb.view(xb.size(0), -1).to(DEVICE), yb.to(DEVICE))
-        for xb, yb in task.get_dataloader("test")
-    ][:20]
+    if args.task == "cora":
+        train_data, test_batches = _cora_split()
+        train_data = [(xb.to(DEVICE), yb.to(DEVICE)) for xb, yb in train_data]
+        test_batches = [
+            (xb.view(xb.size(0), -1).to(DEVICE), yb.to(DEVICE))
+            for xb, yb in test_batches
+        ]
+    else:
+        train_data = [
+            (xb.view(xb.size(0), -1).to(DEVICE), yb.to(DEVICE))
+            for _, (xb, yb) in zip(range(BATCHES), task.get_dataloader("train"))
+        ]
+        test_batches = [
+            (xb.view(xb.size(0), -1).to(DEVICE), yb.to(DEVICE))
+            for xb, yb in task.get_dataloader("test")
+        ][:20]
 
     accs: dict[str, list[float]] = {}
     for seed in SEEDS:
-        net = _train("bp", seed, train_data)
+        net = _train("bp", seed, train_data, dims=dims)
         accs.setdefault("bp/adam", []).append(_eval(net, test_batches))
-        net = _train("pepita", seed, train_data, gamma=args.gamma)
+        net = _train("pepita", seed, train_data, gamma=args.gamma, dims=dims)
         accs.setdefault("pepita/adam", []).append(_eval(net, test_batches))
-        net = _train_muon_pepita(seed, train_data, gamma=args.gamma)
+        net = _train_muon_pepita(seed, train_data, gamma=args.gamma, dims=dims)
         accs.setdefault("pepita/muon.02", []).append(_eval(net, test_batches))
 
     for name, a in accs.items():

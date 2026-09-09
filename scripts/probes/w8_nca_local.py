@@ -77,7 +77,7 @@ import time
 from dataclasses import replace
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
 from computronium import ParameterUpdateConfig
@@ -125,11 +125,13 @@ def _sprites() -> Tensor:
 
 
 def _params(
-    seed: int, in_dim: int = IN_DIM, unshared: bool = False
+    seed: int, in_dim: int = IN_DIM, unshared: bool = False, routing: bool = False
 ) -> dict[str, Tensor]:
     """Shared: one cell MLP. Unshared (W8.4): per-site weights stored flat
     (SITES*out, in) — the site dimension folds into the row space so the
-    update-rule contract and per-site euclid both hold exactly."""
+    update-rule contract and per-site euclid both hold exactly.
+    Routing (TODO16 §2.4): adds a per-site growth gate g = sigmoid(W_g h);
+    effective delta = g * delta (gated growth)."""
     g = torch.Generator().manual_seed(seed)
     rows = SITES if unshared else 1
     p = {
@@ -141,6 +143,9 @@ def _params(
         "bias2": torch.zeros(rows * CHANNELS),
         "bias_readout": torch.zeros(rows * CHANNELS),
     }
+    if routing:
+        p["weight_gate"] = torch.randn(rows, in_dim, generator=g) * in_dim**-0.5
+        p["bias_gate"] = torch.zeros(rows)
     return {k: v.requires_grad_(True) for k, v in p.items()}
 
 
@@ -174,6 +179,12 @@ def _grouped_forward(p: dict[str, Tensor], x: Tensor) -> tuple[Tensor, Tensor, T
     )
     bc = p["bias2"].view(SITES, CHANNELS) if uns else p["bias2"].view(1, CHANNELS)
     delta = DELTA_SCALE * torch.tanh(torch.einsum("gso,sco->gsc", h, wc) + bc)
+    if "weight_gate" in p:
+        rows_g = p["weight_gate"].size(0)
+        wg = p["weight_gate"].view(rows_g, 1, x.size(-1))
+        bg = p["bias_gate"].view(rows_g, 1)
+        gate = torch.sigmoid(torch.einsum("gsi,ghi->gsh", x, wg) + bg)
+        delta = gate * delta
     wr = (
         p["weight_readout"].view(SITES, CHANNELS, HIDDEN)
         if uns
@@ -237,7 +248,7 @@ def _rollout_states(
             _, delta, _logits = _cell_forward(p, states, labels)
         delta_grid = _unflatten(delta, targets.size(0), *targets.shape[1:])
         # non-augmented: states enters the autograd graph mid-rollout
-        states = states + delta_grid * mask.unsqueeze(1)  # noqa: PLR6104
+        states = states + delta_grid * mask.unsqueeze(1)  # ruff: ignore[non-augmented-assignment]
         if grad:
             step_losses.append((states - target_states).pow(2).mean())
     return states, step_losses
@@ -248,7 +259,7 @@ def _target_states(targets: Tensor) -> Tensor:
     return F.one_hot(targets, CHANNELS).permute(0, 3, 1, 2).float()
 
 
-def _distill_init(  # noqa: PLR0914 - probe harness; locals are orthogonal modes
+def _distill_init(  # ruff: ignore[too-many-locals] - probe harness; locals are orthogonal modes
     p: dict[str, Tensor],
     targets: Tensor,
     n_mixes: int = 10,
@@ -291,7 +302,7 @@ def _distill_init(  # noqa: PLR0914 - probe harness; locals are orthogonal modes
                 X.append(teacher)
             mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
             # non-augmented: teacher enters the autograd-free distill set
-            teacher = teacher + (target_states - teacher).clamp(  # noqa: PLR6104
+            teacher = teacher + (target_states - teacher).clamp(  # ruff: ignore[non-augmented-assignment]
                 -DELTA_SCALE, DELTA_SCALE
             ) * mask.unsqueeze(1)
     else:
@@ -457,7 +468,7 @@ def _episode_grads(
     return {**w_grads, **b_grads}, stats
 
 
-def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
+def _train(  # ruff: ignore[too-many-locals, too-many-arguments, too-many-positional-arguments] - probe harness
     arm: str,
     update_name: str,
     seed: int,
@@ -468,6 +479,8 @@ def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
     regen: bool = False,
     damage: bool = False,
     unshared: bool = False,
+    routing: bool = False,
+    gate_lr_scale: float = 1.0,
 ) -> float:
     torch.manual_seed(seed)
     sprites = _sprites()
@@ -475,7 +488,7 @@ def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
     batch_idx = torch.randint(0, len(sprites), (BATCH,), generator=gen)
     targets0 = sprites[batch_idx]
     in_dim = IN_DIM_LABEL_FREE if label_free or regen else IN_DIM
-    p = _params(seed, in_dim, unshared)
+    p = _params(seed, in_dim, unshared, routing=routing)
     _distill_init(p, targets0, label_free=label_free, regen=regen)
     update = _updates(lr)[update_name]
     stats_last = {"inversion_rate": 0.0, "inject_r": 0.0}
@@ -489,6 +502,10 @@ def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
             k = hole_ks[ep % len(hole_ks)]
             init = _hole_states(targets, _target_states(targets), k, gen)
         grads, stats_last = _episode_grads(p, arm, targets, gen, labels, init)
+        if gate_lr_scale < 1.0:
+            grads = {
+                n: g * gate_lr_scale if "gate" in n else g for n, g in grads.items()
+            }
         _apply(update, p, grads)
         if (ep + 1) % eval_every == 0:
             acc = (
@@ -507,6 +524,11 @@ def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
         damage,
         regen,
     )
+    if "weight_gate" in p:
+        print(
+            f"    gate activity {(_gate_activity(p, targets0, label_free)):.3f}",
+            flush=True,
+        )
     return (
         _regen_eval(p, targets0, 8) if regen else _eval(p, targets0, 48, label_free)[1]
     )
@@ -556,6 +578,26 @@ def _updates(lr: float) -> dict[str, object]:
             )
         ),
     }
+
+
+def _gate_activity(p: dict[str, Tensor], targets: Tensor, label_free: bool) -> float:
+    """Fraction of site-steps with an open growth gate (compute proxy,
+    TODO16 §2.4): 1.0 = ungated baseline, lower = sparser compute."""
+    gen = torch.Generator().manual_seed(123)
+    states = _seed_states(targets, gen, center=not label_free)
+    open_frac = 0.0
+    wg = p["weight_gate"].view(1, 1, -1)
+    bg = p["bias_gate"].view(1, 1)
+    for _ in range(ROLLOUT):
+        x = _perceive(states, None if label_free else targets)
+        gate = torch.sigmoid(
+            torch.einsum("gsi,ghi->gsh", x.view(-1, SITES, x.size(-1)), wg) + bg
+        )
+        open_frac += (gate > 0.5).float().mean().item()
+        with torch.no_grad():
+            _h, delta, _l = _cell_forward(p, states, None if label_free else targets)
+        states = states + _unflatten(delta, targets.size(0), *targets.shape[1:])
+    return open_frac / ROLLOUT
 
 
 def _report(
@@ -626,7 +668,7 @@ def _screen() -> dict[str, float]:
     return best
 
 
-def main() -> int:  # noqa: PLR0914 - probe harness
+def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
     t0 = time.time()
     args = __import__("sys").argv[1:]
     opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)
@@ -641,10 +683,14 @@ def main() -> int:  # noqa: PLR0914 - probe harness
     regen = "regen" in flags
     damage = "damage" in flags
     unshared = "unshared" in flags
+    routing = "routing" in flags
+    gate_lr_scale = float(opt.get("gate-lr-scale", 1.0))
     print(
         f"w8_nca_local {REV}; arm {arm or 'all'} seeds {seeds}"
         f"{' [label-free]' if label_free else ''}{' [regen]' if regen else ''}"
         f"{' [damage]' if damage else ''}{' [unshared]' if unshared else ''}"
+        f"{' [routing]' if routing else ''}"
+        f"{' [gate-lr x0.1]' if gate_lr_scale < 1.0 else ''}"
     )
     if arm is None:
         lrs = _screen()
@@ -671,6 +717,8 @@ def main() -> int:  # noqa: PLR0914 - probe harness
                 regen=regen,
                 damage=damage,
                 unshared=unshared,
+                routing=routing,
+                gate_lr_scale=gate_lr_scale,
             )
     print(f"\nwalltime {time.time() - t0:.1f}s (printed, never recorded)")
     return 0

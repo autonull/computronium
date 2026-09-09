@@ -173,9 +173,10 @@ class RoutingPlasticity:
             if x.shape[0] != batch_size:
                 # Expand or truncate gate logits to match x
                 if x.shape[0] > batch_size:
-                    new_gate_logits = new_gate_logits.expand(
-                        x.shape[0], -1
-                    ).contiguous()
+                    # expand() only grows singleton dims — a psi batch
+                    # smaller than the data batch needs a repeat+truncate.
+                    reps = -(-x.shape[0] // batch_size)
+                    new_gate_logits = new_gate_logits.repeat(reps, 1)[: x.shape[0]]
                 else:
                     new_gate_logits = new_gate_logits[: x.shape[0]]
                 batch_size = x.shape[0]

@@ -7,7 +7,7 @@ Protocols are in protocol.py, serialization utilities are in spec.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -32,8 +32,18 @@ class SystemTrainerConfig:
         seed: Random seed
         deterministic: Use deterministic algorithms
         resumable: Reseed the global RNG per batch via ``fold_in`` so an
-            interrupted run resumes bitwise identical to an uninterrupted
-            one (R11.2.24); required for ``from_snapshot`` parity claims.
+        interrupted run resumes bitwise identical to an uninterrupted
+        one (R11.2.24); required for ``from_snapshot`` parity claims.
+        harvest_mode: End-of-run weight harvest instrument. ``None`` (default)
+            trains exactly as before. ``"ema"`` keeps a streaming exponential
+            moving average of geometry parameters (decay ``harvest_decay`` per
+            batch) and restores the EMA weights when ``fit`` completes.
+            ``"best_snapshot"`` tracks the best validation accuracy (train
+            accuracy when no val data) every ``harvest_every_n`` batches and
+            restores the best checkpoint at the end.
+        harvest_decay: Per-batch EMA decay for ``harvest_mode="ema"``.
+        harvest_every_n: Evaluation cadence (batches) for
+            ``harvest_mode="best_snapshot"``.
     """
 
     max_epochs: int = 10
@@ -48,6 +58,9 @@ class SystemTrainerConfig:
     seed: int = 42
     deterministic: bool = False
     resumable: bool = False
+    harvest_mode: Literal["ema", "best_snapshot"] | None = None
+    harvest_decay: float = 0.99
+    harvest_every_n: int = 10
 
 
 class _DataProvider(Protocol):

@@ -296,6 +296,8 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
     writer: str = "code",
     credit_controller: bool = False,
     perm: Tensor | None = None,
+    writer_weight: float = 1.0,
+    credit_read: bool = False,
 ):
     """One timestep's local losses — no tensor carries grad across the
     timestep boundary (state/memory inputs detached).
@@ -323,15 +325,17 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
             v_idx = bits.gather(1, inv[:, k : k + 1]).squeeze(1)
         losses.append(nn.functional.cross_entropy(logits, v_idx))
         # read head: the same CE with h detached — the read vector itself
-        # carries the gradient into (kr, beta) only.
+        # carries the gradient into (kr, beta) only. §5.4 lever (b):
+        # credit_read routes it through the LIVE hc (value-channel
+        # supervision at the cued-read step).
+        h_read = hc.squeeze(1) if credit_read else hc.detach().squeeze(1)
         losses.append(
             nn.functional.cross_entropy(
-                heads.out(torch.cat([hc.detach().squeeze(1), read], dim=-1)),
+                heads.out(torch.cat([h_read, read], dim=-1)),
                 v_idx,
             )
         )
-        if writer == "expected":
-            # r6: supervise the READ KEY onto e_{k mod L} (the slot written
+        if writer == "expected":            # r6: supervise the READ KEY onto e_{k mod L} (the slot written
             # for bit k is k mod L by construction). Through the softmax
             # addressing alone the key sequence learns ~2x slower than the
             # 30 s cell budget allows (hit rate 0.083 -> 0.167 over 1200
@@ -344,6 +348,7 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
     elif t < L:
         # writer losses; h_detached feeds every loss unless
         # credit_controller routes them through the live hc.
+        n_writer = len(losses)
         h_live = hc.squeeze(1)
         h = h_live if credit_controller else h_live.detach()
         w = a_w.detach() if writer == "expected" else a_w
@@ -394,6 +399,8 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
                 .sum(-1)
                 .mean()
             )
+        # §5.4 lever (a): writer loss re-weighting relative to step CE.
+        losses[n_writer:] = [writer_weight * l for l in losses[n_writer:]]
     return losses, state_new, mem_next
 
 
@@ -405,6 +412,8 @@ def _local_episode(
     writer: str = "code",
     credit_controller: bool = False,
     perm: Tensor | None = None,
+    writer_weight: float = 1.0,
+    credit_read: bool = False,
 ):
     """One episode of zero-history local losses (state/memory detached
     per timestep; no gradient crosses a timestep boundary)."""
@@ -435,6 +444,8 @@ def _local_episode(
             writer,
             credit_controller,
             perm,
+            writer_weight,
+            credit_read,
         )
         losses.extend(step_losses)
         mem = mem_next.detach()
@@ -508,6 +519,8 @@ def _run_local(
     writer: str = "code",
     label: str = "local",
     credit_controller: bool = False,
+    writer_weight: float = 1.0,
+    credit_read: bool = False,
 ):
     torch.manual_seed(seed)
     controller = nn.LSTM(1 + MEM_WIDTH, HIDDEN, batch_first=True)
@@ -521,7 +534,8 @@ def _run_local(
         bits = _batch(gen)
         perm = _draw_perm(bits.size(0), bits.size(1), gen)
         loss = _local_episode(
-            controller, heads, bits, code, writer, credit_controller, perm
+            controller, heads, bits, code, writer, credit_controller, perm,
+            writer_weight, credit_read,
         )
         opt.zero_grad()
         loss.backward()
@@ -627,6 +641,18 @@ def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
             credit_controller=True,
         ),
         "local-muon": _run_local_muon,
+        # §5.4 combined levers: (a) writer-loss re-weight x3 + (b) live-hc
+        # value-channel supervision at the cued-read step.
+        "local4": lambda steps, lr, seed: _run_local(
+            steps,
+            lr,
+            seed,
+            writer="expected",
+            label="local4",
+            credit_controller=True,
+            writer_weight=3.0,
+            credit_read=True,
+        ),
     }
     trained = None
     if "load" in opt:

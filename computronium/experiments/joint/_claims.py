@@ -1,9 +1,10 @@
 """Claims-scope markers for the shakedown suites (per-suite audit, session 5).
 
 Scopes are AUDIT STATUS, not verdicts:
-- ``plumbing_only``: forward loop contains no ψ mediation today, so results
-  cannot evidence ψ-mediated behavior. (L3.5's own code comments document the
-  full-training simplification; L3 is a plain-MLP damage test.)
+- ``plumbing_only``: forward loop contains no ψ mediation, so results
+  cannot evidence ψ-mediated behavior. (Historical: L3/L3.5 held this
+  scope until 2026-09-09, when per-batch ψ stepping + modulation landed
+  via ``_plasticity_wiring``.)
 - ``psi_wired_uncontrolled``: ψ IS stepped inside forward and modulates
   computation (empirically confirmed to differentiate plasticity types), but
   θ trains concurrently, ``plasticity.step`` receives ``None`` context, and
@@ -23,13 +24,21 @@ CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
 #
 # | Suite                 | Verdict                   | Blocking gap              |
 # |-----------------------|---------------------------|---------------------------|
-# | L1 adaptation         | plumbing_only             | harness ψ never modulates |
-# |                       |                           | forward; M-arms identical |
+# | L1 adaptation         | psi_wired_uncontrolled    | adapt-time metric is      |
+# |                       |                           | θ-optimizer-driven (caps  |
+# |                       |                           | at the epoch budget for   |
+# |                       |                           | every arm)                |
 # | L2 compute_efficiency | psi_wired_uncontrolled    | gate entropy/FLOPs        |
 # |                       |                           | discriminate routing, but |
 # |                       |                           | θ trains concurrently     |
-# | L3 robustness         | plumbing_only             | plain-MLP damage test     |
-# | L3.5 migration        | plumbing_only             | full-training simpl.      |
+# | L3 robustness         | psi_wired_uncontrolled    | ψ stepped per batch via   |
+# | (2026-09-09)          |                           | _plasticity_wiring and    |
+# |                       |                           | modulates hidden forward; |
+# |                       |                           | θ trains concurrently, no |
+# |                       |                           | frozen-θ control          |
+# | L3.5 migration        | psi_wired_uncontrolled    | ψ stepped per batch and   |
+# | (2026-09-09)          |                           | modulates forward; full-  |
+# |                       |                           | training simpl. remains   |
 # | Z3 flagship           | psi_engaged (R8 gate      | gate is embedded per run  |
 # |                       | landed 2026-09-01)        | (``psi_gate``: exact θ    |
 # |                       |                           | invariance, ψ non-const., |

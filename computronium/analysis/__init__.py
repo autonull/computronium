@@ -48,6 +48,7 @@ from .pareto import (
     plot_pareto_3d,
     plot_pareto_frontier,
 )
+from .recipe_cards import RECIPE_CARDS, RecipeCard, lookup as lookup_recipe_card
 from .results import compute_statistics, get_rankings, load_trials
 from .scaling import (
     ChinchillaLaw,
@@ -130,6 +131,9 @@ __all__ = [
     "MetricEntry",
     "ParetoFrontier",
     "ParetoPoint",
+    "RECIPE_CARDS",
+    "RecipeCard",
+    "lookup_recipe_card",
     "PhylogenyNode",
     "PowerLawFit",
     "ProfileResult",

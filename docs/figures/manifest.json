@@ -44,7 +44,7 @@
       "figure_png": "d13_uaxis_muon_swap.png",
       "provenance": {
         "config_sha256": "c032b4823e63a969a31d4e2cb7cc2adacc4612bd9b099368bfa7e7ff13621fee",
-        "git_commit": "c5012886d4862b02785eb5db771beb4c59e69d8f"
+        "git_commit": "f6c432d57bee1a089f0f400974a5557b2dc6010d"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -104,7 +104,19 @@
       "figure_png": "d18_update_ladder.png",
       "provenance": {
         "config_sha256": "631e23f3c1a6de245e1077e69f6a7ab0df56eb92fe0d295587a621d1a3df9ff4",
-        "git_commit": "883e2965ffe10283f3f1817be6d0b090a32c79fa"
+        "git_commit": "f6c432d57bee1a089f0f400974a5557b2dc6010d"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D19",
+      "capability_name": "depth_harvest",
+      "data_sha256": "0b1b04b9d1c43fc7a39a00a2c4928261812ec14a7f6f8c41078f3e916fccc041",
+      "demo_test": "tests/integration/test_demo_depth_harvest.py",
+      "figure_png": "d19_depth_harvest.png",
+      "provenance": {
+        "config_sha256": "0b1b04b9d1c43fc7a39a00a2c4928261812ec14a7f6f8c41078f3e916fccc041",
+        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -121,6 +133,18 @@
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
     {
+      "capability_id": "D20",
+      "capability_name": "ntm_local",
+      "data_sha256": "5822186c19e13b316bc23f546dd3976b318efaf4ebac4da1f625e29084e565f2",
+      "demo_test": "tests/integration/test_demo_ntm_local.py",
+      "figure_png": "d20_ntm_local.png",
+      "provenance": {
+        "config_sha256": "5822186c19e13b316bc23f546dd3976b318efaf4ebac4da1f625e29084e565f2",
+        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
       "capability_id": "D2",
       "capability_name": "swap_credit",
       "data_sha256": "be3b342fd8be5c18d1fe1c0f7fd7c227f5a25cf3fcacae6b48642b16ee8b86a6",
@@ -128,7 +152,7 @@
       "figure_png": "d2_swap_credit.png",
       "provenance": {
         "config_sha256": "be3b342fd8be5c18d1fe1c0f7fd7c227f5a25cf3fcacae6b48642b16ee8b86a6",
-        "git_commit": "421fabe1610710fa055ef760bc4230eefd4a48e3"
+        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },

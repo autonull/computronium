@@ -57,6 +57,70 @@ class SystemTrainer:
         # Move system components to device
         if hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)  # type: ignore[attr-defined]
+        self._ema: dict[str, Tensor] = {}
+        self._best_theta: dict[str, Tensor] | None = None
+        self._best_score = -float("inf")
+
+    def _harvest_enabled(self) -> bool:
+        return self.config.harvest_mode is not None
+
+    def _harvest_init(self) -> None:
+        if self.config.harvest_mode == "ema":
+            self._ema = {
+                name: t.detach().clone()
+                for name, t in self.system.geometry.params.items()
+            }
+
+    def _harvest_step(self) -> None:
+        """Update harvest state after one training batch."""
+        if not self._harvest_enabled():
+            return
+        if self.config.harvest_mode == "ema":
+            decay = self.config.harvest_decay
+            with torch.no_grad():
+                for name, t in self.system.geometry.params.items():
+                    self._ema[name].mul_(decay).add_(t.detach(), alpha=1 - decay)
+            return
+        if (
+            self.global_step % self.config.harvest_every_n == 0
+            and self.val_data is not None
+        ):
+            score = self.validate()["val_acc"]
+            if score >= self._best_score:
+                self._best_score = score
+                self._best_theta = {
+                    name: t.detach().clone()
+                    for name, t in self.system.geometry.params.items()
+                }
+
+    def _harvest_snapshot_epoch(self) -> None:
+        """best_snapshot fallback: epoch-end scoring when no per-batch val."""
+        if self.config.harvest_mode != "best_snapshot" or self.val_data is not None:
+            return
+        score = self.history[-1].get("train_acc", 0.0) if self.history else 0.0
+        if score >= self._best_score:
+            self._best_score = score
+            self._best_theta = {
+                name: t.detach().clone()
+                for name, t in self.system.geometry.params.items()
+            }
+
+    def _harvest_finalize(self) -> None:
+        """Restore harvested weights into the geometry (in place)."""
+        if not self._harvest_enabled():
+            return
+        theta = self._ema if self.config.harvest_mode == "ema" else self._best_theta
+        if theta is None:
+            logger.warning(
+                "harvest_mode=%s produced no weights", self.config.harvest_mode
+            )
+            return
+        self.system.geometry.update_params(dict(theta))
+        logger.info(
+            "Harvest restored (%s): score=%.4f",
+            self.config.harvest_mode,
+            self._best_score,
+        )
 
     def _begin_epoch(self) -> None:
         """Seed the stream the epoch's shuffle permutation draws from."""
@@ -108,6 +172,7 @@ class SystemTrainer:
             epoch_energy += metrics.get("energy", 0.0) * batch
             num_samples += batch
             self.global_step += 1
+            self._harvest_step()
 
             if self.global_step % self.config.log_every_n_steps == 0:
                 logger.info(
@@ -138,6 +203,7 @@ class SystemTrainer:
             epoch_metrics.update(val_metrics)
 
         self.history.append(epoch_metrics)
+        self._harvest_snapshot_epoch()
         self.current_epoch += 1
 
         logger.info(
@@ -261,9 +327,11 @@ class SystemTrainer:
             self.current_epoch,
         )
 
+        self._harvest_init()
         while self.current_epoch < self.config.max_epochs:
             self.train_epoch()
 
+        self._harvest_finalize()
         logger.info("Training complete")
         return self.history
 
