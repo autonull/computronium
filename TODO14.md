@@ -34,8 +34,10 @@
 >    GPU port measured: works but ~3× slower than CPU (launch-bound).
 >    PEPITA LM cell: BOUNDARY with mechanism (§15) — eval leak caught
 >    and retracted (0.988 → 0.24 clean); label-modulation trains a
->    label-copier, not a sequence model; family is classification-
->    bound.
+>    label-copier, not a sequence model; family is classification-bound.
+> 7. **FF/EqProp under harvest (§16)**: EqProp joins the depth law
+>    (early peak → collapse; most severe depth wall); FF grid deferred
+>    on an unresolved d4 harness gap — no FF claim made.
 >
 > **Open queue (all optional extensions, nothing blocking):** PEPITA on
 > the LM/transformer cell; PEPITA paper-ablation variants (B
