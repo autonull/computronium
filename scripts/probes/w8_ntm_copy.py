@@ -87,6 +87,24 @@ TOTAL_STEPS = SEQ_LEN * 2 + 1
 # under detached state, which R directly stresses). Set via --repeats=R.
 REPEATS = 1
 
+# Task flag (TODO15 §17.10): "copy" = validated sequential task. "recall"
+# = associative recall with EXPLICIT keys (the first pass hid the key→slot
+# binding probe-side, making it unsupervisable for BPTT — the control must
+# never depend on information it cannot observe). Input layout: input step
+# t presents (value=bit on ch0, key=one-hot perm[t] on ch1..); output step
+# k presents one-hot key k as the cue (ch1..) and must emit the value
+# paired with that key. perm = identity reduces recall to copy exactly.
+TASK = "copy"
+
+
+def _draw_perm(batch: int, L: int, gen: torch.Generator) -> Tensor | None:
+    if TASK == "copy":
+        return None
+    # ONE permutation per episode batch — the writer supervision targets
+    # are batch-wide (a per-row perm would need per-row targets; the first
+    # recall pass supervised every row onto row 0's slots: diversity 0.188).
+    return torch.randperm(L, generator=gen).unsqueeze(0).expand(batch, L)
+
 
 def _batch(gen: torch.Generator, L: int = SEQ_LEN) -> Tensor:
     """Random bit sequences (B, L) for one copy episode."""
@@ -143,17 +161,36 @@ def _zero_mem(batch: int) -> Tensor:
     return mem
 
 
-def _episode_targets(bits: Tensor, L: int) -> Tensor:
+def _identity_perm(L: int, batch: int) -> Tensor:
+    return torch.arange(L).unsqueeze(0).expand(batch, L)
+
+
+def _episode_targets(bits: Tensor, L: int, perm: Tensor | None = None) -> Tensor:
+    """Output-phase targets. copy: bit k at step L+1+k. recall: slots were
+    written in permuted order (perm[t] = slot of input t); output step k is
+    cued on slot k and must emit the value written there (bits[:, inv_k])."""
     targets = torch.full((bits.size(0), _total_steps(L)), -100, dtype=torch.long)
-    targets[:, L + 1 :] = bits.repeat(1, REPEATS)
+    out = bits.repeat(1, REPEATS)
+    if perm is not None:
+        inv = perm.argsort(1)
+        out = bits.gather(1, inv).repeat(1, REPEATS)
+    targets[:, L + 1 :] = out
     return targets
 
 
-def _bptt_episode(controller: nn.Module, heads: nn.Module, bits: Tensor):
+def _bptt_episode(
+    controller: nn.Module, heads: nn.Module, bits: Tensor, perm: Tensor | None = None
+):
     """One full-graph teacher-forced episode; returns (logits, targets)."""
     L = bits.size(1)
-    inputs = torch.zeros(bits.size(0), _total_steps(L), 1 + MEM_WIDTH)
+    B = bits.size(0)
+    inputs = torch.zeros(B, _total_steps(L), 1 + MEM_WIDTH)
     inputs[:, :L, 0] = bits.float()
+    if perm is not None:
+        for t in range(L):
+            inputs[:, t, 1 + perm[0, t]] = 1.0  # explicit key
+        for k in range(L):
+            inputs[:, L + 1 + k, 1 + k] = 1.0  # cue = key
     mem = _zero_mem(bits.size(0))
     state = (
         torch.zeros(1, bits.size(0), HIDDEN),
@@ -164,12 +201,21 @@ def _bptt_episode(controller: nn.Module, heads: nn.Module, bits: Tensor):
         hc, state = controller(inputs[:, t : t + 1], state)
         logits, _read, mem, _aw, _ar = heads(hc.squeeze(1), mem)
         out_logits.append(logits)
-    return torch.stack(out_logits, dim=1), _episode_targets(bits, L)
+    return torch.stack(out_logits, dim=1), _episode_targets(bits, L, perm)
 
 
 def _eval_batch(seed: int = 999, L: int = SEQ_LEN) -> Tensor:
     """Fixed fresh-draw eval batch, independent of the training generator."""
     return _batch(torch.Generator().manual_seed(seed), L)
+
+
+def _eval_perm(seed: int = 999, L: int = SEQ_LEN) -> Tensor | None:
+    """Fixed eval permutation for recall (matched to _eval_batch's draw)."""
+    if TASK == "copy":
+        return None
+    return _draw_perm(
+        _eval_batch(seed, L).size(0), L, torch.Generator().manual_seed(seed)
+    )
 
 
 def _run_bptt(steps: int, lr: float, seed: int = 0):
@@ -182,7 +228,8 @@ def _run_bptt(steps: int, lr: float, seed: int = 0):
     best_fg = 0.0
     for step in range(steps):
         bits = _batch(gen)
-        logits_seq, targets = _bptt_episode(controller, heads, bits)
+        perm = _draw_perm(bits.size(0), bits.size(1), gen)
+        logits_seq, targets = _bptt_episode(controller, heads, bits, perm)
         loss = nn.functional.cross_entropy(
             logits_seq.reshape(-1, 2), targets.reshape(-1), ignore_index=-100
         )
@@ -191,7 +238,7 @@ def _run_bptt(steps: int, lr: float, seed: int = 0):
         torch.nn.utils.clip_grad_norm_(params, 5.0)
         opt.step()
         if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch())
+            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
             best_fg = max(best_fg, fg)
             print(
                 f"bptt step {step + 1}: loss {float(loss.detach()):.4f} "
@@ -201,8 +248,8 @@ def _run_bptt(steps: int, lr: float, seed: int = 0):
     return controller, heads, best_fg
 
 
-def _greedy_copy_acc(controller, heads, bits: Tensor) -> float:
-    """Greedy rollout copy accuracy (works for any L; L inferred from bits)."""
+def _greedy_copy_acc(controller, heads, bits: Tensor, perm: Tensor | None = None):
+    """Greedy rollout accuracy (works for any L; L inferred from bits)."""
     B, L = bits.shape
     mem = _zero_mem(B)
     st = (torch.zeros(1, B, HIDDEN), torch.zeros(1, B, HIDDEN))
@@ -212,11 +259,15 @@ def _greedy_copy_acc(controller, heads, bits: Tensor) -> float:
             x_t = torch.zeros(B, 1, 1 + MEM_WIDTH)
             if t < L:
                 x_t[:, 0, 0] = bits[:, t].float()
+                if perm is not None:
+                    x_t[:, 0, 1 + perm[0, t]] = 1.0
+            elif perm is not None and t >= L + 1:
+                x_t[:, 0, 1 + (t - L - 1) % L] = 1.0
             hc, st = controller(x_t, st)
             logits, _read, mem, _aw, _ar = heads(hc.squeeze(1), mem)
             outs.append(logits)
     pred = torch.stack(outs, 1).argmax(-1)
-    tg = _episode_targets(bits, L)
+    tg = _episode_targets(bits, L, perm)
     mask = tg != -100
     return float((pred == tg)[mask].float().mean())
 
@@ -244,6 +295,7 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
     code,
     writer: str = "code",
     credit_controller: bool = False,
+    perm: Tensor | None = None,
 ):
     """One timestep's local losses — no tensor carries grad across the
     timestep boundary (state/memory inputs detached).
@@ -265,13 +317,17 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
     losses = []
     if t >= L + 1:
         k = (t - L - 1) % L
-        losses.append(nn.functional.cross_entropy(logits, bits[:, k]))
+        v_idx = bits[:, k]
+        if perm is not None:
+            inv = perm.argsort(1)
+            v_idx = bits.gather(1, inv[:, k : k + 1]).squeeze(1)
+        losses.append(nn.functional.cross_entropy(logits, v_idx))
         # read head: the same CE with h detached — the read vector itself
         # carries the gradient into (kr, beta) only.
         losses.append(
             nn.functional.cross_entropy(
                 heads.out(torch.cat([hc.detach().squeeze(1), read], dim=-1)),
-                bits[:, k],
+                v_idx,
             )
         )
         if writer == "expected":
@@ -292,7 +348,8 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
         h = h_live if credit_controller else h_live.detach()
         w = a_w.detach() if writer == "expected" else a_w
         if writer == "expected":
-            c = _writer_target(bits, t)
+            w_slot = t if perm is None else int(perm[0, t])
+            c = _writer_target(bits, w_slot)
             add_v = torch.tanh(heads.add(h))
             erase_v = torch.sigmoid(heads.erase(h))
             # expected-content MSE: E_{s~a_w} ||add_v - c||^2 — the write
@@ -315,7 +372,7 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
             # target, same status as the content target c).
             target_a = (
                 torch.nn.functional
-                .one_hot(torch.tensor(t % MEM_SLOTS), MEM_SLOTS)
+                .one_hot(torch.tensor(w_slot % MEM_SLOTS), MEM_SLOTS)
                 .float()
                 .expand_as(a_w)
             )
@@ -341,7 +398,13 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
 
 
 def _local_episode(
-    controller, heads, bits, code, writer: str = "code", credit_controller: bool = False
+    controller,
+    heads,
+    bits,
+    code,
+    writer: str = "code",
+    credit_controller: bool = False,
+    perm: Tensor | None = None,
 ):
     """One episode of zero-history local losses (state/memory detached
     per timestep; no gradient crosses a timestep boundary)."""
@@ -356,8 +419,22 @@ def _local_episode(
         x_t = torch.zeros(bits.size(0), 1, 1 + MEM_WIDTH)
         if t < L:
             x_t[:, 0, 0] = bits[:, t].float()
+            if perm is not None:
+                x_t[:, 0, 1 + perm[0, t]] = 1.0
+        elif perm is not None and t >= L + 1:
+            x_t[:, 0, 1 + (t - L - 1) % L] = 1.0
         step_losses, state, mem_next = _local_step(
-            controller, heads, mem, state, x_t, t, bits, code, writer, credit_controller
+            controller,
+            heads,
+            mem,
+            state,
+            x_t,
+            t,
+            bits,
+            code,
+            writer,
+            credit_controller,
+            perm,
         )
         losses.extend(step_losses)
         mem = mem_next.detach()
@@ -365,7 +442,7 @@ def _local_episode(
 
 
 def _diagnose(  # ruff: ignore[too-many-locals] - probe harness
-    controller, heads, bits: Tensor
+    controller, heads, bits: Tensor, perm: Tensor | None = None
 ) -> dict[str, float]:
     """Read hit-rate diagnostic (§11.9 finding 3, the decisive split):
     at output step t, does the read addressing a_r place its mass on the
@@ -374,6 +451,8 @@ def _diagnose(  # ruff: ignore[too-many-locals] - probe harness
     sequence; low -> the read-local rule is the weak link. Also reports
     write-slot diversity and output accuracy conditioned on a hit."""
     B, L = bits.shape
+    if perm is None:
+        perm = _identity_perm(L, B)
     mem = _zero_mem(B)
     state = (
         torch.zeros(1, B, HIDDEN),
@@ -387,13 +466,19 @@ def _diagnose(  # ruff: ignore[too-many-locals] - probe harness
             x_t = torch.zeros(B, 1, 1 + MEM_WIDTH)
             if t < L:
                 x_t[:, 0, 0] = bits[:, t].float()
+                if TASK == "recall":
+                    x_t[:, 0, 1 + perm[0, t]] = 1.0
+            elif TASK == "recall" and t >= L + 1:
+                x_t[:, 0, 1 + (t - L - 1) % L] = 1.0
             hc, state = controller(x_t, state)
             logits, read, mem_next, a_w, a_r = heads(hc.squeeze(1), mem)
             if t < L:
                 write_slot[t] = a_w.argmax(-1)
             elif t >= L + 1:
                 k = t - L - 1
-                hit = a_r.argmax(-1) == write_slot[k % L]
+                hit = a_r.argmax(-1) == (
+                    k % L if TASK == "recall" else write_slot[k % L]
+                )
                 correct = logits.argmax(-1) == bits[:, k % L]
                 hits.append(hit.float())
                 accs.append(correct.float())
@@ -434,13 +519,16 @@ def _run_local(
     best_fg = 0.0
     for step in range(steps):
         bits = _batch(gen)
-        loss = _local_episode(controller, heads, bits, code, writer, credit_controller)
+        perm = _draw_perm(bits.size(0), bits.size(1), gen)
+        loss = _local_episode(
+            controller, heads, bits, code, writer, credit_controller, perm
+        )
         opt.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(params, 5.0)
         opt.step()
         if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch())
+            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
             best_fg = max(best_fg, fg)
             print(
                 f"{label} step {step + 1}: loss {float(loss.detach()):.4f} "
@@ -488,12 +576,13 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
     best_fg = 0.0
     for step in range(steps):
         bits = _batch(gen)
-        loss = _local_episode(controller, heads, bits, code)
+        perm = _draw_perm(bits.size(0), bits.size(1), gen)
+        loss = _local_episode(controller, heads, bits, code, "code", False, perm)
         opt.zero_grad()
         loss.backward()
         opt.step()
         if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch())
+            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
             best_fg = max(best_fg, fg)
             print(
                 f"local-muon step {step + 1}: loss {float(loss.detach()):.4f} "
@@ -516,10 +605,12 @@ def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
     global MEM_WIDTH, REPEATS  # ruff: ignore[global-statement] - probe CLI overrides module constants
     MEM_WIDTH = int(opt.get("width", 8))
     REPEATS = int(opt.get("repeats", 1))
+    globals()["TASK"] = opt.get("task", "copy")
+
     arms = [opt["arm"]] if "arm" in opt else ["bptt", "local"]
     print(
         f"w8_ntm_copy {REV}; steps {steps} seed {seed} lr {lr:g} "
-        f"width {MEM_WIDTH} repeats {REPEATS} arms {arms}"
+        f"width {MEM_WIDTH} repeats {REPEATS} task {TASK} arms {arms}"
     )
     run = {
         "bptt": _run_bptt,
@@ -558,7 +649,7 @@ def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
             },
             "logs/w8_ntm_local3.pt",
         )
-        stats = _diagnose(controller, heads, _eval_batch())
+        stats = _diagnose(controller, heads, _eval_batch(), _eval_perm())
         print("read diagnostic:", {k: round(v, 3) for k, v in stats.items()})
     if trained is not None and "--len-eval" in args:
         controller, heads, _ = trained

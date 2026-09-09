@@ -1024,3 +1024,56 @@ ablation numbers: the LSTM-alone baseline (no memory at all, matched
 budget) was not measured — the 0.31-0.47 ablated figures are readout-
 crippled, not a clean no-memory control; run that cell before citing
 "the memory carries the sequence" as quantitative.
+
+## §17.10 Associative recall rung — two task-design defects, then OPEN-partial
+with a clean decomposition (addressing solved, value binding unsolved)
+
+`w8_ntm_copy.py --task=recall` (new). Pre-registered lesson chain:
+
+1. **DEFECT (task design): hidden-perm unsupervisability.** First pass
+   wrote input t to a RANDOM hidden slot perm[t]; targets demanded the
+   probe's perm. The local arm "coped" only because its writer
+   supervision leaked the perm; BPTT — which must infer the binding
+   from the episode — sat at 0.62-0.69 flat, exactly what an
+   unsupervisable target predicts. **Redesign: EXPLICIT keys** — input
+   step t presents (value on ch0, one-hot key perm[t] on ch1..); output
+   step k cues one-hot key k. The binding is now fully observable
+   in-episode. BPTT control: **1.000 @ 3000** (loss 0.0001) — gold
+   control validates the task. Rule for the record: **any target the
+   BPTT control cannot in principle learn from the episode's observable
+   information is a task-design defect, not a model result.**
+2. **DEFECT (writer supervision): per-row perm.** perm was drawn per
+   batch ROW while writer targets used row 0's slots (diversity 0.188,
+   acc_read_zeroed > acc). Fixed: one perm per episode batch.
+3. **Result (explicit keys, shared perm, width 16, seed 0):** bptt
+   1.000 @ 3000; local3 **0.760 peak @ 4800 / 0.698 @ 12000** and
+   still noisy. Diagnostics: read_hit_rate **1.000** (cue→slot
+   addressing fully solved), acc_read_zeroed 0.500 (memory causal),
+   acc_given_hit 0.698 — **the failure is content-write precision**:
+   zero-training inspection of written slots shows the bit magnitude
+   compressed (recall ~0.72/0.77 for bits 0/1 vs copy's 0.49-0.66/
+   0.73-0.80 separation). Same residual surface §11.16 named (write
+   precision), now isolated by an explicit-keys task where addressing
+   cannot be the excuse.
+
+**Status: OPEN-partial.** The local factorization solves recall's
+addressing but not its value binding at 4× the BPTT budget. Queued
+levers (pre-register before running): (a) writer loss re-weighting
+(content vs addressing terms); (b) value-channel supervision through
+the live hc at the cued-read step (the credit_controller analog for
+values); (c) more steps — copy's own write precision took 8000+.
+
+## §17.11 Ordinary-task controls — memory is SUPERFLUOUS on MNIST rows
+
+`w8_ordinary_task.py --arm=lstm` (no-memory control, queued §17.9):
+LSTM-alone **0.893** (3 seeds) ≈ bptt 0.897 ≈ hebbian 0.916 on MNIST;
+cross-task FashionMNIST seed 0: bptt 0.791 / hebbian 0.796 (parity
+replicates). Reinterpretation of §17.9: the Hebbian trace is USED
+(ablation drops acc to 0.31-0.47) but NOT NEEDED — a gated recurrent
+state integrates a 28-step sequence without external memory, and the
+ablated readout fails from co-adaptation, not h insufficiency.
+**The ordinary-task cell cannot discriminate memory quality; memory
+value is only measurable on retrieval-demanding tasks (copy/recall) —
+which is why the W8 ladder used algorithmic tasks. §17.5's bptt-vs-
+local gap on the ordinary task stands as a credit-transport result,
+not a memory result.**

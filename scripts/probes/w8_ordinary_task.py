@@ -55,8 +55,8 @@ class BudgetError(RuntimeError):
     """Training budget not honored by the data loader (§17.5 hazard)."""
 
 
-def _data():
-    task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
+def _data(task_name: str = "mnist"):
+    task = create_task(task_name, device="cpu", quick_mode=True, num_workers=0)
     task.setup()
     raw = list(islice(task.get_dataloader("train"), 600))
     train = [(x.view(x.size(0), SEQ, -1), y) for x, y in raw]
@@ -306,6 +306,44 @@ def _run_local(steps: int, lr: float, seed: int, train, test) -> float:
     return best
 
 
+def _run_lstm(steps: int, lr: float, seed: int, train, test) -> float:
+    """No-memory control (§17.9 queue): same controller reading the row
+    sequence, plain final-state classifier — isolates what the memory
+    trace contributes over a plain recurrent encoder."""
+    torch.manual_seed(seed)
+    controller = nn.LSTM(SEQ, HIDDEN, batch_first=True)
+    head = nn.Linear(HIDDEN, CLASSES)
+    params = [*controller.parameters(), *head.parameters()]
+    opt = torch.optim.Adam(params, lr=lr)
+    best = 0.0
+
+    def eval_fn() -> float:
+        ok = tot = 0
+        with torch.no_grad():
+            for rrow, ry in test:
+                _out, (hn, _cn) = controller(rrow)
+                lg = head(hn[-1])
+                ok += (lg.argmax(1) == ry).sum().item()
+                tot += ry.size(0)
+        return ok / tot
+
+    for step, (rrow, y) in enumerate(islice(train, steps)):
+        _out, (hn, _cn) = controller(rrow)
+        loss = nn.functional.cross_entropy(head(hn[-1]), y)
+        opt.zero_grad()
+        loss.backward()
+        nn.utils.clip_grad_norm_(params, 5.0)
+        opt.step()
+        if (step + 1) % max(steps // 5, 1) == 0:
+            acc = eval_fn()
+            best = max(best, acc)
+            print(
+                f"lstm step {step + 1}: loss {loss:.4f} acc(fresh) {acc:.3f}",
+                flush=True,
+            )
+    return best
+
+
 def main() -> int:
     t0 = time.time()
     args = sys.argv[1:]
@@ -314,8 +352,13 @@ def main() -> int:
     lr = float(opt.get("lr", 1e-3))
     seeds = (int(opt["seed"]),) if "seed" in opt else (0, 1, 2)
     arms = [opt["arm"]] if "arm" in opt else ["bptt", "local"]
-    train, test = _data()
-    run = {"bptt": _run_bptt, "local": _run_local, "hebbian": _run_hebbian}
+    train, test = _data(opt.get("task", "mnist"))
+    run = {
+        "bptt": _run_bptt,
+        "local": _run_local,
+        "hebbian": _run_hebbian,
+        "lstm": _run_lstm,
+    }
     results: dict[str, list[float]] = {}
     for arm in arms:
         for seed in seeds:
