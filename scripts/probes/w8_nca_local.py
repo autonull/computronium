@@ -83,11 +83,13 @@ from torch import Tensor
 from computronium import ParameterUpdateConfig
 from computronium.ontology.update import (
     EuclideanUpdate,
+    MeanNormUpdate,
     OrthoAdamUpdate,
     RiemannianOrthogonalUpdate,
+    SpectralConstrainedUpdate,
 )
 
-REV = "2026-09-08-r10"  # W8.4 unshared per-site weights
+REV = "2026-09-09-r11"  # TODO16 §7.2: spectral/mean_norm ρ-constraint updates
 
 GRID = 16
 CHANNELS = 4
@@ -576,6 +578,16 @@ def _updates(lr: float) -> dict[str, object]:
                     step_size=lr, ortho_lr=lr, momentum=0.9
                 )
             )
+        ),
+        # TODO16 §7.2 ρ-constraint axis: update geometries that bound the
+        # parameter displacement (spectral/mean-norm) vs the unconstrained
+        # euclid baseline — the operationalization of "controlled departure
+        # from contraction".
+        "spectral": SpectralConstrainedUpdate(
+            _no_clip(ParameterUpdateConfig.spectral_constrained(step_size=lr))
+        ),
+        "mean_norm": MeanNormUpdate(
+            _no_clip(ParameterUpdateConfig.mean_norm(step_size=lr))
         ),
     }
 
