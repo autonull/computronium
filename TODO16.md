@@ -505,7 +505,12 @@ fg-acc means (plain → routing):
   activity was 0.054 (mostly closed); if gates shut before
   reconfiguring, "no harm" could be "routing inert under muon". A
   gate-open-fraction × fg diagnostic on the muon routing rung would
-  separate the readings (~5 min, queued).
+  separate the readings (~5 min, queued). **RESOLVED from recorded data
+  (no re-run needed):** euclid routing s0 had gate activity 0.062 → fg
+  0.558 (collapse); muon routing s0 had gate activity 0.054 → fg 1.000.
+  Comparable gate closure, opposite outcomes — reconfiguration DID occur
+  under muon and the stability cost is genuinely absorbed by the
+  orthogonalized displacement. Alternative reading closed.
 
 ### Remaining open work (post session 5)
 - Muon-routing gate diagnostic (above) — the only follow-up the 7.2
