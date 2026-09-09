@@ -79,9 +79,9 @@
 >     1. ~~multi-step rollout supervision~~ RUN (E1b): absolute accuracy
 >        improved at every N but growth stayed exponential (56×) — see
 >        E1b verdict above;
->     2. non-chaotic but deep recurrences (e.g. contractive-with-margin
->        maps) where composition error is bounded — but then verify null
->        cannot shortcut (v1 lesson);
+>     2. ~~non-chaotic but deep recurrences~~ RUN (E1d, session 6):
+>        contraction bounds composition inside the geometric series —
+>        the E1 explosion is chaos-specific, see the E1d verdict;
 >     3. ~~ψ-sequenced closed-form chunks~~ RUN (E1c, session 5):
 >        operator-space fit composes benignly (linear ~N·ε²,
 >        chunking-invariant) — the boundary is a precision-scaling
@@ -114,6 +114,40 @@
      hybrid (closed-form operator + learned state-dependent
      correction composed under the N·ε² budget) is the natural next
      mechanism.
+     **E1d follow-up #2 RUN (contractive-with-margin —
+     `scripts/probes/w17_e1d_contractive.py`, 1066 s, 3 seeds, logs
+     `logs/w17_e1d.log`): E1d ALIVE — the E1 multiplicative explosion
+     is CHAOS-SPECIFIC.** Map T(r) = κ·tanh(W r), κ=0.995 (σ_max(J_T)
+     measured 0.9796); arms matched to E1. Findings:
+     - ψ (one-step local credit, trained ONCE per seed on
+       trajectory-mixed pairs) composes BOUNDED: abs error 0.00089 →
+       0.00274 over N=4→32 (3.1×, increments shrinking), 10× INSIDE
+       the geometric bound ε₁(1−κ³²)/(1−κ)=0.026. E1's chaotic
+       21×-unbounded explosion has no counterpart here.
+     - **Unified law candidate (E1+E1b+E1c+E1d):** composition error
+       ≈ min(N·ε², ε/(1−κ)) — linear accumulation (E1c) capped by
+       geometric saturation (E1d); multiplicative explosion (E1) only
+       when the operator field has expanding directions (σ_max(J)>1).
+       Local credit's failure on chaotic maps is a *credit* pathology,
+       not an expressiveness limit.
+     - **r1 defects found en route (§8 audits, both recorded):**
+       (a) train/eval mismatch — one-step pairs sampled only at t=0
+       are off-distribution for attractor-neighborhood eval states
+       (fixed: uniform-t trajectory sampling; one-step error then
+       IMPROVES near the attractor, 0.00027→0.0001);
+       (b) U-normalization degenerate under contraction — Var(r_N)
+       collapses with N (0.86→0.39) so unexplained-fraction inflates
+       mechanically while absolute error saturates; the r1 U-criterion
+       verdict was miscalibrated, replaced by the absolute-error +
+       geometric-bound criterion (r2). The v1-lesson shortcut check
+       rides on variance retention (0.394 > floor), not U.
+     - null/BPTT absolute errors DECREASE with N under contraction
+       (0.00030→0.00017 / 0.00079→0.00049): the task gets easier for
+       end-to-end arms as targets concentrate — matched behavior, no
+       artifact.
+     **E1 follow-ups COMPLETE (1b/1c/1d run; boundary fully
+     mechanism-localized: credit-horizon-independent compounding on
+     chaotic maps, benign linear+geometric composition otherwise).**
 >
 > **PROGRESS (2026-09-10, session 5 — Phase C disposition + E3 §20
 > round): TODO17 CLOSED.**
@@ -186,8 +220,9 @@
 > pyright; paper-claim lock re-run after the registry edit. E1
 > follow-ups 3 (operator-space closed-form chunks — RUN, see E1c
 > verdict: linear ~N·ε² law, chunking invariant) and 2
-> (contractive-with-margin recurrences) — 2 remains the recorded next
-> design and must not be improvised.
+> (contractive-with-margin — RUN, see E1d verdict: bounded inside the
+> geometric series) — **all E1 follow-ups complete; the boundary is
+> fully mechanism-localized.**
 >
 > **Runtime note:** E-probe scripts are single-process multi-arm (not the
 > planned cell grid); E1 ≈ 21 min (6000 steps × 4 N × 3 arms × 3 seeds),
