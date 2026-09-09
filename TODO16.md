@@ -444,6 +444,77 @@ ran; two verdicts changed.
   JSONs regenerated this session; no FrontierRecord objects persisted —
   results live in `benchmark_results/*/`).
 
+---
+
+## Session 5 (2026-09-09, continued) — Phase 7 campaigns, subsetted
+
+### Campaign infrastructure (subsetted for intermediate feedback)
+
+- `scripts/probes/w16_campaign.py` — 7.1 subset driver: fixed {Digital ⊗
+  FeedforwardDAG (mupc, residual, d32, w128) ⊗ EPC max_steps 5}, varied
+  P × C × U × seeds, MNIST 150 batches. `--p={null,routing,fastweight}`
+  selects the subset; `--seeds=` shards for 3-way parallelism.
+  Cell ~28 s; per-seed shard (8 cells) ~4 min → one subset ≈ 4 min at
+  3 parallel (72 cells total ≈ 24 min vs the plan's 144 min estimate).
+- Pre-registered lr table CORRECTED by a 4-cell optimizer-rung screen
+  (Rule 12): muon lr 0.02 (recorded on the shallow 2×64 instantaneous
+  arch) collapses on d32 EPC (0.637/0.144/0.067 at 0.02/0.05/0.1);
+  **muon 0.005 → 0.856**. Final U axis = {muon 0.005, ortho 0.02}.
+  euclid@0.02 sanity 0.842 (not used in the grid).
+- `w8_nca_local` r11: added `spectral`/`mean_norm` updates (the §7.2
+  ρ-constraint axis operationalized as displacement-constraining update
+  geometries vs unconstrained euclid).
+
+### 7.1 results (24 cells/subset × 3 subsets, logs/w16_campaign_{A,B,C}_s*.log)
+
+Null baseline (A): bp 0.808/0.891 (muon/ortho), fa 0.611/0.416
+(**muon rescues FA +0.19** on this arch, replicating the w1 recipe-card
+rescue direction), pepita 0.883/0.874 (bp-parity, home), lg 0.108 = chance
+(LEMMA-family boundary; consistent with the recorded alignment≈0 closure).
+- **Routing (B):** the only cell exceeding the ±0.03 modulation bar is
+  fa×muon **−0.09** (0.520 vs 0.611); pepita×ortho +0.02; bp neutral.
+- **FastWeight (C):** near-inert — pepita cells BITWISE-identical to
+  null in all 3 seeds; max |Δ| ≈ 0.02 (bp×ortho s2 +0.017). The
+  inertness suspect fired per pre-registration: fast-weight ψ is a
+  wiring-level no-op on the pepita path of this harness (the ψ-step/
+  modulation does not enter the pepita pseudo-gradient path).
+- **§7.1 verdict: FALSIFIED as pre-registered** — ψ does not modulate the
+  I(C,U) surface on clean MNIST at d32 EPC scale (1 of 16 cells ≥ 0.03).
+  Consistent with §2.1 (fixed-write ψ parity) and the routing depth
+  result (mitigant only). **The P-axis contribution is the BOUNDARIES,
+  not a new surface interaction.** Note the cost accounting: 72 cells in
+  ~24 min of background walltime (subset + shard parallelism), far under
+  the plan's estimate.
+
+### 7.2 results (4 update families × {plain, routing} × 3 seeds, 400 eps, logs/w16_c72_*.log)
+
+fg-acc means (plain → routing):
+- euclid: 0.984 → 0.827 (s0 collapse 0.576 — replicates the recorded
+  0.558 gate-collapse signature)
+- muon: 0.962 → **0.984 — NO stability loss under routing**
+- spectral: 0.921 → 0.813 (s0 0.535 collapse, euclid-like)
+- mean_norm: 0.427 → 0.079 — the update itself destabilizes the NCA even
+  without routing; catastrophic combined.
+- **§7.2 datum: the stability cost of rule reconfiguration is
+  update-geometry-conditional.** Orthogonalized (muon) updates absorb
+  the gate reconfiguration without contraction loss; euclid/spectral pay
+  ~0.10–0.17; mean-norm is intrinsically unstable on this substrate.
+  This QUALIFIES the §2.4 biconditional: sacrificing contraction margin
+  is sufficient but not necessary — the optimizer's displacement geometry
+  decides. Caveat (open, one alternative reading): muon's routing gate
+  activity was 0.054 (mostly closed); if gates shut before
+  reconfiguring, "no harm" could be "routing inert under muon". A
+  gate-open-fraction × fg diagnostic on the muon routing rung would
+  separate the readings (~5 min, queued).
+
+### Remaining open work (post session 5)
+- Muon-routing gate diagnostic (above) — the only follow-up the 7.2
+  datum owes.
+- L2 compute_efficiency psi_engaged upgrade (optional, ~30 min).
+- TODO16 is otherwise COMPLETE: Phases 0–6 closed, both campaigns run
+  with subsetted intermediate feedback, all success criteria met or
+  explicitly recorded as boundaries.
+
 ### Notes for future sessions (carried)
 - `pytest-timeout` default 60 s; `faulthandler_timeout=120` dumps a stack
   but does not kill — >2-min demo tests need `@pytest.mark.timeout(900)`.
