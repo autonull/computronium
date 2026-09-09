@@ -70,7 +70,7 @@ def _run(credit: str, depth: int, width: int, seed: int, lr: float = LR_MUON) ->
     else:
         credit_obj = LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
-                feedback_scale=0.01, local_objective="pepita"
+                feedback_scale=0.01, local_objective="lemma"
             )
         )
     system = compose_system(

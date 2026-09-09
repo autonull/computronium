@@ -278,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
             "pepita/control",
             LocalGoodnessCredit(
                 CreditAssignmentConfig.local_goodness(
-                    feedback_scale=0.01, local_objective="pepita"
+                    feedback_scale=0.01, local_objective="lemma"
                 )
             ),
             inst,
@@ -288,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
             "pepita/centered",
             CenteredPepitaCredit(
                 CreditAssignmentConfig.local_goodness(
-                    feedback_scale=0.01, local_objective="pepita"
+                    feedback_scale=0.01, local_objective="lemma"
                 )
             ),
             inst,
@@ -298,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             "pepita/ortho",
             LocalGoodnessCredit(
                 CreditAssignmentConfig.local_goodness(
-                    feedback_scale=0.01, local_objective="pepita", orthogonal_init=True
+                    feedback_scale=0.01, local_objective="lemma", orthogonal_init=True
                 )
             ),
             inst,
@@ -308,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
             "pepita/fs1e-3",
             LocalGoodnessCredit(
                 CreditAssignmentConfig.local_goodness(
-                    feedback_scale=1e-3, local_objective="pepita"
+                    feedback_scale=1e-3, local_objective="lemma"
                 )
             ),
             inst,

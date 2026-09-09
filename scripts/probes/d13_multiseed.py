@@ -60,11 +60,11 @@ ARMS = {
         ),
     ),
     "pepita/euclidean": lambda: (
-        _local("pepita"),
+        _local("lemma"),
         EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.2)),
     ),
     "pepita/muon": lambda: (
-        _local("pepita"),
+        _local("lemma"),
         RiemannianOrthogonalUpdate(
             ParameterUpdateConfig.riemannian_orthogonal(step_size=0.02, momentum=0.9)
         ),
@@ -121,7 +121,7 @@ def main() -> None:
             f"{arm:>18}: {mean(accs):.3f} +/- {stdev(accs):.3f}  "
             f"{[round(a, 3) for a in accs]}"
         )
-    for local in ("ff", "pepita"):
+    for local in ("ff", "lemma"):
         muon = results[f"{local}/muon"]
         euclid = results[f"{local}/euclidean"]
         lifts = [m - e for m, e in zip(muon, euclid)]

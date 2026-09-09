@@ -668,7 +668,7 @@ class TestLocalGoodnessRealization:
 
     def test_ff_and_pepita_differ(self, device):
         ff = self._grads("ff", device)
-        pepita = self._grads("pepita", device)
+        pepita = self._grads("lemma", device)
         assert len(ff) == len(pepita) > 0
         for g_ff, g_pep in zip(ff, pepita, strict=True):
             assert not torch.allclose(g_ff, g_pep), (
@@ -677,8 +677,8 @@ class TestLocalGoodnessRealization:
             )
 
     def test_pepita_deterministic_and_nonzero(self, device):
-        a = self._grads("pepita", device)
-        b = self._grads("pepita", device)
+        a = self._grads("lemma", device)
+        b = self._grads("lemma", device)
         for g_a, g_b in zip(a, b, strict=True):
             assert g_a.abs().sum() > 0, "PEPITA gradient must be nonzero"
             assert torch.equal(g_a, g_b), (

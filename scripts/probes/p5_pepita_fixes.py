@@ -96,7 +96,7 @@ class VariantPepita(LocalGoodnessCredit):
 def _variant(kind: str):
     c = VariantPepita(
         CreditAssignmentConfig.local_goodness(
-            feedback_scale=0.01, local_objective="pepita"
+            feedback_scale=0.01, local_objective="lemma"
         )
     )
     c.kind = kind

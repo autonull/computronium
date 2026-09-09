@@ -19,8 +19,10 @@ Walltime printed, never recorded.
 from __future__ import annotations
 
 import argparse
+import itertools
 import sys
 import time
+from itertools import islice
 
 import torch
 from torch.nn import functional
@@ -54,28 +56,44 @@ AUTOPSY_BATCHES = 50
 WEIGHT_DECAY = 0.0
 HARVEST = False
 EMA = False
+PROBE_FREE = False
 SEED = 0
+DEVICE = "cpu"
+TASK = "mnist"
+INPUT_DIM = 784
 
 
-def main() -> int:
+def main() -> int:  # noqa: C901, PLR0912, PLR0914, PLR0915
     t0 = time.time()
-    task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
+    task = create_task(TASK, device=DEVICE, quick_mode=True, num_workers=0)
     task.setup()
     torch.manual_seed(SEED)  # D8 trap: seed BEFORE the loader draw
-    train_data = list(_flatten(task.get_dataloader("train"), AUTOPSY_BATCHES))
-    eval_data = list(_flatten(task.get_dataloader("test"), 20))
+    train_data = [
+        (x.to(DEVICE), y.to(DEVICE))
+        for x, y in islice(
+            (
+                (x.to(DEVICE), y.to(DEVICE))
+                for x, y in itertools.cycle(task.get_dataloader("train"))
+            ),
+            AUTOPSY_BATCHES,
+        )
+    ]
+    eval_data = [
+        (x.to(DEVICE), y.to(DEVICE))
+        for x, y in _flatten(task.get_dataloader("test"), 20)
+    ]
 
     torch.manual_seed(SEED)
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
-            input_dim=784,
+            input_dim=INPUT_DIM,
             output_dim=10,
             hidden_dims=(WIDTH,) * DEPTH,
             init_scheme="mupc",
             residual=True,
         )
-    )
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
+    ).to(DEVICE)
+    substrate = DigitalSubstrate(SubstrateConfig.digital(device=DEVICE))
     dynamics = ErrorPredictiveCodingDynamics(
         StateDynamicsConfig.error_predictive_coding(
             max_steps=DEPTH,
@@ -137,18 +155,15 @@ def main() -> int:
             with torch.no_grad():
                 for w, e in zip(weights, ema, strict=True):
                     e.mul_(ema_decay).add_(w.detach(), alpha=1 - ema_decay)
-        if HARVEST and step % 10 == 0:
+        if HARVEST and not PROBE_FREE and step % 10 == 0:
             val = evaluate(dynamics, geometry, substrate, eval_data)
             if val > best_val:
                 best_val, best_step = val, step
             print(f"  batch {step:>3} val {val:.3f}", flush=True)
 
-    velocity = (losses[0] - losses[9]) / losses[0]
-    train_acc = correct / (AUTOPSY_BATCHES * train_data[0][1].shape[0])
-    with torch.enable_grad():
-        val_acc = evaluate(dynamics, geometry, substrate, eval_data)
     if HARVEST:
-        print(f"best val {best_val:.3f} @ batch {best_step}", flush=True)
+        if not PROBE_FREE:
+            print(f"best val {best_val:.3f} @ batch {best_step}", flush=True)
         if EMA:
             with torch.no_grad():
                 for w, e in zip(weights, ema, strict=True):
@@ -160,6 +175,10 @@ def main() -> int:
         print(f"\nVERDICT: {verdict}", flush=True)
         print(f"walltime {time.time() - t0:.1f}s (printed, never recorded)")
         return 0
+    velocity = (losses[0] - losses[min(9, len(losses) - 1)]) / losses[0]
+    train_acc = correct / (AUTOPSY_BATCHES * train_data[0][1].shape[0])
+    with torch.enable_grad():
+        val_acc = evaluate(dynamics, geometry, substrate, eval_data)
     print(f"activation ratio ‖a50‖/‖a1‖ = {act_ratio:.4e}", flush=True)
     print(f"gradient ratio ‖g1‖/‖g50‖ = {grad_ratio:.4e}", flush=True)
     print(
@@ -192,9 +211,13 @@ def main_entry() -> int:
     parser.add_argument("--batches", type=int, default=50)
     parser.add_argument("--wd", type=float, default=0.0)
     parser.add_argument("--harvest", action="store_true")
+    parser.add_argument("--probe-free", action="store_true")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--depth", type=int, default=50)
     parser.add_argument("--ema", action="store_true")
+    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--task", default="mnist")
+    parser.add_argument("--input-dim", type=int, default=784)
     args = parser.parse_args()
     globals()["AUTOPSY_BATCHES"] = args.batches
     globals()["WEIGHT_DECAY"] = args.wd
@@ -202,6 +225,10 @@ def main_entry() -> int:
     globals()["SEED"] = args.seed
     globals()["DEPTH"] = args.depth
     globals()["EMA"] = args.ema
+    globals()["PROBE_FREE"] = args.probe_free
+    globals()["DEVICE"] = args.device
+    globals()["TASK"] = args.task
+    globals()["INPUT_DIM"] = args.input_dim
     return main()
 
 

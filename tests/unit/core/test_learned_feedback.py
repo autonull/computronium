@@ -50,7 +50,7 @@ def _fixture(learned: bool, seed: int = 0):
     credit = LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
-            local_objective="pepita",
+            local_objective="lemma",
             learned_feedback=learned,
             feedback_lr=0.5,
         )
@@ -135,7 +135,7 @@ def test_load_state_shape_mismatch_fails_loud():
     _, _, _ = _fixture(learned=True, seed=0)
     c2 = LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
-            local_objective="pepita", learned_feedback=True
+            local_objective="lemma", learned_feedback=True
         )
     )
     c2.compute_pseudo_gradient(states1, None, g1)  # populate cache

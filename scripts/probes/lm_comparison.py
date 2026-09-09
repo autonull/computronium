@@ -264,7 +264,7 @@ def _build(geom: str, credit: str, update: str, cfg: dict):
     elif credit == "thermo":
         credit_obj = ThermodynamicContrast()
     else:
-        objective: Literal["ff", "pepita"] = "ff" if credit == "ff" else "pepita"
+        objective: Literal["ff", "lemma"] = "ff" if credit == "ff" else "lemma"
         credit_obj = LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
                 feedback_scale=0.01, local_objective=objective

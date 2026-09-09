@@ -98,7 +98,7 @@ def _make_credit(config: CreditAssignmentConfig):
 
     if config.credit_type == "random_projections":
         return RandomProjectionsCredit(config)
-    if config.credit_type == "local_goodness" and config.local_objective == "pepita":
+    if config.credit_type == "local_goodness" and config.local_objective == "lemma":
         return LocalGoodnessCredit(config)
     raise ValueError("audit supports rp/pepita configs only")  # ruff: ignore[raise-vanilla-args]
 
@@ -113,7 +113,7 @@ def main() -> int:
             input_dim=INPUT_DIM, output_dim=OUTPUT_DIM, hidden_dims=(32,)
         ),
         StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5),
-        CreditAssignmentConfig.local_goodness(local_objective="pepita"),
+        CreditAssignmentConfig.local_goodness(local_objective="lemma"),
         ParameterUpdateConfig.euclidean(step_size=0.0),
     )
     graph_system = compose_system_from_configs(
@@ -130,7 +130,7 @@ def main() -> int:
             hidden_dims=(32, 32),
         ),
         StateDynamicsConfig.instantaneous(),
-        CreditAssignmentConfig.local_goodness(local_objective="pepita"),
+        CreditAssignmentConfig.local_goodness(local_objective="lemma"),
         ParameterUpdateConfig.euclidean(step_size=0.0),
     )
 
@@ -150,7 +150,7 @@ def main() -> int:
         ]
         print(f"{name}: weight params={weight_names}", flush=True)
         for credit_name, cfg in (
-            ("pepita", CreditAssignmentConfig.local_goodness(local_objective="pepita")),
+            ("pepita", CreditAssignmentConfig.local_goodness(local_objective="lemma")),
             (
                 "random_projections",
                 CreditAssignmentConfig.random_projections(),

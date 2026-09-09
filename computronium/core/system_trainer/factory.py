@@ -54,6 +54,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
         HomeostaticCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
@@ -68,6 +69,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return RandomProjectionsCredit(config)
         case "local_goodness" | "forward_only":
             return LocalGoodnessCredit(config)
+        case "pepita":
+            return PepitaCredit(config)
         case "local_contrastive" | "per_layer_ff":
             return LocalContrastiveCredit(config)
         case "temporal_trace" | "spiking":
@@ -344,6 +347,10 @@ def compose_system[  # ruff: ignore[complex-structure]
     set_update_rule = getattr(credit, "set_update_rule", None)
     if callable(set_update_rule):
         set_update_rule(update)
+
+    set_substrate = getattr(credit, "set_substrate", None)
+    if callable(set_substrate):
+        set_substrate(substrate)
 
     system = _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,

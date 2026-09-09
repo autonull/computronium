@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from computronium.ontology.geometry import Geometry, TransformerGeometry
+    from computronium.ontology.substrate import Substrate
     from computronium.ontology.system import SystemState
     from computronium.ontology.update import ParameterUpdate
 
@@ -94,9 +95,9 @@ class CreditAssignmentConfig:
             (for random projections)
         local_objective: Local-credit algorithm selection (for
             local_goodness): "ff" runs the Forward-Forward layer-local
-            goodness contrast (no inverse pass); "pepita" runs the
-            PEPITA error-modulated update (output differential routed
-            through fixed random inverse projections)
+            goodness contrast (no inverse pass); "lemma" runs the
+            LEMMA per-layer error-modulated update (output differential
+            routed through fixed random inverse projections)
         orthogonal_init: Initialize feedback matrices with orthogonal weights
         feedback_scale: Scaling factor for feedback matrices
         readout_error: Augment the FF goodness contrast with CE on the
@@ -132,7 +133,7 @@ class CreditAssignmentConfig:
     credit_type: str
     beta: float
     feedback_matrix: Tensor | None
-    local_objective: Literal["ff", "pepita"]
+    local_objective: Literal["ff", "lemma"]
     orthogonal_init: bool
     feedback_scale: float
     readout_error: bool = False
@@ -218,7 +219,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         credit_norm: CreditNormMode = "none",
@@ -239,7 +240,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -275,7 +276,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         readout_error: bool = False,
@@ -304,7 +305,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         a_plus: float = 1.0,
@@ -346,7 +347,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -365,7 +366,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -379,12 +380,39 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
+    def pepita(
+        cls,
+        *,
+        gamma: float = 0.05,
+        feedback_matrix: Tensor | None = None,
+    ) -> CreditAssignmentConfig:
+        """Published PEPITA (Dellaferrera & Kreiman 2022, arXiv 2201.11665).
+
+        Input-modulated second pass: δ = y − softmax(logits₁) is projected
+        into input space through ONE fixed random B (out×in),
+        x̃ = x + γ·δBᵀ, and the update is the exact autograd gradient of
+        CE(f(x̃), y). NOT the per-layer closed-form mode of
+        ``local_objective="lemma"`` (LEMMA) — that family is
+        mechanism-bound closed (TODO15 §12). γ is the sensitive knob:
+        parity with BP holds at γ=0.05 (0.884 vs 0.890, 3 seeds) and
+        degrades monotonically toward γ=0.5.
+        """
+        return cls(
+            credit_type="pepita",
+            beta=0.5,
+            feedback_matrix=feedback_matrix,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=gamma,
+        )
+
+    @classmethod
     def gradient(
         cls,
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: Literal["ff", "pepita"] = "ff",
+        local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -784,7 +812,7 @@ class LocalGoodnessCredit:
     (G_free − G_nudged) so nudged goodness increases, free goodness
     decreases. Layer-local loss, no inverse pass.
 
-    ``local_objective="pepita"`` (Dellaferrera & Kreiman 2022): the
+    ``local_objective="lemma"`` (LEMMA, per-layer fixed-B variant): the
     output-layer differential e₁ = nudged_out − free_out is routed back
     through fixed random inverse projections (orthogonal rows, scaled by
     ``feedback_scale``) and each weight receives ΔW ∝ −(e₁ @ Bᵀ)ᵀ a_pre
@@ -795,10 +823,10 @@ class LocalGoodnessCredit:
     (arXiv 2201.11665 — one input-space B, modulated *second forward
     pass*, autograd update; faithfully replicated at BP parity in
     scripts/probes/pepita_faithful_replication.py, γ=0.05). This
-    per-layer closed-form variant is recorded as **LEMMA** (Layer-wise
+    per-layer closed-form variant is **LEMMA** (Layer-wise
     Error-Modulated local credit); its measured boundaries (0.306
-    fixed-B, 0.107 learned-B × Muon) apply to LEMMA only. API rename
-    deferred to the hygiene pass.
+    fixed-B, 0.107 learned-B × Muon, harvest-audited plateau) apply to
+    LEMMA only.
 
     The two are genuinely different algorithms: FF's gradient is the
     autograd derivative of the per-layer goodness contrast; PEPITA's is a
@@ -1021,7 +1049,7 @@ class LocalGoodnessCredit:
         if not weight_names:
             return []
 
-        if self.config.local_objective == "pepita":
+        if self.config.local_objective == "lemma":
             return self._pepita_gradient(
                 free_state, free_acts, nudged_acts, weight_names, geometry
             )
@@ -1988,6 +2016,123 @@ class HomeostaticCredit:
             grads.append(grad)
 
         return grads
+
+
+class PepitaCredit:
+    """Published PEPITA credit (arXiv 2201.11665) — the second-pass family.
+
+    Contract: ``phases=(FREE,)`` and ``requires_autograd=False`` — the
+    pipeline settles FREE only under no_grad; this credit builds ONE
+    full-stack autograd graph inside ``compute_pseudo_gradient`` (the
+    modulated second pass) and releases it on return. That whole-stack
+    graph is inherent to the published algorithm: the backward pass is
+    replaced by input modulation, not by a local transport — peak memory
+    is backprop-class, the price of the rule's exactness.
+
+    Mechanism (per step): δ = y − softmax(logits₁) from a no-grad first
+    pass; x̃ = x + γ·δBᵀ with ONE fixed random B (out×in) drawn lazily
+    from the global RNG (or ``config.feedback_matrix``); the pseudo-
+    gradient is the exact autograd gradient of CE(f(x̃), y) — alignment
+    with its own objective by construction, which is why the rule
+    reaches BP parity while the per-layer closed-form LEMMA mode
+    (``LocalGoodnessCredit`` with ``local_objective="lemma"``) does not
+    (TODO15 §12: LEMMA cos ≈ 0 at every layer including the readout).
+
+    The substrate is consumed through ``geometry.forward(x, substrate)``
+    (precision/noise operators on both passes) — wired via the
+    duck-typed ``set_substrate`` hook in ``compose_system``; a
+    DigitalSubstrate is assumed when unset. Only ``feedback_scale`` (γ)
+    and ``feedback_matrix`` (B) of the config are read.
+    """
+
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
+    requires_autograd: ClassVar[bool] = False
+
+    def __init__(self, config: CreditAssignmentConfig | None = None):
+        self.config = config or CreditAssignmentConfig.pepita()
+        self._substrate: Substrate | None = None
+
+    def set_substrate(self, substrate: Substrate) -> None:
+        """Register the system's substrate (wired by ``compose_system``)."""
+        self._substrate = substrate
+
+    def _modulated_input(self, x: Tensor, delta: Tensor) -> Tensor:
+        b = self.config.feedback_matrix
+        if b is None:
+            b = torch.randn(delta.shape[1], x.shape[1], device=x.device, dtype=x.dtype)
+        elif b.shape != (delta.shape[1], x.shape[1]):
+            msg = (
+                f"PepitaCredit: feedback_matrix shape {tuple(b.shape)} does not "
+                f"match (out={delta.shape[1]}, in={x.shape[1]})"
+            )
+            raise ValueError(msg)
+        return x + self.config.feedback_scale * (delta @ b)
+
+    def compute_pseudo_gradient(
+        self,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        free = states.get(Phase.FREE)
+        if free is None or free.x is None or free.y is None:
+            return []
+        x, y = free.x, free.y
+        substrate = self._substrate
+        with torch.no_grad():
+            logits1 = geometry.forward(x, substrate)
+            delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
+                logits1.dtype
+            ) - torch.softmax(logits1, dim=-1)
+        x_tilde = self._modulated_input(x, delta)
+        weight_names = _learnable_weight_names(geometry.params)
+        params = [geometry.params[n] for n in weight_names]
+        with torch.enable_grad():
+            loss2 = torch.nn.functional.cross_entropy(
+                geometry.forward(x_tilde, substrate), y
+            )
+        grads = torch.autograd.grad(loss2, params)
+        return list(grads)
+
+    def compute_bias_pseudo_gradients(
+        self,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        """Bias gradients from the same modulated second pass."""
+        free = states.get(Phase.FREE)
+        if free is None or free.x is None or free.y is None:
+            return {}
+        x, y = free.x, free.y
+        bias_names = [n for n in geometry.params if "bias" in n]
+        if not bias_names:
+            return {}
+        substrate = self._substrate
+        with torch.no_grad():
+            logits1 = geometry.forward(x, substrate)
+            delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
+                logits1.dtype
+            ) - torch.softmax(logits1, dim=-1)
+        x_tilde = self._modulated_input(x, delta)
+        with torch.enable_grad():
+            loss2 = torch.nn.functional.cross_entropy(
+                geometry.forward(x_tilde, substrate), y
+            )
+        grads = torch.autograd.grad(loss2, [geometry.params[n] for n in bias_names])
+        return dict(zip(bias_names, grads, strict=True))
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """The modulated second-pass CE — PEPITA's only real objective."""
+        raise NotImplementedError(
+            "PepitaCredit's objective lives in the modulated second pass; "
+            "no phase-pair surrogate is defined"
+        )
 
 
 class GradientCredit:

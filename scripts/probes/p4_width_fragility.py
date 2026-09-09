@@ -201,7 +201,7 @@ def build(
         credit_obj = LocalGoodnessCredit(
             lmc.CreditAssignmentConfig.local_goodness(
                 feedback_scale=fscale,
-                local_objective="pepita",
+                local_objective="lemma",
                 learned_feedback=learned_fb,
                 feedback_lr=0.5,
                 feedback_update_every=1,

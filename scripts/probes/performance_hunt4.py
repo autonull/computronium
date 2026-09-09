@@ -122,7 +122,7 @@ def _updates() -> dict[str, Callable]:
 def _credit(name: str):
     if name == "bp":
         return BackpropCredit()
-    objective = "ff" if name == "ff" else "pepita"
+    objective = "ff" if name == "ff" else "lemma"
     return LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01, local_objective=objective

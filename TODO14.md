@@ -3,53 +3,40 @@
 > **Opened 2026-09-07.**
 >
 
-> **CURRENT FOCUS (2026-09-09, Session 13 = TODO15 sprint, CLOSED).
+> **CURRENT FOCUS (2026-09-09, Session 14 = TODO15 §13, CLOSED).
 > Resumption pointer for fresh context — the authoritative session log
-> is TODO15.md §8–§12; the deltas that change THIS file's plan:**
+> is TODO15 §13; the deltas that change THIS file's plan:**
 >
-> 1. **§11 (W5 depth frontier) — REOPENED.** The depth-50 "collapse"
->    (0.397 @ 150 batches) was an evaluation-protocol artifact: the val
->    trajectory peaks at 0.797/0.827/0.848 (seeds 0-2, mean 0.824) at
->    batches 30-70, then declines into memorization. Harvesting the
->    peak (max-snapshot or EMA-of-weights, EMA 0.819 ≥ snapshot on
->    seed 0) passes §22's 0.75 gate 3/3. Depth-32 peak 0.917 @ 110;
->    depth-100 peak ≥ 0.828 @ 30 (single partial seed). §22 #4 MET.
->    Consequence: the §11 frontier is now peak-limited, not depth-
->    limited; the instrument is EMA/best-snapshot harvest, NOT longer
->    training or regularization.
-> 2. **PEPITA vs LEMMA split (§13 W7.1) — W7.1's history re-scoped.**
->    The library's LocalGoodnessCredit "pepita" mode is NOT the
->    published PEPITA (arXiv 2201.11665); it is now named **LEMMA**
->    (per-layer closed-form B pseudo-gradient). LEMMA is closed
->    mechanism-bound: its pseudo-gradient has cos ≈ 0 (sign-flipping)
->    vs BP at every layer INCLUDING the readout
->    (`lemma_alignment_probe.py`). Faithful PEPITA was implemented and
->    VALIDATED at BP parity (0.884 vs 0.890, γ=0.05 — γ is the
->    sensitive knob). Queue: promote `PepitaCredit` (needs substrate
->    passthrough into compute_pseudo_gradient), then PEPITA × Muon at
->    γ=0.05. Prior "PEPITA" verdicts (D13, w1_credit_ladder, §7)
->    measured LEMMA — re-scoped, not voided.
-> 3. **W7.3 (STDP) CLOSED structural** — `phases=(FREE,)`, no error
->    term exists for any optimizer to rescue; W7.3b recommended kill.
-> 4. **Flagship B at scale re-closed with a LAW** — mask-entropy:
->    ~1 distinct ReLU mask per image at width 128 (both tasks), 0.354
->    at width 32 — mask-conditioned corrections have no pooling support
->    at any measured width (`mask_entropy_law.py`). §10's piecewise-ψ
->    path is dead; §16's caution stands.
-> 5. **"OrthoAdam chaos" retracted** — twin-trajectory probe (ε=1e-7):
->    val gap 0.006; §8.2's chaos claim was a mis-comparison. Depth
->    readings are trustworthy; the §12 depth-100 gate is unblocked.
-> 6. **New instrument of record: EMA/best-snapshot harvest + the
->    0.4 s BP-gradient alignment probe.** Any Overturn-Table boundary
->    recorded from final-step accuracy on a declining trajectory is
->    suspect — retroactive harvest audit queued.
+> 1. **PepitaCredit PROMOTED** (§13.1) — the published PEPITA rule is a
+>    library primitive on all wiring surfaces (config factory, three
+>    dispatchers, campaign registry, exports) with a duck-typed
+>    `set_substrate` hook reaching the rule through
+>    `geometry.forward(x, substrate)` on both passes. Wiring lock:
+>    `tests/integration/test_pepita_credit_parity.py` (green, 0.65 s).
+> 2. **PEPITA × Muon γ=0.05 — BOUNDARY in the harm direction**
+>    (§13.2): pepita/muon 0.746 vs pepita/adam 0.884 (bp 0.890), 3
+>    seeds. The matrix rules DESTROY exact-modulated gradients while
+>    rescuing degenerate local ones — the I(C,U) law now has both
+>    quadrants measured. PEPITA's home optimizer is Adam-class.
+> 3. **LEMMA closure harvest-audited** (§13.4): best 0.299 vs final
+>    0.290 — plateau; the alignment-noise closure stands. Retroactive
+>    harvest audit of the Overturn Table is DONE (no other suspect
+>    trajectories).
+> 4. **LEMMA API rename EXECUTED** (§13.5): `local_objective="lemma"`;
+>    `credit_type="pepita"` now means the published rule only.
+> 5. **Probe-free EMA harvest** is the default harvest instrument
+>    (`d50_autopsy.py --probe-free`, §13.3).
+> 6. **Breadth block DONE (§14)** — depth×task grid under probe-free
+>    EMA: depth curve 20→0.917, 32→0.917, 50→0.824, 64→0.628,
+>    100→~0.75 — the local-credit depth frontier sits near 32 layers.
+>    Harvest law transfers to FashionMNIST (0.767) but fails on digits
+>    (0.128). Depth-100 MIXED (1/2/1, seed 2 = 0.489) — NOT §22 #4.
+>    GPU port measured: works but ~3× slower than CPU (launch-bound).
 >
-> **Next-session queue (details TODO15 §12.3):** PepitaCredit library
-> promotion; PEPITA × Muon γ=0.05; 3-seed depth-100 harvest (background
-> — AGENTS walltime policy: ≤5 min foreground, else nohup+poll);
-> probe-free EMA harvest default; retroactive harvest audit; LEMMA API
-> rename (hygiene pass). Uncommitted session work: 10 probes, TODO15,
-> AGENTS policy, credit.py naming note.
+> **Open queue (all optional extensions, nothing blocking):** PEPITA on
+> the LM/transformer cell; PEPITA paper-ablation variants (B
+> deterministic seed / learned-B-in-modulated-pass). W7 rungs, mask-ψ,
+> LEMMA redemption: stay closed.
 
 > **PRIOR FOCUS (2026-09-08, Session 12): §24 CLOSED.** D1 (scaled
 > overturn cell) earned the flagship a **Boundary at scale** — the

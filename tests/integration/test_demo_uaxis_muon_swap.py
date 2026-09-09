@@ -103,7 +103,7 @@ _CREDITS = {
     ),
     "pepita": lambda: LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
-            feedback_scale=0.01, local_objective="pepita"
+            feedback_scale=0.01, local_objective="lemma"
         )
     ),
     "ff_hybrid": lambda: LocalGoodnessCredit(

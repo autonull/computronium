@@ -2,7 +2,7 @@
 pseudo-gradient a suppressed-but-real learning direction, or noise?
 
 Method: per batch, compute (a) LEMMA pseudo-gradients
-(LocalGoodnessCredit, local_objective="pepita", fixed-B, the rung that
+(LocalGoodnessCredit, local_objective="lemma", fixed-B, the rung that
 measured 0.306 × Muon) and (b) true BP gradients (autograd CE through
 the same instantaneous forward); track per-layer cosine alignment over
 30 batches on width-64×2 MNIST.
@@ -68,7 +68,7 @@ def main() -> int:
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
-            feedback_scale=0.01, local_objective="pepita"
+            feedback_scale=0.01, local_objective="lemma"
         )
     )
     linear_names = [

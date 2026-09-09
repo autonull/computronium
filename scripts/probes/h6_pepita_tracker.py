@@ -55,7 +55,7 @@ def _run(feedback_lr: float) -> None:
     credit = LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
-            local_objective="pepita",
+            local_objective="lemma",
             learned_feedback=True,
             feedback_lr=feedback_lr,
         )

@@ -40,6 +40,7 @@ Walltime printed, never recorded.
 
 from __future__ import annotations
 
+import argparse
 import time
 
 import torch
@@ -49,7 +50,7 @@ from computronium import create_task
 
 BATCHES = 150
 SEEDS = (0, 1, 2)
-GAMMA = 0.5  # paper's modulatory scale; sensitivity-checked below
+GAMMA = 0.05  # paper's regime — parity knob (see §11.2, TODO15)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -72,7 +73,9 @@ def _eval(net: nn.Sequential, batches) -> float:
     return ok / tot
 
 
-def _train(rule: str, seed: int, train_data, lr: float = 1e-3) -> nn.Sequential:
+def _train(
+    rule: str, seed: int, train_data, lr: float = 1e-3, gamma: float = GAMMA
+) -> nn.Sequential:
     torch.manual_seed(seed)
     net = _net(seed)
     opt = torch.optim.Adam(net.parameters(), lr=lr)
@@ -92,7 +95,7 @@ def _train(rule: str, seed: int, train_data, lr: float = 1e-3) -> nn.Sequential:
                 delta = torch.nn.functional.one_hot(y, 10).float() - torch.softmax(
                     logits1, dim=-1
                 )
-            x_tilde = x + GAMMA * (delta @ b_fixed)
+            x_tilde = x + gamma * (delta @ b_fixed)
             loss2 = nn.functional.cross_entropy(net(x_tilde), y)
             opt.zero_grad()
             loss2.backward()
@@ -100,7 +103,7 @@ def _train(rule: str, seed: int, train_data, lr: float = 1e-3) -> nn.Sequential:
     return net
 
 
-def _train_muon_pepita(seed: int, train_data) -> nn.Sequential:
+def _train_muon_pepita(seed: int, train_data, gamma: float = GAMMA) -> nn.Sequential:
     torch.manual_seed(seed)
     net = _net(seed)
     weights = [p for p in net.parameters() if p.ndim == 2]
@@ -117,7 +120,7 @@ def _train_muon_pepita(seed: int, train_data) -> nn.Sequential:
             delta = torch.nn.functional.one_hot(y, 10).float() - torch.softmax(
                 logits1, dim=-1
             )
-        x_tilde = (x + GAMMA * (delta @ b_fixed)).requires_grad_(True)
+        x_tilde = (x + gamma * (delta @ b_fixed)).requires_grad_(True)
         loss2 = nn.functional.cross_entropy(net(x_tilde), y)
         grads = torch.autograd.grad(loss2, weights)
         opt.step([g.detach() for g in grads])
@@ -125,6 +128,9 @@ def _train_muon_pepita(seed: int, train_data) -> nn.Sequential:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gamma", type=float, default=GAMMA)
+    args = parser.parse_args()
     t0 = time.time()
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()
@@ -142,9 +148,9 @@ def main() -> int:
     for seed in SEEDS:
         net = _train("bp", seed, train_data)
         accs.setdefault("bp/adam", []).append(_eval(net, test_batches))
-        net = _train("pepita", seed, train_data)
+        net = _train("pepita", seed, train_data, gamma=args.gamma)
         accs.setdefault("pepita/adam", []).append(_eval(net, test_batches))
-        net = _train_muon_pepita(seed, train_data)
+        net = _train_muon_pepita(seed, train_data, gamma=args.gamma)
         accs.setdefault("pepita/muon.02", []).append(_eval(net, test_batches))
 
     for name, a in accs.items():

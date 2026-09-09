@@ -125,7 +125,7 @@ class TestValidationAll:
         self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
     def test_native_pepita_mlp(self):
-        """Native PEPITA MLP learns (realized local_objective="pepita")."""
+        """Native PEPITA MLP learns (realized local_objective="lemma")."""
         model = create_native_pepita_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )

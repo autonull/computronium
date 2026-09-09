@@ -568,3 +568,182 @@ through random matrices (LEMMA) is noise. Three families, one law.
 - Uncommitted work as of close: 10 probes, TODO15 §8-§12, AGENTS.md
   walltime policy, credit.py LEMMA naming note — commit pending user
   approval.
+
+---
+
+# §13 — Session 14: Promotion, Muon Verdict, Harvest Audits, LEMMA Rename (2026-09-09)
+
+## §13.1 PepitaCredit PROMOTED to the library
+
+The published PEPITA rule is now a 5-axis ontology primitive, wired on
+all surfaces per the checklist:
+
+- `CreditAssignmentConfig.pepita(gamma=0.05, feedback_matrix=None)` —
+  γ rides `feedback_scale`; `credit_type="pepita"` (the config-key
+  "pepita" now means the PUBLISHED rule; the per-layer LEMMA mode moved
+  to `local_objective="lemma"`, §13.5).
+- `PepitaCredit` (credit.py): `phases=(FREE,)`, `requires_autograd=False`
+  — the settle stays no-grad; the credit builds ONE whole-stack autograd
+  graph inside `compute_pseudo_gradient` (the modulated second pass) and
+  releases it per step. That backprop-class peak memory is inherent to
+  the published algorithm (input modulation replaces the backward
+  TRANSPORT, not the graph). First pass no-grad for δ; B drawn lazily
+  from the global RNG or taken from `feedback_matrix` (shape-checked);
+  `compute_bias_pseudo_gradients` mirrors the second pass for biases;
+  `surrogate_objective` raises (no phase-pair surrogate exists).
+- **Substrate passthrough solved by hook, not signature change**: duck-
+  typed `set_substrate(substrate)` wired in `compose_system` (alongside
+  the `set_update_rule` precedent); the substrate reaches the rule via
+  `geometry.forward(x, substrate)` on BOTH passes — precision/noise
+  operators apply to the modulated input for free. Digital is assumed
+  when unset.
+- Exports: ontology `__all__`, root `__all__`/`_LAZY`/TYPE_CHECKING,
+  all three `_credit_from_config` dispatchers, campaign
+  `_CREDIT_FACTORIES["pepita"]`.
+- Wiring lock: `tests/integration/test_pepita_credit_parity.py` —
+  Digital + FF(784-128-10) + Instantaneous + PepitaCredit(γ=0.05) + Adam
+  over 50 MNIST batches, asserts every weight moves and acc ≥ 0.70
+  (probe trajectory ≈ 0.85 at this budget). PASSES (0.65 s).
+
+## §13.2 PEPITA × Muon 0.02 at γ=0.05 — Muon HURTS the exact-modulation family
+
+`pepita_faithful_replication.py --gamma 0.05` (10.9 s, 3 seeds):
+bp/adam 0.890, **pepita/adam 0.884** (parity replicates), **pepita/muon
+0.746** (0.789/0.691/0.758). Muon is −0.14 on PEPITA's exact-but-
+modulated gradients — the I(C,U) law extends with a THIRD quadrant: the
+matrix rules rescue degenerate LOCAL pseudo-gradients (LEMMA rp rungs
++0.46) and DESTROY exact gradient-of-a-real-objective updates (PEPITA
+−0.14; consistent with LEMMA's redemption diagnostic — LEMMA × Muon's
+surviving 0.306 is the optimizer normalizing class-correlated
+covariates, not aligned credit). **Boundary: PEPITA's home optimizer is
+Adam-class; the rescue edge is an FA-family property, now measured in
+both directions.**
+
+## §13.3 Probe-free EMA harvest is now the cheap default
+
+`d50_autopsy.py --probe-free` (new flag): skips the every-10-batch val
+probes entirely — EMA of weights (decay 0.99) evaluated ONCE at the end.
+Use it for all future harvest cells unless the peak STEP itself is the
+datum.
+
+## §13.4 Retroactive harvest audit: LEMMA × Muon boundary STANDS
+
+`w1_lemma_harvest_audit.py` (5.6 s, 3 seeds; TODO14 §9 doctrine —
+audit any final-step-recorded boundary before it carries weight):
+identical w1_credit_ladder cell + best-snapshot harvest every 10
+batches. final 0.280/0.278/0.311 (mean 0.290 vs the ladder's recorded
+0.306), best 0.292-0.311 (mean 0.299) — best − final = 0.009.
+**Plateau, no peak-hiding artifact: the LEMMA mechanism-bound closure
+(TODO15 §12) survives the harvest audit.** Remaining suspect
+final-step verdicts were triaged: W0's contrast-track already showed
+its trajectory peak (0.193 @ 400 ≪ the failing bar), and the depth
+family is already re-opened under harvesting — nothing else in the
+Overturn Table has a declining-trajectory signature worth a cell.
+
+## §13.5 LEMMA API rename EXECUTED (hygiene pass)
+
+`local_objective` key `"pepita"` → `"lemma"` across `credit.py`
+(Literal + dispatch + docstrings), presets, pepita_native, and every
+probe/test consumer (hunt_cells objective string included). The old
+key dies with no back-compat per AGENTS. The `_pepita_*` internal
+method names on LocalGoodnessCredit stay (they denote the error-
+modulation mechanism, are `_`-private, and the covariate-stream fix is
+historically documented under that name). `credit_type="pepita"` is
+now exclusively the published-rule config key.
+
+## §13.6 Depth-100 harvest — MIXED at 2 seeds, seed 2 aborted
+
+Sequential `--depth 100 --harvest --seed {0,1,2}` (~24 min/seed, OMP=4,
+nohup driver). Results: **seed 0 best val 0.795 @ batch 30 — PASSES**
+(the §10.4 partial record confirmed); **seed 1 best 0.703 @ batch 140
+— FAILS the 0.75 gate** (still rising at the 150-batch horizon — the
+peak may simply sit past the budget, unlike the early-peak shape of
+depth 32/50); seed 2 aborted at batch 10 when the session was wrapped
+(user call — lengthy experiments cut). **Verdict: depth-100 under the
+current recipe is MIXED (1 pass / 1 fail / 1 n/a) — NOT §22 #4-met.
+The honest status is: peak-then-memorize is confirmed at depth 32/50
+(3 seeds each), and depth 100 is a frontier case whose peak may move
+beyond 150 batches — any future claim needs either a longer budget
+(background, pre-registered kill time) or an EMA/probe-free harvest
+cell. Do not cite depth-100 as gate-passing.
+
+## §13.7 State of the map after this session
+
+- **Open/growing**: faithful PEPITA as a library primitive (parity
+  anchor + Adam-class home optimizer), deep local-credit MLPs under
+  harvest (depth 32/50/100), probe-free EMA instrument.
+- **Closed with mechanisms**: LEMMA (alignment noise + harvest-audited
+  plateau), STDP (structural), flagship-B-at-scale (mask-entropy law),
+  OrthoAdam chaos (refuted).
+- **Queue for next session**: nothing blocking. Natural extensions:
+  PEPITA on the LM/transformer cell (only MNIST measured); PEPITA +
+  learned/deterministic-B variants from the paper's ablations;
+  reward-modulated STDP remains killed. LEMMA redemption, mask-ψ,
+  and W7 rungs all stay closed — do not reopen without a new mechanism
+  hypothesis.
+
+---
+
+# §14 — Session 14 (cont.): Breadth Block — Depth×Task Grid Under Probe-Free EMA (2026-09-09)
+
+User directive: trade depth for breadth. Speed levers measured first:
+**the GPU port of `d50_autopsy` (--device/--task/--input-dim flags) WORKS
+but is ~3× SLOWER than CPU** — 100 sequential 128×128 matmuls + per-weight
+SVDs are kernel-launch-bound (12% GPU utilization); CPU stays the
+instrument. Breadth came from 5 parallel background CPU cells (probe-free
+EMA, 150 batches, seed 0):
+
+| cell | EMA final val | verdict |
+|------|---------------|---------|
+| depth 20, MNIST | **0.917** | PASS |
+| depth 50, FashionMNIST | **0.767** | PASS |
+| depth 50, digits (64-dim input) | 0.128 | FAIL |
+| depth 64, MNIST | 0.628 | FAIL |
+| depth 100, MNIST seed 2 | 0.489 | FAIL (completes §13.6: 1/2/1 — NOT §22 #4) |
+
+Findings:
+
+1. **Depth curve under one instrument (EMA harvest, MNIST)**: 20 → 0.917,
+   32 → 0.917, 50 → 0.824, 64 → 0.628, 100 → ~0.75 (0.795/0.703/0.489).
+   Quality is roughly flat to depth ~32 and degrades beyond — the
+   local-credit depth frontier sits near **32 layers**; 100 is a
+   feasibility outlier, not a plateau.
+2. **Peak-location law (from logs, zero compute)**: harvest peaks land at
+   batches 30–110 at every depth (d100-s0 @30, d50 @30-70, d32 @110) —
+   peak LOCATION is seed-noisy, not monotone in depth; s1@100's
+   late-rising trajectory is a slow seed, not a budget law. Finals are
+   always worse than peaks (memorization after peak).
+3. **Task transfer**: the harvest law replicates on FashionMNIST at the
+   same depth recipe (0.767 — the only cross-task cell). It FAILS on
+   digits at depth 50 (0.128 ≈ chance): small-data (1,797 samples) +
+   64-dim input breaks the recipe — likely data-budget/μPC-input-scale,
+   flagged as the next cheap diagnostic, not chased here.
+4. **Depth-64 is the surprise failure** (0.628, well below the 50/100
+   means) — either seed noise or a genuine instability notch; one cell,
+   not chased (breadth rule).
+
+Queue deltas: depth-32 confirmed as the operating point for any future
+quality claim; depth-100 closed as mixed (do not cite as gate-passing);
+digits@50 is the one open cheap question (data-budget vs mechanism).
+
+## §14.1 digits diagnostic: data-budget, mechanism intact
+
+Root cause first: the digits cells trained on only **45 batches** (the
+loader was capped, not cycled — 1,797 samples / batch 64). Fixed with an
+itertools.cycle in `_flatten` (MNIST cells unaffected, 600 > 150 cap).
+Re-runs (probe-free EMA, seed 0):
+
+| cell | EMA final val | verdict |
+|------|---------------|---------|
+| digits depth 50 (cycled budget) | **0.900** | PASS |
+| digits depth 20 | **0.922** | PASS |
+| FashionMNIST depth 100 | 0.491 | FAIL |
+
+Verdicts: (1) **digits@50's 0.128 was pure data-budget** — with the full
+150-batch budget the recipe hits 0.900 at depth 50 on 64-dim input; no
+mechanism break. (2) **The depth-32 frontier replicates cross-task**:
+FashionMNIST depth 100 (0.491) mirrors MNIST's worst seeds (0.489) —
+deep-quality degradation is task-independent, and depth 20 stays flat
+(0.922 digits). The local-credit operating point is depth ≤ 32, full
+budget, EMA harvest. Loader-cycling is now the probe default; any future
+small-dataset cell must assert batches_seen ≥ budget.

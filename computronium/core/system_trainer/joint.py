@@ -65,6 +65,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
         HomeostaticCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
@@ -79,6 +80,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return RandomProjectionsCredit(config)
         case "local_goodness" | "forward_only":
             return LocalGoodnessCredit(config)
+        case "pepita":
+            return PepitaCredit(config)
         case "local_contrastive" | "per_layer_ff":
             return LocalContrastiveCredit(config)
         case "temporal_trace" | "spiking":

@@ -49,7 +49,7 @@ def _system():
         dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
         credit=LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
-                local_objective="pepita",
+                local_objective="lemma",
                 learned_feedback=True,
                 feedback_lr=0.5,
                 feedback_update_every=1,

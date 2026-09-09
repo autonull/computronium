@@ -547,7 +547,7 @@ def create_pepita_mlp(
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(
-        CreditAssignmentConfig.local_goodness(local_objective="pepita")
+        CreditAssignmentConfig.local_goodness(local_objective="lemma")
     )
     update = _default_update(lr)
 

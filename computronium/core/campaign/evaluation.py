@@ -291,6 +291,7 @@ _CREDIT_FACTORIES = {
     "thermodynamic_contrast": _thunk(CreditAssignmentConfig.thermodynamic_contrast),
     "random_projections": _thunk(CreditAssignmentConfig.random_projections),
     "local_goodness": _thunk(CreditAssignmentConfig.local_goodness),
+    "pepita": _thunk(CreditAssignmentConfig.pepita),
     "local_contrastive": _thunk(CreditAssignmentConfig.local_contrastive),
     "temporal_trace": _thunk(CreditAssignmentConfig.temporal_trace),
     "target_inversion": _thunk(CreditAssignmentConfig.target_inversion),

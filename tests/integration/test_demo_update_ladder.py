@@ -109,7 +109,7 @@ def _system(credit: str, update: str, width: int, lr: float):
     else:
         credit_obj = LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
-                feedback_scale=0.01, local_objective="pepita"
+                feedback_scale=0.01, local_objective="lemma"
             )
         )
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())

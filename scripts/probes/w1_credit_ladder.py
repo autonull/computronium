@@ -61,7 +61,7 @@ def _credit(name: str):
                 orthogonal_init=name == "rp_ortho",
             )
         )
-    objective = "ff" if name == "ff" else "pepita"
+    objective = "ff" if name == "ff" else "lemma"
     return LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01, local_objective=objective

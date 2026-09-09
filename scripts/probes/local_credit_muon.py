@@ -50,7 +50,7 @@ def _credit(name: str):
     return LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
-            local_objective="pepita" if name == "pepita" else "ff",
+            local_objective="lemma" if name == "pepita" else "ff",
         )
     )
 

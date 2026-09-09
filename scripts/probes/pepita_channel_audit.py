@@ -66,7 +66,7 @@ def main() -> int:
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         credit = LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
-                feedback_scale=scale, local_objective="pepita"
+                feedback_scale=scale, local_objective="lemma"
             )
         )
         # mirror run_train_step wiring: both phase states carry y; only

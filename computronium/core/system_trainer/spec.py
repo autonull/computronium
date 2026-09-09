@@ -18,6 +18,7 @@ from computronium.ontology import (
     LionUpdate,
     LocalAdamUpdate,
     LocalGoodnessCredit,
+    PepitaCredit,
     MeanNormUpdate,
     OrthoAdamUpdate,
     ParameterUpdateConfig,
@@ -103,6 +104,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return RandomProjectionsCredit(config)
         case "local_goodness" | "forward_only":
             return LocalGoodnessCredit(config)
+        case "pepita":
+            return PepitaCredit(config)
         case "temporal_trace" | "spiking":
             return TemporalTraceCredit(config)
         case "target_inversion" | "target_prop":

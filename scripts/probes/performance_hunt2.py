@@ -67,7 +67,7 @@ def _make(credit: str, depth: int, width: int, lr: float, seed: int):
     if credit == "bp":
         credit_obj = BackpropCredit()
     else:
-        objective = "ff" if credit == "ff" else "pepita"
+        objective = "ff" if credit == "ff" else "lemma"
         credit_obj = LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
                 feedback_scale=0.01, local_objective=objective

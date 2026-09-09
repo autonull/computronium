@@ -60,7 +60,7 @@ def _run_learned(seed: int, train_data, test_batches) -> float:
         credit=LocalGoodnessCredit(
             CreditAssignmentConfig.local_goodness(
                 feedback_scale=0.01,
-                local_objective="pepita",
+                local_objective="lemma",
                 learned_feedback=True,
             )
         ),
