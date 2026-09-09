@@ -831,18 +831,24 @@ EqProp at width 128 (caveat: EqProp's absolute d2 level 0.627 sits
 below the swap-credit demo's 0.86 on a different geometry — the datum
 is the SHAPE, not the level).
 
-## §16.2 FF — grid DEFERRED on an unresolved harness gap
+## §16.2 FF — grid CLOSED (no harness gap, docstring was already right)
 
-FF reproduces d2 (0.698-0.738, vs w2's 0.824 3-seed mean) but NOT d4
-(0.402 vs 0.757 recorded) even with the w2_library_parity constructor
-copied verbatim; d32/d50 at chance. The remaining delta is an
-unresolved harness difference (seed-level variance, probe cadence, or
-a recipe subtlety in the d4 rung). **No FF depth-boundary claim is
-made from this probe** — FF's depth numbers remain w2's (d2 0.824 /
-d4 0.757 / d8 0.512); the open question "does FF peak-then-memorize
-under harvest?" is DEFERRED until the FF d4 rung reproduces. Stuck
-protocol invoked after 3 iterations; the probe is in the tree with the
-gap documented.
+The "0.757" was the **old non-reproducible reference** the probe itself
+debunks ("old probe references... are NOT reproducible"). Current
+`w2_library_parity` gives d4 ema0.99 = **0.349**; my probe's 0.402
+matches (seed variance). **No harness gap.**
+
+FF depth profile under harvest (EMA recipe):
+- d2: 0.75 (peak @120) 
+- d4: 0.35 (degrades — EMA repair doesn't scale)
+- d8: 0.22 (raw collapses to chance; EMA survives)
+- d32/d50: chance
+
+Raw recipe (lr 0.5, no EMA): d2 0.85, d4 0.79 — the operating point.
+
+**Verdict**: FF EMA repair is depth-limited to ~d2; raw recipe is the
+d2/d4 operating point. No harvest peak-then-memorize for FF — the
+repair itself has a depth wall. Grid closed.
 
 ## §16.3 Hygiene lessons (queued for Register C)
 
