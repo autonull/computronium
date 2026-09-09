@@ -2,6 +2,110 @@
 
 > **Opened 2026-09-10.**
 >
+> **PROGRESS (2026-09-10, session 1):**
+>
+> - **Phase A COMPLETE.**
+>   - §3.1 `computronium/papers/registry.py` (PAPERS + FOLDS; fold decision
+>     `p_axis_boundaries → icu_law` recorded) + claim lock
+>     `tests/integration/test_paper_claims.py` — 3 passed. The 0.944 held-out
+>     number was NOT in any prior log; refit once via `fit_icu_model.py` →
+>     reproduced 0.944, pinned to `logs/w16_icu_fit.log`, the lock now resolves
+>     the claim against it.
+>   - §3.2 `DemoSpec.g_axis` flag in `gallery.py` (D17/D19/D20); per-arm
+>     `param_counts` added to all three demo records + figure titles annotated;
+>     lock assertion `test_g_axis_demos_record_param_counts` in
+>     `test_gallery_lock.py`. Demos re-run (deterministic): D19 324s, D20 159s,
+>     D17 6s; gallery re-pinned; full gallery lock + claim lock green (5 passed).
+>   - §3.3 README updated: P-axis reframe (expressiveness hypothesis, not
+>     validated capability), NTM/NCA in the Geometry primitives row, new
+>     capability-table rows (NtmGeometry, NcaGeometry, EMA harvest,
+>     Pepita/LEMMA, recipe cards, I(C,U) model, frozen-θ ψ benchmarks) — all
+>     verified against the actual API before writing.
+> - **Phase B: E2, E3, E4 COMPLETE; E1 in flight.**
+>   - **E2 ALIVE** (`scripts/probes/w17_e2_kolmogorov.py`): short ψ-rule
+>     (385 params) unfolds 32×32 patterns (checker/stripes/plaid) at match
+>     1.000, ratio 2.66×, 3 seeds; readout_adapter control ratio 0.20×.
+>     Defects fixed en route: (a) Fourier positional basis needed π·cell
+>     frequencies (period-2 checker unreachable from raw coords or 2π/H
+>     features — constant-0.5 attractor at MSE 0.25 was the signature);
+>     (b) radial patterns (rings) unreachable from the basis — swapped for
+>     plaid; scope: patterns reachable from the supplied positional basis.
+>   - **E3 ALIVE** (`scripts/probes/w17_e3_rule_reconfig.py`): ψ switches
+>     among K∈{2,4,8} NCA rule heads, K distinct patterns each (match ≥0.9),
+>     single_rule control regenerates P1 only, θ bitwise invariant (SHA).
+>     Same positional-basis defect class as E2 (rings→plaid, corners→dotgrid).
+>     Per-rule heads are independently trained closed-form selectors —
+>     mechanism-level evidence (Z3-toy precedent), not learned composition.
+>   - **E4 ALIVE** (`scripts/probes/w17_e4_composition.py`): closed-form
+>     written ψ-programs (recorded: WRITTEN, not searched — random search
+>     over the grammar failed at 200k episodes for max) over an 8-primitive
+>     counter machine solve max/sum/median-of-3 at N∈{4,8,16}, 16/16 trials,
+>     program length O(N), depth O(1), θ training steps 0; single_op control
+>     0/16. Defects fixed en route: branch offsets (pre-increment pc), the
+>     min-fold needs an unconditional branch (bra) + negacc (min = −max(−x)
+>     over negated tape copies). Substrate grew 7→8 primitives — recorded.
+>   - **E1 FALSIFIED** (v4 final, `scripts/probes/w17_e1_algorithmic_depth.py`;
+>     walltime 1244s, 3 seeds): null 0.22→0.91 MSE (collapses ✓ as predicted),
+>     memory_no_psi 0.24→0.91 (BPTT through memory fails identically — deep
+>     credit decay), psi_sequential 0.057→1.21 (N32/N4 growth 21× — chunk
+>     error compounds multiplicatively under the norm-preserving/chaotic
+>     recurrence). **Mechanism boundary, not a defect** (three design defects
+>     were found and fixed first — see below; v4 is a clean verdict):
+>     per-chunk local credit trains a good ONE-step operator (MSE 0.004) but
+>     the N-step composition error is unconstrained — local chunk credit has
+>     no term controlling long-horizon composition error. ψ at probe scale is
+>     a fixed-depth adapter for *learned chaotic recurrences*; depth
+>     decoupling from architecture NOT demonstrated at this task class.
+>     Value binding was NOT the bottleneck (addressing/writes worked).
+>     E1 verdict history: v1 "ALIVE" was an artifact (contracting tanh made
+>     the target degenerate — discarded); v2/v3 falsifications were
+>     undertraining/bottleneck defects, not mechanism verdicts.
+>     **E1b follow-up #1 RUN (multi-step intermediate credit, T=4 —
+>     `scripts/probes/w17_e1b_multistep_credit.py`, 1758s, 3 seeds):**
+>     psi_multi improves ABSOLUTE accuracy at every N (0.016 @N=4 vs
+>     one-step's 0.057; 0.907 @N=32 vs 1.21 — the T=4 N=32 endpoint now
+>     MATCHES null/memory_no_psi), but growth N32/N4 = 56× — still
+>     exponential (≥21× criterion: credit-horizon-independent). **E1
+>     boundary stands, sharpened:** short-horizon intermediate credit
+>     (T=4 ≪ N=32) buys a better operator but does not reach the
+>     composition problem; error compounding is governed by the ratio
+>     T_credit/N, not by credit quality at fixed T. The boundary is now
+>     a quantitative law candidate: composition error is controlled iff
+>     credit horizon scales with N — which local-credit signals cannot
+>     do for free (that IS the depth problem). Remaining follow-ups:
+>     operator-space closed-form chunks (boundary localizes to credit,
+>     not expressiveness) and contractive-with-margin recurrences.
+>     **Improvement opportunities (E1 follow-ups, unrun):**
+>     1. ~~multi-step rollout supervision~~ RUN (E1b): absolute accuracy
+>        improved at every N but growth stayed exponential (56×) — see
+>        E1b verdict above;
+>     2. non-chaotic but deep recurrences (e.g. contractive-with-margin
+>        maps) where composition error is bounded — but then verify null
+>        cannot shortcut (v1 lesson);
+>     3. ψ-sequenced closed-form chunks (operator learned in "operator
+>        space", e.g. fit the Jacobian field) instead of a state map;
+>     4. criterion note: "accuracy independent of N" is the wrong shape for
+>        chaotic unfolding — the right criterion is error growth rate
+>        ψ ≪ null (E1: 21× vs 4×, worse; E1b: 56× vs 4×, still worse in
+>        rate though better in absolute endpoint).
+>
+> **Runtime note:** E-probe scripts are single-process multi-arm (not the
+> planned cell grid); E1 ≈ 21 min (6000 steps × 4 N × 3 arms × 3 seeds),
+> E2 ≈ 3 min, E3 ≈ 1 min, E4 < 1 s. All backgrounded with OMP=2.
+>
+> **Phase B verdict: mechanism-localized survival (§10 stop-loss 2).**
+> E2 (Kolmogorov compression) + E3 (fabric reconfiguration) + E4 (sequential
+> composition over a tape) ALIVE; E1 (algorithmic depth beyond architecture)
+> FALSIFIED with a clean mechanism boundary (composition-error compounding).
+> The expressiveness thesis holds for *compression, reconfiguration, and
+> program sequencing*; it does NOT hold (yet) for *unfolding a learned
+> chaotic operator*. `p_axis_expressiveness` partially unblocks — claims
+> scoped to E2/E3/E4 mechanisms; headline still needs the §20 round.
+> Phase C (§5.1 I(C,U,P) refit, §5.2 frontier) deferred to a follow-up
+> session: E2/E3/E4 are NCA/counter-machine mechanism probes and add no
+> I(C,U) measurement rows yet — a §5.3-style campaign on the winning
+> (E2/E3) task is the right next cell, not a premature refit.
+>
 > **CURRENT FOCUS:** TODO16 mapped the P-axis as an *adaptation-and-efficiency
 > layer* and found boundaries. TODO17 re-frames and re-tests the P-axis as a
 > **computational-expressiveness axis**: the mechanism by which a fixed
@@ -630,6 +734,9 @@ pre-verdict smoke gate (‖Δw‖ > 0, muon ≠ euclid step) before any multi-ce
 ## §15 — File Inventory & Restart Protocol (for a fresh context)
 
 **Existing probes to reuse (do not rebuild):**
+- `scripts/probes/w17_e1_algorithmic_depth.py` … `w17_e4_composition.py` —
+  the E-probe suite (verdicts in the progress block; E1 falsified, do not
+  re-run without one of the recorded follow-up designs)
 - `scripts/probes/z3_toy.py`, `z3_full.py` — frozen-θ + SHA-invariance + closed-form ψ
 - `scripts/probes/w8_ntm_copy.py` (REV r7) — NTM copy/recall, `--width` slot fix
 - `scripts/probes/w8_nca_local.py` (REV r10) — NCA, distill-init, `--regen`

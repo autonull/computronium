@@ -87,12 +87,12 @@
     {
       "capability_id": "D17",
       "capability_name": "multi_psi_swap",
-      "data_sha256": "fcf2ff3737906491a5644d49686e9e10884f79d135c72008b59947cee4bde6f3",
+      "data_sha256": "b8641d81e4cf47d4197dd2fc002f6c6589e3fd1f848a4757e8fd7e3707c626a6",
       "demo_test": "tests/integration/test_demo_multi_psi_swap.py",
       "figure_png": "d17_multi_psi_swap.png",
       "provenance": {
-        "config_sha256": "fcf2ff3737906491a5644d49686e9e10884f79d135c72008b59947cee4bde6f3",
-        "git_commit": "0803de9dc1b81af8173c572c4cf8b8dad306a507"
+        "config_sha256": "b8641d81e4cf47d4197dd2fc002f6c6589e3fd1f848a4757e8fd7e3707c626a6",
+        "git_commit": "37ab5b7dfc80510641e5b16b01476368ebc32df9"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -111,12 +111,12 @@
     {
       "capability_id": "D19",
       "capability_name": "depth_harvest",
-      "data_sha256": "0b1b04b9d1c43fc7a39a00a2c4928261812ec14a7f6f8c41078f3e916fccc041",
+      "data_sha256": "b43d33c2a8fb3be9739f53ca42df947af2c9d7f54b47d73404e9cb30cafa9399",
       "demo_test": "tests/integration/test_demo_depth_harvest.py",
       "figure_png": "d19_depth_harvest.png",
       "provenance": {
-        "config_sha256": "0b1b04b9d1c43fc7a39a00a2c4928261812ec14a7f6f8c41078f3e916fccc041",
-        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
+        "config_sha256": "b43d33c2a8fb3be9739f53ca42df947af2c9d7f54b47d73404e9cb30cafa9399",
+        "git_commit": "37ab5b7dfc80510641e5b16b01476368ebc32df9"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -135,12 +135,12 @@
     {
       "capability_id": "D20",
       "capability_name": "ntm_local",
-      "data_sha256": "5822186c19e13b316bc23f546dd3976b318efaf4ebac4da1f625e29084e565f2",
+      "data_sha256": "e73eeb951423c2f1df60c78cea8f280b800e5acba9463d02fe60b1f473ad02bf",
       "demo_test": "tests/integration/test_demo_ntm_local.py",
       "figure_png": "d20_ntm_local.png",
       "provenance": {
-        "config_sha256": "5822186c19e13b316bc23f546dd3976b318efaf4ebac4da1f625e29084e565f2",
-        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
+        "config_sha256": "e73eeb951423c2f1df60c78cea8f280b800e5acba9463d02fe60b1f473ad02bf",
+        "git_commit": "37ab5b7dfc80510641e5b16b01476368ebc32df9"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -164,7 +164,7 @@
       "figure_png": "d3_swap_plasticity.png",
       "provenance": {
         "config_sha256": "89f8ab58ed16beaa6e9f101e96903e5433232512827fea9bd6b8a9d0c5fca5cd",
-        "git_commit": "c5012886d4862b02785eb5db771beb4c59e69d8f"
+        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -272,7 +272,7 @@
       "figure_png": "f3_paxis_pareto.png",
       "provenance": {
         "config_sha256": "47f73330e9f3e012704ed9c7066f3912bd7a2aa464c089f986cbda59680d1495",
-        "git_commit": "c5012886d4862b02785eb5db771beb4c59e69d8f"
+        "git_commit": "d87171127b1eb03a1bf2b1cdfb5c3ec0e3bdbfeb"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },

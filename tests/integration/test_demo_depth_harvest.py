@@ -65,6 +65,7 @@ def _run(depth: int, train_data, eval_data) -> dict[str, float]:
     )
     layered = extract_layered_params(geometry)
     weights = [t[0] for t in layered.transitions]
+    param_count = sum(t.numel() for t in weights)
     opt = _OrthoAdamWeights(weights, lr=LR)
     ema = [w.detach().clone() for w in weights]
 
@@ -89,7 +90,7 @@ def _run(depth: int, train_data, eval_data) -> dict[str, float]:
         for w, e in zip(weights, ema, strict=True):
             w.copy_(e)
     ema_acc = evaluate(dynamics, geometry, substrate, eval_data)
-    return {"final": final_acc, "ema": ema_acc}
+    return {"final": final_acc, "ema": ema_acc, "params": param_count}
 
 
 @pytest.mark.timeout(900)
@@ -113,8 +114,13 @@ def test_demo_depth_harvest(emit_run_record) -> None:
         "ema_decay": EMA_DECAY,
         "seed": SEED,
         "arms": arms,
+        "param_counts": {label: accs["params"] for label, accs in arms.items()},
         "figure": figure_spec(
-            "D19 — Probe-free EMA harvest vs final-step weights (depth headline)",
+            "D19 — Probe-free EMA harvest vs final-step weights (depth headline)"
+            + " | params: "
+            + ", ".join(
+                f"{label} {accs['params'] / 1e6:.2f}M" for label, accs in arms.items()
+            ),
             bars_panel(
                 {
                     label: {"final_step": accs["final"], "ema_harvest": accs["ema"]}

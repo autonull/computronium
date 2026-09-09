@@ -38,6 +38,18 @@ def _records() -> dict[str, dict]:
     return records
 
 
+def test_g_axis_demos_record_param_counts() -> None:
+    """Any demo whose registry entry declares a G-axis comparison must
+    carry ``param_counts`` for every arm — capacity mismatches cannot
+    hide in the figure (TODO17 §3.2)."""
+    records = _records()
+    for name, spec in DEMOS.items():
+        if not spec.g_axis:
+            continue
+        counts = records.get(name, {}).get("data", {}).get("param_counts")
+        assert counts, f"{name}: G-axis demo missing param_counts"
+
+
 def test_figure_lock(tmp_path: Path) -> None:
     records = _records()
     assert set(records) == set(EXPECTED), (

@@ -85,10 +85,13 @@ def _fig_declared(record: dict) -> Figure:
 
 @dataclass(frozen=True, slots=True)
 class DemoSpec:
-    """One gallery demo: capability id and its figure factory (R1.3)."""
+    """One gallery demo: capability id, figure factory, and whether the
+    demo asserts a G-axis (architecture) comparison — such demos must
+    record per-arm ``param_counts`` in their run record (TODO17 §3.2)."""
 
     capability_id: str
     factory: Callable[[dict], Figure]
+    g_axis: bool = False
 
 
 DEMOS: dict[str, DemoSpec] = {
@@ -114,9 +117,9 @@ DEMOS: dict[str, DemoSpec] = {
     "update_ladder": DemoSpec("D18", _fig_declared),
     "credit_channel_map": DemoSpec("F4", _fig_declared),
     "resource_vector": DemoSpec("F5", _fig_declared),
-    "multi_psi_swap": DemoSpec("D17", _fig_declared),
-    "depth_harvest": DemoSpec("D19", _fig_declared),
-    "ntm_local": DemoSpec("D20", _fig_declared),
+    "multi_psi_swap": DemoSpec("D17", _fig_declared, g_axis=True),
+    "depth_harvest": DemoSpec("D19", _fig_declared, g_axis=True),
+    "ntm_local": DemoSpec("D20", _fig_declared, g_axis=True),
 }
 
 

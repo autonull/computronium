@@ -174,11 +174,17 @@ def test_demo_multi_psi_swap(emit_run_record) -> None:
 
     library = _build_library(system, data, gen)
     tasks = _measure(system, probes, library)
+    backbone_params = sum(p.numel() for p in system.geometry.params.values())
+    psi_params_per_task = sum(m.numel() + b.numel() for m, b in library.values())
 
     record: dict = {
         "theta_sha256_before": sha_before,
         "theta_sha256_after": _theta_sha256(system),
         "tasks": tasks,
+        "param_counts": {
+            "backbone": backbone_params,
+            "psi_per_task": psi_params_per_task // len(TASKS),
+        },
     }
 
     # Guarantee 1: θ bitwise frozen across the whole lifecycle.
@@ -199,7 +205,9 @@ def test_demo_multi_psi_swap(emit_run_record) -> None:
 
     record["figure"] = figure_spec(
         "D17 — multi-ψ swap: one frozen θ, per-task solved ψ as a state "
-        "variable (swap, don't overwrite)",
+        "variable (swap, don't overwrite) | "
+        f"backbone {backbone_params:,} params; ψ is a per-task additive "
+        f"cost ({psi_params_per_task // len(TASKS):,} params per ridge solve, not θ)",
         bars_panel(
             {
                 t: {

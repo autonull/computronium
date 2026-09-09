@@ -16,6 +16,7 @@ capability record is the 8000-step 3-seed run — local3 mean 0.944
 
 import sys
 import time
+from itertools import chain
 
 import pytest
 
@@ -41,11 +42,18 @@ def test_demo_ntm_local(emit_run_record) -> None:
 
     controller, heads, _ = ntm._run_bptt(STEPS, LR, SEED)
     arms["bptt"] = _acc(controller, heads)
+    bptt_params = sum(
+        p.numel() for p in chain(controller.parameters(), heads.parameters())
+    )
 
     controller, heads, _ = ntm._run_local(
         STEPS, LR, SEED, writer="expected", label="local3", credit_controller=True
     )
     arms["local3"] = _acc(controller, heads)
+    local3_params = sum(
+        p.numel() for p in chain(controller.parameters(), heads.parameters())
+    )
+    param_counts = {"bptt": bptt_params, "local3": local3_params}
     for name, acc in arms.items():
         print(f"{name}: copy-acc {acc:.3f}")
     print(f"walltime {time.time() - t0:.1f}s (printed, never recorded)")
@@ -59,8 +67,10 @@ def test_demo_ntm_local(emit_run_record) -> None:
             "seed": SEED,
             "width": ntm.MEM_WIDTH,
             "arms": arms,
+            "param_counts": param_counts,
             "figure": figure_spec(
-                "D20 — NTM copy: local credit vs bptt control (r6 recipe)",
+                "D20 — NTM copy: local credit vs bptt control (r6 recipe; "
+                f"matched params: {bptt_params:,} / {local3_params:,})",
                 bars_panel(
                     {"copy task / r6 recipe / 3000 steps": arms},
                     xlabel="",
