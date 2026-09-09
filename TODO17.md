@@ -250,6 +250,33 @@
 > 0.722 held-out lattice) — depth-sampling boundary of the fit, not a
 > ψ effect; see session-6 notes in the E1 verdict block.]**
 >
+> **CLOSE-OUT (2026-09-10, session 7 — verification pass):**
+> Dev-env smoke OK; tree clean; claim lock + dynamics wiring lock
+> re-run green (7 passed, 2.6 s). README updated with the E1c/E1d
+> unified composition law and the §5.1 3-seed ψ-orthogonality row.
+> **Success-criteria disposition (§12):**
+> - C1 (E1 alive): NO — falsified, mechanism-localized (chaos-specific
+>   composition compounding; unified law recorded).
+> - C2 (E2 alive): YES — ratio 2.66×, 3 seeds, readout control 0.20×.
+> - C3 (E3 alive): YES — 3/3 seeds §20 round, θ SHA-invariant,
+>   σ_max(J_F) frontier measured.
+> - C4 (E4 alive): YES — 16/16 trials, θ training steps 0, control 0/16.
+> - C5 (paper pipeline): YES — `icu_law` + `p_axis_expressiveness` both
+>   `active_draft` with claim-lock-resolved evidence; `p_axis_boundaries`
+>   parked with recorded fold. Writing round = TODO18 candidate.
+> - C6 (consolidation): YES — claim lock, param-count labels
+>   lock-gated, README reflects the reframe + E-probe outcomes.
+> TODO17 CLOSED (verified). Improvement opportunities for follow-on
+> work: (1) E1 hybrid mechanism — closed-form linear operator
+> (benign N·ε² composition) + learned state-dependent correction
+> composed under the N·ε² budget; (2) Muon-vs-optimizer reconfiguration
+> comparison (campaign 7.2 transfer) for the paper round; (3)
+> depth-matched training set to extend the I(C,U) fit to d32 rows
+> (0.722 held-out on mixed depths is a sampling boundary, not a ψ
+> effect); (4) paper-writing round for both active_draft papers;
+> (5) contractive-recurrence E1 variant with a hybrid credit that fits
+> operators (not state maps) — per the E1c law-candidate note.
+>
 > **CURRENT FOCUS:** TODO16 mapped the P-axis as an *adaptation-and-efficiency
 > layer* and found boundaries. TODO17 re-frames and re-tests the P-axis as a
 > **computational-expressiveness axis**: the mechanism by which a fixed

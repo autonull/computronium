@@ -36,7 +36,7 @@ Historically, ML frameworks treat models as static computational graphs. Computr
 
 By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
 
-The P-axis is investigated as a **computational-expressiveness axis** (TODO17): a program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
+The P-axis is investigated as a **computational-expressiveness axis** (TODO17): a program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
 
 Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
 
@@ -81,6 +81,7 @@ This decomposition is the framework's organizing abstraction for comparing learn
 | **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy — TODO16 §4 |
 | **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits — TODO16 §5 |
 | **P-axis expressiveness probes** (`scripts/probes/w17_e*.py`) | Fixed-θ ψ mechanisms verified at probe scale: Kolmogorov compression (short ψ unfolds 32×32 patterns, 2.66× ratio), NCA rule reconfiguration (K distinct patterns from one seed, θ SHA-invariant, 3 seeds), sequential composition over NTM tape (max/sum/median at O(1) depth); σ_max(J_F) stability-expressiveness frontier measured. E1 (deep chaotic unfolding) falsified with a mechanism boundary — composition-error compounding — TODO17 |
+| **I(C,U) ψ-orthogonality** (`harvest_icu_table.py`, `fit_icu_model.py`) | 3-seed confirmation that ψ does not modulate the credit×update surface: max modulation 9.1 pts (fa×muon routing), mean 2.0 — ψ is a passenger; campaign-7.1 rows in `data/icu_measurements.csv`, `logs/w17_icu_fit.log` — TODO17 §5.1 |
 | **Experiment sweeps / campaigns** | `comp campaign`, `comp benchmark`, `comp scientist` — structured hypercube exploration |
 | **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
 
@@ -146,9 +147,7 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(
-                input_dim=784, output_dim=10, hidden_dims=(32,)
-            )
+            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
@@ -359,9 +358,15 @@ All factories are available via `from computronium import ...` and compose 6-axi
 
 ```python
 from computronium import (
-    create_backprop_mlp, create_eqprop_mlp, create_fa_mlp,
-    create_ff_mlp, create_pepita_mlp, create_tp_mlp,
-    create_pc_mlp, create_hebbian_mlp, create_snn_mlp,
+    create_backprop_mlp,
+    create_eqprop_mlp,
+    create_fa_mlp,
+    create_ff_mlp,
+    create_pepita_mlp,
+    create_tp_mlp,
+    create_pc_mlp,
+    create_hebbian_mlp,
+    create_snn_mlp,
     create_tile_mlp,
 )
 
@@ -372,16 +377,30 @@ input_dim, output_dim = 784, 10
 system = create_backprop_mlp(input_dim, (256, 128), output_dim, lr=0.001, device=device)
 
 # Equilibrium Propagation (energy-based)
-system = create_eqprop_mlp(input_dim, (512, 512, 512), output_dim,
-                           beta=0.1, inference_steps=20, lr=0.001, device=device)
+system = create_eqprop_mlp(
+    input_dim,
+    (512, 512, 512),
+    output_dim,
+    beta=0.1,
+    inference_steps=20,
+    lr=0.001,
+    device=device,
+)
 
 # Feedback Alignment (no weight transport)
 system = create_fa_mlp(input_dim, (256, 128), output_dim, lr=0.001, device=device)
 
 # Forward-Forward (local layer-wise, 3 epochs)
-system = create_ff_mlp(input_dim, (256, 256), output_dim,
-                       layer_lr=0.03, classifier_lr=0.01, threshold=2.0,
-                       num_layers=2, device=device)
+system = create_ff_mlp(
+    input_dim,
+    (256, 256),
+    output_dim,
+    layer_lr=0.03,
+    classifier_lr=0.01,
+    threshold=2.0,
+    num_layers=2,
+    device=device,
+)
 
 # PEPITA (FF variant)
 system = create_pepita_mlp(input_dim, (256, 128), output_dim, lr=0.01, device=device)
@@ -399,8 +418,15 @@ system = create_hebbian_mlp(input_dim, (256,), output_dim, lr=0.001, device=devi
 system = create_snn_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
 
 # TileNet (modular tiles)
-system = create_tile_mlp(input_dim, (256,), output_dim,
-                         lr=0.001, neurons_per_tile=16, tiles_per_layer=2, device=device)
+system = create_tile_mlp(
+    input_dim,
+    (256,),
+    output_dim,
+    lr=0.001,
+    neurons_per_tile=16,
+    tiles_per_layer=2,
+    device=device,
+)
 ```
 
 Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Compose a Six-Axis System quickstart above.
@@ -412,14 +438,12 @@ from computronium import create_routing_mlp, create_fast_weight_mlp
 
 # RoutingPlasticity: state-dependent gating, sparse pathway routing
 system = create_routing_mlp(
-    input_dim, (256,), output_dim,
-    lr=0.001, gate_dim=32, device=device
+    input_dim, (256,), output_dim, lr=0.001, gate_dim=32, device=device
 )
 
 # FastWeightPlasticity: episode-local associative memory
 system = create_fast_weight_mlp(
-    input_dim, (256,), output_dim,
-    lr=0.001, fast_weight_dim=128, device=device
+    input_dim, (256,), output_dim, lr=0.001, fast_weight_dim=128, device=device
 )
 ```
 
