@@ -36,6 +36,26 @@ forward pass (pipeline surgery, next session, ontology checklist).
 
 uv run python scripts/probes/pepita_faithful_replication.py
 Walltime printed, never recorded.
+
+FOLLOW-UP (2026-09-10, TODO17 close-out residuals):
+- --task=cifar10 (flat 3072-256-10 head): bp 0.378, pepita γ=0.05 0.362,
+  pepita×muon 0.227 — parity replicates on the CIFAR-10 head (gap 0.015);
+  Muon harm replicates. The input-modulation family's home is fixed-input
+  tasks, now measured on two datasets.
+- --ablation=rebatch (B redrawn per batch): 0.897 vs bp 0.890 — parity
+  HOLDS without a fixed B.
+- --ablation=ortho (orthogonal B): 0.894 — parity HOLDS with orthogonal B.
+  VERDICT (mechanism-bound): neither B fixedness nor B orthogonality is
+  load-bearing at this scale; the mechanism is the modulated second pass
+  under an exact gradient of a real objective. B statistics are free.
+- --task=cora r2 (train split CYCLED to the 150-batch budget — the
+  first run trained on ~3 batches and was ill-posed for every arm):
+  bp/adam 0.556, pepita/adam γ=0.05 0.328, pepita/muon 0.522. PARITY
+  DOES NOT REPLICATE on flattened graph-node features — a genuine gap,
+  and Muon nearly closes it (0.522 vs 0.556), consistent with the
+  graph row of the I(C,U) map ("graph stays with Muon"). The
+  input-modulation family's fixed-input home is classification on
+  image-like inputs; graph-feature parity is optimizer-conditional.
 """
 
 from __future__ import annotations
@@ -94,6 +114,8 @@ def _train(
     opt = torch.optim.Adam(net.parameters(), lr=lr)
     gen = torch.Generator(device=DEVICE).manual_seed(seed)
     b_fixed = torch.randn(dims[2], dims[0], generator=gen, device=DEVICE)
+    if rule == "pepita_ortho":
+        b_fixed = torch.linalg.qr(b_fixed.T).Q.T.contiguous()
     for xb, yb in train_data:
         x = xb.to(DEVICE).view(xb.size(0), -1)
         y = yb.to(DEVICE)
@@ -103,12 +125,16 @@ def _train(
             opt.zero_grad()
             loss.backward()
             opt.step()
-        else:  # faithful pepita
+        else:  # faithful pepita (+ paper ablations)
             with torch.no_grad():
                 delta = torch.nn.functional.one_hot(y, dims[2]).float() - torch.softmax(
                     logits1, dim=-1
                 )
-            x_tilde = x + gamma * (delta @ b_fixed)
+            b = b_fixed
+            if rule == "pepita_rebatch":
+                # paper ablation: B redrawn every iteration (no fixed B)
+                b = torch.randn(dims[2], dims[0], generator=gen, device=DEVICE)
+            x_tilde = x + gamma * (delta @ b)
             loss2 = nn.functional.cross_entropy(net(x_tilde), y)
             opt.zero_grad()
             loss2.backward()
@@ -152,10 +178,13 @@ def _cora_split(batch: int = 64):
     data = Planetoid(root="./data", name="Cora")[0]
     idx = data.train_mask.nonzero(as_tuple=True)[0]
     perm = torch.randperm(idx.size(0))
-    train = [
+    epoch = [
         (data.x[idx[perm[i : i + batch]]], data.y[idx[perm[i : i + batch]]])
         for i in range(0, idx.size(0), batch)
-    ][:BATCHES]
+    ]
+    # 140 train nodes -> ~3 batches/epoch; cycle to the full budget
+    # (batches_seen >= budget rule, TODO15 §14.1)
+    train = [epoch[i % len(epoch)] for i in range(BATCHES)]
     test = [
         (data.x[data.val_mask | data.test_mask], data.y[data.val_mask | data.test_mask])
     ]
@@ -166,6 +195,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--gamma", type=float, default=GAMMA)
     parser.add_argument("--task", choices=sorted(TASK_DIMS), default="mnist")
+    parser.add_argument(
+        "--ablation",
+        choices=("none", "rebatch", "ortho"),
+        default="none",
+        help="paper-ablation variant of the pepita/adam arm: rebatch = B "
+        "redrawn per batch; ortho = orthogonal B (paper's B-initialization "
+        "ablation)",
+    )
     args = parser.parse_args()
     t0 = time.time()
     dims = TASK_DIMS[args.task]
@@ -193,14 +230,31 @@ def main() -> int:
     for seed in SEEDS:
         net = _train("bp", seed, train_data, dims=dims)
         accs.setdefault("bp/adam", []).append(_eval(net, test_batches))
-        net = _train("pepita", seed, train_data, gamma=args.gamma, dims=dims)
-        accs.setdefault("pepita/adam", []).append(_eval(net, test_batches))
-        net = _train_muon_pepita(seed, train_data, gamma=args.gamma, dims=dims)
-        accs.setdefault("pepita/muon.02", []).append(_eval(net, test_batches))
+        if args.ablation == "none":
+            net = _train("pepita", seed, train_data, gamma=args.gamma, dims=dims)
+            accs.setdefault("pepita/adam", []).append(_eval(net, test_batches))
+            net = _train_muon_pepita(seed, train_data, gamma=args.gamma, dims=dims)
+            accs.setdefault("pepita/muon.02", []).append(_eval(net, test_batches))
+        else:
+            rule = f"pepita_{args.ablation}"
+            net = _train(rule, seed, train_data, gamma=args.gamma, dims=dims)
+            accs.setdefault(f"{rule}/adam", []).append(_eval(net, test_batches))
 
     for name, a in accs.items():
         mean = sum(a) / len(a)
         print(f"{name:>16}: {mean:.3f}  {[f'{x:.3f}' for x in a]}", flush=True)
+
+    if args.ablation != "none":
+        bp = sum(accs["bp/adam"]) / 3
+        pp = sum(accs[f"pepita_{args.ablation}/adam"]) / 3
+        print(
+            f"\nVERDICT (ablation {args.ablation}): pepita {pp:.3f} vs bp "
+            f"{bp:.3f} — paper parity anchor is 0.884 (fixed random B); "
+            "ablation >= anchor → B-detail not load-bearing; below → it is",
+            flush=True,
+        )
+        print(f"walltime {time.time() - t0:.1f}s (printed, never recorded)")
+        return 0
 
     bp = sum(accs["bp/adam"]) / 3
     pp = sum(accs["pepita/adam"]) / 3

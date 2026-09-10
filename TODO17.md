@@ -277,6 +277,112 @@
 > (5) contractive-recurrence E1 variant with a hybrid credit that fits
 > operators (not state maps) — per the E1c law-candidate note.
 >
+> **Inherited-threads audit (TODO10–TODO16, session 7):** every leftover
+> in prior plans is resolved, superseded, or gated — no un-owned work:
+> - DONE: PEPITA H6 weight-trajectory probe (REFUTED at HEAD, parking
+>   stands, `scripts/probes/h6_pepita_tracker.py` docstring); STDP
+>   reward-modulation W7.3b (closed structural, recommend-kill,
+>   TODO14 §13 / TODO15 §9.3); TODO16 campaigns 7.1/7.2 (ran; 7.1
+>   harvested into the I(C,U) table in session 6); TODO16 §3B
+>   depth-100 routing (62% @d100, inherited table).
+> - PARKED with recorded revival conditions (no action): PEPITA
+>   realization chain (TODO13 §register), Z3 flagship (kernel shipped
+>   as E4), ConvGeometry/GraphGeometry/AttentionGeometry (TODO10
+>   Register B, pull-based), zero-history FastWeight, value binding.
+> - DEFERRED to their designated passes (no action now): Register C
+>   repo-wide ruff/pyright hygiene pass; paper-writing round for the
+>   two active_draft papers (= TODO18 seed).
+> - USER-GATED (only items requiring a user decision): D17 step-3 LM
+>   seeds 1–2 (~90 min GPU, per-batch approval, TODO13b §Tier-2 row 3)
+>   and the >10M-token side of the ff_hybrid↔bp/adam cross-over
+>   (TODO13b §524).
+>
+> **Detailed audit of TODO13/14/15/TODO.ntm_nca (session 7):** the
+> flagged open threads resolve against later records — associative-
+> recall levers (a)+(b) FALSIFIED, value binding recorded as the
+> structural limit (TODO16 §5.4, acc_given_hit 0.63); NTM copy 3-seed
+> @ 8000 recorded (0.958/0.917/0.958, mean 0.944 — TODO16 §1.4, no
+> re-run); LSTM-alone no-memory control run (TODO15 §17.11); NCA
+> local×muon wobble closed as an lr artifact (TODO15 §17.1); depth-100
+> closed mixed (do not cite as gate-passing); W8.6 moonshot killed
+> (TODO15 §4); the TODO13 §7 queue (learned feedback, per-layer
+> library credit, P-axis campaign, STDP audit) all executed or closed
+> in TODO14–16. Genuinely-unrun residuals, none blocking:
+> - PARKED-UNSCHEDULED: DNC (TODO.ntm_nca §6 — the cold-start
+>   corollary is on record; NtmGeometry superseded the motivation);
+>   W8.3's structural O(1)-memory win (arbitrary-horizon inference) —
+>   blocked by the label-free-growth representation boundary, needs
+>   recurrent/positional state (a design question, not a cell).
+> - OPTIONAL-UNRUN (TODO15 §15.3): PEPITA paper-ablation variants and
+>   PEPITA×other fixed-input tasks (CIFAR head, graph node
+>   classification) — classification family is open/growing, no
+>   decision hangs.
+> - AS-TOUCH HYGIENE (TODO13 §7): `train_biases` flag;
+>   learned-B `feedback_lr` default 0.5 → 0.05; diverged-arm sentinel
+>   (exp(23.0) → NaN flag). Queue for the Register C pass, not now.
+>
+> **RESIDUALS EXECUTED (2026-09-10, session 7 cont.):**
+> - **Hygiene LANDED:** learned-B `feedback_lr` default 0.5 → 0.05
+>   (both the dataclass and `local_goodness()`; sane-regime record
+>   TODO12b H6); divergence sentinel `perplexity()` in
+>   `computronium/core/losses.py` — overflow yields `float('inf')`,
+>   wired into `SystemTrainer` + both benchmark evaluators (replaces
+>   three bare `torch.exp` sites); `CreditAssignmentConfig.gradient
+>   (train_biases=True)` + `GradientCredit.compute_bias_pseudo_
+>   gradients` — opt-in bias training for contract-honest BP
+>   baselines; default stays the weights-only H2 contract. Targeted
+>   tests: 20 learned-feedback/PEPITA/defect-hunt + 5 metric tests
+>   passed; pyright 55 errors = baseline 55 (zero new).
+> - **PEPITA CIFAR-10 head RUN** (`pepita_faithful_replication.py
+>   --task=cifar10`, 12 s, 3 seeds): bp 0.378, pepita γ=0.05 0.362
+>   (parity gap 0.015 — replicates), pepita×muon 0.227 (Muon harm
+>   replicates). The fixed-input home is now measured on two datasets.
+> - **PEPITA paper ablations RUN** (same probe, `--ablation=`):
+>   rebatch (B redrawn per batch) 0.897 vs bp 0.890; ortho (orthogonal
+>   B) 0.894. **Mechanism-bound verdict:** neither B fixedness nor
+>   orthogonality is load-bearing — the mechanism is the modulated
+>   second pass under an exact gradient; B statistics are free.
+> - STILL GATED/UNSCHEDULED (no change): DNC (parked; NtmGeometry
+>   superseded the motivation); W8.3 arbitrary-horizon O(1)-memory win
+>   (blocked by the label-free-growth boundary — design question);
+>   D17 LM seeds 1–2 + >10M-token cross-over (user-gated).
+>
+> **QUICK-EXPERIMENT ROUND (2026-09-10, session 7 cont. — 5 cells,
+> ~17 min total, all CPU):**
+> 1. **E4 generalization RUN** (`w17_e4_composition.py` + `min` task,
+>    0.0 s): min-of-N composes via the negation-fold path — 16/16
+>    trials at every N ∈ {4,8,16}, single_op 0/16. E4's written-program
+>    result is not max/sum/median-specific.
+> 2. **E2 T-sweep RUN** (`w17_e2_t_sweep.py`, 452.6 s): match 1.000 at
+>    EVERY T ∈ {2..64} for both the 385-param rule AND a 97-param rule
+>    (ratio 11.0×). Verdict: horizon-flexible YES; program-size
+>    shrinkage YES but NOT T-driven (narrow rule solves at T=2 too) —
+>    the ratio lift is positional-basis expressiveness, not a
+>    time-architecture trade; genuine T-dependence needs patterns whose
+>    rule-space description exceeds the small budget (fractals).
+> 3. **Muon-vs-Adam rule reconfiguration RUN** (`w17_e3_optimizer.py`,
+>    449.7 s): the σ_max(J_F) frontier is pattern-structured,
+>    OPTIMIZER-INDEPENDENT — cross stays non-contractive under both
+>    (adam σ 2.39 / match 0.909; muon σ 1.50 / match 0.890), diagonal
+>    mildly > 1 under both, stable set unchanged. Campaign 7.2's "Muon
+>    absorbs reconfiguration stability cost" does NOT transfer to the
+>    structural budget (it softens cross's σ but doesn't cross it).
+> 4. **Depth-matched I(C,U) refit RUN** (`fit_icu_depth_matched.py`,
+>    0.2 s): shallow-only train rows recover the held-out lattice
+>    anchor EXACTLY (0.722 → 0.944). The session-6 degradation is
+>    confirmed a depth-sampling artifact; the law stands at matched
+>    depth. Future fits must depth-stratify.
+> 5. **PEPITA × Cora head RUN** (`pepita_faithful_replication.py
+>    --task=cora`, r2 with the train split cycled — r1 trained on ~3
+>    batches and was ill-posed for every arm; the §14.1 batches_seen
+>    rule re-validated): bp 0.556, pepita/adam 0.328, pepita/muon
+>    0.522. PARITY DOES NOT REPLICATE on graph-node features — a
+>    genuine gap, nearly closed by Muon (graph row of the I(C,U) map
+>    replicates). The fixed-input home is image-like classification.
+> Gates: ruff clean on all changed probe/analysis files; target
+> pytest not re-run (no library code touched this round); claim lock
+> unaffected (registry untouched).
+>
 > **CURRENT FOCUS:** TODO16 mapped the P-axis as an *adaptation-and-efficiency
 > layer* and found boundaries. TODO17 re-frames and re-tests the P-axis as a
 > **computational-expressiveness axis**: the mechanism by which a fixed

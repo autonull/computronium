@@ -107,6 +107,8 @@ def _task_input(task: str, n: int, rng) -> tuple[list[float], float, int]:
         return [*xs, 0.0], max(xs), n
     if task == "sum":
         return [*xs, 0.0], sum(xs), n
+    if task == "min":
+        return [*xs, *([0.0] * (n + 1))], min(xs), 2 * n
     if task == "median3":
         xs = xs[:3] + [0.0] * (n - 3)
         scratch = [0.0] * 7  # slots: sum, max, min, output, -x0, -x1, -x2
@@ -134,6 +136,18 @@ def _fold_block(task: str, k: int) -> list[tuple[str, int, int]]:
     raise ValueError(task)
 
 
+def _min_program(n: int) -> list[tuple[str, int, int]]:
+    """min = -max(-x): negate every element into scratch slots n..2n-1,
+    then max-fold over the negated copies, negate the result."""
+    prog = []
+    for k in range(n):
+        prog += [("load", k, 0), ("negacc", 0, 0), ("store", n + k, 0)]
+    prog += [("load", n, 0)]
+    for k in range(n + 1, 2 * n):
+        prog += _fold_block("max", k)
+    return [*prog, ("negacc", 0, 0), ("store", 2 * n, 0)]
+
+
 def write_program(task: str, n: int) -> list[tuple[str, int, int]]:
     if task == "max":
         prog = [("load", 0, 0)]
@@ -144,6 +158,8 @@ def write_program(task: str, n: int) -> list[tuple[str, int, int]]:
         prog = [("load", 0, 0)]
         prog += [("add", k, 0) for k in range(1, n)]
         return [*prog, ("store", n, 0)]
+    if task == "min":
+        return _min_program(n)
     if task == "median3":
         # med = sum - max - min; min = -max(-x) over negated copies
         # sum
@@ -170,7 +186,7 @@ def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
     t0 = time.time()
     ok_all = True
     print("ψ acquisition: WRITTEN (closed-form; recorded per §4.4)")
-    for task in ("max", "sum", "median3"):
+    for task in ("max", "sum", "min", "median3"):
         for n in N_GA:
             rng = __import__("random").Random(2)
             composed_hits = single_hits = 0
