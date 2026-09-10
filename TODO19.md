@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate) and emitted the first mechanism schema (D-000013); round 6 shipped the R6-A component (RoleSplitUpdate config surface, benchmark-verified bit-identical to the probe). **Open work re-prioritized payout-first (rounds 6–8 target components + real-task results; see Open work).**
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism (X-TPC-001: P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported, first schema D-000013); round 6 shipped RoleSplitUpdate (R6-A); round 7 executed X-TPC-003 on a REAL task pair (frozen-backbone switching matches SGD readout re-training); round 8 shipped ConflictAdaptivePsiPlasticity (R7) and executed X-TAC-001 (self-switching trace decay, no boundaries handed in); round 9 folded the temporal-ψ family into the CORE trainer path (`PlasticityConfig.temporal_psi/.conflict_adaptive` + dispatch + demo D21/gallery). **Next: R8-R9 follow-through — X-USU-002 / X-STA-002, or hygiene items (see Open work).**
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0
@@ -9,6 +9,146 @@
 ---
 
 ## Progress log (updated 2026-09-10)
+
+### Round 9 — temporal-ψ family folded into the core trainer path (2026-09-10)
+
+- **Config surface:** `PlasticityConfig.temporal_psi(trace_decay=…)` /
+  `.conflict_adaptive(conflict_threshold=…)` classmethods in
+  `state/transitions.py` (kwargs ride `consolidation_config`); config
+  factories `temporal_psi_from_config` / `conflict_adaptive_from_config`
+  (strict-typed coercion of the `dict[str, object]` kwargs, ValueError on
+  wrong type); `_plasticity_from_config` in `system_trainer/spec.py`
+  refactored from an elif chain into a factory dict (7 returns → clean).
+  The laws are now reachable from the system-trainer composition path,
+  not just probe-side wiring. Both factories pyright-strict-clean
+  (including the pre-existing `create_temporal_psi_plasticity(**kwargs)`
+  float/bool error — fixed with an explicit signature that preserves the
+  TypeError-on-bogus-kwarg contract).
+- **Integration defect caught at demo scale:** `PlasticityConfig.temporal_psi`
+  initially omitted `replace_readout=True`, so the config-surface law ran
+  the ADDITIVE residual channel — the known-inert one on confident
+  frozen-net margins (X-TPC-001 defect D-TPC-b) — and temporal_090 sat at
+  chance (0.44–0.56) while the same law via probe wiring worked. The
+  margin-robust channel is now the config-surface default (documented on
+  the classmethod). Lesson mirrors round 6: when wiring a validated
+  mechanism through a new surface, mirror its validated defaults exactly.
+- **Demo D21** (`tests/integration/test_demo_temporal_psi_migration.py`
+  + module `computronium/experiments/joint/temporal_psi_migration.py`):
+  MNIST backbone (784-64-2, digit≥5, θ frozen), parity → inverted →
+  parity stream; arms built through the dispatch (temporal_090,
+  closed_form, adaptive). Asserts temporal migrates every phase
+  (≥0.75), closed-form collapses on the inverted phase (−0.10 vs
+  temporal), adaptive self-switches (ρ range spans <0.99 and >0.99) and
+  matches temporal within 0.05. `DEMOS` registry row added
+  ("temporal_psi_migration", D21); figure rendered;
+  `docs/figures/manifest.json` re-pinned (verified zero data drift in the
+  re-run records — only pinned git_commit moved).
+- **Quality:** demo test + gallery lock + swap-plasticity/multi-ψ demos
+  5 passed (~37 s); property locks (adaptive, temporal,
+  plasticity-properties, drift, wiring) 43 passed; ruff + pyright clean
+  on all changed files. **Pre-existing flake noted (not this round's
+  change):** the full demo gate hit pytest's 2-min per-test timeout
+  inside `test_demo_depth_harvest` (D19) — see improvement note.
+- The epistemic machinery needed no expansion this round (no new ledger
+  rows: D21 is the demo regression for X-TPC-003/X-TAC-001, which remain
+  the B-H2 evidence).
+
+### Round 8 — R7: ConflictAdaptivePsiPlasticity component + X-TAC-001 (2026-09-10)
+
+- **Component shipped:** `ConflictAdaptivePsiPlasticity` in
+  `computronium/core/plasticity/adaptive_psi.py` — the ψ law detects fit
+  conflict from its OWN readout agreement
+  (`a_t = mean(argmax(h@M) == y)`; ρ_t = `forget_decay` if a_t below
+  threshold else 1.0) and self-switches trace decay. No task boundaries
+  handed in; warm-up episodes (no readout yet) count as conflicting, so
+  acquisition always runs fast. Subclasses TemporalPsiPlasticity for
+  `_stats`; the shared trace/solve/readout math was deduplicated into
+  module-level helpers (`solve_trace_readout`, `decayed`, `apply_readout`)
+  in `temporal_psi.py`. ψ keys add `agreement`/`rho_used` for inspection.
+  AlgorithmIdentityCard carded (G-HARD-9); 5 property tests
+  (`tests/property/test_adaptive_psi.py`: warm-up ρ, consistent-stream
+  return to ρ=1, boundary-free flip detection, forget-free comparison,
+  modulate parity). Wiring: `core/plasticity/__init__`,
+  `ontology/plasticity.py`, root `__all__`/`_LAZY`/TYPE_CHECKING;
+  IDENTITY_CARDS.md row added (24 of 24 primitives carded; drift lock
+  green).
+- **X-TAC-001 executed** (`scripts/probes/x_tac_001.py`, ~36 s CPU, 3
+  seeds): MNIST backbone (digit≥5, A=0.958–0.967), θ bitwise-frozen;
+  UNLABELED four-phase alternating parity stream (150 episodes/phase).
+  **All three pre-registered predictions SUPPORTED 3/3 seeds:** P1
+  acquisition — end-of-phase accuracy 0.92–0.95 on every phase vs
+  frozen-null floors 0.40–0.59. P2 self-switching matches hand-tuning —
+  adaptive mean phase accuracy within 0.02 of fixed temporal_090 (and
+  usually slightly better: 0.923–0.952 vs 0.913–0.945). P3 detection —
+  ρ switches to forget_decay **1 episode** after every one of the 3 flips
+  on all seeds, false-conflict rate 1.4–1.6% of steady episodes
+  (limit 20%). closed_form collapses to ~0.48–0.52 on inverted phases,
+  exactly as pre-registered.
+- **Round-8 judging criterion met: one shipped component** (the R7
+  adaptive-ρ detector). The oracle boundary in B-H2 is closed: nobody
+  hands in task boundaries or picks ρ anymore.
+- **B-H2 narrowed upward [0.40, 0.65] → [0.45, 0.70]**; only
+  `probability_threshold` fails promotion; CAL-000008; audit clean;
+  post-ingest selection: X-RSE-001 (follow-up).
+- **Schema re-emitted:** D-000018 consolidates E-000022/E-000024/E-000025/
+  E-000026 for B-H2 (D-000017 superseded — missing the adaptive clause);
+  MECHANISM_SCHEMAS.md updated with the oracle-boundary clause.
+- **Pre-flight defect found and fixed:** `a_mastery` initially probed the
+  parity stream instead of the digit≥5 TRAINING task — mastery must be
+  measured on the task θ was trained on. Caught by reading the first-run
+  table (A=0.430 was parity-chance-ish, not a training signal); fixed to
+  a held-out digit≥5 probe (0.958–0.967) before ingest.
+- Quality: tests/ceec **114 passed** (~1.4 s), bootstrap-count locks 7 → 8;
+  temporal-ψ property suite re-verified after the trace-helper
+  deduplication (6/6; a double-accumulation refactor bug was caught by
+  `test_rho_one_is_the_forget_free_limit` and fixed). ruff + pyright
+  clean on all new/changed files (new module strict-clean; the one
+  pre-existing finding in temporal_psi's factory kwargs predates this
+  round).
+
+### Round 7 — R6-B: X-TPC-003 real-task readout migration (2026-09-10)
+
+- **Experiment executed:** `scripts/probes/x_tpc_003.py` (~40 s CPU, 3
+  seeds) — MNIST backbone (784-128-2, gradient credit, CE, 600 episodes)
+  trained on **digit≥5**, θ then bitwise-frozen (SHA-256 +
+  FrozenThetaAudit); ψ adaptation acquires **parity** (B), then re-adapts
+  on **INVERTED parity** (C) — a real-task pair with conflicting label
+  geometry on the same frozen h, the R6-B coordinate.
+- **All three pre-registered predictions SUPPORTED 3/3 seeds:**
+  P1 acquisition — temporal_090 parity B = 0.92–0.94 vs frozen-null floor
+  0.40–0.43 (+0.50). P2 conflict return — temporal C = 0.90–0.94 vs
+  closed-form (ρ=1) 0.45–0.52 (the forget-free statistics blend opposite
+  mappings, exactly as at the toy coordinate). P3 (the nameable result) —
+  temporal C return is within 0.02 of the **retrain_sgd** control (fresh
+  linear readout trained on C with the same total adaptation budget,
+  0.91–0.94) on 3/3 seeds. **Nameable result: frozen-backbone task
+  switching via decayed ridge readout matches SGD readout re-training at
+  equal adaptation budget, with θ untouched and no readout surgery.**
+- **Honest cost note (folded into the schema boundaries):** the temporal
+  arm is NOT faster per-episode than SGD re-training at this scale
+  (0.6 s vs 0.3 s adaptation walltime — the ridge solve runs every
+  episode); the win is θ-untouched migration at matched accuracy, not
+  speed. A one-shot ridge re-fit (single solve over a stored buffer)
+  would be the speed lever if that ever matters.
+- **B-H2 narrowed upward [0.35, 0.55] → [0.40, 0.65]** — temporal-ψ
+  conflict advantage now supported at toy AND real scale; only
+  `probability_threshold` fails promotion (one probe cannot promote);
+  CAL-000007; audit clean; post-ingest selection: X-RSE-001 (follow-up).
+- **Schema re-emitted:** D-000016 consolidates E-000022 + E-000024 +
+  E-000025 for B-H2 (D-000015 was a superseded first emission with
+  incomplete verification levels — append-only, kept); MECHANISM_SCHEMAS.md
+  updated with the real-scale clause and the speed boundary.
+- **Governance dedup landed (improvement note):**
+  `bootstrap.experiment_from_config()` extracted (single YAML→Experiment
+  path); `ingest_verdict(..., experiment_config=...)` now registers the
+  probe's pre-registration YAML if missing BEFORE any evidence write; the
+  probe-local `_ensure_preregistered` copy in x_tpc_002 deleted (migrated);
+  test added (`test_ingest_registers_missing_experiment`) → tests/ceec
+  **114 passed** (~1.5 s); bootstrap-count locks 6 → 7. ruff + pyright
+  clean on all changed files.
+- **X-TPC-003 reuses X-TPC-001/002's pre-flight lessons for free** (ρ on
+  the stored trace, replacement readout channel, centered one-hot target)
+  — zero defects found this round; the round-4 fixes generalize.
 
 ### Round 6 — R6-A role-split update → config surface (2026-09-10)
 
@@ -170,24 +310,25 @@
    (`RoleSplitUpdate` + `ParameterUpdateConfig.role_split`, benchmark-
    verified bit-identical to the probe; see Round 6 log). **Round-6
    judging criterion met: one shipped component.**
-2. **R6-B — X-TPC-003 on a NON-TOY task pair (tangible result).** Temporal-ψ
-   readout migration where the conflicting tasks are real (MNIST-pair
-   with conflicting label geometry, or LM fine-tune A→B contradiction) —
-   NOT the 2-class toy switch. Deliverable: a nameable result ("frozen-
-   backbone task switching via decayed ridge readout, X% faster than
-   re-training / blended accumulation") or an honest falsification at
-   real scale, which kills B-H2's generality cheaply.
-3. **R7 — adaptive-ρ conflict detector.** Law detects fit conflict from
-   the ridge residual and switches trace decay on/off itself (no task
-   boundaries handed in). Demoable continuous-learning component; the
-   difference between "we told it to forget" and "it forgets when it
-   should".
-4. **R8 — fold a winner into the core trainer path** with a benchmark
-   number (whichever of R6-A/R6-B/R7 won).
+2. ~~**R6-B — X-TPC-003 on a NON-TOY task pair**~~ — DONE round 7
+   (MNIST digit≥5 backbone, parity → inverted-parity migration with θ
+   bitwise frozen; P1/P2/P3 all supported 3/3; matches retrain_sgd at
+   equal budget; B-H2 [0.40, 0.65]; see Round 7 log). **Round-7 judging
+   criterion met: one non-toy, nameable result.**
+3. ~~**R7 — adaptive-ρ conflict detector.**~~ — DONE round 8
+   (`ConflictAdaptivePsiPlasticity` + X-TAC-001: switch lag 1 episode,
+   false-conflict 1.4–1.6%, matches hand-tuned ρ=0.9 without boundaries;
+   see Round 8 log). **Round-8 judging criterion met: one shipped
+   component + a governed real-task result.**
+4. ~~**R8/R9 — fold the winning temporal-ψ family into the core trainer
+   path**~~ — DONE round 9 (`PlasticityConfig.temporal_psi`/
+   `.conflict_adaptive` + dispatch + demo D21 + gallery re-pin; see
+   Round 9 log). **Round-9 judging criterion met: shipped integration
+   with a demo regression.**
 5. X-USU-002 (why muon-on-forward degrades one-step descent — momentum/
    noise-floor defect hunt) and X-STA-002 (noise robustness at discovered
-   coordinates; unblocks B-H3 promotion) — keep, but they queue BEHIND
-   items 1–2.
+   coordinates; unblocks B-H3 promotion) — the remaining open work items.
+   X-STA-002 is the higher-value one (it can promote B-H3).
 6. X-RSE-002 only after its baseline defect is fixed (dense arm at
    chance at the quick budget — lengthen budget or simplify task, else
    the ≤1pt accuracy clause is unmeasurable).
@@ -261,6 +402,29 @@ practice, not a work item.
 - **`update_from_config` is now the single update dispatch point** (round 6);
   any new update primitive needs one `_UPDATE_CLASSES` row in
   `ontology/update.py` plus the class — no other wiring.
+- **Temporal-ψ trace math is deduplicated** (round 8): new trace-based ψ
+  laws should build on `solve_trace_readout`/`decayed`/`apply_readout` in
+  `temporal_psi.py` (or subclass TemporalPsiPlasticity) — do NOT re-inline
+  the accumulate/solve/modulate triple.
+- **Adaptive-ρ ergonomics:** the conflict detector's `conflict_threshold`
+  (0.55–0.65) and `forget_decay` (0.5) were validated only on binary
+  parity streams; a multi-class or gradual-drift stream would need the
+  threshold re-validated (and maybe a hysteresis band to avoid ρ
+  flicker near the threshold).
+- **Adaptive arm memory**: the probe records the full per-episode
+  ρ/agreement trajectory only in stdout; the CEEC evidence rows carry the
+  summarized lags/rates. If per-episode trajectories become important,
+  add them to the artifact payload rather than stdout.
+- **`test_demo_depth_harvest` (D19) sits at pytest's 2-min per-test
+  timeout** — the round-9 full demo gate crashed there (thread dump
+  mid-autograd). It passed in earlier gates; either it is load-sensitive
+  or regression-creeping. Before the next full gate: run it solo with a
+  timing print, and if it is genuinely >90 s consider trimming its grid
+  or raising its tier (it is the heaviest demo in the gate).
+- **D21's `probe_accuracy` runs 3 arms × 3 phases × 10 probe batches per
+  demo (~17 s)** — the heaviest part of the new demo is probing. If the
+  demo gate tightens, shrink `probe_batches` before touching the
+  training scale (the assertions have wide margins).
 - **Migrate x_usu_001's inline `_RoleSplitUpdate` to the shipped primitive**
   opportunistically on its next edit (it is now redundant; the benchmark
   probe x_r6a already uses the config surface).
@@ -284,11 +448,21 @@ practice, not a work item.
   partially addressed round 5: X-TPC-002 swept ρ ∈ {0.5, 0.7, 0.9} and all
   arms support P2 3/3 seeds (advantage not knife-edge in ρ); a dedicated
   sensitivity lock is still possible but low value now.
-- Probe pre-registration is still boilerplate: X-TPC-002 added a probe-local
-  `_ensure_preregistered` (yaml → Experiment → idempotent pre-register).
-  Fold into `ingest_verdict` (accept an optional experiment-config path and
-  register-if-missing) or give `bootstrap_experiments` a `skip_registered`
-  flag; migrate x_tpc_002 to it on next edit.
+- ~~Probe pre-registration boilerplate~~ — DONE round 7:
+  `ingest_verdict(..., experiment_config=...)` registers the YAML
+  idempotently before evidence writes; `bootstrap.experiment_from_config`
+  is the single YAML→Experiment path; x_tpc_002/x_tpc_003 use it. Older
+  probes (x_ali/x_rse/x_usu/x_sta) migrate opportunistically on their
+  next edits.
+- **Speed lever for temporal-ψ (from X-TPC-003):** the per-episode ridge
+  solve dominates adaptation walltime (0.6 s vs SGD's 0.3 s at MNIST
+  scale). A buffer-store + one-shot re-fit variant (solve once after N
+  episodes, or re-fit only when the residual drifts) would make the law
+  both adaptive AND cheap — natural partner for the R7 adaptive-ρ
+  component.
+- **`readout` role sentinel**: RoleSplitUpdate's `role_names` still needs
+  explicit parameter names; a shape-auto-detected sentinel would spare
+  callers the detection step — add if a second consumer appears.
 - X-RSE-001's dense-arm accuracy sits near chance at the quick budget — before X-RSE-002, either lengthen the budget or simplify the task so the ≤1pt accuracy-loss clause is measured against a learnable baseline.
 
 ---
@@ -2572,6 +2746,8 @@ At least the following have CEEC records:
 - [x] Adaptive Local Inverses probe (X-ALI-001, round 2).
 - [x] Temporal ψ Credit probe (X-TPC-001, round 4 — P1 supported, P2 falsified at quick scale).
 - [x] Temporal ψ Credit conflict ablation (X-TPC-002, round 5 — P1+P2 supported; B-H2 [0.35, 0.55]).
+- [x] Temporal ψ Credit real-task migration (X-TPC-003, round 7 — P1+P2+P3 supported; B-H2 [0.40, 0.65]).
+- [x] Conflict-adaptive ψ self-switching (X-TAC-001, round 8 — P1+P2+P3 supported; B-H2 [0.45, 0.70]).
 - [x] Stable Transient Amplification probe (X-STA-001, round 3).
 - [x] Routing × Sparsity Efficiency probe (X-RSE-001, round 3).
 - [x] Update-Rule Specialization probe (X-USU-001, round 3).

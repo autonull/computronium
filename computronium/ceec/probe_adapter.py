@@ -19,10 +19,12 @@ Probe output contract (E.1):
 
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from computronium.ceec import bootstrap as _bootstrap
 from computronium.ceec import models
 from computronium.ceec.store import CEECStore, StoreError
 
@@ -148,14 +150,23 @@ def ingest_verdict(  # ruff: ignore[too-many-arguments]
     outcome_boolean: bool | None,
     notes: str,
     evidence_weight: str = "medium",
+    experiment_config: Path | None = None,
 ) -> IngestVerdict:
     """Link probe evidence → belief revision → gates → calibration → audit.
 
     The shared governance loop previously copy-pasted into each
-    ``scripts/probes/x_*.py`` (see TODO19 improvement notes). Selection
-    (``decide``) stays at the round level, outside this helper.
+    ``scripts/probes/x_*.py`` (see TODO19 improvement notes). When
+    ``experiment_config`` is given, the probe's pre-registration YAML is
+    registered if missing (idempotent) BEFORE any evidence write — the
+    X-TPC-002 root-cause lesson. Selection (``decide``) stays at the round
+    level, outside this helper.
     """
     from computronium.ceec import audit, calibration, gates
+
+    if experiment_config is not None:
+        experiment = _bootstrap.experiment_from_config(experiment_config)
+        with contextlib.suppress(StoreError):
+            store.pre_register_experiment(experiment)
 
     probe_result = record_probe_result(store, probe_output, probe_name)
     store._link(

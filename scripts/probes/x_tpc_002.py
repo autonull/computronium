@@ -38,7 +38,6 @@ Walltime: printed, never recorded.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import json
 import time
@@ -303,47 +302,6 @@ def run_probe() -> dict[str, object]:
     }
 
 
-def _ensure_preregistered(store) -> None:
-    from computronium.ceec import bootstrap, models
-    from computronium.ceec.store import StoreError
-
-    entry = bootstrap._load(
-        REPO_ROOT
-        / "configs"
-        / "ceec"
-        / "experiments"
-        / "temporal_psi_credit_conflict.yaml"
-    )["experiment"]
-    pp = entry.get("prediction_probability")
-    cost = entry.get("cost_estimate", {})
-    experiment = models.Experiment(
-        id=entry["id"],
-        question=entry["question"],
-        rationale=entry["rationale"],
-        scope=bootstrap._scope(entry.get("scope", {})),
-        target_beliefs=list(entry.get("target_beliefs", [])),
-        target_goals=list(entry.get("target_goals", [])),
-        design=dict(entry.get("design", {})),
-        prediction=entry["prediction"],
-        prediction_probability=(
-            models.Probability(low=pp["low"], high=pp["high"], method=pp.get("method"))
-            if pp
-            else None
-        ),
-        controls=list(entry.get("controls", [])),
-        metrics=list(entry.get("metrics", [])),
-        budget=entry.get("budget", "quick"),
-        cost_low=cost.get("low"),
-        cost_high=cost.get("high"),
-        falsification_criterion=entry["falsification_criterion"],
-        overturn_criterion=entry["overturn_criterion"],
-        hard_gates=list(entry.get("hard_gates", [])),
-        created_at=bootstrap._now(),
-    )
-    with contextlib.suppress(StoreError):
-        store.pre_register_experiment(experiment)
-
-
 def _ingest_ceec(result: dict[str, object]) -> None:
     from computronium.ceec import selection
     from computronium.ceec.probe_adapter import ingest_verdict
@@ -410,7 +368,6 @@ def _ingest_ceec(result: dict[str, object]) -> None:
     with CEECStore(
         REPO_ROOT / "ceec" / "ceec.sqlite3", REPO_ROOT / "ceec" / "artifacts"
     ) as store:
-        _ensure_preregistered(store)
         verdict = ingest_verdict(
             store,
             probe_name="X-TPC-002",
@@ -423,6 +380,11 @@ def _ingest_ceec(result: dict[str, object]) -> None:
             else ("acquisition_only" if p1 else "no_acquisition"),
             outcome_boolean=supported,
             notes="X-TPC-002 outcome vs pre-registered P1/P2 (conflicting fits)",
+            experiment_config=REPO_ROOT
+            / "configs"
+            / "ceec"
+            / "experiments"
+            / "temporal_psi_credit_conflict.yaml",
         )
         failed = [r.gate for r in verdict.evaluation.results if not r.passed]
         print(f"promotion gates failed: {failed or 'none'}")

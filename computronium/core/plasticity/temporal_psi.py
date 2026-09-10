@@ -21,7 +21,7 @@ the softmax term and the fit collapses (pre-flight defect, X-TPC-001).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import Tensor
@@ -29,6 +29,7 @@ from torch import Tensor
 from computronium.core.identity_card import AlgorithmIdentityCard
 
 if TYPE_CHECKING:
+    from computronium.core.joint.transition import PlasticityConfig
     from computronium.state import CompositeState, SystemContext
 
 
@@ -46,6 +47,55 @@ class TemporalPsiConfig:
     trace_decay: float = 0.9
     ridge_lambda: float = 1e-3
     replace_readout: bool = False
+
+
+def solve_trace_readout(
+    psi: dict[str, Tensor], gram: Tensor, cross: Tensor, ridge_lambda: float
+) -> dict[str, Tensor]:
+    """Solve the ridge readout from (already accumulated) statistics."""
+    d = gram.shape[0]
+    lam = ridge_lambda * gram.diagonal().mean().clamp_min(1e-12)
+    m_aug = torch.linalg.solve(gram + lam * torch.eye(d, device=gram.device), cross)
+    return {
+        "gram": gram,
+        "cross": cross,
+        "readout_m": m_aug[:-1],
+        "readout_b": m_aug[-1],
+        "trace_steps": torch.tensor(
+            psi.get("trace_steps", torch.zeros(())).item() + 1.0
+        ),
+    }
+
+
+def decayed(
+    gram: Tensor, cross: Tensor, prev: dict[str, Tensor], rho: float
+) -> tuple[Tensor, Tensor]:
+    """Apply trace decay ρ to the previous sufficient statistics.
+
+    ρ=1 is the forget-free limit: plain accumulation without decay.
+    """
+    if (prev_gram := prev.get("gram")) is not None:
+        gram = gram + prev_gram if rho == 1.0 else gram + rho * prev_gram
+    if (prev_cross := prev.get("cross")) is not None:
+        cross = cross + prev_cross if rho == 1.0 else cross + rho * prev_cross
+    return gram, cross
+
+
+def apply_readout(
+    activations: list[Tensor] | Tensor,
+    psi: dict[str, Tensor],
+    replace_readout: bool,
+) -> list[Tensor] | Tensor:
+    m = psi.get("readout_m")
+    if m is None or not isinstance(activations, list) or len(activations) < 2:
+        return activations
+    out = list(activations)
+    corr = out[-2] @ m.to(out[-1].dtype)
+    bias = psi.get("readout_b")
+    if isinstance(bias, Tensor):
+        corr += bias.to(out[-1].dtype)
+    out[-1] = corr if replace_readout else out[-1] + corr
+    return out
 
 
 class TemporalPsiPlasticity:
@@ -126,45 +176,43 @@ class TemporalPsiPlasticity:
         stats = self._stats(z)
         if stats is None:
             return psi
-        g, c = stats
-        rho = self.config.trace_decay
-        gram, cross = g, c
-        if (prev_gram := psi.get("gram")) is not None:
-            gram += prev_gram if rho == 1.0 else rho * prev_gram
-        if (prev_cross := psi.get("cross")) is not None:
-            cross += prev_cross if rho == 1.0 else rho * prev_cross
-        d = gram.shape[0]
-        lam = self.config.ridge_lambda * gram.diagonal().mean().clamp_min(1e-12)
-        m_aug = torch.linalg.solve(gram + lam * torch.eye(d, device=gram.device), cross)
-        return {
-            "gram": gram,
-            "cross": cross,
-            "readout_m": m_aug[:-1],
-            "readout_b": m_aug[-1],
-            "trace_steps": torch.tensor(
-                psi.get("trace_steps", torch.zeros(())).item() + 1.0
-            ),
-        }
+        gram, cross = decayed(*stats, psi, self.config.trace_decay)
+        return solve_trace_readout(psi, gram, cross, self.config.ridge_lambda)
 
     def modulate(
         self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
     ) -> list[Tensor] | Tensor:
-        m = psi.get("readout_m")
-        if m is None or not isinstance(activations, list) or len(activations) < 2:
-            return activations
-        out = list(activations)
-        corr = out[-2] @ m.to(out[-1].dtype)
-        bias = psi.get("readout_b")
-        if isinstance(bias, Tensor):
-            corr += bias.to(out[-1].dtype)
-        if self.config.replace_readout:
-            out[-1] = corr
-        else:
-            out[-1] += corr
-        return out
+        return apply_readout(activations, psi, self.config.replace_readout)
 
 
 def create_temporal_psi_plasticity(
-    **kwargs: float,
+    trace_decay: float = 0.9,
+    ridge_lambda: float = 1e-3,
+    replace_readout: bool = False,
 ) -> TemporalPsiPlasticity:
-    return TemporalPsiPlasticity(TemporalPsiConfig(**kwargs))
+    return TemporalPsiPlasticity(
+        TemporalPsiConfig(
+            trace_decay=trace_decay,
+            ridge_lambda=ridge_lambda,
+            replace_readout=replace_readout,
+        )
+    )
+
+
+def temporal_psi_from_config(config: PlasticityConfig) -> TemporalPsiPlasticity:
+    """Instantiate from a ``PlasticityConfig`` (plasticity_type="temporal_psi").
+
+    Kwargs stored in ``consolidation_config`` map onto ``TemporalPsiConfig``
+    (bool fields like ``replace_readout`` arrive from YAML/config as plain
+    values and are coerced).
+    """
+    if config.plasticity_type != "temporal_psi":
+        raise ValueError(f"Expected temporal_psi config, got {config.plasticity_type}")
+    raw = config.consolidation_config or {}
+    return TemporalPsiPlasticity(
+        TemporalPsiConfig(
+            trace_decay=cast("float", raw.get("trace_decay", 0.9)),
+            ridge_lambda=cast("float", raw.get("ridge_lambda", 1e-3)),
+            replace_readout=cast("bool", raw.get("replace_readout", False)),
+        )
+    )

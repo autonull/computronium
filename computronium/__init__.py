@@ -220,6 +220,7 @@ if TYPE_CHECKING:
     )
     from computronium.ontology.plasticity import (
         ClosedFormRidgePlasticity,
+        ConflictAdaptivePsiPlasticity,
         FastWeightPlasticity,
         RoutingPlasticity,
         RuleStatePlasticity,
@@ -414,6 +415,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "NullPlasticity": ("computronium.core.plasticity", "NullPlasticity"),
     "PlasticityConfig": ("computronium.state", "PlasticityConfig"),
     "RoutingPlasticity": ("computronium.ontology.plasticity", "RoutingPlasticity"),
+    "ConflictAdaptivePsiPlasticity": (
+        "computronium.ontology.plasticity",
+        "ConflictAdaptivePsiPlasticity",
+    ),
     "RuleStatePlasticity": ("computronium.ontology.plasticity", "RuleStatePlasticity"),
     "TemporalPsiPlasticity": (
         "computronium.ontology.plasticity",
@@ -573,6 +578,7 @@ __all__ = [
     "ClosedFormRidgePlasticity",
     "CompositeState",
     "ComputroniumLinear",
+    "ConflictAdaptivePsiPlasticity",
     "ConvGeometry",
     "CorrectionRecord",
     "CoupledTransition",

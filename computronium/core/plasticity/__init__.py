@@ -7,6 +7,12 @@ from computronium.core.joint.transition import (
     PlasticityConfig,
     PlasticityPrimitive,
 )
+from computronium.core.plasticity.adaptive_psi import (
+    ConflictAdaptivePsiConfig,
+    ConflictAdaptivePsiPlasticity,
+    conflict_adaptive_from_config,
+    create_conflict_adaptive_psi_plasticity,
+)
 from computronium.core.plasticity.closed_form import (
     ClosedFormRidgeConfig,
     ClosedFormRidgePlasticity,
@@ -35,6 +41,7 @@ from computronium.core.plasticity.temporal_psi import (
     TemporalPsiConfig,
     TemporalPsiPlasticity,
     create_temporal_psi_plasticity,
+    temporal_psi_from_config,
 )
 
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
@@ -42,6 +49,11 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "PlasticityConfig",
     "PlasticityPrimitive",
     "NullPlasticity",
+    # Conflict-adaptive psi (TODO19 R7 — self-switching trace decay)
+    "ConflictAdaptivePsiPlasticity",
+    "ConflictAdaptivePsiConfig",
+    "create_conflict_adaptive_psi_plasticity",
+    "conflict_adaptive_from_config",
     # Closed Form (W3 — ψ computed, not trained)
     "ClosedFormRidgePlasticity",
     "ClosedFormRidgeConfig",
@@ -61,6 +73,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "TemporalPsiPlasticity",
     "TemporalPsiConfig",
     "create_temporal_psi_plasticity",
+    "temporal_psi_from_config",
     # Rule State (Z3)
     "RuleStatePlasticity",
     "RuleStatePlasticityConfig",

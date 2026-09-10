@@ -1,0 +1,86 @@
+# X-TAC-001: conflict-adaptive psi — self-switching trace decay (TODO19 R7)
+experiment:
+  id: X-TAC-001
+  question: >
+    Can the psi law detect fit conflict from its OWN readout agreement and
+    switch trace decay on/off accordingly — matching a hand-tuned fixed
+    rho without being handed any task boundaries?
+  rationale: >
+    Family 2 follow-up for B-H2-TEMPORAL-PSI-CREDIT under
+    G-PSI-PROGRAM-ADAPTATION, and the TODO19 open-work item 3 component:
+    X-TPC-002/003 established that temporal credit wins under conflict but
+    required an ORACLE (the experiment) to hand in the task boundaries and
+    pick rho. ConflictAdaptivePsiPlasticity closes that loop: agreement
+    below threshold switches forgetting on; re-acquisition switches it
+    off. The difference between "we told it to forget" and "it forgets
+    when it should".
+  scope:
+    domain: plasticity
+    substrate: [digital]
+    credit: [temporal_psi]
+    budget: quick
+  target_beliefs: [B-H2-TEMPORAL-PSI-CREDIT]
+  target_goals: [G-PSI-PROGRAM-ADAPTATION]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-feedforward-quick
+    psi_only: true
+    evaluation_policy: >
+      MNIST backbone (784-128-2, gradient credit, CE) trained on digit>=5
+      (600 episodes, batch 64, train split); theta then bitwise-frozen
+      (SHA-256 + FrozenThetaAudit). Unlabeled-boundary stream of four
+      alternating phases on the frozen h basis: parity, INVERTED parity,
+      parity, INVERTED parity (150 episodes each). Arms: adaptive
+      (ConflictAdaptivePsiPlasticity), temporal_090 (fixed rho=0.9),
+      closed_form (rho=1), frozen_null. Probe accuracy on 20 held-out
+      test batches at the end of each phase. The adaptive arm's
+      (agreement, rho_used) trajectory is recorded per episode.
+    evidence_kind: tensor
+    instruments: [I-FROZEN-THETA-AUDIT]
+  prediction: >
+    P1 (acquisition): the adaptive arm's end-of-phase probe accuracy is
+    off the frozen-null floor by >= +0.10 on every phase, on >= 2 of 3
+    seeds. P2 (self-switching matches hand-tuning): the adaptive arm's
+    mean end-of-phase accuracy across the four phases is within 0.02 of
+    the fixed temporal_090 arm on >= 2 of 3 seeds. P3 (detection): after
+    each of the three label flips, the adaptive arm switches rho to
+    forget_decay within <= 2 episodes on >= 2 of 3 seeds, with a
+    false-conflict rate <= 20% of steady-phase episodes (excluding the
+    first 5 episodes after each flip).
+  prediction_probability:
+    low: 0.30
+    high: 0.60
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - temporal_fixed_rho_090
+    - closed_form_rho_1
+    - frozen_null
+    - fixed_theta_audit
+  metrics:
+    - end_of_phase_accuracy
+    - null_floor_accuracy
+    - rho_switch_lag
+    - false_conflict_rate
+    - adaptation_walltime
+    - theta_invariance
+  budget: quick
+  cost_estimate:
+    low: 2.0
+    high: 5.0
+  falsification_criterion: >
+    The adaptive arm fails to acquire (P1), or hand-tuned temporal_090
+    dominates it beyond the P2 margin (self-switching buys nothing over
+    fixed decay), or detection is not timely/stable (P3): rho does not
+    switch within 2 episodes of the flips or false-conflicts on more than
+    20% of steady episodes.
+  overturn_criterion: >
+    A credible trigger (instrument defect, omitted control, untested
+    mechanism) raising rescue probability above 0.10.
+  hard_gates:
+    - frozen_theta_audit
+    - theta_bitwise_invariant
+    - identity_card_for_new_primitive
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

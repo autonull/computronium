@@ -77,6 +77,45 @@ class PlasticityConfig:
             consolidation_config=kwargs,
         )
 
+    @classmethod
+    def temporal_psi(
+        cls, trace_decay: float = 0.9, **kwargs: object
+    ) -> PlasticityConfig:
+        """Temporal-ψ plasticity (TODO19): trace-decayed ridge readout.
+
+        ρ < 1 forgets: enables frozen-θ task migration A₀ → A₁ where the
+        forget-free ρ = 1 law blends conflicting task fits.
+        ``replace_readout`` defaults to True — the margin-robust channel is
+        the validated operating point (the additive residual channel is
+        inert on confident frozen-net margins, X-TPC-001 defect D-TPC-b).
+        """
+        return cls(
+            plasticity_type="temporal_psi",
+            plastic_state_dims=None,
+            consolidation_config={
+                "trace_decay": trace_decay,
+                "replace_readout": True,
+                **kwargs,
+            },
+        )
+
+    @classmethod
+    def conflict_adaptive(
+        cls, conflict_threshold: float = 0.65, **kwargs: object
+    ) -> PlasticityConfig:
+        """Conflict-adaptive ψ (TODO19 R7): self-switching trace decay.
+
+        The law detects fit conflict from its own readout agreement and
+        switches ρ between ``forget_decay`` and 1.0 — no task boundaries
+        handed in. ``replace_readout`` defaults to True (margin-robust
+        channel, see ``temporal_psi``).
+        """
+        return cls(
+            plasticity_type="conflict_adaptive",
+            plastic_state_dims=None,
+            consolidation_config={"conflict_threshold": conflict_threshold, **kwargs},
+        )
+
 
 # ============================================================
 # PlasticityPrimitive: Protocol for plasticity laws

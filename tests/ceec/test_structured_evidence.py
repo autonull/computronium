@@ -188,3 +188,42 @@ class TestIngestVerdict:
         assert verdict.calibration is None  # no pre-registered probability
         assert verdict.violations == []
         assert [r.gate for r in verdict.evaluation.results]
+
+    def test_ingest_registers_missing_experiment(self, store, scope, tmp_path):
+        belief_id = self._belief(store, scope)
+        config = tmp_path / "x_conf.yaml"
+        config.write_text(
+            """
+experiment:
+  id: X-T-CONF
+  question: q
+  rationale: r
+  design: {seed_plan: "3", evaluation_policy: e}
+  prediction: temporal credit helps
+  controls: [frozen_null]
+  metrics: [b_final]
+  budget: quick
+  falsification_criterion: no gain
+  overturn_criterion: closed-form matches return
+  hard_gates: [coordinate_valid]
+"""
+        )
+        verdict = ingest_verdict(
+            store,
+            probe_name="X-T-CONF",
+            probe_output={
+                "status": "ok",
+                "kind": "scalar",
+                "values": 0.5,
+                "quality": {"seeds": 3},
+            },
+            belief_id=belief_id,
+            new_interval=(0.30, 0.60),
+            rationale="probe verdict",
+            outcome="supported",
+            outcome_boolean=True,
+            notes="test",
+            experiment_config=config,
+        )
+        assert store.get_experiment("X-T-CONF").id == "X-T-CONF"
+        assert verdict.violations == []

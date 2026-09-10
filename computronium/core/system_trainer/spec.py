@@ -118,25 +118,29 @@ def _plasticity_from_config(plasticity: PlasticityConfig):
     """Instantiate plasticity from config."""
     from computronium.core.plasticity import (
         NullPlasticity,
+        conflict_adaptive_from_config,
         create_fast_weight_plasticity,
         create_routing_plasticity,
         create_rule_state_plasticity,
         create_substrate_coupled_plasticity,
+        temporal_psi_from_config,
     )
 
+    factories = {
+        "routing": create_routing_plasticity,
+        "fast_weights": create_fast_weight_plasticity,
+        "substrate_coupled": create_substrate_coupled_plasticity,
+        "rule_state": create_rule_state_plasticity,
+        "temporal_psi": temporal_psi_from_config,
+        "conflict_adaptive": conflict_adaptive_from_config,
+    }
     plasticity_type = plasticity.plasticity_type.lower()
-    if plasticity_type == "routing":
-        return create_routing_plasticity(plasticity)
-    elif plasticity_type == "fast_weights":
-        return create_fast_weight_plasticity(plasticity)
-    elif plasticity_type == "substrate_coupled":
-        return create_substrate_coupled_plasticity(plasticity)
-    elif plasticity_type == "rule_state":
-        return create_rule_state_plasticity(plasticity)
-    elif plasticity_type == "null":
+    factory = factories.get(plasticity_type)
+    if factory is not None:
+        return factory(plasticity)
+    if plasticity_type == "null":
         return NullPlasticity()
-    else:
-        raise ValueError(f"Unknown plasticity_type: {plasticity_type!r}")
+    raise ValueError(f"Unknown plasticity_type: {plasticity_type!r}")
 
 
 def compose_system_from_configs(

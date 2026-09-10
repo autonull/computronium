@@ -1,0 +1,83 @@
+# X-TPC-003: frozen-backbone readout migration on a REAL task pair (TODO19 R6-B)
+experiment:
+  id: X-TPC-003
+  question: >
+    Does temporal psi credit support readout migration between CONFLICTING
+    real-task label mappings (MNIST) with theta bitwise frozen, and does it
+    match a re-trained linear readout at the same total adaptation budget?
+  rationale: >
+    Family 2 follow-up for B-H2-TEMPORAL-PSI-CREDIT under
+    G-PSI-PROGRAM-ADAPTATION. X-TPC-001 (P2 falsified) and X-TPC-002
+    (P2 supported) established the temporal-credit advantage on a 2-class
+    synthetic switch; this probe tests the conflicting coordinate at real
+    scale (MNIST backbone trained on digit>=5; psi adaptation on parity,
+    then INVERTED parity) with a re-train-the-readout control, the
+    nameable-result clause named in TODO19 open-work item 2.
+  scope:
+    domain: plasticity
+    substrate: [digital]
+    credit: [temporal_psi]
+    budget: quick
+  target_beliefs: [B-H2-TEMPORAL-PSI-CREDIT]
+  target_goals: [G-PSI-PROGRAM-ADAPTATION]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-feedforward-quick
+    psi_only: true
+    evaluation_policy: >
+      Stage A trains the backbone (784-128-2 MLP, gradient credit, CE) on
+      MNIST digit>=5 (600 episodes, batch 64, train split); theta then
+      bitwise-frozen (SHA-256 + FrozenThetaAudit). Stage B acquires parity
+      (even=1) via psi episodes on the train split; stage C re-adapts on
+      INVERTED parity (odd=1). Probe accuracy on 20 held-out test batches.
+      retrain_sgd control trains a fresh linear readout on h for the same
+      TOTAL adaptation budget (2x psi episodes) on task C only, same probe.
+    evidence_kind: tensor
+    instruments: [I-FROZEN-THETA-AUDIT]
+  prediction: >
+    P1 (acquisition): temporal_090 lifts stage-B (parity) probe accuracy
+    off the frozen-null floor by >= +0.10 on >= 2 of 3 seeds. P2
+    (temporal credit under conflict, real scale): after re-adaptation on
+    inverted parity, the best temporal arm beats forget-free closed-form
+    (rho = 1) by >= +0.10 on >= 2 of 3 seeds. P3 (nameable result): the
+    best temporal arm's C return accuracy is within 0.02 of the
+    retrain_sgd control (fresh linear readout trained on C with the same
+    total adaptation budget) on >= 2 of 3 seeds.
+  prediction_probability:
+    low: 0.25
+    high: 0.55
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - closed_form_rho_1
+    - frozen_null
+    - retrain_sgd_readout
+    - fixed_theta_audit
+  metrics:
+    - b_acquisition_accuracy
+    - b_retained_accuracy
+    - c_return_accuracy
+    - retrain_sgd_accuracy
+    - adaptation_walltime
+    - theta_invariance
+  budget: quick
+  cost_estimate:
+    low: 2.0
+    high: 6.0
+  falsification_criterion: >
+    No temporal arm acquires parity off the frozen-null floor (P1), or the
+    closed-form matches/beats the temporal arms on the inverted-task
+    return (P2 kills temporal credit at the real-scale conflicting
+    coordinate), or the retrain_sgd control dominates the temporal arms by
+    more than the P3 margin (frozen-backbone switching is worse than plain
+    readout re-training).
+  overturn_criterion: >
+    A credible trigger (instrument defect, omitted control, untested
+    mechanism) raising rescue probability above 0.10.
+  hard_gates:
+    - frozen_theta_audit
+    - theta_bitwise_invariant
+    - identity_card_for_new_primitive
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

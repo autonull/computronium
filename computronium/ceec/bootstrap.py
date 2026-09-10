@@ -121,43 +121,46 @@ def bootstrap_goals(store: CEECStore, config_dir: Path) -> list[str]:
     return ids
 
 
+def experiment_from_config(config_path: Path | str) -> models.Experiment:
+    """Build an ``Experiment`` model from its YAML config file."""
+    entry = _load(Path(config_path)).get("experiment")
+    if entry is None:
+        raise StoreError(f"{config_path}: no 'experiment' section")
+    pp = entry.get("prediction_probability")
+    cost = entry.get("cost_estimate", {})
+    return models.Experiment(
+        id=entry["id"],
+        question=entry["question"],
+        rationale=entry["rationale"],
+        scope=_scope(entry.get("scope", {})),
+        target_beliefs=list(entry.get("target_beliefs", [])),
+        target_goals=list(entry.get("target_goals", [])),
+        design=dict(entry.get("design", {})),
+        prediction=entry["prediction"],
+        prediction_probability=(
+            models.Probability(low=pp["low"], high=pp["high"], method=pp.get("method"))
+            if pp
+            else None
+        ),
+        controls=list(entry.get("controls", [])),
+        metrics=list(entry.get("metrics", [])),
+        budget=entry.get("budget", "quick"),
+        cost_low=cost.get("low"),
+        cost_high=cost.get("high"),
+        falsification_criterion=entry["falsification_criterion"],
+        overturn_criterion=entry["overturn_criterion"],
+        hard_gates=list(entry.get("hard_gates", [])),
+        created_at=entry.get("created_at", _now()),
+    )
+
+
 def bootstrap_experiments(store: CEECStore, config_dir: Path) -> list[str]:
     experiment_dir = config_dir / "experiments"
     ids = []
     for config_path in sorted(experiment_dir.glob("*.yaml")):
-        entry = _load(config_path).get("experiment")
-        if entry is None:
-            continue
-        pp = entry.get("prediction_probability")
-        cost = entry.get("cost_estimate", {})
-        experiment = models.Experiment(
-            id=entry["id"],
-            question=entry["question"],
-            rationale=entry["rationale"],
-            scope=_scope(entry.get("scope", {})),
-            target_beliefs=list(entry.get("target_beliefs", [])),
-            target_goals=list(entry.get("target_goals", [])),
-            design=dict(entry.get("design", {})),
-            prediction=entry["prediction"],
-            prediction_probability=(
-                models.Probability(
-                    low=pp["low"], high=pp["high"], method=pp.get("method")
-                )
-                if pp
-                else None
-            ),
-            controls=list(entry.get("controls", [])),
-            metrics=list(entry.get("metrics", [])),
-            budget=entry.get("budget", "quick"),
-            cost_low=cost.get("low"),
-            cost_high=cost.get("high"),
-            falsification_criterion=entry["falsification_criterion"],
-            overturn_criterion=entry["overturn_criterion"],
-            hard_gates=list(entry.get("hard_gates", [])),
-            created_at=entry.get("created_at", _now()),
-        )
+        experiment = experiment_from_config(config_path)
         store.pre_register_experiment(experiment)
-        ids.append(entry["id"])
+        ids.append(experiment.id)
     return ids
 
 
