@@ -10,11 +10,9 @@ The **search for computronium** investigates learning systems native to physical
 
 > **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
 
-## 🎯 Choose Your Lens: Three Perspectives
+The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
 
-Computronium serves three roles simultaneously. The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
-
-| Lens | What It Is | What You Get |
+| Aspect | What It Is | What You Get |
 |------|------------|--------------|
 | **📦 ML Library** | Composable learning systems behind one training API | Train and compare every implemented rule — Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint — under a single interface |
 | **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), AutoScientist campaigns, property-verified hypercube, stability-plasticity monitoring, Pareto frontier analysis | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation |
@@ -29,7 +27,7 @@ Computronium serves three roles simultaneously. The library is usable independen
 | 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
 | 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, AutoScientist automation |
 
-The three perspectives are not mutually exclusive layers but overlapping views of the same codebase. The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
+The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
 
 ---
 
