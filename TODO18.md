@@ -146,7 +146,13 @@ This remediation plan is considered complete when:
 
 ---
 
-# Execution Status (TODO18 rounds 1-14 — Phases 1-5, Track B, Track C, Tier-3 clusters, round close, improvement opportunities: COMPLETE)
+# Execution Status (TODO18 rounds 1-15 — all plan items, carried notes, and optional gates: COMPLETE)
+
+## Progress (round 15 — FrozenThetaAudit optimizer coverage closed; wrapping verdict final)
+- **`FrozenThetaAudit` now audits live update-rule state**: `_collect_update_state` scans the update primitive's instance attrs for live `dict[str, Tensor]` groups (momentum buffers, Adam moments `_m`/`_v`, Fisher anchors) and snapshots them under `update.<attr>.<name>` keys. Key design point: the snapshot protocol's `get_state()` returns *clones*, useless for mutation detection — live-attr discovery is what makes in-place buffer mutations bump `_version` and get caught. Non-tensor dicts (config tables) are skipped; buffers added/removed mid-audit surface as rebound via exit re-collection. 2 new adversarial tests (`test_update_state_in_audit_and_mutation_caught`, `test_update_state_clean_passes_and_non_tensor_dicts_skipped`); J2 lifecycle locks still green (no false positives on real systems — update.step legitimately runs only at episode end, outside audited intra-episode windows). `_collect_persistent_state` complexity kept ≤10 via the `_collect_update_state` helper.
+- **SubstrateSpec internal wrapping: closed as rejected-by-analysis** (round 4 verdict stands, now marked final): the spec is a projection layer over `SubstrateConfig`; wrapping every substrate class would touch the whole substrate family + compose path for no behavioral gain. `substrate_type` hint field already covers the lossy ternary/complex/sparse trio. Do not re-open without a concrete behavioral requirement.
+- **Remaining conditional items (deferred-by-design, no trigger)**: C.3 mutmut (only if audit logic changes — note: it just changed in *coverage*, not logic; the adversarial suite was extended instead), `CampaignRunner` seam (third campaign arrival).
+- Battery: frozen-θ adversarial 8, lifecycle locks 10+1x, slice 14 — green; ruff clean; pyright 0 errors (parity with HEAD).
 
 ## Progress (round 14 — improvement opportunities closed)
 - **Card-drift lock**: `tests/property/test_identity_cards_drift_lock.py` — regenerates the card body from `collect_cards()` and asserts it is an ordered, stripped subsequence of `docs/IDENTITY_CARDS.md` (mirrors the readme-snippet-lock pattern; doc header/status prose is the unlocked hand-maintained index). Editing a card in code without regenerating the doc (or vice versa) now fails. Runtime-sys.path import matches the existing lock-test convention.
@@ -214,7 +220,7 @@ All three clusters from the round-11 Tier-3 backlog are fixed (each was a one-li
 - **Memory-campaign record growth**: 648-cell JSON is fine now; revisit if more axes arrive.
 - **MechanisticStudyRecord/campaign runner generalization**: both study modules share per-cell ClaimRecord aggregation; a `CampaignRunner` seam would dedupe if a third campaign arrives.
 - **`requires_autograd` semantic lock**: ✅ done (round 7) — `tests/property/test_credit_semantics.py` freezes the declared-True set {RandomProjectionsCredit, LocalGoodnessCredit, LemmaCredit, TargetInversionCredit, GradientCredit, BackpropCredit}; failure message instructs docstring + lock updates in the same commit.
-- **FrozenThetaAudit optimizer coverage**, **SubstrateSpec internal wrapping**, **native `CompositeState` Mapping fix**: carried from earlier rounds.
+- **FrozenThetaAudit optimizer coverage**: ✅ done (round 15 — live update-rule state audited). **SubstrateSpec internal wrapping**: ✅ closed as rejected-by-analysis (round 15; see round 15 notes). **native `CompositeState` Mapping fix**: ✅ done (round 8). All carried notes resolved.
 
 ## Details that facilitate future work
 ### Round 12 details (Tier-3 cluster fixes)

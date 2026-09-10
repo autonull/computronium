@@ -75,6 +75,17 @@ def _snapshot(tensors: Mapping[str, Tensor]) -> _Snapshot:
     )
 
 
+def _collect_update_state(update: object, tensors: dict[str, Tensor]) -> None:
+    """Live update-rule state (momentum buffers, Adam moments, Fisher
+    anchors). The snapshot protocol's get_state() returns clones, so scan
+    instance attrs for live dict[str, Tensor] state instead — in-place
+    buffer mutations then bump _version and are caught."""
+    for attr_name, attr in vars(update).items():
+        if isinstance(attr, dict):
+            live = {n: t for n, t in attr.items() if isinstance(t, Tensor)}
+            tensors.update({f"update.{attr_name}.{n}": t for n, t in live.items()})
+
+
 def _collect_persistent_state(system: object) -> dict[str, Tensor]:
     """Pull every persistent tensor a composed System owns."""
     tensors: dict[str, Tensor] = {}
@@ -96,6 +107,9 @@ def _collect_persistent_state(system: object) -> dict[str, Tensor]:
             tensors.update({
                 f"optimizer.g{group_idx}.{i}": p for i, p in enumerate(group["params"])
             })
+    update = getattr(system, "update", None)
+    if update is not None:
+        _collect_update_state(update, tensors)
     if not tensors:
         msg = "FrozenThetaAudit found no persistent tensors on the audited object"
         raise ValueError(msg)

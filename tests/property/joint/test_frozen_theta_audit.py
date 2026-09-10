@@ -86,3 +86,35 @@ def test_report_available_after_exit():
         pass
     assert audit.report is not None
     assert audit.report.invariant
+
+
+class _Update:
+    """Update rule with live momentum buffers (Euclidean-style)."""
+
+    def __init__(self) -> None:
+        self._momentum_buffers: dict[str, torch.Tensor] = {"w": torch.zeros(4, 4)}
+        self.config = {"lr": 0.1}  # non-tensor dict — must be skipped
+
+
+class _SystemWithUpdate:
+    def __init__(self) -> None:
+        self.geometry = _Geometry()
+        self.update = _Update()
+
+
+def test_update_state_in_audit_and_mutation_caught():
+    """Live update-rule buffers are audited; in-place mutation is caught."""
+    system = _SystemWithUpdate()
+    audit = FrozenThetaAudit(system)
+    with audit:
+        system.update._momentum_buffers["w"].add_(1.0)
+    with pytest.raises(AssertionError, match="version_bumped"):
+        audit.assert_invariant()
+    assert "update._momentum_buffers.w" in audit.report.mutated
+
+
+def test_update_state_clean_passes_and_non_tensor_dicts_skipped():
+    system = _SystemWithUpdate()
+    with frozen_theta_audit(system):
+        system.update.config["note"] = "no tensors here"
+    # reaching the end of the with-block without raising is the assertion
