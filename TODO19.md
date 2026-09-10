@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate)
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate) and emitted the first mechanism schema (D-000013). **Open work re-prioritized payout-first (rounds 6–8 target components + real-task results; see Open work).**
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0
@@ -114,24 +114,51 @@
 
 ### Open work (next round)
 
-1. **X-TPC-003 (migration probe)** — temporal-ψ task migration A₀ → A₁
-   without changing θ is now the natural Family-2 follow-up: X-TPC-002
-   proved trace forgetting beats blended accumulation under conflict;
-   X-TPC-003 would measure migration time/loss directly and could push
-   B-H2 toward promotion territory (currently needs probability_low ≥
-   0.95 + multi-seed reproduction + generality). Also candidate:
-   emit the B-H2 `mechanism_schema` derived object (open-work item 2 is
-   unblocked for Family 2 — evidence complete at both coordinates).
-2. ~~Emit `mechanism_schema` derived objects~~ — DONE for B-H2 (round 5:
-   D-000013 via `ceec.schemas` + `emit-schema` CLI). Remaining: emit
-   schemas for B-H1/B-H3/B-H5 (single-probe evidence — consider after a
-   second supporting probe each) and B-H4 (needs X-RSE-002).
-3. ~~Real `supersedes` relations on artifact correction~~ — POLICY
-   EXERCISED round 5 (D-000012: E-000024 supersedes duplicate E-000023);
-   remains an operational practice, not a work item.
-4. Deeper TODO18 migration (per-test evidence for instrument beliefs) — Priority 1 instruments currently rely on bootstrap provenance only.
-5. Follow-up probes from round-3 findings: X-RSE-002 (accuracy-preserving routing: mask tempering / trained gate readout) and X-USU-002 (why muon-on-forward degrades one-step descent — momentum/noise-floor defect hunt). X-STA-002 (noise robustness at the discovered coordinates) also unblocks B-H3 promotion.
-6. Optional: `comp ceec` wrapper integration (§12), portfolio optimization, web dashboard.
+> **Re-prioritized round 5 (payout-first).** The epistemic machinery
+> (ledger, gates, schemas) is now load-bearing and needs no expansion.
+> Rounds 6–8 target *tangible* outputs: components and real-task results,
+> not more ledger rows. Judging criterion: at least one non-toy result or
+> shipped component by end of round 7, else freeze hypothesis families
+> and redirect at engineering questions (update rules, feedback
+> adaptation) until one ships.
+
+1. **R6-A — USU hybrid rule → real config surface (tangible artifact,
+   cheapest payout).** Promote the muon-on-readout + euclid-elsewhere
+   role-split dispatcher from `scripts/probes/x_usu_001.py` into
+   `ParameterUpdateConfig` (a `role_split` primitive with a per-name
+   rule mapping). Wire + identity card + property lock + one benchmark
+   number on an existing demo. This converts the round-3 win into a
+   usable component; ledger follows via `ingest_verdict`.
+2. **R6-B — X-TPC-003 on a NON-TOY task pair (tangible result).** Temporal-ψ
+   readout migration where the conflicting tasks are real (MNIST-pair
+   with conflicting label geometry, or LM fine-tune A→B contradiction) —
+   NOT the 2-class toy switch. Deliverable: a nameable result ("frozen-
+   backbone task switching via decayed ridge readout, X% faster than
+   re-training / blended accumulation") or an honest falsification at
+   real scale, which kills B-H2's generality cheaply.
+3. **R7 — adaptive-ρ conflict detector.** Law detects fit conflict from
+   the ridge residual and switches trace decay on/off itself (no task
+   boundaries handed in). Demoable continuous-learning component; the
+   difference between "we told it to forget" and "it forgets when it
+   should".
+4. **R8 — fold a winner into the core trainer path** with a benchmark
+   number (whichever of R6-A/R6-B/R7 won).
+5. X-USU-002 (why muon-on-forward degrades one-step descent — momentum/
+   noise-floor defect hunt) and X-STA-002 (noise robustness at discovered
+   coordinates; unblocks B-H3 promotion) — keep, but they queue BEHIND
+   items 1–2.
+6. X-RSE-002 only after its baseline defect is fixed (dense arm at
+   chance at the quick budget — lengthen budget or simplify task, else
+   the ≤1pt accuracy clause is unmeasurable).
+7. Deferred epistemic backlog (do NOT schedule before items 1–4 land):
+   schemas for B-H1/B-H3/B-H5/B-H4 (need second probes anyway); deeper
+   TODO18 instrument migration; `comp ceec` wrapper; portfolio
+   optimization; web dashboard; completed-status sweep for executed
+   X-* experiment rows.
+
+~~Emit `mechanism_schema`~~ — DONE for B-H2 (round 5: D-000013).
+~~Real `supersedes` relations~~ — exercised (D-000012); operational
+practice, not a work item.
 
 ### Round 3 — experiment execution record (2026-09-10)
 
