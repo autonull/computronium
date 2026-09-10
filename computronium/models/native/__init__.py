@@ -17,13 +17,13 @@ from computronium.models.native.fa_native import (
     create_native_fa_mlp,
     native_fa_mlp,
 )
+from computronium.models.native.lemma_native import (
+    create_native_lemma_mlp,
+    native_lemma_mlp,
+)
 from computronium.models.native.momentum_eqprop_native import (
     create_native_momentum_eqprop,
     native_momentum_eqprop,
-)
-from computronium.models.native.pepita_native import (
-    create_native_pepita_mlp,
-    native_pepita_mlp,
 )
 from computronium.models.native.research_native import (
     create_native_directed_ep,
@@ -67,8 +67,8 @@ __all__ = [
     "create_native_fa_mlp",
     "create_native_finite_nudge_ep",
     "create_native_holomorphic_ep",
+    "create_native_lemma_mlp",
     "create_native_momentum_eqprop",
-    "create_native_pepita_mlp",
     "create_native_sparse_eqprop",
     "create_native_ternary_eqprop",
     "create_native_tile_ep",
@@ -85,8 +85,8 @@ __all__ = [
     "native_fa_mlp",
     "native_finite_nudge_ep",
     "native_holomorphic_ep",
+    "native_lemma_mlp",
     "native_momentum_eqprop",
-    "native_pepita_mlp",
     "native_sparse_eqprop",
     "native_ternary_eqprop",
     "native_tile_ep",

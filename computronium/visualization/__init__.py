@@ -7,13 +7,13 @@ by construction. ``figure_from_spec`` renders a spec standalone.
 """
 
 from computronium.visualization._demo_api import (
+    bars_panel,
     figure_from_spec,
     figure_spec,
-    bars_panel,
+    graph_panel,
+    heatmap_panel,
     lines_panel,
     scatter_panel,
-    heatmap_panel,
-    graph_panel,
     tree_panel,
 )
 from computronium.visualization.gallery import (

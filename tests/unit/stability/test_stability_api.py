@@ -18,15 +18,15 @@ from computronium.stability import (
     GuardConfig,
     GuardDecision,
     GuardHandle,
+    # Config + Factories
+    JacobianAmplificationConfig,
+    JacobianAmplificationEstimator,
     LyapunovConfig,
     LyapunovEstimator,
     # Resources
     ResourceUsage,
     SettlingConfig,
     SettlingMonitor,
-    # Config + Factories
-    SpectralRadiusConfig,
-    SpectralRadiusEstimator,
     StabilityGuard,
     StabilityVerdict,
     StepState,
@@ -35,13 +35,13 @@ from computronium.stability import (
     calibrate_threshold,
     create_basin_estimator,
     create_guard,
+    create_jacobian_amplification_estimator,
     create_lyapunov_estimator,
     create_settling_monitor,
-    create_spectral_radius_estimator,
     estimate_basin_stability,
     estimate_basin_stability_multistart,
+    estimate_directional_amplification,
     estimate_lyapunov_exponent,
-    estimate_spectral_radius,
     measure_settling_time,
 )
 from computronium.state import CompositeState
@@ -345,36 +345,40 @@ class TestFrontierAggregator:
 
 
 class TestSpectralRadius:
-    def test_estimate_spectral_radius_stable(self, mock_context, initial_state):
+    def test_estimate_directional_amplification_stable(
+        self, mock_context, initial_state
+    ):
         transition = MockTransition(rho=0.5)
-        rho = estimate_spectral_radius(
+        rho = estimate_directional_amplification(
             transition, initial_state, mock_context, num_iterations=10
         )
         assert 0.3 < rho < 0.7
 
-    def test_estimate_spectral_radius_unstable(self, mock_context, initial_state):
+    def test_estimate_directional_amplification_unstable(
+        self, mock_context, initial_state
+    ):
         transition = MockTransition(rho=1.2)
-        rho = estimate_spectral_radius(
+        rho = estimate_directional_amplification(
             transition, initial_state, mock_context, num_iterations=10
         )
         assert 0.9 < rho < 1.5
 
     def test_spectral_radius_estimator_class(self, mock_context, initial_state):
-        estimator = SpectralRadiusEstimator(num_iterations=10, fast_mode=False)
+        estimator = JacobianAmplificationEstimator(num_iterations=10, fast_mode=False)
         transition = MockTransition(rho=0.7)
         rho = estimator(transition, initial_state, mock_context)
         assert 0.5 < rho < 0.9
 
     def test_spectral_radius_fast_mode(self, mock_context, initial_state):
-        estimator = SpectralRadiusEstimator(fast_mode=True)
+        estimator = JacobianAmplificationEstimator(fast_mode=True)
         transition = MockTransition(rho=0.6)
         rho = estimator(transition, initial_state, mock_context)
         assert rho >= 0.0
 
     def test_spectral_radius_config_roundtrip(self):
-        config = SpectralRadiusConfig(num_iterations=15, fast_mode=True)
+        config = JacobianAmplificationConfig(num_iterations=15, fast_mode=True)
         spec = config.to_spec()
-        config2 = SpectralRadiusConfig.from_spec(spec)
+        config2 = JacobianAmplificationConfig.from_spec(spec)
         assert config2.num_iterations == 15
         assert config2.fast_mode is True
 
@@ -690,10 +694,10 @@ class TestExternalGuardAPI:
 
 
 class TestConfigFactories:
-    def test_create_spectral_radius_estimator(self):
-        config = SpectralRadiusConfig(num_iterations=15, fast_mode=True)
-        estimator = create_spectral_radius_estimator(config)
-        assert isinstance(estimator, SpectralRadiusEstimator)
+    def test_create_jacobian_amplification_estimator(self):
+        config = JacobianAmplificationConfig(num_iterations=15, fast_mode=True)
+        estimator = create_jacobian_amplification_estimator(config)
+        assert isinstance(estimator, JacobianAmplificationEstimator)
         assert estimator.num_iterations == 15
         assert estimator.fast_mode is True
 
@@ -760,7 +764,7 @@ class TestIntegration:
         transition = MockTransition(rho=0.7)
 
         # Spectral radius fast proxy
-        spec_est = SpectralRadiusEstimator(fast_mode=True)
+        spec_est = JacobianAmplificationEstimator(fast_mode=True)
         rho = spec_est(transition, initial_state, mock_context)
         assert isinstance(rho, float)
 
@@ -794,7 +798,9 @@ class TestDeviceManagement:
         """All estimators should work on CPU."""
         transition = MockTransition(rho=0.7)
 
-        rho = estimate_spectral_radius(transition, initial_state, mock_context)
+        rho = estimate_directional_amplification(
+            transition, initial_state, mock_context
+        )
         lyap = estimate_lyapunov_exponent(transition, initial_state, mock_context)
         steps, _ = measure_settling_time(
             MockContractingTransition(rate=0.5), initial_state, mock_context
@@ -855,5 +861,5 @@ class TestDeviceManagement:
         )
 
         transition = MockTransition(rho=0.7)
-        rho = estimate_spectral_radius(transition, z, context)
+        rho = estimate_directional_amplification(transition, z, context)
         assert isinstance(rho, float)

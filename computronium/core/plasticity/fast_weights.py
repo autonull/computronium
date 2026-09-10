@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
@@ -53,6 +54,32 @@ class FastWeightPlasticity:
     The fast weights can modulate activity dynamics or be
     consolidated into persistent weights at episode boundaries.
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="FastWeightPlasticity",
+        reference_equations="Fast weights as associative memory; Ba et al. (2016), arXiv 1610.06258; Hebbian outer-product write",
+        deviations_from_literature=(
+            "pre/post are the SETTLED activities supplied by the pipeline "
+            "(F3-audit fix: not the raw target — that made modulation a "
+            "target-correlated bias)",
+            "fixed random projection maps the full outer product to "
+            "fast_weight_dim (avoids truncation bias)",
+            "episode decay + boundary consolidation is framework-specific",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="A_{t+1} = decay·A_t + lr·Proj(outer(pre_t, post_t)) with settled pre/post",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "fast_weight_dim",
+            "decay",
+            "learning_rate",
+            "outer_product_scale",
+        ),
+        validated_limits=(
+            "L3.5 algorithm-migration probe scale; J3 lock: ψ mutates only "
+            "via PlasticityPrimitive.step",
+        ),
+    )
 
     config: PlasticityConfig
 

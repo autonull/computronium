@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
@@ -71,6 +72,32 @@ class RuleStatePlasticity:
         active_operator = softmax(operator_logits)  # training (mixture)
                       = argmax(operator_logits)      # eval (hard selection)
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="RuleStatePlasticity",
+        reference_equations="Z3 fixed-weights changing-algorithm protocol (internal, TODO16 §5): frozen θ + ψ-mediated operator selection",
+        deviations_from_literature=(
+            "operator library is a fixed 8-operator minimal set (Identity, "
+            "Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, "
+            "SignFlip, Delay)",
+            "controller RNN + operator embeddings; θ frozen during Z3 "
+            "evaluation — only ψ adapts",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="operator_logits_{t+1} = decay·logits_t + controller(ψ_t, x_t); active = softmax (train) / argmax (eval)",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "num_operators",
+            "operator_dim",
+            "controller_hidden",
+            "temperature",
+            "decay",
+        ),
+        validated_limits=(
+            "Z3 probe scale: frozen-θ task switching with exact "
+            "parameter invariance ‖θ_after − θ_before‖ = 0 (L4 locks)",
+        ),
+    )
 
     config: PlasticityConfig
 

@@ -16,8 +16,8 @@ from computronium import (
     create_fast_weight_mlp,
     create_ff_mlp,
     create_hebbian_mlp,
+    create_lemma_mlp,
     create_pc_mlp,
-    create_pepita_mlp,
     create_routing_mlp,
     create_snn_mlp,
     create_tile_mlp,
@@ -50,7 +50,7 @@ from computronium.models.native.fa_native import (
 from computronium.models.native.momentum_eqprop_native import (
     create_native_momentum_eqprop,
 )
-from computronium.models.native.pepita_native import create_native_pepita_mlp
+from computronium.models.native.lemma_native import create_native_lemma_mlp
 from computronium.models.native.research_native import (
     create_native_directed_ep,
     create_native_finite_nudge_ep,
@@ -347,18 +347,18 @@ class TestPEPITAParity:
     """Test PEPITA parity between presets factory and native implementation."""
 
     @pytest.mark.parametrize("epochs", [3])
-    def test_create_pepita_mlp_matches_native(self, epochs):
-        """presets.create_pepita_mlp should match native_pepita_mlp."""
+    def test_create_lemma_mlp_matches_native(self, epochs):
+        """presets.create_lemma_mlp should match create_native_lemma_mlp (both LEMMA)."""
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
         construction_seed()
-        system1 = create_pepita_mlp(
+        system1 = create_lemma_mlp(
             input_dim, (hidden_dim, hidden_dim), output_dim, lr=0.01, device=device
         )
         construction_seed()
-        system2 = create_native_pepita_mlp(
+        system2 = create_native_lemma_mlp(
             input_dim, hidden_dim, output_dim, num_layers=2, lr=0.01
         )
 

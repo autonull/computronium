@@ -146,17 +146,15 @@ class _TaskTrainer:
         if scheduler_type:
             self._create_scheduler(scheduler_type, scheduler_kwargs or {})
 
-    def _create_scheduler(
-        self, scheduler_type: str, scheduler_kwargs: dict
-    ) -> None:
+    def _create_scheduler(self, scheduler_type: str, scheduler_kwargs: dict) -> None:
         """Create learning rate scheduler from type and kwargs."""
         scheduler_type_lower = scheduler_type.lower()
         if scheduler_type_lower == "cosine":
             t_max = scheduler_kwargs.get("t_max", self.epochs)
             self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer, T_max=t_max, **{
-                    k: v for k, v in scheduler_kwargs.items() if k != "t_max"
-                }
+                self.optimizer,
+                T_max=t_max,
+                **{k: v for k, v in scheduler_kwargs.items() if k != "t_max"},
             )
         elif scheduler_type_lower == "step":
             step_size = scheduler_kwargs.get("step_size", 10)
@@ -176,6 +174,7 @@ class _TaskTrainer:
             )
         elif scheduler_type_lower == "cosine_warmup":
             from torch.optim.lr_scheduler import SequentialLR
+
             warmup_iters = scheduler_kwargs.get("warmup_iters", 5)
             warmup = torch.optim.lr_scheduler.LinearLR(
                 self.optimizer,

@@ -110,7 +110,7 @@ class TestGradientEquivalence:
                 )
 
     def test_fa_feedback_not_forward_transpose(self):
-        """FA backward weights should NOT equal forward weight transpose (no weight transport)."""
+        """FA backward weights should NOT equal forward weight transpose (no transport shortcut)."""
         system = self._create_mlp_system("fa", seed=42, feedback_scale=0.01)
 
         # Get forward weights from geometry
@@ -128,11 +128,11 @@ class TestGradientEquivalence:
                         # FA feedback should NOT equal forward transpose
                         diff = torch.norm(fb - fw.T)
                         assert diff > 1e-3, (
-                            f"FA feedback matrix equals forward transpose for {name} (no weight transport violation)"
+                            f"FA feedback matrix equals forward transpose for {name} (weight-transport violation)"
                         )
 
     def test_thermodynamic_contrast_local_gradients(self):
-        """ThermodynamicContrast should compute gradients via local contrastive Hebbian rule (no weight transport).
+        """ThermodynamicContrast should compute gradients via local contrastive Hebbian rule (no transport shortcut).
 
         EqProp/thermodynamic contrast uses only local pre/post-synaptic activity correlations:
         ΔW ∝ (free_pre @ free_post - nudged_pre @ nudged_post) / β

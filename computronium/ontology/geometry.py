@@ -640,7 +640,7 @@ class FeedforwardGeometry(nn.Module):
             else:
                 h = layer(h)
                 if self.residual and h.shape == h_in.shape:
-                    h = h + h_in
+                    h += h_in
                 if intermediates is not None:
                     # Add after activation function and skip (post-skip
                     # activities align with settle-kernel acts)
@@ -2436,7 +2436,7 @@ class NcaGeometry(nn.Module):
                 when absent (functional damping, §11.4)
         """
         if states.dim() != 4 or states.shape[-2:] != tuple(self.config.grid_hw):
-            raise ValueError(  # ruff: ignore[raise-vanilla-args]
+            raise ValueError(
                 f"NcaGeometry expects states (B, C, {self.config.grid_hw[0]}, "
                 f"{self.config.grid_hw[1]}), got {tuple(states.shape)}"
             )
@@ -2698,7 +2698,7 @@ class NtmGeometry(nn.Module):
             (logits, read, mem_next, a_w, a_r, state_next)
         """
         if x.dim() != 2 or x.shape[-1] != self.config.input_dim:
-            raise ValueError(  # noqa: TRY003 - caller-facing shape contract
+            raise ValueError(
                 f"NtmGeometry expects x (B, {self.config.input_dim}), "
                 f"got {tuple(x.shape)}"
             )
@@ -2789,7 +2789,7 @@ class NtmGeometry(nn.Module):
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         if x.dim() != 2:
-            raise ValueError(  # noqa: TRY003 - caller-facing shape contract
+            raise ValueError(
                 "forward_with_intermediates expects one (B, input_dim) step"
             )
         state = self._state if self._state is not None else self.init_state(x.shape[0])
@@ -2818,7 +2818,7 @@ class NtmGeometry(nn.Module):
 # ============================================================
 
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:  # noqa: C901, PLR0911 - dispatch table
+def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[complex-structure, too-many-return-statements] - dispatch table
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
     if topology_type == "ntm":

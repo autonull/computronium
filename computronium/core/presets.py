@@ -30,10 +30,12 @@ from computronium.ontology import (
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
+    LemmaCredit,
     LocalGoodnessCredit,
     MemristiveSubstrate,
     NeuromorphicSubstrate,
     ParameterUpdateConfig,
+    PepitaCredit,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
     RecurrentGeometry,
@@ -518,7 +520,7 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
     return _FFSystem(base_system)
 
 
-def create_pepita_mlp(
+def create_lemma_mlp(
     input_dim: int,
     hidden_dims: tuple[int, ...],
     output_dim: int,
@@ -526,10 +528,10 @@ def create_pepita_mlp(
     init_scale: float = 0.1,
     device: str = "cpu",
 ) -> System:
-    """Create a PEPITA MLP system (5-D coordinate).
+    """Create a LEMMA MLP system (5-D coordinate).
 
-    PEPITA uses forward-only local learning with error-modulated input
-    perturbation and layer-local contrastive updates.
+    Per-layer closed-form error-modulated credit
+    (:class:`LemmaCredit`) — NOT the published PEPITA rule (TODO18 2.4).
 
     Args:
         input_dim: Input dimension
@@ -541,14 +543,47 @@ def create_pepita_mlp(
 
     Returns:
         A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
-        + LocalGoodnessCredit + EuclideanUpdate
+        + LemmaCredit + EuclideanUpdate
     """
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    credit = LocalGoodnessCredit(
-        CreditAssignmentConfig.local_goodness(local_objective="lemma")
-    )
+    credit = LemmaCredit()
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_pepita_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.01,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a PEPITA MLP system (5-D coordinate).
+
+    Published PEPITA (arXiv 2201.11665): one input-space fixed random B,
+    error-modulated second forward pass, autograd update
+    (:class:`PepitaCredit`). Memory is backprop-class.
+
+    Args:
+        input_dim: Input dimension
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        init_scale: Weight initialization scale
+        device: Target device
+
+    Returns:
+        A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
+        + PepitaCredit + EuclideanUpdate
+    """
+    substrate = _default_substrate(device)
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = PepitaCredit()
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)
@@ -927,6 +962,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "create_eqprop_mlp",
     "create_fa_mlp",
     "create_ff_mlp",
+    "create_lemma_mlp",
     "create_pepita_mlp",
     "create_tp_mlp",
     "create_pc_mlp",

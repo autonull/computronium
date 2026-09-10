@@ -6,6 +6,8 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+from computronium.core.identity_card import AlgorithmIdentityCard
+
 if TYPE_CHECKING:
     from torch import Tensor
 
@@ -131,6 +133,23 @@ class NullPlasticity:
     6-D coordinate with M=Null. The Zero-Extension Theorem guarantees
     behavioral equivalence.
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="NullPlasticity",
+        reference_equations="Zero-Extension Invariant (internal, J1 lock): F_θ^Null(z)|_x = D_θ(x)",
+        deviations_from_literature=(
+            "not a learning rule: the identity law ψ_{t+1} = ψ_t that "
+            "makes 5-D systems valid 6-D coordinates",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="none (ψ constant; no credit routed through P)",
+        symmetry_requirements=("none",),
+        approximation_parameters=(),
+        validated_limits=(
+            "J1 lock: 5-D build trained identically produces bitwise-equal "
+            "θ (numerical-tolerance certification, Level 4)",
+        ),
+    )
 
     config = PlasticityConfig.null()
 

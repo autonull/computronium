@@ -18,6 +18,12 @@ repos:
         types: [python]
         pass_filenames: false
         always_run: true
+      - id: identity-cards
+        name: identity cards (C.1: every concrete primitive carded)
+        entry: uv run python scripts/generate_identity_cards.py --strict
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: pytest-fast
         name: pytest (property tests)
         entry: uv run pytest tests/property/ -q

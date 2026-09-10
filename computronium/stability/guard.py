@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 from computronium.stability.spectral_radius import (
-    SpectralRadiusEstimator,
-    estimate_spectral_radius_full_jacobian,
+    JacobianAmplificationEstimator,
+    dominant_singular_value,
 )
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ class StabilityGuard:
     """Threshold guard on stability statistics of the joint transition.
 
     Two statistic modes:
-    - ``fast_proxy``: one-step Jacobian-vector gain (`SpectralRadiusEstimator`
+    - ``fast_proxy``: one-step Jacobian-vector gain (`JacobianAmplificationEstimator`
       in fast mode); cheap but blind to non-normal transients.
     - ``windowed_growth``: peak activity growth over a settling window;
       tracks asymptotic divergence directly and separates good/unstable runs
@@ -57,8 +57,8 @@ class StabilityGuard:
     """
 
     threshold: float = DEFAULT_TAU
-    estimator: SpectralRadiusEstimator = field(
-        default_factory=lambda: SpectralRadiusEstimator(fast_mode=True)
+    estimator: JacobianAmplificationEstimator = field(
+        default_factory=lambda: JacobianAmplificationEstimator(fast_mode=True)
     )
     statistic: StatisticKind = "windowed_growth"
     window: int = 10
@@ -331,7 +331,7 @@ class DisagreementReport:
     """Fast-proxy vs full-Jacobian accuracy and cost accounting.
 
     Relative errors are denominator-dominated wherever the reference
-    spectral radius sits near zero (optical/quantum families quote
+    Jacobian amplification sits near zero (optical/quantum families quote
     ~1800-4400x ratios there); the absolute-error fields are the honest
     companion statistic for those regimes.
     """
@@ -361,7 +361,7 @@ def _collect_estimates(
     transition_fn: TransitionFn,
     z: CompositeState,
     context: SystemContext,
-    estimator: SpectralRadiusEstimator,
+    estimator: JacobianAmplificationEstimator,
     probes: ProbeSpec,
 ) -> tuple[list[float], list[float], float, float]:
     generator = torch.Generator(device="cpu").manual_seed(probes.seed)
@@ -381,9 +381,7 @@ def _collect_estimates(
 
         estimates = (
             lambda: estimator(transition_fn, z_probe, context),
-            lambda: estimate_spectral_radius_full_jacobian(
-                transition_fn, z_probe, context
-            ),
+            lambda: dominant_singular_value(transition_fn, z_probe, context),
         )
         for index, estimate in enumerate(estimates):
             start = time.perf_counter()
@@ -398,10 +396,13 @@ def quantify_proxy_disagreement(
     transition_fn: TransitionFn,
     z: CompositeState,
     context: SystemContext,
-    estimator: SpectralRadiusEstimator | None = None,
+    estimator: JacobianAmplificationEstimator | None = None,
     probes: ProbeSpec = ProbeSpec(),
 ) -> DisagreementReport:
-    """Measure fast-proxy error against the exact Jacobian spectral norm.
+    """Measure fast-proxy error against the exact Jacobian amplification σ_max.
+
+    Both the proxy and the full-Jacobian reference measure operator-norm
+    amplification ‖J‖_2, not spectral radius ρ(J) (TODO18 2.1).
 
     Args:
         transition_fn: Joint transition to probe.
@@ -413,7 +414,7 @@ def quantify_proxy_disagreement(
     Returns:
         Error distribution and cumulative timing per method.
     """
-    estimator = estimator or SpectralRadiusEstimator(fast_mode=True)
+    estimator = estimator or JacobianAmplificationEstimator(fast_mode=True)
     proxy_vals, full_vals, proxy_seconds, full_seconds = _collect_estimates(
         transition_fn, z, context, estimator, probes
     )

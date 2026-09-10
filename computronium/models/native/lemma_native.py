@@ -1,7 +1,7 @@
-"""Native PEPITA model using 5-D Ontology composition.
+"""Native LEMMA model using 5-D Ontology composition.
 
-This replaces the legacy PEPITA with a direct
-composition of the 5 Protocols, bypassing ModelAdapter.
+This replaces the legacy Forward-Forward goodness learner with a
+direct composition of the 5 Protocols, bypassing ModelAdapter.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import torch
 
 
-def create_native_pepita_mlp(
+def create_native_lemma_mlp(
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -34,10 +34,11 @@ def create_native_pepita_mlp(
     lr: float = 0.01,
     device: str | torch.device = "cpu",
 ) -> System:
-    """Create a PEPITA system using native 5-D composition.
+    """Create a LEMMA system using native 5-D composition.
 
-    PEPITA uses forward-only local learning with error-modulated input
-    perturbation and layer-local contrastive updates.
+    LEMMA uses forward-only layer-local goodness maximization on
+    positive/negative samples (Forward-Forward family), not PEPITA's
+    error-modulated input perturbation.
 
     Args:
         input_dim: Input dimension
@@ -79,4 +80,4 @@ def create_native_pepita_mlp(
 
 
 # Alias for registry registration
-native_pepita_mlp = create_native_pepita_mlp
+native_lemma_mlp = create_native_lemma_mlp

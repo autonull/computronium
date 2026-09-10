@@ -23,6 +23,7 @@ from computronium import (
     create_fast_weight_mlp,
     create_ff_mlp,
     create_hebbian_mlp,
+    create_lemma_mlp,
     create_pc_mlp,
     create_pepita_mlp,
     create_routing_mlp,
@@ -30,7 +31,6 @@ from computronium import (
     create_tile_mlp,
     create_tp_mlp,
 )
-
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.registry import resolve_task
 from computronium.utils import seed_everything
@@ -72,6 +72,7 @@ _FACTORIES: dict[str, Callable[..., object]] = {
     "eqprop_mlp": create_eqprop_mlp,
     "fa_mlp": create_fa_mlp,
     "ff_mlp": create_ff_mlp,
+    "lemma_mlp": create_lemma_mlp,
     "pepita_mlp": create_pepita_mlp,
     "tp_mlp": create_tp_mlp,
     "pc_mlp": create_pc_mlp,
@@ -107,6 +108,7 @@ _DEFAULT_HIDDEN_DIM: dict[str, int] = {
     "eqprop_mlp": 128,
     "fa_mlp": 128,
     "ff_mlp": 32,
+    "lemma_mlp": 32,
     "pepita_mlp": 32,
     "tp_mlp": 128,
     "pc_mlp": 128,

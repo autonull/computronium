@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
@@ -26,6 +27,25 @@ class SubstrateCoupledPlasticity:
 
     ψ ≡ σ  (plastic state is substrate state)
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="SubstrateCoupledPlasticity",
+        reference_equations="physical plasticity = substrate state evolution (memristive drift, analog noise, decoherence); internal formulation",
+        deviations_from_literature=(
+            "no separate plasticity law: ψ ≡ σ, a no-op at the plasticity "
+            "protocol level — the substrate's forward/update operators "
+            "carry all dynamics",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="none (substrate weight_update_operator evolves σ within the joint transition)",
+        symmetry_requirements=("inherits the substrate's physical constraints",),
+        approximation_parameters=(),
+        validated_limits=(
+            "J4 lock: substrate_owned variables mutate only via "
+            "Substrate.forward_operator; physical-hardware validation is "
+            "future work (simulated substrates only)",
+        ),
+    )
 
     config: PlasticityConfig
 

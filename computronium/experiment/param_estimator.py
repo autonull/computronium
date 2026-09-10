@@ -33,7 +33,7 @@ from computronium.models.native import (
     create_native_backprop_mlp,
     create_native_eqprop_mlp,
     create_native_fa_mlp,
-    create_native_pepita_mlp,
+    create_native_lemma_mlp,
     create_native_tile_ep,
     create_native_tile_fa,
     create_native_tile_hebbian,
@@ -74,7 +74,7 @@ type NativeModelFactory = Callable[..., object]
 
 _NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = (
     ("backprop", create_native_backprop_mlp),
-    ("pepita", create_native_pepita_mlp),
+    ("pepita", create_native_lemma_mlp),
     ("feedback_alignment", create_native_fa_mlp),
     ("tile_ep", create_native_tile_ep),
     ("tile_fa", create_native_tile_fa),

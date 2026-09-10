@@ -48,7 +48,7 @@ def _create_5d_system() -> tuple:
 
 
 def test_null_plasticity_equivalence():  # ruff: ignore[too-many-locals]
-    """Zero-Extension Theorem: Joint(Null) ≡ 5-D dynamics within numerical tolerance.
+    """Zero-Extension Theorem (Level 4 sampled): Joint(Null) ≡ 5-D dynamics within numerical tolerance.
 
     The joint system with M=NullPlasticity must produce identical behavior
     to the original 5-D system for the same inputs and initial conditions.

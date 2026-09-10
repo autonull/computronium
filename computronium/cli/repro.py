@@ -35,7 +35,7 @@ REPRO_MODELS = [
     "native_backprop_mlp",
     "native_eqprop_mlp",
     "native_fa_mlp",
-    "native_pepita_mlp",
+    "native_lemma_mlp",
     "native_tile_ep",
     "native_tile_fa",
     "native_tile_hebbian",
@@ -72,12 +72,10 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str):
 
         return create_native_fa_mlp(input_dim, 64, output_dim, num_layers=2, lr=1e-3)
 
-    if model_name == "native_pepita_mlp":
-        from computronium.models.native.pepita_native import create_native_pepita_mlp
+    if model_name == "native_lemma_mlp":
+        from computronium.models.native.lemma_native import create_native_lemma_mlp
 
-        return create_native_pepita_mlp(
-            input_dim, 64, output_dim, num_layers=2, lr=1e-3
-        )
+        return create_native_lemma_mlp(input_dim, 64, output_dim, num_layers=2, lr=1e-3)
 
     if model_name == "native_tile_ep":
         from computronium.models.native.tile_native import create_native_tile_ep

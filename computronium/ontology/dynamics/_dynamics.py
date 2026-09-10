@@ -1726,7 +1726,7 @@ class LazyStateDynamics:
         acts = list(geometry.forward_with_intermediates(state.x, substrate))
         beta = self.config.beta if target is not None else 0.0
 
-        for sweep in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
+        for sweep in range(self.config.max_steps):
             max_delta = 0.0
             for i in range(len(acts) - 2):
                 pre = op(acts[i], weights[i])

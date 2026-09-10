@@ -23,6 +23,7 @@ One-Line System Construction:
         create_fa_mlp,
         create_ff_mlp,
         create_memristive_mlp,
+        create_lemma_mlp,
         create_pepita_mlp,
         create_tp_mlp,
         create_pc_mlp,
@@ -94,6 +95,12 @@ from typing import TYPE_CHECKING
 __version__ = "1.0.0"
 
 if TYPE_CHECKING:
+    from computronium.analysis.mechanistic_study import (
+        MechanisticStudyRecord as MechanisticStudyRecord,
+    )
+    from computronium.analysis.mechanistic_study import run_mechanistic_study
+    from computronium.analysis.vertical_slice import ClaimRecord as ClaimRecord
+    from computronium.analysis.vertical_slice import run_slice
     from computronium.config.experiment import (
         DataConfig,
         ExperimentConfig,
@@ -106,6 +113,9 @@ if TYPE_CHECKING:
         make_timeseries_preset,
         make_vision_preset,
     )
+    from computronium.core.correction_record import CorrectionRecord
+    from computronium.core.frozen_theta import FrozenThetaAudit, frozen_theta_audit
+    from computronium.core.identity_card import AlgorithmIdentityCard
     from computronium.core.joint.transition import CoupledTransition
     from computronium.core.plasticity import NullPlasticity
     from computronium.core.presets import (
@@ -115,6 +125,7 @@ if TYPE_CHECKING:
         create_fast_weight_mlp,
         create_ff_mlp,
         create_hebbian_mlp,
+        create_lemma_mlp,
         create_memristive_mlp,
         create_neuromorphic_mlp,
         create_pc_mlp,
@@ -148,8 +159,8 @@ if TYPE_CHECKING:
         native_fa_mlp,
         native_finite_nudge_ep,
         native_holomorphic_ep,
+        native_lemma_mlp,
         native_momentum_eqprop,
-        native_pepita_mlp,
         native_sparse_eqprop,
         native_ternary_eqprop,
         native_tile_ep,
@@ -168,6 +179,7 @@ if TYPE_CHECKING:
     from computronium.ontology.credit import (
         BackpropCredit,
         CreditAssignmentConfig,
+        LemmaCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
         PepitaCredit,
@@ -222,6 +234,8 @@ if TYPE_CHECKING:
         QuantizedSubstrate,
         QuantumSubstrate,
         SubstrateConfig,
+        SubstrateSpec,
+        make_substrate,
     )
     from computronium.ontology.system import System, SystemConfig, SystemState
     from computronium.ontology.update import (
@@ -243,6 +257,7 @@ if TYPE_CHECKING:
         StateRegistry,
         SystemContext,
     )
+    from computronium.verification import VerificationLevel, render_taxonomy_markdown
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
@@ -292,6 +307,28 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "SpatialLattice3DGeometry",
     ),
     "theta_audit": ("computronium.core.theta_audit", "theta_audit"),
+    "frozen_theta_audit": ("computronium.core.frozen_theta", "frozen_theta_audit"),
+    "FrozenThetaAudit": ("computronium.core.frozen_theta", "FrozenThetaAudit"),
+    "CorrectionRecord": ("computronium.core.correction_record", "CorrectionRecord"),
+    "VerificationLevel": ("computronium.verification", "VerificationLevel"),
+    "ClaimRecord": ("computronium.analysis.vertical_slice", "ClaimRecord"),
+    "run_slice": ("computronium.analysis.vertical_slice", "run_slice"),
+    "render_taxonomy_markdown": (
+        "computronium.verification",
+        "render_taxonomy_markdown",
+    ),
+    "MechanisticStudyRecord": (
+        "computronium.analysis.mechanistic_study",
+        "MechanisticStudyRecord",
+    ),
+    "run_mechanistic_study": (
+        "computronium.analysis.mechanistic_study",
+        "run_mechanistic_study",
+    ),
+    "AlgorithmIdentityCard": (
+        "computronium.core.identity_card",
+        "AlgorithmIdentityCard",
+    ),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "TransformerGeometry": ("computronium.ontology.geometry", "TransformerGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
@@ -307,6 +344,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "computronium.ontology.credit",
         "LocalContrastiveCredit",
     ),
+    "LemmaCredit": ("computronium.ontology.credit", "LemmaCredit"),
     "LocalGoodnessCredit": ("computronium.ontology.credit", "LocalGoodnessCredit"),
     "PepitaCredit": ("computronium.ontology.credit", "PepitaCredit"),
     "MemristiveSubstrate": ("computronium.ontology.substrate", "MemristiveSubstrate"),
@@ -346,6 +384,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     ),
     "StateDynamicsConfig": ("computronium.ontology.dynamics", "StateDynamicsConfig"),
     "SubstrateConfig": ("computronium.ontology.substrate", "SubstrateConfig"),
+    "SubstrateSpec": ("computronium.ontology.substrate", "SubstrateSpec"),
+    "make_substrate": ("computronium.ontology.substrate", "make_substrate"),
     "System": ("computronium.ontology.system", "System"),
     "SystemConfig": ("computronium.ontology.system", "SystemConfig"),
     "SystemState": ("computronium.ontology.system", "SystemState"),
@@ -383,6 +423,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "create_eqprop_mlp": ("computronium.core.presets", "create_eqprop_mlp"),
     "create_fa_mlp": ("computronium.core.presets", "create_fa_mlp"),
     "create_ff_mlp": ("computronium.core.presets", "create_ff_mlp"),
+    "create_lemma_mlp": ("computronium.core.presets", "create_lemma_mlp"),
     "create_pepita_mlp": ("computronium.core.presets", "create_pepita_mlp"),
     "create_tp_mlp": ("computronium.core.presets", "create_tp_mlp"),
     "create_pc_mlp": ("computronium.core.presets", "create_pc_mlp"),
@@ -452,9 +493,9 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "computronium.models.native",
         "native_fa_mlp",
     ),
-    "native_pepita_mlp": (
+    "native_lemma_mlp": (
         "computronium.models.native",
-        "native_pepita_mlp",
+        "native_lemma_mlp",
     ),
     "native_tile_ep": (
         "computronium.models.native",
@@ -517,13 +558,16 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
 
 __all__ = [
     "AdamUpdate",
+    "AlgorithmIdentityCard",
     "AnalogSubstrate",
     "AttentionGeometry",
     "BackpropCredit",
+    "ClaimRecord",
     "ClosedFormRidgePlasticity",
     "CompositeState",
     "ComputroniumLinear",
     "ConvGeometry",
+    "CorrectionRecord",
     "CoupledTransition",
     "CreditAssignmentConfig",
     "CreditRule",
@@ -536,31 +580,34 @@ __all__ = [
     "EnergyMinimizationDynamics",
     "ErrorPredictiveCodingDynamics",
     "EuclideanUpdate",
-    "LionUpdate",
     "ExperimentConfig",
     "FastWeightPlasticity",
     "FeedforwardGeometry",
     "FixedDepth",
+    "FrozenThetaAudit",
     "GeometryConfig",
     "GraphGeometry",
     "HardwareConfig",
     "InstantaneousDynamics",
     "LazyStateDynamics",
+    "LemmaCredit",
+    "LionUpdate",
     "LocalAdamUpdate",
     "LocalContrastiveCredit",
     "LocalGoodnessCredit",
     "LongestPathDepth",
-    "PepitaCredit",
     "MeanNormUpdate",
+    "MechanisticStudyRecord",
     "MemristiveSubstrate",
     "ModelConfig",
     "NcaGeometry",
-    "NtmGeometry",
     "NeuromorphicSubstrate",
+    "NtmGeometry",
     "NullPlasticity",
     "OpticalSubstrate",
     "OrthoAdamUpdate",
     "ParameterUpdateConfig",
+    "PepitaCredit",
     "PlasticityConfig",
     "PlasticityType",
     "PredictiveSettlingDynamics",
@@ -579,6 +626,7 @@ __all__ = [
     "StateRegistry",
     "SubstrateConfig",
     "SubstrateCoupledPlasticity",
+    "SubstrateSpec",
     "System",
     "SystemConfig",
     "SystemContext",
@@ -594,6 +642,7 @@ __all__ = [
     "TrainingConfig",
     "TransformerGeometry",
     "UnitRMSUpdate",
+    "VerificationLevel",
     "__version__",
     "compose_joint_system",
     "compose_joint_system_from_configs",
@@ -608,6 +657,7 @@ __all__ = [
     "create_fast_weight_mlp",
     "create_ff_mlp",
     "create_hebbian_mlp",
+    "create_lemma_mlp",
     "create_memristive_mlp",
     "create_neuromorphic_mlp",
     "create_pc_mlp",
@@ -619,9 +669,11 @@ __all__ = [
     "create_tile_mlp",
     "create_tp_mlp",
     "extract_config",
+    "frozen_theta_audit",
     "make_graph_preset",
     "make_lm_preset",
     "make_rl_preset",
+    "make_substrate",
     "make_timeseries_preset",
     "make_vision_preset",
     "muon_backprop",
@@ -632,15 +684,18 @@ __all__ = [
     "native_fa_mlp",
     "native_finite_nudge_ep",
     "native_holomorphic_ep",
+    "native_lemma_mlp",
     "native_momentum_eqprop",
-    "native_pepita_mlp",
     "native_sparse_eqprop",
     "native_ternary_eqprop",
     "native_tile_ep",
     "native_tile_fa",
     "native_tile_snn",
     "native_tile_tp",
+    "render_taxonomy_markdown",
     "replace_linear_with_computronium",
+    "run_mechanistic_study",
+    "run_slice",
     "smep",
     "smep_fast",
     "theta_audit",

@@ -13,12 +13,12 @@ from computronium.stability.basin import BasinStabilityEstimator
 from computronium.stability.guard import DEFAULT_TAU, StabilityGuard
 from computronium.stability.lyapunov import LyapunovEstimator
 from computronium.stability.settling import SettlingMonitor
-from computronium.stability.spectral_radius import SpectralRadiusEstimator
+from computronium.stability.spectral_radius import JacobianAmplificationEstimator
 
 
 @dataclass(frozen=True, slots=True)
-class SpectralRadiusConfig:
-    """Configuration for spectral radius estimation."""
+class JacobianAmplificationConfig:
+    """Configuration for Jacobian amplification (σ_max) estimation."""
 
     num_iterations: int = 20
     perturbation_scale: float = 1e-4
@@ -35,7 +35,7 @@ class SpectralRadiusConfig:
         }
 
     @classmethod
-    def from_spec(cls, spec: dict) -> SpectralRadiusConfig:
+    def from_spec(cls, spec: dict) -> JacobianAmplificationConfig:
         """Deserialize from dictionary."""
         return cls(
             num_iterations=spec.get("num_iterations", 20),
@@ -148,7 +148,9 @@ class GuardConfig:
     threshold: float = DEFAULT_TAU
     statistic: Literal["fast_proxy", "windowed_growth"] = "windowed_growth"
     window: int = 10
-    estimator_config: SpectralRadiusConfig = field(default_factory=SpectralRadiusConfig)
+    estimator_config: JacobianAmplificationConfig = field(
+        default_factory=JacobianAmplificationConfig
+    )
 
     def to_spec(self) -> dict:
         return {
@@ -164,17 +166,17 @@ class GuardConfig:
             threshold=spec.get("threshold", DEFAULT_TAU),
             statistic=spec.get("statistic", "windowed_growth"),
             window=spec.get("window", 10),
-            estimator_config=SpectralRadiusConfig.from_spec(
+            estimator_config=JacobianAmplificationConfig.from_spec(
                 spec.get("estimator_config", {})
             ),
         )
 
 
-def create_spectral_radius_estimator(
-    config: SpectralRadiusConfig,
-) -> SpectralRadiusEstimator:
-    """Factory for spectral radius estimator."""
-    return SpectralRadiusEstimator(
+def create_jacobian_amplification_estimator(
+    config: JacobianAmplificationConfig,
+) -> JacobianAmplificationEstimator:
+    """Factory for Jacobian amplification estimator."""
+    return JacobianAmplificationEstimator(
         num_iterations=config.num_iterations,
         perturbation_scale=config.perturbation_scale,
         activity_key=config.activity_key,
@@ -219,7 +221,7 @@ def create_basin_estimator(config: BasinConfig) -> BasinStabilityEstimator:
 
 def create_guard(config: GuardConfig) -> StabilityGuard:
     """Factory for stability guard."""
-    estimator = create_spectral_radius_estimator(config.estimator_config)
+    estimator = create_jacobian_amplification_estimator(config.estimator_config)
     return StabilityGuard(
         threshold=config.threshold,
         estimator=estimator,

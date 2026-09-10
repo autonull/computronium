@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast, runtime_che
 import torch
 from torch import Tensor, nn
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.ontology.utils import _learnable_weight_names
 
 if TYPE_CHECKING:
@@ -598,6 +599,29 @@ class ThermodynamicContrast:
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = False
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="ThermodynamicContrast",
+        reference_equations=(
+            "Equilibrium Propagation contrastive Hebbian rule; Scellier & "
+            "Bengio (2017), ΔW = (C_free − C_nudged)/β per layer"
+        ),
+        deviations_from_literature=(
+            "contrast normalized by batch size in addition to β",
+            "optional credit_norm normalization (none by default, unlike the "
+            "canonical unscaled EqProp gradient)",
+        ),
+        objective_function="nudged free energy − free free energy (surrogate_objective returns that difference)",
+        pseudo_gradient_def="ΔW_l = (free_pre_lᵀ free_post_l − nudged_pre_lᵀ nudged_post_l)ᵀ / (β·batch)",
+        symmetry_requirements=(
+            "reciprocal/symmetric interactions in the settle energy",
+        ),
+        approximation_parameters=("beta",),
+        validated_limits=(
+            "gradient equivalence vs BPTT cosine ≥ 0.5 (CE families), MSE families ≥ 0.6",
+            "energy non-increasing on symmetric-topology settle (property-locked, Level 4)",
+        ),
+    )
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.thermodynamic_contrast()
 
@@ -690,15 +714,36 @@ class RandomProjectionsCredit:
 
     Top error δ_L = ∂L/∂a_L via autograd on the task loss (no weight
     transport at the readout), propagated down through FIXED random
-    matrices: δ_i = δ_{i+1} @ B_i with B_i ~ feedback_scale · N(0,1),
-    fixed at first use. Per-layer pseudo-gradient ΔW_i = δ_{i+1}ᵀ a_i / batch;
-    recurrent self-connections project the last hidden layer's error
     through their own fixed feedback. When the settle graph is unavailable
     the signal is zeros — never fabricated noise.
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="RandomProjectionsCredit",
+        reference_equations=(
+            "Feedback Alignment / Direct Feedback Alignment; Lillicrap et "
+            "al. (2016), Nøkland (2016): δ_i = δ_{i+1} @ B_i, fixed random B"
+        ),
+        deviations_from_literature=(
+            "output-layer error taken by autograd on the task loss (DFA "
+            "variant), not the pure FA single-random-B form",
+            "recurrent self-connections project the last hidden layer's "
+            "error through their own fixed feedback",
+        ),
+        objective_function="task loss (readout autograd only; hidden layers receive projected error)",
+        pseudo_gradient_def="ΔW_i = δ_{i+1}ᵀ a_i / batch, δ_i = δ_{i+1} @ B_i with B_i = feedback_scale·N(0,1) fixed at first use",
+        symmetry_requirements=("none (deliberately asymmetric feedback)",),
+        approximation_parameters=("feedback_scale",),
+        validated_limits=(
+            "gradient-equivalence gates: CE families cos ≥ 0.9 (FA, DirectFA, StochasticFA)",
+            "channel-liveness required per geometry: inert feedback channel "
+            "returns all-zeros indistinguishable from trained failure (see "
+            "CreditAssignmentConfig.random_projections docstring)",
+        ),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
@@ -764,7 +809,6 @@ class RandomProjectionsCredit:
             return self._inert_zeros(geometry, weight_names)
 
         delta_out = torch.autograd.grad(loss, logits)[0].detach()
-        n_trans = len(acts) - 1
         batch = acts[0].shape[0]
 
         # Tile meshes: feedback blocks assembled per transition, error
@@ -772,21 +816,43 @@ class RandomProjectionsCredit:
         # weights (R11.1.4). B_e shares its weight's shape, so the layered
         # contract (B maps act_{k+1} widths down to act_k) holds per edge.
         if _block_transition_acts(acts, geometry) is not None:
-            blocks = geometry.assemble_blocks(self._feedback_weights)
-            err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
-            block_grads: list[Tensor] = []
-            for i in range(n_trans - 1, -1, -1):
-                block_grads.append(err.T @ acts[i] / batch)
-                err = _apply_credit_norm(
-                    [err @ blocks[i]], self.config.credit_norm, [acts[i]]
-                )[0]
-            block_grads.reverse()
-            return geometry.scatter_block_grads(block_grads)
+            return self._block_path(acts, delta_out, geometry, batch)
+        return self._layered_path(acts, weight_names, delta_out, geometry)
 
-        # Layered contract: feedback B_k must map the act-space of layer
-        # k+1 down to layer k. Tile/ragged weights (e.g. per-tile matrices
-        # not aligned with the act widths) break the chain — zeros, never
-        # fabricated signal.
+    def _block_path(
+        self,
+        acts: list[Tensor],
+        delta_out: Tensor,
+        geometry: Geometry,
+        batch: int,
+    ) -> list[Tensor]:
+        """Tile-mesh error walk over assembled feedback blocks."""
+        blocks = geometry.assemble_blocks(self._feedback_weights)
+        err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
+        block_grads: list[Tensor] = []
+        for i in range(len(acts) - 2, -1, -1):
+            block_grads.append(err.T @ acts[i] / batch)
+            err = _apply_credit_norm(
+                [err @ blocks[i]], self.config.credit_norm, [acts[i]]
+            )[0]
+        block_grads.reverse()
+        return geometry.scatter_block_grads(block_grads)
+
+    def _layered_path(
+        self,
+        acts: list[Tensor],
+        weight_names: list[str],
+        delta_out: Tensor,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        """Layered feedback contract: walk error back through fixed B_k.
+
+        B_k must map the act-space of layer k+1 down to layer k.
+        Tile/ragged weights (e.g. per-tile matrices not aligned with the
+        act widths) break the chain — zeros, never fabricated signal.
+        """
+        n_trans = len(acts) - 1
+        batch = acts[0].shape[0]
         for k in range(n_trans):
             b = self._feedback_weights[weight_names[k]]
             if b.shape[0] != acts[k + 1].shape[-1] or b.shape[1] != acts[k].shape[-1]:
@@ -861,6 +927,37 @@ class LocalGoodnessCredit:
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="LocalGoodnessCredit",
+        reference_equations=(
+            "Forward-Forward (Hinton 2022) for local_objective='ff'; LEMMA "
+            "per-layer closed-form for 'lemma' (internal, TODO15 §11-12)"
+        ),
+        deviations_from_literature=(
+            "ff: hidden objective is the autograd derivative of the layer "
+            "goodness contrast; optional readout CE hybrid "
+            "(readout_error=True) carries the target",
+            "lemma: fixed random inverse projections (orthogonal rows, "
+            "feedback_scale), closed form, no autograd through the settle",
+        ),
+        objective_function="ff: Σ_l (G_l^free − G_l^nudged) [+ readout CE]; lemma: none (closed-form modulation)",
+        pseudo_gradient_def="ff: autograd of Σ (G_free − G_nudged) per layer; lemma: ΔW_l ∝ −(e₁ @ Bᵀ)ᵀ a_pre, e₁ = nudged_out − free_out",
+        symmetry_requirements=("lemma: fixed random B with orthogonal rows",),
+        approximation_parameters=(
+            "beta (inert for both modes)",
+            "feedback_scale (lemma)",
+            "readout_error",
+            "credit_norm",
+        ),
+        validated_limits=(
+            "LEMMA fixed-B × Muon 0.306 / learned-B 0.107, harvest-audited plateau (TODO15)",
+            "ff: error-blind without readout_error (flat on LM) — readout CE is the target channel",
+            "on short-settle coordinates the nudged goodness contrast is "
+            "≈3e-3 and the rms-normalized pseudo-gradient is noise-"
+            "dominated: free-loss descent ≈ 0 at matched norms (TODO18 5.1)",
+        ),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_goodness()
@@ -1161,6 +1258,45 @@ class LocalContrastiveCredit:
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
     requires_autograd: ClassVar[bool] = False
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="LocalContrastiveCredit",
+        reference_equations=(
+            "Forward-Forward with per-layer recomputation; Hinton (2022), "
+            "EMA-normalized rung TODO13b W2 / w2_ema_rung probe"
+        ),
+        deviations_from_literature=(
+            "good/bad contrast comes from the label channel in the input "
+            "(label_dim trailing features; negatives roll the label), not "
+            "from FREE/NUDGED phases",
+            "bias-corrected per-element EMA normalization of hidden "
+            "goodness grads; readout rides RAW-magnitude CE (probe "
+            "bisection: normalized readout collapses to chance)",
+            "optional sequential_lr within-batch layer propagation "
+            "(Hinton's recipe) with views built from the update rule's "
+            "actual displacement",
+            "one-layer-at-a-time autograd graph: peak memory = one layer, "
+            "never the stack",
+        ),
+        objective_function="hidden: softplus-gated goodness contrast per layer; readout: local CE on recomputed logits",
+        pseudo_gradient_def="hidden: EMA-normalized autograd of softplus(θ − ΔG_l) w.r.t. W_l; readout: readout_scale · ∂CE/∂W",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "label_dim",
+            "ema_beta",
+            "contrast_threshold",
+            "contrast_objective (gate/hinge)",
+            "stream_norm",
+            "sequential_lr",
+            "readout_scale",
+        ),
+        validated_limits=(
+            "d4 0.757 (raw parity), depth 8 trains only with EMA + "
+            "sequential ordering (0.512; Jacobi ordering collapses d8 to 0.14)",
+            "linear-stack geometries and TransformerGeometry only; other "
+            "topologies raise at first use",
+        ),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_contrastive()
@@ -1708,6 +1844,36 @@ class TemporalTraceCredit:
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
     requires_autograd: ClassVar[bool] = False
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="TemporalTraceCredit",
+        reference_equations=(
+            "STDP pair rule; Bi & Poo (1998), Gerstner et al. (2014): "
+            "Δw ∝ a₊·postᵀ·pre_trace − a₋·post_traceᵀ·pre"
+        ),
+        deviations_from_literature=(
+            "rate-coded fallback: settled (pre, post) activity correlation "
+            "when no spike rasters exist — potentiation/depression weights "
+            "MUST differ (a_plus == a_minus gives identically zero)",
+            "timing-asymmetric mode consumes per-neuron spike rasters from "
+            "SpikeIntegrationDynamics via exponential eligibility traces",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = a_plus·postᵀ·pre_trace − a_minus·post_traceᵀ·pre (timing mode); ΔW = a_plus·postᵀ·pre − a_minus·preᵀ·post (rate mode)",
+        symmetry_requirements=("none (timing asymmetry is the mechanism)",),
+        approximation_parameters=(
+            "a_plus",
+            "a_minus",
+            "tau",
+            "tau_pre",
+            "tau_post",
+            "homeostatic_scaling",
+        ),
+        validated_limits=(
+            "property-locked: W(Δt) = −W(−Δt) antisymmetry, causal > 0, "
+            "anti-causal < 0, exponential decay",
+        ),
+    )
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.temporal_trace()
 
@@ -1738,108 +1904,145 @@ class TemporalTraceCredit:
         )
 
         batch = acts[0].shape[0]
-        grads = []
+        if spike_rasters is not None and use_timing_stdp:
+            return self._timing_stdp_grads(
+                spike_rasters, acts, weight_names, geometry, batch
+            )
+        return self._rate_stdp_grads(acts, weight_names, geometry, batch)
 
-        if use_timing_stdp:
-            # Timing-asymmetric STDP using eligibility traces
-            # spike_rasters[layer][step] = [batch, neurons] for that layer's output
-            tau_pre = getattr(self.config, "tau_pre", 0.9)
-            tau_post = getattr(self.config, "tau_post", 0.9)
-            a_plus = self.config.a_plus
-            a_minus = self.config.a_minus
+    def _timing_stdp_grads(
+        self,
+        spike_rasters: list[list[Tensor]],
+        acts: list[Tensor],
+        weight_names: list[str],
+        geometry: Geometry,
+        batch: int,
+    ) -> list[Tensor]:
+        """Timing-asymmetric STDP using eligibility traces.
 
-            # For each weight layer, we need pre and post spike rasters
-            # Weight i connects acts[i] (pre) -> acts[i+1] (post)
-            # Post-synaptic spikes for weight i: spike_rasters[i] (output of layer i)
-            # Pre-synaptic spikes for weight i: spike_rasters[i-1] (output of layer i-1)
-            # For i=0 (first layer), pre-synaptic is the input - rate encode it
-            for w_idx, name in enumerate(weight_names):
-                if w_idx >= len(spike_rasters):
-                    grads.append(torch.zeros_like(geometry.params[name]))
-                    continue
+        ``spike_rasters[layer][step] = [batch, neurons]`` for that layer's
+        output. Weight i connects acts[i] (pre) -> acts[i+1] (post);
+        post-synaptic spikes for weight i are ``spike_rasters[i]``, pre are
+        ``spike_rasters[i-1]``. For i=0 the input acts[0] is rate-encoded
+        as pre-synaptic spikes (same encoding as STDPLearningRule:
+        sigmoid + Bernoulli).
+        """
+        tau_pre = getattr(self.config, "tau_pre", 0.9)
+        tau_post = getattr(self.config, "tau_post", 0.9)
 
-                post_rasters = spike_rasters[w_idx]  # [step] -> [batch, post_neurons]
-                if not post_rasters:
-                    grads.append(torch.zeros_like(geometry.params[name]))
-                    continue
+        grads: list[Tensor] = []
+        for w_idx, name in enumerate(weight_names):
+            if w_idx >= len(spike_rasters):
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
 
-                # Get pre-synaptic spikes
-                if w_idx == 0:
-                    # First layer: rate-encode input as pre-synaptic spikes
-                    # Input is acts[0] = x, shape [batch, in_dim]
-                    # We need to encode it as spikes for each time step
-                    # Use the same encoding as STDPLearningRule: sigmoid + Bernoulli
-                    x = acts[0]
-                    probs = torch.sigmoid(x)
-                    # Generate spikes for each time step (same pattern each step for rate coding)
-                    pre_rasters = [
-                        (torch.rand_like(probs) < probs).float()
-                        for _ in range(len(post_rasters))
-                    ]
-                else:
-                    pre_rasters = spike_rasters[w_idx - 1]
-
-                if not pre_rasters or len(pre_rasters) != len(post_rasters):
-                    grads.append(torch.zeros_like(geometry.params[name]))
-                    continue
-
-                # Compute eligibility traces
-                # pre_trace accumulates pre-synaptic spikes with exponential decay
-                pre_trace = torch.zeros_like(pre_rasters[0])  # [batch, pre_neurons]
-                for pre_spikes in pre_rasters:
-                    pre_trace = tau_pre * pre_trace + pre_spikes
-
-                # post_trace accumulates post-synaptic spikes with exponential decay
-                post_trace = torch.zeros_like(post_rasters[0])  # [batch, post_neurons]
-                for post_spikes in post_rasters:
-                    post_trace = tau_post * post_trace + post_spikes
-
-                # STDP update: pot = a_plus * post^T @ pre_trace, dep = a_minus * post_trace^T @ pre
-                # We need the final pre and post activity (last time step or average)
-                pre_final = pre_rasters[-1]  # [batch, pre_neurons]
-                post_final = post_rasters[-1]  # [batch, post_neurons]
-
-                # Potentiation: post^T @ pre_trace -> [post, pre]
-                pot = a_plus * (post_final.T @ pre_trace) / batch
-                # Depression: post_trace^T @ pre -> [post, pre]
-                dep = a_minus * (post_trace.T @ pre_final) / batch
-
-                stdp_grad = -(pot - dep)
-                if self.config.homeostatic_scaling:
-                    # Synaptic scaling (gain control): pull each incoming
-                    # row toward the target norm. Descent on this term is
-                    # zero exactly at ||row|| = target — the equilibrium
-                    # that stops runaway potentiation (F2 audit).
-                    w = geometry.params[name].detach()
-                    row_norms = w.norm(dim=1, keepdim=True)
-                    scale = w * (
-                        1 - self.config.homeostatic_target / (row_norms + 1e-8)
-                    )
-                    stdp_grad += scale
-                grads.append(stdp_grad)
-        else:
-            # Rate-coded surrogate (fallback)
-            for pair, name in zip(
-                _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+            post_rasters = spike_rasters[w_idx]  # [step] -> [batch, post_neurons]
+            pre_rasters = spike_rasters[w_idx - 1] if w_idx > 0 else None
+            if w_idx == 0:
+                probs = torch.sigmoid(acts[0])
+                # Rate-encode the input as pre-synaptic spikes for each time
+                # step (same pattern each step; sigmoid + Bernoulli as in
+                # STDPLearningRule).
+                pre_rasters = [
+                    (torch.rand_like(probs) < probs).float()
+                    for _ in range(len(post_rasters))
+                ]
+            if (
+                not pre_rasters
+                or len(pre_rasters) != len(post_rasters)
+                or not post_rasters
             ):
-                if pair is None:
-                    grads.append(torch.zeros_like(geometry.params[name]))
-                    continue
-                pre, post = pair
-
-                # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
-                causal = post.T @ pre / batch
-                # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
-                anticausal = pre.T @ post / batch
-                anticausal_w = anticausal.T
-
-                # STDP: potentiate causal, depress anti-causal
-                # Pseudo-gradient descended: -(a_plus * causal - a_minus * anticausal_w)
-                stdp_grad = -(
-                    self.config.a_plus * causal - self.config.a_minus * anticausal_w
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            grads.append(
+                self._timing_stdp_one(
+                    name,
+                    pre_rasters,
+                    post_rasters,
+                    tau_pre,
+                    tau_post,
+                    geometry,
+                    batch,
                 )
-                grads.append(stdp_grad)
+            )
+        return grads
 
+    def _timing_stdp_one(
+        self,
+        name: str,
+        pre_rasters: list[Tensor],
+        post_rasters: list[Tensor],
+        tau_pre: float,
+        tau_post: float,
+        geometry: Geometry,
+        batch: int,
+    ) -> Tensor:
+        """STDP pseudo-gradient for one weight from its pre/post rasters."""
+        a_plus = self.config.a_plus
+        a_minus = self.config.a_minus
+        # pre_trace accumulates pre-synaptic spikes with exponential decay
+        pre_trace = torch.zeros_like(pre_rasters[0])  # [batch, pre_neurons]
+        for pre_spikes in pre_rasters:
+            pre_trace = tau_pre * pre_trace + pre_spikes
+
+        # post_trace accumulates post-synaptic spikes with exponential decay
+        post_trace = torch.zeros_like(post_rasters[0])  # [batch, post_neurons]
+        for post_spikes in post_rasters:
+            post_trace = tau_post * post_trace + post_spikes
+
+        # Final pre and post activity (last time step or average)
+        pre_final = pre_rasters[-1]  # [batch, pre_neurons]
+        post_final = post_rasters[-1]  # [batch, post_neurons]
+
+        # Potentiation: post^T @ pre_trace -> [post, pre]
+        pot = a_plus * (post_final.T @ pre_trace) / batch
+        # Depression: post_trace^T @ pre -> [post, pre]
+        dep = a_minus * (post_trace.T @ pre_final) / batch
+
+        stdp_grad = -(pot - dep)
+        if self.config.homeostatic_scaling:
+            stdp_grad += self._homeostatic_scale(name, geometry)
+        return stdp_grad
+
+    def _homeostatic_scale(self, name: str, geometry: Geometry) -> Tensor:
+        """Synaptic scaling (gain control): pull each incoming row toward
+        the target norm. Descent on this term is zero exactly at
+        ``||row|| = target`` — the equilibrium that stops runaway
+        potentiation (F2 audit).
+        """
+        w = geometry.params[name].detach()
+        row_norms = w.norm(dim=1, keepdim=True)
+        return w * (1 - self.config.homeostatic_target / (row_norms + 1e-8))
+
+    def _rate_stdp_grads(
+        self,
+        acts: list[Tensor],
+        weight_names: list[str],
+        geometry: Geometry,
+        batch: int,
+    ) -> list[Tensor]:
+        """Rate-coded surrogate (fallback): correlate pre/post activity."""
+        grads: list[Tensor] = []
+        for pair, name in zip(
+            _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+        ):
+            if pair is None:
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            pre, post = pair
+
+            # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
+            causal = post.T @ pre / batch
+            # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
+            anticausal = pre.T @ post / batch
+            anticausal_w = anticausal.T
+
+            # STDP: potentiate causal, depress anti-causal
+            # Pseudo-gradient descended: -(a_plus * causal - a_minus * anticausal_w)
+            stdp_grad = -(
+                self.config.a_plus * causal - self.config.a_minus * anticausal_w
+            )
+            grads.append(stdp_grad)
         return grads
 
     def compute_stdp_window(
@@ -1889,6 +2092,30 @@ class TargetInversionCredit:
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="TargetInversionCredit",
+        reference_equations=(
+            "Target Propagation with transpose feedback; Bengio (2014), "
+            "Lee et al. (2015): t_l = t_{l+1} @ W_{l+1}ᵀ"
+        ),
+        deviations_from_literature=(
+            "inverse mappings are the weight TRANSPOSE, not learned inverse models",
+            "output target is the one-hot label (classification only)",
+            "tile meshes propagate targets over assembled blocks with "
+            "per-edge scattering (R11.1.4)",
+        ),
+        objective_function="per-layer distance ‖acts_l − t_l‖² implied by the pseudo-gradient (no explicit loss returned)",
+        pseudo_gradient_def="ΔW_l = (acts_l − t_l)ᵀ a_{l−1} / batch, t_l = t_{l+1} @ W_{l+1}",
+        symmetry_requirements=(
+            "transpose of forward weights as the backward map (weight-transport-adjacent)",
+        ),
+        approximation_parameters=("beta (phase selection only)",),
+        validated_limits=(
+            "kernel accuracy parity gate: within 1% of reference on "
+            "digits/synthetic (DTP kernel)",
+        ),
+    )
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.target_inversion()
 
@@ -1920,22 +2147,7 @@ class TargetInversionCredit:
         # Tile meshes: targets propagate over the assembled blocks, grads
         # scattered to per-edge weights (R11.1.4).
         if _block_transition_acts(acts, geometry) is not None:
-            blocks = geometry.assemble_blocks(geometry.params)
-            targets: list[Tensor | None] = [None] * len(acts)
-            targets[-1] = torch.nn.functional.one_hot(
-                y, num_classes=acts[-1].shape[-1]
-            ).float()
-            batch = acts[0].shape[0]
-            for i in range(n_trans - 1, -1, -1):
-                nxt = targets[i + 1]
-                targets[i] = nxt @ blocks[i] if nxt is not None else None
-            block_grads = [
-                (acts[i + 1] - targets[i + 1]).T @ acts[i] / batch
-                if targets[i + 1] is not None
-                else torch.zeros(acts[i + 1].shape[-1], acts[i].shape[-1])
-                for i in range(n_trans)
-            ]
-            return geometry.scatter_block_grads(block_grads)
+            return self._block_target_grads(acts, y, geometry)
 
         targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
         pairs = _weight_acts(weight_names, acts, geometry)
@@ -1944,23 +2156,43 @@ class TargetInversionCredit:
         grads = []
         for i, name in enumerate(weight_names):
             pair = pairs[i]
-            if pair is None or i >= n_trans:
+            tgt = targets[i + 1] if i + 1 < len(targets) else None
+            if pair is None or i >= n_trans or tgt is None:
                 # Surplus/ragged weights (recurrent self-connections, tile
                 # meshes) receive no propagated target — zeros, not
                 # fabricated signal.
                 grads.append(torch.zeros_like(geometry.params[name]))
                 continue
             pre, post = pair
-            tgt = targets[i + 1]
-            if tgt is None:
-                grads.append(torch.zeros_like(geometry.params[name]))
-                continue
             delta = post - tgt  # [batch, out]
             # pseudo_grad = delta^T @ pre / batch -> [out, in]
-            grad = delta.T @ pre / pre.shape[0]
-            grads.append(grad)
+            grads.append(delta.T @ pre / pre.shape[0])
 
         return grads
+
+    def _block_target_grads(
+        self, acts: list[Tensor], y: Tensor, geometry: Geometry
+    ) -> list[Tensor]:
+        """Tile meshes: targets propagate over the assembled blocks, grads
+        scattered to per-edge weights (R11.1.4).
+        """
+        blocks = geometry.assemble_blocks(geometry.params)
+        targets: list[Tensor | None] = [None] * len(acts)
+        targets[-1] = torch.nn.functional.one_hot(
+            y, num_classes=acts[-1].shape[-1]
+        ).float()
+        batch = acts[0].shape[0]
+        for i in range(len(acts) - 2, -1, -1):
+            nxt = targets[i + 1]
+            targets[i] = nxt @ blocks[i] if nxt is not None else None
+        n_trans = len(acts) - 1
+        block_grads = [
+            (acts[i + 1] - targets[i + 1]).T @ acts[i] / batch
+            if targets[i + 1] is not None
+            else torch.zeros(acts[i + 1].shape[-1], acts[i].shape[-1])
+            for i in range(n_trans)
+        ]
+        return geometry.scatter_block_grads(block_grads)
 
     def surrogate_objective(
         self,
@@ -1990,10 +2222,31 @@ class HomeostaticCredit:
 
     Per-layer scaling to keep activation norms near homeostatic_target.
     Pseudo-gradient: (mean|post| - target) * W / |W|_F (directional).
+
+    AXIS ROLE (TODO18 4.3): dual role, documented on its identity card.
+    This is a *constraint controller* expressed through the credit axis —
+    the pseudo-gradient is error-blind (never sees y or loss) and purely
+    norm-regulating, unlike error-driven credit families. It stays on the
+    C-axis because the pipeline contract routes per-weight directional
+    signals through ``compute_pseudo_gradient``; it must not be read as a
+    learning signal in the Credit × Update mechanistic studies.
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = False
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="HomeostaticCredit",
+        reference_equations="internal; homeostatic gain control (autonomous Lipschitz scaling)",
+        deviations_from_literature=(
+            "not error-driven: pseudo-gradient is loss-blind by construction",
+        ),
+        objective_function="minimize |mean|post-activation norm − homeostatic_target|²",
+        pseudo_gradient_def="grad_W = (mean‖post‖₂ − target) · W / ‖W‖_F",
+        symmetry_requirements=(),
+        approximation_parameters=("homeostatic_target",),
+        validated_limits=(),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.homeostatic()
@@ -2042,6 +2295,48 @@ class HomeostaticCredit:
         return grads
 
 
+class LemmaCredit(LocalGoodnessCredit):
+    """LEMMA per-layer closed-form credit (TODO18 2.4 disambiguation).
+
+    ``LocalGoodnessCredit`` pinned to ``local_objective="lemma"``: the
+    output differential e₁ is routed through fixed random inverse
+    projections and each layer receives a closed-form modulated update —
+    no second input-modulated forward pass. This is the algorithm the
+    legacy ``create_pepita_mlp`` factory actually composed; the renamed
+    ``create_lemma_mlp`` now states that honestly, and
+    ``create_pepita_mlp`` composes the published PEPITA rule
+    (:class:`PepitaCredit`). Boundary records (0.306 fixed-B, 0.107
+    learned-B × Muon) apply to this family only.
+    """
+
+    def __init__(self, config: CreditAssignmentConfig | None = None):
+        super().__init__(
+            config or CreditAssignmentConfig.local_goodness(local_objective="lemma")
+        )
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="LemmaCredit",
+        reference_equations="LEMMA (Layer-wise Error-Modulated local credit); internal derivation, TODO15 §11-12",
+        deviations_from_literature=(
+            "fixed random inverse projections (orthogonal rows, feedback_scale)",
+            "per-layer closed form, no autograd through the settle",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW_l ∝ −(e₁ @ Bᵀ)ᵀ a_pre from the modulated (nudged) pass, per layer",
+        symmetry_requirements=("fixed random B, orthogonal rows",),
+        approximation_parameters=(
+            "feedback_scale",
+            "feedback_matrix",
+            "orthogonal_init",
+        ),
+        validated_limits=(
+            "0.306 fixed-B × Muon",
+            "0.107 learned-B × Muon",
+            "harvest-audited plateau (TODO15 §12); mechanism-bound closed",
+        ),
+    )
+
+
 class PepitaCredit:
     """Published PEPITA credit (arXiv 2201.11665) — the second-pass family.
 
@@ -2071,6 +2366,23 @@ class PepitaCredit:
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
     requires_autograd: ClassVar[bool] = False
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="PepitaCredit",
+        reference_equations="Dellaferrera & Kreiman 2022, arXiv 2201.11665",
+        deviations_from_literature=(
+            "feedback matrix B fixed (drawn lazily or supplied) — matches published one-B variant",
+            "substrate operators applied on both passes via set_substrate wiring",
+        ),
+        objective_function="CE(f(x + γ·δBᵀ), y) on the modulated second pass",
+        pseudo_gradient_def="exact autograd gradient of CE(f(x̃), y); δ = y − softmax(logits₁)",
+        symmetry_requirements=("none beyond the fixed random B (out×in)",),
+        approximation_parameters=(
+            "feedback_scale γ (sensitive; parity at 0.05)",
+            "feedback_matrix B",
+        ),
+        validated_limits=("BP parity at γ=0.05 (0.884 vs 0.890, 3 seeds, MNIST)",),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.pepita()
@@ -2164,6 +2476,26 @@ class GradientCredit:
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="GradientCredit",
+        reference_equations="Standard backpropagation; Rumelhart, Hinton & Williams (1986)",
+        deviations_from_literature=(
+            "weights-only by default (bias deltas 0.0, locked H2 "
+            "contract); train_biases=True extends to biases for "
+            "contract-honest baselines",
+            "missing-graph fail-loud: autograd grads that do not reach "
+            "every learnable weight raise instead of zero-filling",
+        ),
+        objective_function="task loss on the nudged/output phase settle",
+        pseudo_gradient_def="exact autograd ∂L/∂W via torch.autograd.grad (create_graph=False)",
+        symmetry_requirements=("none",),
+        approximation_parameters=("train_biases",),
+        validated_limits=(
+            "reference baseline: gradient-equivalence gates cos ≥ 0.9 "
+            "(CE) / ≥ 0.6 (MSE); Mnist parity benchmark of record",
+        ),
+    )
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.gradient()

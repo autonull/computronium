@@ -640,8 +640,12 @@ def test_plasticity_state_dims_match_registry():
 # ============================================================
 
 
-def test_zero_extension_theorem_null_plasticity():
-    """Zero-Extension Theorem: Joint(M=Null) ≡ 5-D system."""
+def test_zero_extension_null_plasticity():
+    """Sampled numerical test (Level 4): Joint(M=Null) ≡ 5-D system.
+
+    The zero-extension identity is asserted by sampling, not derived —
+    not machine-checked (TODO18 2.3 taxonomy).
+    """
     from computronium.core.system_trainer import compose_system
 
     substrate = DigitalSubstrate(SubstrateConfig.digital())
@@ -679,8 +683,8 @@ def test_zero_extension_theorem_null_plasticity():
     assert "energy" in metrics_5d
 
 
-def test_zero_extension_theorem_null_vs_non_null():
-    """NullPlasticity should differ from non-null plasticity."""
+def test_zero_extension_null_vs_non_null():
+    """Sampled numerical test (Level 4): NullPlasticity differs from non-null."""
     context_null, geometry_null, _ = _create_test_context(PlasticityConfig.null())
     context_routing, _, _ = _create_test_context(PlasticityConfig.routing(gate_dim=32))
 

@@ -174,10 +174,14 @@ def estimate_train_step_flops(system, batch_size: int) -> int:
 def count_flops(model: nn.Module, input_shape: tuple[int, ...]) -> int:
     """Estimate FLOPs for a model using parameter counting.
 
+    Counts ALL parameters — frozen (``requires_grad=False``) parameters
+    still incur forward (and backward-through) FLOPs; a ψ-only migration
+    with frozen θ is not free compute.
+
     For a more accurate count, use torch.profiler with record_function.
     """
     batch_size = input_shape[0] if input_shape else 1
-    params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params = sum(p.numel() for p in model.parameters())
     return 2 * params * batch_size
 
 
@@ -441,7 +445,7 @@ class EnergyTracker:
         return False
 
 
-def _activity_spectral_radius(
+def _activity_jacobian_amplification(
     system: JointSystem, x: torch.Tensor, input_dim: int, output_dim: int
 ) -> float | None:
     """Spectral radius of the activity Jacobian via power iteration.
@@ -454,12 +458,14 @@ def _activity_spectral_radius(
     try:
         from computronium.core.campaign.evaluation import activity_transition
         from computronium.stability.spectral_radius import (
-            estimate_spectral_radius,
+            estimate_directional_amplification,
         )
         from computronium.state import CompositeState
 
         z = CompositeState(activity={"x": x}, plastic={}, substrate={})
-        return estimate_spectral_radius(activity_transition(system), z, system.context)
+        return estimate_directional_amplification(
+            activity_transition(system), z, system.context
+        )
     except Exception:
         return None
 
@@ -639,7 +645,9 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
             except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
-    spectral_radius = _activity_spectral_radius(system, x, input_dim, output_dim)
+    jacobian_amplification = _activity_jacobian_amplification(
+        system, x, input_dim, output_dim
+    )
 
     coord_str = f"{substrate_type}/{geometry_type}/{dynamics_type}/{plasticity_type}/{credit_type}/{update_type}"
     return ResourceUsage(
@@ -656,7 +664,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
         weight_sparsity=weight_sparsity,
         wall_time_ms=mean_latency,
         energy_proxy=energy_proxy,
-        spectral_radius=spectral_radius,
+        jacobian_amplification=jacobian_amplification,
     )
 
 

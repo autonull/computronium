@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from computronium.models.native.backprop_native import create_native_backprop_mlp
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.fa_native import create_native_fa_mlp
-from computronium.models.native.pepita_native import create_native_pepita_mlp
+from computronium.models.native.lemma_native import create_native_lemma_mlp
 from computronium.models.native.tile_native import (
     create_native_tile_ep,
     create_native_tile_fa,
@@ -124,12 +124,12 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
-    def test_native_pepita_mlp(self):
+    def test_native_lemma_mlp(self):
         """Native PEPITA MLP learns (realized local_objective="lemma")."""
-        model = create_native_pepita_mlp(
+        model = create_native_lemma_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )
-        self._train_system_and_assert_learns(model, self.x, self.y, "native_pepita_mlp")
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_lemma_mlp")
 
     # --- Native Tile Models ---
 

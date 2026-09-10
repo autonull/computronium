@@ -294,7 +294,7 @@ def run_continual_learning(  # ruff: ignore[complex-structure, too-many-branches
     )
     final_metrics.total_time_s = total_time
     final_metrics.stability_verdicts = stability_verdicts
-    final_metrics.max_spectral_radius = (
+    final_metrics.max_jacobian_amplification = (
         max(v.statistic for v in stability_verdicts) if stability_verdicts else 0.0
     )
 
@@ -351,7 +351,7 @@ def run_continual_learning_suite(
                     "peak_memory_mb": metrics.peak_memory_mb,
                     "plastic_state_bytes": metrics.plastic_state_bytes,
                     "replay_buffer_bytes": metrics.replay_buffer_bytes,
-                    "max_spectral_radius": metrics.max_spectral_radius,
+                    "max_jacobian_amplification": metrics.max_jacobian_amplification,
                     "stability_kills": sum(
                         1
                         for v in metrics.stability_verdicts
@@ -370,7 +370,7 @@ def run_continual_learning_suite(
                     "avg_forgetting",
                     "backward_transfer",
                     "forward_transfer",
-                    "max_spectral_radius",
+                    "max_jacobian_amplification",
                     "total_time_s",
                 ]:
                     vals = [float(s[key]) for s in seeds_list]

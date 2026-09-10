@@ -199,10 +199,7 @@ def compute_statistical_significance(
 
 def is_bio_plausible(model_name: str) -> bool:
     """Check if a model is bio-plausible (not backprop)."""
-    return (
-        "backprop" not in model_name.lower()
-        and "baseline" not in model_name.lower()
-    )
+    return "backprop" not in model_name.lower() and "baseline" not in model_name.lower()
 
 
 def group_trials_by_family(trials: list[dict]) -> dict[str, list[dict]]:

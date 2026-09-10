@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
+from computronium.core.system_trainer.spec import (
+    _update_from_config as _spec_update_from_config,
+)
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
     AdamUpdate,
@@ -20,7 +23,6 @@ from computronium.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     LionUpdate,
-    LocalAdamUpdate,
     MeanNormUpdate,
     OrthoAdamUpdate,
     ParameterUpdateConfig,
@@ -31,7 +33,6 @@ from computronium.ontology import (
     SubstrateConfig,
     System,
     ThermodynamicContrast,
-    UnitRMSUpdate,
     dynamics_from_config,
     geometry_from_config,
     substrate_from_config,
@@ -631,29 +632,7 @@ def compose_system_from_configs(
     credit_instance = _credit_from_config(credit)
 
     # Instantiate update from config
-    update_type = update.update_type.lower()
-    if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
-        update_instance = RiemannianOrthogonalUpdate(update)
-    elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
-        update_instance = SpectralConstrainedUpdate(update)
-    elif update_type == "mean_norm":
-        update_instance = MeanNormUpdate(update)
-    elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
-        update_instance = ElasticConsolidationUpdate(update)
-    elif update_type == "euclidean":
-        update_instance = EuclideanUpdate(update)
-    elif update_type == "adam":
-        update_instance = AdamUpdate(update)
-    elif update_type == "ortho_adam":
-        update_instance = OrthoAdamUpdate(update)
-    elif update_type == "lion":
-        update_instance = LionUpdate(update)
-    elif update_type == "unit_rms":
-        update_instance = UnitRMSUpdate(update)
-    elif update_type == "local_adam":
-        update_instance = LocalAdamUpdate(update)
-    else:
-        raise ValueError(f"Unknown update_type: {update_type!r}")
+    update_instance = _spec_update_from_config(update)
 
     return compose_system(
         substrate_instance,

@@ -58,7 +58,7 @@ class ResourceUsage:
     wall_time_ms: float = 0.0
     energy_proxy: float = 0.0
     substrate_overhead: float = 0.0
-    spectral_radius: float | None = None
+    jacobian_amplification: float | None = None  # σ_max(J)-style gain, not ρ(J)
     lyapunov_exponent: float | None = None
     effective_flops: float = 0.0
     state_energy_j: float = 0.0
@@ -110,7 +110,8 @@ class ResourceUsage:
             wall_time_ms=self.wall_time_ms + other.wall_time_ms,
             energy_proxy=self.energy_proxy + other.energy_proxy,
             substrate_overhead=self.substrate_overhead + other.substrate_overhead,
-            spectral_radius=other.spectral_radius or self.spectral_radius,
+            jacobian_amplification=other.jacobian_amplification
+            or self.jacobian_amplification,
             lyapunov_exponent=other.lyapunov_exponent or self.lyapunov_exponent,
             effective_flops=self.effective_flops + other.effective_flops,
         )
@@ -141,7 +142,7 @@ class ResourceUsage:
             wall_time_ms=self.wall_time_ms / divisor,
             energy_proxy=self.energy_proxy / divisor,
             substrate_overhead=self.substrate_overhead / divisor,
-            spectral_radius=self.spectral_radius,
+            jacobian_amplification=self.jacobian_amplification,
             lyapunov_exponent=self.lyapunov_exponent,
             effective_flops=self.effective_flops / divisor,
             state_energy_j=self.state_energy_j / divisor,

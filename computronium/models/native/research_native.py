@@ -104,8 +104,9 @@ def create_native_directed_ep(
 ) -> System:
     """Create a Directed Equilibrium Propagation system using native 5-D composition.
 
-    Directed EP uses asymmetric forward/feedback weights (no weight transport),
-    implementing the Feedback Alignment principle within an energy-based framework.
+    Directed EP uses asymmetric forward/feedback weights (no transport of the
+    forward weight matrix), implementing the Feedback Alignment principle
+    within an energy-based framework.
     The feedback matrices are random and fixed, not transposes of forward weights.
 
     Args:

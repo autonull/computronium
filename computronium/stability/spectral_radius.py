@@ -1,9 +1,19 @@
-"""Spectral Radius Estimation: ρ(J_F) for joint transition stability."""
+"""Jacobian gain metrics: σ_max(J) and ρ(J) are mathematically distinct.
+
+The finite-difference power-iteration estimator measures *directional
+amplification* — ‖Jv‖ along the direction the iteration converges to. For
+normal J (symmetric, diagonal) this equals both σ_max(J) and ρ(J). For
+nonnormal J (e.g. Jordan blocks) the iteration aligns with the dominant
+*eigenvector*, so it converges to ρ(J)-like eigenvalue magnitudes and does
+NOT certify σ_max(J) ≫ ρ(J) transients. Use :func:`dominant_singular_value`
+and :func:`spectral_radius_from_jacobian` for exact, separated metrics
+(TODO18 2.1).
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import Tensor
@@ -15,8 +25,18 @@ if TYPE_CHECKING:
 
     from computronium.state import SystemContext
 
+_ACTIVITY_TYPE_MSG = "activity[{key!r}] must be a Tensor, got {type}"
 
-def estimate_spectral_radius(
+
+def _activity_tensor(z: CompositeState, key: str) -> Tensor:
+    """Narrow an activity slot to its Tensor (numeric scalars unsupported)."""
+    value = z.activity[key]
+    if not isinstance(value, Tensor):
+        raise TypeError(_ACTIVITY_TYPE_MSG.format(key=key, type=type(value).__name__))
+    return value
+
+
+def estimate_directional_amplification(
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,
@@ -24,10 +44,12 @@ def estimate_spectral_radius(
     perturbation_scale: float = 1e-4,
     activity_key: str = "x",
 ) -> float:
-    """Estimate spectral radius ρ(J_F) of the joint transition Jacobian.
+    """Estimate directional amplification ‖Jv‖ of the transition Jacobian.
 
-    Uses the power iteration method on the Jacobian-vector product
-    to estimate the dominant eigenvalue magnitude.
+    Power iteration on J·v (finite-difference JVP) converges to the dominant
+    eigen-direction: ρ(J)-like magnitude for diagonalizable nonnormal J,
+    σ_max(J) only for normal J. This is neither a certified spectral radius
+    nor a certified operator norm — report it as a sampled estimate only.
 
     Args:
         transition_fn: Joint transition function F_θ(z; G, S, M).
@@ -35,71 +57,55 @@ def estimate_spectral_radius(
         context: System context with fixed parameters.
         num_iterations: Number of power iterations.
         perturbation_scale: Scale for finite-difference perturbations.
-        activity_key: Key in z.activity to perturb (default: "x" for neural activity).
+        activity_key: Key in z.activity to perturb (default: "x").
 
     Returns:
-        Estimated spectral radius ρ(J_F).
+        Estimated σ_max(J_F) (operator-norm amplification).
     """
-    # Get base activity
-    x_base = z.activity[activity_key]
-    _batch_size, _dim = x_base.shape
+    x_base = _activity_tensor(z, activity_key)
 
-    # Initialize random vector for power iteration
     v = torch.randn_like(x_base)
-    v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
+    v /= v.norm(dim=-1, keepdim=True) + 1e-8
 
     for _ in range(num_iterations):
-        # Compute J * v via finite differences
-        # Jv ≈ (F(x + εv) - F(x)) / ε
         x_perturbed = x_base + perturbation_scale * v
-
-        # Create perturbed state
         z_perturbed = CompositeState(
             activity={**z.activity, activity_key: x_perturbed},
             plastic=z.plastic,
             substrate=z.substrate,
         )
-
-        # Forward pass
         with torch.no_grad():
             z_next_base = transition_fn(z, context)
             z_next_perturbed = transition_fn(z_perturbed, context)
-
-        # Extract activity difference
-        delta = (
-            z_next_perturbed.activity[activity_key] - z_next_base.activity[activity_key]
+        delta = _activity_tensor(z_next_perturbed, activity_key) - _activity_tensor(
+            z_next_base, activity_key
         )
         Jv = delta / perturbation_scale
-
-        # Power iteration update
         v = Jv / (Jv.norm(dim=-1, keepdim=True) + 1e-8)
 
-    # Final estimate: ||J * v||
     x_perturbed = x_base + perturbation_scale * v
     z_perturbed = CompositeState(
         activity={**z.activity, activity_key: x_perturbed},
         plastic=z.plastic,
         substrate=z.substrate,
     )
-
     with torch.no_grad():
         z_next_base = transition_fn(z, context)
         z_next_perturbed = transition_fn(z_perturbed, context)
-
-    delta = z_next_perturbed.activity[activity_key] - z_next_base.activity[activity_key]
+    delta = _activity_tensor(z_next_perturbed, activity_key) - _activity_tensor(
+        z_next_base, activity_key
+    )
     Jv = delta / perturbation_scale
 
-    # Spectral radius estimate
-    rho = Jv.norm(dim=-1).mean().item()
-
-    return rho
+    return Jv.norm(dim=-1).mean().item()
 
 
 @dataclass(slots=True)
-class SpectralRadiusEstimator:
-    """Configurable spectral radius estimator for joint transitions.
+class JacobianAmplificationEstimator:
+    """Configurable Jacobian-amplification estimator for joint transitions.
 
-    Supports both full power iteration (accurate) and fast proxy (CI).
+    ``full`` mode runs power iteration on the JVP (σ_max estimate);
+    ``fast_mode`` uses a single-step norm-ratio proxy (1 iteration).
     """
 
     num_iterations: int = 20
@@ -113,10 +119,10 @@ class SpectralRadiusEstimator:
         z: CompositeState,
         context: SystemContext,
     ) -> float:
-        """Estimate spectral radius."""
+        """Estimate σ_max(J_F)."""
         if self.fast_mode:
             return self._fast_proxy(transition_fn, z, context)
-        return estimate_spectral_radius(
+        return estimate_directional_amplification(
             transition_fn,
             z,
             context,
@@ -131,17 +137,11 @@ class SpectralRadiusEstimator:
         z: CompositeState,
         context: SystemContext,
     ) -> float:
-        """Fast proxy: single-step norm ratio.
-
-        ρ ≈ ||z_{t+1} - z_t|| / ||z_t - z_{t-1}|| for settling systems.
-        Or single perturbation step for general case.
-        """
-        x = z.activity[self.activity_key]
-
-        # Single finite-difference step
+        """Single finite-difference step: one random direction's ‖Jv‖."""
+        x = _activity_tensor(z, self.activity_key)
         eps = self.perturbation_scale
         v = torch.randn_like(x)
-        v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
+        v /= v.norm(dim=-1, keepdim=True) + 1e-8
 
         x_perturbed = x + eps * v
         z_perturbed = CompositeState(
@@ -149,41 +149,23 @@ class SpectralRadiusEstimator:
             plastic=z.plastic,
             substrate=z.substrate,
         )
-
         with torch.no_grad():
             z_next = transition_fn(z, context)
             z_next_perturbed = transition_fn(z_perturbed, context)
-
-        delta = (
-            z_next_perturbed.activity[self.activity_key]
-            - z_next.activity[self.activity_key]
-        )
-        Jv = delta / eps
-
-        return Jv.norm(dim=-1).mean().item()
+        delta = _activity_tensor(
+            z_next_perturbed, self.activity_key
+        ) - _activity_tensor(z_next, self.activity_key)
+        return (delta / eps).norm(dim=-1).mean().item()
 
 
-def estimate_spectral_radius_full_jacobian(
+def _full_jacobian(
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,
-    activity_key: str = "x",
-) -> float:
-    """Estimate spectral radius by computing full Jacobian (expensive, for validation).
-
-    Computes the exact Jacobian via autograd and returns its spectral norm.
-    Only feasible for small systems.
-
-    Args:
-        transition_fn: Joint transition function.
-        z: Base joint state.
-        context: System context.
-        activity_key: Activity key to differentiate.
-
-    Returns:
-        Spectral norm of the Jacobian.
-    """
-    x = z.activity[activity_key].clone().requires_grad_(True)
+    activity_key: str,
+) -> Tensor:
+    """Exact per-sample Jacobian of the activity transition (small systems)."""
+    x = _activity_tensor(z, activity_key).clone().requires_grad_(True)
 
     def forward(x_input: Tensor) -> Tensor:
         z_input = CompositeState(
@@ -192,16 +174,39 @@ def estimate_spectral_radius_full_jacobian(
             substrate=z.substrate,
         )
         z_out = transition_fn(z_input, context)
-        return z_out.activity[activity_key]
+        return _activity_tensor(z_out, activity_key)
 
-    # Compute Jacobian
-    jac = torch.autograd.functional.jacobian(forward, x)
-
-    # jac shape: [batch, out_dim, batch, in_dim] -> take diagonal for single sample
+    jac = cast("Tensor", torch.autograd.functional.jacobian(forward, x))
     if jac.dim() == 4:
-        # Assume batch=1 for full jacobian
-        jac = jac[0, :, 0, :]
+        jac = jac[0, :, 0, :]  # per-sample slice of batched jacobian
+    return jac
 
-    # Spectral norm = largest singular value
+
+def dominant_singular_value(
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
+    activity_key: str = "x",
+) -> float:
+    """Exact σ_max(J_F) via autograd Jacobian + SVD (expensive; validation only).
+
+    This is the transient amplification bound ‖J‖_2 — distinct from ρ(J).
+    """
+    jac = _full_jacobian(transition_fn, z, context, activity_key)
     _u, s, _vh = torch.linalg.svd(jac)
     return s[0].item()
+
+
+def spectral_radius_from_jacobian(
+    transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
+    z: CompositeState,
+    context: SystemContext,
+    activity_key: str = "x",
+) -> float:
+    """Exact ρ(J_F) = max |λ_i(J_F)| via autograd Jacobian + eigenvalues.
+
+    This is the asymptotic stability margin — for nonnormal J it is strictly
+    smaller than σ_max(J). Small systems only.
+    """
+    jac = _full_jacobian(transition_fn, z, context, activity_key)
+    return torch.linalg.eigvals(jac).abs().max().item()

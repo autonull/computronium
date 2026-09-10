@@ -48,14 +48,14 @@ from computronium.stability.calibration import (
 from computronium.stability.config import (
     BasinConfig,
     GuardConfig,
+    JacobianAmplificationConfig,
     LyapunovConfig,
     SettlingConfig,
-    SpectralRadiusConfig,
     create_basin_estimator,
     create_guard,
+    create_jacobian_amplification_estimator,
     create_lyapunov_estimator,
     create_settling_monitor,
-    create_spectral_radius_estimator,
 )
 from computronium.stability.frontier import (
     FrontierAggregator,
@@ -87,9 +87,10 @@ from computronium.stability.settling import (
     measure_settling_time_full_state,
 )
 from computronium.stability.spectral_radius import (
-    SpectralRadiusEstimator,
-    estimate_spectral_radius,
-    estimate_spectral_radius_full_jacobian,
+    JacobianAmplificationEstimator,
+    dominant_singular_value,
+    estimate_directional_amplification,
+    spectral_radius_from_jacobian,
 )
 
 __version__ = "0.1.0"
@@ -106,9 +107,10 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "quantify_proxy_disagreement",
     "measure_guard_overhead",
     # Spectral radius
-    "SpectralRadiusEstimator",
-    "estimate_spectral_radius",
-    "estimate_spectral_radius_full_jacobian",
+    "JacobianAmplificationEstimator",
+    "estimate_directional_amplification",
+    "dominant_singular_value",
+    "spectral_radius_from_jacobian",
     # Lyapunov
     "LyapunovEstimator",
     "estimate_lyapunov_exponent",
@@ -127,12 +129,12 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Resources
     "ResourceUsage",
     # Config + Factories
-    "SpectralRadiusConfig",
+    "JacobianAmplificationConfig",
     "LyapunovConfig",
     "SettlingConfig",
     "BasinConfig",
     "GuardConfig",
-    "create_spectral_radius_estimator",
+    "create_jacobian_amplification_estimator",
     "create_lyapunov_estimator",
     "create_settling_monitor",
     "create_basin_estimator",

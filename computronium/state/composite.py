@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 type ActivityValue = Tensor | list[Tensor] | float | dict[str, float]
 
@@ -14,15 +18,30 @@ type ActivityValue = Tensor | list[Tensor] | float | dict[str, float]
 class CompositeState:
     """Joint intra-episode state: z_t = (activity, plastic, substrate).
 
+    Fields are declared as ``Mapping`` (covariant in the value type) so
+    callers may pass ``dict[str, Tensor]`` etc.; ``__post_init__``
+    converts to mutable dicts for in-place stepping.
+
     Attributes:
         activity: x_t — neural activations at time t (includes persistent θ refs)
         plastic: ψ_t — fast plastic variables (e.g., eligibility traces, fast weights)
         substrate: σ_t — substrate-owned state (e.g., memristor conductance, analog noise)
     """
 
-    activity: dict[str, ActivityValue]
-    plastic: dict[str, Tensor]
-    substrate: dict[str, Tensor]
+    activity: Mapping[str, ActivityValue]
+    plastic: Mapping[str, Tensor]
+    substrate: Mapping[str, Tensor]
+
+    def _act_mut(self) -> dict[str, ActivityValue]:
+        """The post-init-converted mutable activity dict."""
+        return cast("dict[str, ActivityValue]", self.activity)
+
+    def set_activity(self, key: str, value: ActivityValue | None) -> None:
+        """Set an activity entry; ``None`` removes it."""
+        if value is None:
+            self._act_mut().pop(key, None)
+        else:
+            self._act_mut()[key] = value
 
     # For compatibility with StateDynamics.settle which expects state.x
     @property
@@ -32,10 +51,7 @@ class CompositeState:
 
     @x.setter
     def x(self, value: Tensor | None) -> None:
-        if value is None:
-            self.activity.pop("x", None)
-        else:
-            self.activity["x"] = value
+        self.set_activity("x", value)
 
     @property
     def y(self) -> Tensor | None:
@@ -44,10 +60,7 @@ class CompositeState:
 
     @y.setter
     def y(self, value: Tensor | None) -> None:
-        if value is None:
-            self.activity.pop("y", None)
-        else:
-            self.activity["y"] = value
+        self.set_activity("y", value)
 
     @property
     def activations(self) -> list[Tensor] | Tensor | None:
@@ -60,9 +73,9 @@ class CompositeState:
     @activations.setter
     def activations(self, value: list[Tensor] | Tensor | None) -> None:
         if value is None:
-            self.activity.pop("activations", None)
+            self._act_mut().pop("activations", None)
         else:
-            self.activity["activations"] = value  # pyright: ignore[reportAttributeAccessIssue]
+            self.set_activity("activations", value)
 
     @property
     def free_state(self) -> list[Tensor] | Tensor | None:
@@ -74,9 +87,9 @@ class CompositeState:
     @free_state.setter
     def free_state(self, value: list[Tensor] | Tensor | None) -> None:
         if value is None:
-            self.activity.pop("free_state", None)
+            self._act_mut().pop("free_state", None)
         else:
-            self.activity["free_state"] = value  # pyright: ignore[reportAttributeAccessIssue]
+            self.set_activity("free_state", value)
 
     @property
     def nudged_state(self) -> list[Tensor] | Tensor | None:
@@ -88,9 +101,9 @@ class CompositeState:
     @nudged_state.setter
     def nudged_state(self, value: list[Tensor] | Tensor | None) -> None:
         if value is None:
-            self.activity.pop("nudged_state", None)
+            self._act_mut().pop("nudged_state", None)
         else:
-            self.activity["nudged_state"] = value  # pyright: ignore[reportAttributeAccessIssue]
+            self.set_activity("nudged_state", value)
 
     @property
     def loss(self) -> Tensor | float | None:
@@ -102,9 +115,9 @@ class CompositeState:
     @loss.setter
     def loss(self, value: Tensor | float | None) -> None:
         if value is None:
-            self.activity.pop("loss", None)
+            self._act_mut().pop("loss", None)
         else:
-            self.activity["loss"] = value
+            self.set_activity("loss", value)
 
     @property
     def metrics(self) -> dict[str, float] | None:
@@ -116,9 +129,9 @@ class CompositeState:
     @metrics.setter
     def metrics(self, value: dict[str, float] | None) -> None:
         if value is None:
-            self.activity.pop("metrics", None)
+            self._act_mut().pop("metrics", None)
         else:
-            self.activity["metrics"] = value
+            self.set_activity("metrics", value)
 
     def __post_init__(self) -> None:
         # Ensure mappings are mutable dicts for in-place updates during stepping

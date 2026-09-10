@@ -48,7 +48,8 @@ from .pareto import (
     plot_pareto_3d,
     plot_pareto_frontier,
 )
-from .recipe_cards import RECIPE_CARDS, RecipeCard, lookup as lookup_recipe_card
+from .recipe_cards import RECIPE_CARDS, RecipeCard
+from .recipe_cards import lookup as lookup_recipe_card
 from .results import compute_statistics, get_rankings, load_trials
 from .scaling import (
     ChinchillaLaw,
@@ -106,6 +107,7 @@ from .training_dynamics import (
 )
 
 __all__ = [
+    "RECIPE_CARDS",
     "AblationConfig",
     "AblationStudy",
     "AlgorithmFingerprint",
@@ -131,13 +133,11 @@ __all__ = [
     "MetricEntry",
     "ParetoFrontier",
     "ParetoPoint",
-    "RECIPE_CARDS",
-    "RecipeCard",
-    "lookup_recipe_card",
     "PhylogenyNode",
     "PowerLawFit",
     "ProfileResult",
     "ReceptiveField",
+    "RecipeCard",
     "ScalingLawFitter",
     "TileAlgorithmProfiler",
     "TileGrowthConfig",
@@ -176,6 +176,7 @@ __all__ = [
     "linkage_to_tree",
     "load_trajectory",
     "load_trials",
+    "lookup_recipe_card",
     "pareto_frontier_from_trials",
     "plot_algorithm_map",
     "plot_energy_landscape",

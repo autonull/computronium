@@ -85,7 +85,7 @@ rl = ["gymnasium"]
 spiking = ["snnTorch>=0.8", "cupy-cuda13x>=14.1.1"]
 
 # --- Training infrastructure ---
-lightning = ["pytorch-lightning>=2.0.0"]
+lightning = ["pytorch-lightning>=2.6.6"]
 analysis = ["optuna", "tabulate>=0.9"]
 
 # --- ML/data utilities ---
@@ -211,12 +211,14 @@ ignore = [
     "N803",    # math notation (W, G, V, X) is the domain's naming convention
     "N806",    # ditto for local math variables
     "RSE102",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "TRY003",  # ditto — raise-vanilla-args; long descriptive messages stay at the raise site
     "ARG001",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
     "ARG002",
     "RUF002",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
     "RUF001",
     "RUF003",
     "PLR0133",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
+    "RUF069",  # ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -225,6 +227,7 @@ ignore = [
 ]
 "computronium/ontology/dynamics/__init__.py" = [
     "INP001", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
+    "RUF067", # the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
 "computronium/ontology/dynamics/_dynamics.py" = [
     "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)

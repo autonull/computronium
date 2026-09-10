@@ -245,7 +245,7 @@ class SystemConfig:
             plasticity if plasticity is not None else PlasticityConfig.null(),
         )
 
-    def validate(self) -> None:  # ruff: ignore[complex-structure, too-many-branches]
+    def validate(self) -> None:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
         """Cross-axis validation (hard constraints only).
 
         Raises:
@@ -314,7 +314,7 @@ class SystemConfig:
         # (TODO.ntm_nca.md W8.1/W8.5)
         if self.geometry.topology_type in {"nca", "ntm"} and (
             self.dynamics.dynamics_type != "instantaneous"
-        ):  # ruff: ignore[raise-vanilla-args]
+        ):
             raise ValueError(
                 f"{self.geometry.topology_type.upper()} geometry requires "
                 f"instantaneous dynamics, got {self.dynamics.dynamics_type!r}"

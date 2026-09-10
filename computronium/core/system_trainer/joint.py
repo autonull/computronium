@@ -472,7 +472,7 @@ def _joint_from_spec(spec: dict) -> JointSystem:
     return joint
 
 
-def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches]
+def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,

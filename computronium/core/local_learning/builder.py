@@ -381,9 +381,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
                 ]
                 # Edges see different input slices, so the forward operator
                 # is the horizontal concatenation [W1|W2|...] — cap that.
-                summed = (
-                    weights[0] if len(weights) == 1 else torch.cat(weights, dim=1)
-                )
+                summed = weights[0] if len(weights) == 1 else torch.cat(weights, dim=1)
                 sigma = self._spectral_sigma_tile(tid, summed)
                 if sigma > 1.0:
                     scale = 1.0 / sigma

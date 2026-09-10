@@ -142,7 +142,7 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 **Goal:** shift verification philosophy from offline "Proof" to online "Monitoring."
 
 **Design:**
-1. Elevate `StabilityMonitor` diagnostics — $\rho(J_F)$ via `SpectralRadiusEstimator`, Lyapunov exponents, settling behavior (`computronium/core/stability/`) — into guards inside `AutoScientistCampaign.run_iteration`.
+1. Elevate `StabilityMonitor` diagnostics — $\rho(J_F)$ via `spectral_radius_from_jacobian` (autograd eigvals; `JacobianAmplificationEstimator` for directional amplification), Lyapunov exponents, settling behavior (`computronium/core/stability/`) — into guards inside `AutoScientistCampaign.run_iteration`.
 2. Policy: rollout exhibiting $\rho(J_F) > 1.0$ or non-decreasing free energy (EqProp coordinates) → kill pre-budget-burn, append structured record to the failure manifesto (`analysis/failure_manifesto.py`), mutate hyperparameters (contractive rescaling, temperature reset), retry same iteration.
 3. Calibration pass: run guard against held-out known-good and known-bad configs; choose thresholds on ROC, not intuition. `_fast_proxy` vs. full-Jacobian estimator disagreement rate reported explicitly.
 

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.ontology.utils import apply_pseudo_gradients
 
 if TYPE_CHECKING:
@@ -471,6 +472,26 @@ class EuclideanUpdate:
     (ΔW = f(∇) in flat space), not to the same algorithm.
     """
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="EuclideanUpdate",
+        reference_equations="vanilla SGD with optional heavy-ball momentum; Polyak (1964), Sutskever et al. (2013)",
+        deviations_from_literature=(
+            "global-norm grad_clip (clip_grad_norm_ semantics) preserving "
+            "relative per-parameter magnitudes",
+            "per_element_displacement sibling rules exist — step_size "
+            "semantics are gradient_relative here (lr × gradient-scale)",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · (momentum buffer v with v ← μv + g), global-norm clipped",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "momentum", "grad_clip"),
+        validated_limits=(
+            "the 5-D benchmark baseline across all credit families; "
+            "first-step displacement linear in step_size (calibration "
+            "identity used by the 5.1 mechanistic study)",
+        ),
+    )
+
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.euclidean()
         self._momentum_buffers: dict[str, Tensor] = {}
@@ -546,6 +567,23 @@ class UnitRMSUpdate:
     state is system-scoped (fail-loud reuse, Euclidean precedent).
     """
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="UnitRMSUpdate",
+        reference_equations="internal magnitude-only ladder rung (TODO12 A1); Muon's step-scale control without orthogonalization",
+        deviations_from_literature=(
+            "EMA momentum buffer normalized to unit RMS PER TENSOR — "
+            "magnitude-only: no whitening, no direction signal",
+            "the decisive magnitude-vs-direction rung: UnitRMS ≈ Muon on "
+            "fragile cells ⇒ magnitude suffices; UnitRMS < Muon ⇒ "
+            "orthogonalization carries direction",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · buf / RMS(buf), buf ← μ·buf + g",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "momentum"),
+        validated_limits=("TODO12 magnitude-vs-direction ladder cells",),
+    )
+
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.unit_rms()
         self._momentum_buffers: dict[str, Tensor] = {}
@@ -605,6 +643,21 @@ class LocalAdamUpdate:
     preserves within-tensor relative gradient structure (unlike Adam).
     Optimizer state is system-scoped (fail-loud reuse, Adam precedent).
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="LocalAdamUpdate",
+        reference_equations="LAMB-style scalar-second-moment variant (RESEARCH4 A1 rung); You et al. (2020) for the LAMB family",
+        deviations_from_literature=(
+            "denominator is ONE scalar per tensor (mean of v̂), not "
+            "per-coordinate — preserves within-tensor relative gradient "
+            "structure",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · m̂ / (sqrt(mean(v̂)) + ε), standard Adam moment updates with bias correction",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "momentum (β1)", "beta2", "eps"),
+        validated_limits=("RESEARCH4 A1 local-normalizer rung cells",),
+    )
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.local_adam()
@@ -681,6 +734,32 @@ class AdamUpdate:
     U-axis coverage map (D16) measured only the SGD family, which the
     D14 jpc-faithful regime showed is the wrong default at depth.
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="AdamUpdate",
+        reference_equations="Adam; Kingma & Ba (2015), arXiv 1412.6980",
+        deviations_from_literature=(
+            "operates on credit pseudo-gradients (identical math)",
+            "global-norm grad_clip before moment updates",
+            "step semantics: per_element_displacement — step_size is the "
+            "per-element displacement scale, NOT comparable to SGD lr",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · m̂ / (sqrt(v̂) + ε) per coordinate, with bias-corrected m, v",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "step_size",
+            "momentum (β1)",
+            "beta2",
+            "eps",
+            "grad_clip",
+        ),
+        validated_limits=(
+            "D16 coverage-map gap noted: first swept in the D14 "
+            "jpc-faithful deep regime; the 5.1 mechanistic study "
+            "norm-matches Adam vs SGD at matched first-step displacement",
+        ),
+    )
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.adam()
@@ -780,6 +859,34 @@ class OrthoAdamUpdate(AdamUpdate):
     collapse local-credit lifts that depend on full-spectrum whitening).
     """
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="OrthoAdamUpdate",
+        reference_equations="Adam (Kingma & Ba 2015) direction-swapped with Muon's orthogonalize-the-momentum; Liu et al. (2023) for Muon",
+        deviations_from_literature=(
+            "matrix params: bias-corrected first moment replaced by its "
+            "SVD polar factor (ortho_steps=0, config of record) or "
+            "Newton–Schulz (ortho_steps>0), rescaled to the plain Adam "
+            "step's Frobenius magnitude",
+            "vector params ride plain Adam; non-finite grad / SVD "
+            "non-convergence skip the tensor update",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −ortho_lr · polar(m̂)·(‖adam_step‖/‖polar‖); vectors: −lr · adam_step",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "ortho_lr",
+            "momentum (β1)",
+            "beta2",
+            "ortho_steps",
+            "eps",
+        ),
+        validated_limits=(
+            "measured D16 regime (seeds 0-2, mnist quick 150 batches, bp): "
+            "mlp 0.930±0.002 / attention 0.911±0.003 / lattice 0.924±0.003 "
+            "/ graph 0.411±0.008 — beats both parents except graph vs Adam",
+        ),
+    )
+
     def step(
         self,
         params: dict[str, Tensor],
@@ -841,6 +948,23 @@ class LionUpdate(AdamUpdate):
     Optimizer state is system-scoped (inherited fail-loud reuse check).
     """
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="LionUpdate",
+        reference_equations="Lion; Chen et al. (2023), arXiv 2302.06675",
+        deviations_from_literature=(
+            "operates on credit pseudo-gradients (identical math)",
+            "reuses Adam's clip/state machinery; only m buffer live (v "
+            "empty for snapshot-protocol compatibility)",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · sign(β1·m + (1−β1)·g); m ← β2·m + (1−β2)·g",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "momentum (β1)", "beta2", "grad_clip"),
+        validated_limits=(
+            "O(1)-memory narrative cells; half of Adam's memory footprint",
+        ),
+    )
+
     def step(
         self,
         params: dict[str, Tensor],
@@ -887,6 +1011,33 @@ class RiemannianOrthogonalUpdate:
     cost dominating deep sweeps. ``ortho_steps == 0`` selects the exact
     SVD polar factor as an audit escape hatch.
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="RiemannianOrthogonalUpdate",
+        reference_equations="Muon; Liu et al. (2023), arXiv 2409.00125 (Newton-Schulz orthogonalized momentum)",
+        deviations_from_literature=(
+            "orthogonalizes the MOMENTUM buffer (EMA), not the raw "
+            "single-batch gradient — orthogonalization amplifies the "
+            "noise floor",
+            "vectors (biases) ride plain SGD (matrix-only rule)",
+            "ortho_steps=0 selects the exact SVD polar factor (NOT "
+            "reduced QR — its R-diagonal is sign-arbitrary, direction "
+            "uncorrelated with the gradient, measured cos ≈ 0)",
+            "non-finite momentum / SVD non-convergence skip the tensor "
+            "instead of killing long runs",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · polar(μ·buf + g) for matrices; −lr·g for vectors",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "momentum", "ortho_steps"),
+        validated_limits=(
+            "FF×Muon and depth-frontier lifts measured under the exact "
+            "SVD polar factor (ortho_steps=0, D13); NS (>0) preserves BP "
+            "lifts but can collapse local-credit lifts",
+            "step semantics: per_element_displacement — the 5.1 study "
+            "norm-matches it against SGD at equal first-step ‖Δθ‖",
+        ),
+    )
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.riemannian_orthogonal()
@@ -958,6 +1109,23 @@ class RiemannianOrthogonalUpdate:
 class SpectralConstrainedUpdate:
     """Lipschitz-bounded update: constrain spectral norm of updates."""
 
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="SpectralConstrainedUpdate",
+        reference_equations="Lipschitz-bounded optimization; spectral-norm regularization family (Szegedy et al. 2014 lineage)",
+        deviations_from_literature=(
+            "constrains the spectral norm of the UPDATE GRADIENT, not of "
+            "the weights (σ₂-norm rescale when grad σ > spectral_norm)",
+            "vectors (biases) ride plain SGD",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · g·min(1, spectral_norm/σ₂(g)) for matrices; −lr·g for vectors",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "spectral_norm"),
+        validated_limits=(
+            "Kinetics-discovery campaign cells (memristive settling stabilization question)",
+        ),
+    )
+
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.spectral_constrained()
 
@@ -982,6 +1150,23 @@ class SpectralConstrainedUpdate:
 
 class MeanNormUpdate:
     """Fisher-information geometry update (natural gradient)."""
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="MeanNormUpdate",
+        reference_equations="natural-gradient / Fisher-geometry family; Amari (1998) — simplified rung",
+        deviations_from_literature=(
+            "SIMPLIFIED: per-tensor mean-|g| normalization standing in "
+            "for a true inverse-Fisher preconditioner — direction "
+            "preserving, magnitude per-element-normalized",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="ΔW = −lr · g / (mean|g| + ε) per tensor",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size",),
+        validated_limits=(
+            "treated as a magnitude-normalizer rung, not a Fisher-faithful rule",
+        ),
+    )
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.mean_norm()
@@ -1012,6 +1197,25 @@ class ElasticConsolidationUpdate:
     - fisher_damping: small constant added to Fisher for numerical stability
     - ewc_lambda: importance weight for the EWC regularization term
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="ElasticConsolidationUpdate",
+        reference_equations="Elastic Weight Consolidation; Kirkpatrick et al. (2017), arXiv 1612.00796",
+        deviations_from_literature=(
+            "Fisher information approximated as squared drift from the "
+            "consolidation baseline (params − old)² + fisher_damping, "
+            "not the true diagonal Fisher of the new-task likelihood",
+            "consolidate() anchors old params at episode boundaries "
+            "(two-argument form imports an external old-task snapshot)",
+        ),
+        objective_function="L + (ewc_lambda/2)·Σ F·(param − old)² implicitly applied as a gradient term",
+        pseudo_gradient_def="ΔW = −lr·(g + ewc_lambda·F·(param − old_param))",
+        symmetry_requirements=("none",),
+        approximation_parameters=("ewc_lambda", "fisher_damping"),
+        validated_limits=(
+            "continual-learning drift locks (elastic drift vs plain SGD at consolidation boundaries)",
+        ),
+    )
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.elastic_consolidation()

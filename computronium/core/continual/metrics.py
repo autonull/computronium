@@ -78,7 +78,7 @@ class CLMetrics:
 
     # Stability rider
     stability_verdicts: list = field(default_factory=list)
-    max_spectral_radius: float = 0.0
+    max_jacobian_amplification: float = 0.0
 
     # Training time
     total_time_s: float = 0.0

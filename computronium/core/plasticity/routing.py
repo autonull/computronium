@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
@@ -59,8 +60,35 @@ class RoutingPlasticity:
     sigmoid(gate_logits @ U_ℓ) where U_ℓ is a fixed gate→unit projection
     seeded by layer index — real per-sample, per-unit routing over the
     network's units (the flat-MLP re-spec of pathway gating; there are no
-    distinct physical pathways to mask in a dense geometry).
+    distinct physical pathways to mask in a distinct physical pathways to mask in a dense geometry).
     """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="RoutingPlasticity",
+        reference_equations="state-dependent gating / sparse conditional computation (mixture-of-experts lineage); framework re-spec",
+        deviations_from_literature=(
+            "gates driven by a fixed random input→gate projection G "
+            "seeded per input_dim (F3 fix: scalar |x|-mean drive left "
+            "every gate identical — gain control, not routing)",
+            "modulation is per-unit via fixed gate→unit projections "
+            "(dense geometries have no distinct physical pathways)",
+            "Gumbel-Softmax during training, top-k hard selection at eval",
+        ),
+        objective_function=None,
+        pseudo_gradient_def="gate_logits_{t+1} = decay·gate_logits_t + lr·(x @ G); active_routes = GumbelSoftmax(logits)/top-k",
+        symmetry_requirements=("none",),
+        approximation_parameters=(
+            "gate_dim",
+            "temperature",
+            "top_k",
+            "decay",
+            "learning_rate",
+        ),
+        validated_limits=(
+            "L2 gate-entropy lock (≥ 0); compute-efficiency question is "
+            "an open experimental suite, not an established result",
+        ),
+    )
 
     config: PlasticityConfig
 

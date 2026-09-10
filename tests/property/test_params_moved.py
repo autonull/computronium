@@ -21,6 +21,7 @@ from computronium.core.presets import (
     create_fa_mlp,
     create_ff_mlp,
     create_hebbian_mlp,
+    create_lemma_mlp,
     create_pc_mlp,
     create_pepita_mlp,
     create_snn_mlp,
@@ -35,7 +36,19 @@ if TYPE_CHECKING:
 
 _INPUT_DIM, _HIDDEN, _OUTPUT_DIM, _BATCH = 16, (12,), 4, 8
 
-_MOVERS = ("backprop", "eqprop", "fa", "ff", "tile", "pepita", "tp", "pc", "hebbian", "snn")
+_MOVERS = (
+    "backprop",
+    "eqprop",
+    "fa",
+    "ff",
+    "tile",
+    "lemma",
+    "pepita",
+    "tp",
+    "pc",
+    "hebbian",
+    "snn",
+)
 _NON_MOVERS = {}
 
 _BUILDERS: dict[str, Callable[[], System]] = {
@@ -45,6 +58,7 @@ _BUILDERS: dict[str, Callable[[], System]] = {
     ),
     "fa": lambda: create_fa_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
     "ff": lambda: create_ff_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, layer_lr=0.03),
+    "lemma": lambda: create_lemma_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
     "pepita": lambda: create_pepita_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
     "tp": lambda: create_tp_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
     "pc": lambda: create_pc_mlp(

@@ -32,7 +32,7 @@ from computronium.models.native.fa_native import (
 from computronium.models.native.momentum_eqprop_native import (
     create_native_momentum_eqprop,
 )
-from computronium.models.native.pepita_native import create_native_pepita_mlp
+from computronium.models.native.lemma_native import create_native_lemma_mlp
 from computronium.models.native.research_native import (
     create_native_directed_ep,
     create_native_finite_nudge_ep,
@@ -199,9 +199,9 @@ def test_native_fa_variants_smoke(factory):
 # =============================================================================
 
 
-def test_native_pepita_mlp_smoke():
-    """native_pepita_mlp: forward + train_step."""
-    model = create_native_pepita_mlp(
+def test_native_lemma_mlp_smoke():
+    """native_lemma_mlp: forward + train_step."""
+    model = create_native_lemma_mlp(
         INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, num_layers=1, lr=0.01
     )
     x, y = _make_batch()

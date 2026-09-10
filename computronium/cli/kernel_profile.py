@@ -14,10 +14,12 @@ import json
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from computronium.state import PlasticityPrimitive
 
 import torch
 
@@ -158,9 +160,10 @@ def _create_joint_system(  # ruff: ignore[complex-structure, too-many-branches]
     else:
         raise ValueError(f"Unknown update: {update_type}")
 
-    return compose_joint_system(
-        substrate, geometry, dynamics, plasticity, credit, update
-    )
+    # The null branch passes a bare PlasticityConfig; compose_joint_system
+    # stores it and every plasticity call is hasattr-guarded.
+    p = cast("PlasticityPrimitive", plasticity)
+    return compose_joint_system(substrate, geometry, dynamics, p, credit, update)
 
 
 def _profile_kernel(
@@ -273,8 +276,8 @@ def _profile_coordinate(  # ruff: ignore[complex-structure, too-many-statements]
             from computronium.state import CompositeState
 
             z = CompositeState.empty()
-            z.activity["x"] = x
-            z.activity["y"] = y
+            z.set_activity("x", x)
+            z.set_activity("y", y)
 
             if hasattr(system, "_make_context"):
                 context = system._make_context()

@@ -111,7 +111,7 @@
     {
       "capability_id": "D19",
       "capability_name": "depth_harvest",
-      "data_sha256": "b43d33c2a8fb3be9739f53ca42df947af2c9d7f54b47d73404e9cb30cafa9399",
+      "data_sha256": "8c8e7a44ea599d71a06c54ec2f4efc5a51358b08f4c6e2220c2782ac11ed5421",
       "demo_test": "tests/integration/test_demo_depth_harvest.py",
       "figure_png": "d19_depth_harvest.png",
       "provenance": {

@@ -11,14 +11,14 @@ from computronium.stability import (
     BasinStabilityEstimator,
     FrontierAggregator,
     FrontierRecord,
+    JacobianAmplificationEstimator,
     LyapunovEstimator,
     ResourceUsage,
     SettlingMonitor,
-    SpectralRadiusEstimator,
     estimate_basin_stability,
     estimate_basin_stability_multistart,
+    estimate_directional_amplification,
     estimate_lyapunov_exponent,
-    estimate_spectral_radius,
     measure_settling_time,
 )
 from computronium.state import CompositeState, SystemContext
@@ -324,30 +324,34 @@ class TestFrontierAggregator:
 
 
 class TestSpectralRadius:
-    def test_estimate_spectral_radius_stable(self, mock_context, initial_state):
+    def test_estimate_directional_amplification_stable(
+        self, mock_context, initial_state
+    ):
         transition = MockTransition(rho=0.5)
-        rho = estimate_spectral_radius(
+        rho = estimate_directional_amplification(
             transition, initial_state, mock_context, num_iterations=10
         )
         # Should be close to 0.5
         assert 0.3 < rho < 0.7
 
-    def test_estimate_spectral_radius_unstable(self, mock_context, initial_state):
+    def test_estimate_directional_amplification_unstable(
+        self, mock_context, initial_state
+    ):
         transition = MockTransition(rho=1.2)
-        rho = estimate_spectral_radius(
+        rho = estimate_directional_amplification(
             transition, initial_state, mock_context, num_iterations=10
         )
         # Should be close to 1.2
         assert 0.9 < rho < 1.5
 
     def test_spectral_radius_estimator_class(self, mock_context, initial_state):
-        estimator = SpectralRadiusEstimator(num_iterations=10, fast_mode=False)
+        estimator = JacobianAmplificationEstimator(num_iterations=10, fast_mode=False)
         transition = MockTransition(rho=0.7)
         rho = estimator(transition, initial_state, mock_context)
         assert 0.5 < rho < 0.9
 
     def test_spectral_radius_fast_mode(self, mock_context, initial_state):
-        estimator = SpectralRadiusEstimator(fast_mode=True)
+        estimator = JacobianAmplificationEstimator(fast_mode=True)
         transition = MockTransition(rho=0.6)
         rho = estimator(transition, initial_state, mock_context)
         # Fast mode gives rough estimate
@@ -541,7 +545,7 @@ class TestNullPlasticityStability:
             )
 
         # Test all stability metrics work
-        rho = estimate_spectral_radius(
+        rho = estimate_directional_amplification(
             joint_transition, initial_state, mock_context, num_iterations=5
         )
         assert 0.4 < rho < 0.6
@@ -583,7 +587,7 @@ class TestFastModeProxies:
         transition = MockTransition(rho=0.7)
 
         # Spectral radius fast proxy
-        spec_est = SpectralRadiusEstimator(fast_mode=True)
+        spec_est = JacobianAmplificationEstimator(fast_mode=True)
         rho = spec_est(transition, initial_state, mock_context)
         assert isinstance(rho, float)
 
@@ -617,7 +621,7 @@ class TestCheapProxyProperties:
 
     def test_spectral_radius_fast_proxy_nonnegative(self, mock_context, initial_state):
         """Fast proxy spectral radius should be non-negative."""
-        estimator = SpectralRadiusEstimator(fast_mode=True)
+        estimator = JacobianAmplificationEstimator(fast_mode=True)
         transition = MockTransition(rho=0.5)
         rho = estimator(transition, initial_state, mock_context)
         assert rho >= 0.0

@@ -31,6 +31,8 @@ jobs:
         run: uv run pytest tests/property/ -q
       - name: Demo Gate (demonstration suite + figure lock)
         run: uv run pytest tests/integration/ -k "demo or gallery_lock" -q
+      - name: Vertical Slice Gate (C.2: energy descent, gradient sign, J2 invariance, baseline digest)
+        run: uv run pytest tests/integration/test_vertical_slice_gate.py tests/property/test_vertical_slice.py -q
       - name: Drift Locks (README snippets, root exports)
         run: |
           uv run pytest tests/unit/core/test_readme_snippet_lock.py \

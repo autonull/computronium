@@ -29,7 +29,7 @@ chance 0.1. The accuracy gap is not the claim (D7 precedent): both arms
 train through the settle, and the ePC arm does it with 3× fewer settle
 steps at roughly half the walltime. Scope: demo scale; the repo's sPC
 settle is a simplified variant, so the paper's exact sPC-equivalence
-theorem is not asserted here — the two claims above are.
+theorem is not asserted here — the two claims above are. Level 4 demo-scale evidence only.
 """
 
 from itertools import islice

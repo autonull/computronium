@@ -173,7 +173,7 @@ def tile_settle_block_acts(
         z = op(z, blocks[k])
         bias = biases[k]
         if bias is not None:
-            z = z + bias
+            z += bias
         acts.append(z)
     acts.append(geometry._output_projection(z))  # type: ignore[attr-defined]
     return acts
@@ -206,11 +206,11 @@ def tile_hopfield_energy(
     fields = acts[1:]
     total = torch.zeros((), device=fields[0].device, dtype=fields[0].dtype)
     for field in fields:
-        total = total + 0.5 * field.pow(2).sum()
+        total += 0.5 * field.pow(2).sum()
     for i, block in enumerate(blocks):
         pre, post = acts[i], acts[i + 1]
-        total = total - (post * (pre @ block.T)).sum()
+        total -= (post * (pre @ block.T)).sum()
         bias = biases[i]
         if bias is not None:
-            total = total - (post * bias).sum()
+            total -= (post * bias).sum()
     return total / fields[0].shape[0]

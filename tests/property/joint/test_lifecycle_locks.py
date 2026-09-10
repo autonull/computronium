@@ -12,6 +12,8 @@ These tests verify the lifecycle invariants of the 6-D joint architecture:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch import Tensor
@@ -20,6 +22,7 @@ from computronium.core.dynamics.adapters import (
     EnergyToInstantaneousAdapter,
     StateDynamicsConfig,
 )
+from computronium.core.frozen_theta import FrozenThetaAudit
 from computronium.core.joint import (
     CompositeState,
     ConsolidationConfig,
@@ -48,6 +51,12 @@ from computronium.ontology import (
     TernarySubstrate,
     ThermodynamicContrast,
 )
+
+
+def _tensor(val: object) -> Tensor:
+    """Narrow an activity entry to its Tensor value (test-side narrowing)."""
+    assert isinstance(val, Tensor)
+    return val
 
 
 def _create_test_system():
@@ -92,7 +101,7 @@ def _create_dummy_state_for_registry(
 
 
 def test_j1_null_plasticity_zero_extension():  # ruff: ignore[too-many-locals]
-    """J1: Joint system with M=Null ≡ 5-D system (Zero-Extension Theorem)."""
+    """J1 (Level 4): Joint system with M=Null ≡ 5-D system (Zero-Extension Theorem)."""
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
     # 5-D system
@@ -159,11 +168,6 @@ def test_j2_theta_immutable_intra_episode():
     """J2: Persistent θ parameters are never mutated during intra-episode steps."""
     substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
-    # Snapshot initial theta
-    theta_initial = {
-        name: param.detach().clone() for name, param in geometry.params.items()
-    }
-
     # Create registry and context
     registry = _create_registry_with_geometry(geometry)
     registry.validate(_create_dummy_state_for_registry(registry, geometry))
@@ -185,29 +189,32 @@ def test_j2_theta_immutable_intra_episode():
 
     plasticity = NullPlasticity()
 
-    # Run multiple intra-episode steps
-    z = CompositeState(
-        activity={"x": torch.randn(4, 10), "y": torch.randint(0, 2, (4,))},
-        plastic={},
-        substrate={},
-    )
-
-    for _ in range(5):
-        # Plasticity step (NullPlasticity does nothing)
-        psi = plasticity.step({}, z, context)
-
-        # Simulate activity evolution (in real system, this would be StateDynamics.settle)
+    # Frozen-θ audit: snapshot geometry+substrate persistent state, run the
+    # intra-episode steps, exact-diff (values, _version counters, storage
+    # pointers). Replaces the pre-TODO18 clone/allclose snapshot (TODO18 2.2).
+    audited = SimpleNamespace(geometry=geometry, substrate=substrate)
+    audit = FrozenThetaAudit(audited)
+    with audit:
         z = CompositeState(
             activity={"x": torch.randn(4, 10), "y": torch.randint(0, 2, (4,))},
-            plastic=psi,
+            plastic={},
             substrate={},
         )
 
-    # Theta should be unchanged
-    for name, param in context.theta.items():
-        assert torch.allclose(param, theta_initial[name]), (
-            f"Theta {name} was mutated intra-episode!"
-        )
+        for _ in range(5):
+            # Plasticity step (NullPlasticity does nothing)
+            psi = plasticity.step({}, z, context)
+
+            # Simulate activity evolution (in real system, this would be StateDynamics.settle)
+            z = CompositeState(
+                activity={"x": torch.randn(4, 10), "y": torch.randint(0, 2, (4,))},
+                plastic=psi,
+                substrate={},
+            )
+
+    audit.assert_invariant()
+    assert audit.report is not None
+    assert audit.report.invariant
 
 
 # ============================================================
@@ -339,8 +346,7 @@ def test_j4_substrate_owned_respects_physics():
 
     # Substrate forward operator should project to valid states
     # Use geometry.forward which uses substrate's get_forward_operator
-    x = z.activity["x"]
-    y = geometry.forward(x, substrate)
+    y = geometry.forward(_tensor(z.activity["x"]), substrate)
 
     # Output should be valid (ternary substrate constrains internal state)
     assert y is not None
@@ -390,7 +396,7 @@ def test_j4_substrate_adapter_preserves_constraints():
     )
 
     # Adapter forward operator should preserve state structure
-    y = geometry.forward(z.activity["x"], substrate)
+    y = geometry.forward(_tensor(z.activity["x"]), substrate)
 
     # Output shape preserved
     assert y.shape == (4, 2)
@@ -581,7 +587,7 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
     )
 
     # Adapter forward operator should preserve state structure
-    y = geometry.forward(z.activity["x"], substrate)
+    y = geometry.forward(_tensor(z.activity["x"]), substrate)
 
     # Output shape preserved
     assert y.shape == (4, 2)
@@ -636,7 +642,8 @@ def test_j6_dynamics_adapter_preserves_shape():
     )
 
     # Dynamics step should preserve CompositeState structure
-    state = SystemState(x=z.activity["x"])
+    state = SystemState(x=_tensor(z.activity["x"]))
+    assert state.x is not None
     state.activations = geometry.forward(state.x, substrate)
     # Use the adapter's settle (don't modify source config)
     state = dynamics.settle(state, geometry, substrate, target=None)

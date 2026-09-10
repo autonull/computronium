@@ -15,9 +15,9 @@ def create_stability_guard(
 ):
     """Create stability guard."""
     from computronium.stability import StabilityGuard
-    from computronium.stability.spectral_radius import SpectralRadiusEstimator
+    from computronium.stability.spectral_radius import JacobianAmplificationEstimator
 
-    estimator = SpectralRadiusEstimator(fast_mode=True)
+    estimator = JacobianAmplificationEstimator(fast_mode=True)
     return StabilityGuard(
         threshold=threshold,
         estimator=estimator,

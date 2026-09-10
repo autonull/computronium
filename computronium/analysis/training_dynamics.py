@@ -31,7 +31,7 @@ class JointTrajectory:
     substrate: list[dict[str, list]]  # Per-step substrate state
     energy: list[float]  # Energy per step
     loss: list[float]  # Loss per step
-    spectral_radius: list[float]  # ρ(J_F) per step
+    jacobian_amplification: list[float]  # σ_max(J_F)-style gain proxy per step
     gate_entropy: list[float] | None = None  # Gate entropy for routing
     accuracy: list[float] | None = None  # Accuracy per step
 
@@ -43,8 +43,8 @@ def compute_gate_entropy(gate_logits: np.ndarray) -> float:
     return float(np.mean(entropy))
 
 
-def compute_spectral_radius_proxy(activations: dict[str, np.ndarray]) -> float:
-    """Estimate spectral radius of Jacobian via power iteration proxy."""
+def compute_jacobian_amplification_proxy(activations: dict[str, np.ndarray]) -> float:
+    """RMS activation-norm proxy for Jacobian gain — NOT ρ(J_F) (TODO18 2.1)."""
     # Flatten all activations
     act_vec = np.concatenate([v.flatten() for v in activations.values()])
     if len(act_vec) == 0:
@@ -64,7 +64,7 @@ def load_trajectory(filepath: Path) -> JointTrajectory:
         substrate=traj_data.get("substrate", []),
         energy=traj_data.get("energy", []),
         loss=traj_data.get("loss", []),
-        spectral_radius=traj_data.get("spectral_radius", []),
+        jacobian_amplification=traj_data.get("jacobian_amplification", []),
         gate_entropy=traj_data.get("gate_entropy"),
         accuracy=traj_data.get("accuracy"),
     )
@@ -82,7 +82,7 @@ def save_trajectory(
             "substrate": traj.substrate,
             "energy": traj.energy,
             "loss": traj.loss,
-            "spectral_radius": traj.spectral_radius,
+            "jacobian_amplification": traj.jacobian_amplification,
             "gate_entropy": traj.gate_entropy,
             "accuracy": traj.accuracy,
         },
@@ -264,7 +264,7 @@ def plot_training_dynamics(  # ruff: ignore[complex-structure, too-many-branches
     fig.add_trace(
         go.Scatter(
             x=step_indices,
-            y=trajectory.spectral_radius,
+            y=trajectory.jacobian_amplification,
             name="ρ(J_F)",
             mode="lines+markers",
             line={"color": colors[2], "width": 2},
@@ -347,7 +347,7 @@ def plot_training_dynamics(  # ruff: ignore[complex-structure, too-many-branches
 
 def plot_plasticity_comparison(
     trajectories: dict[str, JointTrajectory],
-    metrics: list[str] = ["energy", "loss", "spectral_radius", "gate_entropy"],
+    metrics: list[str] = ["energy", "loss", "jacobian_amplification", "gate_entropy"],
     save_html: str | Path | None = None,
 ) -> go.Figure:
     """Compare training dynamics across different plasticity types.
@@ -639,7 +639,7 @@ if __name__ == "__main__":
         ],
         energy=[10.0 * np.exp(-i / 10) + np.random.randn() * 0.1 for i in range(steps)],
         loss=[2.0 * np.exp(-i / 15) + np.random.randn() * 0.05 for i in range(steps)],
-        spectral_radius=[0.95 + 0.03 * np.sin(i / 5) for i in range(steps)],
+        jacobian_amplification=[0.95 + 0.03 * np.sin(i / 5) for i in range(steps)],
         gate_entropy=[np.log(64) * (1 - np.exp(-i / 10)) for i in range(steps)],
         accuracy=[0.1 + 0.8 * (1 - np.exp(-i / 10)) for i in range(steps)],
     )

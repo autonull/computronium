@@ -726,7 +726,7 @@ def test_null_plasticity_protocol_compliance(_seed):
 )
 @settings(max_examples=30, deadline=None)
 def test_null_plasticity_preserves_theta(batch_size, seed):
-    """NullPlasticity does not modify theta (Zero-Extension Theorem)."""
+    """NullPlasticity does not modify theta (Zero-Extension Theorem, Level 4)."""
     torch.manual_seed(seed)
     plasticity = NullPlasticity()
 

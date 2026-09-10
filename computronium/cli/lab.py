@@ -4,12 +4,16 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import torch
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.domains import create_task
+
+if TYPE_CHECKING:
+    from computronium.state import PlasticityPrimitive
 
 logger = get_logger()
 
@@ -131,9 +135,10 @@ def _create_joint_system_from_coordinate(  # ruff: ignore[complex-structure, too
     else:
         raise ValueError(f"Unknown update: {coord['update']}")
 
-    return compose_joint_system(
-        substrate, geometry, dynamics, plasticity or plasticity_config, credit, update
-    )
+    # Runtime duck-types a bare PlasticityConfig (compose_joint_system
+    # stores it; every plasticity call is hasattr-guarded).
+    p = cast("PlasticityPrimitive", plasticity or plasticity_config)
+    return compose_joint_system(substrate, geometry, dynamics, p, credit, update)
 
 
 def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
@@ -145,7 +150,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
         "plastic": [],
         "substrate": [],
         "energy": [],
-        "spectral_radius": [],
+        "jacobian_amplification": [],
         "loss": [],
     }
 
@@ -165,8 +170,8 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
 
     # Initialize joint state
     z = CompositeState.empty()
-    z.activity["x"] = x
-    z.activity["y"] = y
+    z.set_activity("x", x)
+    z.set_activity("y", y)
 
     # Get initial plastic state
     if hasattr(system, "_make_context"):
@@ -179,7 +184,9 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
     for step in range(steps):
         # Record current state
         trajectory["activity"].append({
-            k: v.detach().cpu().clone() for k, v in z.activity.items()
+            k: v.detach().cpu().clone()
+            for k, v in z.activity.items()
+            if isinstance(v, torch.Tensor)
         })
         trajectory["plastic"].append({
             k: v.detach().cpu().clone() for k, v in z.plastic.items()
@@ -191,6 +198,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
         # Run one step of joint transition
         if hasattr(system, "dynamics") and hasattr(system.dynamics, "settle"):
             # Use the 5-D settling for now
+            from computronium.core.pipeline import task_loss
             from computronium.ontology import SystemState
 
             state = SystemState(x=x, y=y)
@@ -215,7 +223,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
             nudged_state.energy = system.dynamics.compute_energy(
                 nudged_state, system.geometry
             )
-            nudged_state.loss = task_loss(nudged_state, y)  # ruff: ignore[undefined-name]
+            nudged_state.loss = task_loss(nudged_state, y)
 
             # Record energy
             trajectory["energy"].append(
@@ -225,13 +233,13 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
                 nudged_state.loss.item() if nudged_state.loss else 0.0
             )
 
-            # Estimate spectral radius of Jacobian
+            # Jacobian amplification proxy (not spectral radius; TODO18 2.1)
             if (
                 hasattr(system.geometry, "params")
                 and free_state.activations is not None
             ):
                 try:  # ruff: ignore[too-many-statements-in-try-clause]
-                    # Simple spectral radius estimate via power iteration
+                    # Crude activity-norm proxy for σ_max(J); never claim ρ(J) from this
                     acts = free_state.activations
                     if isinstance(acts, list):
                         act_vec = torch.cat([a.flatten() for a in acts])
@@ -241,13 +249,13 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
                     with torch.no_grad():
                         # Compute Jacobian-vector product approximation
                         jvp = act_vec @ act_vec  # crude proxy
-                        trajectory["spectral_radius"].append(
+                        trajectory["jacobian_amplification"].append(
                             float(torch.norm(jvp).item())
                         )
                 except Exception:
-                    trajectory["spectral_radius"].append(0.0)
+                    trajectory["jacobian_amplification"].append(0.0)
             else:
-                trajectory["spectral_radius"].append(0.0)
+                trajectory["jacobian_amplification"].append(0.0)
 
             # Update plastic state if applicable
             if hasattr(system, "plasticity") and system.plasticity is not None:
@@ -264,8 +272,8 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
                     z.plastic = system.plasticity.step(z.plastic, z, context)
 
             # Update z for next iteration
-            z.activity["x"] = x
-            z.activity["y"] = y
+            z.set_activity("x", x)
+            z.set_activity("y", y)
 
     return trajectory
 
@@ -375,7 +383,7 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # 
     fig.add_trace(
         go.Scatter(
             x=step_indices,
-            y=trajectory["spectral_radius"],
+            y=trajectory["jacobian_amplification"],
             name="ρ(J_F)",
             mode="lines+markers",
         ),
@@ -451,7 +459,7 @@ def inspect_state(args):
                         for step in trajectory["substrate"]
                     ],
                     "energy": trajectory["energy"],
-                    "spectral_radius": trajectory["spectral_radius"],
+                    "jacobian_amplification": trajectory["jacobian_amplification"],
                     "loss": trajectory["loss"],
                 },
             },

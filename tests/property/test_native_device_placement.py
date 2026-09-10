@@ -19,7 +19,7 @@ from computronium.models.native import diffusion_eqprop_native as _diffusion
 from computronium.models.native import eqprop_native as _eqprop
 from computronium.models.native import fa_native as _fa
 from computronium.models.native import momentum_eqprop_native as _momentum
-from computronium.models.native import pepita_native as _pepita
+from computronium.models.native import lemma_native as _pepita
 from computronium.models.native import research_native as _research
 from computronium.models.native import sparse_eqprop_native as _sparse
 from computronium.models.native import ternary_eqprop_native as _ternary
@@ -36,7 +36,7 @@ _FACTORIES: list[tuple[Any, dict]] = [
     (_eqprop.create_native_eqprop_mlp, {}),
     *[(fn, {}) for fn in _fa.FA_FACTORY_VARIANTS],
     (_momentum.create_native_momentum_eqprop, {}),
-    (_pepita.create_native_pepita_mlp, {}),
+    (_pepita.create_native_lemma_mlp, {}),
     (_research.create_native_holomorphic_ep, {}),
     (_research.create_native_directed_ep, {}),
     (_research.create_native_finite_nudge_ep, {}),
