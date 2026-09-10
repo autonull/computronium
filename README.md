@@ -2,13 +2,23 @@
 
 > **Computronium** is a composable machine-learning library and research framework for building, training, analyzing, and comparing learning systems across architectures, learning rules, dynamics, and substrate models. Its research program investigates locality, plasticity, stability, and physical constraints as first-class dimensions of computation.
 
-[^1]: **Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium)): the theoretical limit of physical computation. The name reflects the framework's aim to bridge abstract algorithms and the physical constraints of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
+<details>
+<summary><strong>What is "Computronium"?</strong> (click to expand)</summary>
+
+**Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium)): the theoretical limit of physical computation. The name reflects the framework's aim to bridge abstract algorithms and the physical constraints of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
+</details>
 
 Modern deep learning has achieved remarkable results in mathematical abstraction. But abstraction hides physical cost. Natural intelligence operates without global clocks, infinite memory for backward passes, or perfect precision—emerging from local interactions, energy minimization, and physical constraints.
 
-[^2]: The **search for computronium** investigates learning systems that are native to physical constraints: asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency. The goal is to determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This requires decoupling machine learning from the rigid, non-physical requirements of digital abstraction and embracing local, energy-based dynamics where networks relax toward equilibrium.
+<details>
+<summary><strong>The search for computronium</strong> (click to expand)</summary>
+
+Investigates learning systems native to physical constraints: asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency. The goal is to determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This requires decoupling machine learning from the rigid, non-physical requirements of digital abstraction and embracing local, energy-based dynamics where networks relax toward equilibrium.
+</details>
 
 > **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
+
+## 🎯 Choose Your Lens: Three Perspectives
 
 Computronium serves three roles simultaneously. The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
 
@@ -27,7 +37,11 @@ Computronium serves three roles simultaneously. The library is usable independen
 | 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
 | 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, AutoScientist automation |
 
-[^3]: The three perspectives are not mutually exclusive layers but overlapping views of the same codebase. The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
+<details>
+<summary><strong>Relationship between the three perspectives</strong> (click to expand)</summary>
+
+The three perspectives are not mutually exclusive layers but overlapping views of the same codebase. The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
+</details>
 
 ---
 
@@ -35,9 +49,25 @@ Computronium serves three roles simultaneously. The library is usable independen
 
 Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
 
-[^4]: By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
+<details>
+<summary><strong>Joint transition operator</strong> (click to expand)</summary>
 
-[^5]: The P-axis is investigated as a **computational-expressiveness axis** (TODO17): a program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
+By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
+</details>
+
+<details>
+<summary><strong>P-axis as computational-expressiveness axis (TODO17)</strong> (click to expand)</summary>
+
+A program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). 
+
+The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). 
+
+The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. 
+
+A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. 
+
+The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
+</details>
 
 Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
 
@@ -51,7 +81,11 @@ Computronium provides the ontology, infrastructure, and automation tooling used 
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 ```
 
-[^6]: A **System is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace.** This decomposition is the framework's organizing abstraction for comparing learning systems. It defines compatibility constraints over combinations of primitives; compatible combinations form the search space explored by the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
+<details>
+<summary><strong>System as 6-axis coordinate</strong> (click to expand)</summary>
+
+A **System is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace.** This decomposition is the framework's organizing abstraction for comparing learning systems. It defines compatibility constraints over combinations of primitives; compatible combinations form the search space explored by the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
+</details>
 
 | Axis | Symbol | Role | Primitives |
 |------|:------:|------|------------|
@@ -62,7 +96,29 @@ System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignmen
 | **💡 CreditAssignment** | $C$ | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
 | **🔧 ParameterUpdate** | $U$ | Slow, persistent parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 
-### ML Library Capabilities
+### Geometry Primitives — Deep Dive
+
+<details>
+<summary><strong>NTM Geometry (`NtmGeometry`, `GeometryConfig.ntm`)</strong> (click to expand)</summary>
+
+External-memory tape: LSTM controller + content-addressed heads; local credit learns copy via memory (0.958 @8000 steps, 3 seeds) — TODO.ntm_nca §11.14
+</details>
+
+<details>
+<summary><strong>NCA Geometry (`NcaGeometry`, `GeometryConfig.nca`)</strong> (click to expand)</summary>
+
+Neural cellular automaton fabric; local credit solves growing NCA (fg 1.000, 3 seeds) — TODO.ntm_nca §11.8
+</details>
+
+### CreditAssignment Primitives — Deep Dive
+
+<details>
+<summary><strong>PEPITA / LEMMA Credit (`PepitaCredit`, `local_objective="lemma"`)</strong> (click to expand)</summary>
+
+Published PEPITA input-modulation credit (BP parity 0.884) and the naming distinction from per-layer closed-form LEMMA — TODO15 §11.1/§11.2
+</details>
+
+### ML Library Capabilities (Core)
 
 | Capability | Description |
 |------------|-------------|
@@ -72,10 +128,7 @@ System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignmen
 | **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
 | **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
 | **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee ([figure](docs/figures/d5_z3_frozen_theta.png)) |
-| **NTM geometry** (`NtmGeometry`, `GeometryConfig.ntm`) | External-memory tape: LSTM controller + content-addressed heads; local credit learns copy via memory (0.958 @8000 steps, 3 seeds) — TODO.ntm_nca §11.14 |
-| **NCA geometry** (`NcaGeometry`, `GeometryConfig.nca`) | Neural cellular automaton fabric; local credit solves growing NCA (fg 1.000, 3 seeds) — TODO.ntm_nca §11.8 |
 | **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) — TODO15 §13.3 / TODO16 §0.1 ([figure](docs/figures/d19_depth_harvest.png)) |
-| **PEPITA / LEMMA credit** (`PepitaCredit`, `local_objective="lemma"`) | Published PEPITA input-modulation credit (BP parity 0.884) and the naming distinction from per-layer closed-form LEMMA — TODO15 §11.1/§11.2 |
 | **Recipe cards** (`recipe_cards.py`) | Family→optimizer/geometry/config canonical-constructor registry — TODO16 §0.3 |
 | **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy — TODO16 §4 |
 | **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits — TODO16 §5 |
@@ -96,7 +149,11 @@ flowchart LR
     U --> S
 ```
 
-[^7]: The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
+<details>
+<summary><strong>Why U → S cyclic dependency?</strong> (click to expand)</summary>
+
+The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
+</details>
 
 ### Algebraic Composition (API)
 
@@ -104,7 +161,11 @@ Construct systems by composing primitives across the six axes. The `System` gene
 
 **One trainer, every credit rule** — the same coordinate trained through byte-identical wiring with a single swapped constructor argument. The block is locked verbatim against its source demo test ([`tests/integration/test_demo_swap_credit.py`](tests/integration/test_demo_swap_credit.py)); all three arms learn:
 
-[^8]: The credit-swap demo demonstrates that Backprop (global gradient), ThermodynamicContrast (energy-based local contrast), and RandomProjections (fixed random feedback) can all train the same recurrent geometry with only the credit constructor argument changed. This is the compositional abstraction in action: the geometry, dynamics, substrate, plasticity, and update remain identical.
+<details>
+<summary><strong>Credit-swap demo explained</strong> (click to expand)</summary>
+
+The credit-swap demo demonstrates that Backprop (global gradient), ThermodynamicContrast (energy-based local contrast), and RandomProjections (fixed random feedback) can all train the same recurrent geometry with only the credit constructor argument changed. This is the compositional abstraction in action: the geometry, dynamics, substrate, plasticity, and update remain identical.
+</details>
 
 ```python
 import torch
@@ -164,15 +225,27 @@ for name, credit in CREDIT_ARMS:
     print(f"{name}: {metrics['train_acc']:.1%}")
 ```
 
-[^9]: The P-axis swaps the same way: pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
+<details>
+<summary><strong>P-axis swaps work the same way</strong> (click to expand)</summary>
 
-[^10]: Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
+Pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
+</details>
+
+<details>
+<summary><summary><strong>Formerly hardcoded model families → coordinates</strong> (click to expand)</summary>
+
+Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
+</details>
 
 ### Research Direction Models (Experimental Variants)
 
 These are native implementations of research directions and experimental variants expressed as first-class ontology coordinates. Several may overlap prior literature:
 
-[^11]: These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
+<details>
+<summary><strong>Not claimed as novel algorithms</strong> (click to expand)</summary>
+
+These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
+</details>
 
 | Model | Coordinate | Description |
 |-------|------------|-------------|
@@ -204,9 +277,17 @@ from computronium.models.native import (
 
 Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability analysis *before* implementation:
 
-[^12]: **Symmetric topology + EnergyMinimization** → under the stated energy/boundedness assumptions, fixed-point convergence follows via LaSalle's invariance principle (Hopfield/EqProp). **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics). **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA.
+<details>
+<summary><strong>Formal stability guarantees</strong> (click to expand)</summary>
 
-[^13]: The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below. Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **AutoScientist** searches the declared ontology space and records experiment results.
+**Symmetric topology + EnergyMinimization** → under the stated energy/boundedness assumptions, fixed-point convergence follows via LaSalle's invariance principle (Hopfield/EqProp). **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics). **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA.
+</details>
+
+<details>
+<summary><strong>Joint dynamics extension</strong> (click to expand)</summary>
+
+The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below. Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **AutoScientist** searches the declared ontology space and records experiment results.
+</details>
 
 ---
 
@@ -262,11 +343,19 @@ uv sync --dev
 uv run scripts/quickstart.py
 ```
 
-[^14]: **Why Forward-Forward?** FF uses layer-local objectives and avoids conventional backward propagation through the network (no weight transport). The quickstart is a small reproducibility smoke test comparing FF with Backprop on MNIST—not a benchmark result. `scripts/quickstart.py` is the canonical entry point.
+<details>
+<summary><strong>Why Forward-Forward?</strong> (click to expand)</summary>
+
+FF uses layer-local objectives and avoids conventional backward propagation through the network (no weight transport). The quickstart is a small reproducibility smoke test comparing FF with Backprop on MNIST—not a benchmark result. `scripts/quickstart.py` is the canonical entry point.
+</details>
 
 ### Quickstart: Compose a Six-Axis System
 
-[^15]: The block below is the opening of [`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py) — the demo test that shows it working, locked verbatim against it. Compose a system from all six ontology axes and train it on MNIST:
+<details>
+<summary><strong>Demo test source</strong> (click to expand)</summary>
+
+The block below is the opening of [`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py) — the demo test that shows it working, locked verbatim against it. Compose a system from all six ontology axes and train it on MNIST.
+</details>
 
 ```python
 import torch
@@ -319,7 +408,11 @@ history = trainer.fit()
 print(f"train accuracy: {history[-1]['train_acc']:.1%}")
 ```
 
-[^16]: One epoch on CPU trains this coordinate to ≈ 0.9 (chance 0.1). The same test goes on to demonstrate J1 (a 5-D build trained identically produces bitwise-equal θ) and the L6 config round-trip. Run `pytest tests/integration/ -k demo` to watch every capability demonstrate itself.
+<details>
+<summary><strong>Expected result</strong> (click to expand)</summary>
+
+One epoch on CPU trains this coordinate to ≈ 0.9 (chance 0.1). The same test goes on to demonstrate J1 (a 5-D build trained identically produces bitwise-equal θ) and the L6 config round-trip. Run `pytest tests/integration/ -k demo` to watch every capability demonstrate itself.
+</details>
 
 ### Config-Driven Training
 
@@ -336,7 +429,11 @@ comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
 
 All factories are available via `from computronium import ...` and compose 6-axis ontology systems in one call (5-D systems are the `M = NullPlasticity` slice). Each has a matching YAML preset in `configs/presets/`.
 
-[^17]: **Implemented algorithms are generally literature-derived baselines or variants; the framework contribution is their common compositional representation and systematic comparison.**
+<details>
+<summary><strong>Provenance disclaimer</strong> (click to expand)</summary>
+
+Implemented algorithms are generally literature-derived baselines or variants; the framework contribution is their common compositional representation and systematic comparison.
+</details>
 
 | Factory | Axis Coordinate (S × G × D × M × C × U) | Preset YAML | Description | Provenance |
 |---------|-----------------------------------------|-------------|-------------|------------|
@@ -429,7 +526,11 @@ system = create_tile_mlp(
 )
 ```
 
-[^18]: Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Compose a Six-Axis System quickstart above.
+<details>
+<summary><strong>Training wiring</strong> (click to expand)</summary>
+
+Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Compose a Six-Axis System quickstart above.
+</details>
 
 ### 6-D Joint Factories (Non-Null Plasticity)
 
@@ -468,7 +569,11 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ### 1. Ontology Protocols (`computronium/core/ontology.py`)
 
-[^19]: Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/core/ontology.py` for full Protocol definitions:
+<details>
+<summary><strong>Protocol details</strong> (click to expand)</summary>
+
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/core/ontology.py` for full Protocol definitions.
+</details>
 
 - `Substrate` — `forward_operator`, `weight_update_operator`
 - `Geometry` — `forward`, `route`
@@ -478,7 +583,11 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 
 ### 2. Joint Architecture Protocols (`computronium/core/joint/`)
 
-[^20]: The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py`, `computronium/core/joint/context.py`, `computronium/core/joint/transition.py`:
+<details>
+<summary><strong>Joint protocol details</strong> (click to expand)</summary>
+
+The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py`, `computronium/core/joint/context.py`, `computronium/core/joint/transition.py`.
+</details>
 
 - **CompositeState** — joint intra-episode state $z_t = (x_t, \psi_t, \sigma_t)$ with `activity`, `plastic`, `substrate` mappings
 - **SystemContext** — immutable context: `theta`, `geometry`, `substrate_physics`, `registry`, `config` (6-axis)
@@ -501,7 +610,11 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
-[^21]: **Zero-Extension Invariant**: $M=\text{Null}, \psi=\text{const}, \sigma=\sigma_0 \implies F_\theta(z)|_x = D_\theta(x)$. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
+<details>
+<summary><strong>Zero-Extension Invariant</strong> (click to expand)</summary>
+
+$M=\text{Null}, \psi=\text{const}, \sigma=\sigma_0 \implies F_\theta(z)|_x = D_\theta(x)$. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
+</details>
 
 ### 4. Factories (`computronium/core/system_trainer/`)
 
@@ -537,7 +650,11 @@ joint = compose_joint_system(
 
 ### 5. Substrate Models ✅
 
-[^22]: **Current substrate implementations are primarily computational models; physical-hardware validation is future work.**
+<details>
+<summary><strong>Simulation vs. physical disclaimer</strong> (click to expand)</summary>
+
+Current substrate implementations are primarily computational models; physical-hardware validation is future work.
+</details>
 
 | Substrate Model | What Is Modeled | Simulation vs. Physical | Verification |
 |-----------------|-----------------|-------------------------|--------------|
@@ -547,7 +664,11 @@ joint = compose_joint_system(
 | `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Simulated phase; no physical optical hardware | Phase wrapping to [-π, π]; no NaN/inf outputs |
 | `QuantumSubstrate` | Parameterized unitary gates, parameter-shift rule | Simulated unitaries; no quantum hardware | Parameter-shift matches finite-difference (cosine ≥ 0.999) |
 
-[^23]: **Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
+<details>
+<summary><strong>Energy terminology precision</strong> (click to expand)</summary>
+
+**Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
+</details>
 
 ---
 
@@ -565,7 +686,11 @@ The framework enforces **correctness by construction** through a layered verific
 | **Hypothesized** | Research question; not yet empirically established |
 | **Planned** | Future work; not yet implemented |
 
-[^24]: A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
+<details>
+<summary><strong>Verification ≠ scientific superiority</strong> (click to expand)</summary>
+
+A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
+</details>
 
 ### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
 
@@ -593,7 +718,11 @@ The framework enforces **correctness by construction** through a layered verific
 
 ### 🧬 Biologically Motivated Property Tests (Hypothesis-based)
 
-[^25]: These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
+<details>
+<summary><strong>Not established biological axioms</strong> (click to expand)</summary>
+
+These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
+</details>
 
 | Motivated Constraint | Test | Method | Threshold |
 |------|------|--------|-----------|
@@ -606,7 +735,11 @@ The framework enforces **correctness by construction** through a layered verific
 
 ### ✅ Integration Verification Gates (All Passing)
 
-[^26]: **Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.**
+<details>
+<summary><strong>Scope disclaimer</strong> (click to expand)</summary>
+
+Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.
+</details>
 
 | Gate | Result |
 |------|--------|
@@ -677,7 +810,11 @@ We formulate the research object as:
 adaptive computation ↔ controlled departure from contraction
 ```
 
-[^27]: The hypothesis: **useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.**
+<details>
+<summary><strong>Hypothesis statement</strong> (click to expand)</summary>
+
+**Useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.**
+</details>
 
 ### Monitoring the Frontier
 
@@ -696,11 +833,15 @@ The framework measures:
 
 ### Resource Vector
 
-[^28]: The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
+<details>
+<summary><strong>Resource vector definition</strong> (click to expand)</summary>
+
+The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
 
 $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
 
 The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
+</details>
 
 ### Frontier Record
 
@@ -721,7 +862,11 @@ class FrontierRecord:
 
 ### 5-Level Benchmark Hierarchy
 
-[^29]: The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
+<details>
+<summary><strong>Experimental questions, not established results</strong> (click to expand)</summary>
+
+The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
+</details>
 
 ---
 
@@ -733,7 +878,11 @@ class FrontierRecord:
 
 The 6-axis decomposition gives the **AutoScientist** a **structured search space** instead of a flat model list:
 
-[^30]: The AutoScientist is an automated research agent that proposes, executes, and analyzes experiments across the 6-D ontology space. It uses chain-of-thought reasoning over ontology axes, retrieves prior art from arXiv, generates counterfactuals, and maintains a persistent knowledge base of experimental results.
+<details>
+<summary><strong>What is the AutoScientist?</strong> (click to expand)</summary>
+
+The AutoScientist is an automated research agent that proposes, executes, and analyzes experiments across the 6-D ontology space. It uses chain-of-thought reasoning over ontology axes, retrieves prior art from arXiv, generates counterfactuals, and maintains a persistent knowledge base of experimental results.
+</details>
 
 | Campaign Type | Fixed Axes | Varied Axis | Example Hypothesis |
 |---------------|------------|-------------|-------------------|
@@ -780,7 +929,11 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 
 ### 6-D Joint Experiments — In Development
 
-[^31]: Canonical specification of the 5-level benchmark hierarchy (see *Stability-Plasticity Trade-off Hypothesis* above). All questions remain open.
+<details>
+<summary><strong>Canonical 5-level benchmark hierarchy</strong> (click to expand)</summary>
+
+Canonical specification of the 5-level benchmark hierarchy (see *Stability-Plasticity Trade-off Hypothesis* above). All questions remain open.
+</details>
 
 | Level | Experiment | File | Question | Toy Task / Constraint | Compare |
 |-------|------------|------|----------|----------------------|---------|
@@ -882,7 +1035,11 @@ comp lab benchmark --domain rl --quick
 
 ### Multi-GPU Training
 
-[^32]: PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` supports distributed TileNet sharding for large models.
+<details>
+<summary><strong>Multi-GPU details</strong> (click to expand)</summary>
+
+PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` supports distributed TileNet sharding for large models.
+</details>
 
 ### P2P Coordinator System (gRPC + Kademlia)
 
@@ -893,7 +1050,11 @@ Decentralized coordination at `computronium/p2p/`:
 - 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
 - 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
 
-[^33]: P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` — the P2P layer is algorithm-agnostic):
+<details>
+<summary><strong>P2P worker details</strong> (click to expand)</summary>
+
+P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` — the P2P layer is algorithm-agnostic).
+</details>
 
 ```bash
 # Start a gRPC TileMesh worker
@@ -959,92 +1120,18 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 | `compile.py` | `torch.compile` integration: custom `EqPropFunction`/`EqPropTritonFunction` autograd, dynamic shapes, compile presets |
 | `kernel_backend.py` | `KernelRegistry` with shape-specific auto-tuning cache |
 
-[^34]: **Key achievements:**
+<details>
+<summary><strong>Key achievements</strong> (click to expand)</summary>
+
 - ⚡ Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
 - 🔄 Auto-dispatch with profile-guided backend selection
 - 🚀 Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
 - 🌐 Multi-GPU tile sharding support for large TileNet models
 - ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
+</details>
 
 ---
 
 ## 📜 License
 
 MIT
-
----
-
-## Footnotes
-
-[^1]: **Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium)): the theoretical limit of physical computation. The name reflects the framework's aim to bridge abstract algorithms and the physical constraints of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
-
-[^2]: The **search for computronium** investigates learning systems that are native to physical constraints: asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency. The goal is to determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This requires decoupling machine learning from the rigid, non-physical requirements of digital abstraction and embracing local, energy-based dynamics where networks relax toward equilibrium.
-
-[^3]: The three perspectives are not mutually exclusive layers but overlapping views of the same codebase. The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
-
-[^4]: By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
-
-[^5]: The P-axis is investigated as a **computational-expressiveness axis** (TODO17): a program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
-
-[^6]: A **System is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace.** This decomposition is the framework's organizing abstraction for comparing learning systems. It defines compatibility constraints over combinations of primitives; compatible combinations form the search space explored by the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
-
-[^7]: The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
-
-[^8]: The credit-swap demo demonstrates that Backprop (global gradient), ThermodynamicContrast (energy-based local contrast), and RandomProjections (fixed random feedback) can all train the same recurrent geometry with only the credit constructor argument changed. This is the compositional abstraction in action: the geometry, dynamics, substrate, plasticity, and update remain identical.
-
-[^9]: The P-axis swaps the same way: pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
-
-[^10]: Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
-
-[^11]: These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
-
-[^12]: **Symmetric topology + EnergyMinimization** → under the stated energy/boundedness assumptions, fixed-point convergence follows via LaSalle's invariance principle (Hopfield/EqProp). **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics). **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA.
-
-[^13]: The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below. Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **AutoScientist** searches the declared ontology space and records experiment results.
-
-[^14]: **Why Forward-Forward?** FF uses layer-local objectives and avoids conventional backward propagation through the network (no weight transport). The quickstart is a small reproducibility smoke test comparing FF with Backprop on MNIST—not a benchmark result. `scripts/quickstart.py` is the canonical entry point.
-
-[^15]: The block below is the opening of [`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py) — the demo test that shows it working, locked verbatim against it. Compose a system from all six ontology axes and train it on MNIST.
-
-[^16]: One epoch on CPU trains this coordinate to ≈ 0.9 (chance 0.1). The same test goes on to demonstrate J1 (a 5-D build trained identically produces bitwise-equal θ) and the L6 config round-trip. Run `pytest tests/integration/ -k demo` to watch every capability demonstrate itself.
-
-[^17]: **Implemented algorithms are generally literature-derived baselines or variants; the framework contribution is their common compositional representation and systematic comparison.**
-
-[^18]: Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Compose a Six-Axis System quickstart above.
-
-[^19]: Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/core/ontology.py` for full Protocol definitions.
-
-[^20]: The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py`, `computronium/core/joint/context.py`, `computronium/core/joint/transition.py`.
-
-[^21]: **Zero-Extension Invariant**: $M=\text{Null}, \psi=\text{const}, \sigma=\sigma_0 \implies F_\theta(z)|_x = D_\theta(x)$. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
-
-[^22]: **Current substrate implementations are primarily computational models; physical-hardware validation is future work.**
-
-[^23]: **Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
-
-[^24]: A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
-
-[^25]: These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
-
-[^26]: **Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.**
-
-[^27]: The hypothesis: **useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.**
-
-[^28]: The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources: $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$ The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
-
-[^29]: The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
-
-[^30]: The AutoScientist is an automated research agent that proposes, executes, and analyzes experiments across the 6-D ontology space. It uses chain-of-thought reasoning over ontology axes, retrieves prior art from arXiv, generates counterfactuals, and maintains a persistent knowledge base of experimental results.
-
-[^31]: Canonical specification of the 5-level benchmark hierarchy (see *Stability-Plasticity Trade-off Hypothesis* above). All questions remain open.
-
-[^32]: PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` supports distributed TileNet sharding for large models.
-
-[^33]: P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` — the P2P layer is algorithm-agnostic).
-
-[^34]: **Key achievements:**
-- ⚡ Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
-- 🔄 Auto-dispatch with profile-guided backend selection
-- 🚀 Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
-- 🌐 Multi-GPU tile sharding support for large TileNet models
-- ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
