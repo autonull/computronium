@@ -38,7 +38,7 @@ class TestBootstrap:
 
     def test_experiments_pre_registered(self, bootstrapped_store):
         store, result = bootstrapped_store
-        assert len(result["experiments"]) == 5
+        assert len(result["experiments"]) == 6
         for experiment in store.experiments_by_status("pre_registered"):
             assert experiment.status == "pre_registered"
 

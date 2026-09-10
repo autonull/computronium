@@ -117,6 +117,24 @@ def _status_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def _emit_schema(args: argparse.Namespace) -> int:
+    from computronium.ceec import schemas
+
+    with _open_store(Path(args.ledger_dir)) as store:
+        derived = schemas.emit_mechanism_schema(
+            store,
+            args.belief,
+            statement=args.statement,
+            supporting_evidence=args.evidence.split(",") if args.evidence else None,
+            failure_boundaries=args.boundaries.split(",") if args.boundaries else [],
+            verification_levels=dict(
+                pair.split(":") for pair in args.levels.split(",") if pair
+            ),
+        )
+        print(f"emitted {derived.id} for {args.belief}")
+    return 0
+
+
 def _quarantine_report(args: argparse.Namespace) -> int:
     with _open_store(Path(args.ledger_dir)) as store:
         quarantined = store.beliefs_by_status("quarantined")
@@ -197,6 +215,24 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_status_history)
 
     sub.add_parser("quarantine-report").set_defaults(func=_quarantine_report)
+
+    p = sub.add_parser("emit-schema")
+    p.add_argument("--belief", required=True)
+    p.add_argument("--statement", required=True)
+    p.add_argument(
+        "--evidence",
+        default=None,
+        help="comma-separated evidence IDs (default: all linked)",
+    )
+    p.add_argument(
+        "--boundaries", default="", help="comma-separated failure boundaries"
+    )
+    p.add_argument(
+        "--levels",
+        default="",
+        help="verification levels as evidence_id:level pairs, comma-separated",
+    )
+    p.set_defaults(func=_emit_schema)
 
     p = sub.add_parser("export")
     p.add_argument("--output", default=str(DEFAULT_LEDGER_DIR / "exports"))

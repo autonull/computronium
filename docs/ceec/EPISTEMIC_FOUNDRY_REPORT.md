@@ -1,13 +1,13 @@
 # Epistemic Foundry Report
 
-**Round:** 4 (2026-09-10) — temporal-ψ mechanism built and X-TPC-001 executed under CEEC governance.
+**Round:** 5 (2026-09-10) — X-TPC-002 conflicting-task ablation executed; temporal-ψ advantage confirmed at the conflicting coordinate.
 
 ## Active beliefs
 
 | ID | Statement (abridged) | Status | Interval |
 |---|---|---|---|
 | B-H1-ADAPTIVE-LOCAL-INVERSES | Slow feedback adaptation improves local credit descent | open | [0.45, 0.80] (was [0.20, 0.60]) |
-| B-H2-TEMPORAL-PSI-CREDIT | Temporal ψ credit extends frozen-θ task horizon | open | [0.20, 0.40] (was [0.10, 0.45]) |
+| B-H2-TEMPORAL-PSI-CREDIT | Temporal ψ credit extends frozen-θ task horizon | open | [0.35, 0.55] (was [0.20, 0.40]) |
 | B-H3-STABLE-TRANSIENT-AMPLIFICATION | Stable transient amplification improves robustness | open | [0.30, 0.70] (was [0.20, 0.55]) |
 | B-H4-ROUTING-SPARSITY-EFFICIENCY | Routing yields measurable resource benefits | open | [0.05, 0.35] (was [0.25, 0.60]) |
 | B-H5-UPDATE-RULE-SPECIALIZATION | Role-specific update rules improve learning/stability | open | [0.25, 0.60] (was [0.20, 0.55]) |
@@ -73,6 +73,39 @@ untested mechanism the belief names; X-TPC-001 remains pre-registered.
   promote). **Calibration:** CAL-000005 (acquisition_only, outcome
   boolean 0 vs the temporal-credit prediction). **Audit:** clean.
 
+## Round 5 outcomes — X-TPC-002 (conflicting-task ablation)
+
+- **Execution:** `scripts/probes/x_tpc_002.py`, ~10 s CPU, 3 seeds,
+  cumsum → last-symbol → INVERTED last-symbol switch (stage C imposes the
+  opposite label mapping on the same frozen h), θ bitwise frozen in the ψ
+  phase (SHA-256 + FrozenThetaAudit), all X-TPC-001 defect fixes inherited.
+- **P1 (acquisition) SUPPORTED** (temporal_090: 2/3 seeds off the null
+  floor, B {0.754, 0.777, 0.766} vs null {0.645, 0.660, 0.707}).
+- **P2 (temporal credit under conflict) SUPPORTED 3/3 seeds on EVERY
+  temporal arm:** C return temporal {0.695–0.812} vs closed-form
+  {0.508–0.535} — the forget-free sufficient statistics blend opposite
+  mappings and cancel toward chance, exactly as the pre-registered
+  mechanism argument predicted. The forgetting trade-off is visible:
+  temporal arms drop stage-B retention (Bret 0.18–0.28) while closed-form
+  keeps it (0.46–0.53).
+- **Belief update:** B-H2 narrowed upward [0.20, 0.40] → [0.35, 0.55].
+  The temporal-credit clause is now supported at BOTH coordinates
+  (positive-only at the non-conflicting one, decisive at the conflicting
+  one); the conflict boundary condition is closed.
+- **Gates:** only `probability_threshold` fails (one probe cannot
+  promote). **Calibration:** CAL-000006 (outcome
+  temporal_credit_conflict_supported, boolean 1). **Audit:** clean.
+  Post-ingest oracle selection: X-RSE-001 (follow-up).
+- Trace-decay sensitivity (folded from the TODO19 improvement notes):
+  ρ ∈ {0.5, 0.7, 0.9} all support P2 3/3 seeds; ρ=0.9 retains the highest
+  C accuracy — the advantage is not knife-edge in ρ.
+
+## Mechanism schemas
+
+First schema emitted round 5: **temporal-psi-credit (D-000013)** for
+B-H2-TEMPORAL-PSI-CREDIT — see `MECHANISM_SCHEMAS.md`. Also round 5: the
+first real `supersedes` artifact-correlation relation (D-000012).
+
 ## Promoted claims
 
 None yet. Promotion requires `probability_low >= 0.95` plus the full gate
@@ -100,11 +133,13 @@ None.
 | X-STA-001 | completed, positive, calibrated |
 | X-RSE-001 | completed, negative at operating point, calibrated |
 | X-USU-001 | completed, positive, calibrated |
+| X-TPC-002 | completed, positive (P1+P2), calibrated |
 
 ## Calibration summary
 
-5 records (CAL-000001..CAL-000005). Outcomes: 3 success (ALI, STA, USU),
-2 failure (RSE routing benefit, TPC temporal-credit advantage). Review
+6 records (CAL-000001..CAL-000006). Outcomes: 4 success (ALI, STA, USU,
+TPC-002), 2 failure (RSE routing benefit, TPC-001 temporal-credit at
+non-conflicting coordinate). Review
 flags: none — prediction misses were honest interval misses, not
 miscalibration drift.
 

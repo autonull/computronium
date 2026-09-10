@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale)
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate)
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0
@@ -68,16 +68,67 @@
 - Quality: `tests/ceec` 111 passed (~1.5 s); `tests/property` full suite
   745 passed / 12 skipped (~2 min); ruff + pyright clean on all new/changed files.
 
+### Round 5 — X-TPC-002 conflicting-task ablation (2026-09-10)
+
+- **X-TPC-002 executed** (`scripts/probes/x_tpc_002.py`, ~10 s CPU, 3
+  seeds): cumsum → last-symbol → **inverted last-symbol** switch — stage C
+  imposes the opposite label mapping on the same frozen h basis, the
+  conflict coordinate named in the round-4 boundary note. θ bitwise
+  frozen (SHA-256 + FrozenThetaAudit); all X-TPC-001 defect fixes
+  inherited; probe pre-registers itself from
+  `configs/ceec/experiments/temporal_psi_credit_conflict.yaml`
+  (idempotent).
+- **P1 (acquisition) SUPPORTED** — temporal_090 off the null floor 2/3
+  seeds (B {0.754, 0.777, 0.766} vs null {0.645, 0.660, 0.707}).
+- **P2 (temporal credit under conflict) SUPPORTED 3/3 seeds on every
+  temporal arm** — C return temporal {0.695–0.812} vs closed-form
+  {0.508–0.535} (the forget-free statistics blend opposite mappings and
+  cancel toward chance, exactly as pre-registered). Trade-off visible:
+  temporal drops stage-B retention (0.18–0.28) where closed-form keeps it
+  (0.46–0.53).
+- **Trace-decay sensitivity folded in** (was an improvement note):
+  ρ ∈ {0.5, 0.7, 0.9} all support P2 3/3; ρ=0.9 highest C accuracy — not
+  knife-edge in ρ.
+- **B-H2 narrowed upward [0.20, 0.40] → [0.35, 0.55]** — the temporal
+  clause is now supported at BOTH coordinates; conflict boundary
+  condition closed. Only `probability_threshold` fails promotion;
+  CAL-000006; audit clean; post-ingest selection: X-RSE-001 (follow-up).
+- Wiring: `configs/ceec/experiments/temporal_psi_credit_conflict.yaml`
+  added; bootstrap-count locks (test_bootstrap, test_integration_loop)
+  5 → 6 experiments. Quality: `tests/ceec` 111 passed (~1.4 s); ruff +
+  pyright clean.
+- **First `mechanism_schema` emitted (open-work item 2 done for B-H2):**
+  new `computronium/ceec/schemas.py` (`emit_mechanism_schema`,
+  `belief_evidence_ids`) + CLI `emit-schema`; schema D-000013 consolidates
+  X-TPC-001 + X-TPC-002 evidence for B-H2 ([0.35, 0.55], open);
+  `MECHANISM_SCHEMAS.md` updated; tests `tests/ceec/test_schemas.py`
+  (2 cases) → 113 passed.
+- **First real `supersedes` relation exercised (open-work item 3):**
+  D-000012 — E-000024 supersedes the duplicated E-000023 (the first
+  `--ceec` run recorded evidence, then failed at calibration because
+  X-TPC-002 wasn't pre-registered; the idempotent retry re-recorded the
+  identical payload). Root-cause fix in the probe: `_ensure_preregistered`
+  now runs before any evidence write.
+- Audit clean post-emission; calibration report: 6 records, 4 success /
+  2 honest-miss failures, no review flags.
+
 ### Open work (next round)
 
-1. **X-TPC-002 (conflicting-task ablation)** — the round-4 boundary
-   condition: temporal (trace-decay) credit only beats forget-free
-   accumulation when the A/B h-fits conflict. Build a switch whose tasks
-   impose contradictory readouts on the same h (e.g. inverted label
-   mappings) and re-test P2. Until then B-H2 stays [0.20, 0.40] with the
-   conflict boundary noted.
-2. Emit `mechanism_schema` derived objects once a first gated update lands (MECHANISM_SCHEMAS.md slots reserved).
-3. Real `supersedes` relations on artifact correction (policy defined, not exercised).
+1. **X-TPC-003 (migration probe)** — temporal-ψ task migration A₀ → A₁
+   without changing θ is now the natural Family-2 follow-up: X-TPC-002
+   proved trace forgetting beats blended accumulation under conflict;
+   X-TPC-003 would measure migration time/loss directly and could push
+   B-H2 toward promotion territory (currently needs probability_low ≥
+   0.95 + multi-seed reproduction + generality). Also candidate:
+   emit the B-H2 `mechanism_schema` derived object (open-work item 2 is
+   unblocked for Family 2 — evidence complete at both coordinates).
+2. ~~Emit `mechanism_schema` derived objects~~ — DONE for B-H2 (round 5:
+   D-000013 via `ceec.schemas` + `emit-schema` CLI). Remaining: emit
+   schemas for B-H1/B-H3/B-H5 (single-probe evidence — consider after a
+   second supporting probe each) and B-H4 (needs X-RSE-002).
+3. ~~Real `supersedes` relations on artifact correction~~ — POLICY
+   EXERCISED round 5 (D-000012: E-000024 supersedes duplicate E-000023);
+   remains an operational practice, not a work item.
 4. Deeper TODO18 migration (per-test evidence for instrument beliefs) — Priority 1 instruments currently rely on bootstrap provenance only.
 5. Follow-up probes from round-3 findings: X-RSE-002 (accuracy-preserving routing: mask tempering / trained gate readout) and X-USU-002 (why muon-on-forward degrades one-step descent — momentum/noise-floor defect hunt). X-STA-002 (noise robustness at the discovered coordinates) also unblocks B-H3 promotion.
 6. Optional: `comp ceec` wrapper integration (§12), portfolio optimization, web dashboard.
@@ -152,10 +203,15 @@
   either the scan (treat protocol-*subclasses* as concrete) or duck-type
   the class (as TemporalPsiPlasticity now does). Same audit should check
   for other protocol-inheriting primitives.
-- Mechanism law params (trace_decay sweep {0.3, 0.5, 0.9}, ridge_lambda)
-  were fixed a priori; a small sweep lock or probe would pin the ρ
-  sensitivity of the acquisition/return curves (X-TPC-002 should fold
-  this in).
+- ~~Mechanism law params (trace_decay sweep, ridge_lambda) fixed a priori~~ —
+  partially addressed round 5: X-TPC-002 swept ρ ∈ {0.5, 0.7, 0.9} and all
+  arms support P2 3/3 seeds (advantage not knife-edge in ρ); a dedicated
+  sensitivity lock is still possible but low value now.
+- Probe pre-registration is still boilerplate: X-TPC-002 added a probe-local
+  `_ensure_preregistered` (yaml → Experiment → idempotent pre-register).
+  Fold into `ingest_verdict` (accept an optional experiment-config path and
+  register-if-missing) or give `bootstrap_experiments` a `skip_registered`
+  flag; migrate x_tpc_002 to it on next edit.
 - X-RSE-001's dense-arm accuracy sits near chance at the quick budget — before X-RSE-002, either lengthen the budget or simplify the task so the ≤1pt accuracy-loss clause is measured against a learnable baseline.
 
 ---
@@ -2438,6 +2494,7 @@ At least the following have CEEC records:
 
 - [x] Adaptive Local Inverses probe (X-ALI-001, round 2).
 - [x] Temporal ψ Credit probe (X-TPC-001, round 4 — P1 supported, P2 falsified at quick scale).
+- [x] Temporal ψ Credit conflict ablation (X-TPC-002, round 5 — P1+P2 supported; B-H2 [0.35, 0.55]).
 - [x] Stable Transient Amplification probe (X-STA-001, round 3).
 - [x] Routing × Sparsity Efficiency probe (X-RSE-001, round 3).
 - [x] Update-Rule Specialization probe (X-USU-001, round 3).

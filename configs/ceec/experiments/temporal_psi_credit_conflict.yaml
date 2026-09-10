@@ -1,0 +1,65 @@
+# X-TPC-002: conflicting-task temporal-psi credit ablation (TODO19 Family 2)
+experiment:
+  id: X-TPC-002
+  question: >
+    Does temporal psi credit beat forget-free closed-form accumulation when
+    the A/B h-fits conflict (inverted label mapping on the same frozen h)?
+  rationale: >
+    Family 2 follow-up for B-H2-TEMPORAL-PSI-CREDIT under
+    G-PSI-PROGRAM-ADAPTATION. X-TPC-001 falsified P2 at a non-conflicting
+    coordinate; this probe re-tests P2 at the conflicting coordinate named
+    in the B-H2 boundary note.
+  scope:
+    domain: plasticity
+    substrate: [digital]
+    credit: [temporal_psi]
+    budget: quick
+  target_beliefs: [B-H2-TEMPORAL-PSI-CREDIT]
+  target_goals: [G-PSI-PROGRAM-ADAPTATION]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-feedforward-quick
+    psi_only: true
+    evaluation_policy: >
+      3-stage cumsum -> last-symbol -> INVERTED last-symbol switch; probe
+      accuracy over 8 fresh batches per read; theta bitwise-frozen in the
+      psi phase (SHA-256 + FrozenThetaAudit)
+    evidence_kind: tensor
+    instruments: [I-FROZEN-THETA-AUDIT]
+  prediction: >
+    After re-adaptation on the inverted-label task, the best temporal arm
+    (rho < 1) beats the forget-free closed-form ridge (rho = 1) by at
+    least +0.10 accuracy on at least 2 of 3 seeds; the closed-form
+    sufficient statistics blend opposite mappings and cancel toward chance.
+  prediction_probability:
+    low: 0.30
+    high: 0.60
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - closed_form_rho_1
+    - frozen_null
+    - fixed_theta_audit
+  metrics:
+    - b_acquisition_accuracy
+    - b_retained_accuracy
+    - c_return_accuracy
+    - theta_invariance
+  budget: quick
+  cost_estimate:
+    low: 1.0
+    high: 3.0
+  falsification_criterion: >
+    No temporal arm acquires stage B off the frozen-null floor, or the
+    closed-form matches/beats the temporal arms on the inverted-task
+    return despite the conflict.
+  overturn_criterion: >
+    A credible trigger (instrument defect, omitted control, untested
+    mechanism) raising rescue probability above 0.10.
+  hard_gates:
+    - frozen_theta_audit
+    - theta_bitwise_invariant
+    - identity_card_for_new_primitive
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

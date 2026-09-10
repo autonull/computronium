@@ -18,12 +18,15 @@ uv run python -m computronium.ceec.cli audit
 uv run python -m computronium.ceec.cli calibration-report
 uv run python -m computronium.ceec.cli status-history --belief B-...
 uv run python -m computronium.ceec.cli quarantine-report
+uv run python -m computronium.ceec.cli emit-schema --belief B-... --statement "..."
 uv run python -m computronium.ceec.cli export
 ```
 
 ## Policy
 
 Append-only; corrections create new artifacts linked with `supersedes`
-relations. See `docs/ceec/LEDGER_POLICY.md`. The ledger is audit-clean at
-bootstrap (8 instruments, 5 hypotheses, 5 goals, 5 pre-registered
-experiments, 4 migrated TODO18 records).
+relations (first exercised round 5: D-000012). See
+`docs/ceec/LEDGER_POLICY.md`. Current state: audit-clean; 8 instruments,
+5 hypotheses, 5 goals, 6 pre-registered experiments, 4 migrated
+TODO18 records, 6 calibration records, 1 emitted mechanism schema
+(D-000013).
