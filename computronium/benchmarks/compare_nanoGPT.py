@@ -29,6 +29,7 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 from torch import nn
 
 from computronium.core.logging import get_logger
+from computronium.core.losses import perplexity
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.utils import count_parameters
 
@@ -513,8 +514,8 @@ def benchmark_model(  # ruff: ignore[complex-structure, too-many-branches, too-m
         ),
         train_loss=final_train_loss,
         val_loss=val_loss,
-        train_ppl=torch.exp(torch.tensor(final_train_loss)).item(),
-        val_ppl=torch.exp(torch.tensor(val_loss)).item(),
+        train_ppl=perplexity(final_train_loss),
+        val_ppl=perplexity(val_loss),
         tokens_per_sec=tokens_per_sec,
         memory_mb=memory_mb,
         training_time_sec=training_time,

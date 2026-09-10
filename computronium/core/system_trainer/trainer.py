@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
+from computronium.core.losses import perplexity
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
     TrainerSnapshot,
@@ -242,7 +243,7 @@ class SystemTrainer:
         return {
             "val_loss": val_loss,
             "val_acc": val_correct / denom,
-            "val_ppl": torch.exp(torch.tensor(val_loss)).item(),
+            "val_ppl": perplexity(val_loss),
         }
 
     def snapshot(self) -> TrainerSnapshot:

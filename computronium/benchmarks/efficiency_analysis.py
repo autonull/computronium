@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 from computronium.core.logging import get_logger
+from computronium.core.losses import perplexity
 from computronium.core.utils.device import get_device
 
 logger = get_logger()
@@ -343,7 +344,7 @@ def analyze_parameter_efficiency(
             n_batches += 1
 
     val_loss = total_loss / max(1, n_batches)
-    val_ppl = torch.exp(torch.tensor(val_loss)).item()
+    val_ppl = perplexity(val_loss)
 
     # Efficiency score: PPL per million parameters
     params_millions = param_counts["total"] / 1e6
@@ -417,7 +418,7 @@ def analyze_flop_efficiency(
             n_batches += 1
 
     val_loss = total_loss / max(1, n_batches)
-    val_ppl = torch.exp(torch.tensor(val_loss)).item()
+    val_ppl = perplexity(val_loss)
 
     # Efficiency score: PPL per GFLOP
     gflops = flops_per_token / 1e9

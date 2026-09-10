@@ -6,6 +6,7 @@ Consolidates duplicate implementations from ``core/trainer.py`` and
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import torch
@@ -17,8 +18,20 @@ if TYPE_CHECKING:
 __all__ = [
     "compute_accuracy",
     "compute_loss",
+    "perplexity",
     "reshape_for_cross_entropy",
 ]
+
+
+def perplexity(val_loss: float) -> float:
+    """Exponentiate a mean cross-entropy into perplexity.
+
+    A diverged arm (val_loss large enough to overflow ``exp``) yields
+    ``float('inf')`` — the divergence sentinel — instead of an
+    overflow artifact (TODO13 §7 evidence hygiene).
+    """
+    ppl = torch.exp(torch.tensor(min(val_loss, 1e4))).item()
+    return ppl if math.isfinite(ppl) else float("inf")
 
 
 def reshape_for_cross_entropy(

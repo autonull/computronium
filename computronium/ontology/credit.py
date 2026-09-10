@@ -147,8 +147,9 @@ class CreditAssignmentConfig:
     homeostatic_target: float = 1.0
     homeostatic_scaling: bool = False
     learned_feedback: bool = False
-    feedback_lr: float = 0.5
+    feedback_lr: float = 0.05  # measured insane at 0.5 (‖B‖ collapse, TODO12b H6)
     feedback_update_every: int = 1
+    train_biases: bool = False
     label_dim: int = 0
     ema_beta: float = 0.99
     stream_norm: bool = True
@@ -283,7 +284,7 @@ class CreditAssignmentConfig:
         readout_error: bool = False,
         credit_norm: CreditNormMode = "none",
         learned_feedback: bool = False,
-        feedback_lr: float = 0.5,
+        feedback_lr: float = 0.05,
         feedback_update_every: int = 1,
     ) -> CreditAssignmentConfig:
         return cls(
@@ -416,6 +417,7 @@ class CreditAssignmentConfig:
         local_objective: Literal["ff", "lemma"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
+        train_biases: bool = False,
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="gradient",
@@ -424,6 +426,7 @@ class CreditAssignmentConfig:
             local_objective=local_objective,
             orthogonal_init=orthogonal_init,
             feedback_scale=feedback_scale,
+            train_biases=train_biases,
         )
 
 
@@ -2189,6 +2192,33 @@ class GradientCredit:
                 "to the reached layers only. Zero-filling hides that failure."
             )
         return list(grads)
+
+    def compute_bias_pseudo_gradients(
+        self,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        """Name-keyed gradients for 1-D params (opt-in via ``train_biases``).
+
+        Default is the weights-only backprop contract (H2: bias deltas
+        0.000, locked as intentional); ``train_biases`` extends the
+        gradient to biases for contract-honest baselines.
+        """
+        if loss is None or not self.config.train_biases:
+            return {}
+        bias_names = [n for n, p in geometry.params.items() if p.ndim < 2]
+        if not bias_names:
+            return {}
+        params = [geometry.params[n] for n in bias_names]
+        grads = torch.autograd.grad(
+            loss, params, retain_graph=False, create_graph=False, allow_unused=True
+        )
+        return {
+            n: g.zero_like() if g is None else g
+            for n, g in zip(bias_names, grads, strict=True)
+            if g is not None
+        }
 
     def surrogate_objective(
         self,
