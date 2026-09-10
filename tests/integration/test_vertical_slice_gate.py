@@ -43,8 +43,8 @@ def baseline() -> ClaimRecord:
 
 @pytest.fixture(scope="module")
 def fresh_record() -> ClaimRecord:
-    run = run_slice(seed=0, n_steps=12)
-    return ClaimRecord.from_runs(_COORD, run.config, [run])
+    runs = [run_slice(seed=seed, n_steps=12) for seed in (0, 1, 2)]
+    return ClaimRecord.from_runs(_COORD, runs[0].config, runs)
 
 
 @pytest.mark.usefixtures("fresh_record")

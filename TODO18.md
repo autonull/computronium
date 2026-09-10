@@ -146,7 +146,13 @@ This remediation plan is considered complete when:
 
 ---
 
-# Execution Status (TODO18 rounds 1-12 — Phases 1-5, Track B, Track C, Tier-3 clusters, round close: COMPLETE)
+# Execution Status (TODO18 rounds 1-14 — Phases 1-5, Track B, Track C, Tier-3 clusters, round close, improvement opportunities: COMPLETE)
+
+## Progress (round 14 — improvement opportunities closed)
+- **Card-drift lock**: `tests/property/test_identity_cards_drift_lock.py` — regenerates the card body from `collect_cards()` and asserts it is an ordered, stripped subsequence of `docs/IDENTITY_CARDS.md` (mirrors the readme-snippet-lock pattern; doc header/status prose is the unlocked hand-maintained index). Editing a card in code without regenerating the doc (or vice versa) now fails. Runtime-sys.path import matches the existing lock-test convention.
+- **Vertical-slice baseline multi-seed**: re-pinned `results/vertical_slice/claim_record.json` over seeds (0,1,2) — `ClaimRecord.from_runs` aggregates to n=36 per metric; `config_digest` unchanged (`5d93dadfa0c3ca5f`, config-identity is seed-independent). Gate fixture `fresh_record` now regenerates all 3 seeds; 16/16 slice tests green. Closes the "multi-seed pinning" opportunity.
+- **Lemma inertness probe**: `scripts/probes/lemma_settle_inertness.py` (verdict in docstring). Cos(pseudo-grad, ∇ free loss), 3 seeds, per layer: lemma ≈ 0 on BOTH coordinates (settle +0.003/+0.086/+0.000; feedforward/instant −0.010/+0.107); ff healthy on both (+0.43..0.53); bp +1.000 anchor; eqprop healthy on its own coordinate (+0.70/+0.55) and ≈0 on the instantaneous control's first layer (FREE==NUDGED collapse — expected). **Coordinate-mismatch hypothesis falsified: the 5.1 lemma-cell inertness is the LEMMA closed form's own directional quality (fixed random inverse projections), consistent with TODO15 §12. Lemma-on-settle stays closed until the projection structure changes (learned-B already measured worse).** No record re-pin needed (5.1 numbers already reflect this).
+- Battery: slice 16, card lock 1, fidelity 45, verification labels 5 — all green; ruff format+check clean on changed files.
 
 ## Round close (round 13 — Tier-3 verification run)
 - **Full suite green**: `1513 passed, 48 skipped, 34 deselected, 27 xfailed, 0 failed` in 3m04s (`logs/tier3_round_close.log`). All 15 pre-existing failure clusters from round 11 confirmed fixed; no regressions from the round-12 one-line fixes. Skips/xfails are deliberate (walltime-tiered demos, platform-conditional, expected-fail contracts).
@@ -204,10 +210,9 @@ All three clusters from the round-11 Tier-3 backlog are fixed (each was a one-li
 ## New improvement opportunities
 - **`_check_plasticity` snapshot hardening**: the aliasing bug (round 12) came from storing caller-owned dicts in a trace. A `SystemState`-style frozen projection for ψ trace entries would make such checks structurally alias-proof; low priority (dict-snapshot now in place).
 - **Locked-snippet reformat rule**: any future `ruff format` change to a demo test wrapped in a lock marker must be paired with a README block update in the same commit; consider adding the lock-marker files to the pre-commit `identity-cards`-style hook for visibility.
-- **Card drift lock**: `docs/IDENTITY_CARDS.md` is hand-headered + generated-body; a `gallery_lock`-style drift test (regenerate → compare) would keep cards honest. Low priority (strict gate covers presence, not content drift).
-- **`MechanisticStudyRecord`/campaign runner generalization**: both study modules share per-cell ClaimRecord aggregation; a `CampaignRunner` seam would dedupe if a third campaign arrives.
-- **ClaimRecord multi-seed pinning** (vertical-slice baseline still 1 seed; campaign records are 3-seed).
+- ~~Card drift lock~~ ✅ done (round 14). ~~ClaimRecord multi-seed pinning~~ ✅ done (round 14). ~~Lemma inertness investigation~~ ✅ closed (round 14 probe: rule-quality boundary, not coordinate mismatch).
 - **Memory-campaign record growth**: 648-cell JSON is fine now; revisit if more axes arrive.
+- **MechanisticStudyRecord/campaign runner generalization**: both study modules share per-cell ClaimRecord aggregation; a `CampaignRunner` seam would dedupe if a third campaign arrives.
 - **`requires_autograd` semantic lock**: ✅ done (round 7) — `tests/property/test_credit_semantics.py` freezes the declared-True set {RandomProjectionsCredit, LocalGoodnessCredit, LemmaCredit, TargetInversionCredit, GradientCredit, BackpropCredit}; failure message instructs docstring + lock updates in the same commit.
 - **FrozenThetaAudit optimizer coverage**, **SubstrateSpec internal wrapping**, **native `CompositeState` Mapping fix**: carried from earlier rounds.
 
