@@ -29,34 +29,6 @@ The ML library provides the composable primitives; the research framework provid
 
 ---
 
-## 🧬 Coupled Dynamical Systems
-
-Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
-
-Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
-
-<details>
-<summary><strong>Joint transition operator</strong> ⋯</summary>
-
-By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
-</details>
-
-<details>
-<summary><strong>P-axis as computational-expressiveness axis (TODO17)</strong> ⋯</summary>
-
-A program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). 
-
-The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). 
-
-The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. 
-
-A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. 
-
-The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
-</details>
-
----
-
 ## 🔮 Six-Dimensional Decomposition
 
 **Computronium models learning systems using 6 composable axes:**
@@ -256,6 +228,34 @@ from computronium.models.native import (
 <summary><strong>Not claimed as novel algorithms</strong> ⋯</summary>
 
 These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
+</details>
+
+---
+
+## 🧬 Coupled Dynamical Systems
+
+Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
+
+Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
+
+<details>
+<summary><strong>Joint transition operator</strong> ⋯</summary>
+
+By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
+</details>
+
+<details>
+<summary><strong>P-axis as computational-expressiveness axis (TODO17)</strong> ⋯</summary>
+
+A program ψ of Kolmogorov complexity $K$ can in principle be *unfolded over time* on a substrate of fixed architectural depth, using $O(K/D)$ sequential steps and $O(K)$ external memory — fixed hardware (θ), reconfigurable program (ψ), unbounded tape (NTM memory), emergent fabric (NCA). 
+
+The E1–E4 probes (TODO17) partially realize this: compression (E2), fabric reconfiguration (E3), and program sequencing over a tape (E4) are demonstrated with frozen θ; deep *chaotic* unfolding (E1) is falsified with a recorded mechanism boundary (composition-error compounding — local credit of any fixed horizon T cannot control N-step composition error unless T scales with N). 
+
+The boundary is a quantitative law (E1c/E1d): composition error ≈ min(N·ε², ε/(1−κ)) — linear accumulation of per-step operator precision, capped by geometric saturation under contraction; multiplicative explosion occurs only for operators with expanding directions (σ_max(J) > 1), i.e. the failure is chaos-specific and a *credit* pathology, not an expressiveness limit. 
+
+A σ_max(J_F) stability-expressiveness frontier on the NCA fabric is measured: most patterns cost nothing, thin symmetric structure requires non-contractive rules. 
+
+The README states capabilities as probe-scale evidence, not validated headline claims. Formal specification and protocol implementations: *Core Architecture* below.
 </details>
 
 ---
