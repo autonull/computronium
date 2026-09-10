@@ -1,0 +1,55 @@
+# X-ALI-001: one-step alignment probe (TODO19 Family 1)
+experiment:
+  id: X-ALI-001
+  question: >
+    Does slow feedback adaptation improve one-step improvement_per_norm
+    relative to fixed feedback?
+  rationale: >
+    Family 1 primary probe for B-H1-ADAPTIVE-LOCAL-INVERSES under
+    G-LOCAL-CREDIT-VIABILITY.
+  scope:
+    domain: credit
+    substrate: [digital]
+    credit: [random_projections, target_inversion]
+    budget: quick
+  target_beliefs: [B-H1-ADAPTIVE-LOCAL-INVERSES]
+  target_goals: [G-LOCAL-CREDIT-VIABILITY]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    horizon: 1
+    norm_matching: true
+    coordinate: digital-feedforward-quick
+    evaluation_policy: one-step improvement_per_norm over matched-norm pairs
+    evidence_kind: vector
+    instruments: [I-VERTICAL-SLICE-PANEL, I-AUTOGRAD-PIPELINE]
+  prediction: >
+    Adaptive feedback increases improvement_per_norm by at least 10%
+    relative to fixed feedback across 3 seeds.
+  prediction_probability:
+    low: 0.30
+    high: 0.60
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - fixed_random_feedback
+    - matched_norm
+  metrics:
+    - improvement_per_norm
+    - pseudo_gradient_alignment
+    - feedback_alignment
+    - walltime
+  budget: quick
+  cost_estimate:
+    low: 0.5
+    high: 1.5
+  falsification_criterion: >
+    No consistent improvement across seeds, or improvement disappears after
+    norm matching.
+  overturn_criterion: >
+    A defect-free mechanism raising rescue probability above 0.10.
+  hard_gates:
+    - coordinate_valid
+    - seed_plan_present
+    - matched_control
+    - evaluation_policy_valid
+    - no_quarantined_dependencies

@@ -1,0 +1,71 @@
+# CEEC goals (TODO19 F.3)
+# Goal utility is strictly separate from belief probability.
+
+goals:
+  - id: G-LOCAL-CREDIT-VIABILITY
+    statement: >
+      Determine whether local credit descent can be made viable across
+      substrate, geometry, and credit families.
+    kind: science
+    belief_refs: [B-H1-ADAPTIVE-LOCAL-INVERSES, B-H5-UPDATE-RULE-SPECIALIZATION]
+    utility:
+      science: 0.9
+      program: 0.4
+      resource: 0.2
+      optionality: 0.5
+      urgency: 0.6
+    scalar_utility: 0.9
+
+  - id: G-PSI-PROGRAM-ADAPTATION
+    statement: >
+      Establish whether frozen-theta psi adaptation scales to longer horizons
+      with temporal credit.
+    kind: science
+    belief_refs: [B-H2-TEMPORAL-PSI-CREDIT]
+    utility:
+      science: 0.9
+      program: 0.7
+      resource: 0.1
+      optionality: 0.6
+      urgency: 0.5
+    scalar_utility: 0.9
+
+  - id: G-STABLE-EXPRESSIVITY
+    statement: >
+      Find coordinates where stability and transient amplification coexist
+      beneficially.
+    kind: science
+    belief_refs: [B-H3-STABLE-TRANSIENT-AMPLIFICATION]
+    utility:
+      science: 0.7
+      program: 0.3
+      resource: 0.1
+      optionality: 0.4
+      urgency: 0.3
+    scalar_utility: 0.7
+
+  - id: G-RESOURCE-PARETO
+    statement: >
+      Map the resource Pareto frontier of routing and sparsity mechanisms.
+    kind: resource
+    belief_refs: [B-H4-ROUTING-SPARSITY-EFFICIENCY]
+    utility:
+      science: 0.4
+      program: 0.6
+      resource: 0.9
+      optionality: 0.5
+      urgency: 0.4
+    scalar_utility: 0.8
+
+  - id: G-EPISTEMIC-HEALTH
+    statement: >
+      Keep instruments calibrated, quarantine clean, and calibration honest.
+    kind: hygiene
+    belief_refs: []
+    utility:
+      science: 0.5
+      program: 0.5
+      resource: 0.3
+      optionality: 0.7
+      urgency: 0.6
+    scalar_utility: 0.7

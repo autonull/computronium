@@ -1,0 +1,57 @@
+# X-TPC-001: frozen-theta horizon probe (TODO19 Family 2)
+experiment:
+  id: X-TPC-001
+  question: >
+    Does temporal psi credit extend successful task horizon relative to
+    instantaneous psi update under frozen theta?
+  rationale: >
+    Family 2 primary probe for B-H2-TEMPORAL-PSI-CREDIT under
+    G-PSI-PROGRAM-ADAPTATION.
+  scope:
+    domain: plasticity
+    substrate: [digital]
+    credit: [temporal_psi]
+    budget: quick
+  target_beliefs: [B-H2-TEMPORAL-PSI-CREDIT]
+  target_goals: [G-PSI-PROGRAM-ADAPTATION]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-feedforward-quick
+    psi_only: true
+    evaluation_policy: successful-horizon comparison with fixed-theta audit
+    evidence_kind: curve
+    instruments: [I-FROZEN-THETA-AUDIT, I-AUTOGRAD-PIPELINE]
+  prediction: >
+    Temporal psi credit increases successful horizon by at least 50%
+    relative to the instantaneous baseline under frozen theta.
+  prediction_probability:
+    low: 0.25
+    high: 0.55
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - instantaneous_psi_update
+    - null_plasticity
+    - fixed_theta_audit
+  metrics:
+    - successful_horizon
+    - adaptation_steps
+    - composition_error_growth
+    - psi_entropy
+    - theta_invariance
+  budget: quick
+  cost_estimate:
+    low: 1.0
+    high: 3.0
+  falsification_criterion: >
+    Temporal credit does not extend horizon, or theta invariance fails, or
+    composition error worsens materially.
+  overturn_criterion: >
+    A credible trigger (instrument defect, omitted control, untested
+    mechanism) raising rescue probability above 0.10.
+  hard_gates:
+    - frozen_theta_audit
+    - theta_bitwise_invariant
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

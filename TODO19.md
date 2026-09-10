@@ -1,10 +1,103 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Final actionable development plan  
-**Created:** 2026-09-11  
-**Supersedes:** TODO19 “Mechanism Foundry”  
-**Normative governance spec:** CEEC-Core v1.0  
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); temporal-ψ mechanism build outstanding
+**Created:** 2026-09-11
+**Supersedes:** TODO19 “Mechanism Foundry”
+**Normative governance spec:** CEEC-Core v1.0
 **Primary implementation target:** `computronium/ceec/`
+
+---
+
+## Progress log (updated 2026-09-10)
+
+### Implemented (round 1)
+
+- **Phase A (governance):** `docs/ceec/{COMPUTRONIUM_PROFILE,LEDGER_POLICY,EXPERIMENT_PRE_REGISTRATION,CALIBRATION_POLICY}.md`, `configs/ceec/{profile,gates}.yaml`.
+- **Phase B (ledger):** `computronium/ceec/{models,ids,store}.py`. Append-only SQLite (DB-level triggers block UPDATE/DELETE on 17 tables); frozen Pydantic object models with CEEC validation (structured evidence requires axes+values_ref; inert/missing require notes; promotion/boundary require gate refs; reopen requires trigger); content-addressed artifacts (`sha256:`, `ceec/artifacts/<h[:2]>/<h>`); belief revision history; only `open` revisions via `update_belief` — gated statuses exclusively via `change_status`.
+- **Phase C (gates/quarantine):** `gates.py` — promotion (8 gates) and boundary (7 gates) evaluation from evidence `quality` metadata; transitive quarantine propagation + cascading unquarantine; effective-status resolution incl. staleness (content-change-based, not status-flip-based).
+- **Phase D (selection):** `selection.py` — hard-constraint filter (G-HARD-0..10) evaluated BEFORE scoring; documented EV/cost model (`EV = Σ goal_priority·(1−mid)·generality_mult`, `Score = EV/Cost^γ`); deterministic state hash; explicit overrides that cannot bypass constraints or target constraint-failed candidates; append-only decisions.
+- **Phase E (evidence capture):** `probe_adapter.py` (probe contract → artifact/evidence/derived; inert/missing auto-documentation; scalar summaries always derived); `migrate/todo18_records.py` — all 3 claim records + corrections log migrated as Artifact+Evidence+Derived, never beliefs.
+- **Phase F (bootstrap):** `configs/ceec/{instruments,beliefs,goals}.yaml` + 5 experiment YAMLs; `bootstrap.py` gives every belief provenance evidence (config artifact). Real ledger initialized at `ceec/ceec.sqlite3`: 8 instruments, 5 hypotheses, 5 goals, 5 pre-registered experiments, audit clean.
+- **Phase H (calibration/audit/report):** `calibration.py` (outcome recording with Brier/log, report, review flags), `audit.py` (8 checks), `cli.py` (init, bootstrap, migrate, propose, decide, audit, calibration-report, status-history, quarantine-report, export). Bootstrap-round report: `docs/ceec/EPISTEMIC_FOUNDRY_REPORT.md`, `MECHANISM_SCHEMAS.md`, `INSTRUMENT_BELIEFS.md`, `CEEC_CORE.md`, `ceec/README.md`.
+
+### Quality gates
+
+- `tests/ceec/`: **110 passed** (models, store, gates, quarantine, selection, structured evidence, bootstrap, calibration, integration loop, families smoke) — ~1.3 s.
+- `ruff format` + `ruff check` clean on all new files; `pyright` clean (0 errors).
+
+### Open work (next round)
+
+1. **Temporal-ψ mechanism build** (blocks X-TPC-001): implement a supervised/temporal ψ update (new Plasticity primitive) with AlgorithmIdentityCard (G-HARD-9) + FrozenThetaAudit (G-HARD-8). D22 root cause (ψ contract consumes target-free first-phase activity) is the design constraint: the new ψ law must consume a loss/target or trace term. Lever analysis recorded as derived `D-000005`; X-TPC-001 stays pre-registered.
+2. Emit `mechanism_schema` derived objects once a first gated update lands (MECHANISM_SCHEMAS.md slots reserved).
+3. Real `supersedes` relations on artifact correction (policy defined, not exercised).
+4. Deeper TODO18 migration (per-test evidence for instrument beliefs) — Priority 1 instruments currently rely on bootstrap provenance only.
+5. Follow-up probes from round-3 findings: X-RSE-002 (accuracy-preserving routing: mask tempering / trained gate readout) and X-USU-002 (why muon-on-forward degrades one-step descent — momentum/noise-floor defect hunt). X-STA-002 (noise robustness at the discovered coordinates) also unblocks B-H3 promotion.
+6. Optional: `comp ceec` wrapper integration (§12), portfolio optimization, web dashboard.
+
+### Round 3 — experiment execution record (2026-09-10)
+
+- **X-STA-001 executed** (`scripts/probes/x_sta_001.py`, ~0.5 s CPU): stable
+  transiently-amplifying coordinates found on **all 3 seeds** via
+  W = Q·blkdiag(ρ(I+cK₄))·Qᵀ (4 size-4 Jordan blocks, rotated; nominal
+  ρ=0.85, c-sweep {0, 0.5, 1, 2, 4}). Realized ρ ≤ 0.91 < 0.95 limit while
+  σ_max reaches 4.06; settling time grows monotonically with σ_max
+  (168→344 steps at tol 1e-4; budget 500). c=0 purely-contractive control
+  matched. B-H3 updated [0.20, 0.55] → [0.30, 0.70]; only
+  probability_threshold fails promotion; calibration CAL-000002; audit clean.
+  Design note: single-Jordan-block families are float32-fragile (defect
+  perturbation ~ε^(1/16) moved realized ρ to ~1.06); size-4 blocks bound
+  the drift at ~ε^(1/4) ≈ 0.02.
+- **X-RSE-001 executed** (`scripts/probes/x_rse_001.py`, ~0.5 s CPU): routing
+  (RoutingPlasticity, gate_dim=16, backprop credit, sparse 3-informative-
+  feature task, 30 steps, 3 seeds) cuts effective ops by **48–50%** with no
+  gate collapse, but costs 0–4.7pt accuracy (seed-dependent) — the ≤1pt
+  accuracy-loss clause of the pre-registered prediction fails on one seed,
+  so verdict = no routing benefit *at this operating point*. B-H4 narrowed
+  [0.25, 0.60] → [0.05, 0.35] (the accuracy clause fails; the ops win alone
+  is recorded in the evidence values, not the belief). defect_audit gate
+  flagged (dense seed-1 accuracy 0.203 ≈ chance — task barely learnable at
+  quick budget). Calibration CAL-000003; audit clean.
+- **X-USU-001 executed** (`scripts/probes/x_usu_001.py`, ~0.6 s CPU): role-
+  split update beats uniform on all 3 seeds — **muon-on-readout +
+  euclid-elsewhere** (hybrid_muon_out) is the best arm everywhere
+  (ipn 0.52–0.60 vs uniform-euclid 0.45–0.54); muon-on-forward is
+  destructive at matched norm (ipn 0.01–0.03), consistent with the
+  RiemannianOrthogonal identity card's "orthogonalization amplifies the
+  noise floor" deviation (single-batch pseudo-grads). Specialization
+  supported. B-H5 updated [0.20, 0.55] → [0.25, 0.60] with
+  hybrid_muon_out named winner; only probability_threshold fails; CAL-000004;
+  audit clean. The hybrid rule is a per-name dispatcher (zero-momentum
+  non-role grads → exactly zero displacement; no double-stepping).
+- CEEC oracle selection after each ingest: X-RSE-001 → X-USU-001 →
+  X-RSE-001 (follow-up), consistent with the narrowed beliefs.
+- Wiring: `scripts/probes/x_*.py` added to ruff `per-file-ignores`
+  (E402/I001 — sys.path bootstrap pattern); all three probes ruff + pyright
+  clean; `tests/ceec` 110 passed (~1.4 s).
+
+### Round 2 — experiment execution record (2026-09-10)
+
+- **X-ALI-001 executed** (`scripts/probes/x_ali_001.py`, 2.2 s CPU): adaptive
+  feedback (B ∝ W/‖W‖ re-projection, shape-safe, re-projected each step) beats
+  fixed random feedback on late-half improvement_per_norm on **all 3 seeds**
+  at matched ‖Δθ‖ ({0.863, 0.853, 0.694} vs {0.490, 0.459, 0.517}). B-H1
+  updated [0.20, 0.60] → [0.45, 0.80]; promotion gate evaluated (only
+  probability_threshold fails — one probe cannot promote); calibration
+  CAL-000001 (Brier 0.25); audit clean.
+- **X-TPC-001 lever analysis** (`scripts/probes/x_tpc_001_feasibility.py`):
+  D22 falsified the instantaneous-ψ lever; temporal credit is the untested
+  lever and requires a mechanism build (identity card + frozen-θ audit).
+  B-H2 narrowed [0.15, 0.55] → [0.10, 0.45]; no boundary declared (the named
+  lever is untested — boundary would be premature).
+
+### Improvement opportunities
+
+- Evidence-quality flags are convention-driven (probe `quality` dict keys documented in `gates.py` docstring); a Pydantic `QualityModel` would harden them.
+- `_next_id` uses table COUNT — safe under single-writer CLI use; switch to AUTOINCREMENT-style sequencing if concurrent writers appear.
+- `decide()` re-evaluates constraints on every call; cache keyed on `state_hash` if rounds grow large.
+- Staleness detection compares revision content; consider recording per-belief dep-snapshot hashes for exactness.
+- Defective-matrix construction is float32-fragile: a size-4 Jordan block drifts realized ρ by ~ε^(1/4); add a `stability/` helper that verifies constructed spectra before use (X-STA-001 learned this the hard way — see round 3 note).
+- Probe `_ingest_ceec` blocks share ~40 lines of boilerplate (link evidence → update belief → gates → calibration → audit → decide); extract a shared `ceec.probe_adapter.ingest_verdict(...)` helper (DRY; three near-identical copies now exist).
+- X-RSE-001's dense-arm accuracy sits near chance at the quick budget — before X-RSE-002, either lengthen the budget or simplify the task so the ≤1pt accuracy-loss clause is measured against a learnable baseline.
 
 ---
 
@@ -2256,39 +2349,39 @@ The Epistemic Foundry plan is complete when all of the following are true.
 
 ### CEEC implementation
 
-- [ ] `computronium/ceec/` module exists.
-- [ ] Object models implemented.
-- [ ] SQLite ledger implemented.
-- [ ] Artifact ingestion implemented.
-- [ ] Evidence ingestion implemented.
-- [ ] Derived ingestion implemented.
-- [ ] Belief revisions implemented.
-- [ ] Gate engine implemented.
-- [ ] Quarantine propagation implemented.
-- [ ] Decision ledger implemented.
-- [ ] Calibration tracker implemented.
-- [ ] Audit command implemented.
+- [x] `computronium/ceec/` module exists.
+- [x] Object models implemented.
+- [x] SQLite ledger implemented.
+- [x] Artifact ingestion implemented.
+- [x] Evidence ingestion implemented.
+- [x] Derived ingestion implemented.
+- [x] Belief revisions implemented.
+- [x] Gate engine implemented.
+- [x] Quarantine propagation implemented.
+- [x] Decision ledger implemented.
+- [x] Calibration tracker implemented.
+- [x] Audit command implemented.
 
 ### Governance
 
-- [ ] Computronium CEEC profile written.
-- [ ] Ledger policy written.
-- [ ] Pre-registration policy written.
-- [ ] Calibration policy written.
-- [ ] Instrument beliefs bootstrapped.
-- [ ] Hypothesis beliefs bootstrapped.
-- [ ] Goals bootstrapped.
-- [ ] Initial experiments pre-registered.
+- [x] Computronium CEEC profile written.
+- [x] Ledger policy written.
+- [x] Pre-registration policy written.
+- [x] Calibration policy written.
+- [x] Instrument beliefs bootstrapped.
+- [x] Hypothesis beliefs bootstrapped.
+- [x] Goals bootstrapped.
+- [x] Initial experiments pre-registered.
 
 ### Experiment execution
 
 At least the following have CEEC records:
 
-- [ ] Adaptive Local Inverses probe.
-- [ ] Temporal ψ Credit probe.
-- [ ] Stable Transient Amplification probe.
-- [ ] Routing × Sparsity Efficiency probe.
-- [ ] Update-Rule Specialization probe.
+- [x] Adaptive Local Inverses probe (X-ALI-001, round 2).
+- [ ] Temporal ψ Credit probe (blocked on temporal-ψ mechanism build).
+- [x] Stable Transient Amplification probe (X-STA-001, round 3).
+- [x] Routing × Sparsity Efficiency probe (X-RSE-001, round 3).
+- [x] Update-Rule Specialization probe (X-USU-001, round 3).
 
 Each produces at least one of:
 
@@ -2301,22 +2394,22 @@ Each produces at least one of:
 
 ### Quality
 
-- [ ] CEEC tests pass.
-- [ ] Integration loop test passes.
+- [x] CEEC tests pass.
+- [x] Integration loop test passes.
 - [ ] Existing Computronium test suite remains green.
-- [ ] Pyright passes under repository standard.
-- [ ] Ruff format and check pass.
+- [x] Pyright passes under repository standard.
+- [x] Ruff format and check pass.
 - [ ] Verification label tests pass.
 - [ ] Identity-card hook passes if new primitives introduced.
 
 ### Documentation
 
-- [ ] `docs/ceec/COMPUTRONIUM_PROFILE.md` exists.
-- [ ] `docs/ceec/LEDGER_POLICY.md` exists.
-- [ ] `docs/ceec/INSTRUMENT_BELIEFS.md` exists.
-- [ ] `docs/ceec/EPISTEMIC_FOUNDRY_REPORT.md` exists.
-- [ ] `docs/ceec/MECHANISM_SCHEMAS.md` exists.
-- [ ] README updated only if evidence gates pass.
+- [x] `docs/ceec/COMPUTRONIUM_PROFILE.md` exists.
+- [x] `docs/ceec/LEDGER_POLICY.md` exists.
+- [x] `docs/ceec/INSTRUMENT_BELIEFS.md` exists.
+- [x] `docs/ceec/EPISTEMIC_FOUNDRY_REPORT.md` exists.
+- [x] `docs/ceec/MECHANISM_SCHEMAS.md` exists.
+- [x] README updated only if evidence gates pass.
 
 ---
 

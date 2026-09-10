@@ -1,0 +1,50 @@
+# CEEC Profile (Computronium)
+
+thresholds:
+  promote: 0.95
+  boundary: 0.05
+  reopen: 0.10
+
+probability_policy:
+  point: allowed
+  interval: preferred
+  method_declaration_required: true
+
+cost_model:
+  walltime_weight: 1.0
+  memory_weight: 0.25
+  human_review_weight: 0.5
+  storage_weight: 0.05
+  gamma: 1.0
+
+hard_constraints_nonwaivable:
+  - coordinate_valid
+  - pre_registration_complete
+  - no_quarantined_dependencies
+  - budget_within_limit
+  - controls_present_or_justified
+  - seed_plan_present
+  - evaluation_policy_present
+  - structured_evidence_plan_present
+  - instrument_valid_for_claim
+  - frozen_theta_audit_for_psi_only_claims
+  - identity_card_for_new_primitive
+
+evidence_kinds:
+  - scalar
+  - interval
+  - vector
+  - tensor
+  - curve
+  - event
+  - distribution
+  - frontier
+  - inert
+  - missing
+
+verification_levels:
+  analytical: 1
+  machine_checked: 2
+  certified_numerical: 3
+  sampled_numerical: 4
+  empirical_observation: 5

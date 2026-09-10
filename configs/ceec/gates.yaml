@@ -1,0 +1,67 @@
+# CEEC gate configuration.
+# promotion: all gates in promotion_gates must pass.
+# boundary: all gates in boundary_gates must pass.
+
+promotion_gates:
+  probability_threshold:
+    description: probability_low >= thresholds.promote
+    hard: true
+  multi_seed:
+    description: at least 3 seeds unless justified in experiment design
+    hard: true
+  matched_control:
+    description: matched control present or justified
+    hard: true
+  evaluation_policy_valid:
+    description: task, split, budget, metric definitions, evaluation timing declared
+    hard: true
+  defect_audit:
+    description: defect hunt checklist run with no material defects open
+    hard: true
+  reproduction:
+    description: result reproduced by an independent run or probe
+    hard: true
+  scope_explicit:
+    description: belief scope fully declared
+    hard: true
+  no_quarantined_dependencies:
+    description: no material dependency on a quarantined belief/evidence
+    hard: true
+
+boundary_gates:
+  rescue_probability_threshold:
+    description: rescue_probability_high <= thresholds.boundary
+    hard: true
+  defect_hunt_passed:
+    description: defect hunt checklist executed and closed
+    hard: true
+  integrity_checks_passed:
+    description: instrument integrity checks passed
+    hard: true
+  known_levers_exhausted:
+    description: all known levers tested or excluded with rationale
+    hard: true
+  matched_control:
+    description: matched control present or justified
+    hard: true
+  multi_seed_where_feasible:
+    description: multi-seed where feasible
+    hard: true
+  scope_explicit:
+    description: belief scope fully declared
+    hard: true
+
+quarantine_triggers:
+  - known_defect_affects_measurement
+  - estimator_mislabeled
+  - audit_incomplete
+  - config_provenance_mismatch
+  - dependent_artifact_stale
+  - correction_invalidates_measurement
+  - live_patch_unverified
+
+reopen_triggers:
+  - strong_untested_mechanism
+  - new_evidence_raises_rescue_probability
+  - instrument_defect_invalidates_boundary
+  - decisive_omitted_control_discovered

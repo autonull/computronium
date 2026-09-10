@@ -1,0 +1,93 @@
+# CEEC hypothesis beliefs (TODO19 F.2)
+# Intervals preferred; method declared; status open until gated.
+
+beliefs:
+  - id: B-H1-ADAPTIVE-LOCAL-INVERSES
+    statement: >
+      Slowly adapting feedback projections improve local credit descent
+      quality relative to fixed feedback under matched norm and quick budget.
+    type: mechanism
+    scope:
+      domain: credit
+      substrate: [digital, sparse]
+      geometry: [feedforward, recurrent]
+      credit: [random_projections, target_inversion]
+      budget: quick
+    probability:
+      low: 0.20
+      high: 0.60
+    uncertainty: high
+    evidence_weight: low
+    generality: narrow
+    status: open
+
+  - id: B-H2-TEMPORAL-PSI-CREDIT
+    statement: >
+      Temporal psi credit extends successful task horizon of frozen-theta
+      psi adaptation relative to instantaneous psi updates.
+    type: mechanism
+    scope:
+      domain: plasticity
+      substrate: [digital]
+      geometry: [feedforward]
+      credit: [temporal_psi]
+      budget: quick
+    probability:
+      low: 0.15
+      high: 0.55
+    uncertainty: high
+    evidence_weight: low
+    generality: narrow
+    status: open
+
+  - id: B-H3-STABLE-TRANSIENT-AMPLIFICATION
+    statement: >
+      Asymptotically stable but transiently amplifying dynamics improve
+      robustness or expressivity relative to purely contractive dynamics.
+    type: mechanism
+    scope:
+      domain: stability
+      substrate: [digital]
+      geometry: [recurrent]
+      budget: quick
+    probability:
+      low: 0.20
+      high: 0.55
+    uncertainty: high
+    evidence_weight: low
+    generality: narrow
+    status: open
+
+  - id: B-H4-ROUTING-SPARSITY-EFFICIENCY
+    statement: >
+      Routing produces measurable resource benefits (effective operations,
+      walltime, memory) at equal or better task performance on sparse tasks.
+    type: mechanism
+    scope:
+      domain: resources
+      substrate: [digital, sparse]
+      budget: quick
+    probability:
+      low: 0.25
+      high: 0.60
+    uncertainty: high
+    evidence_weight: low
+    generality: moderate
+    status: open
+
+  - id: B-H5-UPDATE-RULE-SPECIALIZATION
+    statement: >
+      Assigning different update rules to different parameter roles improves
+      learning or stability relative to a uniform update rule.
+    type: mechanism
+    scope:
+      domain: update
+      substrate: [digital]
+      budget: quick
+    probability:
+      low: 0.20
+      high: 0.55
+    uncertainty: high
+    evidence_weight: low
+    generality: narrow
+    status: open

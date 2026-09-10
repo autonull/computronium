@@ -1,0 +1,14 @@
+{
+  "calibration_records": 1,
+  "scored_records": 0,
+  "mean_brier": null,
+  "mean_log_score": null,
+  "predicted_outcomes": 1,
+  "observed_success_rate": 1.0,
+  "promotions": 0,
+  "promotion_reversal_rate": 0.0,
+  "boundaries": 0,
+  "boundary_reopen_rate": 0.0,
+  "quarantines": 0,
+  "override_rate": 0.0
+}

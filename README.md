@@ -1217,6 +1217,25 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 
 ---
 
+## 🧭 CEEC Epistemic Operating System (`computronium/ceec/`)
+
+Governs research claims via the CEEC-Core chain (TODO19 Epistemic Foundry):
+`Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
+
+| Module | Purpose |
+|--------|---------|
+| `store.py` | Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability |
+| `gates.py` | Promotion/boundary gate engine, quarantine propagation, effective-status resolution |
+| `selection.py` | EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions |
+| `calibration.py` | Brier/log-score calibration tracker and report |
+| `audit.py` | Ledger integrity audit (evidence-less beliefs, ungated promotions, …) |
+| `bootstrap.py` | Seeds instruments, hypotheses, goals, pre-registered experiments from `configs/ceec/` |
+| `cli.py` | `uv run python -m computronium.ceec.cli init\|bootstrap\|decide\|audit\|calibration-report\|export` |
+
+Ledger lives at `ceec/ceec.sqlite3`; policies in `docs/ceec/`.
+
+---
+
 ## 📜 License
 
 MIT

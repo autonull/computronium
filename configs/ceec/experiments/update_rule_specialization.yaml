@@ -1,0 +1,54 @@
+# X-USU-001: role ablation one-step probe (TODO19 Family 5)
+experiment:
+  id: X-USU-001
+  question: >
+    Does role-specific update assignment improve one-step
+    improvement_per_norm relative to uniform update?
+  rationale: >
+    Family 5 primary probe for B-H5-UPDATE-RULE-SPECIALIZATION under
+    G-LOCAL-CREDIT-VIABILITY.
+  scope:
+    domain: update
+    substrate: [digital]
+    budget: quick
+  target_beliefs: [B-H5-UPDATE-RULE-SPECIALIZATION]
+  target_goals: [G-LOCAL-CREDIT-VIABILITY]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-feedforward-quick
+    roles: [forward_weights, feedback_weights, routing_psi, readout]
+    evaluation_policy: one-step improvement_per_norm with norm matching
+    evidence_kind: tensor
+    instruments: [I-VERTICAL-SLICE-PANEL, I-AUTOGRAD-PIPELINE]
+  prediction: >
+    At least one role-specific assignment improves one-step
+    improvement_per_norm over uniform update across 3 seeds.
+  prediction_probability:
+    low: 0.25
+    high: 0.60
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - uniform_update_baseline
+    - matched_norm
+  metrics:
+    - improvement_per_norm
+    - spectral_radius
+    - dominant_singular_value
+    - gradient_norm
+  budget: quick
+  cost_estimate:
+    low: 1.0
+    high: 2.0
+  falsification_criterion: >
+    No role-specific assignment improves descent quality, or improvement is
+    explained by update instability.
+  overturn_criterion: >
+    A hybrid update showing consistent multi-seed gains after wiring checks,
+    raising rescue probability above 0.10.
+  hard_gates:
+    - coordinate_valid
+    - seed_plan_present
+    - matched_control
+    - evaluation_policy_valid
+    - no_quarantined_dependencies

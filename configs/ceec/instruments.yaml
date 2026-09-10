@@ -1,0 +1,83 @@
+# CEEC instrument beliefs (TODO19 F.1)
+# These are measurement instruments, not claims. Quarantine propagates to
+# material dependents.
+
+instruments:
+  - id: I-FROZEN-THETA-AUDIT
+    statement: >
+      FrozenThetaAudit detects in-place, alias, mutate-then-restore, and
+      storage rebinding mutations of persistent theta within audited episode
+      windows.
+    type: instrument
+    scope:
+      domain: audit
+      extra:
+        audit_scope: intra_episode_theta
+    evidence_refs:
+      - TODO18 frozen-theta adversarial tests
+
+  - id: I-JACOBIAN-SEPARATION
+    statement: >
+      Jacobian separation instruments (spectral_radius_from_jacobian,
+      dominant_singular_value) resolve spectral radius and dominant singular
+      value to within sampling tolerance at audited coordinates.
+    type: instrument
+    scope:
+      domain: stability
+      measures: spectral_radius_and_sigma_max
+
+  - id: I-VERTICAL-SLICE-PANEL
+    statement: >
+      The vertical slice panel produces reproducible credit-quality
+      measurements with matched-norm controls at the reference coordinate.
+    type: instrument
+    scope:
+      domain: credit
+      budget: quick
+      measures: improvement_per_norm
+
+  - id: I-FLOPS-ESTIMATOR
+    statement: >
+      The FLOPs estimator counts effective operations within 10% of profiled
+      ground truth on reference workloads.
+    type: instrument
+    scope:
+      domain: resources
+      measures: walltime_memory_effective_ops
+
+  - id: I-RESOURCE-PROFILER
+    statement: >
+      The resource profiler attributes walltime and memory to subsystems with
+      less than 5% attribution error.
+    type: instrument
+    scope:
+      domain: resources
+      measures: walltime_memory_effective_ops
+
+  - id: I-KERNEL-EQUIVALENCE
+    statement: >
+      Kernel equivalence tests prove bit-level or tolerance-level equivalence
+      between fused kernels and their reference compositions.
+    type: instrument
+    scope:
+      domain: kernels
+      measures: kernel_bit_equivalence
+
+  - id: I-AUTOGRAD-PIPELINE
+    statement: >
+      The autograd pipeline produces correct gradients for audited subgraphs,
+      honoring requires_autograd contracts and detached-settle boundaries.
+    type: instrument
+    scope:
+      domain: autograd
+      measures: gradient_correctness
+
+  - id: I-VERIFICATION-LABELS
+    statement: >
+      Verification labels (levels 1-5) correctly classify evidence strength
+      across analytical, machine-checked, certified, sampled, and empirical
+      categories.
+    type: instrument
+    scope:
+      domain: verification
+      measures: evidence_strength

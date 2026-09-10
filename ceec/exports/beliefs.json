@@ -1,0 +1,95 @@
+[
+  {
+    "id": "B-H1-ADAPTIVE-LOCAL-INVERSES",
+    "status": "open",
+    "revision": "BR-000006",
+    "probability": [
+      0.45,
+      0.8
+    ]
+  },
+  {
+    "id": "B-H2-TEMPORAL-PSI-CREDIT",
+    "status": "open",
+    "revision": "BR-000007",
+    "probability": [
+      0.1,
+      0.45
+    ]
+  },
+  {
+    "id": "B-H3-STABLE-TRANSIENT-AMPLIFICATION",
+    "status": "open",
+    "revision": "BR-000003",
+    "probability": [
+      0.2,
+      0.55
+    ]
+  },
+  {
+    "id": "B-H4-ROUTING-SPARSITY-EFFICIENCY",
+    "status": "open",
+    "revision": "BR-000004",
+    "probability": [
+      0.25,
+      0.6
+    ]
+  },
+  {
+    "id": "B-H5-UPDATE-RULE-SPECIALIZATION",
+    "status": "open",
+    "revision": "BR-000005",
+    "probability": [
+      0.2,
+      0.55
+    ]
+  },
+  {
+    "id": "I-AUTOGRAD-PIPELINE",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-FLOPS-ESTIMATOR",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-FROZEN-THETA-AUDIT",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-JACOBIAN-SEPARATION",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-KERNEL-EQUIVALENCE",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-RESOURCE-PROFILER",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-VERIFICATION-LABELS",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  },
+  {
+    "id": "I-VERTICAL-SLICE-PANEL",
+    "status": "open",
+    "revision": null,
+    "probability": null
+  }
+]

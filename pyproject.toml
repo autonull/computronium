@@ -235,6 +235,10 @@ ignore = [
 "computronium/ontology/_settle_kernel.py" = [
     "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
+"scripts/probes/x_*.py" = [
+    "E402",  # sys.path bootstrap before computronium imports
+    "I001",  # import block follows the sys.path insert by design
+]
 "tests/**/*.py" = [
     "S101",   # assert in tests
     "PLR6301", # no-self-use in test methods

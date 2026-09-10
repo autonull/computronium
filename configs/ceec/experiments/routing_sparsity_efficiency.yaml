@@ -1,0 +1,54 @@
+# X-RSE-001: effective operations probe (TODO19 Family 4)
+experiment:
+  id: X-RSE-001
+  question: >
+    Does routing reduce effective operations relative to the dense baseline
+    on a sparse task?
+  rationale: >
+    Family 4 primary probe for B-H4-ROUTING-SPARSITY-EFFICIENCY under
+    G-RESOURCE-PARETO.
+  scope:
+    domain: resources
+    substrate: [digital, sparse]
+    budget: quick
+  target_beliefs: [B-H4-ROUTING-SPARSITY-EFFICIENCY]
+  target_goals: [G-RESOURCE-PARETO]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-sparse-quick
+    evaluation_policy: effective-ops and accuracy at matched compute
+    evidence_kind: tensor
+    instruments: [I-FLOPS-ESTIMATOR, I-RESOURCE-PROFILER]
+  prediction: >
+    Routing reduces effective ops by at least 10% with accuracy loss
+    <= 1 point.
+  prediction_probability:
+    low: 0.35
+    high: 0.70
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - dense_matched_compute_baseline
+  metrics:
+    - effective_ops
+    - active_units
+    - memory
+    - walltime
+    - accuracy
+    - gate_entropy
+  budget: quick
+  cost_estimate:
+    low: 1.0
+    high: 2.5
+  falsification_criterion: >
+    Routing overhead removes savings, or gates collapse, or the task lacks
+    exploitable sparsity.
+  overturn_criterion: >
+    A measured routing benefit on a verified sparse task after gate-collapse
+    exclusion, raising rescue probability above 0.10.
+  hard_gates:
+    - resource_profiler_instrument_valid
+    - matched_compute_baseline
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

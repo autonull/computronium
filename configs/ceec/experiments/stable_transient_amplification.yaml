@@ -1,0 +1,52 @@
+# X-STA-001: stability separation probe (TODO19 Family 3)
+experiment:
+  id: X-STA-001
+  question: >
+    Can we identify coordinates with spectral radius within limit and
+    dominant singular value above 1?
+  rationale: >
+    Family 3 primary probe for B-H3-STABLE-TRANSIENT-AMPLIFICATION under
+    G-STABLE-EXPRESSIVITY.
+  scope:
+    domain: stability
+    substrate: [digital]
+    geometry: [recurrent]
+    budget: quick
+  target_beliefs: [B-H3-STABLE-TRANSIENT-AMPLIFICATION]
+  target_goals: [G-STABLE-EXPRESSIVITY]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-recurrent-quick
+    evaluation_policy: spectral metrics at sampled coordinates
+    evidence_kind: vector
+    instruments: [I-JACOBIAN-SEPARATION]
+  prediction: >
+    Coordinates with rho <= rho_limit and sigma_max > 1 exist and settle
+    within the stability budget.
+  prediction_probability:
+    low: 0.35
+    high: 0.65
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - purely_contractive_baseline
+  metrics:
+    - spectral_radius_from_jacobian
+    - dominant_singular_value
+    - directional_amplification
+    - settling_time
+  budget: quick
+  cost_estimate:
+    low: 0.5
+    high: 2.0
+  falsification_criterion: >
+    No coordinate found where sigma_max > 1 without settling failure, across
+    all sampled initializations.
+  overturn_criterion: >
+    A settling pathology refuted by new evidence raising rescue probability
+    above 0.10.
+  hard_gates:
+    - jacobian_separation_instrument_valid
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies
