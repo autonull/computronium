@@ -5,36 +5,27 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from computronium.ontology import (
-    AdamUpdate,
     BackpropCredit,
     CreditAssignmentConfig,
     DiffusionDynamics,
-    ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
-    EuclideanUpdate,
     GeometryConfig,
     HomeostaticCredit,
     InstantaneousDynamics,
-    LionUpdate,
-    LocalAdamUpdate,
     LocalGoodnessCredit,
-    MeanNormUpdate,
-    OrthoAdamUpdate,
     ParameterUpdateConfig,
     PepitaCredit,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
-    RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
-    UnitRMSUpdate,
     geometry_from_config,
     substrate_from_config,
+    update_from_config,
 )
 
 if TYPE_CHECKING:
@@ -118,29 +109,9 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
-_UPDATE_CLASSES: dict[str, type] = {
-    "riemannian_orthogonal": RiemannianOrthogonalUpdate,
-    "muon": RiemannianOrthogonalUpdate,
-    "spectral_constrained": SpectralConstrainedUpdate,
-    "spectral": SpectralConstrainedUpdate,
-    "mean_norm": MeanNormUpdate,
-    "elastic_consolidation": ElasticConsolidationUpdate,
-    "ewc": ElasticConsolidationUpdate,
-    "euclidean": EuclideanUpdate,
-    "adam": AdamUpdate,
-    "ortho_adam": OrthoAdamUpdate,
-    "lion": LionUpdate,
-    "unit_rms": UnitRMSUpdate,
-    "local_adam": LocalAdamUpdate,
-}
-
-
 def _update_from_config(update: ParameterUpdateConfig):
-    """Instantiate update from config."""
-    cls = _UPDATE_CLASSES.get(update.update_type.lower())
-    if cls is None:
-        raise ValueError(f"Unknown update_type: {update.update_type!r}")
-    return cls(update)
+    """Instantiate update from config (canonical dispatch in ontology.update)."""
+    return update_from_config(update)
 
 
 def _plasticity_from_config(plasticity: PlasticityConfig):

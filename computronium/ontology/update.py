@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import] — runtime isinstance
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import Tensor
 
 from computronium.core.identity_card import AlgorithmIdentityCard
-from computronium.ontology.utils import apply_pseudo_gradients
+from computronium.ontology.utils import _learnable_weight_names, apply_pseudo_gradients
 
 if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
@@ -71,6 +72,8 @@ class ParameterUpdateConfig:
     beta2: float = 0.999
     eps: float = 1e-8
     ortho_lr: float = 0.003
+    role_names: tuple[str, ...] = ()
+    sub_rules: RoleSplitSpec | None = None
 
     @property
     def step_semantics(self) -> StepSemantics:
@@ -358,6 +361,59 @@ class ParameterUpdateConfig:
             beta2=beta2,
             eps=eps,
             ortho_lr=ortho_lr,
+        )
+
+    @classmethod
+    def role_split(
+        cls,
+        *,
+        role_names: tuple[str, ...],
+        on_role: ParameterUpdateConfig,
+        other: ParameterUpdateConfig,
+    ) -> ParameterUpdateConfig:
+        """Role-split dispatcher config (X-USU-001 hybrid rule): the
+        ``on_role`` rule applies to the parameters named in ``role_names``,
+        ``other`` to the rest (X-USU-001 winner: muon-on-readout +
+        euclid-elsewhere)."""
+        return cls(
+            update_type="role_split",
+            step_size=on_role.step_size,
+            momentum=on_role.momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            role_names=tuple(role_names),
+            sub_rules=RoleSplitSpec(on_role=on_role, other=other),
+        )
+
+
+# ============================================================
+# Role-split sub-rule pair
+# ============================================================
+
+
+@dataclass(frozen=True, slots=True)
+class RoleSplitSpec:
+    """Sub-rule pair for ``update_type="role_split"`` (X-USU-001 hybrid).
+
+    Attributes:
+        on_role: Rule applied to the parameters named in
+            ``ParameterUpdateConfig.role_names``.
+        other: Rule applied to every other learnable weight.
+    """
+
+    on_role: ParameterUpdateConfig
+    other: ParameterUpdateConfig
+
+    @classmethod
+    def coerce(cls, obj: RoleSplitSpec | Mapping[str, object]) -> RoleSplitSpec:
+        """Accept a spec or its ``dataclasses.asdict`` form (ledger/spec round-trip)."""
+        if isinstance(obj, RoleSplitSpec):
+            return obj
+        return cls(
+            on_role=ParameterUpdateConfig(**obj["on_role"]),  # type: ignore[arg-type]
+            other=ParameterUpdateConfig(**obj["other"]),  # type: ignore[arg-type]
         )
 
 
@@ -1268,3 +1324,120 @@ class ElasticConsolidationUpdate:
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
+
+
+class RoleSplitUpdate:
+    """Per-name dispatcher: the ``on_role`` rule on ``role_names``, the
+    ``other`` rule on the rest (X-USU-001 hybrid primitive).
+
+    Promoted from the X-USU-001 probe (B-H5 winner: muon-on-readout +
+    euclid-elsewhere beat both uniform arms on improvement_per_norm on
+    3/3 seeds). Each sub-rule sees ONLY its own names — params,
+    pseudo-grads and bias grads are partitioned — so momentum buffers
+    stay per-role, no parameter is stepped twice, and a sub-rule's
+    global-norm clip (Euclidean) applies to its own name set only.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="RoleSplitUpdate",
+        reference_equations=(
+            "per-parameter-name rule dispatch (composition primitive, "
+            "no canonical optimizer reference)"
+        ),
+        deviations_from_literature=(
+            "not a new optimizer — routes each parameter name to exactly "
+            "one sub-rule (X-USU-001: muon-on-readout + euclid-elsewhere)",
+            "global-norm clip semantics are per-subset: each sub-rule "
+            "clips its own name set independently",
+        ),
+        objective_function=None,
+        pseudo_gradient_def=(
+            "ΔW_n = on_role.step(g_n) for n ∈ role_names; other.step(g_n) otherwise"
+        ),
+        symmetry_requirements=("role_names must name existing parameters",),
+        approximation_parameters=("role_names",),
+        validated_limits=(
+            "X-USU-001: hybrid_muon_out beat both uniform arms on "
+            "improvement_per_norm on 3/3 seeds (B-H5); muon-on-forward "
+            "is destructive at matched norm",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig) -> None:
+        if config.update_type.lower() != "role_split" or config.sub_rules is None:
+            raise ValueError(
+                "RoleSplitUpdate requires update_type='role_split' with a "
+                f"role_split spec (got {config.update_type!r})"
+            )
+        spec = RoleSplitSpec.coerce(config.sub_rules)
+        self.config = config
+        self._role_names = frozenset(config.role_names)
+        self._on_role = cast("_StatefulUpdate", update_from_config(spec.on_role))
+        self._other = cast("_StatefulUpdate", update_from_config(spec.other))
+
+    def _partitions(
+        self, params: dict[str, Tensor]
+    ) -> tuple[tuple[_StatefulUpdate, frozenset[str]], ...]:
+        names = frozenset(params)
+        return (
+            (self._on_role, names & self._role_names),
+            (self._other, names - self._role_names),
+        )
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry | None,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        grads = dict(zip(_learnable_weight_names(params), pseudo_grads))
+        bgrads = bias_grads or {}
+        updated = dict(params)
+        for rule, names in self._partitions(params):
+            if not names:
+                continue
+            sub_params = {n: params[n] for n in names}
+            sub_grads = [grads[n] for n in _learnable_weight_names(sub_params)]
+            sub_bias = {n: bgrads[n] for n in bgrads if n in sub_params}
+            sub_out = rule.step(sub_params, sub_grads, geometry, sub_bias or None)
+            updated.update({n: sub_out[n] for n in sub_params})
+        return updated
+
+    def get_state(self) -> dict[str, dict[str, dict[str, Tensor]]]:
+        return {"on_role": self._on_role.get_state(), "other": self._other.get_state()}
+
+    def load_state(self, state: dict[str, dict[str, dict[str, Tensor]]]) -> None:
+        self._on_role.load_state(state.get("on_role", {}))
+        self._other.load_state(state.get("other", {}))
+
+
+_UPDATE_CLASSES: dict[str, type] = {
+    "role_split": RoleSplitUpdate,
+    "riemannian_orthogonal": RiemannianOrthogonalUpdate,
+    "muon": RiemannianOrthogonalUpdate,
+    "spectral_constrained": SpectralConstrainedUpdate,
+    "spectral": SpectralConstrainedUpdate,
+    "mean_norm": MeanNormUpdate,
+    "elastic_consolidation": ElasticConsolidationUpdate,
+    "ewc": ElasticConsolidationUpdate,
+    "euclidean": EuclideanUpdate,
+    "adam": AdamUpdate,
+    "ortho_adam": OrthoAdamUpdate,
+    "unit_rms": UnitRMSUpdate,
+    "local_adam": LocalAdamUpdate,
+    "lion": LionUpdate,
+}
+
+
+def update_from_config(config: ParameterUpdateConfig) -> ParameterUpdate:
+    """Instantiate the update rule named by ``config.update_type``.
+
+    Single dispatch point shared by the joint-system factory and
+    ``System.from_spec``; unknown values raise (no silent Euclidean
+    fallback: a typo'd update_type must not masquerade as SGD).
+    """
+    cls = _UPDATE_CLASSES.get(config.update_type.lower())
+    if cls is None:
+        raise ValueError(f"Unknown update_type: {config.update_type!r}")
+    return cls(config)

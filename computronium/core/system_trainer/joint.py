@@ -20,30 +20,23 @@ from computronium.core.plasticity import (
 )
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
-    AdamUpdate,
     CreditAssignmentConfig,
     DiffusionDynamics,
     DigitalSubstrate,
-    ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
     InstantaneousDynamics,
-    LocalAdamUpdate,
-    MeanNormUpdate,
-    OrthoAdamUpdate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
-    RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     System,
     ThermodynamicContrast,
-    UnitRMSUpdate,
     geometry_from_config,
     substrate_from_config,
+    update_from_config,
 )
 
 if TYPE_CHECKING:
@@ -472,7 +465,7 @@ def _joint_from_spec(spec: dict) -> JointSystem:
     return joint
 
 
-def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -536,27 +529,7 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-ma
 
     # Instantiate update from config — unknown values raise (no silent
     # Euclidean fallback: a typo'd update_type must not masquerade as SGD).
-    update_type = update.update_type.lower()
-    if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
-        update_instance = RiemannianOrthogonalUpdate(update)
-    elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
-        update_instance = SpectralConstrainedUpdate(update)
-    elif update_type == "mean_norm":
-        update_instance = MeanNormUpdate(update)
-    elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
-        update_instance = ElasticConsolidationUpdate(update)
-    elif update_type == "euclidean":
-        update_instance = EuclideanUpdate(update)
-    elif update_type == "adam":
-        update_instance = AdamUpdate(update)
-    elif update_type == "ortho_adam":
-        update_instance = OrthoAdamUpdate(update)
-    elif update_type == "unit_rms":
-        update_instance = UnitRMSUpdate(update)
-    elif update_type == "local_adam":
-        update_instance = LocalAdamUpdate(update)
-    else:
-        raise ValueError(f"Unknown update_type: {update_type!r}")
+    update_instance = update_from_config(update)
 
     # Instantiate plasticity from config — unknown values raise (no silent
     # Null fallback: null plasticity must be declared, not defaulted).
@@ -602,7 +575,6 @@ def create_routing_eqprop_system(
     from computronium.ontology import (
         CreditAssignmentConfig,
         EnergyMinimizationDynamics,
-        EuclideanUpdate,
         GeometryConfig,
         ParameterUpdateConfig,
         RecurrentGeometry,
@@ -692,7 +664,6 @@ def create_fast_weight_eqprop_system(
     from computronium.ontology import (
         CreditAssignmentConfig,
         EnergyMinimizationDynamics,
-        EuclideanUpdate,
         GeometryConfig,
         ParameterUpdateConfig,
         RecurrentGeometry,

@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate) and emitted the first mechanism schema (D-000013). **Open work re-prioritized payout-first (rounds 6–8 target components + real-task results; see Open work).**
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported — temporal-ψ advantage confirmed at the conflicting coordinate) and emitted the first mechanism schema (D-000013); round 6 shipped the R6-A component (RoleSplitUpdate config surface, benchmark-verified bit-identical to the probe). **Open work re-prioritized payout-first (rounds 6–8 target components + real-task results; see Open work).**
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0
@@ -9,6 +9,50 @@
 ---
 
 ## Progress log (updated 2026-09-10)
+
+### Round 6 — R6-A role-split update → config surface (2026-09-10)
+
+- **Component shipped:** `RoleSplitUpdate` in `computronium/ontology/update.py`
+  — per-name dispatcher (`on_role` rule on `role_names`, `other` rule on
+  the rest), promoted from the X-USU-001 inline `_RoleSplitUpdate`. Cleaner
+  than the probe version: sub-rules see ONLY their own names (params,
+  pseudo-grads and bias grads partitioned via `apply_pseudo_gradients`'s
+  name-zipping), so no zeroed-grad momentum-buffer pollution and no
+  double-stepping; global-norm clip is per-subset (documented in the card).
+- **Config surface:** `ParameterUpdateConfig.role_split(role_names=…,
+  on_role=…, other=…)` classmethod; nested `RoleSplitSpec` (frozen
+  dataclass) stored under `sub_rules`, with `RoleSplitSpec.coerce` for the
+  `dataclasses.asdict` round-trip (ledger/spec serialization).
+- **Dispatch deduplication:** the three near-identical update elif chains
+  (joint.py, factory.py `from_spec`, spec.py `_UPDATE_CLASSES`) collapsed
+  into one canonical `update_from_config()` in `ontology/update.py`;
+  spec.py/factory.py/joint.py now delegate. Added the `role_split` type
+  there, so all three composition paths get the primitive for free.
+  Exports: `ontology/__init__` (+ `update_from_config`), root
+  `__all__`/`_LAZY`/TYPE_CHECKING. Identity card added;
+  `docs/IDENTITY_CARDS.md` regenerated (drift lock green).
+- **Quality:** 10 property tests (`tests/property/test_role_split_update.py`):
+  partition exactness vs solo sub-rules, bias pass-through/routing,
+  role-complement equivalence, snapshot replay determinism, asdict
+  round-trip, factory dispatch, end-to-end train step (muon readout shows
+  near-equal row norms). All pass; ruff + pyright clean on all changed
+  files (joint/factory/spec at HEAD error parity — no new findings).
+- **Benchmark (`scripts/probes/x_r6a_role_split_benchmark.py`, ~0.35 s
+  CPU):** wired component reproduces x_usu_001 BIT-IDENTICALLY —
+  role_split_muon_out ipn {0.597, 0.568, 0.520} vs uniform_euclid
+  {0.542, 0.521, 0.446}, 3/3 seeds. Measurement path mirrors
+  `x_usu_001.run_arm` exactly (feedback_scale=0.1, euclid-based per-arm
+  lr calibration, readout auto-detect). Pre-flight lesson recorded: an
+  initial variant with (a) default feedback_scale, (b) hybrid-arm lr
+  calibrated on its OWN displacement norm, and (c) `grad_clip=0` on the
+  euclid sub-rule lost 0/3 — the wiring was fine, the measurement path
+  wasn't. When reproducing a probe, mirror its calibration policy
+  exactly before doubting the component.
+- **Ledger intentionally NOT updated:** the benchmark is a strict
+  reproduction of existing X-USU-001 evidence (bit-identical values); a
+  new pre-registered experiment row would add a redundant ledger entry,
+  not knowledge. B-H5 evidence stays X-USU-001; the component regression
+  is the property lock + this probe.
 
 ### Implemented (round 1)
 
@@ -122,13 +166,10 @@
 > and redirect at engineering questions (update rules, feedback
 > adaptation) until one ships.
 
-1. **R6-A — USU hybrid rule → real config surface (tangible artifact,
-   cheapest payout).** Promote the muon-on-readout + euclid-elsewhere
-   role-split dispatcher from `scripts/probes/x_usu_001.py` into
-   `ParameterUpdateConfig` (a `role_split` primitive with a per-name
-   rule mapping). Wire + identity card + property lock + one benchmark
-   number on an existing demo. This converts the round-3 win into a
-   usable component; ledger follows via `ingest_verdict`.
+1. ~~**R6-A — USU hybrid rule → real config surface**~~ — DONE round 6
+   (`RoleSplitUpdate` + `ParameterUpdateConfig.role_split`, benchmark-
+   verified bit-identical to the probe; see Round 6 log). **Round-6
+   judging criterion met: one shipped component.**
 2. **R6-B — X-TPC-003 on a NON-TOY task pair (tangible result).** Temporal-ψ
    readout migration where the conflicting tasks are real (MNIST-pair
    with conflicting label geometry, or LM fine-tune A→B contradiction) —
@@ -217,6 +258,15 @@ practice, not a work item.
 
 ### Improvement opportunities
 
+- **`update_from_config` is now the single update dispatch point** (round 6);
+  any new update primitive needs one `_UPDATE_CLASSES` row in
+  `ontology/update.py` plus the class — no other wiring.
+- **Migrate x_usu_001's inline `_RoleSplitUpdate` to the shipped primitive**
+  opportunistically on its next edit (it is now redundant; the benchmark
+  probe x_r6a already uses the config surface).
+- Role-name ergonomics: `role_names` must be explicit parameter names; a
+  `"readout"` sentinel (auto-detected by shape, as the probes do) would
+  spare callers the detection step — add if a second consumer appears.
 - Evidence-quality flags are convention-driven (probe `quality` dict keys documented in `gates.py` docstring); a Pydantic `QualityModel` would harden them.
 - `_next_id` uses table COUNT — safe under single-writer CLI use; switch to AUTOINCREMENT-style sequencing if concurrent writers appear.
 - `decide()` re-evaluates constraints on every call; cache keyed on `state_hash` if rounds grow large.

@@ -119,8 +119,10 @@ from computronium.ontology.update import (
     ParameterUpdate,
     ParameterUpdateConfig,
     RiemannianOrthogonalUpdate,
+    RoleSplitUpdate,
     SpectralConstrainedUpdate,
     UnitRMSUpdate,
+    update_from_config,
 )
 from computronium.ontology.utils import (
     ConfigFactory,
@@ -203,6 +205,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # ParameterUpdate
     "ParameterUpdateConfig",
     "ParameterUpdate",
+    "RoleSplitUpdate",
+    "update_from_config",
     "EuclideanUpdate",
     "LionUpdate",
     "AdamUpdate",

@@ -13,22 +13,15 @@ from computronium.core.system_trainer.spec import (
 )
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
-    AdamUpdate,
     CreditAssignmentConfig,
     DigitalSubstrate,
-    ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
-    LionUpdate,
-    MeanNormUpdate,
-    OrthoAdamUpdate,
     ParameterUpdateConfig,
     RecurrentGeometry,
-    RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
     StateDynamicsConfig,
     SubstrateConfig,
     System,
@@ -36,6 +29,7 @@ from computronium.ontology import (
     dynamics_from_config,
     geometry_from_config,
     substrate_from_config,
+    update_from_config,
 )
 
 if TYPE_CHECKING:
@@ -243,25 +237,7 @@ def compose_system[  # ruff: ignore[complex-structure]
 
             # Reconstruct update
             update_cfg = ParameterUpdateConfig(**spec["update"])
-            update_type = update_cfg.update_type.lower()
-            if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
-                update = RiemannianOrthogonalUpdate(update_cfg)
-            elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
-                update = SpectralConstrainedUpdate(update_cfg)
-            elif update_type == "mean_norm":
-                update = MeanNormUpdate(update_cfg)
-            elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
-                update = ElasticConsolidationUpdate(update_cfg)
-            elif update_type == "euclidean":
-                update = EuclideanUpdate(update_cfg)
-            elif update_type == "adam":
-                update = AdamUpdate(update_cfg)
-            elif update_type == "ortho_adam":
-                update = OrthoAdamUpdate(update_cfg)
-            elif update_type == "lion":
-                update = LionUpdate(update_cfg)
-            else:
-                raise ValueError(f"Unknown update_type: {update_type!r}")
+            update = update_from_config(update_cfg)
 
             return compose_system(substrate, geometry, dynamics, credit, update)
 

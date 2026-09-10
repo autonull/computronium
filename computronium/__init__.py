@@ -249,6 +249,7 @@ if TYPE_CHECKING:
         OrthoAdamUpdate,
         ParameterUpdateConfig,
         RiemannianOrthogonalUpdate,
+        RoleSplitUpdate,
         SpectralConstrainedUpdate,
         UnitRMSUpdate,
     )
@@ -293,6 +294,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "EnergyMinimizationDynamics",
     ),
     "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
+    "RoleSplitUpdate": ("computronium.ontology.update", "RoleSplitUpdate"),
     "LionUpdate": ("computronium.ontology.update", "LionUpdate"),
     "AdamUpdate": ("computronium.ontology.update", "AdamUpdate"),
     "OrthoAdamUpdate": ("computronium.ontology.update", "OrthoAdamUpdate"),
@@ -621,6 +623,7 @@ __all__ = [
     "RandomProjectionsCredit",
     "RecurrentGeometry",
     "RiemannianOrthogonalUpdate",
+    "RoleSplitUpdate",
     "RoutingPlasticity",
     "RuleStatePlasticity",
     "ShortestPathDepth",
