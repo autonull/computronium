@@ -146,7 +146,19 @@ This remediation plan is considered complete when:
 
 ---
 
-# Execution Status (TODO18 rounds 1-7 — Phases 1-5, Track B, Track C complete; 5.2 extensions, locks, evidence seams done)
+# Execution Status (TODO18 rounds 1-12 — Phases 1-5, Track B, Track C, Tier-3 clusters, round close: COMPLETE)
+
+## Round close (round 13 — Tier-3 verification run)
+- **Full suite green**: `1513 passed, 48 skipped, 34 deselected, 27 xfailed, 0 failed` in 3m04s (`logs/tier3_round_close.log`). All 15 pre-existing failure clusters from round 11 confirmed fixed; no regressions from the round-12 one-line fixes. Skips/xfails are deliberate (walltime-tiered demos, platform-conditional, expected-fail contracts).
+- **TODO18 is complete**: all Tracks (A phases 1-5, B §1-7, C.1/C.2/C.4), Definition of Done items 1-4 satisfied. Only C.3 (optional mutmut) remains deferred-by-design.
+
+## Progress (round 12 — pre-existing Tier-3 failure clusters closed, 15/15)
+All three clusters from the round-11 Tier-3 backlog are fixed (each was a one-line-seed defect, not a redesign):
+- **ψ-fidelity cluster (7 tests) — snapshot aliasing in `_check_plasticity`**: the tracing `plasticity.step` wrapper stored the caller's `psi` dict by reference, but `_step_psi`'s writeback (`psi.clear(); psi.update(new_psi)`, pipeline.py:131) mutates that same dict — so `trace[-1]` pre/post aliased to identical contents and `_psi_max_delta` reported 0 ("inert plasticity update") for every non-null primitive. Fix: snapshot `pre = dict(psi)` / `dict(new_psi)` in the wrapper (fidelity.py). Root cause is in the *check*, not the plasticity primitives or the pipeline writeback (the writeback is correct — cross-episode ψ persistence needs it). All 45 fidelity tests green.
+- **`test_system_spec.py` cluster (7 tests) — `grid_hw` tuple restore missing**: `_geometry_spec_parts`'s JSON tuple-restore list (`factory.py:93`) covered `hidden_dims/conv_channels/input_hw/pool_hw/lattice_dims` but not `grid_hw`, so the NCA spec round-trip compared `[16,16]` vs `(16,16)`. Added `"grid_hw"` to the list; GeometryConfig now has no remaining un-restored tuple fields (all 6 enumerated). 20/20 green.
+- **`readme_snippet_lock` — GeometryConfig wrap drift**: README's locked `swap_credit` block had `GeometryConfig.recurrent(...)` on one line; the demo test wraps it across 3 lines (ruff 88-col). Lock compares stripped lines in order, so the single wrap mismatch failed the whole block. README updated to the test's 3-line form; lock script green. Lesson: line-wrap shape in locked snippets must mirror the source test exactly — reformat only test and block together.
+- Battery: 245 passed / 6 skipped / 4 xfailed (spec + lock + fidelity + discovery + joint + slice + substrate). Ruff format+check clean on changed files; pyright on changed files byte-identical to HEAD (7 pre-existing factory.py TypeVar-union errors, 0 new).
+- **Tier-3 expectation**: the full suite should now be fully green except skipped/xfailed/xpassed (round 11's 15 failures + the gallery drift were the entire delta; a full re-run at round close will confirm).
 
 ## Progress (round 11 — CLI pyright clean, Tier-3 round close)
 - **CLI pyright backlog**: lab.py + kernel_profile.py now **0 pyright errors**. Plasticity union widening solved at the call sites (`cast("PlasticityPrimitive", ...)` with a duck-typing comment — compose_joint_system stores bare `PlasticityConfig` for the null branch; widening the `TP` TypeVar bound was tried and rejected: +1 pyright error inside joint.py); `task_loss` properly imported from `computronium.core.pipeline` (the `undefined-name` ignore hack removed); trajectory activity comprehension narrowed with an `isinstance Tensor` filter.
@@ -185,11 +197,13 @@ This remediation plan is considered complete when:
 - **FA regression fixed**: an earlier uncommitted round had flipped `RandomProjectionsCredit.requires_autograd` True→False — the pipeline then settled NUDGED under `no_grad`, detaching the settle graph FA's `autograd.grad(loss, logits)` needs; FA/DFA training became silent no-ops (caught by `test_native_fa_learning_capability`). Restored to `True`. Lesson: `requires_autograd` is a *functional* contract, not metadata — flipping it changes pipeline grad context (`core/pipeline.py:169`).
 - **Hygiene**: RESEARCH3.md §stability now names `spectral_radius_from_jacobian` + `JacobianAmplificationEstimator` (last stale `SpectralRadiusEstimator` reference gone repo-wide). `pepita_native.py` → `lemma_native.py` rename complete: `create_native_lemma_mlp`/`native_lemma_mlp`, root `_LAZY`/`__all__`/TYPE_CHECKING updated, `cli/repro.py` + `param_estimator.py` + 4 test files migrated, docstrings corrected to Forward-Forward goodness math. No demo/gallery entries referenced the native (re-pin not needed). Battery: 73 native/parity/gradient + 8 validation + 12 labels/wiring + 8 memory, all green.
 
-## Next up (ordered)
-1. **Pre-existing Tier-3 failure clusters** (15, byte-identical at HEAD): (a) ψ-fidelity pipeline (7 tests — `fast_weights`/`routing` ψ target-activity threading + capability-manifest subspace), (b) `test_system_spec.py` 7 spec-round-trip failures, (c) `readme_snippet_lock` 1. Each needs a HEAD-anchored diagnosis (none are TODO18 regressions).
+## Next up
+1. ~~Round-close verification~~ ✅ done (round 13 — full suite green).
 2. **C.3** (optional): mutmut over `frozen_theta.py` — only if the audit logic changes.
 
 ## New improvement opportunities
+- **`_check_plasticity` snapshot hardening**: the aliasing bug (round 12) came from storing caller-owned dicts in a trace. A `SystemState`-style frozen projection for ψ trace entries would make such checks structurally alias-proof; low priority (dict-snapshot now in place).
+- **Locked-snippet reformat rule**: any future `ruff format` change to a demo test wrapped in a lock marker must be paired with a README block update in the same commit; consider adding the lock-marker files to the pre-commit `identity-cards`-style hook for visibility.
 - **Card drift lock**: `docs/IDENTITY_CARDS.md` is hand-headered + generated-body; a `gallery_lock`-style drift test (regenerate → compare) would keep cards honest. Low priority (strict gate covers presence, not content drift).
 - **`MechanisticStudyRecord`/campaign runner generalization**: both study modules share per-cell ClaimRecord aggregation; a `CampaignRunner` seam would dedupe if a third campaign arrives.
 - **ClaimRecord multi-seed pinning** (vertical-slice baseline still 1 seed; campaign records are 3-seed).
@@ -198,6 +212,12 @@ This remediation plan is considered complete when:
 - **FrozenThetaAudit optimizer coverage**, **SubstrateSpec internal wrapping**, **native `CompositeState` Mapping fix**: carried from earlier rounds.
 
 ## Details that facilitate future work
+### Round 12 details (Tier-3 cluster fixes)
+- **Diagnostic pattern**: reproduce the check manually (import the module, call `check_coordinate_fidelity`, inspect `AxisCheck.detail` — it's a frozen dataclass, attribute access not subscripting), then drive the traced wrapper by hand. The aliasing bug was invisible in the primitives themselves; only the trace pre/post comparison exposed it.
+- **`psi` writeback contract**: `_step_psi` (pipeline.py:131) intentionally mutates the caller's `psi` dict in place (`clear()` + `update()`) so ψ persists across episodes when `plasticity.step` returns a fresh dict. Any check that snapshots ψ *must* shallow-copy before the step (`dict(psi)`), because tensor values are replaced, not mutated — shallow copies are sufficient, clones unnecessary.
+- **GeometryConfig tuple fields (complete list for spec round-trips)**: `hidden_dims`, `conv_channels`, `input_hw`, `pool_hw`, `lattice_dims`, `grid_hw` (+ nested `connectivity.lattice_dims`). `_geometry_spec_parts` is the single restore point.
+- **Locked snippet mechanics**: `scripts/readme_snippet_lock.py` compares every nonblank, non-harness README block line as a stripped in-order subsequence of the source test file. `_HARNESS_EXEMPT_PREFIXES` = `("def _flatten(", "for x, y in ")` — loader-cap churn in `_flatten` is deliberately exempt; API lines keep full teeth.
+
 ### Round 6 details (5.2 extensions)
 - **Coupling semantics**: `x_{t+1} = tanh(W_x x_t + W_in u_t + W_fb m_t + ξ_t)` with `W_fb` seeded at `seed+2`, scale 0.3, built only when `coupling == "coupled"`. `m` is driven by inputs only — never by x — so the linearized state perturbation decay stays `∏(1−x_t²)W_x`; coupling shifts the trajectory the Jacobian is evaluated along, not its structure. `_measured_contraction` now replays a zero-noise episode on the rig's own maps (was: synthetic map + contraction-derived seed).
 - **Paired replay**: each episode is run twice with the same `torch.manual_seed(seed*1000+trial)` — once at `noise_level`, once at 0 — so `state_noise_divergence` isolates exactly the noise the state arm absorbs (shared pattern/distractor/write-noise realization; zero-noise draw yields exact zeros). Doubles episode count; acceptable at these dims.

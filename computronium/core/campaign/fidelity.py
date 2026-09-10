@@ -513,8 +513,9 @@ def _check_plasticity(joint, parts: list[str]) -> AxisCheck:
 
     def tracing_step(psi, z, context):
         calls["step"] += 1
+        pre = dict(psi)
         new_psi = original_step(psi, z, context)
-        trace.append((psi, new_psi))
+        trace.append((pre, dict(new_psi)))
         return new_psi
 
     joint.plasticity.step = tracing_step  # type: ignore[method-assign]

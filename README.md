@@ -191,7 +191,9 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
+            GeometryConfig.recurrent(
+                input_dim=784, output_dim=10, hidden_dims=(32,)
+            )
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)

@@ -98,6 +98,7 @@ def _geometry_spec_parts(
         "input_hw",
         "pool_hw",
         "lattice_dims",
+        "grid_hw",
     ):
         if isinstance(geometry_dict.get(field), list):
             geometry_dict[field] = tuple(geometry_dict[field])
