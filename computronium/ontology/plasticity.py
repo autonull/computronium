@@ -12,6 +12,7 @@ from computronium.core.plasticity.fast_weights import FastWeightPlasticity
 from computronium.core.plasticity.routing import RoutingPlasticity
 from computronium.core.plasticity.rule_state import RuleStatePlasticity
 from computronium.core.plasticity.substrate_coupled import SubstrateCoupledPlasticity
+from computronium.core.plasticity.temporal_psi import TemporalPsiPlasticity
 from computronium.state import (
     NullPlasticity,
     PlasticityConfig,
@@ -31,4 +32,5 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "RoutingPlasticity",
     "RuleStatePlasticity",
     "SubstrateCoupledPlasticity",
+    "TemporalPsiPlasticity",
 ]

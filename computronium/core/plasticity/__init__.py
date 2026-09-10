@@ -31,6 +31,11 @@ from computronium.core.plasticity.substrate_coupled import (
     SubstrateCoupledPlasticity,
     create_substrate_coupled_plasticity,
 )
+from computronium.core.plasticity.temporal_psi import (
+    TemporalPsiConfig,
+    TemporalPsiPlasticity,
+    create_temporal_psi_plasticity,
+)
 
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Base
@@ -52,6 +57,10 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Substrate Coupled
     "SubstrateCoupledPlasticity",
     "create_substrate_coupled_plasticity",
+    # Temporal Psi (TODO19 X-TPC-001)
+    "TemporalPsiPlasticity",
+    "TemporalPsiConfig",
+    "create_temporal_psi_plasticity",
     # Rule State (Z3)
     "RuleStatePlasticity",
     "RuleStatePlasticityConfig",

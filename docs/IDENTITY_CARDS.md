@@ -6,7 +6,7 @@ card records the reference equation, deviations from the literature,
 the objective, the pseudo-gradient definition, and the feedback
 symmetry. Cards are the source for the README §5 primitives table.
 
-**Status:** 22 of 22 concrete primitives carded (aliases
+**Status:** 23 of 23 concrete primitives carded (aliases
 `BackpropCredit` = `GradientCredit` and `ThermodynamicContrastCredit`
 dedupe to their target class). The `--strict` gate is wired into
 pre-commit (C.1): adding a Credit/Update/Plasticity primitive without
@@ -41,3 +41,4 @@ an attached `AlgorithmIdentityCard` now blocks the commit.
 | RoutingPlasticity | state-dependent gating / sparse conditional computation (mixture-of-experts lineage); framework re-spec | gates driven by a fixed random input→gate projection G seeded per input_dim (F3 fix: scalar |x|-mean drive left every gate identical — gain control, not routing); modulation is per-unit via fixed gate→unit projections (dense geometries have no distinct physical pathways); Gumbel-Softmax during training, top-k hard selection at eval | — | gate_logits_{t+1} = decay·gate_logits_t + lr·(x @ G); active_routes = GumbelSoftmax(logits)/top-k | none |
 | RuleStatePlasticity | Z3 fixed-weights changing-algorithm protocol (internal, TODO16 §5): frozen θ + ψ-mediated operator selection | operator library is a fixed 8-operator minimal set (Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay); controller RNN + operator embeddings; θ frozen during Z3 evaluation — only ψ adapts | — | operator_logits_{t+1} = decay·logits_t + controller(ψ_t, x_t); active = softmax (train) / argmax (eval) | none |
 | SubstrateCoupledPlasticity | physical plasticity = substrate state evolution (memristive drift, analog noise, decoherence); internal formulation | no separate plasticity law: ψ ≡ σ, a no-op at the plasticity protocol level — the substrate's forward/update operators carry all dynamics | — | none (substrate weight_update_operator evolves σ within the joint transition) | inherits the substrate's physical constraints |
+| TemporalPsiPlasticity | G_t = ρG_{t−1} + H_augᵀH_aug; C_t = ρC_{t−1} + H_augᵀ(onehot(y) − ½); M_t = (G_t + λ·mean(diag G_t)·I)⁻¹C_t; o' = o + H@M + b | ψ computed in closed form per episode, not trained; single-pass exponentially-decayed ridge — no optimality claim vs gradient descent; ρ=1 is the forget-free limit (accumulation without decay) | trace-weighted ridge fit of centered one-hot targets from settled h | none — no gradient path; ψ is a deterministic function of (ψ_{t−1}, activity, target) | G symmetric PSD by construction; solve is exact (torch.linalg.solve) |

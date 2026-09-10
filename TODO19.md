@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); temporal-ψ mechanism build outstanding
+**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism and executed X-TPC-001 (P1 positive, P2 falsified at quick scale)
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0
@@ -25,9 +25,57 @@
 - `tests/ceec/`: **110 passed** (models, store, gates, quarantine, selection, structured evidence, bootstrap, calibration, integration loop, families smoke) — ~1.3 s.
 - `ruff format` + `ruff check` clean on all new files; `pyright` clean (0 errors).
 
+### Round 4 — temporal-ψ mechanism build + X-TPC-001 (2026-09-10)
+
+- **Mechanism built:** `computronium/core/plasticity/temporal_psi.py` —
+  `TemporalPsiPlasticity` (trace-decayed ridge readout residual),
+  `psi_phase = "nudged"` (consumes the D22-missing supervision term),
+  ρ=1 forget-free limit, `replace_readout` margin-robust channel,
+  AlgorithmIdentityCard carded (G-HARD-9), 6 property tests
+  (`tests/property/test_temporal_psi.py`). Wiring: `PlasticityConfig`
+  surface untouched (closed-form precedent); exports in
+  `core/plasticity/__init__`, `ontology/plasticity.py`, root
+  `__all__`/`_LAZY`/TYPE_CHECKING; `docs/IDENTITY_CARDS.md` row
+  regenerated (drift lock green).
+- **Three pre-flight defects found and fixed BEFORE the governed run**
+  (probe docstring carries the full log): (a) trace-accumulation sign
+  defect — ρ was applied to the incoming batch (`G_t = G_{t−1} + ρg`)
+  instead of the stored trace (`G_t = ρG_{t−1} + g`), so the trace never
+  forgot; caught by an exact-saturation check (ρ=0.5 must saturate at
+  g/(1−ρ)); (b) additive-residual channel inert at the D22 switch
+  coordinate (frozen margins ≈ 9.5 vs correction ≈ 0.4/sample, zero
+  argmax flips) → replacement readout; (c) onehot−softmax residual
+  target collapses under saturated softmax (A' fit inverts to 0.22) →
+  centered one-hot target. An intermediate "temporal beats closed-form"
+  reading under the residual target was identified as a target-induced
+  artifact and discarded before ingestion.
+- **X-TPC-001 executed** (`scripts/probes/x_tpc_001.py`, ~8.5 s CPU,
+  3 seeds, A→B→A' switch, θ SHA-256 + FrozenThetaAudit in the ψ phase):
+  **P1 (acquisition) SUPPORTED** — temporal_090 beats the frozen-null
+  floor by ≥ +0.10 on 2/3 seeds (B {0.754, 0.777, 0.766} vs null
+  {0.645, 0.660, 0.707}). **P2 (temporal-credit advantage) FALSIFIED at
+  quick scale** — forget-free closed-form matches A' return (0.875 vs
+  temporal 0.863–0.949): the parity/last-symbol h-fits don't conflict,
+  so trace forgetting buys nothing at this coordinate.
+- **B-H2 narrowed [0.10, 0.45] → [0.20, 0.40]** (supervised-ψ
+  acquisition real; temporal advantage needs conflicting task fits).
+  Only `probability_threshold` fails promotion; CAL-000005; audit clean;
+  oracle selection after ingest: X-RSE-001 (follow-up), consistent.
+- **Shared governance helper landed:** `ceec.probe_adapter.ingest_verdict(...)`
+  (evidence → belief revision → promotion gates → calibration → audit)
+  replaces the four copy-pasted `_ingest_ceec` bodies going forward;
+  covered by `TestIngestVerdict` in `tests/ceec/test_structured_evidence.py`.
+- Quality: `tests/ceec` 111 passed (~1.5 s); `tests/property` full suite
+  745 passed / 12 skipped (~2 min); ruff + pyright clean on all new/changed files.
+
 ### Open work (next round)
 
-1. **Temporal-ψ mechanism build** (blocks X-TPC-001): implement a supervised/temporal ψ update (new Plasticity primitive) with AlgorithmIdentityCard (G-HARD-9) + FrozenThetaAudit (G-HARD-8). D22 root cause (ψ contract consumes target-free first-phase activity) is the design constraint: the new ψ law must consume a loss/target or trace term. Lever analysis recorded as derived `D-000005`; X-TPC-001 stays pre-registered.
+1. **X-TPC-002 (conflicting-task ablation)** — the round-4 boundary
+   condition: temporal (trace-decay) credit only beats forget-free
+   accumulation when the A/B h-fits conflict. Build a switch whose tasks
+   impose contradictory readouts on the same h (e.g. inverted label
+   mappings) and re-test P2. Until then B-H2 stays [0.20, 0.40] with the
+   conflict boundary noted.
 2. Emit `mechanism_schema` derived objects once a first gated update lands (MECHANISM_SCHEMAS.md slots reserved).
 3. Real `supersedes` relations on artifact correction (policy defined, not exercised).
 4. Deeper TODO18 migration (per-test evidence for instrument beliefs) — Priority 1 instruments currently rely on bootstrap provenance only.
@@ -96,7 +144,18 @@
 - `decide()` re-evaluates constraints on every call; cache keyed on `state_hash` if rounds grow large.
 - Staleness detection compares revision content; consider recording per-belief dep-snapshot hashes for exactness.
 - Defective-matrix construction is float32-fragile: a size-4 Jordan block drifts realized ρ by ~ε^(1/4); add a `stability/` helper that verifies constructed spectra before use (X-STA-001 learned this the hard way — see round 3 note).
-- Probe `_ingest_ceec` blocks share ~40 lines of boilerplate (link evidence → update belief → gates → calibration → audit → decide); extract a shared `ceec.probe_adapter.ingest_verdict(...)` helper (DRY; three near-identical copies now exist).
+- ~~Probe `_ingest_ceec` boilerplate~~ — DONE round 4: `ceec.probe_adapter.ingest_verdict(...)`; existing x_ali/x_rse/x_usu probes still carry their inline copies (migrate opportunistically on their next edits).
+- **ClosedFormRidgePlasticity is silently uncarded**: any class *inheriting*
+  the `PlasticityPrimitive` Protocol gets `_is_protocol=True` from
+  `typing._ProtocolMeta` and is skipped by the identity-card scan
+  (`scripts/generate_identity_cards.py::_is_concrete_primitive`). Fix
+  either the scan (treat protocol-*subclasses* as concrete) or duck-type
+  the class (as TemporalPsiPlasticity now does). Same audit should check
+  for other protocol-inheriting primitives.
+- Mechanism law params (trace_decay sweep {0.3, 0.5, 0.9}, ridge_lambda)
+  were fixed a priori; a small sweep lock or probe would pin the ρ
+  sensitivity of the acquisition/return curves (X-TPC-002 should fold
+  this in).
 - X-RSE-001's dense-arm accuracy sits near chance at the quick budget — before X-RSE-002, either lengthen the budget or simplify the task so the ≤1pt accuracy-loss clause is measured against a learnable baseline.
 
 ---
@@ -2378,7 +2437,7 @@ The Epistemic Foundry plan is complete when all of the following are true.
 At least the following have CEEC records:
 
 - [x] Adaptive Local Inverses probe (X-ALI-001, round 2).
-- [ ] Temporal ψ Credit probe (blocked on temporal-ψ mechanism build).
+- [x] Temporal ψ Credit probe (X-TPC-001, round 4 — P1 supported, P2 falsified at quick scale).
 - [x] Stable Transient Amplification probe (X-STA-001, round 3).
 - [x] Routing × Sparsity Efficiency probe (X-RSE-001, round 3).
 - [x] Update-Rule Specialization probe (X-USU-001, round 3).
@@ -2396,11 +2455,11 @@ Each produces at least one of:
 
 - [x] CEEC tests pass.
 - [x] Integration loop test passes.
-- [ ] Existing Computronium test suite remains green.
+- [x] Existing Computronium test suite remains green (tests/ceec 111, tests/property 745 passed).
 - [x] Pyright passes under repository standard.
 - [x] Ruff format and check pass.
 - [ ] Verification label tests pass.
-- [ ] Identity-card hook passes if new primitives introduced.
+- [x] Identity-card hook passes if new primitives introduced (TemporalPsiPlasticity carded; drift lock green).
 
 ### Documentation
 

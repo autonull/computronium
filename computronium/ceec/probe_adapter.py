@@ -27,7 +27,10 @@ from computronium.ceec import models
 from computronium.ceec.store import CEECStore, StoreError
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
+
+    from computronium.ceec import audit, gates
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,3 +124,65 @@ def record_probe_result(
 
 def load_probe_output(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True, slots=True)
+class IngestVerdict:
+    """Result of the shared post-probe governance loop (``ingest_verdict``)."""
+
+    probe: ProbeEvidence
+    evaluation: gates.Evaluation
+    calibration: models.CalibrationRecord | None
+    violations: Sequence[audit.Finding]
+
+
+def ingest_verdict(  # ruff: ignore[too-many-arguments]
+    store: CEECStore,
+    *,
+    probe_name: str,
+    probe_output: dict[str, Any],
+    belief_id: str,
+    new_interval: tuple[float, float],
+    rationale: str,
+    outcome: str,
+    outcome_boolean: bool | None,
+    notes: str,
+    evidence_weight: str = "medium",
+) -> IngestVerdict:
+    """Link probe evidence → belief revision → gates → calibration → audit.
+
+    The shared governance loop previously copy-pasted into each
+    ``scripts/probes/x_*.py`` (see TODO19 improvement notes). Selection
+    (``decide``) stays at the round level, outside this helper.
+    """
+    from computronium.ceec import audit, calibration, gates
+
+    probe_result = record_probe_result(store, probe_output, probe_name)
+    store._link(
+        store._conn,
+        "belief_evidence",
+        "belief_id",
+        belief_id,
+        "evidence_id",
+        [probe_result.evidence.id],
+    )
+    store._conn.commit()
+    store.update_belief(
+        belief_id,
+        models.Probability(
+            low=new_interval[0],
+            high=new_interval[1],
+            method="heuristic_interval_based_on_gate_evidence",
+        ),
+        "medium",
+        evidence_weight,
+        "narrow",
+        "open",
+        f"{probe_name}: {rationale}",
+    )
+    evaluation = gates.evaluate_promotion(store, belief_id)
+    record = calibration.record_experiment_outcome(
+        store, probe_name, outcome, outcome_boolean, notes=notes
+    )
+    violations = [f for f in audit.run_audit(store) if f.severity == "violation"]
+    return IngestVerdict(probe_result, evaluation, record, violations)

@@ -3,9 +3,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from computronium.ceec import StoreError
+from computronium.ceec import StoreError, models
 from computronium.ceec.migrate import todo18_records
-from computronium.ceec.probe_adapter import record_probe_result
+from computronium.ceec.probe_adapter import ingest_verdict, record_probe_result
 
 
 class TestStructuredEvidence:
@@ -129,3 +129,62 @@ class TestTodo18Migration:
         result = todo18_records.migrate_all(store)
         assert result["claim_records"] == []
         assert result["corrections"] is None
+
+
+class TestIngestVerdict:
+    def _belief(self, store, scope):
+        artifact = store.ingest_artifact(b"bootstrap", "config")
+        return store.create_belief(
+            "temporal psi credit",
+            "mechanism",
+            scope,
+            evidence_refs=[
+                store.record_evidence(
+                    "vector", scope, [artifact.id], axes=["a"], values_ref=artifact.uri
+                ).id
+            ],
+        ).id
+
+    def test_governance_loop_links_updates_and_audits(self, store, scope):
+        belief_id = self._belief(store, scope)
+        store.pre_register_experiment(
+            models.Experiment(
+                id="X-T-001",
+                question="q",
+                rationale="r",
+                scope=scope,
+                target_beliefs=[belief_id],
+                target_goals=[],
+                design={"seed_plan": "3", "evaluation_policy": "e"},
+                prediction="temporal credit helps",
+                controls=["frozen_null"],
+                metrics=["b_final"],
+                budget="quick",
+                falsification_criterion="no gain",
+                overturn_criterion="closed-form matches return",
+                hard_gates=["coordinate_valid"],
+                created_at="2026-09-10",
+            )
+        )
+        verdict = ingest_verdict(
+            store,
+            probe_name="X-T-001",
+            probe_output={
+                "status": "ok",
+                "kind": "tensor",
+                "axes": ["arm", "seed"],
+                "values": {"temporal": [0.1, 0.2]},
+                "quality": {"seeds": 3, "verification_level": 4},
+            },
+            belief_id=belief_id,
+            new_interval=(0.30, 0.60),
+            rationale="probe verdict",
+            outcome="supported",
+            outcome_boolean=True,
+            notes="test",
+        )
+        assert verdict.probe.derived is None
+        assert store.latest_revision(belief_id).probability.low == 0.30
+        assert verdict.calibration is None  # no pre-registered probability
+        assert verdict.violations == []
+        assert [r.gate for r in verdict.evaluation.results]

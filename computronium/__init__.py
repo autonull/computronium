@@ -224,6 +224,7 @@ if TYPE_CHECKING:
         RoutingPlasticity,
         RuleStatePlasticity,
         SubstrateCoupledPlasticity,
+        TemporalPsiPlasticity,
     )
     from computronium.ontology.substrate import (
         AnalogSubstrate,
@@ -412,6 +413,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "PlasticityConfig": ("computronium.state", "PlasticityConfig"),
     "RoutingPlasticity": ("computronium.ontology.plasticity", "RoutingPlasticity"),
     "RuleStatePlasticity": ("computronium.ontology.plasticity", "RuleStatePlasticity"),
+    "TemporalPsiPlasticity": (
+        "computronium.ontology.plasticity",
+        "TemporalPsiPlasticity",
+    ),
     "SubstrateCoupledPlasticity": (
         "computronium.ontology.plasticity",
         "SubstrateCoupledPlasticity",
@@ -635,6 +640,7 @@ __all__ = [
     "SystemTrainer",
     "SystemTrainerConfig",
     "TargetInversionCredit",
+    "TemporalPsiPlasticity",
     "TemporalTraceCredit",
     "ThermodynamicContrast",
     "ThermodynamicContrastCredit",
