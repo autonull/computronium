@@ -10,40 +10,18 @@ YAML for human-readable checkpoints.
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
-from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import yaml
+from ceec.sqlite_toolkit import SqliteStore
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from computronium.core.campaign.frontier_record import FrontierRecord
     from computronium.state import StateRegistry, SystemContext
-
-SCHEMA_VERSION = 1
-
-
-class SchemaVersionError(RuntimeError):
-    """Database schema is newer than this build (frozen schema, forward-only)."""
-
-    def __init__(self, db_version: int, supported: int) -> None:
-        super().__init__(
-            f"Campaign DB schema v{db_version} > supported v{supported}; "
-            "open it with a newer build instead"
-        )
-        self.db_version = db_version
-        self.supported = supported
-
-
-# MIGRATIONS[v] upgrades a v-old schema to v+1. Schema is frozen: every future
-# schema change appends here, never mutates earlier entries.
-MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +52,7 @@ class EpisodeRecord:
     rng_state: bytes | None = None
 
 
-class CampaignStore:
+class CampaignStore(SqliteStore):
     """
     SQLite + YAML backed campaign persistence.
 
@@ -87,118 +65,59 @@ class CampaignStore:
     - RNG state for reproducibility
     """
 
+    # Schema is frozen: every future schema change appends a new version
+    # here, never mutates earlier entries.
+    MIGRATIONS: ClassVar[dict[int, str]] = {
+        1: """
+        CREATE TABLE IF NOT EXISTS campaigns (
+            campaign_id TEXT PRIMARY KEY,
+            branch_name TEXT NOT NULL,
+            parent_branch TEXT,
+            iteration INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            config TEXT NOT NULL,
+            metadata TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_campaign_branch ON campaigns(branch_name);
+        CREATE TABLE IF NOT EXISTS episodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id TEXT NOT NULL,
+            branch_name TEXT NOT NULL,
+            iteration INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            coordinate TEXT NOT NULL,
+            task_name TEXT NOT NULL,
+            frontier_record TEXT NOT NULL,
+            consolidation_event TEXT,
+            rng_state BLOB,
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_episode_campaign ON episodes(campaign_id);
+        CREATE INDEX IF NOT EXISTS idx_episode_branch ON episodes(branch_name);
+        CREATE INDEX IF NOT EXISTS idx_episode_coord ON episodes(coordinate);
+        CREATE INDEX IF NOT EXISTS idx_episode_task ON episodes(task_name);
+        CREATE TABLE IF NOT EXISTS registry_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id TEXT NOT NULL,
+            episode_id INTEGER NOT NULL,
+            registry_signature TEXT NOT NULL,
+            composite_state_shape TEXT NOT NULL,
+            plasticity_primitive TEXT NOT NULL,
+            plasticity_config TEXT NOT NULL,
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
+            FOREIGN KEY (episode_id) REFERENCES episodes(id)
+        );
+        """,
+    }
+
     def __init__(self, db_path: str | Path, checkpoint_dir: str | Path | None = None):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        super().__init__(db_path)
 
         if checkpoint_dir is None:
             checkpoint_dir = self.db_path.parent / "checkpoints"
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-        self._init_db()
-
-    def _init_db(self) -> None:
-        """Initialize or migrate the database schema (frozen, versioned)."""
-        with sqlite3.connect(self.db_path) as conn:
-            version = conn.execute("PRAGMA user_version").fetchone()[0]
-            if version > SCHEMA_VERSION:
-                raise SchemaVersionError(version, SCHEMA_VERSION)
-            if version == SCHEMA_VERSION:
-                return
-            if version == 0 and self._is_empty(conn):
-                self._create_schema(conn)
-            elif version == 0:
-                # Legacy pre-freeze database: identical to the v1 schema.
-                pass
-            else:
-                for v in range(version, SCHEMA_VERSION):
-                    MIGRATIONS[v](conn)
-            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            conn.commit()
-
-    @staticmethod
-    def _is_empty(conn: sqlite3.Connection) -> bool:
-        """True when no campaigns table exists (fresh database)."""
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
-        ).fetchone()
-        return row is None
-
-    @staticmethod
-    def _create_schema(conn: sqlite3.Connection) -> None:
-        """Create the v1 schema."""
-        # Campaigns table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS campaigns (
-                campaign_id TEXT PRIMARY KEY,
-                branch_name TEXT NOT NULL,
-                parent_branch TEXT,
-                iteration INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                config TEXT NOT NULL,  -- JSON
-                metadata TEXT NOT NULL  -- JSON
-            )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_campaign_branch ON campaigns(branch_name)"
-        )
-
-        # Episodes table - stores full evaluation records
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS episodes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                campaign_id TEXT NOT NULL,
-                branch_name TEXT NOT NULL,
-                iteration INTEGER NOT NULL,
-                timestamp TEXT NOT NULL,
-                coordinate TEXT NOT NULL,       -- 6-D coordinate string
-                task_name TEXT NOT NULL,
-                frontier_record TEXT NOT NULL,  -- JSON serialized FrontierRecord
-                consolidation_event TEXT,       -- JSON serialized consolidation event
-                rng_state BLOB,                 -- Pickled RNG state
-                FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id)
-            )
-        """)
-        for index in (
-            "CREATE INDEX IF NOT EXISTS idx_episode_campaign ON episodes(campaign_id)",
-            "CREATE INDEX IF NOT EXISTS idx_episode_branch ON episodes(branch_name)",
-            "CREATE INDEX IF NOT EXISTS idx_episode_coord ON episodes(coordinate)",
-            "CREATE INDEX IF NOT EXISTS idx_episode_task ON episodes(task_name)",
-        ):
-            conn.execute(index)
-
-        # State registry snapshots
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS registry_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                campaign_id TEXT NOT NULL,
-                episode_id INTEGER NOT NULL,
-                registry_signature TEXT NOT NULL,  -- Hash of StateVariable registrations
-                composite_state_shape TEXT NOT NULL,  -- JSON: {activity: {...}, plastic: {...}, substrate: {...}}
-                plasticity_primitive TEXT NOT NULL,
-                plasticity_config TEXT NOT NULL,  -- JSON
-                FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
-                FOREIGN KEY (episode_id) REFERENCES episodes(id)
-            )
-        """)
-
-    @contextmanager
-    def _conn(self):
-        """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
-
-    @property
-    def schema_version(self) -> int:
-        """Schema version stamped in the database (frozen at SCHEMA_VERSION)."""
-        with self._conn() as conn:
-            return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
     def create_campaign(
         self,
@@ -223,7 +142,7 @@ class CampaignStore:
             metadata=metadata or {},
         )
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self._tx() as conn:
             conn.execute(
                 """
                 INSERT INTO campaigns
@@ -247,11 +166,11 @@ class CampaignStore:
 
     def get_campaign(self, campaign_id: str) -> CampaignState | None:
         """Get campaign by ID."""
-        with self._conn() as conn:
-            cursor = conn.execute(
-                "SELECT * FROM campaigns WHERE campaign_id = ?", (campaign_id,)
-            )
-            row = cursor.fetchone()
+        conn = self.conn
+        cursor = conn.execute(
+            "SELECT * FROM campaigns WHERE campaign_id = ?", (campaign_id,)
+        )
+        row = cursor.fetchone()
 
         if not row:
             return None
@@ -269,17 +188,17 @@ class CampaignStore:
 
     def get_latest_on_branch(self, branch_name: str) -> CampaignState | None:
         """Get the most recent campaign state on a branch."""
-        with self._conn() as conn:
-            cursor = conn.execute(
-                """
-                SELECT * FROM campaigns
-                WHERE branch_name = ?
-                ORDER BY iteration DESC, updated_at DESC
-                LIMIT 1
-                """,
-                (branch_name,),
-            )
-            row = cursor.fetchone()
+        conn = self.conn
+        cursor = conn.execute(
+            """
+            SELECT * FROM campaigns
+            WHERE branch_name = ?
+            ORDER BY iteration DESC, updated_at DESC
+            LIMIT 1
+            """,
+            (branch_name,),
+        )
+        row = cursor.fetchone()
 
         if not row:
             return None
@@ -303,7 +222,7 @@ class CampaignStore:
     ) -> None:
         """Update campaign iteration counter and metadata."""
         now = datetime.now().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
+        with self._tx() as conn:
             if metadata:
                 conn.execute(
                     "UPDATE campaigns SET iteration = ?, updated_at = ?, metadata = ? WHERE campaign_id = ?",
@@ -328,7 +247,7 @@ class CampaignStore:
         rng_state: bytes | None = None,
     ) -> int:
         """Add an episode evaluation record."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._tx() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO episodes
@@ -363,7 +282,7 @@ class CampaignStore:
         plasticity_config: dict,
     ) -> int:
         """Store StateRegistry and CompositeState shape signature."""
-        with sqlite3.connect(self.db_path) as conn:
+        with self._tx() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO registry_snapshots
@@ -390,16 +309,16 @@ class CampaignStore:
 
     def get_episodes(self, campaign_id: str) -> list[EpisodeRecord]:
         """Get all episodes for a campaign."""
-        with self._conn() as conn:
-            cursor = conn.execute(
-                """
-                SELECT * FROM episodes
-                WHERE campaign_id = ?
-                ORDER BY iteration ASC
-                """,
-                (campaign_id,),
-            )
-            rows = cursor.fetchall()
+        conn = self.conn
+        cursor = conn.execute(
+            """
+            SELECT * FROM episodes
+            WHERE campaign_id = ?
+            ORDER BY iteration ASC
+            """,
+            (campaign_id,),
+        )
+        rows = cursor.fetchall()
 
         return [
             EpisodeRecord(
@@ -428,9 +347,9 @@ class CampaignStore:
             params.append(branch_name)
         query += " ORDER BY iteration ASC"
 
-        with self._conn() as conn:
-            cursor = conn.execute(query, params)
-            rows = cursor.fetchall()
+        conn = self.conn
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
 
         return [
             EpisodeRecord(
@@ -461,11 +380,11 @@ class CampaignStore:
 
     def list_branches(self) -> list[str]:
         """List all branch names."""
-        with self._conn() as conn:
-            cursor = conn.execute(
-                "SELECT DISTINCT branch_name FROM campaigns ORDER BY branch_name"
-            )
-            return [row[0] for row in cursor.fetchall()]
+        conn = self.conn
+        cursor = conn.execute(
+            "SELECT DISTINCT branch_name FROM campaigns ORDER BY branch_name"
+        )
+        return [row[0] for row in cursor.fetchall()]
 
     def list_campaigns(self, branch_name: str | None = None) -> list[CampaignState]:
         """List campaigns, optionally filtered by branch."""
@@ -476,9 +395,9 @@ class CampaignStore:
             params = (branch_name,)
         query += " ORDER BY updated_at DESC"
 
-        with self._conn() as conn:
-            cursor = conn.execute(query, params)
-            rows = cursor.fetchall()
+        conn = self.conn
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
 
         return [
             CampaignState(
@@ -578,9 +497,9 @@ class CampaignStore:
             query += " AND task_name = ?"
             params.append(task_name)
 
-        with self._conn() as conn:
-            cursor = conn.execute(query, params)
-            rows = cursor.fetchall()
+        conn = self.conn
+        cursor = conn.execute(query, params)
+        rows = cursor.fetchall()
 
         records = [json.loads(row["frontier_record"]) for row in rows]
         return records

@@ -16,7 +16,6 @@ from computronium.analysis.counterfactual import (
     what_if,
 )
 from computronium.core.campaign import (
-    SCHEMA_VERSION,
     CampaignStack,
     CampaignStore,
     FrontierRecord,
@@ -95,13 +94,13 @@ def _bad_axis_sampler(_rng, _iteration: int, _experiment: int) -> str:
 class TestSchemaFreeze:
     def test_fresh_db_stamped_with_current_version(self, tmp_path: Path) -> None:
         store = CampaignStore(tmp_path / "campaign.db")
-        assert store.schema_version == SCHEMA_VERSION
+        assert store.schema_version == max(CampaignStore.MIGRATIONS)
 
     def test_future_schema_rejected(self, tmp_path: Path) -> None:
         db = tmp_path / "campaign.db"
         db.write_text("")
         with sqlite3.connect(db) as conn:
-            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+            conn.execute(f"PRAGMA user_version = {max(CampaignStore.MIGRATIONS) + 1}")
         with pytest.raises(SchemaVersionError):
             CampaignStore(db)
 
@@ -114,7 +113,7 @@ class TestSchemaFreeze:
             conn.execute("PRAGMA user_version = 0")
 
         reopened = CampaignStore(db)
-        assert reopened.schema_version == SCHEMA_VERSION
+        assert reopened.schema_version == max(CampaignStore.MIGRATIONS)
         assert reopened.list_campaigns()[0].branch_name == "main"
 
     def test_migration_hook_appends(
@@ -129,11 +128,10 @@ class TestSchemaFreeze:
 
         from computronium.core.campaign import campaign_store
 
-        monkeypatch.setattr(campaign_store, "SCHEMA_VERSION", 2)
         monkeypatch.setattr(
-            campaign_store,
+            campaign_store.CampaignStore,
             "MIGRATIONS",
-            (lambda conn: None, lambda conn: conn.execute("DROP TABLE legacy_flags")),  # ruff: ignore[unused-lambda-argument]
+            {**CampaignStore.MIGRATIONS, 2: "DROP TABLE legacy_flags;"},
         )
         store = CampaignStore(db)
         assert store.schema_version == 2
@@ -589,7 +587,7 @@ class TestCampaignCLI:
 
         db = tmp_path / "campaign.db"
         store = CampaignStore(db)
-        assert store.schema_version == SCHEMA_VERSION
+        assert store.schema_version == max(CampaignStore.MIGRATIONS)
         campaigns = store.list_campaigns()
         assert len(campaigns) == 1
         assert store.get_episodes(campaigns[0].campaign_id)

@@ -5,12 +5,12 @@ Provides persistence, resource accounting, Pareto frontier computation,
 kernel caching, and fault tolerance checkpointing for 6-D joint architecture campaigns.
 """
 
+from ceec.sqlite_toolkit import SchemaVersionError
+
 from computronium.core.campaign.campaign_store import (
-    SCHEMA_VERSION,
     CampaignState,
     CampaignStore,
     EpisodeRecord,
-    SchemaVersionError,
 )
 from computronium.core.campaign.checkpoint import (
     CheckpointManager,
@@ -86,7 +86,6 @@ __all__ = [
     "DEFAULT_GUARD_TAU",
     "DEFAULT_INPUT_DIM",
     "DEFAULT_NUM_CLASSES",
-    "SCHEMA_VERSION",
     "AxisCheck",
     "BuildKwargs",
     "CampaignRunResult",
