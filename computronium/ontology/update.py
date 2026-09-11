@@ -75,6 +75,9 @@ class ParameterUpdateConfig:
     role_names: tuple[str, ...] = ()
     sub_rules: RoleSplitSpec | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "role_names", tuple(self.role_names))
+
     @property
     def step_semantics(self) -> StepSemantics:
         """What ``step_size`` displaces (see ``_STEP_SEMANTICS``)."""
