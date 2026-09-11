@@ -12,6 +12,9 @@ import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, replace
+from typing import ClassVar
+
+from ceec.sqlite_toolkit import SqliteStore
 
 from computronium.core._paths import db_path
 from computronium.core.exceptions import KnowledgeBaseError
@@ -44,7 +47,7 @@ class KnowledgeBaseConfig:
     min_records: int = 10
 
 
-class KnowledgeBase:  # integrity-surface + conditional + flagship queries are all distinct public KB reads  # ruff: ignore[too-many-public-methods]
+class KnowledgeBase(SqliteStore):  # noqa: PLR0904 (legacy facade: delegates + async variants)
     """
     Upgraded KnowledgeBase with SQLite + Vector Store.
 
@@ -56,6 +59,56 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
     - Causal discovery for identifying causal factors
     - Meta-analysis: scaling laws, fingerprints, failure manifolds, phylogeny
     """
+
+    # Schema is frozen: every future schema change appends a new version
+    # here, never mutates earlier entries.
+    MIGRATIONS: ClassVar[dict[int, str]] = {
+        1: """
+        CREATE TABLE IF NOT EXISTS knowledge (
+            id TEXT PRIMARY KEY,
+            topic TEXT NOT NULL,
+            model_family TEXT NOT NULL,
+            finding TEXT NOT NULL,
+            details TEXT,
+            confidence REAL NOT NULL,
+            tags TEXT,
+            timestamp REAL NOT NULL,
+            source TEXT DEFAULT 'manual',
+            experiment_id TEXT,
+            metrics TEXT,
+            hyperparameters TEXT,
+            extra TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_topic ON knowledge(topic);
+        CREATE INDEX IF NOT EXISTS idx_model_family ON knowledge(model_family);
+        CREATE INDEX IF NOT EXISTS idx_timestamp ON knowledge(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_source ON knowledge(source);
+        CREATE INDEX IF NOT EXISTS idx_experiment ON knowledge(experiment_id);
+        CREATE TABLE IF NOT EXISTS experiments (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            model_family TEXT NOT NULL,
+            task TEXT NOT NULL,
+            config TEXT,
+            metrics TEXT,
+            status TEXT DEFAULT 'completed',
+            timestamp REAL NOT NULL,
+            artifacts TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_exp_model ON experiments(model_family);
+        CREATE INDEX IF NOT EXISTS idx_exp_task ON experiments(task);
+        CREATE TABLE IF NOT EXISTS surrogates (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            model_type TEXT NOT NULL,
+            target_metric TEXT NOT NULL,
+            features TEXT,
+            trained_at REAL NOT NULL,
+            performance TEXT,
+            model_path TEXT
+        );
+        """,
+    }
 
     def __init__(
         self,
@@ -101,90 +154,15 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
             )
         )
 
-        # Initialize SQLite
-        self._init_db()
+        # Initialize SQLite (schema-versioned via the sqlite toolkit)
+        super().__init__(self.config.db_path)
 
         # Load seed data if empty
         self._load_seed_if_empty()
 
-    def _init_db(self) -> None:
-        """Initialize SQLite database with tables."""
-        with sqlite3.connect(self.config.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS knowledge (
-                    id TEXT PRIMARY KEY,
-                    topic TEXT NOT NULL,
-                    model_family TEXT NOT NULL,
-                    finding TEXT NOT NULL,
-                    details TEXT,
-                    confidence REAL NOT NULL,
-                    tags TEXT,  -- JSON array
-                    timestamp REAL NOT NULL,
-                    source TEXT DEFAULT 'manual',
-                    experiment_id TEXT,
-                    metrics TEXT,  -- JSON
-                    hyperparameters TEXT,  -- JSON
-                    extra TEXT  -- JSON
-                )
-            """)
-
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_topic ON knowledge(topic)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_model_family ON knowledge(model_family)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_timestamp ON knowledge(timestamp)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_source ON knowledge(source)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_experiment ON knowledge(experiment_id)
-            """)
-
-            # Table for experiment results
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS experiments (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    model_family TEXT NOT NULL,
-                    task TEXT NOT NULL,
-                    config TEXT,  -- JSON
-                    metrics TEXT,  -- JSON
-                    status TEXT DEFAULT 'completed',
-                    timestamp REAL NOT NULL,
-                    artifacts TEXT  -- JSON
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_exp_model ON experiments(model_family)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_exp_task ON experiments(task)
-            """)
-
-            # Table for surrogate model predictions
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS surrogates (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    model_type TEXT NOT NULL,  -- 'gp', 'rf', 'nn', 'symbolic'
-                    target_metric TEXT NOT NULL,
-                    features TEXT,  -- JSON list of feature names
-                    trained_at REAL NOT NULL,
-                    performance TEXT,  -- JSON metrics
-                    model_path TEXT
-                )
-            """)
-
-            conn.commit()
-
     def _load_seed_if_empty(self) -> None:
         """Load seed knowledge if database is empty."""
-        with sqlite3.connect(self.config.db_path) as conn:
-            count = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
+        count = self.conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
 
         if count == 0:
             self._load_seed_data()
@@ -249,7 +227,7 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
                 object.__setattr__(entry, "embedding", embedding.tolist())
 
         # Store in SQLite
-        with sqlite3.connect(self.config.db_path) as conn:
+        with self._tx() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO knowledge
@@ -273,7 +251,6 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
                     json.dumps(entry.extra),
                 ),
             )
-            conn.commit()
 
         # Add to vector index
         if self.vector_store.vector_index is not None and entry.embedding is not None:
@@ -315,7 +292,7 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
         self.add_entry(entry)
 
         # Also store in experiments table
-        with sqlite3.connect(self.config.db_path) as conn:
+        with self._tx() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO experiments
@@ -335,7 +312,6 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
                     json.dumps(artifacts or {}),
                 ),
             )
-            conn.commit()
 
         return experiment_id
 
@@ -435,7 +411,7 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
                 and not all(tag in entry.tags for tag in value)
             ):
                 return False
-            if key == "min_confidence":
+            if key == "min_confidence" and isinstance(value, int | float | str):
                 try:
                     if float(entry.confidence) < float(value):
                         return False
@@ -561,36 +537,35 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
 
     def get_stats(self) -> dict[str, object]:
         """Get knowledge base statistics."""
-        with sqlite3.connect(self.config.db_path) as conn:
-            total = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
-            by_source = dict(
-                conn.execute(
-                    "SELECT source, COUNT(*) FROM knowledge GROUP BY source"
-                ).fetchall()
-            )
-            by_model = dict(
-                conn.execute(
-                    "SELECT model_family, COUNT(*) FROM knowledge GROUP BY model_family"
-                ).fetchall()
-            )
-            by_topic = dict(
-                conn.execute(
-                    "SELECT topic, COUNT(*) FROM knowledge GROUP BY topic"
-                ).fetchall()
-            )
+        conn = self.conn
+        total = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]
+        by_source = dict(
+            conn.execute(
+                "SELECT source, COUNT(*) FROM knowledge GROUP BY source"
+            ).fetchall()
+        )
+        by_model = dict(
+            conn.execute(
+                "SELECT model_family, COUNT(*) FROM knowledge GROUP BY model_family"
+            ).fetchall()
+        )
+        by_topic = dict(
+            conn.execute(
+                "SELECT topic, COUNT(*) FROM knowledge GROUP BY topic"
+            ).fetchall()
+        )
 
-            exp_total = conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
-            exp_by_model = dict(
-                conn.execute(
-                    "SELECT model_family, COUNT(*) FROM experiments "
-                    "GROUP BY model_family"
-                ).fetchall()
-            )
-            exp_by_task = dict(
-                conn.execute(
-                    "SELECT task, COUNT(*) FROM experiments GROUP BY task"
-                ).fetchall()
-            )
+        exp_total = conn.execute("SELECT COUNT(*) FROM experiments").fetchone()[0]
+        exp_by_model = dict(
+            conn.execute(
+                "SELECT model_family, COUNT(*) FROM experiments GROUP BY model_family"
+            ).fetchall()
+        )
+        exp_by_task = dict(
+            conn.execute(
+                "SELECT task, COUNT(*) FROM experiments GROUP BY task"
+            ).fetchall()
+        )
 
         return {
             "total_entries": total,
@@ -615,6 +590,7 @@ class KnowledgeBase:  # integrity-surface + conditional + flagship queries are a
     def close(self) -> None:
         """Close connections."""
         self.vector_store.persist()
+        self.conn.close()
 
     # ------------------------------------------------------------------
     # Metamodel / Surrogate integration (legacy compatibility)
@@ -759,7 +735,7 @@ _DEFAULT_KB: KnowledgeBase | None = None
 
 
 def _get_default_kb() -> KnowledgeBase:
-    global _DEFAULT_KB  # ruff: ignore[global-statement]
+    global _DEFAULT_KB  # noqa: PLW0603 (lazy module singleton)
     if _DEFAULT_KB is None:
         _DEFAULT_KB = KnowledgeBase()
     return _DEFAULT_KB
