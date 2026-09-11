@@ -7,7 +7,9 @@ Persists trials, configurations, and results to a SQLite database.
 import json
 import sqlite3
 from datetime import datetime
-from pathlib import Path
+from typing import ClassVar
+
+from ceec.sqlite_toolkit import SqliteStore
 
 from computronium.core.logging import get_logger
 from computronium.core.training_state import TRAINING_CHECKPOINTS_DDL, EpochCheckpoint
@@ -23,27 +25,11 @@ __all__ = [
 ]
 
 
-class HyperoptStorage:
+class HyperoptStorage(SqliteStore):
     """Storage backend for hyperparameter optimization trials."""
 
-    def __init__(self, db_path: str = "results/hyperopt.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = None
-        self._init_db()
-
-    def _init_db(self):
-        """Initialize database schema."""
-        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-
-        # Enable Write-Ahead Logging for better concurrency
-        self.conn.execute("PRAGMA journal_mode=WAL;")
-
-        cursor = self.conn.cursor()
-
-        # Trials table
-        cursor.execute("""
+    MIGRATIONS: ClassVar[dict[int, str]] = {
+        1: """
             CREATE TABLE IF NOT EXISTS hyperopt_logs (
                 trial_id INTEGER PRIMARY KEY,
                 model_name TEXT NOT NULL,
@@ -57,11 +43,8 @@ class HyperoptStorage:
                 iteration_time REAL,
                 param_count REAL,
                 is_pareto INTEGER DEFAULT 0
-            )
-        """)
+            );
 
-        # Training trajectories table (Scientist++ Phase 2)
-        cursor.execute("""
             CREATE TABLE IF NOT EXISTS training_trajectories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 trial_id INTEGER NOT NULL,
@@ -73,23 +56,19 @@ class HyperoptStorage:
                 overfitting_detected BOOLEAN,
                 unstable BOOLEAN,
                 FOREIGN KEY (trial_id) REFERENCES hyperopt_logs(trial_id)
-            )
-        """)
+            );
+        """,
+        2: TRAINING_CHECKPOINTS_DDL.rstrip().rstrip(";")
+        + """;
+            CREATE INDEX IF NOT EXISTS idx_checkpoints_trajectory
+                ON training_checkpoints(trajectory_id);
+            CREATE INDEX IF NOT EXISTS idx_checkpoints_epoch
+                ON training_checkpoints(epoch);
+        """,
+    }
 
-        # Training checkpoints table
-        cursor.execute(TRAINING_CHECKPOINTS_DDL)
-
-        # Indices
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_checkpoints_trajectory"
-            " ON training_checkpoints(trajectory_id);"
-        )
-        cursor.execute(
-            "CREATE INDEX IF NOT EXISTS idx_checkpoints_epoch"
-            " ON training_checkpoints(epoch);"
-        )
-
-        self.conn.commit()
+    def __init__(self, db_path: str = "results/hyperopt.db"):
+        super().__init__(db_path)
 
     def create_trial(
         self,
