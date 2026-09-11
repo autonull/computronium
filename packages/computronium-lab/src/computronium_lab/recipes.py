@@ -19,6 +19,8 @@ from computronium.ontology.update import ParameterUpdateConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from torch import Tensor
+
 
 @dataclass(frozen=True, slots=True)
 class Recipe:
@@ -106,6 +108,52 @@ def build_role_split_muon_readout(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class StableAmplifier:
+    """A linear coordinate with verified stable-transient amplification."""
+
+    weight: Tensor
+    rho: float
+    sigma_max: float
+    rho_ok: bool
+    sigma_ok: bool
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return x @ self.weight.T
+
+
+def build_stable_amplification(
+    gain: float = 0.85,
+    rho_limit: float = 0.95,
+    dim: int = 4,
+) -> StableAmplifier:
+    """Jordan-block stable-transient coordinate from packages/stability.
+
+    rho <= rho_limit while sigma_max > 1: transient amplification without
+    divergence (X-STA-001/002). Raises if the realized spectrum misses the
+    requested window.
+    """
+    from stability.matrices import (
+        jordan_block,
+        linear_transition,
+        realized_rho,
+        realized_sigma_max,
+    )
+
+    weight = jordan_block(gain=gain, dim=dim)
+    transition, state = linear_transition(weight)
+    rho = realized_rho(transition, state)
+    sigma_max = realized_sigma_max(transition, state)
+    if rho > rho_limit or sigma_max <= 1.0:
+        raise ValueError(
+            f"realized spectrum misses window: rho={rho:.4f} "
+            f"(limit {rho_limit}), sigma_max={sigma_max:.4f}"
+        )
+    return StableAmplifier(
+        weight=weight, rho=rho, sigma_max=sigma_max, rho_ok=True, sigma_ok=True
+    )
+
+
 RECIPES: dict[str, Recipe] = {
     "temporal_psi": Recipe(
         name="temporal_psi",
@@ -128,6 +176,18 @@ RECIPES: dict[str, Recipe] = {
         "forward weights; depth beyond the validated two-layer scope.",
         evidence=("X-ALI-001", "X-ALI-002"),
         build=build_adaptive_feedback,
+    ),
+    "stable_amplification": Recipe(
+        name="stable_amplification",
+        summary="Jordan-block linear coordinate: rho <= limit while "
+        "sigma_max > 1 — large transient signal retention without divergence.",
+        when_to_use="Noisy linear substrates needing a transient gain boost "
+        "at matched spectral radius; resonance-free short-horizon recall.",
+        when_not="Isotropic-noise SNR improvement (noise is amplified at the "
+        "same transient rate as signal — retention gain, not SNR gain); "
+        "long-horizon memory (settling still decays the transient).",
+        evidence=("X-STA-001", "X-STA-002"),
+        build=build_stable_amplification,
     ),
     "role_split_muon_readout": Recipe(
         name="role_split_muon_readout",

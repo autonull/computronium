@@ -1,0 +1,63 @@
+# X-STA-002: noise robustness of stable-transient amplification (TODO20 Phase 6A)
+experiment:
+  id: X-STA-002
+  question: >
+    Do coordinates with rho <= rho_limit and sigma_max > 1 improve short-horizon
+    signal retention relative to matched contractive coordinates, and at what
+    noise-divergence cost?
+  rationale: >
+    Phase 6A carryover for the stable-transient-amplification recipe: X-STA-001
+    established that nonnormal coordinates (rho <= 0.95, sigma_max > 1) settle
+    in budget; this probe quantifies the transient signal retention those
+    coordinates buy under isotropic noise, against a contractive control at
+    matched rho.
+  scope:
+    domain: stability
+    substrate: [digital]
+    geometry: [recurrent]
+    budget: quick
+  target_beliefs: [B-H3-STABLE-TRANSIENT-AMPLIFICATION]
+  target_goals: [G-STABLE-EXPRESSIVITY]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    coordinate: digital-recurrent-quick
+    evaluation_policy: >
+      paired-replay on linear transitions (J = W): per-step isotropic noise
+      realization shared between driven and noise-only replay; retention is
+      the driven-minus-noise-only separation norm, noise divergence the
+      noise-only replay norm
+    evidence_kind: tensor
+    instruments: [I-JACOBIAN-SEPARATION]
+  prediction: >
+    Amplifying coordinates (c > 0, sigma_max > 1, rho <= 0.95) retain signal
+    strictly better than the matched contractive control (c = 0) on all seeds
+    at the short horizon, while still settling in budget; noise divergence
+    grows with c (the cost).
+  prediction_probability:
+    low: 0.40
+    high: 0.70
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - matched_contractive_baseline_c0
+  metrics:
+    - signal_retention
+    - noise_divergence
+    - settling_success
+    - settling_time
+  budget: quick
+  cost_estimate:
+    low: 0.5
+    high: 2.0
+  falsification_criterion: >
+    The amplifying coordinate's short-horizon signal retention is not strictly
+    greater than the matched contractive control on at least one seed, or it
+    fails to settle within budget.
+  overturn_criterion: >
+    A settling pathology refuted by new evidence raising rescue probability
+    above 0.10.
+  hard_gates:
+    - jacobian_separation_instrument_valid
+    - coordinate_valid
+    - seed_plan_present
+    - no_quarantined_dependencies

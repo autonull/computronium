@@ -449,7 +449,13 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
 | `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes |
-| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); CLI `stability` |
+| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
+
+Platform docs (recipe book, edge blueprint, external summary, release
+notes/manifest): `docs/platform/`. X-STA-002 validated the
+stable-amplification family: 4×–2600× transient retention over matched
+contractive controls at ρ=0.85, noise amplified at the same rate (retention
+gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
 
 `uv sync` installs them as editable workspace members automatically.
 

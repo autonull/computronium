@@ -42,6 +42,15 @@ def test_build_role_split_system() -> None:
     assert metrics["loss"] > 0.0
 
 
+def test_build_stable_amplification() -> None:
+    amp = build_recipe("stable_amplification")
+    x = torch.randn(4, 4)
+    y = getattr(amp, "__call__")(x)
+    assert y.shape == (4, 4)
+    assert getattr(amp, "rho") <= 0.95
+    assert getattr(amp, "sigma_max") > 1.0
+
+
 def test_unknown_recipe_raises() -> None:
     with pytest.raises(ValueError, match="unknown recipe"):
         build_recipe("nope")

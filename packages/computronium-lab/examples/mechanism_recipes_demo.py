@@ -64,6 +64,16 @@ def _role_split_segment(lab: Lab) -> None:
     )
 
 
+def _stable_amplification_segment() -> None:
+    amp = build_recipe("stable_amplification", gain=0.85, dim=4)
+    x = torch.randn(4, 4)
+    y = amp(x)
+    print(
+        f"stable_amplification: rho={amp.rho:.3f} sigma_max={amp.sigma_max:.2f} "
+        f"output_norm={float(y.norm()):.2f} (input_norm={float(x.norm()):.2f})"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
@@ -73,6 +83,7 @@ def main() -> int:
     _temporal_psi_segment(lab)
     _adaptive_feedback_segment(lab)
     _role_split_segment(lab)
+    _stable_amplification_segment()
     print(f"walltime: {time.perf_counter() - t0:.2f}s (printed, never recorded)")
     return 0
 

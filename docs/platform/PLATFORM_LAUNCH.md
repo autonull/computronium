@@ -10,12 +10,14 @@ Normative plan: `TODO20.md`.
 | **ceec-core** | `packages/ceec-core` | stdlib only | Standalone epistemic governance ledger (evidence, beliefs, gates, audit) |
 | **psi-peft** | `packages/psi-peft` | torch | Frozen-backbone task switching via temporal-ψ readouts |
 | **local-feedback** | `packages/local-feedback` | torch | Adaptive local feedback projections (local credit without backprop) |
+| **stability** | `packages/stability` | torch, numpy | Calibrated stability guard + stable-matrix helpers (single source, Rule 6) |
 | **computronium-lab** | `packages/computronium-lab` | computronium | High-level API over the 6-axis ontology: presets, recipes, comparisons |
 | **blueprints/docs** | `docs/platform/` | — | Recipe book, edge blueprint, external summary, publication draft |
 
 ## Package boundaries (G-RELEASE-1)
 
-- `ceec-core`, `psi-peft`, `local-feedback` must never import `computronium.*`.
+- `ceec-core`, `psi-peft`, `local-feedback`, `stability` must never import
+  `computronium.*`.
 - `computronium-lab` may import Computronium; its purpose is to expose it.
 - Enforced by `tests/platform/test_package_boundaries.py` and per-package
   `test_no_computronium_imports.py`.
