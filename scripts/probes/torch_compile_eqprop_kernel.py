@@ -23,7 +23,6 @@ from computronium import (
 )
 from computronium.ontology._settle_kernel import (
     SubstrateSettleKernel,
-    _one_hot,
     extract_layered_params,
 )
 
@@ -68,9 +67,7 @@ def main() -> None:
     substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
     params = extract_layered_params(geometry)
     assert params is not None
-    kernel = SubstrateSettleKernel(
-        substrate=substrate, params=params, step_size=0.5
-    )
+    kernel = SubstrateSettleKernel(substrate=substrate, params=params, step_size=0.5)
     x = torch.randn(BATCH, 784)
     acts0 = geometry.forward_with_intermediates(x, substrate)
 

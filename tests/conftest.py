@@ -28,6 +28,14 @@ logging.basicConfig(
 
 sys.modules["cupy"] = MagicMock()
 
+# Probe sibling imports: one canonical anchor for the whole suite
+# (T21.3A.8) — per-file inserts deleted from tests and probe scripts.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+for _scripts_dir in ("scripts", "scripts/probes"):
+    _probe_path = _REPO_ROOT / _scripts_dir
+    if _probe_path.is_dir() and str(_probe_path) not in sys.path:
+        sys.path.insert(0, str(_probe_path))
+
 
 def lm_train_step(
     model: nn.Module, input_ids: torch.Tensor, target_ids: torch.Tensor | None = None

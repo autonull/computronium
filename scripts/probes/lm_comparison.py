@@ -387,7 +387,11 @@ CELLS = [
     ("transformer", "bp", "muon"),
     ("transformer", "ff_hybrid", "muon"),
     ("transformer", "ff_hybrid", "ortho_adam"),
-    ("transformer", "ff_hybrid", "adam"),  # D17 confound cell: credit @ Adam (TODO13b S3)
+    (
+        "transformer",
+        "ff_hybrid",
+        "adam",
+    ),  # D17 confound cell: credit @ Adam (TODO13b S3)
     ("transformer", "pepita", "muon"),
     ("mlp", "bp", "adam"),
     ("mlp", "ff_hybrid", "muon"),

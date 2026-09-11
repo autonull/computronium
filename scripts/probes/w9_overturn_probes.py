@@ -16,15 +16,12 @@ Walltime printed, never recorded.
 from __future__ import annotations
 
 import copy
-import sys
 import time
 from itertools import islice
-from pathlib import Path
 
 import torch
 from torch import nn
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from computronium import (
     CreditAssignmentConfig,

@@ -20,15 +20,12 @@ from __future__ import annotations
 
 import argparse
 import itertools
-import sys
 import time
 from itertools import islice
-from pathlib import Path
 
 import torch
 from torch.nn import functional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jpc_ortho_adam import _OrthoAdamWeights
 from w4_depth_frontier import (

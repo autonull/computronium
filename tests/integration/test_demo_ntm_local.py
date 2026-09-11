@@ -14,14 +14,11 @@ capability record is the 8000-step 3-seed run — local3 mean 0.944
 (0.958/0.917/0.958), `logs/breadth_ntm_copy8k_s{0,1,2}.log`.
 """
 
-import sys
 import time
 from itertools import chain
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "probes"))
 
 import w8_ntm_copy as ntm
 

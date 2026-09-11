@@ -7,10 +7,8 @@ every card row keeps full teeth — editing a card in code without
 regenerating the doc (or vice versa) fails.
 """
 
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from generate_identity_cards import collect_cards
 

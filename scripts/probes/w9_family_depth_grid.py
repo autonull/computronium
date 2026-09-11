@@ -40,9 +40,6 @@ from torch import Tensor, nn
 if TYPE_CHECKING:
     from computronium.ontology import StateDynamics
 
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from computronium import (
     CreditAssignmentConfig,

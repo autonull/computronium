@@ -43,25 +43,23 @@ LR_GRID = (0.03, 0.015, 0.01)
 
 def _probe(joint, coordinate: str, seed: int) -> float:
     return float(
-        np.mean(
-            [
-                probe_episode(
-                    joint,
-                    coordinate=coordinate,
-                    task_name="synthetic",
-                    campaign_id=TRIAL_CAMPAIGN_ID,
-                    episode=PROBE_EPISODE_BASE + i,
-                    batch_size=16,
-                    input_dim=8,
-                    num_classes=8,
-                    seed=seed,
-                    stationary_teacher=True,
-                    teacher_noise=0.1,
-                    segment=PROBED_SEGMENT,
-                )
-                for i in range(8)
-            ]
-        )
+        np.mean([
+            probe_episode(
+                joint,
+                coordinate=coordinate,
+                task_name="synthetic",
+                campaign_id=TRIAL_CAMPAIGN_ID,
+                episode=PROBE_EPISODE_BASE + i,
+                batch_size=16,
+                input_dim=8,
+                num_classes=8,
+                seed=seed,
+                stationary_teacher=True,
+                teacher_noise=0.1,
+                segment=PROBED_SEGMENT,
+            )
+            for i in range(8)
+        ])
     )
 
 

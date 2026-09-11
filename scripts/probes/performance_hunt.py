@@ -79,9 +79,7 @@ def _run(credit: str, depth: int, width: int, seed: int, lr: float = LR_MUON) ->
         dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
         credit=credit_obj,
         update=RiemannianOrthogonalUpdate(
-            ParameterUpdateConfig.riemannian_orthogonal(
-                step_size=lr, momentum=0.9
-            )
+            ParameterUpdateConfig.riemannian_orthogonal(step_size=lr, momentum=0.9)
         ),
     )
     trainer = SystemTrainer(

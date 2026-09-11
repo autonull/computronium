@@ -76,12 +76,8 @@ def _updates() -> dict[str, Callable]:
         "nat.01": lambda: MeanNormUpdate(
             ParameterUpdateConfig.mean_norm(step_size=0.01)
         ),
-        "nat.1": lambda: MeanNormUpdate(
-            ParameterUpdateConfig.mean_norm(step_size=0.1)
-        ),
-        "nat1": lambda: MeanNormUpdate(
-            ParameterUpdateConfig.mean_norm(step_size=1.0)
-        ),
+        "nat.1": lambda: MeanNormUpdate(ParameterUpdateConfig.mean_norm(step_size=0.1)),
+        "nat1": lambda: MeanNormUpdate(ParameterUpdateConfig.mean_norm(step_size=1.0)),
     }
 
 

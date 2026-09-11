@@ -19,14 +19,11 @@ Walltime printed, never recorded.
 from __future__ import annotations
 
 import hashlib
-import sys
 import time
-from pathlib import Path
 
 import torch
 from torch import Tensor
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from w4_scaled_psi import _Data, _forward_acts, _stage_a
 

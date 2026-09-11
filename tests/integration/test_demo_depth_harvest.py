@@ -9,16 +9,13 @@ harvest headline; depth-50 EMA ≥ 0.75 is the depth headline.
 Measured (2026-09-09, mnist quick): see record.
 """
 
-import sys
 import time
 from itertools import islice
-from pathlib import Path
 
 import pytest
 import torch
 from torch.nn import functional
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "probes"))
 
 from jpc_ortho_adam import _OrthoAdamWeights
 from w4_depth_frontier import _flatten, evaluate

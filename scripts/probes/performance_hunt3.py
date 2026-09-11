@@ -59,9 +59,7 @@ def _geometry(name: str):
         return ConvGeometry(GeometryConfig.conv(input_dim=784, output_dim=10))
     if name == "conv_wide":
         return ConvGeometry(
-            GeometryConfig.conv(
-                input_dim=784, output_dim=10, conv_channels=(16, 32)
-            )
+            GeometryConfig.conv(input_dim=784, output_dim=10, conv_channels=(16, 32))
         )
     if name == "ff_d4_w256":
         return FeedforwardGeometry(
@@ -72,8 +70,16 @@ def _geometry(name: str):
     raise ValueError(name)
 
 
-def _run(geometry_name: str, credit: str, seed: int, *, epochs: int = 1,
-         device: str = "cpu", train_data=None, test_batches=None) -> float:
+def _run(
+    geometry_name: str,
+    credit: str,
+    seed: int,
+    *,
+    epochs: int = 1,
+    device: str = "cpu",
+    train_data=None,
+    test_batches=None,
+) -> float:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()
     if train_data is None:
@@ -93,9 +99,7 @@ def _run(geometry_name: str, credit: str, seed: int, *, epochs: int = 1,
         dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
         credit=_credit(credit),
         update=RiemannianOrthogonalUpdate(
-            ParameterUpdateConfig.riemannian_orthogonal(
-                step_size=LR_MUON, momentum=0.9
-            )
+            ParameterUpdateConfig.riemannian_orthogonal(step_size=LR_MUON, momentum=0.9)
         ),
     )
     SystemTrainer(
@@ -130,29 +134,58 @@ if __name__ == "__main__":
     train_data = list(islice(task.get_dataloader("train"), 300))
     test_batches = list(task.get_dataloader("test"))
 
-    print(f"params: conv={_params('conv')} conv_wide={_params('conv_wide')} "
-          f"ff_d4_w256={_params('ff_d4_w256')}", flush=True)
+    print(
+        f"params: conv={_params('conv')} conv_wide={_params('conv_wide')} "
+        f"ff_d4_w256={_params('ff_d4_w256')}",
+        flush=True,
+    )
 
     # GPU vs CPU walltime on the conv×muon arm (device policy: measure).
     for device in ("cpu", "cuda"):
         started = time.perf_counter()
-        _run("conv", "bp", 0, device=device, train_data=train_data,
-             test_batches=test_batches)
-        print(f"conv/bp/muon 1ep on {device}: {time.perf_counter() - started:.1f}s",
-              flush=True)
+        _run(
+            "conv",
+            "bp",
+            0,
+            device=device,
+            train_data=train_data,
+            test_batches=test_batches,
+        )
+        print(
+            f"conv/bp/muon 1ep on {device}: {time.perf_counter() - started:.1f}s",
+            flush=True,
+        )
 
     for geometry, credit in (
-        ("conv", "bp"), ("conv", "ff"),
-        ("conv_wide", "bp"), ("conv_wide", "ff"),
+        ("conv", "bp"),
+        ("conv", "ff"),
+        ("conv_wide", "bp"),
+        ("conv_wide", "ff"),
     ):
-        accs = [_run(geometry, credit, s, train_data=train_data,
-                     test_batches=test_batches) for s in SEEDS]
-        print(f"{geometry}/{credit}/muon: {np.mean(accs):.3f} "
-              f"± {np.std(accs):.3f} {accs}", flush=True)
+        accs = [
+            _run(geometry, credit, s, train_data=train_data, test_batches=test_batches)
+            for s in SEEDS
+        ]
+        print(
+            f"{geometry}/{credit}/muon: {np.mean(accs):.3f} "
+            f"± {np.std(accs):.3f} {accs}",
+            flush=True,
+        )
 
     for epochs in (2, 3):
-        accs = [_run("ff_d4_w256", "ff", s, epochs=epochs,
-                     train_data=train_data, test_batches=test_batches)
-                for s in SEEDS]
-        print(f"ff_d4_w256/ff/muon {epochs}ep: {np.mean(accs):.3f} "
-              f"± {np.std(accs):.3f} {accs}", flush=True)
+        accs = [
+            _run(
+                "ff_d4_w256",
+                "ff",
+                s,
+                epochs=epochs,
+                train_data=train_data,
+                test_batches=test_batches,
+            )
+            for s in SEEDS
+        ]
+        print(
+            f"ff_d4_w256/ff/muon {epochs}ep: {np.mean(accs):.3f} "
+            f"± {np.std(accs):.3f} {accs}",
+            flush=True,
+        )

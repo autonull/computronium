@@ -5,10 +5,7 @@ its source demo test (sidecar map: ``scripts/readme_snippets.json``). A
 locked snippet that no longer matches its test fails CI.
 """
 
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 from readme_snippet_lock import check_readme_snippets
 

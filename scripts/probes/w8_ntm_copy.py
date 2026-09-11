@@ -335,7 +335,9 @@ def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-p
                 v_idx,
             )
         )
-        if writer == "expected":            # r6: supervise the READ KEY onto e_{k mod L} (the slot written
+        if (
+            writer == "expected"
+        ):  # r6: supervise the READ KEY onto e_{k mod L} (the slot written
             # for bit k is k mod L by construction). Through the softmax
             # addressing alone the key sequence learns ~2x slower than the
             # 30 s cell budget allows (hit rate 0.083 -> 0.167 over 1200
@@ -534,8 +536,15 @@ def _run_local(
         bits = _batch(gen)
         perm = _draw_perm(bits.size(0), bits.size(1), gen)
         loss = _local_episode(
-            controller, heads, bits, code, writer, credit_controller, perm,
-            writer_weight, credit_read,
+            controller,
+            heads,
+            bits,
+            code,
+            writer,
+            credit_controller,
+            perm,
+            writer_weight,
+            credit_read,
         )
         opt.zero_grad()
         loss.backward()

@@ -15,15 +15,12 @@ Walltime printed, never recorded.
 
 from __future__ import annotations
 
-import sys
 import time
 from itertools import islice
-from pathlib import Path
 
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from hunt_cells import BATCH_CAP, SEEDS
 
