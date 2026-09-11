@@ -93,7 +93,7 @@ dev = [
 
 # --- Core feature groups ---
 nn = []  # ComputroniumLinear, pluggable credit rules — zero extra deps
-stability = []  # Stability guard, spectral radius — zero extra deps
+stability-guard = []  # alias for the stability workspace dep (extras name must not shadow it)
 
 # --- Domain / data ---
 vision = ["torchvision"]

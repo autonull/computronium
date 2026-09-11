@@ -15,6 +15,8 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
+from psi_peft.math import decayed, solve_trace_readout
+
 
 class PsiReadout:
     """Trace-decayed ridge readout over frozen features.
@@ -66,16 +68,20 @@ class PsiReadout:
     def update(self, h: Tensor, y: Tensor) -> None:
         """Accumulate one episode's statistics and re-solve the ridge readout."""
         gram, cross = self._stats(h, y)
-        rho = self.trace_decay
+        prev: dict[str, Tensor] = {}
         if self._gram is not None:
-            gram = gram + self._gram if rho == 1.0 else gram + rho * self._gram
+            prev["gram"] = self._gram
         if self._cross is not None:
-            cross = cross + self._cross if rho == 1.0 else cross + rho * self._cross
+            prev["cross"] = self._cross
+        gram, cross = decayed(gram, cross, prev, self.trace_decay)
         self._gram, self._cross = gram, cross
-        d = gram.shape[0]
-        lam = self.ridge_lambda * gram.diagonal().mean().clamp_min(1e-12)
-        m_aug = torch.linalg.solve(gram + lam * torch.eye(d, device=gram.device), cross)
-        self._readout_m, self._readout_b = m_aug[:-1], m_aug[-1]
+        psi = solve_trace_readout(
+            {"trace_steps": torch.tensor(float(self.trace_steps))},
+            gram,
+            cross,
+            self.ridge_lambda,
+        )
+        self._readout_m, self._readout_b = psi["readout_m"], psi["readout_b"]
         self.trace_steps += 1
 
     def forward(self, h: Tensor) -> Tensor:

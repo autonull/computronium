@@ -24,6 +24,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 import torch
+
+# Rule 6: the ridge math's single copy lives in the psi-peft package;
+# re-exported here for the internal ontology surface and parity tests.
+from psi_peft.math import decayed, solve_trace_readout
 from torch import Tensor
 
 from computronium.core.identity_card import AlgorithmIdentityCard
@@ -47,38 +51,6 @@ class TemporalPsiConfig:
     trace_decay: float = 0.9
     ridge_lambda: float = 1e-3
     replace_readout: bool = False
-
-
-def solve_trace_readout(
-    psi: dict[str, Tensor], gram: Tensor, cross: Tensor, ridge_lambda: float
-) -> dict[str, Tensor]:
-    """Solve the ridge readout from (already accumulated) statistics."""
-    d = gram.shape[0]
-    lam = ridge_lambda * gram.diagonal().mean().clamp_min(1e-12)
-    m_aug = torch.linalg.solve(gram + lam * torch.eye(d, device=gram.device), cross)
-    return {
-        "gram": gram,
-        "cross": cross,
-        "readout_m": m_aug[:-1],
-        "readout_b": m_aug[-1],
-        "trace_steps": torch.tensor(
-            psi.get("trace_steps", torch.zeros(())).item() + 1.0
-        ),
-    }
-
-
-def decayed(
-    gram: Tensor, cross: Tensor, prev: dict[str, Tensor], rho: float
-) -> tuple[Tensor, Tensor]:
-    """Apply trace decay ρ to the previous sufficient statistics.
-
-    ρ=1 is the forget-free limit: plain accumulation without decay.
-    """
-    if (prev_gram := prev.get("gram")) is not None:
-        gram = gram + prev_gram if rho == 1.0 else gram + rho * prev_gram
-    if (prev_cross := prev.get("cross")) is not None:
-        cross = cross + prev_cross if rho == 1.0 else cross + rho * prev_cross
-    return gram, cross
 
 
 def apply_readout(

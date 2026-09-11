@@ -1,6 +1,6 @@
 # TODO20 — Computronium Platform Launch
 
-**Status:** ALL PHASES COMPLETE (2026-09-11) — Phases 0–5 + 2.5 shipped; Phase 6A executed (X-STA-002, E-000028, stable-amplification recipe shipped), 6B/6C deferred with explicit boundaries; Phase 7 docs published; Phase 8 QA passed (platform+package suites green, demos/benchmarks quick-mode verified, final CEEC audit clean). Remaining open debt: ceec-core/psi-peft single-source migration (Rule 6 end-state, see §17).
+**Status:** COMPLETE + Rule-6 single-source CLOSED (2026-09-11) — ceec AND psi migrations done — Phases 0–5 + 2.5 shipped; Phase 6A executed (X-STA-002, E-000028, stable-amplification recipe shipped), 6B/6C deferred with explicit boundaries; Phase 7 docs published; Phase 8 QA passed (platform+package suites green, demos/benchmarks quick-mode verified, final CEEC audit clean). Remaining open debt: ceec-core/psi-peft single-source migration (Rule 6 end-state, see §17).
 **Created:** 2026-09-11  
 **Supersedes:** TODO19 “Epistemic Foundry” as the active execution phase  
 **Absorbs:** All unfinished TODO19 work required for release, trust, or product value  
@@ -1580,7 +1580,7 @@ TODO20 is complete when the following are true.
 - [x] `computronium-lab` supports minimum presets and recipes.
 - [x] `computronium-lab` quickstart runs.
 - [x] `stability` package extracted with calibration parity lock.
-- [ ] Rule 6 holds: zero duplicated implementations (adapters only). *(guard/resources done; ceec-core/psi-peft internal duplicates remain as documented transitional scaffolding — migration order in §17)*
+- [x] Rule 6 holds: zero duplicated implementations (adapters only) — ceec + psi single-source sweep closed 2026-09-11.
 - [x] `computronium` depends on packages via uv workspace membership.
 
 ### TODO19 closure
@@ -2211,3 +2211,40 @@ stability validated; local-feedback validated; computronium-lab validated.
 All packages listed in `docs/platform/RELEASE_MANIFEST.md`; release notes
 published. TODO20 Definition of Done met except the two Rule-6 migrations
 (ceec-core/psi-peft) explicitly documented as transitional scaffolding.
+
+### 2026-09-11 — Rule-6 single-source sweep CLOSED (ceec + psi)
+
+**ceec migration (internal → package).** `computronium/ceec/*.py` are now
+star-import adapters of `ceec.<mod>` (submodule-bound in `__init__`,
+`__all__ = list(ceec.__all__)`); `migrate/todo18_records` is
+**module-aliased** (`sys.modules[__name__] = ceec.migrate.todo18_records`)
+so monkeypatched module globals in legacy tests hit the real module —
+star-import adapters break `monkeypatch.setattr(module, ...)` semantics.
+~1.8k lines of duplicated implementation deleted. `computronium.ceec.cli`
+stays runnable via `-m` (adapter invokes the package `main`). Legacy
+bootstrap-count tests updated 8 → 10 (two new pre-registered configs).
+
+**psi migration (math → package).** `solve_trace_readout` + `decayed`
+moved to `psi_peft.math` (single copy); package `PsiReadout.update`
+consumes them; internal `temporal_psi.py` re-imports from the package and
+keeps `apply_readout` (framework-coupled activations surface). Parity test
+still meaningful (class-vs-function paths). Full temporal/psi/plasticity
+unit sweep: 130 pass.
+
+**Opportunities fixed:** #1 (`pre_register_experiment` draft-status error
+message corrected in the package copy — now the only copy), #9 (extras
+group renamed `stability-guard`, no longer shadows the `stability` dep).
+
+**Verification:** tests/ceec 114, platform 19, package suites
+16/15/19/23/21 — all pass; audit CLI clean; ruff clean; pyright 0 errors
+on touched files; dev-env smoke ok after `uv sync --dev --all-extras`.
+
+**Gotchas for future work:**
+- Per-package test-basename collisions (#18) break single-invocation
+  collection — the per-package gate is binding, not cosmetic.
+- Module-alias adapters are the pattern to copy when legacy tests
+  monkeypatch module attributes (star-import adapters silently miss).
+
+**TODO20 end state:** all DoD items checked. Remaining optional work:
+publication-draft expansion (venue-driven), X-USU-002 defect hunt if
+RoleSplit value warrants, X-RSE if the routing baseline becomes learnable.
