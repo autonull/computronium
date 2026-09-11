@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -14,6 +15,10 @@ from computronium.core.system_trainer.trainer import SystemTrainer
 from computronium.experiments.joint.tasks import gaussian_blobs
 from computronium_lab.presets import PRESETS, build_system_preset
 from computronium_lab.recipes import RECIPES, build_recipe
+from computronium_lab.synthesis.spec import Constraints, ProblemSpec
+
+if TYPE_CHECKING:
+    from computronium_lab.synthesis.engine import ParetoOption, SynthesisResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +71,40 @@ class Lab:
         self.quick = quick
         self.record_ledger = record_ledger
         self.last_results: list[ComparisonResult] = []
+        self._campaigns: dict[str, int] = {}
+
+    def specify(
+        self,
+        task: str,
+        dataset: str,
+        constraints: Constraints | None = None,
+        objectives: tuple[str, ...] = ("accuracy",),
+        exploration_budget: int = 3,
+        **dims: int,
+    ) -> ProblemSpec:
+        """Specify the problem — the input to synthesize() (TODO23 T23.1.1)."""
+        spec = ProblemSpec(
+            task=task,
+            dataset=dataset,
+            constraints=constraints or Constraints(),
+            objectives=objectives,
+            exploration_budget=exploration_budget,
+            input_dim=int(dims.get("input_dim", 32)),
+            num_classes=int(dims.get("num_classes", 4)),
+        )
+        return spec
+
+    def synthesize(self, spec: ProblemSpec) -> SynthesisResult:
+        """Spec → best valid mechanism coordinate with provenance (T23.1.5)."""
+        from computronium_lab.synthesis.engine import synthesize as _synthesize
+
+        return _synthesize(spec, campaigns_run=self._campaigns)
+
+    def explore(self, spec: ProblemSpec) -> list[ParetoOption]:
+        """Pareto frontier of constraint-satisfying mechanisms (T23.1.6)."""
+        from computronium_lab.synthesis.engine import explore as _explore
+
+        return _explore(spec)
 
     def compose(self, preset: str, **kwargs: object) -> object:
         """One-line system composition from a registered preset."""

@@ -286,15 +286,29 @@ No internal metrics without a user-facing report.
 
 ## 12. Progress Log
 
-### Session YYYY-MM-DD — Phase 1: Problem→Mechanism Compiler
-- [ ] T23.1.1 Spec DSL
-- [ ] T23.1.2 I(C,U,P) Model v2
-- [ ] T23.1.3 Constraint Solver
-- [ ] T23.1.4 Recipe Registry
-- [ ] T23.1.5 Synthesis Engine
-- [ ] T23.1.6 Interactive Explorer
-- [ ] T23.1.7 Exploration Budget
-- [ ] T23.1.8 Autopoiesis-Ready Primitives
+### Session 2026-09-11 — Phase 1: Problem→Mechanism Compiler — COMPLETE
+- [x] T23.1.1 Spec DSL — `computronium_lab.synthesis.spec` (`ProblemSpec`, `Constraints`, `exploration_budget`, `key()` for budget accounting)
+- [x] T23.1.2 I(C,U,P) Model v2 — `synthesis.predictor.ViabilityModel`: **depth-matched fit** (d≤2 corpus; d32 rows are a recorded sampling boundary, TODO17 §5.1), ψ-conditional (plasticity feature), geometry-aware. **CV 0.880, held-out lattice 0.944 ≥ 0.90** (pinned claim reproduced)
+- [x] T23.1.3 Constraint Solver — `engine.filter_catalog` (substrate support, local-credit policy, latency/memory ceilings) + `screen_config` → `SystemConfig.validate()` as hard screen
+- [x] T23.1.4 Recipe Registry — `synthesis.catalog.CATALOG`: 6 candidates (backprop, role-split muon readout, temporal-ψ, FF, FA, PEPITA) each with Pareto metadata (accuracy/latency/memory/stability/adaptation_speed), provenance ref, config builder, build path (preset or recipe); soft priors from `computronium.analysis.recipe_cards` (`engine.card_factor`)
+- [x] T23.1.5 Synthesis Engine — `engine.synthesize(spec) → SynthesisResult` with 6-line provenance trace (constraint filter → I(C,U,P) features → p → card verdict → tree path → mechanism evidence) and `result.build(spec)` composing the system
+- [x] T23.1.6 Interactive Explorer — `engine.explore(spec)` → non-dominated Pareto frontier over `spec.objectives`; `Lab.explore()`
+- [x] T23.1.7 Exploration Budget — CEEC gate `ExplorationBudgetExhausted`; exploratory when top p < 0.7; per-spec campaign counting in `Lab._campaigns`
+- [x] T23.1.8 Autopoiesis-Ready Primitives — `computronium.autopoiesis.protocols`: `OperatorGenome`, `MutationOperator`, `FitnessMetric`, `SelectionPolicy`, `StagnationDetector`, `Constitution` (runtime-checkable Protocols, zero implementation)
+
+**Wiring:** `Lab.specify/synthesize/explore`; synthesis exports at `computronium_lab` root. **Tests:** `packages/computronium-lab/tests/test_synthesis.py` (8) + `tests/unit/core/test_autopoiesis_protocols.py` (1); lab suite 32 passed. Gates: ruff format+check clean, pyright strict 0 errors on new modules. `computronium-lab` now depends on `scikit-learn`.
+
+**Session notes for future work:**
+- The 0.944 held-out claim requires the depth-matched (d≤2) corpus; the full corpus (with d32 campaign rows) gives CV 0.849 / lattice 0.722 — do not "improve" the fit by feeding it d32 rows (recorded boundary, TODO17).
+- Catalog Pareto metadata are measured values transcribed from RESULTS.md/ladder logs; extend CATALOG by adding a `MechanismCandidate` row with a real `config_builder` (screened by `SystemConfig.validate()` in tests via `synthesize`).
+- Predictor confidence = P(viable) from the calibrated logistic; the tree path is provenance only (not used for scoring).
+- `screen_config` skips candidates with `config_builder=None` (mechanism recipes without a flat 6-axis config); every current catalog entry has one.
+
+**Improvement opportunities (queued, not blockers):**
+- Ecosystem campaign records: `Lab.synthesize` could opt-in record a CEEC campaign artifact per exploratory synthesis (Phase 2.5 will need this wiring anyway).
+- Candidate coverage: NCA/NTM/lattice geometries and PC-family credit are not yet cataloged; add rows when their Pareto metadata can be transcribed from recorded results (no new probes — §11).
+- `explore` currently evaluates only cataloged mechanisms; a Gibbs-style sweep over `filter_catalog ∩ objective fronts` could surface un-cataloged coordinates, but only with measured metadata (§11 anti-probe-farm rule).
+- `predictor.rationale` re-encodes features per call; cache the transformed row if it ever shows up in a profile.
 
 ### Session YYYY-MM-DD — Phase 2: Unified Training Surface
 - [ ] T23.2.1 Lab.train()

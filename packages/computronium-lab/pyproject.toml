@@ -3,7 +3,7 @@ name = "computronium-lab"
 version = "0.1.0"
 description = "High-level API over the Computronium 6-axis ontology: compose, train, compare, report."
 requires-python = ">=3.12"
-dependencies = ["torch>=2.0", "computronium", "psi-peft", "local-feedback"]
+dependencies = ["torch>=2.0", "computronium", "psi-peft", "local-feedback", "scikit-learn>=1.4"]
 
 [build-system]
 requires = ["hatchling"]

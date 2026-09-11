@@ -448,7 +448,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 | `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
-| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes |
+| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget** |
 | `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
 
 Platform docs (recipe book, edge blueprint, external summary, release
@@ -458,6 +458,24 @@ contractive controls at ρ=0.85, noise amplified at the same rate (retention
 gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
 
 `uv sync` installs them as editable workspace members automatically.
+
+### Quickstart: Synthesize a Mechanism from a Problem Spec (TODO23)
+
+```python
+from computronium_lab import Lab, Constraints
+
+lab = Lab()
+spec = lab.specify(
+    "image_classification", "cifar100",
+    constraints=Constraints(substrate="digital", continual=False),
+    objectives=("accuracy", "stability"),
+)
+result = lab.synthesize(spec)      # → coordinate + provenance + predicted viability
+print(result.coordinate, result.provenance)
+system = result.build(spec)        # composed System, hard-screened by SystemConfig.validate()
+metrics = lab.train(system, epochs=1)
+frontier = lab.explore(spec)       # Pareto frontier of constraint-satisfying mechanisms
+```
 
 ### Quickstart: Forward-Forward vs Backprop in <2 Minutes
 

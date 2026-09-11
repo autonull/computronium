@@ -719,6 +719,7 @@ dependencies = [
     { name = "computronium" },
     { name = "local-feedback" },
     { name = "psi-peft" },
+    { name = "scikit-learn" },
     { name = "torch" },
 ]
 
@@ -727,6 +728,7 @@ requires-dist = [
     { name = "computronium", editable = "." },
     { name = "local-feedback", editable = "packages/local-feedback" },
     { name = "psi-peft", editable = "packages/psi-peft" },
+    { name = "scikit-learn", specifier = ">=1.4" },
     { name = "torch", specifier = ">=2.0" },
 ]
 
