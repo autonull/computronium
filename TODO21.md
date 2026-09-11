@@ -345,6 +345,27 @@ Everything else documents deferral in §12.
 Commits: kb migration / hyperopt v3 shared-file migration / gallery
 staleness message / reproducibility §3.4 traceability fix.
 
+**Session-3 addendum 2 (Register C hygiene pass, ruff leg DONE)**
+
+1. **Repo-wide ruff: zero findings** (was 79). Safe autofixes (I001/RUF105/
+   RUF106), hand fixes (`test_tile_settle_kernel` unused unpack + `dict()`
+   literals; two noqa→name-form conversions; probe set-literal membership),
+   and config closures with rationale: `scripts/probes/**` per-file-ignores
+   block (throwaway research scripts — S101/S324/complexity/E741/F841/
+   PLW2901/ARG005/SIM113; security rules stay active) and `S404` on
+   `tests/**` (legitimate subprocess in CLI/wheel smoke tests). Touched
+   tests verified green. Canonical suppression form is `# ruff: ignore
+   [rule-name]` (name-form, verified working).
+2. **Repo-wide pyright: abandoned as a hygiene item** — a full `pyright .`
+   run exceeded ~45 min with no output on this machine (cold analysis of
+   the full package tree; pyright buffers output until completion, so
+   walltime is opaque). Deferred with rationale per the standing AGENTS
+   posture: repo-wide checking stays basic/deferred until tooling makes it
+   tractable (e.g. `pyright --verifytypes`, scoped runs, or a faster
+   machine); strict pyright on changed/new modules remains the per-commit
+   gate and was 0-error all session. If anyone re-attempts repo-wide
+   pyright, run it in background overnight, not in a session cell.
+
 **Session-3 addendum (round close): lint-gate + full suite**
 
 1. **ruff 0.15.9 suppression-directive discovery.** The repo's ~1.5k
@@ -609,12 +630,9 @@ store migration / sys.path anchor / figure re-pin.
 3. Gallery lock staleness: **softened** — the drift failure message now
    self-describes staleness (emitting commit vs HEAD). A hard staleness
    gate was evaluated and rejected: 22/26 records legitimately lag HEAD.
-4. Ruff legacy findings, post-0.15: 54 repo-wide (I001/S404/complexity
-   class) + the ~1.5k `ruff: ignore` name-form directives now inert-but-
-   present (RUF100/RUF103 ignored in config with rationale; canonical
-   form documented in §12). Register C, ride the hygiene pass — an
-   aggressive `--fix --select RUF...` deletion of guard-rail comments was
-   attempted and reverted; don't redo it.
+4. Ruff: **retired** — repo-wide zero findings after the session-3 hygiene
+   pass (see addendum 2). Remaining: repo-wide pyright abandoned with
+   rationale (background-only if ever re-attempted).
 5. Ledger gate reform candidate: `bounded` status or scope-bounded
    promotion threshold (deferred ledger feature work).
 6. Phase 4 hardware probes: deferred (simulation-only scaffolding exists;
