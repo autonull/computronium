@@ -43,7 +43,10 @@ beliefs:
   - id: B-H3-STABLE-TRANSIENT-AMPLIFICATION
     statement: >
       Asymptotically stable but transiently amplifying dynamics improve
-      robustness or expressivity relative to purely contractive dynamics.
+      transient signal retention relative to purely contractive dynamics
+      (retention-gain-only: X-STA-002 paired replay shows noise divergence
+      scales with the retention ratio, so SNR is unchanged; no robustness
+      claim). Validated scope: linear transitions, quick family, 3 seeds.
     type: mechanism
     scope:
       domain: stability
