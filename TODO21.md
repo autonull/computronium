@@ -1,9 +1,10 @@
 # TODO21 — Platform Afterlife: Publication, Hygiene, and Honest Boundaries
 
-**Status:** IN PROGRESS (2026-09-11, session 1). Read §12 Progress log
+**Status:** IN PROGRESS (2026-09-11, session 2). Read §12 Progress log
 first — it carries completed-state (Phase 1 done, T21.2.1 closed, Phase 3A
-dedupes landed), gotchas, and environment notes. Next work: the numbered
-"Open/registered for next session" list at the end of §12.
+dedupes landed; session 2 closed the pre-existing test failures, T21.3.3,
+T21.3A.8, second store migration) and gotchas. Next work: the numbered
+"Open/registered" list at the end of §12.
 **Created:** 2026-09-11
 **Supersedes:** TODO20 (closed 2026-09-11 — all DoD checked, Rule 6 satisfied, audit clean)
 **Absorbs:** All registered-but-unfixed TODO20 improvement opportunities and deferred-science boundaries that still have product value
@@ -250,14 +251,14 @@ binding for any new extraction.
 - [x] Metrics/power-iteration/synthetic-task dedupes landed (T21.3A.1–3);
       internal analysis code consumes package metrics.
 - [x] Lab boundary direction decided + boundary test in place (T21.3A.7).
-- [x] sys.path hacks removed (T21.3A.8; dead ones deleted, 13
-      sibling-import anchors kept and `__file__`-anchored — see §12).
+- [x] sys.path hacks removed (T21.3A.8 fully closed — one conftest
+      anchor; see §12 session 2).
 - [x] sqlite-ledger toolkit extracted + first store migration with
       parity lock (T21.3A.9).
 - [ ] Per-package pyright configs landed (if scripts need gating) —
       deferred with rationale.
-- [ ] Single-command gate green (if T21.3.3 adopted) — partial: works
-      with `--import-mode=importlib`; basename rename queued.
+- [x] Single-command gate green (T21.3.3 DONE — package test basenames
+      prefixed; gate runs without the importlib workaround).
 - [ ] Lab trainer-metrics contract (T21.3.4) — documented deferral.
 - [x] Repo-wide hygiene gates run at round close (T21.3.5; findings
       closed or explicitly re-queued — see §12 snapshot).
@@ -287,7 +288,57 @@ Everything else documents deferral in §12.
 
 ## 12. Progress log
 
-### Session 2026-09-11 (agent) — Phase 1 complete, Phase 2 closed, Phase 3A dedupes landed
+### Session 2026-09-11 (agent, session 2) — pre-existing failures closed, T21.3.3, T21.3A.8, 2nd store migration
+
+Session-1 commits landed as the first act (they were already in history);
+this session then closed the registered items:
+
+1. **Pre-existing test failures all fixed.**
+   - 7 `test_system_spec` round-trip failures: JSON round-trip turns
+     `role_names` tuple → list, so `ParameterUpdateConfig` reconstructed
+     unequal. Fix: `__post_init__` tuple coercion in
+     `computronium/ontology/update.py`. 20/20 green.
+   - Gallery figure-lock drift: staleness artifact, not demo drift —
+     slow-marked demos are deselected by default (`-m 'not slow...'` in
+     addopts), so their on-disk run records go stale vs the pinned
+     manifest. Executing the slow demo refreshes the record; lock passes.
+     Records + manifest re-pinned. Gotcha: gallery lock is only green in
+     a session where the slow demos ran.
+   - Wheel acceptance: root cause was the `--no-deps --no-index` sandbox
+     predating the Rule 6 platform-package deps — `ontology.plasticity`
+     imports `psi_peft.math`, not present in the single wheel. Fix:
+     test now builds `uv build --all-packages --wheel` and installs all
+     workspace wheels. Real pip users were never broken.
+2. **T21.3.3 DONE** — package test basenames prefixed (`test_lf_*`,
+   `test_psi_*`, `test_lab_*`); duplicate-basename collision gone;
+   single-command gate `uv run python -m pytest tests/ packages -q`
+   verified green without `--import-mode=importlib`. PLATFORM_LAUNCH.md
+   updated.
+3. **T21.3A.9 second store migrated** — `CampaignStore` now subclasses
+   `SqliteStore` (MIGRATIONS dict replaces SCHEMA_VERSION/MIGRATIONS-
+   tuple plumbing; `-186` lines net). `SchemaVersionError` re-exported
+   from `ceec.sqlite_toolkit` via campaign `__init__`. Legacy pre-freeze
+   v0 DBs still grandfather (v1 DDL is IF NOT EXISTS). Tests retargeted
+   (`max(CampaignStore.MIGRATIONS)`); suite 39 passed. **NOTE:**
+   `execution/_state.py` stores (FailureTracker/DecisionLogger) CANNOT
+   naively subclass SqliteStore — they share the hyperopt DB file whose
+   `user_version` is owned by HyperoptStorage; per-store user_version
+   ownership would collide. Any migration there needs a shared-version
+   scheme or separate files; judgment recorded, not re-litigated.
+4. **T21.3A.8 fully closed** — one canonical anchor in
+   `tests/conftest.py` (scripts/ + scripts/probes); 11 probe
+   self-inserts + 4 test inserts deleted (probe self-inserts were dead
+   under direct script execution: sys.path[0] = script dir).
+   Probe-dependent integration tests (depth_harvest, ntm_local) green.
+5. Flakiness note: `TestArmLearningRegression::test_fast_weights_learns_
+   discriminating_task` failed once under full-suite contention, passes
+   standalone (47.7 s) — same contention class as the session-1 gotcha,
+   not a defect.
+
+Commits (logical): role_names fix / test renames / wheel fix / campaign
+store migration / sys.path anchor / figure re-pin.
+
+**Session 2026-09-11 (agent) — Phase 1 complete, Phase 2 closed, Phase 3A dedupes landed**
 
 **Phase 1 — Publication (T21.1.1–T21.1.4) DONE**
 
@@ -372,13 +423,12 @@ Everything else documents deferral in §12.
   directions, AST-based). Decision recorded in PLATFORM_LAUNCH.md. Also
   fixed lab's private-module import (`ontology.dynamics._dynamics` →
   public `ontology.dynamics`).
-- [~] **T21.3A.8** sys.path hacks removed where genuinely dead: 7
-  validation/tracks library appends, 9 repo-root inserts (8 probes +
-  icu_report), tests/conftest.py, test_triton_kernel,
-  test_validation_all, test_verify_backend. **Kept (not dead), anchored
-  to `__file__`:** 11 probes + 2 integration tests that import sibling
-  probe modules (`hunt_cells`, `w4_*`, `w8_ntm_copy`, `jpc_ortho_adam`)
-  — deleting these requires packaging scripts/probes; registered below.
+- [x] **T21.3A.8** sys.path hacks removed: session 1 killed the dead
+  ones; session 2 closed the rest — one canonical anchor in
+  `tests/conftest.py`, 11 probe self-inserts + 4 test inserts deleted.
+  (Session-1 detail, superseded by the bullet above: 7 validation/tracks
+  library appends, 9 repo-root inserts, tests/conftest.py,
+  test_triton_kernel, test_validation_all, test_verify_backend.)
 - [~] **T21.3A.9** Toolkit extracted:
   `packages/ceec-core/src/ceec/sqlite_toolkit.py` (`SqliteStore`:
   frozen-MIGRATIONS schema versioning via `user_version`, `_tx`
@@ -460,25 +510,22 @@ Everything else documents deferral in §12.
   attribute, etc. — Register C).
 - pip-audit: not run this round (CI-scope item; queued with T21.3.5).
 
-**Open/registered for next session**
+**Open/registered (after session 2)**
 
-1. Fix the 7 pre-existing `test_system_spec.py` round-trip failures
-   (`ParameterUpdateConfig` reconstructs unequal — likely a field dropped
-   or defaulted in the spec→config path; baseline defect, verify before
-   touching update.py). Also the gallery figure-lock drift and wheel
-   acceptance failure — same stash-verified pre-existing class.
-2. Execute the REPRODUCIBILITY fresh-clone dry-run gate (T21.1.3) and
-   record walltime.
-3. T21.3.3: rename package test basenames, adopt the single-command gate
-   without importlib workaround.
-4. T21.3A.9: migrate remaining stores (suggest `execution/_state.py` or
-   `knowledge/kb.py` next, each with a parity lock); consider folding
-   ceec.store's prefixed-id generator in as opt-in.
-5. Package `scripts/probes` (or a shared probe helpers module) so the
-   remaining 13 anchored sys.path inserts can be deleted.
-6. Ledger gate reform candidate: `bounded` status or scope-bounded
+1. Execute the REPRODUCIBILITY fresh-clone dry-run gate (T21.1.3) and
+   record walltime. Highest-priority remaining item; ~1 session.
+2. T21.3A.9: remaining stores (`knowledge/kb.py`, `core/campaign` DONE,
+   hyperopt DONE). `execution/_state.py` stores need a shared
+   user_version scheme or file split first (see session-2 note) —
+   consider extracting a `SharedFileStore` variant or defer with
+   rationale.
+3. Gallery lock staleness: consider a `--slow` gate variant or a record
+   age check so the lock fails loudly ("records stale — run slow demos")
+   instead of as a sha mismatch.
+4. Ruff autofixable legacy findings remain in probes (ARG/C901/E741 class)
+   — Register C, ride the hygiene pass.
+5. Ledger gate reform candidate: `bounded` status or scope-bounded
    promotion threshold (deferred ledger feature work).
-7. Phase 4 hardware probes: deferred this round (simulation-only
-   scaffolding exists; none is publication-blocking; rationale: budget
-   went to Phase 1 + hygiene). Re-open only if a manuscript reviewer
+6. Phase 4 hardware probes: deferred (simulation-only scaffolding exists;
+   none is publication-blocking). Re-open only if a manuscript reviewer
    claim needs it.
