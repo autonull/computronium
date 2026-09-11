@@ -365,7 +365,7 @@ class HyperoptStorage(SqliteStore):
             trajectory: TrainingTrajectory object
                 (from computronium.execution.training_dynamics)
         """
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             cursor = self.conn.cursor()
 
             # Insert Trajectory

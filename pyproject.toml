@@ -236,6 +236,15 @@ ignore = [
     "RUF003",
     "PLR0133",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
     "RUF069",  # ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
+    # Suppression-comment style rules (ruff 0.15 directive family): the repo
+    # uses ~1.5k legacy `# ruff: ignore[rule-name]` guard-rail comments;
+    # RUF100 marks them unused, RUF105/106 want the other directive form and
+    # RUF103 rejects it back. Canonical-form migration is Register C work;
+    # enabling these rules only churns guard-rails without lint signal.
+    "RUF100",
+    "RUF103",
+    "RUF105",
+    "RUF106",
 ]
 
 [tool.ruff.lint.per-file-ignores]
