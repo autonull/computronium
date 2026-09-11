@@ -20,8 +20,6 @@ from itertools import islice
 
 import numpy as np
 import torch
-
-
 from hunt_cells import BATCH_CAP, SEEDS
 
 from computronium import (  # type: ignore[attr-defined]

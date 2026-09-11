@@ -122,7 +122,7 @@ def _run(
 ) -> float:
     torch.manual_seed(seed)
     if geometry_fn is None:
-        geometry_fn = lambda: FeedforwardGeometry(  # noqa: E731 — small probe default
+        geometry_fn = lambda: FeedforwardGeometry(  # ruff: ignore[lambda-assignment] — small probe default
             GeometryConfig.feedforward(
                 input_dim=784, output_dim=10, hidden_dims=(64, 64)
             )
@@ -151,7 +151,7 @@ def _run(
             acts = state.activations
             out = acts[-1] if isinstance(acts, list) else acts
             if out is None:
-                raise RuntimeError(  # noqa: TRY003 — probe-local invariant
+                raise RuntimeError(  # ruff: ignore[raise-vanilla-args] — probe-local invariant
                     "settle produced no activations"
                 )
             ok += (out.argmax(1) == batch_y).sum().item()

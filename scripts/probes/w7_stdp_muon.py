@@ -14,8 +14,6 @@ from __future__ import annotations
 import time
 
 import torch
-
-
 from spiking_learning import BATCH_CAP, DEPTHS, SETTLE_STEPS, WIDTH, _flatten
 
 from computronium import (  # type: ignore[attr-defined]

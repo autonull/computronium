@@ -9,7 +9,6 @@ regenerating the doc (or vice versa) fails.
 
 from pathlib import Path
 
-
 from generate_identity_cards import collect_cards
 
 DOC = Path("docs/IDENTITY_CARDS.md")

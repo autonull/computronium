@@ -23,8 +23,6 @@ import time
 
 import torch
 from torch import Tensor
-
-
 from w4_scaled_psi import _Data, _forward_acts, _stage_a
 
 from computronium import (  # type: ignore[attr-defined]

@@ -205,7 +205,7 @@ def _run_live_arms(substrate, config, train_data) -> dict:
     spc = _spc_system(substrate)
     spc_norms = _credit_norms(spc, substrate, train_data[0])
     print(f"spc norms {spc_norms}")
-    assert all(n == 0.0 for n in spc_norms[:-1]), (  # noqa: RUF069 — exact-zero IS the ratchet (F1 precedent)
+    assert all(n == 0.0 for n in spc_norms[:-1]), (  # ruff: ignore[float-equality-comparison] — exact-zero IS the ratchet (F1 precedent)
         "sPC hidden credit norms must be exactly zero (the blocked channel)"
     )
     assert all(n > 0 for n in norms_none[:-1]), (

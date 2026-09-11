@@ -33,12 +33,12 @@ from computronium import (
     ParameterUpdateConfig,
     StateDynamicsConfig,
     SubstrateConfig,
+    SystemState,
     SystemTrainer,
     SystemTrainerConfig,
     compose_system,
     create_task,
 )
-from computronium import SystemState
 from computronium.ontology.update import RiemannianOrthogonalUpdate
 
 WIDTH = 128

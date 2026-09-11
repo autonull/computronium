@@ -87,7 +87,7 @@ def _basin_curve(
     return means, r50
 
 
-def _walk(arm: str, config: TrialConfig) -> dict:  # noqa: PLR0914
+def _walk(arm: str, config: TrialConfig) -> dict:  # ruff: ignore[too-many-locals]
     """One arm: persistent-θ walk + resource vector + stability scalars."""
     coordinate = f"digital/feedforward/instantaneous/{arm}/gradient/euclidean"
     latencies: list[float] = []

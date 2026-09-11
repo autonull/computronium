@@ -266,8 +266,27 @@ ignore = [
     "E402",  # sys.path bootstrap before computronium imports
     "I001",  # import block follows the sys.path insert by design
 ]
+"scripts/probes/**" = [
+    # Research probes are sanctioned throwaways (AGENTS probe conventions):
+    # numbers-in-docstrings matter, lint polish does not. Security rules
+    # stay active; these close the style/complexity classes only.
+    "S101",    # asserts are the probe's sanity gates
+    "S324",    # md5 for non-cognitive cache keys
+    "PLR0911", # complexity budgets don't apply to one-off sweeps
+    "PLR0912",
+    "PLR0914",
+    "PLR0915",
+    "PLR6104", # out-of-place adds are the settle graph-safety idiom
+    "PLW0603", # probe-level module state by design
+    "PLW2901", # loop-var overwrite is a common probe idiom
+    "E741",    # single-letter math names (l, n) are the domain language
+    "F841",    # assignments kept for side effects / future inspection
+    "ARG005",  # lambda placeholders in tracker callbacks
+    "SIM113",  # manual counters read clearer in sweep loops
+]
 "tests/**/*.py" = [
     "S101",   # assert in tests
+    "S404",   # subprocess CLI smoke / wheel-acceptance tests
     "PLR6301", # no-self-use in test methods
     "S606",   # subprocess CLI smoke tests
     "S603",   # subprocess.run with fixed args

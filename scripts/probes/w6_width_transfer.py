@@ -40,7 +40,6 @@ Walltime printed, never recorded.
 import time
 
 import torch
-
 import w4_depth_frontier as w4
 
 

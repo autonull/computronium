@@ -113,7 +113,7 @@ def _acts_list(activations) -> list[torch.Tensor]:
     return activations if isinstance(activations, list) else [activations]
 
 
-def closed_form_gradient(credit, states, geometry) -> list[torch.Tensor]:  # noqa: PLR0914
+def closed_form_gradient(credit, states, geometry) -> list[torch.Tensor]:  # ruff: ignore[too-many-locals]
     """Detached per-layer FF goodness gradient — no autograd graph.
 
     Layer k weight W_k (acts index k): ∂(‖a_free‖²−‖a_nudged‖²)/∂W_k =

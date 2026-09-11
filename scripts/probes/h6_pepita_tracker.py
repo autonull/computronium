@@ -126,7 +126,7 @@ def _run(feedback_lr: float) -> None:
                 lambda n, p, g: p - 3e-4 * g / g.square().mean().sqrt().add(1e-8),
             )
         )
-        if i in (0, 49, 99, 149):
+        if i in {0, 49, 99, 149}:
             w_out = system.geometry.params["2.weight"]
             drift = (system.geometry.params["2.weight"] - pre["2.weight"]).norm()
             b_norms = [f"{b.norm():.3f}" for b in system.credit._learned.values()]

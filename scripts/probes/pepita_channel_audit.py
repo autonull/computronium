@@ -24,7 +24,6 @@ import time
 
 import torch
 
-
 from computronium import (  # type: ignore[attr-defined]
     CreditAssignmentConfig,
     DigitalSubstrate,

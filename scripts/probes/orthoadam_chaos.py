@@ -21,10 +21,8 @@ from __future__ import annotations
 import time
 
 import torch
-from torch.nn import functional
-
-
 from jpc_ortho_adam import _OrthoAdamWeights
+from torch.nn import functional
 from w4_depth_frontier import BETA, GAMMA, WIDTH, _flatten, evaluate
 
 from computronium import (  # type: ignore[attr-defined]

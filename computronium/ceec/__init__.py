@@ -7,6 +7,7 @@ package (uv workspace member ``packages/ceec-core``).
 from __future__ import annotations
 
 from ceec import *  # ruff: ignore[undefined-local-with-import-star]
+from ceec import __all__ as _pkg_all
 from ceec import (
     audit as audit,
 )
@@ -43,7 +44,5 @@ from ceec import (
 from ceec import (
     store as store,
 )
-
-from ceec import __all__ as _pkg_all
 
 __all__ = list(_pkg_all)

@@ -22,7 +22,6 @@ from itertools import islice
 import torch
 from torch import nn
 
-
 from computronium import (
     CreditAssignmentConfig,
     DigitalSubstrate,

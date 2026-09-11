@@ -29,8 +29,6 @@ import time
 from itertools import islice
 
 import torch
-
-
 from hunt_cells import BATCH_CAP, _credit, _updates
 
 from computronium import (

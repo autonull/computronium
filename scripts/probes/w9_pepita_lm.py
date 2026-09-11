@@ -119,7 +119,7 @@ def _train(
     return _evaluate(net, val)
 
 
-def main() -> int:  # noqa: PLR0914
+def main() -> int:  # ruff: ignore[too-many-locals]
     parser = argparse.ArgumentParser()
     parser.add_argument("--steps", type=int, default=STEPS)
     args = parser.parse_args()

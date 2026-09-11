@@ -100,7 +100,7 @@ def test_free_vs_nudged_contrast():
         beta=0.1,
         settle_steps=5,
     )
-    g, s, d, c, u = m.geometry, m.substrate, m.dynamics, m.credit, m.update
+    g, s, d = m.geometry, m.substrate, m.dynamics
 
     x = torch.randn(4, 20)
     y = torch.randint(0, 5, (4,))
@@ -122,9 +122,9 @@ def test_all_seven_factories_learn():
     x = torch.randn(8, 10)
     y = torch.randint(0, 3, (8,))
     factories = [
-        (create_native_tile_ep, dict(beta=0.1)),
+        (create_native_tile_ep, {"beta": 0.1}),
         (create_native_tile_fa, {}),
-        (create_native_tile_tp, dict(beta=0.1)),
+        (create_native_tile_tp, {"beta": 0.1}),
         (create_native_tile_snn, {}),
         (create_native_tile_hebbian, {}),
         (create_native_tile_pc, {}),

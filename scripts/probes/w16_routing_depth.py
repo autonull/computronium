@@ -89,7 +89,7 @@ def _run(depth: int, routing: bool, train, test, seed: int) -> float:
     return ok / tot
 
 
-def main() -> int:  # ruff: ignore[PLR0914] - probe harness
+def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
     t0 = time.time()
     args = sys.argv[1:]
     opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)

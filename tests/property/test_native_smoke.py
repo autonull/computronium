@@ -29,10 +29,10 @@ from computronium.models.native.fa_native import (
     create_native_fa_sign_symmetric,
     create_native_fa_stochastic,
 )
+from computronium.models.native.lemma_native import create_native_lemma_mlp
 from computronium.models.native.momentum_eqprop_native import (
     create_native_momentum_eqprop,
 )
-from computronium.models.native.lemma_native import create_native_lemma_mlp
 from computronium.models.native.research_native import (
     create_native_directed_ep,
     create_native_finite_nudge_ep,

@@ -18,8 +18,6 @@ import time
 from itertools import chain
 
 import pytest
-
-
 import w8_ntm_copy as ntm
 
 from computronium.visualization._demo_api import bars_panel, figure_spec

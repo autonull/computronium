@@ -58,7 +58,7 @@ import itertools
 import time
 
 import torch
-import torch.nn.functional as F  # noqa: N812 — torch's own convention
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase] — torch's own convention
 from torch import Tensor, nn
 
 from computronium.data.lm import get_lm_dataset

@@ -29,8 +29,6 @@ import time
 
 import torch
 from torch import nn
-
-
 from w4_hidden_psi import RIDGE_LAMBDA, _LayerRidge
 from w4_scaled_psi import (
     DEVICE,
