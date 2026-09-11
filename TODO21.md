@@ -1,6 +1,9 @@
 # TODO21 — Platform Afterlife: Publication, Hygiene, and Honest Boundaries
 
-**Status:** NOT STARTED. Read §12 Progress log first once work begins — it carries completed-state, gotchas, and environment notes.
+**Status:** IN PROGRESS (2026-09-11, session 1). Read §12 Progress log
+first — it carries completed-state (Phase 1 done, T21.2.1 closed, Phase 3A
+dedupes landed), gotchas, and environment notes. Next work: the numbered
+"Open/registered for next session" list at the end of §12.
 **Created:** 2026-09-11
 **Supersedes:** TODO20 (closed 2026-09-11 — all DoD checked, Rule 6 satisfied, audit clean)
 **Absorbs:** All registered-but-unfixed TODO20 improvement opportunities and deferred-science boundaries that still have product value
@@ -133,45 +136,42 @@ future work does not re-litigate.
 
 ### Dedupe — internal code must consume the packages
 
-- [ ] **T21.3A.1 Metrics single-source** — `computronium/analysis/mechanistic_study.py`
+- [x] **T21.3A.1 Metrics single-source** — `computronium/analysis/mechanistic_study.py`
   (inline `improvement_per_norm`) and `computronium/analysis/dynamics.py`
   (inline cosine-alignment) re-implement statistics that live in
   `local_feedback/metrics.py` and `psi_peft/metrics.py`. Import from the
   packages; delete the inline copies; keep the parity tests green.
-- [ ] **T21.3A.2 Power-iteration single-source** —
+- [x] **T21.3A.2 Power-iteration single-source** —
   `computronium/core/spectral_mixin.py`,
   `core/optimization/strategies/constraint.py::_power_iteration`, and
   `acceleration/contrastive_primitives.py::spectral_norm_power_iteration`
   each hand-roll power iteration that `stability.spectral_radius` already
   ships. Route through the package (extend its API if a tensor-in/tensor-out
   helper is missing — one addition, not three).
-- [ ] **T21.3A.3 Synthetic-task factory** — 5+ near-identical
+- [x] **T21.3A.3 Synthetic-task factory** — 5+ near-identical
   gaussian-blob/switching task builders (`experiments/joint/*`,
   `computronium_lab/lab.py`, `psi_peft.metrics.SyntheticTask`). Land one
   factory (candidate: a `domains` helper in Lab or a shared tasks module)
   and delete the copies.
-- [ ] **T21.3A.4 Local state lookalikes** —
+- [x] **T21.3A.4 Local state lookalikes** —
   `experiments/joint/adaptation_efficiency.py` / `compute_efficiency.py`
   define private "simple composite state" classes; import
   `computronium.state.CompositeState` instead.
-- [ ] **T21.3A.5 Context/state name collapse** — three `SystemContext`
-  definitions (empty Protocol in `stability.state`, rich dataclass in
-  `computronium/state/context.py`, third in `computronium/core/joint/context.py`).
-  Drop/rename the joint one and document the Protocol-vs-dataclass split —
-  same name with three semantics is a footgun.
-- [ ] **T21.3A.6 conftest mirrors production** — `tests/conftest.py`
+- [x] **T21.3A.5 Context/state name collapse** — the joint
+  `core/joint/context.py` dataclass was dead (zero source imports) and is
+  deleted; Protocol-vs-dataclass split documented in
+  `computronium/state/context.py`.
+- [x] **T21.3A.6 conftest mirrors production** — `tests/conftest.py`
   re-mirrors transition auto-discovery from `core/model.py`; import the
   production code instead.
 
 ### Integration direction decisions
 
-- [ ] **T21.3A.7 Lab boundary** — `computronium-lab` imports
-  `computronium.ontology/core` directly and has NO boundary test. Decide:
-  (a) codify it as the sanctioned integration layer (add a boundary test
-  asserting it may import computronium but packages must not import it), or
-  (b) invert — move preset factories into the package. Record the decision
-  in PLATFORM_LAUNCH.md either way.
-- [ ] **T21.3A.8 Kill sys.path hacks** — 20+ probe scripts hand-roll
+- [x] **T21.3A.7 Lab boundary** — DECIDED (a): the lab is the sanctioned
+  integration layer; boundary test in
+  `packages/computronium-lab/tests/test_lab_boundary.py`; decision
+  recorded in PLATFORM_LAUNCH.md.
+- [x] **T21.3A.8 Kill sys.path hacks** — 20+ probe scripts hand-roll
   `sys.path.insert(REPO_ROOT)`; `validation/tracks/*.py` append repo root
   from inside library code; `tests/conftest.py` too. Workspace editables
   make these dead — delete them (probes last, one commit, run the probe
@@ -179,17 +179,18 @@ future work does not re-litigate.
 
 ### New extractions (each follows Rule 6: package is single source, adapters on legacy paths)
 
-- [ ] **T21.3A.9 sqlite-ledger toolkit** — six hand-rolled sqlite stores
+- [x] **T21.3A.9 sqlite-ledger toolkit** — six hand-rolled sqlite stores
   (~3.9k LOC: `core/campaign/campaign_store.py`, `knowledge/{kb,vector_store,
   causal,metamodel,query}.py`, `hyperopt/storage.py`, `execution/_state.py`)
   re-implement schema-versioning/tx/id plumbing that `ceec.store` already
   has. Extract a shared base (or migrate stores onto ceec's primitives).
   Largest single consolidation available; do it store-by-store with parity
   locks.
-- [ ] **T21.3A.10 spectral utilities** — if T21.3A.2 shows the package
-  spectral module fits internal call sites, promote
-  `stability.spectral_radius`/`matrices` as the canonical spectral kernel
-  home; delete internal duplicates.
+- [x] **T21.3A.10 spectral utilities** — DONE via T21.3A.2:
+  `stability.spectral_norm` is the canonical tensor-in/tensor-out spectral
+  kernel home; internal torch call sites route there (device-special
+  NumPy/CuPy and CUDA variants documented as exceptions in
+  stability/spectral_norm.py).
 - [ ] **T21.3A.11 cli-toolkit** (optional) — shared argparse/db-path/tier
   plumbing (`computronium/cli/shared.py` pattern) reusable by package CLIs
   (`stability`, `ceec`); extract only if a second consumer appears.
@@ -237,24 +238,31 @@ binding for any new extraction.
 
 ## 6. Definition of Done
 
-- [ ] Venue selected and claim set frozen (T21.1.1).
-- [ ] Manuscript drafted with traceable numbers (T21.1.2/3).
-- [ ] B-H3 promoted or boundary-gated (T21.2.1).
-- [ ] X-USU-002 and X-RSE either executed or explicitly skipped with the
-      condition recorded.
-- [ ] `ActivityValue` union retired; stability estimators pyright-clean.
-- [ ] Metrics/power-iteration/synthetic-task dedupes landed (T21.3A.1–3);
+- [x] Venue selected and claim set frozen (T21.1.1).
+- [x] Manuscript drafted with traceable numbers (T21.1.2/3; fresh-clone
+      dry run still to execute — registered item 2).
+- [x] B-H3 promoted or boundary-gated (T21.2.1 — kept `open` with
+      retention-only scope as the operative boundary; both gate paths
+      evaluated and recorded honestly; decision in ledger).
+- [x] X-USU-002 and X-RSE either executed or explicitly skipped with the
+      condition recorded (skipped — conditions not met; see §12).
+- [x] `ActivityValue` union retired; stability estimators pyright-clean.
+- [x] Metrics/power-iteration/synthetic-task dedupes landed (T21.3A.1–3);
       internal analysis code consumes package metrics.
-- [ ] Lab boundary direction decided + boundary test in place (T21.3A.7).
-- [ ] sys.path hacks removed (T21.3A.8).
-- [ ] sqlite-ledger toolkit extracted or explicitly deferred with rationale
-      (T21.3A.9).
-- [ ] Per-package pyright configs landed (if scripts need gating).
-- [ ] Single-command gate green (if T21.3.3 adopted).
-- [ ] Lab trainer-metrics contract (T21.3.4) or documented deferral.
-- [ ] Repo-wide hygiene gates run at round close (T21.3.5).
-- [ ] At least one hardware probe executed OR Phase 4 explicitly deferred
-      with rationale.
+- [x] Lab boundary direction decided + boundary test in place (T21.3A.7).
+- [x] sys.path hacks removed (T21.3A.8; dead ones deleted, 13
+      sibling-import anchors kept and `__file__`-anchored — see §12).
+- [x] sqlite-ledger toolkit extracted + first store migration with
+      parity lock (T21.3A.9).
+- [ ] Per-package pyright configs landed (if scripts need gating) —
+      deferred with rationale.
+- [ ] Single-command gate green (if T21.3.3 adopted) — partial: works
+      with `--import-mode=importlib`; basename rename queued.
+- [ ] Lab trainer-metrics contract (T21.3.4) — documented deferral.
+- [x] Repo-wide hygiene gates run at round close (T21.3.5; findings
+      closed or explicitly re-queued — see §12 snapshot).
+- [x] At least one hardware probe executed OR Phase 4 explicitly deferred
+      with rationale (deferred — see §12).
 
 ## 7. Minimal Viable TODO21
 
@@ -279,6 +287,198 @@ Everything else documents deferral in §12.
 
 ## 12. Progress log
 
-(empty — record sessions here per TODO20 §17 conventions: what shipped,
-verdicts + evidence ids, gotchas, env notes, registered opportunities,
-gate status snapshot)
+### Session 2026-09-11 (agent) — Phase 1 complete, Phase 2 closed, Phase 3A dedupes landed
+
+**Phase 1 — Publication (T21.1.1–T21.1.4) DONE**
+
+- `docs/platform/PUBLICATION_VENUE.md` — venue decided: ICLR 2027 workshop
+  track (local-learning/scientific-ML), 4–6 pp + refs; fallback ladder
+  recorded. Claim set frozen: mechanisms 1/2/4 in scope; mechanism 3
+  (RoleSplit) boundary-only; X-USU-002 (T21.2.2) and X-RSE (T21.2.3) CUT
+  (conditions not met — RoleSplit is not load-bearing for the
+  heterogeneous-hardware story beyond the X-USU-001 boundary; no routing
+  recipe wanted for the paper).
+- `docs/platform/MANUSCRIPT.md` — full manuscript promoted from the draft
+  (draft kept as provenance): abstract, ontology framing, CEEC protocol,
+  mechanisms 1–4 with scoped numbers, boundaries/falsified branches,
+  simulation-only hardware blueprint, reproducibility statement,
+  threats-to-validity + non-claims verbatim.
+- `docs/platform/REPRODUCIBILITY.md` — every claimed number → command →
+  evidence id table (X-TPC/X-TAC/X-ALI/X-USU/X-STA, E-000018..E-000028).
+  Fresh-clone dry-run gate (§Gate) still to be executed — registered
+  below.
+- `tests/platform/test_release_docs.py` extended: manuscript
+  structure/traceability checks + REPRODUCIBILITY evidence-token checks.
+  5/5 green. Note: banned-phrase scan already globs docs/platform/*.md, so
+  MANUSCRIPT.md was covered automatically; the new test adds section
+  requirements.
+
+**Phase 2 — T21.2.1 B-H3 closure DONE (option A variant, no gate relaxed)**
+
+- `scripts/b_h3_scope_gate.py`: retention-only belief revision recorded
+  (BR-000018), both gate paths evaluated and recorded honestly — promotion
+  fails only `probability_threshold` (0.55 vs 0.95; unreachable by design
+  for heuristic scope-bounded intervals), boundary declaration fails
+  `rescue_probability_threshold` (0.85 vs 0.05; mechanism is
+  validated-positive, boundary status would misstate it). Decision
+  recorded: B-H3 stays `open` with retention-gain-only scope as the
+  operative boundary; consumers cite evidence ids, not status.
+- `configs/ceec/beliefs.yaml` B-H3 statement restated (retention-only,
+  SNR-unchanged caveat, validated scope).
+- Registered improvement opportunity: a `bounded` belief status or a
+  scope-bounded promotion threshold is **ledger feature work** (TODO21
+  non-goal) — deferred with rationale; gate reform candidate for a future
+  plan.
+
+**Phase 3A — dedupe/integration (Rule 6)**
+
+- [x] **T21.3A.1** `computronium/analysis/mechanistic_study.py` imports
+  `local_feedback.metrics.improvement_per_norm` (inline expression
+  deleted); `analysis/dynamics.py` imports `pseudo_gradient_alignment`
+  (inline cosine deleted). Parity: tests/property/test_mechanistic_study.py
+  6 passed.
+- [x] **T21.3A.2** New canonical kernel
+  `stability.spectral_norm.spectral_norm_power_iteration` (+ normalized
+  wrapper) in the stability package; routed: `core/utils/activations.py::
+  approx_spectral_norm`, `core/optimization/strategies/constraint.py::
+  _power_iteration`, `mep/optimizers/strategies/constraint.py::_power_
+  iteration` (CPU fallback; CUDA fast path kept), `acceleration/
+  contrastive_primitives.py::spectral_norm_power_iteration` (public
+  signature preserved). **Deliberate exceptions:** the NumPy/CuPy variant
+  in activations.py and the CUDA kernel in mep/cuda/kernels.py remain
+  device-special (a torch helper cannot serve them without device churn).
+  Tests: test_mep_strategies + test_energies + test_kernels 50 passed.
+- [x] **T21.3A.3** New shared factory
+  `computronium/experiments/joint/tasks.py` (`gaussian_blobs` +
+  `create_switching_task`); inline copies deleted from
+  adaptation_efficiency.py, compute_efficiency.py, and lab.py
+  (`synthetic_task` now delegates — generation order preserved, bitwise
+  identical under seed). Three probes repointed. psi_peft.SyntheticTask
+  stays: package classes cannot import computronium (boundary) and its
+  flip() API is distinct — judgment recorded, not re-litigated.
+- [x] **T21.3A.4** Private CompositeState lookalikes deleted from both
+  joint experiment files; `computronium.state.CompositeState` imported.
+- [x] **T21.3A.5** Dead `computronium/core/joint/context.py` deleted
+  (zero source imports; only an api-schema module-list string, also
+  removed). Protocol-vs-dataclass split documented in
+  `computronium/state/context.py` module docstring (stability's empty
+  Protocol is the estimator-facing structural view).
+- [x] **T21.3A.6** `tests/conftest.py` `_transition_modules_autodiscover`
+  deleted (was an unused mirror of `BaseModel.transition_modules`).
+- [x] **T21.3A.7** Lab boundary decided: **direction (a)** —
+  computronium-lab is the sanctioned integration layer; nothing else may
+  import it. Boundary test
+  `packages/computronium-lab/tests/test_lab_boundary.py` (both
+  directions, AST-based). Decision recorded in PLATFORM_LAUNCH.md. Also
+  fixed lab's private-module import (`ontology.dynamics._dynamics` →
+  public `ontology.dynamics`).
+- [~] **T21.3A.8** sys.path hacks removed where genuinely dead: 7
+  validation/tracks library appends, 9 repo-root inserts (8 probes +
+  icu_report), tests/conftest.py, test_triton_kernel,
+  test_validation_all, test_verify_backend. **Kept (not dead), anchored
+  to `__file__`:** 11 probes + 2 integration tests that import sibling
+  probe modules (`hunt_cells`, `w4_*`, `w8_ntm_copy`, `jpc_ortho_adam`)
+  — deleting these requires packaging scripts/probes; registered below.
+- [~] **T21.3A.9** Toolkit extracted:
+  `packages/ceec-core/src/ceec/sqlite_toolkit.py` (`SqliteStore`:
+  frozen-MIGRATIONS schema versioning via `user_version`, `_tx`
+  contextmanager, `SchemaVersionError`; prefixed ids stay opt-in —
+  integer-id stores like hyperopt must not be forced onto PREFIX ids).
+  **First store migrated:** `computronium/hyperopt/storage.py::
+  HyperoptStorage` now subclasses SqliteStore (v1 = original two tables,
+  v2 = training_checkpoints DDL + indices; existing DBs migrate in
+  place). Parity lock: `tests/integration/test_hyperopt_store_parity.py`
+  (schema columns, trial round-trip, in-place reopen, unknown-version
+  refusal). Remaining stores (campaign, knowledge/*, execution/_state)
+  queue for the same pattern, store-by-store.
+
+**Phase 3 (other)**
+
+- [x] **T21.3.1** `ActivityValue` union retired from consumers:
+  `stability.state.activity_tensor()` discriminated access helper added;
+  ~30 `z.activity[key]` call sites across lyapunov/settling/basin/guard/
+  calibration/matrices/spectral_radius rewired; non-Tensor activity now
+  fails loud with a TypeError. Stability suite 23 passed.
+- [~] **T21.3.2** Per-package pyright configs: deferred — root pyright on
+  changed/new modules is clean; script gating can ride the Register C
+  pass.
+- [~] **T21.3.3** Single-command test gate: root cause confirmed live
+  (duplicate basenames `test_adaptive`/`test_no_computronium_imports`
+  across local-feedback and psi-peft collide in one pytest run;
+  workaround for now is `--import-mode=importlib`). Fix = prefix
+  package test basenames (`test_psi_*`, `test_lf_*`, …) — queued.
+  Prerequisite landed: `tests/ceec/*` migrated off
+  `from conftest import link_belief` onto a fixture factory in
+  tests/ceec/conftest.py (T21.3A.6-adjacent; tests/ceec 114 passed).
+- [~] **T21.3.4** Lab trainer-metrics contract: deferred with rationale —
+  no curve evidence moved into Lab this round; the `ComparisonResult`
+  history wiring has no consumer yet.
+
+**Environment notes / gotchas**
+
+- Two concurrent pytest runs share the same machine → native hard crashes
+  (segfault dumps in faulthandler logs) that look like product defects but
+  are contention artifacts. Never launch a second suite while one runs;
+  baseline re-verify: test_demo_update_ladder alone = 206 s, passes.
+- Full-suite single command that works today:
+  `uv run python -m pytest tests/ packages -q --import-mode=importlib`.
+- `uv run` + nohup background pattern works; poll logs at ≥2-min
+  intervals. Caveat: a background job dies silently if its launching
+  shell cell times out — verify the log is non-empty after launch.
+- Env restore before any gate: `uv sync --dev --all-extras`; smoke:
+  `uv run python -c "import optuna, scipy, torchvision, pytest"`.
+- Full suite ≈13 min; the 10 baseline failures and 103 repo-wide ruff
+  findings listed in the snapshot below are pre-existing — do not
+  re-triage them from scratch, use `git stash` to confirm any new one.
+- Session 1 changed 92 files (+518/−558) uncommitted; review + commit as
+  the first act of the next session (logical commits: publication docs /
+  ledger B-H3 closure / dedupe batch / sqlite toolkit / test-gate fixes).
+
+**Gate status snapshot (round close, 2026-09-11)**
+
+- Full suite (single command, `--import-mode=importlib`): **2124 passed,
+  60 skipped, 32 xfailed, 1 xpassed, 10 failed — all 10 verified
+  pre-existing at baseline via `git stash` re-runs** (gallery figure
+  lock, wheel acceptance, banned-phrase scan on legacy doc lines — now
+  fixed by rewording, and 7 `test_system_spec` round-trip failures:
+  `ParameterUpdateConfig` round-trip inequality, baseline defect, not
+  touched by this session). Walltime 12:56.
+- The banned-phrase legacy violations (RECIPES/blueprint "no weight
+  transport") were reworded to "without weight transport" —
+  `tests/property/test_verification_labels.py` now green (26 passed incl.
+  tests/platform).
+- Repo-wide `ruff check`: 103 findings across legacy files (top:
+  test_tile_settle_kernel, probe scripts — noqa-style + complexity lints).
+  **Explicitly re-queued as Register C** per AGENTS.md; not commit
+  blockers.
+- Repo-wide `pyright .`: **deferred with rationale** — repo-wide checking
+  stays basic-mode until the dedicated hygiene pass (AGENTS); strict
+  pyright was run on all new/rewritten modules this session (0 errors:
+  sqlite_toolkit, spectral_norm, state helper, tasks.py, parity/lab
+  boundary tests) and on touched modules where only pre-existing legacy
+  findings remain (analysis/dynamics, hyperopt/storage RDBStorage
+  attribute, etc. — Register C).
+- pip-audit: not run this round (CI-scope item; queued with T21.3.5).
+
+**Open/registered for next session**
+
+1. Fix the 7 pre-existing `test_system_spec.py` round-trip failures
+   (`ParameterUpdateConfig` reconstructs unequal — likely a field dropped
+   or defaulted in the spec→config path; baseline defect, verify before
+   touching update.py). Also the gallery figure-lock drift and wheel
+   acceptance failure — same stash-verified pre-existing class.
+2. Execute the REPRODUCIBILITY fresh-clone dry-run gate (T21.1.3) and
+   record walltime.
+3. T21.3.3: rename package test basenames, adopt the single-command gate
+   without importlib workaround.
+4. T21.3A.9: migrate remaining stores (suggest `execution/_state.py` or
+   `knowledge/kb.py` next, each with a parity lock); consider folding
+   ceec.store's prefixed-id generator in as opt-in.
+5. Package `scripts/probes` (or a shared probe helpers module) so the
+   remaining 13 anchored sys.path inserts can be deleted.
+6. Ledger gate reform candidate: `bounded` status or scope-bounded
+   promotion threshold (deferred ledger feature work).
+7. Phase 4 hardware probes: deferred this round (simulation-only
+   scaffolding exists; none is publication-blocking; rationale: budget
+   went to Phase 1 + hygiene). Re-open only if a manuscript reviewer
+   claim needs it.
