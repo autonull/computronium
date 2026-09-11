@@ -21,6 +21,13 @@ Normative plan: `TODO20.md`.
 - `computronium-lab` may import Computronium; its purpose is to expose it.
 - Enforced by `tests/platform/test_package_boundaries.py` and per-package
   `test_no_computronium_imports.py`.
+- **T21.3A.7 decision (2026-09-11):** the lab↔computronium integration is
+  **sanctioned direction (a)** — the lab is the integration layer; nothing
+  else may import it. Enforced by
+  `packages/computronium-lab/tests/test_lab_boundary.py` (lab must import
+  computronium; computronium + standalone packages must not import the
+  lab). Inverting (moving preset factories into the package) was rejected:
+  the factories consume internal modules the packages must not see.
 
 ## Release gates
 
