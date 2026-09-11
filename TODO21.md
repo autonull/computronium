@@ -1,9 +1,10 @@
 # TODO21 — Platform Afterlife: Publication, Hygiene, and Honest Boundaries
 
-**Status:** IN PROGRESS (2026-09-11, session 2). Read §12 Progress log
+**Status:** IN PROGRESS (2026-09-11, session 3). Read §12 Progress log
 first — it carries completed-state (Phase 1 done, T21.2.1 closed, Phase 3A
 dedupes landed; session 2 closed the pre-existing test failures, T21.3.3,
-T21.3A.8, second store migration) and gotchas. Next work: the numbered
+T21.3A.8, second store migration; session 3 executed the fresh-clone dry
+run and closed T21.3A.9) and gotchas. Next work: the numbered
 "Open/registered" list at the end of §12.
 **Created:** 2026-09-11
 **Supersedes:** TODO20 (closed 2026-09-11 — all DoD checked, Rule 6 satisfied, audit clean)
@@ -181,12 +182,15 @@ future work does not re-litigate.
 ### New extractions (each follows Rule 6: package is single source, adapters on legacy paths)
 
 - [x] **T21.3A.9 sqlite-ledger toolkit** — six hand-rolled sqlite stores
-  (~3.9k LOC: `core/campaign/campaign_store.py`, `knowledge/{kb,vector_store,
-  causal,metamodel,query}.py`, `hyperopt/storage.py`, `execution/_state.py`)
-  re-implement schema-versioning/tx/id plumbing that `ceec.store` already
-  has. Extract a shared base (or migrate stores onto ceec's primitives).
-  Largest single consolidation available; do it store-by-store with parity
-  locks.
+   (~3.9k LOC: `core/campaign/campaign_store.py`, `knowledge/{kb,vector_store,
+   causal,metamodel,query}.py`, `hyperopt/storage.py`, `execution/_state.py`)
+   re-implement schema-versioning/tx/id plumbing that `ceec.store` already
+   has. Extract a shared base (or migrate stores onto ceec's primitives).
+   Largest single consolidation available; do it store-by-store with parity
+   locks. **CLOSED (session 3)** — campaign, hyperopt (v3 owns the shared
+   execution tables), and the knowledge family (kb owns `computronium_kb.db`)
+   migrated under the one-owning-store-per-file pattern; parity locks in
+   `tests/integration/test_{hyperopt,kb}_store_parity.py`.
 - [x] **T21.3A.10 spectral utilities** — DONE via T21.3A.2:
   `stability.spectral_norm` is the canonical tensor-in/tensor-out spectral
   kernel home; internal torch call sites route there (device-special
@@ -241,7 +245,7 @@ binding for any new extraction.
 
 - [x] Venue selected and claim set frozen (T21.1.1).
 - [x] Manuscript drafted with traceable numbers (T21.1.2/3; fresh-clone
-      dry run still to execute — registered item 2).
+      dry run EXECUTED — see §12 session 3).
 - [x] B-H3 promoted or boundary-gated (T21.2.1 — kept `open` with
       retention-only scope as the operative boundary; both gate paths
       evaluated and recorded honestly; decision in ledger).
@@ -253,8 +257,9 @@ binding for any new extraction.
 - [x] Lab boundary direction decided + boundary test in place (T21.3A.7).
 - [x] sys.path hacks removed (T21.3A.8 fully closed — one conftest
       anchor; see §12 session 2).
-- [x] sqlite-ledger toolkit extracted + first store migration with
-      parity lock (T21.3A.9).
+- [x] sqlite-ledger toolkit extracted + all unblocked store migrations
+      with parity locks (T21.3A.9 CLOSED — see §12 session 3; only the
+      optional T21.3A.11–13 extractions remain, each conditional).
 - [ ] Per-package pyright configs landed (if scripts need gating) —
       deferred with rationale.
 - [x] Single-command gate green (T21.3.3 DONE — package test basenames
@@ -287,6 +292,58 @@ Everything else documents deferral in §12.
 ---
 
 ## 12. Progress log
+
+### Session 2026-09-11 (agent, session 3) — dry-run gate executed, T21.3A.9 closed
+
+1. **Fresh-clone dry-run gate EXECUTED (T21.1.3 gate)** — clone at
+   `6ef8d7fc` → `/tmp/rr`, `uv sync --dev --all-extras` (sync dominated the
+   walltime; note UV hardlink warning on this fs layout, cosmetic). Results:
+   - Dev-env smoke OK.
+   - `tests/platform`: 21 passed / 12 s.
+   - `psi_vs_sgd_readout --quick`: frozen 0.250 / closed-form 0.762 /
+     temporal B 0.661 / adaptive B 0.736 / θ-inv True; sgd walltime ratio
+     ≈ 9× (155.8 vs 16.8–22.8 ms). Matches manuscript §3.1.
+   - `adaptive_vs_fixed --quick`: late_ipn 0.0427±0.004 vs 0.0381±0.004;
+     alignment 0.9513 vs 0.4344. Matches §3.2 exactly.
+   - `mechanism_recipes_demo`: all four arms run (temporal probe 0.69/0.72,
+     role-split one-step loss 1.3077, rho=0.850 sigma_max=1.74). §3.4
+     retention numbers are NOT printed by this demo — traceability gap
+     found and fixed (next bullet).
+   - `scripts/probes/x_sta_001.py` + `x_sta_002.py`: settle 238–344 ✓,
+     retention/noise ratios reproduce the paired-replay claim; both run in
+     ~3 s each on a fresh clone.
+   **Fix:** REPRODUCIBILITY.md §3.4 row now points at the X-STA probes
+   (the demo only demonstrates spectral facts); §3.3 row notes the width-32
+   FF×Muon collapse is a recipe-level `when_not` boundary, not re-measured.
+2. **T21.3A.9 CLOSED.** `KnowledgeBase` migrated onto `SqliteStore`
+   (MIGRATIONS v1 = knowledge/experiments/surrogates DDL; `_tx` replaces
+   per-call connects; `close()` releases the connection). Parity lock:
+   `tests/integration/test_kb_store_parity.py` (schema/version, entry +
+   experiment round-trip, in-place reopen, unknown-version refusal).
+   knowledge-suite regression 50 passed. **Judgment:** `vector_store/
+   causal/metamodel/query.py` create no tables — they are readers/writers
+   of kb-owned tables, so the KB's file-owned `user_version` covers the
+   whole `computronium_kb.db` family; no per-component migration needed
+   (same owning-store pattern as below).
+   `HyperoptStorage` gained **v3**: the execution-layer `failures` +
+   `decision_log` DDL (ExperimentState shares one file across
+   HyperoptStorage + FailureTracker; the versioned DDL is the file-owned
+   canonical copy, IF-NOT-EXISTS grandfathers existing DBs). This resolves
+   the session-2 blocker: no per-store user_version collision because the
+   file has exactly one owning MIGRATIONS map. FailureTracker/DecisionLogger
+   stay raw writers (idempotent lazy DDL). Parity lock extended (v2-DB
+   in-place migration, shared-file coexistence). Also fixed the invalid
+   `# ruff: ignore[...]` suppression comments left in the touched store
+   (proper `# noqa:` codes now). hyperopt+execution suite 32 passed.
+3. **Gallery-lock staleness message** (open item 3): a hard staleness
+   assert would false-fail — 22/26 run records legitimately lag HEAD (they
+   carry their emitting commit). Instead the drift failure message now
+   includes the record's emitting commit vs HEAD plus the "stale — run the
+   demo (slow demos need -m slow) and re-pin" guidance. Gallery lock +
+   platform 23 passed.
+
+Commits: kb migration / hyperopt v3 shared-file migration / gallery
+staleness message / reproducibility §3.4 traceability fix.
 
 ### Session 2026-09-11 (agent, session 2) — pre-existing failures closed, T21.3.3, T21.3A.8, 2nd store migration
 
@@ -510,18 +567,18 @@ store migration / sys.path anchor / figure re-pin.
   attribute, etc. — Register C).
 - pip-audit: not run this round (CI-scope item; queued with T21.3.5).
 
-**Open/registered (after session 2)**
+**Open/registered (after session 3)**
 
-1. Execute the REPRODUCIBILITY fresh-clone dry-run gate (T21.1.3) and
-   record walltime. Highest-priority remaining item; ~1 session.
-2. T21.3A.9: remaining stores (`knowledge/kb.py`, `core/campaign` DONE,
-   hyperopt DONE). `execution/_state.py` stores need a shared
-   user_version scheme or file split first (see session-2 note) —
-   consider extracting a `SharedFileStore` variant or defer with
-   rationale.
-3. Gallery lock staleness: consider a `--slow` gate variant or a record
-   age check so the lock fails loudly ("records stale — run slow demos")
-   instead of as a sha mismatch.
+1. ~~Execute the REPRODUCIBILITY fresh-clone dry-run gate~~ **DONE**
+   (session 3). Re-run only if claims change.
+2. T21.3A.9: **CLOSED** — campaign, hyperopt (+ shared execution tables v3),
+   and the knowledge family all resolved via the one-owning-store-per-file
+   pattern. Remaining optional extractions (T21.3A.11 cli-toolkit,
+   T21.3A.12 figure-spec renderer, T21.3A.13 execution split) stay
+   conditional on a second consumer appearing — no consumer today.
+3. Gallery lock staleness: **softened** — the drift failure message now
+   self-describes staleness (emitting commit vs HEAD). A hard staleness
+   gate was evaluated and rejected: 22/26 records legitimately lag HEAD.
 4. Ruff autofixable legacy findings remain in probes (ARG/C901/E741 class)
    — Register C, ride the hygiene pass.
 5. Ledger gate reform candidate: `bounded` status or scope-bounded
@@ -529,3 +586,6 @@ store migration / sys.path anchor / figure re-pin.
 6. Phase 4 hardware probes: deferred (simulation-only scaffolding exists;
    none is publication-blocking). Re-open only if a manuscript reviewer
    claim needs it.
+7. Remaining DoD gap: T21.3.2 (per-package pyright configs) and T21.3.4
+   (lab trainer-metrics contract) are documented deferrals — keep as
+   recorded deferrals, not open work, unless a consumer appears.
