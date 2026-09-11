@@ -28,7 +28,7 @@ def store(tmp_path):
 def test_full_integration_loop(store, tmp_path):
     # 1-2. initialize + bootstrap from real configs
     result = bootstrap.bootstrap(store, "configs/ceec")
-    assert len(result["experiments"]) == 8
+    assert len(result["experiments"]) == 10
 
     # 3-4. select experiment + record decision
     profile = selection.load_profile(

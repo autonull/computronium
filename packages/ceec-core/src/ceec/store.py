@@ -881,7 +881,10 @@ class CEECStore:  # ruff: ignore[too-many-public-methods] - ledger API is intent
         if not experiment.metrics or not experiment.hard_gates:
             raise StoreError("pre-registration requires metrics and hard gates")
         if experiment.status != "draft":
-            raise StoreError(f"experiment {experiment.id} already registered")
+            raise StoreError(
+                f"experiment {experiment.id} must have status='draft' to "
+                f"pre-register (got {experiment.status!r})"
+            )
         registered = experiment.model_copy(
             update={"status": "pre_registered", "created_at": experiment.created_at}
         )
