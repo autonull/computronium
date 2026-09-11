@@ -38,6 +38,17 @@ def _records() -> dict[str, dict]:
     return records
 
 
+def _git_head() -> str:
+    import subprocess  # noqa: S404 (fixed arg list, no shell)
+
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+
 def test_g_axis_demos_record_param_counts() -> None:
     """Any demo whose registry entry declares a G-axis comparison must
     carry ``param_counts`` for every arm — capacity mismatches cannot
@@ -81,6 +92,10 @@ def test_figure_lock(tmp_path: Path) -> None:
         fresh = next(m for m in metas if m.capability_name == name)
         assert entry["data_sha256"] == fresh.data_sha256, (
             f"figure data for {name} drifted from the pinned manifest — "
-            "review the demo diff, then re-pin deliberately"
+            f"review the demo diff, then re-pin deliberately "
+            f"(record emitted at {record['provenance']['git_commit'][:8]}, "
+            f"HEAD is {_git_head()[:8]}; if the emitting commit predates the "
+            "demo's last change, the record is stale — run the demo "
+            "(slow demos need -m slow) and re-pin)"
         )
         assert entry["demo_test"] == fresh.demo_test
