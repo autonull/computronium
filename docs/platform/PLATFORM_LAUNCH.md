@@ -20,7 +20,8 @@ Normative plan: `TODO20.md`.
   `computronium.*`.
 - `computronium-lab` may import Computronium; its purpose is to expose it.
 - Enforced by `tests/platform/test_package_boundaries.py` and per-package
-  `test_no_computronium_imports.py`.
+  `test_psi_no_computronium_imports.py` / `test_lf_no_computronium_imports.py`
+  (prefixed basenames — T21.3.3 single-command gate).
 - **T21.3A.7 decision (2026-09-11):** the lab↔computronium integration is
   **sanctioned direction (a)** — the lab is the integration layer; nothing
   else may import it. Enforced by
