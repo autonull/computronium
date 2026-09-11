@@ -93,6 +93,10 @@ def _run(depth: int, train_data, eval_data) -> dict[str, float]:
     return {"final": final_acc, "ema": ema_acc, "params": param_count}
 
 
+# T20.1.3 triage (2026-09-10): consistently ~340-345s walltime — far beyond
+# the fast gate. Marked `slow` so the default suite (`-m 'not slow'`) skips
+# it; run explicitly via `-m slow` or the nightly tier.
+@pytest.mark.slow
 @pytest.mark.timeout(900)
 def test_demo_depth_harvest(emit_run_record) -> None:
     t0 = time.time()

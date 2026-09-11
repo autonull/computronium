@@ -1,0 +1,58 @@
+# X-ALI-002: short-trajectory validation of adaptive feedback (TODO20 Phase 4)
+experiment:
+  id: X-ALI-002
+  question: >
+    Does the X-ALI-001 adaptive-feedback advantage in improvement_per_norm
+    persist on short (10-step) trajectories under matched one-step
+    displacement norm?
+  rationale: >
+    TODO20 Phase 4 carryover (TODO19): validate that the adaptive lever is
+    not a long-horizon artifact before shipping packages/local-feedback.
+  scope:
+    domain: credit
+    substrate: [digital]
+    credit: [random_projections]
+    budget: quick
+  target_beliefs: [B-H1-ADAPTIVE-LOCAL-INVERSES]
+  target_goals: [G-LOCAL-CREDIT-VIABILITY]
+  design:
+    seeds: 3
+    seed_plan: 3 seeds
+    horizon: 10
+    norm_matching: true
+    coordinate: digital-feedforward-quick
+    evaluation_policy: >
+      late-half improvement_per_norm over matched-norm 10-step trajectories,
+      3 seeds; verdict = adaptive mean strictly greater than fixed on all
+      seeds
+    evidence_kind: curve
+    instruments: [I-VERTICAL-SLICE-PANEL, I-AUTOGRAD-PIPELINE]
+  prediction: >
+    Adaptive feedback holds a strictly greater late-half improvement_per_norm
+    than fixed feedback on all 3 seeds even on 10-step horizons.
+  prediction_probability:
+    low: 0.30
+    high: 0.60
+    method: heuristic_interval_based_on_gate_evidence
+  controls:
+    - fixed_random_feedback
+    - matched_norm
+  metrics:
+    - improvement_per_norm
+    - feedback_alignment
+    - walltime
+  budget: quick
+  cost_estimate:
+    low: 0.3
+    high: 1.0
+  falsification_criterion: >
+    Adaptive feedback fails to hold a strictly greater late-half
+    improvement_per_norm than fixed feedback on at least one seed.
+  overturn_criterion: >
+    A defect-free mechanism raising rescue probability above 0.10.
+  hard_gates:
+    - coordinate_valid
+    - seed_plan_present
+    - matched_control
+    - evaluation_policy_valid
+    - no_quarantined_dependencies

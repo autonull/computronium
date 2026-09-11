@@ -1,5 +1,3 @@
-"""Resource Usage re-export from neutral home (computronium.resources)."""
+"""Adapter: the standalone stability package is the single source (Rule 6)."""
 
-from computronium.resources import ResourceUsage
-
-__all__ = ["ResourceUsage"]
+from stability.resources import *  # ruff: ignore[undefined-local-with-import-star]

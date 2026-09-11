@@ -17,6 +17,15 @@ from generate_identity_cards import collect_cards
 DOC = Path("docs/IDENTITY_CARDS.md")
 
 
+def test_concrete_protocol_subclass_not_skipped() -> None:
+    # Regression (T20.1.1): __protocol_attrs__ leaks onto concrete
+    # subclasses of protocols and used to skip them from the scan.
+    cards, missing = collect_cards()
+    names = {card.name for card in cards}
+    assert "ClosedFormRidgePlasticity" in names
+    assert not [m for m in missing if "ClosedFormRidgePlasticity" in m]
+
+
 def test_identity_cards_doc_matches_generated_body() -> None:
     import io
     from contextlib import redirect_stdout

@@ -437,6 +437,22 @@ determinism locks are pinned to small dims, so keep them on CPU).
 uv sync --dev
 ```
 
+### Standalone platform packages (`packages/`)
+
+Extracted, framework-free packages the repo depends on (uv workspace
+members, TODO20 Rule 6 — one implementation copy each; legacy
+`computronium.*` import paths are thin adapters):
+
+| Package | Import | What it is |
+|---|---|---|
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit); CLI `ceec` |
+| `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
+| `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
+| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes |
+| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); CLI `stability` |
+
+`uv sync` installs them as editable workspace members automatically.
+
 ### Quickstart: Forward-Forward vs Backprop in <2 Minutes
 
 ```bash

@@ -1,0 +1,17 @@
+[project]
+name = "computronium-lab"
+version = "0.1.0"
+description = "High-level API over the Computronium 6-axis ontology: compose, train, compare, report."
+requires-python = ">=3.12"
+dependencies = ["torch>=2.0", "computronium", "psi-peft", "local-feedback"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/computronium_lab"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

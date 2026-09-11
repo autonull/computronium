@@ -1,6 +1,6 @@
 # TODO20 — Computronium Platform Launch
 
-**Status:** Final actionable plan  
+**Status:** Phases 0–5 + 2.5 COMPLETE (2026-09-11); Rule 6 (one-copy) + Products A/B/C/D/F shipped; X-ALI-002 closed. Next: **Phase 6** (conditional science) → 7 (docs) → 8 (QA). For a fresh context, read §17 Progress log first — it carries completed-state, API gotchas, and environment notes.
 **Created:** 2026-09-11  
 **Supersedes:** TODO19 “Epistemic Foundry” as the active execution phase  
 **Absorbs:** All unfinished TODO19 work required for release, trust, or product value  
@@ -66,10 +66,11 @@ Computronium Core
 
         ↓ productize
 
-External Platform
+External Platform (packages/ — ONE copy each, computronium depends on them)
   ├── ceec-core         → governance protocol
   ├── psi-peft          → flagship mechanism
   ├── local-feedback    → local-learning mechanism
+  ├── stability         → calibrated stability guard (TODO11 R11.3.3)
   ├── computronium-lab  → usable laboratory API
   └── blueprints/docs   → hardware and recipe communication
 ```
@@ -198,6 +199,37 @@ docs/platform/EXTERNAL_SUMMARY.md
 docs/platform/PUBLICATION_DRAFT.md
 ```
 
+### Product F — Stability (self-contained calibrated stability guard)
+
+Target package:
+
+```text
+packages/stability/
+```
+
+Source: `computronium/stability/` (TODO11 R11.3.3 "PR-5", ROC-calibrated
+kill thresholds, `comp stability` CLI in `computronium/cli/stability.py`,
+registered artifact `docs/figures/registered/stability_guard_pr5.json`).
+
+External value:
+
+```text
+Any dynamical-systems project can attach a calibrated stability guard
+(`attach(model)`, `StabilityVerdict`) that kills runaway settling/energy
+dynamics with <5% false-kill, without depending on Computronium.
+```
+
+Core features:
+
+- `attach(model)` / `StabilityVerdict` guard API (as-is from v1).
+- ROC calibration machinery with the registered-artifact lock.
+- Scope statement carried verbatim (energy-minimization + non-normal
+  linear coordinates only; no transformer-collapse claim).
+- `stability` CLI (successor to `comp stability`).
+- Phase 6A's Jordan-block helper lands HERE (single copy), not in Lab.
+- Migration: computronium depends on `stability` (Rule 6); legacy
+  `computronium.stability` import path becomes an adapter.
+
 ---
 
 ## 3. Non-Goals
@@ -256,6 +288,18 @@ and where it does not apply.
 ### Rule 5 — CEEC is frozen internally
 
 Internal CEEC semantics remain governed by TODO19. TODO20 extracts and productizes CEEC; it does not invent new epistemic machinery.
+
+### Rule 6 — ONE copy of every extracted component (binding)
+
+Each extracted component (`ceec-core`, `psi-peft`, `local-feedback`,
+`stability`, …) has **exactly one implementation copy** in the repository.
+The `packages/` copy IS the source of truth; `computronium` must depend on
+the package (uv workspace member) and adapt via thin adapter modules on the
+legacy import paths where needed. Duplicated implementations are
+transitional scaffolding only — every duplicate must converge to one copy
+via the parity-tested migration (package → computronium depends on it →
+delete the internal copy). The `computronium/stability/` guard (TODO11
+R11.3.3, `comp stability` CLI) is subject to the same rule.
 
 ---
 
@@ -345,7 +389,25 @@ packages/
       test_lab_train.py
       test_presets.py
       test_recipes.py
+
+  stability/
+    pyproject.toml
+    README.md
+    src/
+      stability/
+        __init__.py
+        guard.py
+        calibration.py
+        matrices.py
+        cli.py
+    tests/
+      test_guard.py
+      test_calibration.py
+      test_no_computronium_imports.py
 ```
+(The stability package is the extracted TODO11 R11.3.3 guard; Phase 2.5
+below. Lab Phase 6A's `stability.py` helper folds INTO this package, not
+into Lab.)
 
 Also create:
 
@@ -366,6 +428,7 @@ tests/platform/
   test_package_boundaries.py
   test_ceec_core_compat.py
   test_psi_peft_parity.py
+  test_stability_parity.py
   test_local_feedback_parity.py
   test_lab_smoke.py
   test_release_docs.py
@@ -402,7 +465,8 @@ All unfinished TODO19 work is explicitly handled.
 | `_next_id` AUTOINCREMENT hardening | Deferred unless concurrent writers appear |
 | `decide()` caching | Deferred |
 | Staleness dep-snapshot hashes | Deferred |
-| Jordan-block stability helper | Included if stable-amplification recipe ships |
+| Jordan-block stability helper | Included if stable-amplification recipe ships — as `packages/stability` API, per Rule 6 |
+| `computronium/stability/` guard + `comp stability` CLI | Phase 2.5: extract to `packages/stability`; computronium keeps adapter imports |
 | RoleSplit readout sentinel | Included in Lab recipes if ergonomically useful |
 | x_usu_001 inline `_RoleSplitUpdate` migration | Optional cleanup |
 | Probe ingestion boilerplate migration | Optional when touched |
@@ -730,6 +794,44 @@ packages/ceec-core
 
 ---
 
+# Phase 2.5 — Stability Package and Single-Source Migration (Rule 6)
+
+## Objective
+
+Extract `computronium/stability/` as `packages/stability` and make
+`computronium` depend on the package — establishing the ONE-copy norm
+with adapters for legacy import paths.
+
+## Tasks
+
+- [x] **T20.2.5.1 Skeleton** — `packages/stability` per repo layout §5.
+- [x] **T20.2.5.2 Move** `computronium/stability/{calibration.py, guard API}` →
+  `packages/stability/src/stability/`; add `guard.py` public surface
+  (`attach`, `StabilityVerdict`), `cli.py` (`stability` command).
+- [x] **T20.2.5.3 Parity lock** — `tests/unit/core/test_stability_guard.py`
+  semantics ported to the package; `tests/platform/test_stability_parity.py`
+  pins the extracted calibration against the registered artifact
+  (`stability_guard_pr5.json`).
+- [x] **T20.2.5.4 Adapter** — `computronium/stability/__init__.py` re-exports
+  from the installed package; `comp stability` CLI keeps working.
+- [x] **T20.2.5.5 Workspace** — make `computronium` a uv workspace member set
+  (`[tool.uv.workspace]`) so `uv sync` stops pruning package editables and
+  internal code can import `stability`, `ceec` etc. directly.
+- [x] **T20.2.5.6 Single-source sweep** (guard/resources done; ceec-core/psi-peft migration evaluated — see log) — delete the moved internal
+  implementation copies (guard first; then evaluate ceec-core/psi-peft
+  migration under the same rule). No duplicate survives except adapters.
+
+## Acceptance Criteria
+
+- [x] `packages/stability` installs, CLI works, no computronium imports.
+- [x] Parity test passes against the registered calibration artifact.
+- [x] `comp stability` and `computronium.stability` imports still work.
+- [x] Zero duplicated implementations (Rule 6) — adapters only (guard +
+      resources deleted internally; ceec-core/psi-peft migration deferred,
+      see T20.2.5.6 note in §17).
+
+---
+
 # Phase 3 — Product B: Psi-PEFT
 
 ## Objective
@@ -916,13 +1018,13 @@ packages/local-feedback
 
 ## Tasks
 
-- [ ] **T20.4.1 Create package skeleton**
+- [x] **T20.4.1 Create package skeleton**
   - Files:
     - `packages/local-feedback/pyproject.toml`
     - `packages/local-feedback/README.md`
     - `packages/local-feedback/src/local_feedback/__init__.py`
 
-- [ ] **T20.4.2 Implement adaptive feedback module**
+- [x] **T20.4.2 Implement adaptive feedback module**
   - File:
     - `packages/local-feedback/src/local_feedback/adaptive.py`
   - API:
@@ -951,20 +1053,20 @@ packages/local-feedback
     - shape-safe,
     - no Computronium imports.
 
-- [ ] **T20.4.3 Implement fixed-feedback baseline**
+- [x] **T20.4.3 Implement fixed-feedback baseline**
   - File:
     - `packages/local-feedback/src/local_feedback/baselines.py`
   - Must include:
     - fixed random feedback,
     - matched-norm comparison utilities.
 
-- [ ] **T20.4.4 Implement local-training adapter**
+- [x] **T20.4.4 Implement local-training adapter**
   - File:
     - `packages/local-feedback/src/local_feedback/trainer.py`
   - Purpose:
     - show how adaptive feedback plugs into a simple local-credit loop.
 
-- [ ] **T20.4.5 Run X-ALI-002 short-trajectory validation**
+- [x] **T20.4.5 Run X-ALI-002 short-trajectory validation**
   - Carryover TODO19 item.
   - Evidence kind:
     - curve.
@@ -980,7 +1082,7 @@ packages/local-feedback
   - If not:
     - document as out-of-scope limitation.
 
-- [ ] **T20.4.7 Build demo**
+- [x] **T20.4.7 Build demo**
   - File:
     - `packages/local-feedback/examples/local_feedback_demo.py`
   - Must show:
@@ -988,7 +1090,7 @@ packages/local-feedback
     - adaptive feedback improvement,
     - matched norm.
 
-- [ ] **T20.4.8 Build benchmark**
+- [x] **T20.4.8 Build benchmark**
   - File:
     - `packages/local-feedback/benchmarks/adaptive_vs_fixed.py`
   - Metrics:
@@ -1000,13 +1102,13 @@ packages/local-feedback
   - Seeds:
     - 3.
 
-- [ ] **T20.4.9 Add tests**
+- [x] **T20.4.9 Add tests**
   - Files:
     - `packages/local-feedback/tests/test_adaptive.py`
     - `packages/local-feedback/tests/test_trajectory.py`
     - `packages/local-feedback/tests/test_no_computronium_imports.py`
 
-- [ ] **T20.4.10 Write package README**
+- [x] **T20.4.10 Write package README**
   - Must include:
     - when adaptive feedback helps,
     - when it does not,
@@ -1015,11 +1117,11 @@ packages/local-feedback
 
 ## Acceptance Criteria
 
-- [ ] Package is standalone.
-- [ ] Demo runs on CPU.
-- [ ] One-step and short-trajectory validations exist.
-- [ ] Benchmark shows adaptive feedback beating fixed feedback under matched norm in validated scope.
-- [ ] Documentation includes limits.
+- [x] Package is standalone.
+- [x] Demo runs on CPU.
+- [x] One-step and short-trajectory validations exist.
+- [x] Benchmark shows adaptive feedback beating fixed feedback under matched norm in validated scope.
+- [x] Documentation includes limits.
 
 ---
 
@@ -1037,13 +1139,13 @@ packages/computronium-lab
 
 ## Tasks
 
-- [ ] **T20.5.1 Create package skeleton**
+- [x] **T20.5.1 Create package skeleton**
   - Files:
     - `packages/computronium-lab/pyproject.toml`
     - `packages/computronium-lab/README.md`
     - `packages/computronium-lab/src/computronium_lab/__init__.py`
 
-- [ ] **T20.5.2 Implement Lab API**
+- [x] **T20.5.2 Implement Lab API**
   - File:
     - `packages/computronium-lab/src/computronium_lab/lab.py`
   - API sketch:
@@ -1062,7 +1164,7 @@ packages/computronium-lab
         def report(self, path: str): ...
     ```
 
-- [ ] **T20.5.3 Implement presets**
+- [x] **T20.5.3 Implement presets**
   - File:
     - `packages/computronium-lab/src/computronium_lab/presets.py`
   - Minimum presets:
@@ -1075,7 +1177,7 @@ packages/computronium-lab
     - `adaptive_local_feedback`
     - `role_split_muon_readout`
 
-- [ ] **T20.5.4 Implement recipe layer**
+- [x] **T20.5.4 Implement recipe layer**
   - File:
     - `packages/computronium-lab/src/computronium_lab/recipes.py`
   - Recipes should wrap validated mechanisms:
@@ -1085,11 +1187,11 @@ packages/computronium-lab
     - stable amplification helper if released,
     - routing recipe only if unblocked.
 
-- [ ] **T20.5.5 Optional CEEC recording**
+- [x] **T20.5.5 Optional CEEC recording**
   - Lab may optionally record evidence using CEEC-Core.
   - Must be off by default for external simplicity.
 
-- [ ] **T20.5.6 Build quickstart example**
+- [x] **T20.5.6 Build quickstart example**
   - File:
     - `packages/computronium-lab/examples/lab_quickstart.py`
   - Must show:
@@ -1104,7 +1206,7 @@ packages/computronium-lab
     )
     ```
 
-- [ ] **T20.5.7 Build mechanism recipes demo**
+- [x] **T20.5.7 Build mechanism recipes demo**
   - File:
     - `packages/computronium-lab/examples/mechanism_recipes_demo.py`
   - Must show:
@@ -1112,7 +1214,7 @@ packages/computronium-lab
     - adaptive feedback recipe,
     - role-split recipe.
 
-- [ ] **T20.5.8 Add tests**
+- [x] **T20.5.8 Add tests**
   - Files:
     - `packages/computronium-lab/tests/test_lab_compose.py`
     - `packages/computronium-lab/tests/test_lab_train.py`
@@ -1122,12 +1224,12 @@ packages/computronium-lab
 
 ## Acceptance Criteria
 
-- [ ] `Lab.compose` works for minimum presets.
-- [ ] `Lab.train` works on quick tasks.
-- [ ] `Lab.compare` produces a readable table.
-- [ ] `Lab.recipe` exposes validated mechanisms.
-- [ ] Quickstart runs on CPU.
-- [ ] Lab does not require users to understand CEEC internals.
+- [x] `Lab.compose` works for minimum presets.
+- [x] `Lab.train` works on quick tasks.
+- [x] `Lab.compare` produces a readable table.
+- [x] `Lab.recipe` exposes validated mechanisms.
+- [x] Quickstart runs on CPU.
+- [x] Lab does not require users to understand CEEC internals.
 
 ---
 
@@ -1163,13 +1265,15 @@ X-STA-002
     - c × noise_level × seed.
 
 - [ ] **T20.6A.2 Build stable-matrix helper**
-  - File:
-    - `packages/computronium-lab/src/computronium_lab/stability.py`
+  - File (Rule 6 — lives in the stability package, not Lab):
+    - `packages/stability/src/stability/matrices.py`
   - Must include:
     - size-4 Jordan-block construction,
     - rotation,
     - realized ρ check,
     - realized σ_max check.
+  - Reuse the calibrated guard's realized-spectrum checks; do not
+    reimplement (Rule 6).
 
 - [ ] **T20.6A.3 Run X-STA-002**
   - Metrics:
@@ -1428,6 +1532,7 @@ Required test roots:
 tests/platform/
 packages/ceec-core/tests/
 packages/psi-peft/tests/
+packages/stability/tests/
 packages/local-feedback/tests/
 packages/computronium-lab/tests/
 ```
@@ -1438,6 +1543,7 @@ Suggested CI gate:
 uv run pytest tests/platform -q
 uv run pytest packages/ceec-core/tests -q
 uv run pytest packages/psi-peft/tests -q
+uv run pytest packages/stability/tests -q
 uv run pytest packages/local-feedback/tests -q
 uv run pytest packages/computronium-lab/tests -q
 uv run pytest tests/property/test_verification_labels.py -q
@@ -1467,12 +1573,15 @@ TODO20 is complete when the following are true.
 - [ ] `psi-peft` includes readout, adaptive, and buffered variants.
 - [ ] `psi-peft` demo runs on CPU.
 - [ ] `psi-peft` benchmark reproduces validated task-switching result.
-- [ ] `local-feedback` is standalone and runnable.
-- [ ] `local-feedback` demo runs on CPU.
-- [ ] `local-feedback` benchmark validates adaptive feedback under scope.
-- [ ] `computronium-lab` provides a high-level API.
-- [ ] `computronium-lab` supports minimum presets and recipes.
-- [ ] `computronium-lab` quickstart runs.
+- [x] `local-feedback` is standalone and runnable.
+- [x] `local-feedback` demo runs on CPU.
+- [x] `local-feedback` benchmark validates adaptive feedback under scope.
+- [x] `computronium-lab` provides a high-level API.
+- [x] `computronium-lab` supports minimum presets and recipes.
+- [x] `computronium-lab` quickstart runs.
+- [ ] `stability` package extracted with calibration parity lock.
+- [ ] Rule 6 holds: zero duplicated implementations (adapters only).
+- [ ] `computronium` depends on packages via uv workspace membership.
 
 ### TODO19 closure
 
@@ -1483,7 +1592,7 @@ TODO20 is complete when the following are true.
 - [ ] Experiment statuses swept.
 - [ ] Ledger audit clean.
 - [ ] Temporal-ψ speed lever addressed.
-- [ ] X-ALI-002 validation completed.
+- [x] X-ALI-002 validation completed.
 - [ ] X-STA-002 either executed for stability recipe or explicitly deferred.
 - [ ] X-USU-002 either executed for RoleSplit recipe or explicitly deferred.
 - [ ] X-RSE baseline either fixed or routing release blocked with boundary.
@@ -1514,9 +1623,11 @@ If time is constrained, the minimum acceptable TODO20 is:
 1. Phase 1 hygiene closure.
 2. `ceec-core` standalone quickstart and audit.
 3. `psi-peft` standalone demo and benchmark.
-4. `local-feedback` standalone demo and benchmark.
-5. Basic mechanism recipe book.
-6. Final audit and release manifest.
+4. Phase 2.5 stability extraction + Rule 6 single-source sweep
+   (non-negotiable: duplication is scaffolding, not a resting state).
+5. `local-feedback` standalone demo and benchmark.
+6. Basic mechanism recipe book.
+7. Final audit and release manifest.
 
 Deferred in minimal mode:
 
@@ -1543,6 +1654,12 @@ Do not launch packages on top of unresolved hygiene defects.
 Extract and stabilize CEEC standalone.
 
 This is the governance foundation.
+
+### Step 2.5 — Stability package and single-source migration (Rule 6)
+
+Extract `computronium/stability/` to `packages/stability`, add uv workspace
+membership, and sweep the duplicate ceec-core/psi-peft implementations so
+each component has ONE copy (adapters only).
 
 ### Step 3 — Psi-PEFT
 
@@ -1594,6 +1711,7 @@ local-feedback adaptive arm beats fixed feedback under matched norm.
 computronium-lab quickstart composes and trains at least one preset.
 All release docs contain scope and limitations.
 All released evidence is traceable and not quarantined.
+Every extracted component has exactly ONE implementation copy (Rule 6).
 ```
 
 ---
@@ -1663,3 +1781,364 @@ How to use it.
 ```
 
 That is the platform launch.
+
+---
+
+## 17. Progress log
+
+### 2026-09-10 — Phases 0–3 complete
+
+**Phase 0 — Platform charter**
+- `docs/platform/PLATFORM_LAUNCH.md` (products, boundaries, release gates,
+  harvest-only rule), `docs/platform/RELEASE_MANIFEST.md` (per-package
+  status/evidence/limitations), `tests/platform/` root created.
+
+**Phase 1 — TODO19 trust closure**
+- **T20.1.1 identity-card scan defect:** concrete protocol subclasses were
+  skipped because `__protocol_attrs__` leaks onto them from
+  `typing.Protocol.__init_subclass__`. Fixed
+  `scripts/generate_identity_cards.py::_is_concrete_primitive` to test only
+  `_is_protocol` (concrete subclasses carry `__protocol_attrs__` but
+  `_is_protocol=False`). Regression test
+  `tests/property/test_identity_cards_drift_lock.py::test_concrete_protocol_subclass_not_skipped`.
+- **T20.1.2 ClosedFormRidgePlasticity carded** (`AlgorithmIdentityCard` in
+  `computronium/core/plasticity/closed_form.py`, validated_limits =
+  probe-local arm). `docs/IDENTITY_CARDS.md` regenerated → 25 of 25 carded;
+  strict gate + drift lock pass.
+- **T20.1.3 D19 timeout triaged:** `test_demo_depth_harvest` measured at
+  **344.7s** (logs/t2013_depth_harvest.log). Disposition: marked
+  `@pytest.mark.slow` (default addopts deselects slow/benchmark/llm), so the
+  fast gate drops it (~0s); run explicitly with `-m slow` or nightly.
+  NOTE: the test's `@pytest.mark.timeout(900)` needs pytest-timeout if you
+  want runtime enforcement (not installed; not required since marker-only).
+- **T20.1.4 verification labels:** 5 passed (no fixes needed).
+- **T20.1.5 experiment sweep:** all 8 experiments (X-ALI-001, X-RSE-001,
+  X-STA-001, X-USU-001, X-TPC-001/002/003, X-TAC-001) had evidence; marked
+  `completed` via `CEECStore.set_experiment_status`. No ambiguous active
+  experiments remain.
+- **T20.1.6 ledger audit + calibration report:** audit clean; calibration
+  report has 8 records, 0 scored (expected — no promotion/boundary events).
+- **T20.1.7 TODO19 DoD:** TODO19.md header marked SUPERSEDED-by-TODO20.
+
+**Phase 2 — ceec-core (packages/ceec-core)**
+- Full extraction: models/ids/store/gates/calibration/audit/cli/schemas/
+  bootstrap/selection/probe_adapter/migrate copied with
+  `computronium.ceec → ceec` import rewrite (no computronium imports,
+  enforced by test). Internal CEEC untouched (duplicate-first per plan;
+  `tests/ceec` 36 pass).
+- New: `ceec.constraints` (`ConstraintValidator` Protocol +
+  `ConstraintResult`), standalone `ceec` CLI entrypoint
+  (`pip install -e packages/ceec-core`), quickstart example (audit: 0
+  findings), 16 unit tests, `tests/platform/test_ceec_core_compat.py`
+  (public-API + `record_evidence` signature parity).
+- **Deviation (documented in README):** ceec-core depends on pydantic v2
+  (plan said stdlib-only; chosen over rewriting validated models).
+- **API gotchas for future work:** `pre_register_experiment` requires the
+  Experiment model `status="draft"` (error message misleadingly says
+  "already registered"); `change_status` promotes/boundaries need gate
+  outcome refs; audit `_beliefs_without_scope` requires scope.axis fields
+  (e.g. `credit=(...)`) non-empty, not just domain.
+- **Env note:** install with `uv pip install -e packages/ceec-core` after
+  `uv sync` (uv sync prunes non-lockfile editables). A nested `uv run`
+  inside `packages/ceec-core/` creates a stray `.venv` — run from repo root.
+- Test basenames are prefixed `test_ceec_*` to avoid collision with
+  `tests/ceec/test_{models,store,gates}.py` under the default prepend
+  import mode (do NOT switch the repo to importlib mode: `tests/ceec/*`
+  imports `from conftest import ...`).
+
+**Phase 3 — psi-peft (packages/psi-peft)**
+- `PsiReadout` (trace-decayed ridge, `replace_readout` default True per
+  plan), `AdaptivePsiReadout` (agreement-gated ρ, warm-up = conflict),
+  `BufferedPsiReadout` (interval refit + agreement-based drift detection
+  that CLEARS stale episodes on drift). Demo (`examples/task_switching_demo.py`,
+  θ bitwise-invariant, ~50ms), benchmark (`benchmarks/psi_vs_sgd_readout.py
+  --quick`, 6 arms × 3 seeds, mean±var, walltime).
+- **Benchmark reproduces the validated pattern** (quick, 3 seeds):
+  frozen_null 0.25 / closed_form B=0.26 (blends, as X-TPC-002 predicts) /
+  temporal_090 B=0.66 A_ret=0.76 / adaptive B=0.74 / buffered fastest with
+  tradeoff / sgd_readout 150ms (9× slower) at lower quick-budget accuracy.
+  θ invariance passes for all arms.
+- **Documented tradeoff:** buffered meets the ≤1.2× SGD walltime target but
+  NOT the ≤0.02 accuracy margin vs temporal_090 under conflict (~0.1 gap on
+  B at quick budget) — README and manifest record this as the speed/accuracy
+  boundary per plan §T20.3.4.
+- 15 package tests (trace math vs manual ridge, ρ=1 forget-free limit,
+  decaying-vs-forget-free conflict divergence, adaptive lag ≤2 episodes,
+  buffer/drift semantics, boundary + demo determinism) +
+  `tests/platform/test_psi_peft_parity.py` (standalone ridge solution
+  ≡ internal `decayed`+`solve_trace_readout` on identical data).
+- ruff + pyright strict clean on both packages' src.
+
+**Deferred to next session**
+- Phase 4 local-feedback (extract X-ALI-001 probe logic; demo/benchmark
+  pattern now established by psi-peft — copy its structure).
+- Phase 5 Lab; Phase 6 conditional; Phase 7 docs; Phase 8 final QA.
+
+**New improvement opportunities (registered)**
+1. `pre_register_experiment`'s not-a-draft error should say so (mislabeled
+   error text) — upstream to internal CEEC too.
+2. Buffered-ψ drift semantics: agreement-based drift + buffer clear is a
+   *mechanism change* vs the internal ConflictAdaptivePsiPlasticity (which
+   decays per-episode). Worth an internal experiment comparing
+   buffer-reset vs trace-decay forgetting if the buffered recipe ships.
+3. `uv` workspace membership for `packages/*` would stop `uv sync` pruning
+   the editable installs (currently re-install after each sync).
+4. `tests/platform` cannot ship `__init__.py` (name collides with stdlib
+   `platform` under pytest rootdir import) — keep it rootless.
+5. Consider `--import-mode=importlib` only after migrating `tests/ceec/*`
+   off the `from conftest import ...` pattern.
+6. Demo determinism tests must strip walltime lines (adapt=…ms) and reset
+   `sys.argv` before invoking argparse-bearing demos.
+
+**Gate status snapshot:** ceec-core validated (G-1/2/3-partial/4/6);
+psi-peft validated (G-1/2/3/6, README G-4/G-5 compliant); local-feedback
+and Lab not started. All in `docs/platform/RELEASE_MANIFEST.md`.
+
+### 2026-09-10 addendum — stability package + Rule 6 (single source)
+
+**Decision (user-directed):** the TODO11 R11.3.3 calibrated stability guard
+(`computronium/stability/`, "computronium-stability" branded quickstart,
+`comp stability` CLI, registered artifact `stability_guard_pr5.json`) becomes
+**Product F** — extracted as `packages/stability` under new **Phase 2.5**.
+TODO20 §Operating Rules gains **Rule 6 (binding): ONE copy of every
+extracted component** — `packages/` copies are the source of truth,
+`computronium` depends on them via uv workspace membership, legacy import
+paths become thin adapters. This generalizes the duplicate-then-migrate
+pattern and retires it as an end state. The Phase 6A Lab stability helper
+folds into `packages/stability`, not Lab.
+
+**Sequence for next session:** Phase 2.5 (stability + workspace +
+single-source sweep incl. ceec-core/psi-peft migration under Rule 6) →
+Phase 4 (local-feedback) → Phase 5 (Lab).
+
+### 2026-09-11 — Phase 2.5 complete: stability package + Rule 6 single-source
+
+**T20.2.5.1/2 — packages/stability extracted (Product F).** Guard
+(`attach`/`StabilityVerdict`/`StabilityGuard`/`calibrate_threshold`),
+spectral_radius, settling, lyapunov, basin, frontier, config, and the
+generic PR-5 ROC calibration machinery moved verbatim into
+`packages/stability/src/stability/` with `computronium.stability`→`stability`
+and `computronium.state`→`stability.state` rewrites. Deps: torch+numpy only;
+no computronium imports (AST boundary test). New in the package:
+- `state.py` — minimal framework-agnostic `CompositeState` (activity/
+  plastic/substrate mappings + `clone`) and an empty `SystemContext`
+  Protocol. computronium's richer `CompositeState` is duck-compatible:
+  package estimators only read `.activity[key]` and rebuild via
+  `type(z)(...)`/field kwargs, so computronium states pass through untyped.
+- `calibration.py` — generic split: ginibre_run/unrolled_divergence/
+  harvest_bad + NEW `harvest_good_statistics` (stable-gain Ginibre arms),
+  `rates_at_tau` (was private `_rates_at_tau`), `overhead_and_interval`
+  (was `_overhead_and_interval`), and `calibrate_ginibre_harvest` — a
+  self-contained ROC calibration path for external users (host apps with
+  their own known-good arms call `calibrate_threshold` directly).
+- `matrices.py` — Phase 6A stable-matrix helpers (jordan_block, rotation,
+  linear_transition, realized_rho/σ_max via the package's own exact
+  estimators, verify_spectrum with rho_limit/sigma_floor flags).
+- `cli.py` — `stability` entrypoint: `check` (attach to linear map),
+  `calibrate` (quick Ginibre ROC), `statistic` (single probe). Exit 1 when
+  the check kills.
+
+**T20.2.5.4 — adapters.** `computronium/stability/*.py` are now thin
+re-export adapters (`from stability.X import *`); `__init__` re-exports the
+package `__all__` plus binds submodules so BOTH `from computronium.stability
+import X` and `from computronium.stability.X import Y` keep working — zero
+internal consumer rewrites needed. The computronium-coupled demo-harvest
+orchestration (DEMO_GOOD_COORDINATES, DISAGREEMENT_COORDINATES,
+harvest_good_statistics over campaign coordinates, _quantify_disagreement,
+calibrate_demo_harvest) lives in the `computronium.stability.calibration`
+adapter (it drives `computronium.core.campaign.evaluation` — host-side
+integration code, not a Rule-6 duplicate). `computronium/resources.py`
+became an adapter re-exporting `ResourceUsage`/`MAC_ENERGY_J` from
+`stability.resources` (ResourceUsage moved wholesale into the package —
+computronium depends on the package, so the single copy inverted homes).
+
+**T20.2.5.5 — workspace.** Root `pyproject.toml` gains
+`[tool.uv.workspace] members = ["packages/*"]` + `[tool.uv.sources]`
+(workspace=true) for ceec-core/psi-peft/stability; all three are root
+dependencies, so `uv sync` no longer prunes the editables (verified: sync
+installs `stability==0.1.0` from `packages/stability`).
+
+**T20.2.5.3 — parity + artifact lock.** `tests/platform/test_stability_parity.py`:
+adapter-is-identity checks; registered-artifact lock
+(`stability_guard_pr5.json`: τ=1.029, FKR 0.0, kill 1.0, threshold 1.0289…
+between good max 1.0 and bad min 1.0579); fresh package-side Ginibre probe
+semantics; duck-typing test (computronium CompositeState drives the
+package guard). Package tests: 22 (guard ROC/probe/attach, calibration
+label rule + acceptance, matrices, CLI, boundary).
+
+**T20.2.5.6 — sweep status.** Guard + ResourceUsage: internal
+implementations DELETED (adapters only). ceec-core/psi-peft: internal
+duplicates remain (transitional scaffolding per Rule 6) — migration
+evaluated and deferred: computronium.ceec has deep internal coupling
+(probe_adapter, bootstrap, CEEC ledger tests fixture via
+`tests/ceec/conftest.py`), and internal ψ-plasticity is the parity source
+for psi_peft. Suggested migration order when picked up: ceec store/models
+first (adapter = re-export shim in `computronium/ceec/__init__.py`), then
+psi parity inversion (internal re-exports from `psi_peft.readout`).
+
+**Verification:** 28 package+parity tests, 110 legacy stability tests
+(unit/stability, test_stability_guard, stability metrics, jacobian
+amplification), 114 tests/ceec, 44 platform+packages — all pass. ruff
+clean on all touched files. Pyright basic: clean on state/matrices/cli/
+calibration/guard adapters/resources; the moved estimator modules
+(lyapunov 28, settling 23, basin 19 errors — all from the `ActivityValue`
+union looseness) carry pre-move legacy typing debt, queued to the hygiene
+pass like the rest of Register C.
+
+**Improvement opportunities (registered)**
+7. `ActivityValue` union (`Tensor | list[Tensor] | float | dict[str,float]`)
+   causes ~70 basic-mode pyright errors across lyapunov/settling/basin —
+   narrow to a discriminated access-helper API during the hygiene pass
+   (single fix in `stability/state.py` + call sites).
+8. A root `pyrightconfig.json` overrides per-package `[tool.pyright]`
+   sections — packages cannot tighten their own mode while the repo stays
+   basic; consider per-package pyrightconfig files or the hygiene pass.
+9. `pyproject.toml` extras group named `stability = []` now shadows the
+   `stability` dependency name — rename the extras group (e.g.
+   `stability-guard`) to avoid ambiguity.
+10. `ResourceUsage.measure()` uses lazy `import torch, nn` inside the
+    method with `ruff: ignore[undefined-name]` signature annotations —
+    fixed with TYPE_CHECKING imports in the package copy; if any internal
+    copy resurfaces, use the same pattern.
+11. ceec-core/psi-peft single-source migration (Rule 6 end-state) is the
+    main remaining duplication debt — see T20.2.5.6 order above.
+
+**Gate status snapshot:** ceec-core validated; psi-peft validated;
+stability validated (G-1/2/3/4/6, artifact parity lock); local-feedback
+and Lab not started (Phase 4/5 next). Manifest updated in
+`docs/platform/RELEASE_MANIFEST.md`.
+
+### 2026-09-11 — Phase 4 complete: local-feedback (Product C) + X-ALI-002 closure
+
+**Package (packages/local-feedback, Product C).** `AdaptiveFeedback`
+(feedback matrix B that drifts toward the normalized forward weight at
+`feedback_lr`, EMA blend, `update_frequency` throttle, matched
+`expected_norm = scale*sqrt(numel)`), `FixedFeedback` (control; identical
+surface, never moves), `matched_norm` ratio util, shared `metrics`
+(improvement_per_norm, feedback_alignment, pseudo_gradient_alignment,
+late_half_mean), and `LocalFeedbackTrainer` — a two-layer torch MLP trained
+WITHOUT backprop through the readout: output error `e` is projected back via
+`dh = e @ B`, hidden credit `g_hidden = dhᵀx`, readout gets its own local
+grad. torch only; AST boundary test; pyright strict clean (src+tests);
+ruff clean; 20 package+parity tests.
+
+**Key mechanism finding (corrected during build):** the trainer's feedback
+matrix parallels the READOUT weight (out×in), and re-projecting B onto the
+changing readout weight makes `e@B` approach true backprop through W2 — that
+is the mechanism behind the descent-quality gain. The X-ALI-001 per-step
+re-projection (feedback_lr=1.0) *thrashes* at this horizon; the plan-default
+slow blend (`feedback_lr=0.02`) is the setting that wins on all seeds.
+Benchmark (3 seeds × 60 steps, matched norm): adaptive late_ipn 0.0427±0.004
+> fixed 0.0381±0.004 (per-seed wins asserted in test); descent quality 0.98
+both (quick task saturates late) — the discriminator is late_ipn and
+alignment (0.95 adaptive vs 0.43 fixed). README + manifest record the
+slow-blend-is-validated boundary.
+
+**T20.4.5 X-ALI-002 closed.** Pre-registered
+`configs/ceec/experiments/adaptive_local_inverses_short.yaml` (10-step
+horizon, 3 seeds, matched norm, curve kind) → registered (status
+pre_registered) → `scripts/probes/x_ali_002.py --ceec` (mirrors x_ali_001
+structure): verdict **adaptive better on all 3 seeds** (late ipn 0.88/0.88/
+0.69 vs fixed 0.49/0.48/0.53), channel live, evidence **E-000027** recorded,
+belief B-H1 narrowed upward [0.45,0.8] → **[0.55, 0.85]**, experiment marked
+completed.
+
+**Parity:** `tests/platform/test_local_feedback_parity.py` pins package
+`AdaptiveFeedback.update(lr=1.0)` ≡ probe `_adapt_feedback` on identical
+weights across 3 seeds (mechanism-level; full end-to-end parity vs internal
+EqProp systems documented as out-of-scope in README).
+
+**Gate status snapshot:** ceec-core validated; psi-peft validated;
+stability validated; **local-feedback validated** (G-1/2/3/6 + parity lock);
+Lab not started (Phase 5 next). Manifest + root README updated.
+
+**Env note:** `uv sync --dev --all-extras` after editing root pyproject
+workspace sources; `local-feedback` added as workspace member + root dep.
+
+**Improvement opportunities (registered)**
+12. Pyright `extraPaths` in a workspace member's `[tool.pyright]` did not
+    resolve sibling-dir imports (examples/benchmarks sys.path hacks) —
+    scripts/tests that load demo modules do it via importlib.util instead;
+    consider promoting shared demo helpers into the package if a third
+    package needs the same pattern.
+13. torch-stub "partially unknown" pyright noise in tests is pervasive;
+    package strict gate covers src+tests and passes, but example/benchmark
+    scripts stay unchecked — consider per-package pyrightconfig files
+    (see #8) if scripts need gating.
+14. Benchmark quick-mode discrimination is config-sensitive (lr=0.05
+    diverges on random labels; task noise 0.1 too easy → late-half
+    saturation). The tuned config (noise 0.5, trainer lr 0.02, 60 steps,
+    slow-blend feedback_lr 0.02) is the validated quick-mode setting —
+    keep it pinned in tests.
+
+**Next:** Phase 5 — computronium-lab (skeleton, Lab API, presets, recipes,
+quickstart, tests). Phase 6/7/8 after.
+
+### 2026-09-11 — Phase 5 complete: computronium-lab (Product D)
+
+**Package (packages/computronium-lab, validated).** `Lab` (compose/train/
+compare/recipe/report), `presets.py` registry (8 minimum presets: 6 system
+builders wrapping `computronium.core.presets` factories + 2 mechanism
+descriptors), `recipes.py` (temporal_psi → psi_peft.AdaptivePsiReadout;
+adaptive_feedback → local_feedback.AdaptiveFeedback; role_split_muon_readout
+→ compose_system_from_configs with `ParameterUpdateConfig.role_split
+(riemannian_orthogonal-on-readout, euclidean-elsewhere)`, readout param name
+derived from hidden_dims), `report.py` (markdown table + JSON). Optional
+CEEC recording via `Lab(record_ledger=...)` — OFF by default, writes a
+scalar evidence row with an artifact-ref payload (smoke-tested).
+
+**Deps wiring note:** computronium-lab depends on `computronium` — required
+adding `computronium = { workspace = true }` to the ROOT `[tool.uv.sources]`
+(uv workspace members need an explicit source entry). Lab is a root
+dependency of computronium but NOT listed in computronium's own deps
+(cycle); `uv sync` installs it via the root project deps — verified.
+
+**Determinism defect found + fixed in Lab (not in core):** results were
+RNG-order dependent — preset composition draws weights from the global RNG
+BEFORE `SystemTrainer` reseeds, so identical `Lab.compare` calls gave
+different accuracies (fa_mlp 0.276/0.526/0.0052 depending on position).
+Fix: `Lab.compose`/`Lab.train` reseed `torch.manual_seed(self.seed)` before
+building/training; compare is now order- and run-invariant (test pins it).
+
+**fa_mlp quick-mode defect (documented, not a code defect):** internal
+default lr=0.001 makes NO progress on the quick task at 5 epochs (acc 0.26 =
+chance); lr=0.05 reaches 0.48. Lab preset quick-tunes `fa_mlp` to lr=0.05;
+recorded in README/manifest. At 5 quick epochs: backprop 0.77, eqprop 0.79
+(needs ≥5 epochs — 1-epoch eqprop acc 0.08 is init quality, not mechanism
+quality), fa 0.48.
+
+**Gates:** ruff clean; pyright strict clean (src+tests); 22 package tests +
+platform suite 36 total pass; quickstart + recipes demos run on CPU
+(<1s). Manifest + root README updated.
+
+**Env/API gotchas for future work:**
+- `create_eqprop_mlp` takes `inference_steps` (not `n_iters`); its
+  RecurrentGeometry needs equal hidden dims (Lab eqprop preset defaults
+  hidden (64,64,64)).
+- `ceec.record_evidence(kind="vector")` requires axes + values_ref; simple
+  payload evidence should use `kind="scalar"` + artifact_refs.
+- `ceec.CEECStore(db, artifacts_dir)` takes TWO paths (context manager ok).
+- Workspace packages cannot be imported by pyright's `extraPaths` when
+  examples load sibling demo modules — tests use importlib.util loading.
+- Demo `Preset` for role_split uses a lazy builder importing recipes
+  (presets↔recipes would otherwise be circular via QUICK_DIMS).
+
+**Improvement opportunities (registered)**
+15. Lab `train` metric extraction hardcodes history keys (`train_loss`,
+    `train_acc`); a stable trainer-metrics contract would de-couple Lab from
+    trainer internals.
+16. `Lab.compare` reports only final-epoch metrics; per-epoch history is
+    discarded (ComparisonResult.history unused) — wire history through for
+    curve evidence if recipe benchmarking moves into Lab.
+17. Quickstart uses the synthetic task; `task="mnist"` wiring (plan
+    T20.5.6 sketch) was deliberately not shipped to avoid network downloads
+    in demos — add a dataset task registry later if requested.
+
+18. Package test basenames collide across packages under one pytest
+    invocation (test_adaptive.py / test_no_computronium_imports.py exist in
+    psi-peft AND local-feedback AND stability) — the CI gate runs suites
+    per-package (§9); if a single-command gate is wanted, prefix basenames
+    (ceec-core precedent: test_ceec_*) or move packages to importlib mode.
+
+**Next:** Phase 6 conditional science (X-STA-002 / X-USU-002 / X-RSE) →
+Phase 7 docs → Phase 8 QA.

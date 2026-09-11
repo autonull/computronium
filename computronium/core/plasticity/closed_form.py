@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.core.joint.transition import PlasticityPrimitive
 
 if TYPE_CHECKING:
@@ -41,6 +42,28 @@ class ClosedFormRidgePlasticity(PlasticityPrimitive):
     """
 
     psi_phase = "nudged"
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="ClosedFormRidgePlasticity",
+        reference_equations=(
+            "G = Σ H_augᵀH_aug; C = Σ H_augᵀ(onehot(y) − softmax(o)); "
+            "M = (G + λ·mean(diag G)·I)⁻¹C; o' = o + H@M + b"
+        ),
+        deviations_from_literature=(
+            "ψ solved in closed form from NUDGED settled activity — no gradients anywhere",
+            "bias-augmented ridge (constant column absorbs logit offsets)",
+            "no trace decay — statistics accumulate without forgetting",
+        ),
+        objective_function="ridge fit of one-hot targets minus current readout logits",
+        pseudo_gradient_def="none — ψ is a deterministic function of (ψ_{t−1}, activity, target)",
+        symmetry_requirements=(
+            "G symmetric PSD by construction; solve is exact (torch.linalg.solve)",
+        ),
+        approximation_parameters=("ridge_lambda=1e-3",),
+        validated_limits=(
+            "probe-local control/mechanism arm; behavior outside quick-budget CPU probes unvalidated",
+        ),
+    )
 
     config: ClosedFormRidgeConfig
 

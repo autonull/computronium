@@ -1,0 +1,17 @@
+[project]
+name = "psi-peft"
+version = "0.1.0"
+description = "Frozen-backbone task switching via temporal-psi ridge readouts (Psi-PEFT)."
+requires-python = ">=3.12"
+dependencies = ["torch>=2.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/psi_peft"]
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"

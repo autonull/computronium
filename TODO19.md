@@ -1,6 +1,6 @@
 # TODO19 — Epistemic Foundry: CEEC-Governed Mechanism Discovery
 
-**Status:** Phases A–F and H implemented; Phase G open — families 1 & 3–5 primary probes executed (rounds 2–3); round 4 built the temporal-ψ mechanism (X-TPC-001: P1 positive, P2 falsified at quick scale); round 5 executed X-TPC-002 (P1+P2 supported, first schema D-000013); round 6 shipped RoleSplitUpdate (R6-A); round 7 executed X-TPC-003 on a REAL task pair (frozen-backbone switching matches SGD readout re-training); round 8 shipped ConflictAdaptivePsiPlasticity (R7) and executed X-TAC-001 (self-switching trace decay, no boundaries handed in); round 9 folded the temporal-ψ family into the CORE trainer path (`PlasticityConfig.temporal_psi/.conflict_adaptive` + dispatch + demo D21/gallery). **Next: R8-R9 follow-through — X-USU-002 / X-STA-002, or hygiene items (see Open work).**
+**Status:** SUPERSEDED by TODO20 (platform launch). All unfinished work is dispositioned in `TODO20.md` §6 (carryover table) and executed under TODO20 phases. Trust-hygiene closure (identity-card scan defect, ClosedFormRidgePlasticity carding, verification labels, experiment-status sweep, ledger audit) completed under TODO20 Phase 1 on 2026-09-10.
 **Created:** 2026-09-11
 **Supersedes:** TODO19 “Mechanism Foundry”
 **Normative governance spec:** CEEC-Core v1.0

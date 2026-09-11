@@ -1,157 +1,71 @@
-"""computronium-stability — Calibrated stability guard for dynamical neural systems.
+"""Adapter: the standalone stability package is the single source (Rule 6).
 
-Calibrated on:
-- Settling/energy-based dynamics (energy minimization, predictive settling)
-- Non-normal linear dynamics (Ginibre ensemble)
-- 16 real substrate × settling-dynamics coordinates
-  (windowed growth = 1.000, FKR 0% at τ=1.029)
-
-Scope statement (mandatory v1):
-This guard is calibrated for energy-minimization
-coordinates and non-normal linear dynamics.
-General-transformer collapse detection is future calibration
-work, not a v1 claim.
-
-Quick start:
-    import torch
-    from computronium_stability import attach, StabilityVerdict
-
-    model = torch.nn.Linear(10, 10)
-    guard = attach(model)
-
-    for step in range(100):
-        x = torch.randn(32, 10)
-        y = model(x)
-        verdict = guard.check({"x": x, "y": y, "loss": y.pow(2).mean()})
-        if verdict.kill:
-            print(f"Killed at step {step}: {verdict}")
-            break
+Legacy ``computronium.stability`` import paths re-export from the
+``stability`` package (uv workspace member ``packages/stability``). The
+computronium-coupled PR-5 demo-harvest orchestration lives in
+``computronium.stability.calibration`` (it drives the internal campaign
+demo-suite coordinate builder); everything generic comes from the package.
 """
 
-from computronium.stability.basin import (
-    BasinStabilityEstimator,
-    estimate_basin_stability,
-    estimate_basin_stability_multistart,
-)
-from computronium.stability.calibration import (
-    DEMO_GOOD_COORDINATES,
-    DISAGREEMENT_COORDINATES,
+from __future__ import annotations
+
+import stability as _stability
+from stability import *  # ruff: ignore[undefined-local-with-import-star]
+from stability import (  # ruff: ignore[unused-import]  # adapter re-exports
     OVERHEAD_BUDGET,
     PR5Calibration,
-    calibrate_demo_harvest,
+    calibrate_ginibre_harvest,
+    calibrate_threshold,
     ginibre_run,
     harvest_bad_statistics,
     harvest_good_statistics,
+    measure_guard_overhead,
     probe_interval_for_overhead,
+    quantify_proxy_disagreement,
     unrolled_divergence,
 )
-from computronium.stability.config import (
-    BasinConfig,
-    GuardConfig,
-    JacobianAmplificationConfig,
-    LyapunovConfig,
-    SettlingConfig,
-    create_basin_estimator,
-    create_guard,
-    create_jacobian_amplification_estimator,
-    create_lyapunov_estimator,
-    create_settling_monitor,
+from stability import (  # submodule binding for legacy paths
+    basin as basin,
 )
-from computronium.stability.frontier import (
-    FrontierAggregator,
-    FrontierRecord,
+from stability import (
+    calibration as calibration,
 )
-from computronium.stability.guard import (
-    DEFAULT_TAU,
-    ExternalTransitionFn,
-    GuardDecision,
-    GuardHandle,
-    StabilityGuard,
-    StabilityVerdict,
-    StatisticKind,
-    StepState,
-    attach,
-    calibrate_threshold,
-    measure_guard_overhead,
-    quantify_proxy_disagreement,
+from stability import (
+    config as config,
 )
-from computronium.stability.lyapunov import (
-    LyapunovEstimator,
-    estimate_lyapunov_exponent,
-    estimate_lyapunov_spectrum,
+from stability import (
+    frontier as frontier,
 )
-from computronium.stability.resources import ResourceUsage
-from computronium.stability.settling import (
-    SettlingMonitor,
-    measure_settling_time,
-    measure_settling_time_full_state,
+from stability import (
+    guard as guard,
 )
-from computronium.stability.spectral_radius import (
-    JacobianAmplificationEstimator,
-    dominant_singular_value,
-    estimate_directional_amplification,
-    spectral_radius_from_jacobian,
+from stability import (
+    lyapunov as lyapunov,
+)
+from stability import (
+    matrices as matrices,
+)
+from stability import (
+    resources as resources,
+)
+from stability import (
+    settling as settling,
+)
+from stability import (
+    spectral_radius as spectral_radius,
 )
 
-__version__ = "0.1.0"
+from computronium.stability.calibration import (
+    DEMO_GOOD_COORDINATES,
+    DISAGREEMENT_COORDINATES,
+    calibrate_demo_harvest,
+)
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
-    # Guard API (primary)
-    "attach",
-    "StabilityGuard",
-    "StabilityVerdict",
-    "GuardHandle",
-    "GuardDecision",
-    "DEFAULT_TAU",
-    "calibrate_threshold",
-    "quantify_proxy_disagreement",
-    "measure_guard_overhead",
-    # Spectral radius
-    "JacobianAmplificationEstimator",
-    "estimate_directional_amplification",
-    "dominant_singular_value",
-    "spectral_radius_from_jacobian",
-    # Lyapunov
-    "LyapunovEstimator",
-    "estimate_lyapunov_exponent",
-    "estimate_lyapunov_spectrum",
-    # Settling
-    "SettlingMonitor",
-    "measure_settling_time",
-    "measure_settling_time_full_state",
-    # Basin stability
-    "BasinStabilityEstimator",
-    "estimate_basin_stability",
-    "estimate_basin_stability_multistart",
-    # Frontier
-    "FrontierRecord",
-    "FrontierAggregator",
-    # Resources
-    "ResourceUsage",
-    # Config + Factories
-    "JacobianAmplificationConfig",
-    "LyapunovConfig",
-    "SettlingConfig",
-    "BasinConfig",
-    "GuardConfig",
-    "create_jacobian_amplification_estimator",
-    "create_lyapunov_estimator",
-    "create_settling_monitor",
-    "create_basin_estimator",
-    "create_guard",
-    # Type aliases
-    "StepState",
-    "ExternalTransitionFn",
-    "StatisticKind",
-    # PR-5 demo-harvest calibration
-    "PR5Calibration",
-    "calibrate_demo_harvest",
-    "harvest_good_statistics",
-    "harvest_bad_statistics",
-    "probe_interval_for_overhead",
-    "unrolled_divergence",
-    "ginibre_run",
+__version__ = _stability.__version__
+
+__all__ = [  # ruff: ignore[invalid-all-object]
+    *_stability.__all__,
     "DEMO_GOOD_COORDINATES",
     "DISAGREEMENT_COORDINATES",
-    "OVERHEAD_BUDGET",
+    "calibrate_demo_harvest",
 ]

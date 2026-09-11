@@ -36,7 +36,9 @@ _SKIP_NAMES_PREFIX = ("_",)
 
 
 def _is_concrete_primitive(obj: type) -> bool:
-    if getattr(obj, "__protocol_attrs__", None) or getattr(obj, "_is_protocol", False):
+    # __protocol_attrs__ leaks onto concrete subclasses of protocols; only
+    # classes that are themselves protocols carry _is_protocol=True.
+    if getattr(obj, "_is_protocol", False):
         return False
     if inspect.isabstract(obj):
         return False

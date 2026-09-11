@@ -36,7 +36,24 @@ dependencies = [
     "omegaconf>=2.3",
     "kademlia>=2.2.3",
     "torch-geometric>=2.8.0.post1",
+    # Platform packages (TODO20 Rule 6: one copy, adapters on legacy paths)
+    "ceec-core",
+    "psi-peft",
+    "stability",
+    "local-feedback",
+    "computronium-lab",
 ]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+ceec-core = { workspace = true }
+psi-peft = { workspace = true }
+stability = { workspace = true }
+local-feedback = { workspace = true }
+computronium-lab = { workspace = true }
+computronium = { workspace = true }
 
 [project.optional-dependencies]
 # --- Development tools ---
@@ -234,6 +251,9 @@ ignore = [
 ]
 "computronium/ontology/_settle_kernel.py" = [
     "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
+]
+"packages/*/tests/**/*.py" = [
+    "S101",   # assert in standalone-package tests
 ]
 "scripts/probes/x_*.py" = [
     "E402",  # sys.path bootstrap before computronium imports

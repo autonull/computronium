@@ -6,13 +6,11 @@ card records the reference equation, deviations from the literature,
 the objective, the pseudo-gradient definition, and the feedback
 symmetry. Cards are the source for the README §5 primitives table.
 
-**Status:** 24 of 24 concrete primitives carded (aliases
+**Status:** 25 of 25 concrete primitives carded (aliases
 `BackpropCredit` = `GradientCredit` and `ThermodynamicContrastCredit`
 dedupe to their target class). The `--strict` gate is wired into
 pre-commit (C.1): adding a Credit/Update/Plasticity primitive without
 an attached `AlgorithmIdentityCard` now blocks the commit.
-
-## Credit primitives
 
 | Name | Reference | Deviations | Objective | Pseudo-gradient | Symmetry |
 |---|---|---|---|---|---|
@@ -37,6 +35,7 @@ an attached `AlgorithmIdentityCard` now blocks the commit.
 | RoleSplitUpdate | per-parameter-name rule dispatch (composition primitive, no canonical optimizer reference) | not a new optimizer — routes each parameter name to exactly one sub-rule (X-USU-001: muon-on-readout + euclid-elsewhere); global-norm clip semantics are per-subset: each sub-rule clips its own name set independently | — | ΔW_n = on_role.step(g_n) for n ∈ role_names; other.step(g_n) otherwise | role_names must name existing parameters |
 | SpectralConstrainedUpdate | Lipschitz-bounded optimization; spectral-norm regularization family (Szegedy et al. 2014 lineage) | constrains the spectral norm of the UPDATE GRADIENT, not of the weights (σ₂-norm rescale when grad σ > spectral_norm); vectors (biases) ride plain SGD | — | ΔW = −lr · g·min(1, spectral_norm/σ₂(g)) for matrices; −lr·g for vectors | none |
 | UnitRMSUpdate | internal magnitude-only ladder rung (TODO12 A1); Muon's step-scale control without orthogonalization | EMA momentum buffer normalized to unit RMS PER TENSOR — magnitude-only: no whitening, no direction signal; the decisive magnitude-vs-direction rung: UnitRMS ≈ Muon on fragile cells ⇒ magnitude suffices; UnitRMS < Muon ⇒ orthogonalization carries direction | — | ΔW = −lr · buf / RMS(buf), buf ← μ·buf + g | none |
+| ClosedFormRidgePlasticity | G = Σ H_augᵀH_aug; C = Σ H_augᵀ(onehot(y) − softmax(o)); M = (G + λ·mean(diag G)·I)⁻¹C; o' = o + H@M + b | ψ solved in closed form from NUDGED settled activity — no gradients anywhere; bias-augmented ridge (constant column absorbs logit offsets); no trace decay — statistics accumulate without forgetting | ridge fit of one-hot targets minus current readout logits | none — ψ is a deterministic function of (ψ_{t−1}, activity, target) | G symmetric PSD by construction; solve is exact (torch.linalg.solve) |
 | ConflictAdaptivePsiPlasticity | a_t = mean(argmax(h@M_{t−1} + b_{t−1}) == y); ρ_t = forget_decay if a_t < threshold else 1.0; G_t = ρ_tG_{t−1} + HᵀH; C_t = ρ_tC_{t−1} + Hᵀ(onehot(y) − ½); M_t = (G_t + λ·mean(diag G_t)·I)⁻¹C_t; o' = M-corrected readout | conflict detected from readout agreement, not task boundaries — no oracle switch signal is handed in; warm-up episodes (no readout yet) count as conflicting: acquisition always runs at forget_decay; single-pass exponentially-decayed ridge — no optimality claim | agreement-gated trace-weighted ridge fit of centered one-hot targets from settled h | none — no gradient path; ψ is a deterministic function of (ψ_{t−1}, activity, target) | G symmetric PSD by construction; solve is exact (torch.linalg.solve) |
 | FastWeightPlasticity | Fast weights as associative memory; Ba et al. (2016), arXiv 1610.06258; Hebbian outer-product write | pre/post are the SETTLED activities supplied by the pipeline (F3-audit fix: not the raw target — that made modulation a target-correlated bias); fixed random projection maps the full outer product to fast_weight_dim (avoids truncation bias); episode decay + boundary consolidation is framework-specific | — | A_{t+1} = decay·A_t + lr·Proj(outer(pre_t, post_t)) with settled pre/post | none |
 | NullPlasticity | Zero-Extension Invariant (internal, J1 lock): F_θ^Null(z)|_x = D_θ(x) | not a learning rule: the identity law ψ_{t+1} = ψ_t that makes 5-D systems valid 6-D coordinates | — | none (ψ constant; no credit routed through P) | none |

@@ -8,6 +8,16 @@ resolution-markers = [
     "sys_platform != 'emscripten' and sys_platform != 'linux' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "ceec-core",
+    "computronium",
+    "computronium-lab",
+    "local-feedback",
+    "psi-peft",
+    "stability",
+]
+
 [[package]]
 name = "aiofiles"
 version = "25.1.0"
@@ -227,6 +237,17 @@ filecache = [
 ]
 
 [[package]]
+name = "ceec-core"
+version = "0.1.0"
+source = { editable = "packages/ceec-core" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 source = { registry = "https://pypi.org/simple" }
@@ -441,11 +462,16 @@ name = "computronium"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ceec-core" },
+    { name = "computronium-lab" },
     { name = "kademlia" },
+    { name = "local-feedback" },
     { name = "numpy" },
     { name = "omegaconf" },
+    { name = "psi-peft" },
     { name = "pydantic" },
     { name = "rich" },
+    { name = "stability" },
     { name = "torch" },
     { name = "torch-geometric" },
     { name = "tqdm" },
@@ -599,7 +625,9 @@ dev = [
 requires-dist = [
     { name = "botorch", marker = "extra == 'knowledgebase'" },
     { name = "build", marker = "extra == 'dev'" },
-    { name = "computronium", extras = ["vision", "lm", "rl", "spiking", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "llm", "nn"], marker = "extra == 'full'" },
+    { name = "ceec-core", editable = "packages/ceec-core" },
+    { name = "computronium", extras = ["vision", "lm", "rl", "spiking", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "llm", "nn"], marker = "extra == 'full'", editable = "." },
+    { name = "computronium-lab", editable = "packages/computronium-lab" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = "==50.0.0" },
     { name = "cupy-cuda13x", marker = "extra == 'spiking'", specifier = ">=14.1.1" },
     { name = "datasets", marker = "extra == 'dev'" },
@@ -614,6 +642,7 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
     { name = "kademlia", specifier = ">=2.2.3" },
     { name = "kademlia", marker = "extra == 'p2p'" },
+    { name = "local-feedback", editable = "packages/local-feedback" },
     { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'plot'" },
     { name = "networkx", marker = "extra == 'graphs'" },
@@ -634,6 +663,7 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'dev'", specifier = ">=6.9.0" },
     { name = "plotly", marker = "extra == 'plot'", specifier = ">=6.9.0" },
     { name = "pre-commit", marker = "extra == 'dev'" },
+    { name = "psi-peft", editable = "packages/psi-peft" },
     { name = "psutil", marker = "extra == 'dev'" },
     { name = "psutil", marker = "extra == 'monitoring'" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -654,6 +684,7 @@ requires-dist = [
     { name = "seaborn", marker = "extra == 'dev'" },
     { name = "seaborn", marker = "extra == 'plot'" },
     { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
+    { name = "stability", editable = "packages/stability" },
     { name = "sympy", marker = "extra == 'knowledgebase'" },
     { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },
     { name = "tabulate", marker = "extra == 'dev'", specifier = ">=0.9" },
@@ -678,6 +709,25 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-timeout", specifier = ">=2.4.0" },
+]
+
+[[package]]
+name = "computronium-lab"
+version = "0.1.0"
+source = { editable = "packages/computronium-lab" }
+dependencies = [
+    { name = "computronium" },
+    { name = "local-feedback" },
+    { name = "psi-peft" },
+    { name = "torch" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "computronium", editable = "." },
+    { name = "local-feedback", editable = "packages/local-feedback" },
+    { name = "psi-peft", editable = "packages/psi-peft" },
+    { name = "torch", specifier = ">=2.0" },
 ]
 
 [[package]]
@@ -1825,6 +1875,17 @@ wheels = [
 ]
 
 [[package]]
+name = "local-feedback"
+version = "0.1.0"
+source = { editable = "packages/local-feedback" }
+dependencies = [
+    { name = "torch" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "torch", specifier = ">=2.0" }]
+
+[[package]]
 name = "mako"
 version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2850,6 +2911,17 @@ wheels = [
 ]
 
 [[package]]
+name = "psi-peft"
+version = "0.1.0"
+source = { editable = "packages/psi-peft" }
+dependencies = [
+    { name = "torch" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "torch", specifier = ">=2.0" }]
+
+[[package]]
 name = "psutil"
 version = "7.2.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3677,6 +3749,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/96/d7/8ac6ffa1e36169e762ef65bd835046abb2251b1bc17f8f6708e14ed8d31f/sqlalchemy-2.0.52-cp314-cp314-win_amd64.whl", hash = "sha256:a593db51b3bae75db17a5738ad5f992244b3a03863f83c28117ee482c6a3f76d", size = 2156718 },
     { url = "https://files.pythonhosted.org/packages/dc/4b/e01a737eef378e734cc6394a82248a6ce13b167dfa36c731075ce9fc9c64/sqlalchemy-2.0.52-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:c1e61d08bdf4ee2f41024569e3400de7d6734ba498144766b11260936ccfa582", size = 2190344 },
     { url = "https://files.pythonhosted.org/packages/b3/3f/3582293d1e185e71d19d7c731c3e2ee20ba21981c4a1115c0806c1f62120/sqlalchemy-2.0.52-py3-none-any.whl", hash = "sha256:3b81b8363a919ce53453591cdb93702e6bd54ade6c4fa2f468fc053baee5ed89", size = 1950700 },
+]
+
+[[package]]
+name = "stability"
+version = "0.1.0"
+source = { editable = "packages/stability" }
+dependencies = [
+    { name = "numpy" },
+    { name = "torch" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy" },
+    { name = "torch", specifier = ">=2.0" },
 ]
 
 [[package]]

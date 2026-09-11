@@ -1,35 +1,36 @@
-"""PR-5 demo-harvest calibration for the stability guard.
+"""Adapter: PR-5 demo-harvest orchestration + generic calibration re-exports.
 
-Known-good statistics are harvested from the demo-suite coordinate family
-(the campaign-builder-expressible coordinates the demonstration suite pins);
-known-bad statistics from a Ginibre linear ensemble whose runs are labeled
-by unrolled divergence (norm explosion). The ROC calibration certifies both
-the max-margin operating point and the deployed ``DEFAULT_TAU``; proxy-vs-
-full-Jacobian disagreement and probe overhead complete the PR-5 acceptance
-triple (<5% false-kill, >95% kill rate, <10% overhead).
-
-Measured findings this calibration records (tiny and demo scale):
-- ``windowed_growth`` reads ≈ 1.0 on every known-good arm — bounded
-  activations (saturating geometry + imp-60 zero-pad feedback) — and fires
-  only on genuinely explosive maps; it is the deployed kill statistic.
-- ``fast_proxy`` is calibration-only: its one-step Jacobian-vector gain
-  under-estimates σ_max on non-normal maps and is inflated by substrate
-  noise on memristive/neuromorphic arms (the family-sweep "INFEASIBLE on
-  non-normal systems" deferral, quantified here on real coordinates).
-- Per-probe cost is a multiple of a training step (2-13x measured), so the
-  <10% overhead bar is met through the calibrated probe interval.
+The generic ROC machinery (PR-5 acceptance triple, Ginibre harvest, rate
+math) lives in the standalone ``stability`` package (Rule 6). What remains
+here is computronium-coupled by nature: the demo-suite coordinate family
+and the harvest drivers that build internal campaign systems.
 """
 
 from __future__ import annotations
 
-import math
-from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
-
-from computronium.stability.guard import (
+from stability.calibration import (
+    EXPLOSION_FACTOR,
+    GINIBRE_BATCH,
+    GINIBRE_DIM,
+    GINIBRE_GAINS,
+    GINIBRE_SEEDS_PER_GAIN,
+    HARVEST_SEED,
+    OVERHEAD_BUDGET,
+    STATISTIC_KINDS,
+    UNROLL_STEPS,
+    PR5Calibration,
+    calibrate_ginibre_harvest,
+    ginibre_run,
+    harvest_bad_statistics,
+    overhead_and_interval,
+    probe_interval_for_overhead,
+    rates_at_tau,
+    unrolled_divergence,
+)
+from stability.guard import (
     DEFAULT_TAU,
     CalibrationReport,
     DisagreementReport,
@@ -40,6 +41,7 @@ from computronium.stability.guard import (
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
@@ -48,8 +50,6 @@ if TYPE_CHECKING:
     from computronium.state import SystemContext
 
     Transition = Callable[[CompositeState, "SystemContext | None"], CompositeState]
-
-STATISTIC_KINDS: tuple[StatisticKind, ...] = ("fast_proxy", "windowed_growth")
 
 # The demo-suite coordinate family, expressed in campaign-builder syntax:
 # D1/D2 (recurrent settling + credit arms), D6 (substrate arms), D7 (spike
@@ -74,127 +74,7 @@ DISAGREEMENT_COORDINATES: tuple[str, ...] = (
     "neuromorphic/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
 )
 
-GINIBRE_GAINS: tuple[float, ...] = (0.95, 1.0, 1.05, 1.1, 1.2, 1.4)
-GINIBRE_SEEDS_PER_GAIN = 3
-GINIBRE_DIM = 32
-GINIBRE_BATCH = 4
-UNROLL_STEPS = 200
-EXPLOSION_FACTOR = 1e3
-OVERHEAD_BUDGET = 0.10
-HARVEST_SEED = 0
 _DISAGREEMENT_BATCH = 16
-
-
-@dataclass(frozen=True, slots=True)
-class PR5Calibration:
-    """The PR-5 acceptance triple over one demo-harvest run.
-
-    Attributes:
-        good: Harvested known-good statistics per statistic kind.
-        bad: Harvested known-bad (divergence-labeled) statistics per kind.
-        calibration: ROC report per kind (``None`` = infeasible classes).
-        deployed_tau: False-kill / kill-rate at ``DEFAULT_TAU`` per kind.
-        overhead_ratio: Probe-cost / transition-step-cost per kind.
-        probe_interval: Episodes between probes meeting the overhead budget.
-        disagreement: Proxy-vs-full-Jacobian reports keyed by coordinate.
-        family: Harvest metadata (coordinates, dims, label rule, budgets).
-    """
-
-    good: dict[StatisticKind, list[float]]
-    bad: dict[StatisticKind, list[float]]
-    calibration: dict[StatisticKind, CalibrationReport | None]
-    deployed_tau: dict[StatisticKind, tuple[float, float]]
-    overhead_ratio: dict[StatisticKind, float]
-    probe_interval: dict[StatisticKind, int]
-    disagreement: dict[str, DisagreementReport]
-    family: dict[str, object]
-
-    def to_dict(self) -> dict[str, object]:
-        """JSON-serializable artifact shape."""
-        return {
-            "good_summary": {kind: _summarize(v) for kind, v in self.good.items()},
-            "bad_summary": {kind: _summarize(v) for kind, v in self.bad.items()},
-            "calibration": {
-                kind: asdict(report) if report is not None else None
-                for kind, report in self.calibration.items()
-            },
-            "deployed_tau": {
-                kind: {
-                    "tau": DEFAULT_TAU,
-                    "false_kill_rate": false_kill,
-                    "kill_rate": kill_rate,
-                }
-                for kind, (false_kill, kill_rate) in self.deployed_tau.items()
-            },
-            "overhead_ratio": dict(self.overhead_ratio),
-            "probe_interval": dict(self.probe_interval),
-            "disagreement": {
-                coordinate: asdict(report)
-                for coordinate, report in self.disagreement.items()
-            },
-            "family": dict(self.family),
-        }
-
-
-def _summarize(values: list[float]) -> dict[str, float | int]:
-    if not values:
-        return {"n": 0}
-    return {
-        "n": len(values),
-        "min": min(values),
-        "max": max(values),
-        "mean": sum(values) / len(values),
-    }
-
-
-def _activity_norm(z: CompositeState) -> float:
-    x = z.activity.get("x")
-    return float(torch.linalg.vector_norm(x)) if isinstance(x, Tensor) else 0.0
-
-
-def ginibre_run(
-    gain: float,
-    seed: int,
-    dim: int = GINIBRE_DIM,
-    batch: int = GINIBRE_BATCH,
-) -> tuple[Transition, CompositeState]:
-    """One closed-form linear run: ``gain/sqrt(dim)``-scaled Ginibre weight."""
-    generator = torch.Generator().manual_seed(seed)
-    weight = torch.randn(dim, dim, generator=generator) * (gain / dim**0.5)
-    state = CompositeState(
-        activity={"x": torch.randn(batch, dim, generator=generator)},
-        plastic={},
-        substrate={},
-    )
-
-    def transition(z: CompositeState, _context: SystemContext | None) -> CompositeState:
-        x = z.activity["x"]
-        return CompositeState(
-            activity={"x": x @ weight.T if isinstance(x, Tensor) else x},
-            plastic=z.plastic,
-            substrate=z.substrate,
-        )
-
-    return transition, state
-
-
-def unrolled_divergence(
-    transition: Transition,
-    z: CompositeState,
-    context: SystemContext | None,
-    *,
-    steps: int = UNROLL_STEPS,
-    factor: float = EXPLOSION_FACTOR,
-) -> bool:
-    """Label rule: activity norm explodes past ``factor`` x initial or NaNs."""
-    base = _activity_norm(z)
-    current = z
-    for _ in range(steps):
-        current = transition(current, context)
-        norm = _activity_norm(current)
-        if not math.isfinite(norm) or norm > factor * base:
-            return True
-    return False
 
 
 def harvest_good_statistics(
@@ -234,73 +114,8 @@ def harvest_good_statistics(
                 guard = StabilityGuard(
                     threshold=float("inf"), statistic=kind, window=window
                 )
-                stats[kind].append(guard.probe(transition, z, context))
+                stats[kind].append(guard.probe(transition, z, context))  # type: ignore[arg-type]
     return stats
-
-
-def harvest_bad_statistics(
-    *,
-    dim: int = GINIBRE_DIM,
-    batch: int = GINIBRE_BATCH,
-    gains: tuple[float, ...] = GINIBRE_GAINS,
-    seeds_per_gain: int = GINIBRE_SEEDS_PER_GAIN,
-    window: int = 10,
-) -> dict[StatisticKind, list[float]]:
-    """Guard statistics over verified-divergent Ginibre runs.
-
-    Non-diverging (marginal) runs enter neither set: they are not known-good
-    coordinates and not verified-unstable.
-    """
-    stats: dict[StatisticKind, list[float]] = {kind: [] for kind in STATISTIC_KINDS}
-    for gain in gains:
-        for seed in range(seeds_per_gain):
-            transition, state = ginibre_run(gain, seed, dim, batch)
-            if not unrolled_divergence(transition, state, None):
-                continue
-            # The closed-form transition ignores its context; the probe's
-            # declared signature still requires a (typed-null) context.
-            context = cast("SystemContext", None)
-            for kind in STATISTIC_KINDS:
-                guard = StabilityGuard(
-                    threshold=float("inf"), statistic=kind, window=window
-                )
-                stats[kind].append(guard.probe(transition, state, context))
-    return stats
-
-
-def _rates_at_tau(
-    good: Sequence[float], bad: Sequence[float], tau: float
-) -> tuple[float, float]:
-    good_arr = torch.tensor(good, dtype=torch.float64)
-    bad_arr = torch.tensor(bad, dtype=torch.float64)
-    false_kill = float((good_arr > tau).float().mean()) if good_arr.numel() else 0.0
-    kill = float((bad_arr > tau).float().mean()) if bad_arr.numel() else 0.0
-    return false_kill, kill
-
-
-def probe_interval_for_overhead(ratio: float, budget: float = OVERHEAD_BUDGET) -> int:
-    """Episodes between guard probes so amortized cost stays within budget."""
-    if ratio <= 0.0:
-        return 1
-    return max(1, math.ceil(ratio / budget))
-
-
-def _overhead_and_interval(
-    transition: object,
-    z: CompositeState,
-    context: SystemContext,
-    window: int,
-    budget: float,
-    n_steps: int,
-) -> tuple[dict[StatisticKind, float], dict[StatisticKind, int]]:
-    overhead: dict[StatisticKind, float] = {}
-    interval: dict[StatisticKind, int] = {}
-    for kind in STATISTIC_KINDS:
-        guard = StabilityGuard(threshold=float("inf"), statistic=kind, window=window)
-        ratio = measure_guard_overhead(transition, z, context, guard, n_steps=n_steps)  # type: ignore[arg-type]
-        overhead[kind] = ratio
-        interval[kind] = probe_interval_for_overhead(ratio, budget)
-    return overhead, interval
 
 
 def _quantify_disagreement(
@@ -330,7 +145,10 @@ def _quantify_disagreement(
         x, _ = episode_batch(0, input_dim=input_dim, batch_size=_DISAGREEMENT_BATCH)
         z = CompositeState(activity={"x": x}, plastic={}, substrate={})
         reports[coordinate] = quantify_proxy_disagreement(
-            activity_transition(joint), z, joint.context, probes=probes
+            activity_transition(joint),  # type: ignore[arg-type]
+            z,  # type: ignore[arg-type]
+            joint.context,  # type: ignore[arg-type]
+            probes=probes,
         )
     return reports
 
@@ -358,31 +176,10 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
 ) -> PR5Calibration:
     """Run the full PR-5 calibration over the demo-harvest.
 
-    Args:
-        input_dim: Known-good arm input width (demo-suite pin: 784).
-        hidden_dims: Known-good arm hidden widths (demo-suite pin: (32,)).
-        output_dim: Known-good arm output width (demo-suite pin: 10).
-        batch_size: Probe batch (demo-suite pin: 64).
-        episodes: Probe-state episode indices (deterministic synthetic stream).
-        window: Windowed-growth window (campaign pin: 10).
-        max_false_kill: Pre-registered false-kill ceiling (PR-5: 0.05).
-        min_kill_rate: Pre-registered kill-rate floor (PR-5: 0.95).
-        overhead_budget: Amortized probe-cost budget (PR-5: 0.10).
-        disagreement_input_dim: Input width for the disagreement study (tiny:
-            the full-Jacobian reference is cost-feasible only at tiny dims).
-        disagreement_hidden_dims: Hidden widths for the disagreement study.
-        disagreement_probes: Probe count/seed for the disagreement study.
-        include_demo_cost_probe: When True, adds a one-probe full-Jacobian
-            cost datapoint at the harvest dims (≈20 s at demo scale) — the
-            cost-infeasibility evidence for in-loop disagreement tracking.
-        ginibre_dim: Known-bad family width.
-        ginibre_batch: Known-bad family batch.
-        ginibre_gains: Known-bad family gain sweep.
-        ginibre_seeds: Known-bad runs per gain.
-        seed: Root seed for coordinate construction (forked per build).
-
-    Returns:
-        The frozen calibration record; ``to_dict`` renders the artifact.
+    See the standalone ``stability`` package for the generic machinery;
+    this driver supplies the computronium demo-suite known-good arms and
+    the campaign coordinate builder. The registered artifact is
+    ``docs/figures/registered/stability_guard_pr5.json``.
     """
     from computronium.core.campaign.evaluation import (
         activity_transition,
@@ -411,7 +208,7 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
         for kind in STATISTIC_KINDS
     }
     deployed: dict[StatisticKind, tuple[float, float]] = {
-        kind: _rates_at_tau(good[kind], bad[kind], DEFAULT_TAU)
+        kind: rates_at_tau(good[kind], bad[kind], DEFAULT_TAU)
         for kind in STATISTIC_KINDS
     }
 
@@ -425,10 +222,10 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
         )
     overhead_x, _ = episode_batch(0, input_dim=input_dim, batch_size=batch_size)
     overhead_z = CompositeState(activity={"x": overhead_x}, plastic={}, substrate={})
-    overhead, interval = _overhead_and_interval(
-        activity_transition(overhead_joint),
-        overhead_z,
-        overhead_joint.context,
+    overhead, interval = overhead_and_interval(
+        activity_transition(overhead_joint),  # type: ignore[arg-type]
+        overhead_z,  # type: ignore[arg-type]
+        overhead_joint.context,  # type: ignore[arg-type]
         window,
         overhead_budget,
         n_steps=5,
@@ -454,9 +251,9 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
         cost_z = CompositeState(activity={"x": cost_x}, plastic={}, substrate={})
         disagreement[f"demo_dims_cost/{DEMO_GOOD_COORDINATES[0]}"] = (
             quantify_proxy_disagreement(
-                activity_transition(cost_joint),
-                cost_z,
-                cost_joint.context,
+                activity_transition(cost_joint),  # type: ignore[arg-type]
+                cost_z,  # type: ignore[arg-type]
+                cost_joint.context,  # type: ignore[arg-type]
                 probes=ProbeSpec(n_probes=1, seed=seed),
             )
         )
@@ -494,3 +291,31 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
         disagreement=disagreement,
         family=family,
     )
+
+
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
+    "DEMO_GOOD_COORDINATES",
+    "DISAGREEMENT_COORDINATES",
+    "calibrate_demo_harvest",
+    "harvest_good_statistics",
+    "EXPLOSION_FACTOR",
+    "UNROLL_STEPS",
+    "GINIBRE_DIM",
+    "GINIBRE_BATCH",
+    "GINIBRE_GAINS",
+    "GINIBRE_SEEDS_PER_GAIN",
+    "HARVEST_SEED",
+    "OVERHEAD_BUDGET",
+    "PR5Calibration",
+    "STATISTIC_KINDS",
+    "calibrate_ginibre_harvest",
+    "ginibre_run",
+    "harvest_bad_statistics",
+    "overhead_and_interval",
+    "probe_interval_for_overhead",
+    "rates_at_tau",
+    "unrolled_divergence",
+    "calibrate_threshold",
+    "measure_guard_overhead",
+    "quantify_proxy_disagreement",
+]
