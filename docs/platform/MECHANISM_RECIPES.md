@@ -42,7 +42,7 @@ task/budget; nothing here is a universal claim (G-RELEASE-5).
   forward weight (EMA blend, matched norm), making `e @ B` approach true
   backprop through the readout — improving local descent quality without a
   global backward pass.
-- **When to use:** local-learning loops (no weight transport) that need
+- **When to use:** local-learning loops (without weight transport) that need
   better hidden-layer credit; matched-norm comparison setups.
 - **When not to use:** very short horizons on saturated tasks; zero/degenerate
   forward weights; depth beyond the validated two-layer scope; fast

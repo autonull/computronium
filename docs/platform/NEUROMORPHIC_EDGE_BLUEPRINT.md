@@ -12,7 +12,7 @@ learning substrates.
 
 | Mechanism | Edge property | Why it maps |
 |---|---|---|
-| Frozen backbone + ψ readout (`psi-peft`) | no weight transport; on-device adaptation | θ never changes after freezing; only a small readout accumulates trace-decayed ridge statistics — compatible with substrates that cannot backprop through the core |
+| Frozen backbone + ψ readout (`psi-peft`) | without weight transport; on-device adaptation | θ never changes after freezing; only a small readout accumulates trace-decayed ridge statistics — compatible with substrates that cannot backprop through the core |
 | Adaptive feedback (`local-feedback`) | local credit without a global backward pass | hidden-layer credit is computed from projected output error (`e @ B`) and local activities; B drifts slowly toward the forward weight, an EMA update realizable with local accumulators |
 | Role-split updates (`computronium-lab`) | heterogeneous update hardware | expensive orthogonalization (Muon-class) is confined to the readout weight; all other weights use cheap euclidean updates — a natural split between "smart" and "dumb" update circuitry |
 | Stable amplification (`stability`) | noisy-substrate transient robustness | coordinates with ρ ≤ limit and σ_max > 1 give large transient signal gain without divergence (X-STA-001/002); useful where substrate noise is bursty and short-horizon recall matters |

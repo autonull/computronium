@@ -71,3 +71,24 @@ def test_blueprints_state_simulation_only() -> None:
         REPO_ROOT / "docs" / "platform" / "NEUROMORPHIC_EDGE_BLUEPRINT.md"
     ).lower()
     assert "simulation only" in text or "no physical hardware validation" in text
+
+
+def test_manuscript_structure_and_traceability() -> None:
+    manuscript = REPO_ROOT / "docs" / "platform" / "MANUSCRIPT.md"
+    repro = REPO_ROOT / "docs" / "platform" / "REPRODUCIBILITY.md"
+    venue = REPO_ROOT / "docs" / "platform" / "PUBLICATION_VENUE.md"
+    for path in (manuscript, repro, venue):
+        assert path.exists(), f"missing publication artifact {path}"
+    text = _readings(manuscript)
+    lowered = text.lower()
+    for heading in ("threats to validity", "non-claims", "reproducibility"):
+        assert heading in lowered, f"MANUSCRIPT.md missing {heading!r}"
+    assert "reproducibility.md" in lowered, (
+        "MANUSCRIPT.md must point at REPRODUCIBILITY.md"
+    )
+
+
+def test_reproducibility_maps_numbers_to_evidence() -> None:
+    text = _readings(REPO_ROOT / "docs" / "platform" / "REPRODUCIBILITY.md").lower()
+    for token in ("e-000018", "e-000028", "uv run", "x-tpc", "x-ali", "x-sta"):
+        assert token in text, f"REPRODUCIBILITY.md missing {token!r}"
