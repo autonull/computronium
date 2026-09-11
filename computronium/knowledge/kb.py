@@ -47,7 +47,7 @@ class KnowledgeBaseConfig:
     min_records: int = 10
 
 
-class KnowledgeBase(SqliteStore):  # noqa: PLR0904 (legacy facade: delegates + async variants)
+class KnowledgeBase(SqliteStore):  # ruff: ignore[too-many-public-methods] (legacy facade: delegates + async variants)
     """
     Upgraded KnowledgeBase with SQLite + Vector Store.
 
@@ -735,7 +735,7 @@ _DEFAULT_KB: KnowledgeBase | None = None
 
 
 def _get_default_kb() -> KnowledgeBase:
-    global _DEFAULT_KB  # noqa: PLW0603 (lazy module singleton)
+    global _DEFAULT_KB  # ruff: ignore[global-statement] (lazy module singleton)
     if _DEFAULT_KB is None:
         _DEFAULT_KB = KnowledgeBase()
     return _DEFAULT_KB

@@ -165,11 +165,11 @@ class HyperoptStorage(SqliteStore):
         if updates:
             values.append(trial_id)
             set_clause = ", ".join(updates)
-            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # noqa: S608
+            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # ruff: ignore[hardcoded-sql-expression]
             self.conn.execute(query, values)
             self.conn.commit()
 
-    def log_epoch(  # noqa: PLR0913
+    def log_epoch(  # ruff: ignore[too-many-arguments]
         self,
         trial_id: int,
         epoch: int,
@@ -337,7 +337,7 @@ class HyperoptStorage(SqliteStore):
         if trial_ids:
             placeholders = ",".join("?" * len(trial_ids))
             self.conn.execute(
-                f"UPDATE hyperopt_logs SET is_pareto = 1"  # noqa: S608
+                f"UPDATE hyperopt_logs SET is_pareto = 1"  # ruff: ignore[hardcoded-sql-expression]
                 f" WHERE trial_id IN ({placeholders})",
                 trial_ids,
             )

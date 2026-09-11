@@ -36,6 +36,7 @@ doubles the signal path and moved the wall.)
 
 from itertools import islice
 
+import pytest
 import torch
 
 from computronium import (
@@ -58,6 +59,7 @@ def _flatten(loader, cap):
         yield x.view(x.size(0), -1), y
 
 
+@pytest.mark.timeout(300)
 def test_demo_substrate_swap(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True)
     task.setup()

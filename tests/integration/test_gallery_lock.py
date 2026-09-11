@@ -39,7 +39,7 @@ def _records() -> dict[str, dict]:
 
 
 def _git_head() -> str:
-    import subprocess  # noqa: S404 (fixed arg list, no shell)
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] (fixed arg list, no shell)
 
     return subprocess.run(
         ["git", "rev-parse", "HEAD"],

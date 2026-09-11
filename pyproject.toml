@@ -243,8 +243,6 @@ ignore = [
     # enabling these rules only churns guard-rails without lint signal.
     "RUF100",
     "RUF103",
-    "RUF105",
-    "RUF106",
 ]
 
 [tool.ruff.lint.per-file-ignores]
