@@ -1,6 +1,6 @@
 # TODO20 — Computronium Platform Launch
 
-**Status:** COMPLETE + Rule-6 single-source CLOSED (2026-09-11) — ceec AND psi migrations done — Phases 0–5 + 2.5 shipped; Phase 6A executed (X-STA-002, E-000028, stable-amplification recipe shipped), 6B/6C deferred with explicit boundaries; Phase 7 docs published; Phase 8 QA passed (platform+package suites green, demos/benchmarks quick-mode verified, final CEEC audit clean). Remaining open debt: ceec-core/psi-peft single-source migration (Rule 6 end-state, see §17).
+**Status:** CLOSED & SUPERSEDED by TODO21 (publication, hygiene, boundary-gated science). All phases complete; Rule-6 single-source closed (ceec + psi, 2026-09-11). — Phases 0–5 + 2.5 shipped; Phase 6A executed (X-STA-002, E-000028, stable-amplification recipe shipped), 6B/6C deferred with explicit boundaries; Phase 7 docs published; Phase 8 QA passed (platform+package suites green, demos/benchmarks quick-mode verified, final CEEC audit clean). Remaining open debt: ceec-core/psi-peft single-source migration (Rule 6 end-state, see §17).
 **Created:** 2026-09-11  
 **Supersedes:** TODO19 “Epistemic Foundry” as the active execution phase  
 **Absorbs:** All unfinished TODO19 work required for release, trust, or product value  
