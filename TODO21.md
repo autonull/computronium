@@ -345,6 +345,36 @@ Everything else documents deferral in §12.
 Commits: kb migration / hyperopt v3 shared-file migration / gallery
 staleness message / reproducibility §3.4 traceability fix.
 
+**Session-3 addendum (round close): lint-gate + full suite**
+
+1. **ruff 0.15.9 suppression-directive discovery.** The repo's ~1.5k
+   legacy `# ruff: ignore[rule-name]` comments are now parsed by ruff's
+   new directive family: RUF105 wants `ruff: ignore` over `noqa`, RUF106
+   wants name-form over code-form, RUF103 rejects unknown names, and
+   RUF100's "unused" fix DELETES precautionary guard-rail comments (a
+   409-file mass deletion was attempted by an aggressive `--fix
+   --select RUF...` and reverted wholesale). Resolution:
+   - pyproject ignore list now carries RUF100/RUF103 with the rationale
+     inline (RUF105/RUF106 are not valid ignore-list selectors in this
+     build — findings in touched files stay clean by using name-form).
+   - Canonical suppression form going forward: `# ruff: ignore[rule-name]`
+     (name-form — verified working, e.g. `[global-statement]`).
+   - Repo-wide findings collapsed from ~1500+ to **54** (I001 unsorted
+     imports 20, S404 8, PLR0914/C901-class complexity, F841, E741) —
+     all legacy Register C, re-queued for the hygiene pass.
+2. **Full suite (round close): 2141 passed, 60 skipped, 74 deselected,
+   32 xfailed, 1 xpassed in 32:47** — single failure
+   `test_demo_substrate_swap` = pytest-timeout >60 s under contention
+   (passes standalone 56.6 s; same contention class as session 2's
+   TestArmLearningRegression flake). Fixed with `@pytest.mark.timeout(300)`
+   (pattern matches other long demos). Gotcha: `faulthandler_timeout=120`
+   only *prints* stacks mid-test — don't mistake it for a kill; the real
+   per-test limit is `timeout = 60` unless a test overrides the mark.
+3. **pip-audit: clean** (only the 5 workspace packages unauditable —
+   expected). Round-close gates complete: full suite ✓, repo-wide ruff ✓
+   (Register C re-queued), pip-audit ✓, repo-wide pyright stays deferred
+   per AGENTS (strict runs on all touched modules this session, 0 errors).
+
 ### Session 2026-09-11 (agent, session 2) — pre-existing failures closed, T21.3.3, T21.3A.8, 2nd store migration
 
 Session-1 commits landed as the first act (they were already in history);
@@ -579,8 +609,12 @@ store migration / sys.path anchor / figure re-pin.
 3. Gallery lock staleness: **softened** — the drift failure message now
    self-describes staleness (emitting commit vs HEAD). A hard staleness
    gate was evaluated and rejected: 22/26 records legitimately lag HEAD.
-4. Ruff autofixable legacy findings remain in probes (ARG/C901/E741 class)
-   — Register C, ride the hygiene pass.
+4. Ruff legacy findings, post-0.15: 54 repo-wide (I001/S404/complexity
+   class) + the ~1.5k `ruff: ignore` name-form directives now inert-but-
+   present (RUF100/RUF103 ignored in config with rationale; canonical
+   form documented in §12). Register C, ride the hygiene pass — an
+   aggressive `--fix --select RUF...` deletion of guard-rail comments was
+   attempted and reverted; don't redo it.
 5. Ledger gate reform candidate: `bounded` status or scope-bounded
    promotion threshold (deferred ledger feature work).
 6. Phase 4 hardware probes: deferred (simulation-only scaffolding exists;
