@@ -4,10 +4,15 @@ No-op and spectral-norm-bound constraints. Subclasses can override
 :meth:`SpectralConstraint._power_iteration` to inject a CUDA fast path.
 """
 
-import torch
-from torch import nn
+from typing import TYPE_CHECKING
+
+from stability.spectral_norm import spectral_norm_power_iteration
 
 from .base import ConstraintStrategy
+
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
 
 __all__ = ["NoConstraint", "SpectralConstraint"]
 
@@ -69,25 +74,9 @@ class SpectralConstraint(ConstraintStrategy):
         v: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Estimate the spectral norm (CPU reference implementation)."""
-        if W.ndim > 2:
-            W = W.view(W.shape[0], -1)
-
-        h, w = W.shape
-        if u is None:
-            u = torch.randn(h, device=W.device, dtype=W.dtype)
-            u = u / (u.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
-        if v is None:
-            v = torch.randn(w, device=W.device, dtype=W.dtype)
-            v = v / (v.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
-
-        for _ in range(self.power_iter):
-            v = W.T @ u
-            v = v / (v.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
-            u = W @ v
-            u = u / (u.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
-
-        sigma = (u @ W @ v).abs()
-        return sigma, u, v
+        return spectral_norm_power_iteration(
+            W, u=u, v=v, num_iters=self.power_iter, eps=self.EPSILON
+        )
 
     def should_apply(self, timing: str) -> bool:
         """Check if the constraint should apply at the given ``timing``."""

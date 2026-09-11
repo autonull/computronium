@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from computronium.core.system_trainer.spec import compose_system_from_configs
 from computronium.ontology.credit import CreditAssignmentConfig
-from computronium.ontology.dynamics._dynamics import StateDynamicsConfig
+from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.geometry import GeometryConfig
 from computronium.ontology.substrate import SubstrateConfig
 from computronium.ontology.update import ParameterUpdateConfig

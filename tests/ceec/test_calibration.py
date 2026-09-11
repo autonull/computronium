@@ -1,12 +1,11 @@
 import pytest
-from conftest import link_belief
 
 from computronium.ceec import calibration, models
 
 
 @pytest.fixture
-def predicted_experiment(store, scope):
-    belief_id = link_belief(store, scope, _evidence(store, scope), "B-H1")
+def predicted_experiment(store, scope, link_belief):
+    belief_id = link_belief(_evidence(store, scope), "B-H1")
     store.create_goal("credit viability", "science", id_="G-1", belief_refs=[belief_id])
     store.revise_goal("G-1", {"science": 1.0}, scalar_utility=1.0)
     experiment = models.Experiment(

@@ -36,7 +36,7 @@ from stability.guard import (
     calibrate_threshold,
     measure_guard_overhead,
 )
-from stability.state import CompositeState
+from stability.state import CompositeState, activity_tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -140,7 +140,7 @@ def ginibre_run(
     )
 
     def transition(z: CompositeState, _context: SystemContext | None) -> CompositeState:
-        x = z.activity["x"]
+        x = activity_tensor(z.activity, "x")
         return CompositeState(
             activity={"x": x @ weight.T if isinstance(x, Tensor) else x},
             plastic=z.plastic,

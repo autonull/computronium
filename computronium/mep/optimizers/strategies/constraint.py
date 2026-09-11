@@ -8,6 +8,7 @@ MEP-specific.
 """
 
 import torch
+from stability.spectral_norm import spectral_norm_power_iteration
 from torch import nn
 
 from computronium.core.optimization.strategies import (
@@ -102,23 +103,4 @@ class SettlingSpectralPenalty:
                 W, u, v, niter=niter, epsilon=epsilon
             )
 
-        if W.ndim > 2:
-            W = W.view(W.shape[0], -1)
-
-        h, w = W.shape
-
-        if u is None:
-            u = torch.randn(h, device=W.device, dtype=W.dtype)
-            u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
-        if v is None:
-            v = torch.randn(w, device=W.device, dtype=W.dtype)
-            v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
-
-        for _ in range(niter):
-            v = W.T @ u
-            v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
-            u = W @ v
-            u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
-
-        sigma = (u @ W @ v).abs()
-        return sigma, u, v
+        return spectral_norm_power_iteration(W, u=u, v=v, num_iters=niter, eps=epsilon)

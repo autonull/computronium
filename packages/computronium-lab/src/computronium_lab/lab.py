@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.trainer import SystemTrainer
+from computronium.experiments.joint.tasks import gaussian_blobs
 from computronium_lab.presets import PRESETS, build_system_preset
 from computronium_lab.recipes import RECIPES, build_recipe
 
@@ -35,10 +36,9 @@ def synthetic_task(
 ) -> tuple[DataLoader[tuple[Tensor, ...]], DataLoader[tuple[Tensor, ...]]]:
     """Deterministic gaussian-blob classification task (quick mode)."""
     gen = torch.Generator().manual_seed(seed)
-    centers = torch.randn(num_classes, input_dim, generator=gen) * 2.0
-    labels = torch.randint(0, num_classes, (n,), generator=gen)
-    x = centers[labels] + torch.randn(n, input_dim, generator=gen) * 0.5
-    y = labels
+    x, y = gaussian_blobs(
+        n, input_dim, num_classes, scale=2.0, noise=0.5, generator=gen
+    )
     split = int(n * 0.75)
     train = DataLoader(
         TensorDataset(x[:split], y[:split]), batch_size=batch_size, shuffle=True

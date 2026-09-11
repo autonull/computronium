@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from stability.state import CompositeState
+from stability.state import CompositeState, activity_tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -45,7 +45,7 @@ def estimate_basin_stability(  # ruff: ignore[too-many-locals]
     Returns:
         Basin stability estimate in [0, 1].
     """
-    x_attractor = z_attractor.activity[activity_key]
+    x_attractor = activity_tensor(z_attractor.activity, activity_key)
     batch_size, _dim = x_attractor.shape
 
     # Get attractor activity for reference
@@ -53,7 +53,7 @@ def estimate_basin_stability(  # ruff: ignore[too-many-locals]
     with torch.no_grad():
         for _ in range(10):  # Ensure attractor is settled
             z_ref = transition_fn(z_ref, context)
-    x_attractor = z_ref.activity[activity_key]
+    x_attractor = activity_tensor(z_ref.activity, activity_key)
 
     converged = 0
 
@@ -82,7 +82,7 @@ def estimate_basin_stability(  # ruff: ignore[too-many-locals]
             with torch.no_grad():
                 z_next = transition_fn(z_current, context)
 
-            x_current = z_next.activity[activity_key]
+            x_current = activity_tensor(z_next.activity, activity_key)
             delta = x_current - x_attractor
 
             if distance_metric == "euclidean":
@@ -147,7 +147,7 @@ class BasinStabilityEstimator:
         Uses the Jacobian at the attractor to estimate basin size.
         Basin radius ≈ tolerance / ||J - I|| where J is Jacobian at fixed point.
         """
-        x = z_attractor.activity[self.activity_key]
+        x = activity_tensor(z_attractor.activity, self.activity_key)
         eps = 1e-4
 
         # Estimate Jacobian at attractor via finite differences
@@ -167,10 +167,9 @@ class BasinStabilityEstimator:
                 z_next = transition_fn(z_attractor, context)
                 z_next_perturbed = transition_fn(z_perturbed, context)
 
-            delta = (
-                z_next_perturbed.activity[self.activity_key]
-                - z_next.activity[self.activity_key]
-            )
+            delta = activity_tensor(
+                z_next_perturbed.activity, self.activity_key
+            ) - activity_tensor(z_next.activity, self.activity_key)
             Jv = delta / eps
             J_norms.append(Jv.norm(dim=-1).mean().item())
 

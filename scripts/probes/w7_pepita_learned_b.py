@@ -18,15 +18,16 @@ from __future__ import annotations
 import sys
 import time
 from itertools import islice
+from pathlib import Path
 
 import numpy as np
 import torch
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hunt_cells import BATCH_CAP, SEEDS  # noqa: E402
+from hunt_cells import BATCH_CAP, SEEDS
 
-from computronium import (  # type: ignore[attr-defined]  # noqa: E402
+from computronium import (  # type: ignore[attr-defined]
     CreditAssignmentConfig,
     DigitalSubstrate,
     FeedforwardGeometry,

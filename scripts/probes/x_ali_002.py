@@ -19,14 +19,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
 
 from computronium.analysis.mechanistic_study import (
     _INPUT_DIM,

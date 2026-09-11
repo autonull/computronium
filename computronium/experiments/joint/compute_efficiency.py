@@ -27,35 +27,8 @@ from computronium.experiments.joint import (
     CLAIMS_SCOPE_PSI_ENGAGED,
     CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
 )
-
-
-def create_moe_task(
-    batch_size: int,
-    input_dim: int,
-    num_experts: int = 8,
-    active_experts: int = 1,
-    device: torch.device | str = "cpu",
-) -> tuple[Tensor, Tensor]:
-    """Create MoE task data.
-
-    Each input belongs to one expert (cluster).
-    Target is expert index.
-    """
-    device = get_device(device)
-
-    # Generate cluster centers
-    centers = torch.randn(num_experts, input_dim, device=device) * 2
-
-    # Assign each sample to a cluster
-    expert_ids = torch.randint(0, num_experts, (batch_size,), device=device)
-
-    # Generate samples around cluster centers
-    x = centers[expert_ids] + torch.randn(batch_size, input_dim, device=device) * 0.5
-
-    # Target is the expert ID
-    y = expert_ids
-
-    return x, y
+from computronium.experiments.joint.tasks import gaussian_blobs
+from computronium.state import CompositeState
 
 
 def count_active_routes(gate_logits: Tensor, top_k: int = 1) -> tuple[float, float]:
@@ -75,15 +48,6 @@ def count_active_routes(gate_logits: Tensor, top_k: int = 1) -> tuple[float, flo
     active = routes.sum(dim=-1).float().mean().item()
 
     return active, entropy
-
-
-class CompositeState:
-    """Simple composite state for benchmarking."""
-
-    def __init__(self, activity, plastic, substrate):
-        self.activity = activity
-        self.plastic = plastic
-        self.substrate = substrate
 
 
 class ComputeEfficiencyModel(nn.Module):
@@ -244,7 +208,7 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
     losses = []
 
     for epoch in range(epochs):
-        x, y = create_moe_task(batch_size, input_dim, num_experts, device=device)
+        x, y = gaussian_blobs(batch_size, input_dim, num_experts, device=device)
 
         optimizer.zero_grad()
         logits = model(x)
@@ -281,7 +245,7 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
 
     with ThetaInvarianceAudit(model) as psi_audit:
         for _ in range(psi_epochs):
-            x, _y = create_moe_task(batch_size, input_dim, num_experts, device=device)
+            x, _y = gaussian_blobs(batch_size, input_dim, num_experts, device=device)
             model.train()
             logits = model(x)  # ψ steps inside forward; θ frozen, no optimizer
             with torch.no_grad():
@@ -315,7 +279,7 @@ def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-bra
 
     with torch.no_grad():
         for _ in range(20):
-            x, y = create_moe_task(batch_size, input_dim, num_experts, device=device)
+            x, y = gaussian_blobs(batch_size, input_dim, num_experts, device=device)
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()

@@ -23,40 +23,8 @@ from torch import Tensor, nn
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
 from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
-
-
-def create_switching_task(
-    batch_size: int,
-    seq_len: int,
-    input_dim: int,
-    phase: str = "A",
-    device: torch.device | str = "cpu",
-) -> tuple[Tensor, Tensor]:
-    """Create switching task data.
-
-    Phase A: Classify by cumulative sum (sum of sequence > 0 -> class 1)
-    Phase B: Classify by last symbol (last element > 0 -> class 1)
-    """
-    device = get_device(device)
-    x = torch.randn(batch_size, seq_len, input_dim, device=device)
-
-    if phase == "A":
-        cumsum = x.sum(dim=1)
-        y = (cumsum.mean(dim=-1) > 0).long()
-    else:
-        last = x[:, -1, :]
-        y = (last.mean(dim=-1) > 0).long()
-
-    return x, y
-
-
-class CompositeState:
-    """Simple composite state for benchmarking."""
-
-    def __init__(self, activity, plastic, substrate):
-        self.activity = activity
-        self.plastic = plastic
-        self.substrate = substrate
+from computronium.experiments.joint.tasks import create_switching_task
+from computronium.state import CompositeState
 
 
 class PlasticityModulatedModel(nn.Module):

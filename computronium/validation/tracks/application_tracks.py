@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,10 +17,7 @@ from ._base import build_track_result, track_header
 if TYPE_CHECKING:
     from ..notebook import TrackResult
 
-# Enhance import path
 root_path = Path(__file__).parent.parent.parent
-if str(root_path) not in sys.path:
-    sys.path.append(str(root_path))
 
 
 __all__ = [

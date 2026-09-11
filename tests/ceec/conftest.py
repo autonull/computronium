@@ -29,24 +29,28 @@ def evidence(store, scope):
     )
 
 
-def link_belief(store, scope, evidence, belief_id="B-T1"):
-    store.create_belief(
-        "test hypothesis",
-        "mechanism",
-        scope,
-        id_=belief_id,
-        evidence_refs=[evidence.id],
-    )
-    store.update_belief(
-        belief_id,
-        models.Probability(low=0.2, high=0.6),
-        "high",
-        "low",
-        "narrow",
-        "open",
-        "bootstrap",
-    )
-    return belief_id
+@pytest.fixture
+def link_belief(store, scope):
+    def _link(evidence, belief_id="B-T1"):
+        store.create_belief(
+            "test hypothesis",
+            "mechanism",
+            scope,
+            id_=belief_id,
+            evidence_refs=[evidence.id],
+        )
+        store.update_belief(
+            belief_id,
+            models.Probability(low=0.2, high=0.6),
+            "high",
+            "low",
+            "narrow",
+            "open",
+            "bootstrap",
+        )
+        return belief_id
+
+    return _link
 
 
 shutil  # re-exported for tests that clean artifact dirs

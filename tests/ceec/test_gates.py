@@ -1,5 +1,4 @@
 import pytest
-from conftest import link_belief
 
 from computronium.ceec import StoreError, gates, models
 
@@ -41,8 +40,8 @@ FULL_BOUNDARY_QUALITY = {
 
 
 @pytest.fixture
-def promotable_belief(store, scope):
-    belief_id = link_belief(store, scope, _placeholder_evidence(store, scope))
+def promotable_belief(store, scope, link_belief):
+    belief_id = link_belief(_placeholder_evidence(store, scope))
     store.update_belief(
         belief_id,
         models.Probability(
@@ -61,8 +60,8 @@ def promotable_belief(store, scope):
 
 
 @pytest.fixture
-def boundary_belief(store, scope):
-    belief_id = link_belief(store, scope, _placeholder_evidence(store, scope))
+def boundary_belief(store, scope, link_belief):
+    belief_id = link_belief(_placeholder_evidence(store, scope))
     store.update_belief(
         belief_id,
         models.Probability(

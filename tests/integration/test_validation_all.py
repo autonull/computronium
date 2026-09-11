@@ -1,6 +1,3 @@
-import sys
-from pathlib import Path
-
 import pytest
 import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
@@ -19,8 +16,6 @@ from computronium.models.native.tile_native import (
 )
 
 # Add parent to path for in-package testing
-parent_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(parent_dir))
 
 
 class TestValidationAll:

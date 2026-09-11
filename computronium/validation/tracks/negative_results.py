@@ -10,7 +10,6 @@ Track 55: Pure Linear Chain Failure
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,8 +32,6 @@ __all__ = [
 logger = get_logger()
 
 root_path = Path(__file__).parent.parent.parent
-if str(root_path) not in sys.path:
-    sys.path.append(str(root_path))
 
 
 class PureLinearChain(nn.Module):

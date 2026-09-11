@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from local_feedback.metrics import pseudo_gradient_alignment
 from torch import nn
 
 __all__ = [
@@ -310,12 +311,7 @@ class DynamicsAnalyzer:
                 for name, param in self.model.named_parameters():
                     if param.grad is not None and name in bio_grads:
                         g_bio = bio_grads[name].flatten()
-                        g_bp = param.grad.flatten()
-
-                        # Cosine similarity
-                        sim = torch.nn.functional.cosine_similarity(
-                            g_bio.unsqueeze(0), g_bp.unsqueeze(0)
-                        ).item()
+                        sim = pseudo_gradient_alignment(g_bio, param.grad)
                         per_layer_alignment[name] = sim
                         alignment_sum += sim
                         count += 1

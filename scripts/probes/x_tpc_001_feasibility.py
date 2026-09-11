@@ -15,13 +15,11 @@ the untested mechanism B-H2 names; boundary would be premature.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
 
-from computronium.ceec import CEECStore, audit, models  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.ceec import CEECStore, audit, models
 
 BELIEF = "B-H2-TEMPORAL-PSI-CREDIT"
 

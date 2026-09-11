@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from stability.state import activity_tensor
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -43,12 +45,12 @@ def measure_settling_time(
     z_current = z
 
     for step in range(max_steps):
-        x_before = z_current.activity[activity_key]
+        x_before = activity_tensor(z_current.activity, activity_key)
 
         with torch.no_grad():
             z_next = transition_fn(z_current, context)
 
-        x_after = z_next.activity[activity_key]
+        x_after = activity_tensor(z_next.activity, activity_key)
         delta = x_after - x_before
 
         if norm_type == "relative":
@@ -91,12 +93,12 @@ class SettlingMonitor:
             if trajectory is not None:
                 trajectory.append(z_current.clone())
 
-            x_before = z_current.activity[self.activity_key]
+            x_before = activity_tensor(z_current.activity, self.activity_key)
 
             with torch.no_grad():
                 z_next = transition_fn(z_current, context)
 
-            x_after = z_next.activity[self.activity_key]
+            x_after = activity_tensor(z_next.activity, self.activity_key)
             delta = x_after - x_before
 
             if self.norm_type == "relative":
@@ -131,12 +133,12 @@ class SettlingMonitor:
         norms = []
 
         for _ in range(min(5, self.max_steps)):
-            x_before = z_current.activity[self.activity_key]
+            x_before = activity_tensor(z_current.activity, self.activity_key)
 
             with torch.no_grad():
                 z_next = transition_fn(z_current, context)
 
-            x_after = z_next.activity[self.activity_key]
+            x_after = activity_tensor(z_next.activity, self.activity_key)
             delta = x_after - x_before
 
             if self.norm_type == "relative":

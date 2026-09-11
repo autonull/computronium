@@ -18,7 +18,7 @@ from stability.spectral_radius import (
     dominant_singular_value,
     spectral_radius_from_jacobian,
 )
-from stability.state import CompositeState
+from stability.state import CompositeState, activity_tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,7 +62,7 @@ def linear_transition(
     )
 
     def transition(z: CompositeState, _context: SystemContext | None) -> CompositeState:
-        x = z.activity["x"]
+        x = activity_tensor(z.activity, "x")
         return CompositeState(
             activity={"x": x @ weight.T if isinstance(x, Tensor) else x},
             plastic=z.plastic,

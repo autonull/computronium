@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from stability.state import CompositeState
+from stability.state import CompositeState, activity_tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,7 +41,7 @@ def estimate_lyapunov_exponent(
     Returns:
         Estimated local Lyapunov exponent (per step).
     """
-    x = z.activity[activity_key]
+    x = activity_tensor(z.activity, activity_key)
     _batch_size, _dim = x.shape
 
     # Initialize perturbation vector
@@ -66,8 +66,8 @@ def estimate_lyapunov_exponent(
             z_base = transition_fn(z_base, context)
             z_perturbed = transition_fn(z_perturbed, context)
 
-        x_base = z_base.activity[activity_key]
-        x_pert = z_perturbed.activity[activity_key]
+        x_base = activity_tensor(z_base.activity, activity_key)
+        x_pert = activity_tensor(z_perturbed.activity, activity_key)
 
         # Compute separation
         delta = x_pert - x_base
@@ -132,7 +132,7 @@ class LyapunovEstimator:
 
         λ ≈ log(||δ_{t+1}|| / ||δ_t||)
         """
-        x = z.activity[self.activity_key]
+        x = activity_tensor(z.activity, self.activity_key)
         eps = self.perturbation_scale
 
         v = torch.randn_like(x)
@@ -150,10 +150,9 @@ class LyapunovEstimator:
             z_next_perturbed = transition_fn(z_perturbed, context)
 
         delta_t = v
-        delta_t1 = (
-            z_next_perturbed.activity[self.activity_key]
-            - z_next.activity[self.activity_key]
-        )
+        delta_t1 = activity_tensor(
+            z_next_perturbed.activity, self.activity_key
+        ) - activity_tensor(z_next.activity, self.activity_key)
 
         sep_t = delta_t.norm(dim=-1).mean()
         sep_t1 = delta_t1.norm(dim=-1).mean()
@@ -189,7 +188,7 @@ def estimate_lyapunov_spectrum(  # ruff: ignore[too-many-locals]
     Returns:
         List of Lyapunov exponents (sorted descending).
     """
-    x = z.activity[activity_key]
+    x = activity_tensor(z.activity, activity_key)
     _batch_size, dim = x.shape
 
     # Initialize orthonormal perturbation matrix
@@ -221,9 +220,9 @@ def estimate_lyapunov_spectrum(  # ruff: ignore[too-many-locals]
                 z_next = transition_fn(z_current, context)
                 z_next_perturbed = transition_fn(z_perturbed, context)
 
-            delta = (
-                z_next_perturbed.activity[activity_key] - z_next.activity[activity_key]
-            )
+            delta = activity_tensor(
+                z_next_perturbed.activity, activity_key
+            ) - activity_tensor(z_next.activity, activity_key)
             new_q.append(delta / perturbation_scale)
 
             # Accumulate log norm

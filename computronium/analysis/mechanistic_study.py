@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import torch
+from local_feedback.metrics import improvement_per_norm
 
 from computronium.analysis.vertical_slice import (
     ClaimRecord,
@@ -196,7 +197,7 @@ def run_one_step_reset(
         "loss_before": loss_before,
         "loss_delta": loss_delta,
         "displacement_norm": disp,
-        "improvement_per_norm": (-loss_delta / disp) if disp > 0 else 0.0,
+        "improvement_per_norm": improvement_per_norm(loss_before, loss_after, disp),
     }
 
 

@@ -19,6 +19,7 @@ from stability.spectral_radius import (
     JacobianAmplificationEstimator,
     dominant_singular_value,
 )
+from stability.state import activity_tensor
 
 if TYPE_CHECKING:
     from stability.state import CompositeState, SystemContext
@@ -65,7 +66,7 @@ class StabilityGuard:
 
     def _extract_activity_internal(self, z: CompositeState) -> torch.Tensor:
         """Extract activity from internal CompositeState."""
-        value = z.activity[self.estimator.activity_key]
+        value = activity_tensor(z.activity, self.estimator.activity_key)
         if not isinstance(value, torch.Tensor):
             raise TypeError(
                 f"activity[{self.estimator.activity_key!r}] must be a Tensor"
@@ -109,15 +110,15 @@ class StabilityGuard:
         context: SystemContext,
     ) -> float:
         key = self.estimator.activity_key
-        base_norm = torch.linalg.vector_norm(z.activity[key]) + 1e-12
+        base_norm = torch.linalg.vector_norm(activity_tensor(z.activity, key)) + 1e-12
         peak = 1.0
         with torch.no_grad():
             current = z
             for _ in range(self.window):
                 nxt = transition_fn(current, context)
-                growth = float(torch.linalg.vector_norm(nxt.activity[key])) / float(
-                    base_norm
-                )
+                growth = float(
+                    torch.linalg.vector_norm(activity_tensor(nxt.activity, key))
+                ) / float(base_norm)
                 peak = max(peak, growth)
                 current = nxt
         return peak
@@ -370,7 +371,7 @@ def _collect_estimates(
     probes: ProbeSpec,
 ) -> tuple[list[float], list[float], float, float]:
     generator = torch.Generator(device="cpu").manual_seed(probes.seed)
-    x_base = z.activity["x"]
+    x_base = activity_tensor(z.activity, "x")
     if not isinstance(x_base, torch.Tensor):
         raise TypeError("activity['x'] must be a Tensor for probe collection")
     proxy_vals: list[float] = []

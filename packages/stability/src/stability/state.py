@@ -50,4 +50,20 @@ class SystemContext(Protocol):
     """
 
 
-__all__ = ["ActivityValue", "CompositeState", "SystemContext"]
+def activity_tensor(activity: dict[str, ActivityValue], key: str) -> Tensor:
+    """Narrow ``activity[key]`` to its :class:`Tensor` value.
+
+    Discriminated access instead of a loose union at every consumer: raises
+    a loud :class:`TypeError` for scalar/list activity entries, which the
+    stability estimators never treat numerically.
+    """
+    value = activity[key]
+    if not isinstance(value, Tensor):
+        raise TypeError(
+            f"activity[{key!r}] must be a Tensor for stability estimation, "
+            f"got {type(value).__name__}"
+        )
+    return value
+
+
+__all__ = ["ActivityValue", "CompositeState", "SystemContext", "activity_tensor"]

@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import sys
 import time
+from pathlib import Path
 
 import torch
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from spiking_learning import BATCH_CAP, DEPTHS, SETTLE_STEPS, WIDTH, _flatten
 

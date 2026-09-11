@@ -92,7 +92,7 @@ from computronium import (
     compose_system_from_configs,
 )
 from computronium.core.pipeline import forward_pass, run_train_step
-from computronium.experiments.joint.adaptation_efficiency import (
+from computronium.experiments.joint.tasks import (
     create_switching_task,
 )
 

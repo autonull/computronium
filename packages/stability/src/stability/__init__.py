@@ -97,6 +97,10 @@ from stability.settling import (
     measure_settling_time,
     measure_settling_time_full_state,
 )
+from stability.spectral_norm import (
+    spectral_norm_power_iteration,
+    spectral_normalized_weight,
+)
 from stability.spectral_radius import (
     JacobianAmplificationEstimator,
     dominant_singular_value,
@@ -122,6 +126,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "estimate_directional_amplification",
     "dominant_singular_value",
     "spectral_radius_from_jacobian",
+    "spectral_norm_power_iteration",
+    "spectral_normalized_weight",
     # Lyapunov
     "LyapunovEstimator",
     "estimate_lyapunov_exponent",

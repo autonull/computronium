@@ -24,7 +24,6 @@ Honest verdict:
 from __future__ import annotations
 
 import os
-import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -44,8 +43,7 @@ if TYPE_CHECKING:
     from ..notebook import TrackResult
 
 root_path = Path(__file__).parent.parent.parent
-if str(root_path) not in sys.path:
-    sys.path.append(str(root_path))
+
 
 __all__ = [
     "count_parameters",

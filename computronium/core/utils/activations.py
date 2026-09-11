@@ -15,7 +15,7 @@ from typing import Literal
 
 import numpy as np
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+from stability.spectral_norm import spectral_norm_power_iteration
 from torch import nn
 
 from computronium.core.logging import get_logger
@@ -91,15 +91,9 @@ def approx_spectral_norm(weight: torch.Tensor, n_iter: int = 10) -> float:
         return 0.0
 
     w_mat = weight.view(weight.size(0), -1)
-    out_dim, _in_dim = w_mat.shape
 
-    u = torch.randn(out_dim, device=weight.device, dtype=weight.dtype)
-
-    for _ in range(n_iter):
-        v = F.normalize(torch.mv(w_mat.t(), u), dim=0, eps=1e-12)
-        u = F.normalize(torch.mv(w_mat, v), dim=0, eps=1e-12)
-
-    return torch.dot(u, torch.mv(w_mat, v)).item()
+    sigma, _u, _v = spectral_norm_power_iteration(w_mat, num_iters=n_iter)
+    return sigma.item()
 
 
 # ─── NumPy/CuPy array-library helpers ────────────────────────────────────

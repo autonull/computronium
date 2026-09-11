@@ -16,10 +16,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Add project root to path
-ROOT_DIR = Path(__file__).parent.parent
-sys.path.append(str(ROOT_DIR))
-
 # Configure logging for tests
 logging.basicConfig(
     level=logging.INFO,
@@ -31,27 +27,6 @@ logging.basicConfig(
 # computronium.acceleration checks for cupy
 
 sys.modules["cupy"] = MagicMock()
-
-
-def _transition_modules_autodiscover(model: nn.Module) -> list[nn.Module]:
-    """Auto-discover transition modules for models with standard structure.
-
-    Mirrors the deprecated TransitionGraphMixin logic for test fixtures.
-    """
-    # 1. Explicit ModuleList (most common)
-    layers = getattr(model, "layers", None)
-    if isinstance(layers, nn.ModuleList):
-        return list(layers)
-    # 2. Forward layers
-    forward_layers = getattr(model, "forward_layers", None)
-    if isinstance(forward_layers, nn.ModuleList):
-        return list(forward_layers)
-
-    raise NotImplementedError(
-        f"{type(model).__name__} has no transition_modules(). "
-        "Define `self.layers: nn.ModuleList[nn.Module]` or implement "
-        "transition_modules()."
-    )
 
 
 def lm_train_step(

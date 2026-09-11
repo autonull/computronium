@@ -1,6 +1,3 @@
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
@@ -8,8 +5,6 @@ import torch
 from computronium.acceleration.triton_kernels import TritonEqPropOps
 
 # Add project root to path
-root_path = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(root_path))
 
 
 pytestmark = pytest.mark.gpu

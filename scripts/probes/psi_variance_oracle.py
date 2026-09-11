@@ -27,11 +27,12 @@ from __future__ import annotations
 import hashlib
 import sys
 import time
+from pathlib import Path
 
 import torch
 from torch import nn
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from w4_hidden_psi import RIDGE_LAMBDA, _LayerRidge
 from w4_scaled_psi import (

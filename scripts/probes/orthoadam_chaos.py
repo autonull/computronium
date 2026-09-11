@@ -20,11 +20,12 @@ from __future__ import annotations
 
 import sys
 import time
+from pathlib import Path
 
 import torch
 from torch.nn import functional
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jpc_ortho_adam import _OrthoAdamWeights
 from w4_depth_frontier import BETA, GAMMA, WIDTH, _flatten, evaluate

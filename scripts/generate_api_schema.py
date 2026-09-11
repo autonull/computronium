@@ -23,7 +23,6 @@ PUBLIC_MODULES = [
     "computronium.core.system_trainer",
     "computronium.core.joint.transition",
     "computronium.core.joint.state",
-    "computronium.core.joint.context",
     "computronium.core.substrates.digital_substrate",
     "computronium.core.substrates.analog_substrate",
     "computronium.core.substrates.memristive_substrate",

@@ -1,4 +1,10 @@
-"""SystemContext: Immutable context for the coupled transition."""
+"""SystemContext: Immutable context for the coupled transition.
+
+The canonical rich dataclass. ``stability.state.SystemContext`` is an
+intentionally empty structural Protocol (opaque fixed-parameter context)
+that this dataclass satisfies; the two share only the name by design —
+the Protocol is the estimator-facing view, this class is the state.
+"""
 
 from __future__ import annotations
 

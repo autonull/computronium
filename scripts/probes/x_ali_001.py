@@ -32,27 +32,25 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT))
 
-from computronium.analysis.mechanistic_study import (  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.analysis.mechanistic_study import (
     _INPUT_DIM,
     _OUTPUT_DIM,
     _build_system,
     _calibrated_lr,
 )
-from computronium.analysis.vertical_slice import free_loss  # ruff: ignore[module-import-not-at-top-of-file]
-from computronium.ontology.credit import (  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.analysis.vertical_slice import free_loss
+from computronium.ontology.credit import (
     CreditAssignmentConfig,
     RandomProjectionsCredit,
 )
-from computronium.ontology.update import ParameterUpdateConfig  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.ontology.update import ParameterUpdateConfig
 
 N_SEEDS = 3
 N_STEPS = 30

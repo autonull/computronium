@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 from torch import Tensor
 
-from stability.state import CompositeState
+from stability.state import CompositeState, activity_tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,7 +30,7 @@ _ACTIVITY_TYPE_MSG = "activity[{key!r}] must be a Tensor, got {type}"
 
 def _activity_tensor(z: CompositeState, key: str) -> Tensor:
     """Narrow an activity slot to its Tensor (numeric scalars unsupported)."""
-    value = z.activity[key]
+    value = activity_tensor(z.activity, key)
     if not isinstance(value, Tensor):
         raise TypeError(_ACTIVITY_TYPE_MSG.format(key=key, type=type(value).__name__))
     return value

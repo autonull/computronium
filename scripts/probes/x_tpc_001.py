@@ -69,7 +69,7 @@ from computronium.core.plasticity.temporal_psi import (
     TemporalPsiConfig,
     TemporalPsiPlasticity,
 )
-from computronium.experiments.joint.adaptation_efficiency import (
+from computronium.experiments.joint.tasks import (
     create_switching_task,
 )
 

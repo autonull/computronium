@@ -28,10 +28,11 @@ import copy
 import sys
 import time
 from itertools import islice
+from pathlib import Path
 
 import torch
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from hunt_cells import BATCH_CAP, _credit, _updates
 

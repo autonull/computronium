@@ -1,9 +1,5 @@
 import os
 import pathlib
-import sys
-
-# Add repo root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # ruff: ignore[os-path-abspath, os-path-join, os-path-dirname]
 
 
 def verify_backend():  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]

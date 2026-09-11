@@ -15,7 +15,6 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
 
 from computronium.analysis import lookup_recipe_card  # ruff: ignore[module-import-not-at-top-of-file]
 

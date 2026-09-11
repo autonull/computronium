@@ -23,11 +23,12 @@ from __future__ import annotations
 import sys
 import time
 from itertools import islice
+from pathlib import Path
 
 import torch
 from torch import Tensor, nn
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from computronium import (
     CreditAssignmentConfig,
@@ -72,7 +73,9 @@ def main() -> int:
         )
     )
     linear_names = [
-        f"{i}.weight" for i, m in enumerate(geometry._layers) if isinstance(m, nn.Linear)
+        f"{i}.weight"
+        for i, m in enumerate(geometry._layers)
+        if isinstance(m, nn.Linear)
     ]
 
     def bp_grads(x: Tensor, y: Tensor) -> dict[str, Tensor]:

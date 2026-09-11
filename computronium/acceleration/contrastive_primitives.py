@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Literal
 
 import torch
+from stability.spectral_norm import spectral_normalized_weight
 from torch import Tensor
 
 
@@ -54,20 +55,8 @@ def spectral_norm_power_iteration(
     Returns:
         (W_normalized, u_new, sigma)
     """
-    out_dim = W.shape[0]
-    if u is None:
-        u = torch.randn(out_dim, device=W.device, dtype=W.dtype)
-        u = u / u.norm()  # ruff: ignore[non-augmented-assignment]
-
-    for _ in range(num_iters):
-        v = W.T @ u
-        v = v / v.norm()  # ruff: ignore[non-augmented-assignment]
-        u = W @ v
-        u = u / u.norm()  # ruff: ignore[non-augmented-assignment]
-
-    sigma = (u @ W @ v).item()
-    W_normalized = W / sigma
-    return W_normalized, u, sigma
+    W_normalized, u, sigma = spectral_normalized_weight(W, u=u, num_iters=num_iters)
+    return W_normalized, u, sigma.item()
 
 
 def lif_step(

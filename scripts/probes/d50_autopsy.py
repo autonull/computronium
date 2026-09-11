@@ -23,11 +23,12 @@ import itertools
 import sys
 import time
 from itertools import islice
+from pathlib import Path
 
 import torch
 from torch.nn import functional
 
-sys.path.insert(0, "scripts/probes")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jpc_ortho_adam import _OrthoAdamWeights
 from w4_depth_frontier import (
@@ -63,7 +64,7 @@ TASK = "mnist"
 INPUT_DIM = 784
 
 
-def main() -> int:  # noqa: C901, PLR0912, PLR0914, PLR0915
+def main() -> int:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     t0 = time.time()
     task = create_task(TASK, device=DEVICE, quick_mode=True, num_workers=0)
     task.setup()
