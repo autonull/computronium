@@ -23,8 +23,14 @@ def test_schema_tables_and_version(store: HyperoptStorage) -> None:
         r[0]
         for r in store.conn.execute("select name from sqlite_master where type='table'")
     }
-    assert {"hyperopt_logs", "training_trajectories", "training_checkpoints"} <= tables
-    assert store.schema_version == 2
+    assert {
+        "hyperopt_logs",
+        "training_trajectories",
+        "training_checkpoints",
+        "failures",
+        "decision_log",
+    } <= tables
+    assert store.schema_version == 3
     columns = {r[1] for r in store.conn.execute("pragma table_info(hyperopt_logs)")}
     assert {
         "trial_id",
@@ -58,7 +64,7 @@ def test_in_place_reopen(tmp_path) -> None:
     first.create_trial("m", {})
     first.conn.close()
     second = HyperoptStorage(path)
-    assert second.schema_version == 2
+    assert second.schema_version == 3
     rows = second.conn.execute("select count(*) from hyperopt_logs").fetchone()
     assert rows[0] == 1
 
@@ -73,3 +79,31 @@ def test_unknown_schema_version_refused(tmp_path) -> None:
     conn.close()
     with pytest.raises(SchemaVersionError, match="v99"):
         HyperoptStorage(path)
+
+
+def test_v2_db_migrates_in_place(tmp_path) -> None:
+    path = str(tmp_path / "legacy.db")
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE hyperopt_logs (trial_id INTEGER PRIMARY KEY)")
+    conn.execute("PRAGMA user_version = 2;")
+    conn.commit()
+    conn.close()
+    store = HyperoptStorage(path)
+    assert store.schema_version == 3
+    tables = {
+        r[0]
+        for r in store.conn.execute("select name from sqlite_master where type='table'")
+    }
+    assert {"failures", "decision_log"} <= tables
+
+
+def test_execution_shared_file(tmp_path) -> None:
+    from computronium.execution._state import FailureTracker
+
+    path = str(tmp_path / "shared.db")
+    HyperoptStorage(path)
+    tracker = FailureTracker(path)
+    tracker._init_db()  # idempotent next to the toolkit-owned schema
+    conn = sqlite3.connect(path)
+    assert int(conn.execute("PRAGMA user_version;").fetchone()[0]) == 3
+    conn.close()

@@ -65,6 +65,37 @@ class HyperoptStorage(SqliteStore):
             CREATE INDEX IF NOT EXISTS idx_checkpoints_epoch
                 ON training_checkpoints(epoch);
         """,
+        # v3: execution-layer tables sharing this file (ExperimentState uses
+        # one db for HyperoptStorage + FailureTracker). FailureTracker keeps
+        # its lazy IF-NOT-EXISTS DDL; the versioned DDL here is the
+        # file-owned canonical copy (IF NOT EXISTS grandfathers old DBs).
+        3: """
+            CREATE TABLE IF NOT EXISTS failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                task_name TEXT NOT NULL,
+                tier TEXT NOT NULL,
+                trial_id INTEGER,
+                failure_type TEXT NOT NULL,
+                failure_epoch INTEGER,
+                failure_batch INTEGER,
+                config TEXT NOT NULL,
+                last_metrics TEXT NOT NULL,
+                stack_trace TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_failures_model ON failures(model_name);
+            CREATE INDEX IF NOT EXISTS idx_failures_type ON failures(failure_type);
+            CREATE INDEX IF NOT EXISTS idx_failures_timestamp ON failures(timestamp);
+            CREATE TABLE IF NOT EXISTS decision_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL,
+                event_type TEXT,
+                description TEXT,
+                metadata TEXT
+            );
+        """,
     }
 
     def __init__(self, db_path: str = "results/hyperopt.db"):
@@ -134,11 +165,11 @@ class HyperoptStorage(SqliteStore):
         if updates:
             values.append(trial_id)
             set_clause = ", ".join(updates)
-            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # ruff: ignore[hardcoded-sql-expression]
+            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # noqa: S608
             self.conn.execute(query, values)
             self.conn.commit()
 
-    def log_epoch(  # ruff: ignore[too-many-arguments]
+    def log_epoch(  # noqa: PLR0913
         self,
         trial_id: int,
         epoch: int,
@@ -306,7 +337,7 @@ class HyperoptStorage(SqliteStore):
         if trial_ids:
             placeholders = ",".join("?" * len(trial_ids))
             self.conn.execute(
-                f"UPDATE hyperopt_logs SET is_pareto = 1"  # ruff: ignore[hardcoded-sql-expression]
+                f"UPDATE hyperopt_logs SET is_pareto = 1"  # noqa: S608
                 f" WHERE trial_id IN ({placeholders})",
                 trial_ids,
             )
@@ -334,7 +365,7 @@ class HyperoptStorage(SqliteStore):
             trajectory: TrainingTrajectory object
                 (from computronium.execution.training_dynamics)
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:
             cursor = self.conn.cursor()
 
             # Insert Trajectory
