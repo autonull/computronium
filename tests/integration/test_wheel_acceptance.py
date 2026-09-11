@@ -44,7 +44,9 @@ print("acceptance-ok")
 
 
 def _run(cmd: list[str]) -> str:
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=False)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=600, check=False
+    )
     assert result.returncode == 0, (
         f"{' '.join(cmd)} failed:\n{result.stdout[-2000:]}\n{result.stderr[-2000:]}"
     )
@@ -55,15 +57,15 @@ def _run(cmd: list[str]) -> str:
 def test_wheel_installs_and_runs() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp) / "dist"
-        _run(["uv", "build", "--wheel", "--out-dir", str(out_dir)])
+        _run(["uv", "build", "--all-packages", "--wheel", "--out-dir", str(out_dir)])
         wheels = list(out_dir.glob("*.whl"))
-        assert len(wheels) == 1
+        assert len(wheels) >= 1
 
         env_dir = Path(tmp) / "venv"
         venv.EnvBuilder(with_pip=True, system_site_packages=True).create(env_dir)
         pip = str(env_dir / "bin" / "pip")
         python = str(env_dir / "bin" / "python")
-        _run([pip, "install", "--no-deps", "--no-index", str(wheels[0])])
+        _run([pip, "install", "--no-deps", "--no-index", *map(str, wheels)])
 
         result = subprocess.run(
             [python, "-c", _SMOKE],
