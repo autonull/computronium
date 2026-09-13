@@ -43,9 +43,9 @@ def test_spec_validation() -> None:
 
 def test_constraint_filter() -> None:
     memristive = {c.name for c in filter_catalog(_spec(constraints=MEMRISTIVE))}
-    assert memristive == {"backprop_mlp"}
+    assert memristive == {"backprop_mlp", "ntm_classifier"}
     local = {c.name for c in filter_catalog(_spec(constraints=LOCAL_ONLY))}
-    assert local == {"ff_mlp"}
+    assert local == {"ff_mlp", "eqprop_mlp", "epc_deep"}
     tight = {
         c.name
         for c in filter_catalog(
@@ -139,7 +139,7 @@ def test_lab_wire_end_to_end() -> None:
     )
     result = lab.synthesize(spec)
     assert result.confidence > 0.7 and not result.exploratory
-    metrics = lab.train(result.build(spec), epochs=1)
-    assert metrics["accuracy"] > 0.0
+    trained = lab.train(result.build(spec), epochs=1)
+    assert trained.metrics["accuracy"] > 0.0
     frontier = lab.explore(spec)
     assert frontier

@@ -121,6 +121,7 @@ DEMOS: dict[str, DemoSpec] = {
     "depth_harvest": DemoSpec("D19", _fig_declared, g_axis=True),
     "ntm_local": DemoSpec("D20", _fig_declared, g_axis=True),
     "temporal_psi_migration": DemoSpec("D21", _fig_declared),
+    "mechanism_explorer": DemoSpec("D22", _fig_declared),
 }
 
 

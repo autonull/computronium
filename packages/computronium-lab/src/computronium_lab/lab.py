@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -10,15 +11,26 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, TensorDataset
 
-from computronium.core.system_trainer.config import SystemTrainerConfig
-from computronium.core.system_trainer.trainer import SystemTrainer
 from computronium.experiments.joint.tasks import gaussian_blobs
 from computronium_lab.presets import PRESETS, build_system_preset
 from computronium_lab.recipes import RECIPES, build_recipe
 from computronium_lab.synthesis.spec import Constraints, ProblemSpec
+from computronium_lab.training import (
+    TrainingResult,
+    TrainOptions,
+    train_with_certificates,
+)
 
 if TYPE_CHECKING:
+    from computronium_lab.adaptation import (
+        AdaptationMode,
+        AdaptationResult,
+        TaskBoundary,
+    )
+    from computronium_lab.deployment import ExportResult
     from computronium_lab.synthesis.engine import ParetoOption, SynthesisResult
+
+PSI_ONLY = "psi_only"
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +110,54 @@ class Lab:
         """Spec → best valid mechanism coordinate with provenance (T23.1.5)."""
         from computronium_lab.synthesis.engine import synthesize as _synthesize
 
-        return _synthesize(spec, campaigns_run=self._campaigns)
+        result = _synthesize(spec, campaigns_run=self._campaigns)
+        if result.exploratory:
+            self._record_exploratory(result, spec)
+        return result
+
+    def _record_exploratory(self, result: SynthesisResult, spec: ProblemSpec) -> None:
+        """Opt-in CEEC artifact for an exploratory synthesis (T23.1.7)."""
+        from pathlib import Path
+
+        from ceec.models import Scope
+        from ceec.store import CEECStore
+
+        if not self.record_ledger:
+            return
+        db = Path(self.record_ledger)
+        payload = json.dumps(
+            {
+                "mechanism": result.name,
+                "coordinate": result.coordinate,
+                "predicted_viability": result.predicted_viability,
+                "spec": spec.key(),
+                "provenance": list(result.provenance),
+            },
+            indent=2,
+        )
+        with CEECStore(db, db.parent / "artifacts") as store:
+            artifact = store.ingest_artifact(
+                payload.encode(),
+                "exploratory_synthesis",
+                {
+                    "source": "computronium_lab.synthesize",
+                    "mechanism": result.name,
+                    "exploratory": True,
+                },
+            )
+            store.record_evidence(
+                kind="scalar",
+                scope=Scope(
+                    domain="lab",
+                    substrate=(spec.constraints.substrate,),
+                    budget="quick",
+                ),
+                artifact_refs=[artifact.id],
+                quality={"predicted_viability": result.predicted_viability},
+                defects=[],
+                notes="exploratory synthesis (T23.1.7): campaign pending",
+            )
+            store._conn.commit()
 
     def explore(self, spec: ProblemSpec) -> list[ParetoOption]:
         """Pareto frontier of constraint-satisfying mechanisms (T23.1.6)."""
@@ -126,31 +185,100 @@ class Lab:
         task: str = "synthetic",
         epochs: int = 1,
         batch_size: int = 32,
-    ) -> dict[str, float]:
-        """Quick-train a composed system; returns final train metrics."""
+        *,
+        spec: ProblemSpec | None = None,
+        options: TrainOptions | None = None,
+    ) -> TrainingResult:
+        """Train with opt-in guarantees; returns a TrainingResult (T23.2.1)."""
         if task != "synthetic":
             raise ValueError(
                 f"task {task!r} not wired; Lab quick mode ships 'synthetic'"
             )
         torch.manual_seed(self.seed)
-        train_loader, _ = synthetic_task(seed=self.seed, batch_size=batch_size)
-        trainer = SystemTrainer(
-            system=system,  # type: ignore[arg-type]
-            config=SystemTrainerConfig(
-                max_epochs=epochs,
-                batch_size=batch_size,
-                device=self.device,
-                seed=self.seed,
-                deterministic=True,
-            ),
-            train_data=train_loader,
+        train_loader, _ = synthetic_task(
+            seed=self.seed,
+            batch_size=batch_size,
+            input_dim=spec.input_dim if spec is not None else 32,
+            num_classes=spec.num_classes if spec is not None else 4,
         )
-        history = trainer.fit()
-        final = history[-1] if history else {}
-        return {
-            "loss": float(final.get("train_loss", final.get("loss", 0.0))),
-            "accuracy": float(final.get("train_acc", final.get("free_accuracy", 0.0))),
-        }
+        return train_with_certificates(
+            system,
+            train_loader,
+            device=self.device,
+            seed=self.seed,
+            epochs=epochs,
+            batch_size=batch_size,
+            spec=spec,
+            options=options or TrainOptions(),
+            record_ledger=self.record_ledger,
+        )
+
+    def adapt(
+        self,
+        system: object,
+        task_data: object,
+        mode: AdaptationMode | str = PSI_ONLY,
+        *,
+        episodes: int = 10,
+        boundary: TaskBoundary | None = None,
+        stability_check: bool = False,
+    ) -> AdaptationResult:
+        """ψ-only continual adaptation on frozen θ (TODO23 Phase 3)."""
+        from computronium_lab.adaptation import adapt as _adapt
+
+        torch.manual_seed(self.seed)
+        return _adapt(
+            system,
+            task_data,
+            mode,
+            episodes=episodes,
+            boundary=boundary,
+            stability_check=stability_check,
+        )
+
+    def export(
+        self,
+        system: object,
+        out_dir: str = "exports",
+        *,
+        spec: ProblemSpec | None = None,
+        target: str = "onnx",
+        quantization: str | None = None,
+        input_shape: tuple[int, ...] = (1, 32),
+        sample_input: Tensor | None = None,
+    ) -> ExportResult:
+        """Compile → constrain → quantize → export with substrate report (T23.4)."""
+        from computronium_lab.deployment import export_system
+
+        return export_system(
+            system,
+            out_dir,
+            constraints=spec.constraints if spec is not None else None,
+            target=target,
+            quantization=quantization,  # type: ignore[arg-type]
+            input_shape=input_shape,
+            sample_input=sample_input,
+        )
+
+    def serve(
+        self,
+        system: object,
+        *,
+        spec: ProblemSpec | None = None,
+        host: str = "127.0.0.1",
+        port: int = 8000,
+        input_shape: tuple[int, ...] = (1, 32),
+    ) -> None:
+        """Run the FastAPI edge runtime against a composed system (T23.4.4)."""
+        from computronium_lab.deployment import serve_system
+
+        serve_system(
+            system,
+            constraints=spec.constraints if spec is not None else None,
+            host=host,
+            port=port,
+            input_shape=input_shape,
+        )
 
     def compare(
         self,
@@ -164,7 +292,7 @@ class Lab:
         for name in presets:
             system = self.compose(name, **kwargs)
             t0 = time.perf_counter()
-            metrics = self.train(system, task=task, epochs=epochs)
+            metrics = self.train(system, task=task, epochs=epochs).metrics
             walltime = time.perf_counter() - t0
             results.append(
                 ComparisonResult(

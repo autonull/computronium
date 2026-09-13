@@ -74,6 +74,7 @@ class ProblemSpec:
         return (
             f"{self.task}/{self.dataset}/{c.substrate}/{c.precision}"
             f"/continual={c.continual}/local={c.local_credit}"
+            f"/dims={self.input_dim}x{self.num_classes}"
         )
 
 

@@ -189,6 +189,9 @@ class ViabilityModel:
             candidate = parent / "data" / "icu_measurements.csv"
             if candidate.exists():
                 return candidate
+        packaged = Path(__file__).parent / "data" / "icu_measurements.csv"
+        if packaged.exists():
+            return packaged
         raise FileNotFoundError(
             "icu_measurements.csv not found; pass corpus= explicitly"
         )

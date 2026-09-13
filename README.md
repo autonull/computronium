@@ -473,8 +473,11 @@ spec = lab.specify(
 result = lab.synthesize(spec)      # → coordinate + provenance + predicted viability
 print(result.coordinate, result.provenance)
 system = result.build(spec)        # composed System, hard-screened by SystemConfig.validate()
-metrics = lab.train(system, epochs=1)
+trained = lab.train(system, epochs=1)   # → TrainingResult (metrics + certificates)
+print(trained.metrics)
 frontier = lab.explore(spec)       # Pareto frontier of constraint-satisfying mechanisms
+adapted = lab.adapt(system, task_stream, mode="conflict_adaptive")  # ψ-only, θ bitwise frozen
+print(adapted.theta.bitwise_invariant, adapted.metrics["psi_accuracy"])
 ```
 
 ### Quickstart: Forward-Forward vs Backprop in <2 Minutes

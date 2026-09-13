@@ -716,19 +716,23 @@ name = "computronium-lab"
 version = "0.1.0"
 source = { editable = "packages/computronium-lab" }
 dependencies = [
+    { name = "ceec-core" },
     { name = "computronium" },
     { name = "local-feedback" },
     { name = "psi-peft" },
     { name = "scikit-learn" },
+    { name = "stability" },
     { name = "torch" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "ceec-core", editable = "packages/ceec-core" },
     { name = "computronium", editable = "." },
     { name = "local-feedback", editable = "packages/local-feedback" },
     { name = "psi-peft", editable = "packages/psi-peft" },
     { name = "scikit-learn", specifier = ">=1.4" },
+    { name = "stability", editable = "packages/stability" },
     { name = "torch", specifier = ">=2.0" },
 ]
 

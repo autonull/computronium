@@ -9,9 +9,10 @@ from computronium_lab import Lab
 def test_train_returns_finite_metrics() -> None:
     lab = Lab(seed=0)
     system = lab.compose("backprop_mlp")
-    metrics = lab.train(system, epochs=1)
-    assert metrics["loss"] > 0.0
-    assert 0.0 <= metrics["accuracy"] <= 1.0
+    result = lab.train(system, epochs=1)
+    assert result.metrics["loss"] > 0.0
+    assert 0.0 <= result.metrics["accuracy"] <= 1.0
+    assert result.walltime_s > 0.0
 
 
 def test_train_unknown_task_rejected() -> None:

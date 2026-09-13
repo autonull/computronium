@@ -45,3 +45,25 @@ def test_nothing_imports_the_lab() -> None:
             if "computronium_lab" in _imported_root_modules(path):
                 offenders.append(str(path.relative_to(REPO_ROOT)))
     assert not offenders, f"forbidden computronium_lab imports: {offenders}"
+
+
+def test_exploratory_synthesis_records_ceec(tmp_path):
+    from computronium_lab import Constraints, Lab
+
+    ledger = tmp_path / "ledger.db"
+    lab = Lab(seed=0, record_ledger=str(ledger))
+    spec = lab.specify(
+        "classification",
+        "synthetic",
+        constraints=Constraints(substrate="digital", latency_ms=5.0),
+    )
+    result = lab.synthesize(spec)
+    assert result.exploratory
+    artifacts = sorted((tmp_path / "artifacts").glob("*"))
+    assert artifacts, "exploratory synthesis must ingest a CEEC artifact"
+    import sqlite3
+
+    conn = sqlite3.connect(ledger)
+    types = [t for (t,) in conn.execute("SELECT type FROM artifacts").fetchall()]
+    conn.close()
+    assert "exploratory_synthesis" in types, types

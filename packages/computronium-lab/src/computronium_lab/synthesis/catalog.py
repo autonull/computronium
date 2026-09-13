@@ -200,6 +200,62 @@ def _role_split_config(substrate: str, precision: str) -> SystemConfig:
     )
 
 
+def _eqprop_config(substrate: str, precision: str) -> SystemConfig:
+    return SystemConfig(
+        substrate=_substrate_config(substrate, precision),
+        geometry=GeometryConfig.feedforward(
+            input_dim=32, output_dim=4, hidden_dims=(64, 64, 64), init_scale=0.1
+        ),
+        dynamics=StateDynamicsConfig.energy_minimization(max_steps=30, beta=0.5),
+        credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
+        update=ParameterUpdateConfig.euclidean(step_size=0.1),
+    )
+
+
+def _epc_config(substrate: str, precision: str) -> SystemConfig:
+    return SystemConfig(
+        substrate=_substrate_config(substrate, precision),
+        geometry=GeometryConfig.feedforward(
+            input_dim=32,
+            output_dim=4,
+            hidden_dims=(128,) * 31,
+            init_scheme="mupc",
+            residual=True,
+        ),
+        dynamics=StateDynamicsConfig.error_predictive_coding(max_steps=32, beta=0.5),
+        credit=CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
+        update=ParameterUpdateConfig.ortho_adam(step_size=1e-3),
+    )
+
+
+def _lattice_config(substrate: str, precision: str) -> SystemConfig:
+    return SystemConfig(
+        substrate=_substrate_config(substrate, precision),
+        geometry=GeometryConfig.spatial_lattice(
+            input_dim=32,
+            output_dim=4,
+            hidden_dims=(64, 32),
+            lattice_dims=(4, 4, 4),
+            connectivity_radius=1,
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=0.1),
+    )
+
+
+def _ntm_config(substrate: str, precision: str) -> SystemConfig:
+    return SystemConfig(
+        substrate=_substrate_config(substrate, precision),
+        geometry=GeometryConfig.ntm(
+            input_dim=32, output_dim=4, hidden=32, mem_slots=16, mem_width=16
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=0.05),
+    )
+
+
 CATALOG: tuple[MechanismCandidate, ...] = (
     MechanismCandidate(
         name="backprop_mlp",
@@ -263,6 +319,97 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         pareto=Pareto(accuracy=0.38, latency_ms=4.5, memory_gb=0.8, stability=0.6),
         provenance="w1_credit_ladder: fa×euclid 0.38 @ d2 (rescued only by muon)",
         config_builder=_fa_config,
+    ),
+    MechanismCandidate(
+        name="epc_deep",
+        credit="eqprop",
+        update="ortho_adam",
+        mechanism_class="settling",
+        depth=32,
+        width=128,
+        substrates=("digital",),
+        local_credit=True,
+        build_kind="recipe",
+        build_name="epc_deep",
+        recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
+        pareto=Pareto(accuracy=0.917, latency_ms=30.0, memory_gb=2.0, stability=0.9),
+        provenance=(
+            "family_recipes ePC flagship: depth-32 harvest 0.917 mean "
+            "(3 seeds, mupc+residual, ortho_adam); d32 is the predictor's "
+            "recorded sampling boundary — treat predicted viability as "
+            "extrapolation, the measured operating point is authoritative"
+        ),
+        config_builder=_epc_config,
+    ),
+    MechanismCandidate(
+        name="eqprop_mlp",
+        credit="eqprop",
+        update="euclid",
+        mechanism_class="settling",
+        depth=2,
+        width=128,
+        substrates=("digital",),
+        local_credit=True,
+        build_name="eqprop_mlp",
+        pareto=Pareto(accuracy=0.86, latency_ms=12.0, memory_gb=0.8, stability=0.85),
+        provenance=(
+            "family_recipes EqProp: 0.86 on RecurrentGeometry (32,) "
+            "(swap_credit demo); collapses beyond d2-d4 without harvest"
+        ),
+        config_builder=_eqprop_config,
+    ),
+    MechanismCandidate(
+        name="spatial_lattice_bp",
+        credit="bp",
+        update="euclid",
+        geometry="lattice",
+        mechanism_class="spatial",
+        width=64,
+        substrates=("digital",),
+        local_credit=False,
+        build_kind="recipe",
+        build_name="spatial_lattice_bp",
+        pareto=Pareto(
+            accuracy=0.83,
+            latency_ms=6.0,  # param-count-scaled estimate (D11 measures accuracy only)
+            memory_gb=0.8,
+            stability=0.9,  # D11: noisy-probe delta ~0.003 vs clean probe
+        ),
+        provenance=(
+            "D11 spatial_lattice_geometry_swap: train_acc 0.828 (MNIST quick, "
+            "bp + euclid, 206k params); noisy-probe robustness 0.904 vs "
+            "0.907 clean. latency/memory are param-count-scaled estimates, "
+            "not measurements"
+        ),
+        config_builder=_lattice_config,
+    ),
+    MechanismCandidate(
+        name="ntm_classifier",
+        credit="bp",
+        update="euclid",
+        geometry="ntm",
+        mechanism_class="memory",
+        width=32,
+        substrates=("digital", "memristive"),
+        local_credit=False,
+        build_kind="recipe",
+        build_name="ntm_classifier",
+        recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
+        pareto=Pareto(
+            accuracy=1.0,  # task-saturating quick tier (see provenance)
+            latency_ms=8.0,  # LSTM controller + addressing overhead (estimate)
+            memory_gb=0.5,
+            stability=0.95,
+        ),
+        provenance=(
+            "2026-09-13 ontology-NTM campaign (TODO23 §12): train_acc 1.0 "
+            "@ 10 epochs on the gaussian-blob quick tier (3 seeds, digital "
+            "and memristive int8+noise 0.05 — no delta; task saturates, so "
+            "treat accuracy as a ceiling, not a margin). 12.8k params; "
+            "latency/memory are estimates. Sequential-copy regime (D20 "
+            "d8k: bptt 0.979) is NOT wired into Lab's quick tier"
+        ),
+        config_builder=_ntm_config,
     ),
     MechanismCandidate(
         name="pepita_mlp",

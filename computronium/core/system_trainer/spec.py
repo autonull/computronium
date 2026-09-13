@@ -7,17 +7,12 @@ from typing import TYPE_CHECKING
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
-    DiffusionDynamics,
-    EnergyMinimizationDynamics,
     GeometryConfig,
     HomeostaticCredit,
-    InstantaneousDynamics,
     LocalGoodnessCredit,
     ParameterUpdateConfig,
     PepitaCredit,
-    PredictiveSettlingDynamics,
     RandomProjectionsCredit,
-    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     TargetInversionCredit,
@@ -68,20 +63,10 @@ def _geometry_from_config(geometry: GeometryConfig) -> Geometry:
 
 
 def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
-    """Instantiate dynamics from config."""
-    dynamics_type = dynamics.dynamics_type.lower()
-    if dynamics_type == "energy_minimization":
-        return EnergyMinimizationDynamics(dynamics)
-    elif dynamics_type == "predictive_settling":
-        return PredictiveSettlingDynamics(dynamics)
-    elif dynamics_type == "spike_integration":
-        return SpikeIntegrationDynamics(dynamics)
-    elif dynamics_type == "diffusion":
-        return DiffusionDynamics(dynamics)
-    elif dynamics_type == "instantaneous":
-        return InstantaneousDynamics(dynamics)
-    else:
-        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
+    """Instantiate dynamics from config via the ontology registry."""
+    from computronium.ontology.dynamics import dynamics_from_config
+
+    return dynamics_from_config(dynamics)
 
 
 def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
