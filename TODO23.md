@@ -492,6 +492,14 @@ No internal metrics without a user-facing report.
 
 **Remaining TODO23:** PyPI publishing only (external — credentials + publish sibling packages first).
 
+### Session 2026-09-13 — Quick-Task Difficulty Calibration (improvement #1)
+- [x] **Difficulty sweep** — 4 (scale, noise) operating points × 5 mechanisms × 2 epoch budgets, 3 seeds each. Finding: the old task (scale 2.0, noise 0.5) saturated at 1.0 for *every* gradient-trained mechanism (backprop, role_split, ntm, pepita) at 10 epochs — accuracy metadata stopped discriminating; only ff_mlp (0.0) and fa (~0.42) separated. **ff_mlp=0.0 and pepita=1.0 are real measurements** (verified from history keys, not metric-extraction quirks) — the ladder-era catalog accuracies (pepita 0.10) came from harder/different setups and are not reproducible on the easy tier.
+- [x] **New calibrated task**: `lab.synthetic_task` now uses **scale=1.2, noise=1.5**. Operating point: backprop 0.372@5ep / 0.783@15ep / **0.896@20ep** (3 seeds 0.953/0.849/0.885, cross-process stable twice; worst-seed mean 0.849 still clears the ±0.15 reproduction gate with margin); ntm/role_split/pepita 1.0; fa ~0.42; ff 0.0. Pareto separation restored.
+- [x] **Ripples handled**: `test_compare_backprop_beats_chance_at_five_epochs` re-anchored to the new chance geometry (>0.3, chance 0.25); backprop catalog provenance records the 0.896@20ep reproduction; campaign tests unchanged (both held: backprop 20ep ≥0.76, ntm 10ep 1.0); no absolute-accuracy assertions elsewhere. D22 demo/gallery untouched (they read catalog metadata, not the task) — demo + lock re-verified green.
+- [x] **Known boundary (recorded)**: catalog accuracies remain heterogeneous in provenance (ladder/D-demo setups vs this task). Campaign gates now *verify* the two rows with lab-native campaigns (backprop, ntm); campaigns on rows whose metadata predates this task (ff 0.83, pepita 0.10, fa 0.38) will honestly fail BenchmarkReproduction until those rows get their own measured campaigns — the gate working as designed, not a defect. A per-row re-measurement pass is the eventual fix (§11-compliant campaigns only).
+
+**Gates:** lab suite **73 passed**; D22 demo + gallery lock green; ruff clean; pyright clean on touched modules. Committed through 03a87fea (TODO23 synthesis layer).
+
 ---
 
 **This redeems everything. The primitive layer is done. The governance layer is done. TODO23 builds the synthesis layer that makes them generative.**

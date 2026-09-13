@@ -51,10 +51,20 @@ def synthetic_task(
     num_classes: int = 4,
     batch_size: int = 32,
 ) -> tuple[DataLoader[tuple[Tensor, ...]], DataLoader[tuple[Tensor, ...]]]:
-    """Deterministic gaussian-blob classification task (quick mode)."""
+    """Deterministic gaussian-blob classification task (quick mode).
+
+    Calibrated difficulty (scale=1.2, noise=1.5): strong gradient-trained
+    mechanisms land ~0.90 at 20 epochs while weaker credit rules separate
+    below — see the difficulty-sweep note in the body.
+    """
     gen = torch.Generator().manual_seed(seed)
+    # (1.2, 1.5) is the calibrated difficulty operating point (2026-09-13
+    # difficulty sweep, TODO23 §12): the old (2.0, 0.5) task saturated at
+    # 1.0 for every gradient-trained mechanism, so accuracy metadata
+    # stopped discriminating. At (1.2, 1.5) backprop lands ~0.90 @ 20ep
+    # while weaker credit rules separate below it.
     x, y = gaussian_blobs(
-        n, input_dim, num_classes, scale=2.0, noise=0.5, generator=gen
+        n, input_dim, num_classes, scale=1.2, noise=1.5, generator=gen
     )
     split = int(n * 0.75)
     train = DataLoader(

@@ -264,7 +264,11 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         substrates=("digital", "memristive", "neuromorphic"),
         build_name="backprop_mlp",
         pareto=Pareto(accuracy=0.91, latency_ms=5.0, memory_gb=1.2, stability=0.95),
-        provenance="w1_credit_ladder: bp×euclid 0.91 @ d2",
+        provenance=(
+            "w1_credit_ladder: bp×euclid 0.91 @ d2. Reproduction verified "
+            "on the calibrated (scale 1.2, noise 1.5) quick tier at 20ep: "
+            "0.896 mean (3 seeds) — see TODO23 §12 difficulty sweep"
+        ),
         config_builder=_bp_config,
     ),
     MechanismCandidate(
