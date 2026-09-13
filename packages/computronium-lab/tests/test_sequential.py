@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+import torch
 from computronium_lab import (
     SEQUENCE_TASKS,
     Lab,
@@ -65,6 +66,8 @@ def test_sequence_campaign_certifies(tmp_path: Path) -> None:
     assert report.reproduction, report.summary()
     assert report.deployability
     assert report.certified
+    assert report.matched_control
+    assert report.control_accuracy is not None and report.control_accuracy < 0.6
 
     from computronium_lab.campaign import ledger_audit
 
@@ -107,3 +110,33 @@ def test_ntm_sequence_screened_by_validate() -> None:
     screen_config(cand, spec)
     system = cand.build(spec)
     assert system is not None
+
+
+def test_psi_program_composes_task_sequences() -> None:
+    """E4 over NTM: a ψ-program acquires two sequence tasks on one live ψ
+    state; theta stays bitwise frozen across the whole program."""
+    from computronium_lab.adaptation import PsiProgram, PsiStep
+
+    system = build_ntm_sequence()
+    train_sequence(system, "last_symbol", epochs=20, seed=0)
+
+    def stream(label_rule):
+        def gen():
+            for _ in range(3):
+                x = torch.randn(16, 8, 8)
+                yield x, label_rule(x)
+
+        return gen()
+
+    program = PsiProgram(PsiStep("last_symbol", "temporal", 2)) + PsiProgram(
+        PsiStep("threshold", "conflict_adaptive", 2)
+    )
+    data = {
+        "last_symbol": stream(lambda x: (x[:, -1].mean(-1) > 0).long()),
+        "threshold": stream(lambda x: (x.sum(dim=(1, 2)) > 0).long()),
+    }
+    result, steps = program.run(system, data)
+    assert len(steps) == 2
+    assert all(r.theta.bitwise_invariant for r in steps)
+    assert result.theta.bitwise_invariant
+    assert result.psi_updated

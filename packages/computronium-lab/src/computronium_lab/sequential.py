@@ -82,7 +82,7 @@ class SequenceTrainingResult:
     walltime_s: float = 0.0
 
 
-def train_sequence(
+def train_sequence(  # ruff: ignore[too-many-arguments] - flat sequence-run knobs
     system: object,
     task: str,
     *,
@@ -93,6 +93,7 @@ def train_sequence(
     input_dim: int = 8,
     seed: int = 0,
     val_batches: int = 8,
+    label_shuffle: bool = False,
 ) -> SequenceTrainingResult:
     """BPTT classification on a sequence task (TODO23 sequence tier).
 
@@ -105,6 +106,11 @@ def train_sequence(
 
     Raises ``ValueError`` for unknown tasks and ``TypeError`` when the
     geometry exposes no ``episode`` API (sequence-incompatible).
+
+    ``label_shuffle=True`` is the matched-control arm: targets are
+    permuted per episode while training; scoring stays on the
+    *unpermuted* val episodes, so the learned map is wrong by
+    construction and the control ceiling is chance.
     """
     if not hasattr(system, "geometry"):
         raise TypeError("sequence training requires a composed ontology System")
@@ -127,6 +133,12 @@ def train_sequence(
             input_dim=input_dim,
             seed=seed * 1000 + epoch,
         )
+        if label_shuffle:
+            y = y[
+                torch.randperm(
+                    len(y), generator=torch.Generator().manual_seed(seed + epoch)
+                )
+            ]
         optimizer.zero_grad()
         logits, _ = episode(x, grad=True)
         loss = torch.nn.functional.cross_entropy(logits[:, -1], y)
@@ -174,6 +186,8 @@ class SequenceCampaignReport:
     reproduction: bool
     deployability: bool
     certified: bool
+    control_accuracy: float | None = None
+    matched_control: bool = False
 
     def summary(self) -> dict[str, object]:
         return {
@@ -181,6 +195,8 @@ class SequenceCampaignReport:
             "seeds": list(self.seeds),
             "accuracies": list(self.accuracies),
             "predicted_accuracy": self.predicted_accuracy,
+            "control_accuracy": self.control_accuracy,
+            "matched_control": self.matched_control,
             "gates": {
                 "BenchmarkReproduction": self.reproduction,
                 "StabilityCertificate": None,
@@ -216,6 +232,20 @@ def sequence_campaign(
     mean_accuracy = sum(accuracies) / len(accuracies)
     reproduction = mean_accuracy >= predicted_accuracy - tolerance
 
+    control_accuracies = []
+    for seed in seeds:
+        control = train_sequence(
+            system_builder(),
+            task,
+            epochs=epochs,
+            lr=lr,
+            seed=seed,
+            label_shuffle=True,
+        )
+        control_accuracies.append(control.accuracy)
+    control_mean = sum(control_accuracies) / len(control_accuracies)
+    matched_control = control_mean < predicted_accuracy - tolerance
+
     deployability = True
     deploy_note = "skipped (no out_dir)"
     if out_dir is not None:
@@ -243,6 +273,8 @@ def sequence_campaign(
         reproduction=reproduction,
         deployability=deployability,
         certified=certified,
+        control_accuracy=control_mean,
+        matched_control=matched_control,
     )
     _record(lab, report, deploy_note)
     return report
@@ -271,9 +303,17 @@ def _record(lab: Lab, report: SequenceCampaignReport, deploy_note: str) -> None:
                 extra={"sequence_task": report.task},
             ),
             artifact_refs=[artifact.id],
-            quality={"seeds": len(report.seeds), "matched_control": False},
+            quality={
+                "seeds": len(report.seeds),
+                "matched_control": report.matched_control,
+                "evaluation_policy": "sequence_campaign_v1",
+                "control_accuracy": report.control_accuracy,
+            },
             defects=[],
-            notes=f"sequence campaign; stability gate N/A (BPTT); deploy: {deploy_note}",
+            notes=(
+                f"sequence campaign; control {report.control_accuracy:.3f}; "
+                f"stability gate N/A (BPTT); deploy: {deploy_note}"
+            ),
         )
         for gate, ok in (
             ("BenchmarkReproduction", report.reproduction),

@@ -397,8 +397,8 @@ RECIPES: dict[str, Recipe] = {
         "this operating point (see provenance boundaries).",
         evidence=(
             "2026-09-13 ntm_sequence campaign (TODO23 §12): last_symbol "
-            "0.92 @ 120ep, 3 seeds; threshold 0.65; parity at chance "
-            "(recorded boundary)",
+            "0.881 mean @ 120ep, 3 seeds (control 0.491); threshold "
+            "~0.65; parity at chance (recorded boundary)",
         ),
         build=build_ntm_sequence,
     ),

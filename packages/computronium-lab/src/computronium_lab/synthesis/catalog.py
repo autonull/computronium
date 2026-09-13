@@ -440,19 +440,20 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         build_name="ntm_sequence",
         recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
         pareto=Pareto(
-            accuracy=0.92,  # last_symbol @ 120ep (see provenance)
+            accuracy=0.88,  # campaign mean @ 120ep (see provenance)
             latency_ms=12.0,  # BPTT through T=8 LSTM+memory steps (estimate)
             memory_gb=0.6,
             stability=0.9,
         ),
         provenance=(
             "2026-09-13 ntm_sequence campaign (TODO23 §12, sequence tier): "
-            "last_symbol 0.918/0.922/0.910 @ 120ep lr=0.1 (3 seeds, T=8, "
-            "d=8, 2-class; raw-LSTM control 0.953 @ 60ep — NTM pays its "
-            "memory overhead). Boundaries: threshold 0.65, parity at "
-            "chance at this budget (long-horizon integration needs a "
-            "different recipe); D20 sequential-copy (bptt 0.979) NOT "
-            "wired. Trained via sequential.train_sequence (BPTT through "
+            "last_symbol 0.863/0.930/0.852 (mean 0.881) @ 120ep lr=0.1, "
+            "T=8, d=8, 2-class; label-permutation control 0.491 (chance). "
+            "Raw-LSTM context 0.953 @ 60ep — NTM pays its memory "
+            "overhead. Boundaries: threshold ~0.65, parity at chance at "
+            "this budget (long-horizon integration needs a different "
+            "recipe); D20 sequential-copy (bptt 0.979) NOT wired. "
+            "Trained via sequential.train_sequence (BPTT through "
             "geometry.episode); latency is an estimate"
         ),
         config_builder=_ntm_sequence_config,

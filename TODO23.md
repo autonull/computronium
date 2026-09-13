@@ -534,6 +534,14 @@ No internal metrics without a user-facing report.
 
 **Gates:** lab suite **82 passed**; D22 demo + gallery lock green (ntm_sequence filtered/dominated in the demo's scenarios — no re-pin needed); ruff clean; pyright strict 0 on all touched modules.
 
+### Session 2026-09-13 — Sequence Control Arm + E4 Task-Sequence Programs
+- [x] **Matched control for the sequence campaign** — `train_sequence(..., label_shuffle=True)`: targets permuted per episode during training, scoring on unpermuted val episodes (wrong map by construction → chance ceiling). `sequence_campaign` runs the equal-compute control per seed and records `control_accuracy`/`matched_control` in the report, evidence quality (`evaluation_policy="sequence_campaign_v1"`), and notes. Measured: control **0.491** (chance) vs treated mean 0.881 — `matched_control=True`, certified.
+- [x] **Metadata re-anchored to the actual campaign** — the module's deterministic per-episode reseeding shifted the training stream vs the pre-module probe: campaign accuracies are 0.863/0.930/0.852 (**mean 0.881**), so catalog `accuracy=0.88` with per-seed values + control in provenance (was the probe's 0.918/0.922/0.910). Lesson recorded: probe numbers ≠ module numbers once a module owns its seeding; metadata comes from the module's own campaign.
+- [x] **E4 task-sequence programs over NTM** — `PsiProgram` composition test on the sequence tier: two tasks (last_symbol → threshold, temporal + conflict_adaptive) acquired back-to-back on one live ψ state over the trained NTM; all steps θ bitwise-invariant, cumulative certificate bitwise, ψ updated. Also fixed `PsiProgram` construction: a bare `PsiStep` now wraps (dataclass field was silently holding a single step — `__add__` crashed on `steps + steps`).
+- [~] **Remaining in #3**: sequence-level ψ *statistics* (ψ primitives currently see per-timestep pipeline states, not accumulated sequence summaries — the E4 statistics-carrying machinery beyond the live ψ dict). Everything else in #2/#3 is external (PyPI), dataset-blocked (NLP/neuromorphic), or ontology-blocked (Z3 composition, NCA state-prediction tier).
+
+**Gates:** lab suite **83 passed**; ruff clean; pyright strict 0 on touched modules.
+
 ---
 
 **This redeems everything. The primitive layer is done. The governance layer is done. TODO23 builds the synthesis layer that makes them generative.**

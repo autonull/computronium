@@ -492,6 +492,11 @@ class PsiProgram:
 
     steps: tuple[PsiStep, ...] = ()
 
+    def __post_init__(self) -> None:
+        # bare-step convenience: PsiProgram(PsiStep(...)) wraps, not unpacks
+        if isinstance(self.steps, PsiStep):
+            object.__setattr__(self, "steps", (self.steps,))
+
     def __len__(self) -> int:
         return len(self.steps)
 
