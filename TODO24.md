@@ -1,13 +1,16 @@
 # TODO24 — Autopoietic Mechanism Discovery and Certified Research Corpus
 
-**Status:** PLANNED (2026-09-14).  
-**Created:** 2026-09-14  
-**Builds on:** TODO23 (Generative Learning Mechanism Platform), TODO12–22 primitives, governance, and synthesis assets.  
+**Status:** PLANNED — ready to execute.  
+**Created:** 2026-09-13  
+**Aligned:** 2026-09-13 (codebase + CEEC verification pass; all referenced identifiers verified against implementations).  
+**Builds on:** TODO23 (Generative Learning Mechanism Platform), TODO12–22 primitives, CEEC-Core governance (`packages/ceec-core`), and synthesis assets.  
 **Explicit exclusion:** PyPI publishing is out of scope for TODO24. Publishing remains the final release pass after TODO24 is complete.
 
 ---
 
 ## 0. The Next Synthesis
+
+**Program goal:** run the H24.1–H24.6 experiments and obtain measured answers. CEEC work in TODO24 is instrument improvement serving those experiments and their successors — never an end in itself. Compartments stay pure (CEEC governs and records; the AutoScientist proposes and sweeps; the evolution kernel searches) and join only through thin adapters (T24.2.8).
 
 TODO23 turned Computronium into a generative platform:
 
@@ -20,14 +23,14 @@ That synthesis layer works over a **static catalog** of known mechanisms. It is 
 TODO24 turns the platform into a **self-improving, budgeted, campaign-governed research engine**:
 
 1. **Autopoiesis Kernel** — implement the TODO23 autopoiesis protocols as an evolutionary search over existing 6-axis mechanism coordinates.
-2. **Certified Research Corpus** — create a persistent, statistically disciplined corpus of problem classes, campaigns, controls, frontiers, and boundary records.
+2. **Certified Research Corpus** — create a persistent, statistically disciplined corpus of problem classes, campaigns, controls, frontiers, and measurement blocks.
 3. **User-Facing Research Products** — ship evolution reports, continual-learning benchmarks, substrate-transfer reports, cookbook entries, and gallery demos.
 
 The core rule remains:
 
 > **Evolution proposes. Campaigns dispose. Only certified mechanisms become recommendations.**
 
-TODO24 is valuable even if evolutionary search does not discover a superior mechanism. The corpus, benchmark harness, statistical protocol, boundary ledger, and cookbook are durable products independent of any single research hypothesis.
+TODO24 is valuable even if evolutionary search does not discover a superior mechanism. The corpus, benchmark harness, statistical protocol, measurement-block ledger, and cookbook are durable products independent of any single research hypothesis.
 
 ---
 
@@ -37,11 +40,11 @@ TODO24 is valuable even if evolutionary search does not discover a superior mech
 |---|---|---|
 | **6-axis ontology** | S × G × D × P × C × U primitives, compatibility validation, factories | Mutation space is constrained to existing valid coordinates. No new axes. |
 | **Lab synthesis layer** | `ProblemSpec`, `synthesize`, `explore`, catalog, viability predictor | Evolution operates on the same problem specs and candidate builders. |
-| **Campaign governance** | `run_campaign`, `ledger_audit`, `promote_mechanism` | Fitness and certification use campaign evidence, not probe anecdotes. |
+| **Campaign governance** | `run_campaign`, `ledger_audit`, `promote_mechanism`; ceec-core already implements the full CEEC-Core object model (Experiment, Derived, Decision, GateOutcome, StatusChange, Goal, CalibrationRecord) plus the §22 selection loop (`ceec.selection`) — the Lab currently exercises only Artifact + scalar Evidence + GateOutcome + Belief + Decision | Fitness and certification use campaign evidence, not probe anecdotes; TODO24 grows the usage surface to the full object model and lands targeted CEEC instrument improvements (T24.0.6, T24.6.6). |
 | **Training certificates** | Stability guard, harvest, determinism seal, CEEC logging | Evolution candidates inherit the same training guarantees. |
 | **Continual ψ runtime** | ψ-only adaptation, θ bitwise invariance, ψ programs | Continual-learning benchmark compares ψ modes against matched controls. |
 | **Deployment layer** | Substrate compilation, export, quantization, energy estimates | Substrate-transfer campaigns measure robustness and deployment cost. |
-| **Autopoiesis protocols** | `OperatorGenome`, `MutationOperator`, `FitnessMetric`, `SelectionPolicy`, `StagnationDetector`, `Constitution` | TODO24 provides concrete, tested implementations. |
+| **Autopoiesis protocols** | `computronium.autopoiesis.protocols`: `OperatorGenome`, `MutationOperator`, `FitnessMetric`, `SelectionPolicy`, `StagnationDetector`, `Constitution` (runtime-checkable, zero implementation) | TODO24 provides concrete, tested implementations. |
 
 ---
 
@@ -53,7 +56,7 @@ TODO24 is valuable even if evolutionary search does not discover a superior mech
 | Campaigns exist but are not a corpus | Results are isolated; hard to compare across problem classes | Persistent Research Corpus v1 with protocols, stats, and archives |
 | ψ adaptation is implemented but not benchmarked | Continual benefits remain anecdotal | Standardized curriculum benchmark with matched controls |
 | Substrate export exists but transfer robustness is not measured | Deployment claims remain qualitative | Substrate-transfer campaigns with fidelity, accuracy delta, energy estimates |
-| Negative results and boundaries are scattered | Future work loses institutional memory | Boundary ledger and failure manifest as first-class outputs |
+| Negative results and known limitations are scattered | Future work loses institutional memory | Measurement-block ledger and failure manifest as first-class outputs |
 | Predictor corpus can drift | `I(C,U,P)` model becomes stale or overfit | Corpus-driven refit/revalidation loop with recorded boundaries |
 
 ---
@@ -70,8 +73,8 @@ TODO24 must produce concrete user-facing value, not only research infrastructure
 | **Frontier archive** | Persistent Pareto frontiers that synthesis and explorer can reuse |
 | **Continual benchmark report** | ψ-only adaptation compared against frozen and θ-update controls |
 | **Substrate-transfer report** | Digital → INT8 / ternary / memristive-simulated robustness metrics |
-| **Mechanism Cookbook v1** | Certified entries with constraints, evidence, boundaries, and deployment notes |
-| **Boundary ledger** | Explicit record of what cannot yet be measured and why |
+| **Mechanism Cookbook v1** | Certified entries with constraints, evidence, known limitations, and deployment notes |
+| **Measurement-block ledger** | Explicit record of what cannot yet be measured and why |
 | **Gallery 3.0 / D24 demo** | Visible, locked demonstration of evolutionary search and corpus reports |
 
 Even if no evolved mechanism beats the existing catalog, TODO24 still ships:
@@ -107,18 +110,19 @@ The target API is additive and must not break TODO23.
 
 ```python
 from computronium_lab import (
-    Lab,
-    ProblemSpec,
+    Constraints,
     EvolutionBudget,
     EvolutionSpec,
+    Lab,
+    ProblemSpec,
 )
 
-lab = Lab(record_ledger="ceec/todo24.sqlite3")
+lab = Lab(record_ledger="scratch/todo24.sqlite3")
 
 spec = lab.specify(
     task="flat_classification",
-    dataset="synthetic_calibrated",
-    constraints=dict(
+    dataset="gaussian_blob",  # the TODO23 calibrated quick tier
+    constraints=Constraints(
         compute_budget="cpu_quick",
         latency_ms=50,
         memory_gb=2,
@@ -127,7 +131,7 @@ spec = lab.specify(
         precision="float32",
         substrate="digital",
     ),
-    objectives=["accuracy", "adaptation_speed", "stability"],
+    objectives=("accuracy", "adaptation_speed", "stability"),
 )
 
 plan = lab.plan_evolution(
@@ -135,13 +139,13 @@ plan = lab.plan_evolution(
     evolution=EvolutionSpec(
         population=6,
         generations=3,
-        seed_candidates=[
+        seed_candidates=(
             "backprop_mlp",
             "temporal_psi_task_switcher",
-            "role_split_mlp",
+            "role_split_muon_readout",
             "ntm_classifier",
-        ],
-        objectives=["accuracy", "adaptation_speed", "stability"],
+        ),
+        objectives=("accuracy", "adaptation_speed", "stability"),
         budget=EvolutionBudget(
             max_campaigns=12,
             max_epochs_per_campaign=20,
@@ -165,8 +169,8 @@ Continual benchmark target:
 continual_report = lab.benchmark_continual(
     mechanism="temporal_psi_task_switcher",
     curriculum="two_task_switch",
-    modes=["temporal", "role_split", "conflict_adaptive"],
-    controls=["frozen_no_psi", "theta_finetune_matched_compute"],
+    modes=("temporal", "role_split", "conflict_adaptive"),
+    controls=("frozen_no_psi", "theta_finetune_matched_compute"),
     seeds=(0, 1, 2),
 )
 ```
@@ -177,10 +181,12 @@ Substrate-transfer target:
 transfer_report = lab.benchmark_substrate_transfer(
     mechanism="backprop_mlp",
     source_substrate="digital",
-    target_constraints=["int8", "ternary", "memristive"],
+    target_constraints=("int8", "ternary", "memristive"),
     seeds=(0, 1, 2),
 )
 ```
+
+**Existing-surface alignment.** Everything above exists today except `EvolutionBudget`, `EvolutionSpec`, `plan_evolution`, `run_evolution`, `benchmark_continual`, and `benchmark_substrate_transfer`. `Constraints`/`ProblemSpec` are exported at the `computronium_lab` root; `lab.specify` validates `Constraints` fields and the `KNOWN_OBJECTIVES` set (`accuracy`, `adaptation_speed`, `stability`, `latency`, `memory`). Seed candidates are catalog rows (`role_split_mlp` does not exist; the row is `role_split_muon_readout`). Continual `modes` are the `AdaptationMode` values (`temporal`, `role_split`, `conflict_adaptive`). Transfer targets map onto existing deployment surfaces: `int8`/`ternary` are the `Quantization` paths, `memristive` is a device model via `compile_substrate` + `apply_substrate_constraints`, with `substrate_report` and `estimate_energy` (simulated/estimated tiers) supplying fidelity and energy.
 
 ---
 
@@ -191,7 +197,7 @@ transfer_report = lab.benchmark_substrate_transfer(
 │  RESEARCH & AUTOPOIESIS LAYER (TODO24)                      │
 │  EvolutionSpec → Genome → Mutation → Fitness → Selection    │
 │  Research Corpus → Campaigns → Statistics → Frontier Archive│
-│  Cookbook / Boundary Ledger / Reports                       │
+│  Cookbook / Measurement-Block / Reports                     │
 ├─────────────────────────────────────────────────────────────┤
 │  SYNTHESIS LAYER (TODO23)                                   │
 │  ProblemSpec → synthesize/explore → train/adapt/export      │
@@ -206,6 +212,8 @@ transfer_report = lab.benchmark_substrate_transfer(
 
 TODO24 does **not** replace TODO23. It adds a research and discovery layer above it.
 
+Compartments stay pure: CEEC governs and records (never executes), the AutoScientist proposes and sweeps (no CEEC dependency), the evolution kernel searches the Lab catalog — joined only by thin adapters (T24.2.8, §14).
+
 ---
 
 ## 7. Scope and Non-Goals
@@ -217,7 +225,7 @@ TODO24 does **not** replace TODO23. It adds a research and discovery layer above
 - Persistent research corpus for synthetic and already-implemented task tiers.
 - Continual-learning curriculum benchmark.
 - Substrate-transfer benchmark using existing simulated substrate constraints.
-- Statistical summaries, frontier archives, boundary records, and cookbook generation.
+- Statistical summaries, frontier archives, measurement blocks, and cookbook generation.
 - Gallery/demo integration.
 - Ledger-audited campaign records for evolution and corpus work.
 
@@ -225,7 +233,7 @@ TODO24 does **not** replace TODO23. It adds a research and discovery layer above
 
 - PyPI publishing.
 - New ontology axes.
-- New CEEC-Core features.
+- CEEC-Core changes beyond the instrument improvements in T24.0.6/T24.6.6.
 - Physical hardware validation.
 - Large external dataset campaigns.
 - New biological or physical claims.
@@ -241,13 +249,14 @@ TODO24 does **not** replace TODO23. It adds a research and discovery layer above
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T24.0.1 Baseline Freeze** | `docs/research/todo24_baseline.md`: catalog hash, predictor corpus hash, calibrated task parameters, known campaign budgets, known boundaries | TODO23 |
-| **T24.0.2 Research Schema** | `computronium_lab.research`: `CorpusSpec`, `ProblemClassProtocol`, `MeasurementProtocol`, `StatisticalSummary`, `BoundaryRecord` | T24.0.1 |
-| **T24.0.3 Budget Tiers** | `smoke`, `quick`, `certified` budget definitions; only `certified` can support cookbook or belief promotion | T24.0.2 |
-| **T24.0.4 Ledger Record Types** | Lab-level artifact types: `evolution_generation`, `evolution_candidate`, `research_corpus_summary`, `boundary_record`; update `ledger_audit` allowlist | T24.0.2 |
-| **T24.0.5 Corpus Directories** | Stable data/result paths: `data/research/todo24/`, `results/todo24/`, docs output | T24.0.2 |
+| **T24.0.1 Baseline Freeze** | `docs/research/todo24_baseline.md`: catalog hash, predictor corpus hash, calibrated task parameters, known campaign budgets, known limitations | TODO23 |
+| **T24.0.2 Research Schema** | `computronium_lab.research`: `CorpusSpec`, `ProblemClassProtocol`, `MeasurementProtocol`, `StatisticalSummary`, `MeasurementBlock` — mapped onto ceec-core objects already implemented: `MeasurementProtocol` → `Experiment` pre-registration (`ceec.bootstrap.experiment_from_config`), `StatisticalSummary` → `Derived` (`record_derived`), `MeasurementBlock` → artifact + `inert`/`missing` evidence (notes mandatory) | T24.0.1 |
+| **T24.0.3 Budget Tiers** | `smoke`, `quick`, `certified` budget definitions (RESEARCH3 E-1 ladder mapping: smoke→smoke, quick→pilot, certified→full); only `certified` can support cookbook or belief promotion; `certified` is shorthand for 'campaign gates passed', never a belief status | T24.0.2 |
+| **T24.0.4 Ledger Record Types** | Lab-level artifact types: `evolution_generation`, `evolution_candidate`, `research_corpus_summary`, `measurement_block` (Artifact.type strings; `PREFIX_BY_KIND` untouched); update `ledger_audit` allowlist; new records use structured evidence kinds (vector/curve/frontier with axes+values_ref — enforced by `ceec.models`), never scalar-only | T24.0.2 |
+| **T24.0.5 Corpus Directories** | Stable data/result paths: `data/research/todo24/`, `results/todo24/<problem_class>/<seed>/<timestamp>/` with `manifest.json` (RESEARCH3 E-3 layout), docs output | T24.0.2 |
+| **T24.0.6 CEEC Instrument Improvements** | Structured-evidence emission helpers (curve/vector/frontier from run history); `ledger_audit` delegates to `ceec.audit` + the lab allowlist; `GateStatus` reconciled to the spec vocabulary (`passed`/`failed`/`unknown`/`waived_with_justification`), lab writers updated | T24.0.2 |
 
-**Success criterion:** baseline document exists; schema tests pass; ledger audit still rejects `X-*` probe codes.
+**Success criterion:** baseline document exists; schema tests pass; T24.0.6 lands without regressing `ledger_audit` (still rejects `X-*` probe codes; structured-kind checks active).
 
 ---
 
@@ -264,6 +273,8 @@ TODO24 does **not** replace TODO23. It adds a research and discovery layer above
 | **T24.1.5 CampaignFitness** | Wraps existing campaign runners; returns standardized objective vector and gate outcomes | T24.1.4 |
 | **T24.1.6 ParetoSelection** | Implements `SelectionPolicy`; non-dominated sorting, crowding, diversity preservation | T24.1.5 |
 | **T24.1.7 StagnationDetector** | Implements `StagnationDetector`; detects no frontier growth, no new certified entries, or exhausted budget | T24.1.6 |
+
+**Protocol reality (TODO23 T23.1.8).** The shipped protocols are scalar and minimal: `OperatorGenome.genome()/instantiate()`, `MutationOperator.mutate(genome, rng)`, `FitnessMetric.score(operator, batch) -> float`, `SelectionPolicy.select(population, k)`, `StagnationDetector.update(best_fitness) -> bool`, `Constitution.admits(genome) -> bool`. Multi-objective Pareto selection and frontier-growth stagnation are **research-layer extensions** in `computronium_lab.research` (vector fitness, crowding, hypervolume); the TODO23 protocols are not widened. Scalar conformance is preserved where a scalar view exists (surrogate screens, single-objective fallbacks). `CoordinateGenome` wraps a catalog `MechanismCandidate` (build path `preset`/`recipe` with `build_name` or `config_builder`) as its `genome()` payload.
 
 **Mutation operators must be safe by construction.**
 
@@ -294,6 +305,8 @@ Examples:
 | **T24.2.4 EvolutionReport** | Best candidates, frontier, lineage, mutation trace, negative results, ledger references | T24.2.3 |
 | **T24.2.5 Frontier Archive** | Persistent JSON/SQLite archive of measured Pareto points and hypervolume summaries | T24.2.3 |
 | **T24.2.6 Synthesis Integration** | Optional `synthesize(..., include_evolved=True)` uses archived frontier candidates | T24.2.5 |
+| **T24.2.7 CEEC Experiment Lifecycle** | Each generation/campaign pre-registers as a ceec `Experiment` (draft → pre_registered → running → completed/failed); candidate selection runs the CEEC §22 loop (`ceec.selection.generate_candidates` → `check_hard_constraints` → `decide`); the evolution kernel keeps its own archive — no `CampaignDatabase` coupling (compartments stay pure); `stability.resources.ResourceUsage` rollups recorded as resource-vector `Derived` via the adapter | T24.2.3 |
+| **T24.2.8 Compartment Adapters** | Thin adapters, no cross-imports: AutoScientist→CEEC (proposals/campaigns pre-register as `Experiment`s, record Evidence/`Derived`), AutoScientist→evolution (`ProposalObjective`-ranked candidates offered as seed genomes), Lab→CEEC recorder formalized | T24.2.7 |
 
 **Evolution report must include:**
 
@@ -321,20 +334,21 @@ Examples:
 |---|---|---|
 | **T24.3.1 Problem Classes** | Standardized runners for: flat classification, sequence tasks, NCA state prediction, continual switch, substrate transfer | Phase 0 |
 | **T24.3.2 Measurement Protocol Runner** | Multi-seed, equal-compute, val-split, matched-control execution | T24.3.1 |
-| **T24.3.3 Statistical Summary Module** | Means, stds, confidence intervals, paired tests, effect sizes, one-sided promotion-compatible bounds | T24.3.2 |
+| **T24.3.3 Statistical Summary Module** | Means, stds, confidence intervals, paired tests, effect sizes, one-sided promotion-compatible bounds — implemented on the RESEARCH3 PR-4 statistics kit (bootstrap CI + paired-comparison harness), not a parallel stack | T24.3.2 |
 | **T24.3.4 Catalog Re-Measurement Pass** | Re-measure applicable catalog rows on corpus tasks using Lab construction paths | T24.3.2 |
 | **T24.3.5 Frontier Archive Integration** | Corpus results append to the same frontier archive used by evolution | T24.3.3 |
-| **T24.3.6 Boundary Ledger** | Record rows/problem classes that cannot be measured yet and why | T24.3.1 |
+| **T24.3.6 Measurement-Block Ledger** | Record rows/problem classes that cannot be measured yet and why | T24.3.1 |
 
 **Initial problem classes:**
 
 | Problem Class | Existing Basis | Notes |
 |---|---|---|
-| `flat_classification` | calibrated synthetic task | Primary quick-tier classification corpus |
-| `sequence_last_symbol` | `sequence_task` | NTM sequence tier |
-| `sequence_threshold` | `sequence_task` | NTM sequence tier |
+| `flat_classification` | calibrated gaussian-blob quick tier | Primary classification corpus; strong mechanisms saturate at 1.0 by 10–20 epochs |
+| `sequence_last_symbol` | `sequence_task("last_symbol")` | NTM sequence tier; 0.918–0.922 @ 120 ep recorded |
+| `sequence_threshold` | `sequence_task("threshold")` | NTM sequence tier; ~0.65 ceiling recorded |
+| `sequence_parity` | `sequence_task("parity")` | At chance at the recorded budget — inherited TODO23 limitation; the corpus records it, never forces it |
 | `nca_state_prediction` | `grid_transition_task` | k-step rollout task; avoids one-step degeneracy |
-| `continual_switch` | ψ adaptation runtime | Synthetic task stream with boundary |
+| `continual_switch` | `Lab.adapt` ψ runtime | Synthetic task stream with boundary |
 | `substrate_transfer` | deployment layer | Digital-trained model evaluated under substrate constraints |
 
 **Success criterion:** corpus report can be regenerated from raw campaign artifacts; statistical summaries are deterministic; catalog metadata updates only come from campaign evidence.
@@ -356,6 +370,10 @@ Examples:
 **ψ arms must preserve bitwise θ invariance.**  
 **θ fine-tune control must not be compared as if it were ψ-only.** It exists to measure trade-offs under matched compute.
 
+**Invariance proof + state inventory:** ψ-arm θ invariance is proven with the existing `FrozenThetaAudit` (`computronium.core.frozen_theta`) plus a mutable-state inventory (optimizer moments, buffers, dataloader order) so "ψ-only" claims cannot hide mutable state elsewhere (TODO.rigor §28).
+
+**Capacity-matched control:** where constructible, include an equal-writable-state recurrent baseline (TODO.rigor §9) among the controls; otherwise record a measurement block stating why not.
+
 **Success criterion:** `lab.benchmark_continual` returns a report with per-mode metrics, control metrics, statistical summary, θ invariance proofs, and ledger references.
 
 ---
@@ -369,7 +387,7 @@ Examples:
 | **T24.5.1 Transfer Campaign** | Train on digital substrate; apply/export INT8, ternary, memristive-simulated constraints; evaluate val accuracy and fidelity | Phase 3 |
 | **T24.5.2 Robustness Score** | Composite record: accuracy delta, fidelity max-abs-diff, export success, energy estimate, constraint preservation | T24.5.1 |
 | **T24.5.3 Evolutionary Substrate Mutation** | Optional genome mutations over substrate constraints where construction/export exists | Phase 1, T24.5.1 |
-| **T24.5.4 Deployment Cookbook Entries** | Certified deployment recommendations or boundary records | T24.5.2 |
+| **T24.5.4 Deployment Cookbook Entries** | Certified deployment recommendations or boundary beliefs | T24.5.2 |
 
 **Important honesty constraint:** substrate models remain simulated unless physical hardware validation is later added. TODO24 must not imply hardware-measured results.
 
@@ -388,6 +406,7 @@ Examples:
 | **T24.6.3 Belief Promotion for Evolved Mechanisms** | Use existing `promote_mechanism` pipeline where campaigns pass; honest refusal otherwise | Phase 3–5 |
 | **T24.6.4 Failure Manifesto** | Structured negative results: failed candidates, failed mutations, failed transfers, task-class mismatches | Phase 2–5 |
 | **T24.6.5 Ledger Audit** | All TODO24 artifacts pass `ledger_audit`; zero `X-*` probe codes | All phases |
+| **T24.6.6 Prediction Calibration** | H24.1–H24.6 pre-registered predictions scored on outcome via `ceec.calibration` / `record_calibration` (Brier/log score); calibration drift reviewed per CEEC §24 | T24.6.1 |
 
 **Cookbook v1 entry format:**
 
@@ -398,7 +417,7 @@ Constraints:
 Coordinate:
 Evidence:
 Certificates:
-Known boundaries:
+Known limitations:
 Deployment notes:
 ```
 
@@ -414,7 +433,7 @@ Deployment notes:
 |---|---|---|
 | **T24.7.1 D24 Evolution Demo** | Locked integration demo test showing plan → evolve → campaign → frontier/report | Phase 2 |
 | **T24.7.2 Gallery 3.0 Figures** | Frontier growth, lineage, continual adaptation curves, substrate transfer plots | Phase 3–6 |
-| **T24.7.3 Practitioner Documentation** | Evolution quickstart, research corpus guide, cookbook guide, boundary ledger guide | Phase 6 |
+| **T24.7.3 Practitioner Documentation** | Evolution quickstart, research corpus guide, cookbook guide, measurement-block ledger guide | Phase 6 |
 | **T24.7.4 Demo Lock and Manifest** | Gallery manifest re-pinned and demo lock green | T24.7.1–T24.7.3 |
 
 **Success criterion:** `pytest -k demo` and gallery lock pass; documentation snippets smoke-verify.
@@ -431,7 +450,7 @@ All TODO24 measurements must follow this protocol.
 - Minimum seeds for `certified`: 3.
 - Deterministic task generators per seed.
 - Record seed, config hash, genome hash, and campaign hash.
-- Determinism seal is optional for expensive campaigns but required for promoted mechanisms when affordable.
+- Determinism seal is optional at smoke/quick tiers and required for certified-tier promotion attempts (TODO23's `seal_determinism` localizes the first diverging epoch).
 
 ### 9.2 Controls
 
@@ -445,14 +464,17 @@ Every claim-bearing campaign must have an appropriate control:
 | Continual ψ | Frozen no-ψ control and/or θ fine-tune matched-compute control |
 | Substrate transfer | Unconstrained digital baseline |
 
+ψ claims additionally require a capacity-matched control where constructible (Phase 4) — otherwise a measurement block records why not.
+
 ### 9.3 Equal Compute
 
-Comparisons must normalize compute:
+Comparisons must normalize compute and writable state:
 
 - same number of epochs or same number of optimizer steps,
 - same batch count where applicable,
 - ψ adaptation episodes counted explicitly,
-- control arms receive equal training budget.
+- control arms receive equal training budget,
+- plastic-state capacity (ψ / fast weights / optimizer state) reported per arm and matched or bounded — budget-normalized reporting per TODO.rigor §5 (writable bits, FLOPs/step, latency).
 
 ### 9.4 Metrics
 
@@ -471,13 +493,22 @@ theta_invariance                 boolean for ψ arms
 export_success                   boolean
 ```
 
+Energy values carry their tier label (`simulated` | `estimated`) — never presented as hardware-measured (TODO.rigor §18).
+
 ### 9.5 Statistics
 
 - Report mean and standard deviation across seeds.
 - Use paired tests when comparing matched arms.
-- Use confidence intervals or one-sided lower bounds for promotion.
+- Promotion maps onto the CEEC-Core §18 gate family (τ_promote = 0.95, MultiSeed ≥ 3, MatchedControl, EvaluationPolicyValid, DefectAudit, Reproduction, ScopeExplicit) as already enforced by `promote_mechanism` (one-sided t-bound, reproduction tolerance).
+- Certified negative results map onto the CEEC-Core §19 boundary gates (defect hunt, levers exhausted); do not confuse them with lab `measurement_block` artifacts (blocked measurements).
 - Do not promote on smoke-tier results.
-- Do not weaken gates to fit a budget; lengthen the budget or record a boundary.
+- Do not weaken gates to fit a budget; lengthen the budget or record a measurement block (the recorded TODO23 calibration finding).
+
+### 9.6 Evidence Structure
+
+- Per-seed metric tables → `vector` evidence; training/adaptation histories → `curve`; Pareto frontiers → `frontier`; blocked measurements → `inert`/`missing` with explanatory notes.
+- Structured kinds carry `axes` + `values_ref` (enforced by `ceec.models`); scalar-only primary evidence is the CEEC §27 anti-pattern TODO24 retires — the lab's current `kind="scalar"` campaign records are the debt being paid.
+- `ceec.audit` structured-kind checks run alongside `ledger_audit`.
 
 ---
 
@@ -506,23 +537,34 @@ quick = EvolutionBudget(
 
 certified = EvolutionBudget(
     max_campaigns=24,
-    max_epochs_per_campaign=task_specific,
+    max_epochs_per_campaign=None,  # None = inherit the task's certified operating point
     max_seeds=3,
 )
 ```
 
-Task-specific certified epoch budgets should inherit the stable operating points discovered in TODO23, for example:
+Task-specific certified epoch budgets inherit the stable operating points recorded in TODO23:
 
-- flat classification: 20 epochs where stable,
-- sequence last_symbol: campaign-defined, often >60 epochs,
-- NCA state prediction: 100–300 epochs depending on certification need,
+- flat classification: 20 epochs (reproduction 0.896 @ 20 ep; 10-epoch runs are cross-process nondeterministic and honestly refuse promotion),
+- sequence last_symbol: 120 epochs (0.918–0.922; raw-LSTM control 0.953 @ 60 ep),
+- sequence threshold: ~0.65 recorded ceiling; parity: at chance at the recorded budget — a recorded limitation, not a budget problem,
+- NCA state prediction: 100–300 epochs (certifies at 100; 300 is the recorded default),
 - continual adaptation: fixed episode budget, not open-ended training.
 
 ---
 
 ## 11. CEEC and Ledger Integration
 
-TODO24 does not modify CEEC-Core. It uses the existing governance layer at the campaign level.
+CEEC-Core is the governance compartment: it records and decides, it never executes experiments. ceec-core already ships the full CEEC-Core object model and the §22 selection loop; TODO24 grows the Lab's usage from the current slice (Artifact + scalar Evidence + GateOutcome + Belief + Decision) to the complete loop and lands targeted instrument improvements (T24.0.6, T24.6.6) without moving execution logic into CEEC:
+
+| ceec object (implemented) | TODO24 usage |
+|---|---|
+| `Experiment` (+ pre-registration via `ceec.bootstrap.experiment_from_config`) | Pre-registered campaigns, evolution generations, corpus measurements |
+| `Derived` (`record_derived`) | Statistical summaries, frontier/hypervolume rollups, resource-vector rollups |
+| `GateOutcome` / `StatusChange` | Promotion and boundary attempts with full status history |
+| `Goal` / `GoalRevision` | Corpus- and hypothesis-level research goals |
+| `CalibrationRecord` (`ceec.calibration`) | H24 pre-registered predictions scored after outcome (Brier/log) |
+
+Implemented `GateStatus` vocabulary is `pass | fail | not_evaluated` (`ceec.models`); T24.0.6 reconciles it to the METHODOLOGY §15 spec vocabulary (`passed`/`failed`/`unknown`/`waived_with_justification`).
 
 ### Allowed TODO24 artifact types
 
@@ -535,7 +577,11 @@ TODO24 does not modify CEEC-Core. It uses the existing governance layer at the c
 | `evolution_generation` | Generation-level summary: population, frontier, stagnation, budget |
 | `evolution_candidate` | Candidate genome, mutation trace, fitness/campaign references |
 | `research_corpus_summary` | Corpus-level statistical summary |
-| `boundary_record` | Explicit record of a blocked or impossible measurement |
+| `measurement_block` | Explicit record of a blocked or impossible measurement |
+
+The allowlist lives lab-side (`computronium_lab.campaign._ALLOWED_ARTIFACT_TYPES`, currently `validation_campaign`, `exploratory_synthesis`, `lab_comparison`, `mechanism_belief`); extending it with the four new types is a Lab change, not a CEEC-Core change. Campaign gates already enforced by the Lab: `BenchmarkReproduction`, `StabilityCertificate`, `DeployabilityCheck`.
+
+**Terminology:** a `measurement_block` is a blocked or impossible *measurement* (lab artifact); a CEEC `boundary` *belief* is a negative claim that passed the §19 boundary gates. "Certified" is shorthand for "campaign gates passed" — never a status; belief statuses are only CEEC's `open`/`promoted`/`boundary`/`quarantined`. Cookbook "certified negative result" means a `boundary` belief.
 
 ### Ledger rules
 
@@ -543,6 +589,7 @@ TODO24 does not modify CEEC-Core. It uses the existing governance layer at the c
 - No belief without campaign evidence.
 - No cookbook entry without certified campaign or certified negative result.
 - Failed campaigns are retained as evidence.
+- Every certified-tier measurement and every evolution generation is a pre-registered `Experiment` with a recorded `Decision`; selection uses the CEEC §22 loop, not ad-hoc choices.
 - Evolution candidates that never pass screening may appear in generation summaries, but they do not become beliefs.
 
 ---
@@ -557,10 +604,10 @@ TODO24 does not modify CEEC-Core. It uses the existing governance layer at the c
 | Ledger becomes noisy | Only campaign-like artifacts; audit rejects probe codes |
 | Invalid coordinates waste campaigns | `SystemConfig.validate()` and constitution checks before training |
 | False positives from seed variance | Multi-seed campaigns, paired statistics, promotion thresholds |
-| Negative results get lost | Boundary ledger and failure manifesto are required outputs |
+| Negative results get lost | Measurement-block ledger and failure manifesto are required outputs |
 | New task classes destabilize core | Problem classes implemented through protocols, not core edits |
 | Substrate results overclaim | Simulated/estimated labels mandatory; no hardware-measured claims |
-| Evolution fails to improve catalog | TODO24 still ships corpus, benchmark, cookbook, and boundaries |
+| Evolution fails to improve catalog | TODO24 still ships corpus, benchmark, cookbook, and recorded limitations |
 
 ---
 
@@ -577,8 +624,10 @@ TODO24 does not modify CEEC-Core. It uses the existing governance layer at the c
 - [ ] Continual benchmark compares ψ modes against controls with θ invariance proofs for ψ arms.
 - [ ] Substrate-transfer report covers at least three mechanisms and three constraint sets.
 - [ ] Cookbook v1 contains certified entries or certified negative results.
-- [ ] Boundary ledger records blocked items with reasons.
-- [ ] Ledger audit passes with zero `X-*` codes.
+- [ ] Measurement-block ledger records blocked items with reasons.
+- [ ] Ledger audit passes with zero `X-*` codes; certified-tier work is pre-registered as CEEC `Experiment`s with `Decision` records and calibration scores.
+- [ ] CEEC instrument improvements landed (T24.0.6): structured-evidence helpers, unified audit, spec `GateStatus` vocabulary.
+- [ ] Compartment purity verified (T24.2.8): no CEEC import inside `computronium/autoscientist`, no AutoScientist import inside the evolution kernel.
 - [ ] D24 demo and gallery lock are green.
 - [ ] New modules pass ruff format/check and strict pyright.
 - [ ] Full test suite remains green or legacy failures are explicitly recorded.
@@ -607,14 +656,14 @@ No core evolution changes required.
 
 ### Add a new mechanism
 
-Provide:
+Provide a catalog row:
 
 ```text
 MechanismCandidate
-  - catalog row
-  - config builder or recipe builder
-  - SystemConfig.validate() compatibility
-  - measured campaign evidence
+  - build_kind "preset" | "recipe" with build_name or config_builder
+  - coordinate fields (credit, update, geometry, plasticity, substrates)
+  - measured Pareto metadata + provenance (never speculative)
+  - SystemConfig.validate() compatibility via the build path
 ```
 
 No manual metadata without campaign evidence.
@@ -625,7 +674,8 @@ Provide:
 
 ```text
 FitnessMetric component
-  - objective name
+  - objective name (extend KNOWN_OBJECTIVES and the objective→field/direction
+    map in synthesis/engine.py)
   - direction
   - normalization
   - campaign source field
@@ -660,6 +710,10 @@ compile/export path
 
 No physical-hardware claims without hardware validation.
 
+### Wire an AutoScientist surface (adapter only)
+
+The AutoScientist stays a pure compartment — no CEEC import inside `computronium/autoscientist`. The T24.2.8 adapter mirrors `ExperimentProposer` proposals and `HypothesisReasoner` hypothesis chains into CEEC `Experiment` pre-registrations / `Belief` drafts through the research schema (`AutoScientistBridge` packages execution; CEEC packages governance) and offers `ProposalObjective`-ranked candidates to the evolution kernel as seed genomes. No parallel proposal ledger.
+
 ---
 
 ## 15. Anti-Bureaucracy Clause
@@ -667,14 +721,14 @@ No physical-hardware claims without hardware validation.
 ```text
 No PyPI publishing in TODO24.
 No new ontology axes.
-No new CEEC-Core features.
+No experiment-execution logic in CEEC-Core (governance only; instrument improvements ride T24.0.6).
 No probe-level beliefs.
 No cookbook entry without campaign evidence or certified negative result.
 No catalog metadata without a construction path and campaign evidence.
 No evolved candidate becomes a recommendation solely because it was mutated.
 No task class is forced into an incompatible geometry.
 No substrate result is described as hardware-measured unless physical validation exists.
-No internal metric ships without a user-facing report or boundary record.
+No internal metric ships without a user-facing report or measurement block.
 ```
 
 ---
@@ -695,6 +749,7 @@ If yes, TODO24 is complete.
 - [ ] T24.0.3 Budget Tiers
 - [ ] T24.0.4 Ledger Record Types
 - [ ] T24.0.5 Corpus Directories
+- [ ] T24.0.6 CEEC Instrument Improvements
 
 ### Session YYYY-MM-DD — Phase 1: Autopoiesis Kernel
 - [ ] T24.1.1 CoordinateGenome
@@ -712,6 +767,8 @@ If yes, TODO24 is complete.
 - [ ] T24.2.4 EvolutionReport
 - [ ] T24.2.5 Frontier Archive
 - [ ] T24.2.6 Synthesis Integration
+- [ ] T24.2.7 CEEC Experiment Lifecycle
+- [ ] T24.2.8 Compartment Adapters
 
 ### Session YYYY-MM-DD — Phase 3: Certified Research Corpus v1
 - [ ] T24.3.1 Problem Classes
@@ -719,7 +776,7 @@ If yes, TODO24 is complete.
 - [ ] T24.3.3 Statistical Summary Module
 - [ ] T24.3.4 Catalog Re-Measurement Pass
 - [ ] T24.3.5 Frontier Archive Integration
-- [ ] T24.3.6 Boundary Ledger
+- [ ] T24.3.6 Measurement-Block Ledger
 
 ### Session YYYY-MM-DD — Phase 4: Continual Adaptation Benchmark
 - [ ] T24.4.1 CurriculumSpec
@@ -740,6 +797,7 @@ If yes, TODO24 is complete.
 - [ ] T24.6.3 Belief Promotion for Evolved Mechanisms
 - [ ] T24.6.4 Failure Manifesto
 - [ ] T24.6.5 Ledger Audit
+- [ ] T24.6.6 Prediction Calibration
 
 ### Session YYYY-MM-DD — Phase 7: Demo, Gallery, and Documentation
 - [ ] T24.7.1 D24 Evolution Demo
@@ -753,5 +811,7 @@ If yes, TODO24 is complete.
 - [ ] Continual benchmark report validated
 - [ ] Substrate transfer report validated
 - [ ] Ledger audit clean
+- [ ] CEEC Experiment lifecycle validated end-to-end (pre-registration → selection → Decision)
+- [ ] Compartment purity verified (no cross-imports)
 - [ ] Gallery/demo locks green
 
