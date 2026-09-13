@@ -448,7 +448,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 | `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
-| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget** |
+| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget**; task tiers: classification quick tier, sequence tier (`train_sequence`), state-prediction tier (`train_state_prediction` — NCA grid rollout), ψ-only continual adaptation (`Lab.adapt`), validation campaigns + `promote_mechanism` + `ledger_audit` |
 | `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
 
 Platform docs (recipe book, edge blueprint, external summary, release
