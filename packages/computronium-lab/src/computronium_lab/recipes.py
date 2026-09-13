@@ -263,6 +263,43 @@ def build_ntm_classifier(
     )
 
 
+def build_ntm_sequence(
+    input_dim: int = 8,
+    output_dim: int = 2,
+    hidden: int = 32,
+    mem_slots: int = 16,
+    mem_width: int = 16,
+    step_size: float = 0.1,
+) -> object:
+    """NTM on the sequence tier (2026-09-13 sequence campaign).
+
+    Same W8.5 construction as ``ntm_classifier``; trained via
+    ``computronium_lab.sequential.train_sequence`` (BPTT through
+    ``geometry.episode``) on the Z3 synthetic tasks. ``step_size`` is the
+    SGD lr used by that loop (the update axis is bypassed — BPTT *is*
+    backprop).
+    """
+    return compose_system_from_configs(
+        substrate=SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ),
+        geometry=GeometryConfig.ntm(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden=hidden,
+            mem_slots=mem_slots,
+            mem_width=mem_width,
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=step_size),
+    )
+
+
 RECIPES: dict[str, Recipe] = {
     "temporal_psi": Recipe(
         name="temporal_psi",
@@ -348,6 +385,22 @@ RECIPES: dict[str, Recipe] = {
             "1.0 @ 10 epochs, 3 seeds, digital + memristive",
         ),
         build=build_ntm_classifier,
+    ),
+    "ntm_sequence": Recipe(
+        name="ntm_sequence",
+        summary="NTM on the sequence tier — W8.5 construction trained "
+        "with BPTT through geometry.episode on the Z3 synthetic tasks.",
+        when_to_use="Sequence classification (parity/last_symbol/"
+        "threshold); memory-addressed recurrent problems.",
+        when_not="Single-step classification (ntm_classifier); "
+        "sequential-copy regimes and long-horizon parity are NOT at "
+        "this operating point (see provenance boundaries).",
+        evidence=(
+            "2026-09-13 ntm_sequence campaign (TODO23 §12): last_symbol "
+            "0.92 @ 120ep, 3 seeds; threshold 0.65; parity at chance "
+            "(recorded boundary)",
+        ),
+        build=build_ntm_sequence,
     ),
 }
 

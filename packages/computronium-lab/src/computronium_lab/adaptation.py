@@ -265,9 +265,17 @@ def _psi_eval(
     batches = list(task_data)  # type: ignore[arg-type]
     for i, (x, y) in enumerate(batches[:max_batches]):
         with torch.no_grad():
-            state = SystemState(x=x, y=y)
-            state.activations = forward_pass(substrate, geometry, x)
-            settled = dynamics.settle(state, geometry, substrate, target=None)
+            if x.dim() == 3:
+                # sequence episode: score the final-timestep readout after
+                # stepping the geometry through its own recurrence
+                for t in range(x.shape[1]):
+                    state = SystemState(x=x[:, t], y=y)
+                    state.activations = forward_pass(substrate, geometry, x[:, t])
+                    settled = dynamics.settle(state, geometry, substrate, target=None)
+            else:
+                state = SystemState(x=x, y=y)
+                state.activations = forward_pass(substrate, geometry, x)
+                settled = dynamics.settle(state, geometry, substrate, target=None)
             acts = settled.activations
             if acts is None:
                 continue
@@ -310,6 +318,21 @@ def _psi_only_episodes(
     history: list[dict[str, float]] = []
     for i in range(episodes):
         x, y = batches[i % len(batches)]
+        if x.dim() == 3:
+            history.append(
+                _sequence_episode(
+                    substrate,
+                    geometry,
+                    dynamics,
+                    credit,
+                    frozen,
+                    x,
+                    y,
+                    plasticity,
+                    psi,
+                )
+            )
+            continue
         history.append(
             run_train_step(
                 substrate,
@@ -325,6 +348,44 @@ def _psi_only_episodes(
             )
         )
     return history, psi
+
+
+def _sequence_episode(
+    substrate: object,
+    geometry: object,
+    dynamics: object,
+    credit: object,
+    frozen: object,
+    x: Tensor,
+    y: Tensor,
+    plasticity: PsiPlasticity,
+    psi: dict[str, Tensor],
+) -> dict[str, float]:
+    """One ψ episode over a sequence-shaped batch (E4 over NTM).
+
+    The sequence runs through the pipeline one timestep at a time; the
+    geometry's cross-step buffers carry the recurrence. ψ steps ONCE per
+    episode — on the final timestep, where the episode's evidence is
+    complete — and the same ψ modulation applies there; earlier
+    timesteps run plasticity-free so the step contract is not violated.
+    """
+    metrics: dict[str, float] | None = None
+    for t in range(x.shape[1]):
+        engage = plasticity if t == x.shape[1] - 1 else None
+        metrics = run_train_step(
+            substrate,  # type: ignore[arg-type]
+            geometry,  # type: ignore[arg-type]
+            dynamics,  # type: ignore[arg-type]
+            credit,  # type: ignore[arg-type]
+            frozen,  # type: ignore[arg-type]
+            x[:, t],
+            y,
+            plasticity=engage,
+            psi=psi,
+            context=object(),  # ψ primitives never read the context
+        )
+    assert metrics is not None  # ruff: ignore[assert] - loop runs at least once
+    return metrics
 
 
 def adapt(

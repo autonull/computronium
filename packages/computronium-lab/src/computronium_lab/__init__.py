@@ -48,6 +48,14 @@ from computronium_lab.ecosystem import (
 from computronium_lab.lab import ComparisonResult, Lab
 from computronium_lab.presets import PRESETS
 from computronium_lab.recipes import RECIPES, build_recipe
+from computronium_lab.sequential import (
+    SEQUENCE_TASKS,
+    SequenceCampaignReport,
+    SequenceTrainingResult,
+    sequence_campaign,
+    sequence_task,
+    train_sequence,
+)
 from computronium_lab.synthesis import (
     Constraints,
     ExplorationBudgetExhausted,
@@ -68,6 +76,7 @@ from computronium_lab.training import (
 __all__ = [
     "PRESETS",
     "RECIPES",
+    "SEQUENCE_TASKS",
     "AdaptationMode",
     "AdaptationResult",
     "BenchmarkReport",
@@ -86,6 +95,8 @@ __all__ = [
     "ProblemSpec",
     "PsiProgram",
     "PsiStep",
+    "SequenceCampaignReport",
+    "SequenceTrainingResult",
     "StabilityCertificate",
     "StabilityGuardKill",
     "SubstrateReport",
@@ -110,7 +121,10 @@ __all__ = [
     "run_benchmark",
     "run_campaign",
     "select_z3_operator",
+    "sequence_campaign",
+    "sequence_task",
     "serve_system",
     "substrate_report",
     "synthesize",
+    "train_sequence",
 ]

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         TaskBoundary,
     )
     from computronium_lab.deployment import ExportResult
+    from computronium_lab.sequential import SequenceTrainingResult
     from computronium_lab.synthesis.engine import ParetoOption, SynthesisResult
 
 PSI_ONLY = "psi_only"
@@ -231,6 +232,32 @@ class Lab:
             spec=spec,
             options=opts,
             record_ledger=self.record_ledger,
+        )
+
+    def train_sequence(
+        self,
+        system: object,
+        task: str = "last_symbol",
+        *,
+        epochs: int = 60,
+        lr: float = 0.1,
+        batch_size: int = 32,
+        seq_len: int = 8,
+        input_dim: int = 8,
+        seed: int | None = None,
+    ) -> SequenceTrainingResult:
+        """BPTT classification on a sequence task (TODO23 sequence tier)."""
+        from computronium_lab.sequential import train_sequence as _train
+
+        return _train(
+            system,
+            task,
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            seq_len=seq_len,
+            input_dim=input_dim,
+            seed=self.seed if seed is None else seed,
         )
 
     def adapt(

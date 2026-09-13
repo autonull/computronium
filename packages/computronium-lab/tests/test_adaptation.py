@@ -12,6 +12,7 @@ from computronium_lab.adaptation import (
     PsiStep,
     TaskBoundary,
     TaskBoundaryDetector,
+    adapt,
     heldout_split,
     paired_slope,
     probe_campaign,
@@ -133,3 +134,24 @@ def test_train_still_works_after_adapt(lab: Lab, system: object) -> None:
     result = lab.train(system, epochs=1, options=TrainOptions(harvest=True))
     assert result.metrics["accuracy"] >= 0.0
     assert result.harvest is not None and result.harvest.applied
+
+
+def test_psi_episode_over_ntm_sequence() -> None:
+    """E4 over NTM: sequence-shaped ψ episodes, θ bitwise frozen."""
+    from computronium_lab.recipes import build_ntm_sequence
+    from computronium_lab.sequential import train_sequence
+
+    system = build_ntm_sequence()
+    train_sequence(system, "last_symbol", epochs=20, seed=0)
+
+    def stream():
+        for _ in range(4):
+            # (B, T, D) sequence episodes with a binary task label
+            x = torch.randn(16, 8, 8)
+            y = (x.sum(dim=(1, 2)) > 0).long()
+            yield x, y
+
+    result = adapt(system, stream(), "temporal", episodes=3)
+    assert result.theta.bitwise_invariant
+    assert result.psi_updated
+    assert 0.0 <= result.metrics["free_accuracy"] <= 1.0

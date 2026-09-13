@@ -521,6 +521,19 @@ No internal metrics without a user-facing report.
 
 **Gates:** unit-core/ceec credit+compose 48 passed; property credit 58 passed; ruff clean; pyright 0 on `spec.py`, unchanged legacy baseline in `credit.py`.
 
+### Session 2026-09-13 — Sequence Task Tier + ψ-over-NTM (#2/#3 enabling slice)
+- [x] **`computronium_lab.sequential`** — the sequence task tier (the extension both remaining items were blocked on):
+  - `sequence_task(name, ...)` — parity / last_symbol / threshold, **reusing the recorded Z3 generators** (`experiments/joint/z3_fixed_weights.py`; nothing new invented). Deterministic per seed.
+  - `train_sequence(system, task, ...)` — BPTT classification through `geometry.episode(grad=True)` (per-episode CE on final-step logits, SGD). Honest framing in the docstring: the credit axis is bypassed because BPTT through the unrolled episode *is* backprop; the update axis's step_size is ignored in favor of `lr`. Raises for geometries without an `episode` API.
+  - `Lab.train_sequence(...)` entrypoint; `SequenceTrainingResult` exported.
+  - `sequence_campaign(lab, builder, task, ...)` — §6-governed multi-seed validation: BenchmarkReproduction + DeployabilityCheck gates, one `validation_campaign` artifact/evidence/decision in the ledger (the classification StabilityCertificate does not apply to BPTT; its absence is recorded as None, not faked). Negative results stored too.
+- [x] **Measured ntm_sequence campaign** (raw-LSTM control for context): last_symbol **0.918/0.922/0.910 @ 120ep** lr=0.1 (raw LSTM: 0.953 @ 60ep — NTM pays its memory overhead); threshold ~0.65; **parity at chance at this budget** (long-horizon integration needs a different recipe — recorded boundary, not swept further). D20 sequential-copy (bptt 0.979) still not wired.
+- [x] **`ntm_sequence` recipe + catalog row** — same W8.5 construction; screened via `_ntm_sequence_config` through `SystemConfig.validate()`; Pareto metadata = measured (accuracy) + labeled estimates (latency/memory). Provenance carries all boundaries verbatim.
+- [x] **#3 first slice — ψ episodes over NTM sequences**: probed the existing machinery first — ψ adaptation *already engages* an NTM system (flat episodes): ψ updates, θ bitwise frozen, ψ-readout fitting its stream. The real gap was sequence-shaped episodes. Wiring: `_psi_only_episodes` routes 3D batches through `_sequence_episode` — the sequence runs through the pipeline one timestep at a time (the NTM's own cross-step buffers carry the recurrence), and **ψ steps ONCE per episode on the final timestep** (the pipeline's step contract preserved; earlier timesteps run plasticity-free). `_psi_eval` scores the final-timestep readout for sequence batches. Test: trained NTM + 3D stream → θ bitwise-invariant, ψ updated, free/ψ accuracies bounded.
+- [~] **Z3 controller campaign — refined verdict**: the sequence tier now supplies the *tasks* (parity/last_symbol/threshold are the lab-native sequence tasks), but `Z3Controller` is a raw nn.Module — training it is a raw-module campaign, the exact construction/metadata mismatch that blocked NTM originally. The campaign needs an ontology Z3 composition (operator selection as a geometry/dynamics primitive) which does not exist. Blocked, recorded.
+
+**Gates:** lab suite **82 passed**; D22 demo + gallery lock green (ntm_sequence filtered/dominated in the demo's scenarios — no re-pin needed); ruff clean; pyright strict 0 on all touched modules.
+
 ---
 
 **This redeems everything. The primitive layer is done. The governance layer is done. TODO23 builds the synthesis layer that makes them generative.**
