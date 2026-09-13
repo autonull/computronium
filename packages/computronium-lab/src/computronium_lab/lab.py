@@ -29,6 +29,12 @@ if TYPE_CHECKING:
     )
     from computronium_lab.deployment import ExportResult
     from computronium_lab.sequential import SequenceTrainingResult
+    from computronium_lab.state_prediction import (
+        StatePredictionResult as StatePredictionResult,
+    )
+    from computronium_lab.state_prediction import (
+        TransitionTask as StatePredictionTask,
+    )
     from computronium_lab.synthesis.engine import ParetoOption, SynthesisResult
 
 PSI_ONLY = "psi_only"
@@ -260,6 +266,37 @@ class Lab:
             seed=self.seed if seed is None else seed,
         )
 
+    def train_state_prediction(
+        self,
+        system: object,
+        task: StatePredictionTask | None = None,
+        *,
+        epochs: int = 300,
+        lr: float = 0.02,
+        batch_size: int = 32,
+        steps: int = 3,
+        seed: int | None = None,
+    ) -> StatePredictionResult:
+        """State-prediction training on the grid tier (TODO23 §12)."""
+        from computronium_lab.state_prediction import (
+            grid_transition_task,
+        )
+        from computronium_lab.state_prediction import (
+            train_state_prediction as _train,
+        )
+
+        if task is None:
+            task = grid_transition_task(self.seed if seed is None else seed)
+        return _train(
+            system,
+            task,
+            epochs=epochs,
+            lr=lr,
+            batch_size=batch_size,
+            steps=steps,
+            seed=self.seed if seed is None else seed,
+        )
+
     def adapt(
         self,
         system: object,
@@ -269,8 +306,13 @@ class Lab:
         episodes: int = 10,
         boundary: TaskBoundary | None = None,
         stability_check: bool = False,
+        psi_step: str = "final",
     ) -> AdaptationResult:
-        """ψ-only continual adaptation on frozen θ (TODO23 Phase 3)."""
+        """ψ-only continual adaptation on frozen θ (TODO23 Phase 3).
+
+        ``psi_step="every_timestep"`` accumulates ψ statistics across
+        sequence timesteps (see ``adaptation.adapt``).
+        """
         from computronium_lab.adaptation import adapt as _adapt
 
         torch.manual_seed(self.seed)
@@ -281,6 +323,7 @@ class Lab:
             episodes=episodes,
             boundary=boundary,
             stability_check=stability_check,
+            psi_step=psi_step,
         )
 
     def export(

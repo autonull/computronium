@@ -300,6 +300,40 @@ def build_ntm_sequence(
     )
 
 
+def build_nca_predictor(
+    channels: int = 4,
+    grid_hw: tuple[int, int] = (10, 10),
+    hidden: int = 32,
+    step_size: float = 0.02,
+) -> object:
+    """State-prediction NCA composition (W8.1 construction, label-free).
+
+    Shared cell MLP over the 3x3 neighborhood (W8.1 reference recipe) with
+    GradientCredit + Euclidean update; trained via
+    ``state_prediction.train_state_prediction`` (direct one-step MSE — the
+    credit axis is bypassed, one-step MSE through the geometry IS
+    backprop). Label-free regime (W8.3): no per-cell label grid.
+    """
+    return compose_system_from_configs(
+        substrate=SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ),
+        geometry=GeometryConfig.nca(
+            channels=channels,
+            grid_hw=grid_hw,
+            hidden=hidden,
+            label_channels=0,
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=step_size),
+    )
+
+
 RECIPES: dict[str, Recipe] = {
     "temporal_psi": Recipe(
         name="temporal_psi",
@@ -401,6 +435,24 @@ RECIPES: dict[str, Recipe] = {
             "~0.65; parity at chance (recorded boundary)",
         ),
         build=build_ntm_sequence,
+    ),
+    "nca_predictor": Recipe(
+        name="nca_predictor",
+        summary="Neural cellular automaton on the state-prediction tier — "
+        "W8.1 shared cell MLP over the 3x3 neighborhood, label-free "
+        "regime, k=3 rollout grid→grid MSE.",
+        when_to_use="State-space prediction / local dynamics modelling "
+        "(grid→grid regression); self-organizing pattern dynamics.",
+        when_not="Classification (the flat quick tier cannot host the "
+        "grid; a pooled readout head is not composed); one-step "
+        "transitions (the map degenerates to identity); multi-step "
+        "growth with label conditioning (distill regime, not wired).",
+        evidence=(
+            "2026-09-13 state-prediction campaign (TODO23 §12): "
+            "hidden-teacher rollout cell_acc 0.964-0.997 (mean 0.976) "
+            "@ 300ep, 3 seeds; permuted control 0.61-0.66",
+        ),
+        build=build_nca_predictor,
     ),
 }
 

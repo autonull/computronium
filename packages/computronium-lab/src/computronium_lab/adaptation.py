@@ -299,11 +299,16 @@ def _psi_only_episodes(
     plasticity: PsiPlasticity,
     psi: dict[str, Tensor],
     episodes: int,
+    psi_step: str = "final",
 ) -> tuple[list[dict[str, float]], dict[str, Tensor]]:
     """Run episodes through the pipeline with the U-axis frozen.
 
     The caller's ``psi`` dict is stepped in place by ``_step_psi`` (the
     pipeline's writeback contract), so ψ carries across episodes.
+    ``psi_step="every_timestep"`` engages the P-axis at every sequence
+    step (sequence-level ψ statistics — the primitive's own decayed
+    sufficient statistics carry across the recurrence) instead of once
+    on the final timestep.
     """
     batches = list(task_data)  # type: ignore[arg-type]
     if not batches:
@@ -330,6 +335,7 @@ def _psi_only_episodes(
                     y,
                     plasticity,
                     psi,
+                    psi_step=psi_step,
                 )
             )
             continue
@@ -350,7 +356,7 @@ def _psi_only_episodes(
     return history, psi
 
 
-def _sequence_episode(
+def _sequence_episode(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - flat pipeline tuple, psi_step keyword-only
     substrate: object,
     geometry: object,
     dynamics: object,
@@ -360,18 +366,23 @@ def _sequence_episode(
     y: Tensor,
     plasticity: PsiPlasticity,
     psi: dict[str, Tensor],
+    *,
+    psi_step: str = "final",
 ) -> dict[str, float]:
     """One ψ episode over a sequence-shaped batch (E4 over NTM).
 
     The sequence runs through the pipeline one timestep at a time; the
-    geometry's cross-step buffers carry the recurrence. ψ steps ONCE per
-    episode — on the final timestep, where the episode's evidence is
-    complete — and the same ψ modulation applies there; earlier
-    timesteps run plasticity-free so the step contract is not violated.
+    geometry's cross-step buffers carry the recurrence. With the default
+    ``psi_step="final"`` ψ steps ONCE per episode — on the final
+    timestep, where the episode's evidence is complete — and the same ψ
+    modulation applies there; earlier timesteps run plasticity-free so
+    the step contract is not violated. ``psi_step="every_timestep"``
+    engages the P-axis at every step (sequence-level ψ statistics).
     """
     metrics: dict[str, float] | None = None
+    last = x.shape[1] - 1
     for t in range(x.shape[1]):
-        engage = plasticity if t == x.shape[1] - 1 else None
+        engage = plasticity if (psi_step == "every_timestep" or t == last) else None
         metrics = run_train_step(
             substrate,  # type: ignore[arg-type]
             geometry,  # type: ignore[arg-type]
@@ -396,12 +407,16 @@ def adapt(
     episodes: int = 10,
     boundary: TaskBoundary | None = None,
     stability_check: bool = False,
+    psi_step: str = "final",
 ) -> AdaptationResult:
     """ψ-only adaptation: θ bitwise frozen, ψ updated, certificate returned.
 
     ``mode="psi_only"`` (the Phase-2 API spelling) resolves to TEMPORAL.
     ``boundary`` forces a manual task boundary; otherwise the detector runs
     over the episode stream (loss plateau + ψ-agreement conflict).
+    ``psi_step="every_timestep"`` accumulates ψ statistics across sequence
+    timesteps instead of stepping once on the final timestep (sequence
+    variants; the A/B campaign lives in TODO23 §12).
     """
     t0 = time.perf_counter()
     match mode:
@@ -421,7 +436,9 @@ def adapt(
     if not batches:
         raise ValueError("task_data is empty; ψ-only adaptation needs episodes")
 
-    history, psi = _psi_only_episodes(system, batches, plasticity, psi, episodes)
+    history, psi = _psi_only_episodes(
+        system, batches, plasticity, psi, episodes, psi_step=psi_step
+    )
 
     sha_after = theta_digest(system)
     proof = ThetaInvarianceProof(

@@ -268,6 +268,18 @@ def _ntm_config(substrate: str, precision: str) -> SystemConfig:
     )
 
 
+def _nca_predictor_config(substrate: str, precision: str) -> SystemConfig:
+    return SystemConfig(
+        substrate=_substrate_config(substrate, precision),
+        geometry=GeometryConfig.nca(
+            channels=4, grid_hw=(10, 10), hidden=32, label_channels=0
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=0.02),
+    )
+
+
 CATALOG: tuple[MechanismCandidate, ...] = (
     MechanismCandidate(
         name="backprop_mlp",
@@ -470,6 +482,39 @@ CATALOG: tuple[MechanismCandidate, ...] = (
             "geometry.episode); latency is an estimate"
         ),
         config_builder=_ntm_sequence_config,
+    ),
+    MechanismCandidate(
+        name="nca_predictor",
+        credit="bptt",
+        update="euclid",
+        geometry="nca",
+        mechanism_class="exact_gradient",
+        depth=1,
+        width=32,
+        substrates=("digital",),
+        local_credit=False,
+        build_kind="recipe",
+        build_name="nca_predictor",
+        pareto=Pareto(
+            accuracy=0.96,  # rollout cell_acc (see provenance)
+            latency_ms=12.0,  # k=3 rollout of the shared cell MLP (estimate)
+            memory_gb=0.1,
+            stability=0.9,
+        ),
+        provenance=(
+            "2026-09-13 state-prediction campaign (TODO23 §12, NCA tier): "
+            "hidden-teacher rollout task (fixed random CA rule per seed, "
+            "k=3 BPTT targets; the ONE-STEP map is degenerate — next≈states, "
+            "trained and permuted control both at cell_acc 1.0 — recorded "
+            "boundary), student NCA (4ch, 10x10, 32 hidden, ~1.6k params, "
+            "delta_scale 0.5) via BPTT rollout MSE (credit axis bypassed). "
+            "Probe: cell_acc 0.964/0.999/0.965 (mean 0.976) @ 300ep, 3 "
+            "seeds (<7s each); permuted control ≈0.607 (chance floor 0.25; "
+            "identity prior explains the gap). Matched control flagged "
+            "against the 0.96-0.15 bar. W8.1 growth/distill regime with "
+            "label conditioning is NOT wired into the tier"
+        ),
+        config_builder=_nca_predictor_config,
     ),
     MechanismCandidate(
         name="pepita_mlp",

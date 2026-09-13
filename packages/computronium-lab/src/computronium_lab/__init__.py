@@ -56,6 +56,13 @@ from computronium_lab.sequential import (
     sequence_task,
     train_sequence,
 )
+from computronium_lab.state_prediction import (
+    StatePredictionCampaignReport,
+    StatePredictionResult,
+    grid_transition_task,
+    state_prediction_campaign,
+    train_state_prediction,
+)
 from computronium_lab.synthesis import (
     Constraints,
     ExplorationBudgetExhausted,
@@ -99,6 +106,8 @@ __all__ = [
     "SequenceTrainingResult",
     "StabilityCertificate",
     "StabilityGuardKill",
+    "StatePredictionCampaignReport",
+    "StatePredictionResult",
     "SubstrateReport",
     "SynthesisResult",
     "TaskBoundary",
@@ -114,6 +123,7 @@ __all__ = [
     "estimate_energy",
     "explore",
     "export_system",
+    "grid_transition_task",
     "ledger_audit",
     "probe_campaign",
     "promote_mechanism",
@@ -124,7 +134,9 @@ __all__ = [
     "sequence_campaign",
     "sequence_task",
     "serve_system",
+    "state_prediction_campaign",
     "substrate_report",
     "synthesize",
     "train_sequence",
+    "train_state_prediction",
 ]

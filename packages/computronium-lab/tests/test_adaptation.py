@@ -155,3 +155,29 @@ def test_psi_episode_over_ntm_sequence() -> None:
     assert result.theta.bitwise_invariant
     assert result.psi_updated
     assert 0.0 <= result.metrics["free_accuracy"] <= 1.0
+
+
+def test_psi_step_every_timestep_variant() -> None:
+    """Sequence-ψ statistics variant (TODO23 §12 A/B): per-timestep ψ.
+
+    The A/B campaign (scripts/probes/sequence_psi_stats_ab.py) found no
+    significant difference vs the final-step default (paired t, p=0.68),
+    so "final" stays the default; this test locks the variant's
+    contracts: θ bitwise frozen, ψ updated, metrics bounded.
+    """
+    from computronium_lab.recipes import build_ntm_sequence
+    from computronium_lab.sequential import train_sequence
+
+    system = build_ntm_sequence()
+    train_sequence(system, "last_symbol", epochs=20, seed=0)
+
+    def stream():
+        for _ in range(4):
+            x = torch.randn(16, 8, 8)
+            y = (x.sum(dim=(1, 2)) > 0).long()
+            yield x, y
+
+    result = adapt(system, stream(), "temporal", episodes=3, psi_step="every_timestep")
+    assert result.theta.bitwise_invariant
+    assert result.psi_updated
+    assert 0.0 <= result.metrics["psi_accuracy"] <= 1.0
