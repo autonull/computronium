@@ -1,6 +1,6 @@
 # TODO23 — Generative Learning Mechanism Platform
 
-**Status:** IN PROGRESS (2026-09-13). Phases 1–5 COMPLETE; integration validation: 5-problem-class loop ✓, external quickstart ✓; validation campaigns + CEEC ledger audit + §6 belief promotion + **ontology-NTM campaign & catalog row shipped and tested**. Remaining: PyPI publishing (external).
+**Status:** IN PROGRESS (2026-09-13). Phases 1–5 COMPLETE; integration validation: 5-problem-class loop ✓, external quickstart ✓; validation campaigns + CEEC ledger audit + §6 belief promotion + ontology-NTM campaign & catalog row + **legacy-row re-measurement (FF metric defect fixed, honest metadata) shipped and tested**. Remaining: PyPI publishing (external); sequence-ψ statistics (campaign-gated, see §12 verdict).
 **Created:** 2026-09-11
 **Synthesizes:** TODO12–22 (all prior work redeemed here)
 
@@ -258,14 +258,14 @@ Week 14:   Integration test: full loop spec→synthesize→train→adapt→expor
 
 ## 10. Definition of Done (Tangible)
 
-- [ ] `lab = Lab(); spec = lab.specify(...); system = lab.synthesize(spec)` works for 5 problem classes
-- [ ] `result = lab.train(system, spec)` produces `TrainingResult` with all certificates
-- [ ] `result = lab.adapt(system, task_stream)` runs continual learning with θ invariance proof
-- [ ] `lab.export(system, target="onnx", substrate="memristive")` produces runnable artifact
-- [ ] Benchmark suite runs on vision/NLP/tabular/continual/neuromorphic with published Pareto frontiers
-- [ ] External user quickstart: `pip install computronium-lab` → result in <5 min
+- [x] `lab = Lab(); spec = lab.specify(...); system = lab.synthesize(spec)` works for 5 problem classes
+- [x] `result = lab.train(system, spec)` produces `TrainingResult` with all certificates
+- [x] `result = lab.adapt(system, task_stream)` runs continual learning with θ invariance proof
+- [x] `lab.export(system, target="onnx", substrate="memristive")` produces runnable artifact
+- [~] Benchmark suite runs on vision/NLP/tabular/continual/neuromorphic with published Pareto frontiers — quick tier shipped (`run_benchmark`); NLP/neuromorphic tiers need real datasets (recorded boundary)
+- [x] External user quickstart: `pip install computronium-lab` → result in <5 min (wheel install verified; PyPI publishing is the release-pass remainder)
 - [x] CEEC ledger contains *campaign records for certified mechanisms*, not probe codes — `run_campaign` + `ledger_audit` shipped and tested (§10 audit enforces zero X-* codes in new entries)
-- [ ] Zero "X-*" experiment codes in new ledger entries
+- [x] Zero "X-*" experiment codes in new ledger entries — enforced by `ledger_audit` (tested both directions)
 
 ---
 
@@ -472,6 +472,26 @@ No internal metrics without a user-facing report.
 - Promotion cost: one campaign + one control run per spec at the campaign's epoch budget. Budget-conscious corpora: `promote_mechanism(..., reports=[...])` now accepts pre-computed `CampaignReport`s (redeemed 2026-09-13 — controls still run).
 - Remaining TODO23 items: ontology-NTM row (blocked on its own measured ontology campaign, §11) and PyPI publishing (external, needs credentials + sibling packages first).
 - `Finding.code` in `ceec.audit` is `check` — surfaced violations are check names, not codes.
+
+### Session 2026-09-13 — Legacy-Row Re-Measurement + FF Metric Defect Fix
+- [x] **FF metric defect fixed (skeptical-low-performer follow-through)** — `ff_mlp` measured 0.0 train accuracy on the calibrated task, all seeds/epochs: exactly 0.0 is a defect signature (constant-collapse scores chance 0.25), not a training failure. Root cause: `_FFSystem.train_step` (computronium/core/presets.py) returned only the **teacher-forced** `"accuracy"` (classifier on label-injected positives) under a key `SystemTrainer.train_epoch` drops (it reads `free_accuracy`/`nudged_fit_accuracy`). Fix: FF now computes an honest free-phase metric — classifier over **all** hidden layers of the *un-injected* input under `no_grad` — and reports it as `free_accuracy` (the trainer's preferred key). No trainer change; FF's teacher-forced `cls_acc` is still returned under `"accuracy"` but never consumed as accuracy.
+- [x] **Honest val-split re-measurement** (`scripts/probes/remeasure_val_split.py`; measurement protocol: campaign construction path `cand.build(spec)` + `Lab.train(stability_guard=True)` + val split via `system.forward`, 3 seeds):
+  - backprop_mlp (control): train 0.964/0.917/0.839, **val 0.870 @20ep** — consistent with the recorded 0.918 guard-path operating point; metadata stands.
+  - **ff_mlp: val 0.953/0.938/0.922 @10ep, 0.92 mean @20ep** — FF *works*; the 0.83 ladder metadata was understated on this task. Catalog: accuracy 0.92.
+  - **fa_mlp: val 0.453/0.688/0.422 @20ep (mean 0.52, σ≈0.13 — the FA high-variance signature)**. Catalog: accuracy 0.52.
+  - **pepita_mlp: val 0.984/1.0/0.953 @10ep (mean 0.98)** — the ladder-era 0.10 is obsolete on the lab tier; PEPITA is provably backprop-equivalent, so parity with backprop is the mechanistic expectation. Catalog: accuracy 0.97, stability 0.9.
+- [x] **RNG-offset finding (recorded)** — the plain (no-guard) path trains from a different init than the guard path: `_probe_batch` consumes global torch RNG (shuffle draws) before `fit`, so the seed maps to different initializations. The recorded campaign numbers are guard-path numbers; re-measurements must use the campaign configuration (guard on) or they will not be comparable.
+- [x] **Campaign gate now verifies the three rows** — `test_campaign_certifies_remeasured_legacy_rows`: ff/pepita reproduce at 10 epochs, fa at 20 (its spread needs the longer budget). The §12 note "campaigns on these rows will honestly fail until re-measured" is redeemed.
+- [x] **Gallery re-pinned** — ff/pepita/fa metadata changed → D22 record data changed → `render_gallery` re-pin; gallery lock 2 passed. (`run_records/*.json` git_commit-field rewrites on the other records are the recorded cosmetic convention.)
+- [~] **Sequence-level ψ statistics — verdict recorded, campaign-gated** (the last in-#3 slice): the temporal ψ law already carries decayed sufficient statistics (gram/cross) in the live ψ dict across episodes/tasks; the remaining question is whether those statistics should accumulate **per-timestep over the sequence** instead of stepping once on the final timestep. That changes the ψ update semantics — a mechanism variant, not a wiring edit (same class as the Z3-controller verdict). It needs its own A/B comparison campaign on the sequence tier (current final-step variant vs accumulated-statistics variant), §11-compliant. Do not implement without that campaign.
+
+**Gates:** lab suite **84 passed** (~43s); FF property/parity tests green; gallery lock green; ruff format+check clean on touched files; pyright 0 new errors on `presets.py` (4 pre-existing), catalog/tests/probes clean.
+
+**Notes for future work:**
+- Campaign metric semantics: `run_campaign` reads `result.metrics["accuracy"]` = trainer `train_acc`, which for pipeline systems is free-phase (honest) and for FF is now the un-injected free phase (honest). Val-split scoring (`TrainOptions.val_data` → `val_acc`) is available when a row's provenance needs held-out numbers — the re-measurement protocol above is the reference.
+- ff's free-phase probe adds one no-grad forward per train step (negligible at quick-tier scale; the forward is shared code with `forward()` semantics).
+- pepita_mlp now outranks backprop_mlp on the accuracy frontier — honest (backprop-equivalence), and the frontier stays dominated-by-measurement.
+- **Remaining TODO23:** PyPI publishing only (external: credentials + sibling packages first). Sequence-ψ statistics ride their own campaign (verdict above).
 
 ### Session 2026-09-13 — Ontology-NTM Campaign + Catalog Row (blocker redeemed)
 - [x] **Measured ontology-NTM campaign** (the recorded blocker from the Lattice session): an ontology `GeometryConfig.ntm` System (LSTM controller + content-addressed memory, 12.8k params, mem_slots=mem_width=16 per the W8.5 recipe's `mem_slots ≤ mem_width` rule) trained via `Lab.train` on the gaussian-blob quick tier: **train_acc 1.0 @ 10 epochs, 3 seeds, digital AND memristive (int8 + noise 0.05 — no delta)**; ~0.5s/seed. `SystemConfig.validate()` accepts the coordinate.

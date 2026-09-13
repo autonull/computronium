@@ -447,6 +447,23 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
             h_pos, h_neg = x_pos, x_neg
             hidden_states_pos = []
 
+            # Free-phase accuracy on the *un-injected* input: the honest
+            # generalization metric (cls_acc below is computed on
+            # label-injected positives and is teacher-forced by
+            # construction). SystemTrainer prefers free_accuracy.
+            with torch.no_grad():
+                h_free = x
+                free_states = []
+                for layer in layers:
+                    h_free = layer(h_free)
+                    free_states.append(h_free)
+                free_acc = (
+                    (classifier(torch.cat(free_states, dim=1)).argmax(-1) == y)
+                    .float()
+                    .mean()
+                    .item()
+                )
+
             for i, (layer, opt) in enumerate(zip(layers, layer_opts)):
                 h_pos = layer(h_pos)
                 g_pos = (h_pos**2).mean(dim=1)
@@ -494,6 +511,7 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
             return {
                 "loss": total_loss / max(n_layers, 1),
                 "accuracy": cls_acc,
+                "free_accuracy": free_acc,
                 "cls_loss": cls_loss.item(),
             }
 

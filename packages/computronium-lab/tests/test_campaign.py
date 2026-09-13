@@ -51,6 +51,22 @@ def test_campaign_certifies_ntm_classifier(tmp_path: Path) -> None:
     assert report.certified, report.summary()
 
 
+def test_campaign_certifies_remeasured_legacy_rows(tmp_path: Path) -> None:
+    """ff/fa/pepita rows re-measured on the calibrated task (TODO23 §12).
+
+    Metadata now comes from the val-split re-measurement campaign; these
+    runs prove BenchmarkReproduction against it. fa runs at 20 epochs
+    (    its spread needs the longer budget); ff/pepita reproduce at 10.
+    """
+    cases = (("ff_mlp", 10), ("pepita_mlp", 10), ("fa_mlp", 20))
+    for mechanism, epochs in cases:
+        lab = Lab(seed=0, record_ledger=str(tmp_path / f"{mechanism}.db"))
+        spec = lab.specify("classification", "synthetic", constraints=Constraints())
+        report = run_campaign(lab, mechanism, spec, seeds=(0, 1, 2), epochs=epochs)
+        assert report.reproduction, report.summary()
+        assert report.stability
+
+
 def test_campaign_rejects_uncataloged_mechanism() -> None:
     lab = Lab(seed=0)
     spec = lab.specify("classification", "synthetic")

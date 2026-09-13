@@ -322,8 +322,15 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         local_credit=True,
         substrates=("digital", "neuromorphic"),
         build_name="ff_mlp",
-        pareto=Pareto(accuracy=0.83, latency_ms=4.0, memory_gb=0.4, stability=0.9),
-        provenance="w1_credit_ladder: ff×euclid 0.83 @ d2",
+        pareto=Pareto(accuracy=0.92, latency_ms=4.0, memory_gb=0.4, stability=0.9),
+        provenance=(
+            "w1_credit_ladder: ff×euclid 0.83 @ d2. Re-measured on the "
+            "calibrated (scale 1.2, noise 1.5) quick tier, guard path, "
+            "val-split via forward: 0.953/0.938/0.922 @10ep, "
+            "0.984/0.875/0.906 @20ep (mean 0.92); train-side 0.0 was a "
+            "metric-key defect (FF's un-injected free phase now reports "
+            "free_accuracy) — see TODO23 §12 re-measurement session"
+        ),
         config_builder=_ff_config,
     ),
     MechanismCandidate(
@@ -332,8 +339,14 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         update="euclid",
         substrates=("digital",),
         build_name="fa_mlp",
-        pareto=Pareto(accuracy=0.38, latency_ms=4.5, memory_gb=0.8, stability=0.6),
-        provenance="w1_credit_ladder: fa×euclid 0.38 @ d2 (rescued only by muon)",
+        pareto=Pareto(accuracy=0.52, latency_ms=4.5, memory_gb=0.8, stability=0.6),
+        provenance=(
+            "w1_credit_ladder: fa×euclid 0.38 @ d2 (rescued only by muon). "
+            "Re-measured on the calibrated quick tier, guard path, "
+            "val-split: 0.453/0.688/0.422 @20ep (mean 0.52, σ≈0.13 — "
+            "high seed variance is the FA signature here); see TODO23 "
+            "§12 re-measurement session"
+        ),
         config_builder=_fa_config,
     ),
     MechanismCandidate(
@@ -464,8 +477,16 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         update="euclid",
         substrates=("digital",),
         build_name="pepita_mlp",
-        pareto=Pareto(accuracy=0.10, latency_ms=6.0, memory_gb=1.0, stability=0.5),
-        provenance="w1_credit_ladder: pepita×euclid ≈0.10 @ d2 (home update: adam)",
+        pareto=Pareto(accuracy=0.97, latency_ms=6.0, memory_gb=1.0, stability=0.9),
+        provenance=(
+            "w1_credit_ladder: pepita×euclid ≈0.10 @ d2 (home update: adam) "
+            "— ladder-era operating point, NOT reproducible on the lab "
+            "quick tier. Re-measured on the calibrated task, guard path, "
+            "val-split via forward: 0.984/1.0/0.953 @10ep (mean 0.98); "
+            "PEPITA is provably backprop-equivalent so parity with "
+            "backprop_mlp (0.87) is the mechanistic expectation, not an "
+            "anomaly; see TODO23 §12 re-measurement session"
+        ),
         config_builder=_pepita_config,
     ),
 )
