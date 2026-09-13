@@ -186,7 +186,9 @@ class TestAppendOnly:
         with pytest.raises(sqlite3.IntegrityError):
             store._conn.execute(stmt)
 
-    def test_revision_chain_intact_after_status_changes(self, store, scope, evidence, link_belief):
+    def test_revision_chain_intact_after_status_changes(
+        self, store, scope, evidence, link_belief
+    ):
         belief_id = link_belief(evidence)
         gate = store.record_gate_outcome(
             "probability_threshold", "pass", "ok", belief_id=belief_id

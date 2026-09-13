@@ -31,7 +31,7 @@ OBJECTIVE_FIELDS: dict[str, tuple[str, bool]] = {
 }
 
 
-class ExplorationBudgetExhausted(RuntimeError):  # noqa: N818 — CEEC gate name is pre-registered
+class ExplorationBudgetExhausted(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] — CEEC gate name is pre-registered
     """CEEC gate: exploratory campaigns for this spec exceeded its budget."""
 
 

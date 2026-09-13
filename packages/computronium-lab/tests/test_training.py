@@ -66,6 +66,19 @@ def test_determinism_seal_verified() -> None:
     assert result.determinism.verified
     assert result.determinism.params_sha256
     assert result.determinism.metrics_sha256
+    assert result.determinism.first_divergence_epoch is None
+
+
+def test_val_data_surfaces_val_metrics() -> None:
+    from computronium_lab.lab import synthetic_task
+
+    lab = Lab(seed=0)
+    system = lab.compose("backprop_mlp")
+    _, val = synthetic_task(seed=0)
+    result = lab.train(system, epochs=2, options=TrainOptions(val_data=val))
+    assert "val_loss" in result.metrics
+    assert "val_acc" in result.metrics
+    assert 0.0 <= result.metrics["val_acc"] <= 1.0
 
 
 def test_stability_probe_reports_kill_and_unavailability() -> None:

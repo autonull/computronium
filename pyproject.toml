@@ -222,77 +222,77 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "E501",  # disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
-    "PLR2004", # numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
-    "PLR6301", # protocol implementations keep a uniform method surface (self unused by design)
-    "N803",    # math notation (W, G, V, X) is the domain's naming convention
-    "N806",    # ditto for local math variables
-    "RSE102",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
-    "TRY003",  # ditto — raise-vanilla-args; long descriptive messages stay at the raise site
-    "ARG001",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
-    "ARG002",
-    "RUF002",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
-    "RUF001",
-    "RUF003",
-    "PLR0133",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
-    "RUF069",  # ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
+    "line-too-long",  # disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
+    "magic-value-comparison", # numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
+    "no-self-use", # protocol implementations keep a uniform method surface (self unused by design)
+    "invalid-argument-name",    # math notation (W, G, V, X) is the domain's naming convention
+    "non-lowercase-variable-in-function",    # ditto for local math variables
+    "unnecessary-paren-on-raise-exception",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "raise-vanilla-args",  # ditto — raise-vanilla-args; long descriptive messages stay at the raise site
+    "unused-function-argument",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
+    "unused-method-argument",
+    "ambiguous-unicode-character-docstring",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
+    "ambiguous-unicode-character-string",
+    "ambiguous-unicode-character-comment",
+    "comparison-of-constant",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
+    "float-equality-comparison",  # ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
     # Suppression-comment style rules (ruff 0.15 directive family): the repo
     # uses ~1.5k legacy `# ruff: ignore[rule-name]` guard-rail comments;
     # RUF100 marks them unused, RUF105/106 want the other directive form and
     # RUF103 rejects it back. Canonical-form migration is Register C work;
     # enabling these rules only churns guard-rails without lint signal.
-    "RUF100",
-    "RUF103",
+    "unused-noqa",
+    "invalid-suppression-comment",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "computronium/__init__.py" = [
-    "F822", # __all__ names resolve through the _LAZY import map
+    "undefined-export", # __all__ names resolve through the _LAZY import map
 ]
 "computronium/ontology/dynamics/__init__.py" = [
-    "INP001", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
-    "RUF067", # the registry is the single-source wiring point by design (TODO18 wiring lock)
+    "implicit-namespace-package", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
+    "non-empty-init-module", # the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
 "computronium/ontology/dynamics/_dynamics.py" = [
-    "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
+    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
 "computronium/ontology/_settle_kernel.py" = [
-    "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
+    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
 "packages/*/tests/**/*.py" = [
-    "S101",   # assert in standalone-package tests
+    "assert",   # assert in standalone-package tests
 ]
 "scripts/probes/x_*.py" = [
-    "E402",  # sys.path bootstrap before computronium imports
-    "I001",  # import block follows the sys.path insert by design
+    "module-import-not-at-top-of-file",  # sys.path bootstrap before computronium imports
+    "unsorted-imports",  # import block follows the sys.path insert by design
 ]
 "scripts/probes/**" = [
     # Research probes are sanctioned throwaways (AGENTS probe conventions):
     # numbers-in-docstrings matter, lint polish does not. Security rules
     # stay active; these close the style/complexity classes only.
-    "S101",    # asserts are the probe's sanity gates
-    "S324",    # md5 for non-cognitive cache keys
-    "PLR0911", # complexity budgets don't apply to one-off sweeps
-    "PLR0912",
-    "PLR0914",
-    "PLR0915",
-    "PLR6104", # out-of-place adds are the settle graph-safety idiom
-    "PLW0603", # probe-level module state by design
-    "PLW2901", # loop-var overwrite is a common probe idiom
-    "E741",    # single-letter math names (l, n) are the domain language
-    "F841",    # assignments kept for side effects / future inspection
-    "ARG005",  # lambda placeholders in tracker callbacks
-    "SIM113",  # manual counters read clearer in sweep loops
+    "assert",    # asserts are the probe's sanity gates
+    "hashlib-insecure-hash-function",    # md5 for non-cognitive cache keys
+    "too-many-return-statements", # complexity budgets don't apply to one-off sweeps
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-statements",
+    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom
+    "global-statement", # probe-level module state by design
+    "redefined-loop-name", # loop-var overwrite is a common probe idiom
+    "ambiguous-variable-name",    # single-letter math names (l, n) are the domain language
+    "unused-variable",    # assignments kept for side effects / future inspection
+    "unused-lambda-argument",  # lambda placeholders in tracker callbacks
+    "enumerate-for-loop",  # manual counters read clearer in sweep loops
 ]
 "tests/**/*.py" = [
-    "S101",   # assert in tests
-    "S404",   # subprocess CLI smoke / wheel-acceptance tests
-    "PLR6301", # no-self-use in test methods
-    "S606",   # subprocess CLI smoke tests
-    "S603",   # subprocess.run with fixed args
-    "S607",   # partial-path executables (uv)
-    "S311",   # random.Random in test samplers/fixtures
-    "PLR2004", # literal expected values in assertions
+    "assert",   # assert in tests
+    "suspicious-subprocess-import",   # subprocess CLI smoke / wheel-acceptance tests
+    "no-self-use", # no-self-use in test methods
+    "start-process-with-no-shell",   # subprocess CLI smoke tests
+    "subprocess-without-shell-equals-true",   # subprocess.run with fixed args
+    "start-process-with-partial-path",   # partial-path executables (uv)
+    "suspicious-non-cryptographic-random-usage",   # random.Random in test samplers/fixtures
+    "magic-value-comparison", # literal expected values in assertions
 ]
 
 [tool.ruff.lint.flake8-type-checking]

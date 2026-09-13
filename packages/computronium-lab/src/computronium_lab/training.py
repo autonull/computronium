@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 DEFAULT_TAU = 1.029
 
 
-class StabilityGuardKill(RuntimeError):  # noqa: N818 — CEEC gate name is pre-registered
+class StabilityGuardKill(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] - CEEC gate name is pre-registered
     """CEEC-gated stop: the stability guard flagged divergence mid-training."""
 
 
@@ -71,11 +71,17 @@ class ThetaAuditOutcome:
 
 @dataclass(frozen=True, slots=True)
 class DeterminismSeal:
-    """seed → bitwise reproducible params + metrics certificate (T23.2.6)."""
+    """seed → bitwise reproducible params + metrics certificate (T23.2.6).
+
+    ``first_divergence_epoch`` localizes the first epoch whose metrics
+    diverged between the replicas (``None`` = no divergence observed, or
+    verified run).
+    """
 
     params_sha256: str
     metrics_sha256: str
     verified: bool
+    first_divergence_epoch: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +128,7 @@ def _make_trainer(
     epochs: int,
     batch_size: int,
     harvest_mode: str | None,
+    val_data: object | None = None,
 ) -> SystemTrainer:
     return SystemTrainer(
         system=system,  # type: ignore[arg-type]
@@ -134,6 +141,7 @@ def _make_trainer(
             harvest_mode=harvest_mode,  # type: ignore[arg-type]
         ),
         train_data=train_data,  # type: ignore[arg-type]
+        val_data=val_data,  # type: ignore[arg-type]
     )
 
 
@@ -146,6 +154,7 @@ def _fit(
     epochs: int,
     batch_size: int,
     harvest_mode: str | None,
+    val_data: object | None = None,
 ) -> SystemTrainer:
     torch.manual_seed(seed)
     trainer = _make_trainer(
@@ -156,6 +165,7 @@ def _fit(
         epochs=epochs,
         batch_size=batch_size,
         harvest_mode=harvest_mode,
+        val_data=val_data,
     )
     trainer.fit()
     return trainer
@@ -170,11 +180,13 @@ def seal_determinism(
     epochs: int,
     batch_size: int,
     harvest_mode: str | None,
+    val_data: object | None = None,
 ) -> tuple[DeterminismSeal, SystemTrainer]:
     """Train twice from identical state; verify bitwise-identical outcome.
 
     Returns the seal and the *second* trainer (so callers keep one final
-    parameter state). Opt-in: this doubles the training cost.
+    parameter state). Opt-in: this doubles the training cost. A per-epoch
+    metrics trace localizes the first diverging epoch when the seal fails.
     """
     runs: list[tuple[str, str, SystemTrainer]] = []
     for _ in range(2):
@@ -187,6 +199,7 @@ def seal_determinism(
             epochs=epochs,
             batch_size=batch_size,
             harvest_mode=harvest_mode,
+            val_data=val_data,
         )
         runs.append((
             _params_digest(replica),
@@ -194,9 +207,26 @@ def seal_determinism(
             trainer,
         ))
     a, b = runs
+    divergence = _first_divergence_epoch(a[2].history, b[2].history)
     verified = a[0] == b[0] and a[1] == b[1]
-    seal = DeterminismSeal(params_sha256=b[0], metrics_sha256=b[1], verified=verified)
+    seal = DeterminismSeal(
+        params_sha256=b[0],
+        metrics_sha256=b[1],
+        verified=verified,
+        first_divergence_epoch=None if verified else divergence,
+    )
     return seal, b[2]
+
+
+def _first_divergence_epoch(
+    a: list[dict[str, float]], b: list[dict[str, float]]
+) -> int | None:
+    for ra, rb in zip(a, b):
+        if ra.get("epoch") != rb.get("epoch") or _metrics_digest([
+            ra
+        ]) != _metrics_digest([rb]):
+            return int(ra.get("epoch", 0))
+    return None
 
 
 def stability_probe(
@@ -207,7 +237,7 @@ def stability_probe(
     """One StabilityVerdict → StabilityCertificate (never raises)."""
     try:
         verdict = handle.check(state, step=step)
-    except Exception as exc:  # noqa: BLE001 — certificate, not a crash path
+    except Exception as exc:  # ruff: ignore[blind-except] - certificate, not a crash path
         return StabilityCertificate(
             checked=False, kill=False, note=f"guard unavailable: {exc}"
         )
@@ -270,21 +300,26 @@ class TrainOptions:
     frozen_theta_audit: bool | None = None
     ceec_logging: bool = False
     determinism_seal: bool = False
+    val_data: object | None = None
 
 
 class _GuardedRun:
-    """Per-epoch training loop with a calibrated stability kill switch."""
+    """Per-epoch training loop with a calibrated stability kill switch.
+
+    Probe states cycle across epochs (rolling probe): a fixed batch misses
+    late-run divergence in weight drift that other inputs expose.
+    """
 
     def __init__(
         self,
         trainer: SystemTrainer,
         handle: GuardHandle,
-        probe_state: dict[str, object],
+        probe_states: list[dict[str, object]],
         max_epochs: int,
     ) -> None:
         self._trainer = trainer
         self._handle = handle
-        self._probe_state = probe_state
+        self._probe_states = probe_states
         self._max_epochs = max_epochs
         self.certificate: StabilityCertificate | None = None
 
@@ -292,9 +327,10 @@ class _GuardedRun:
         self._trainer._harvest_init()
         while self._trainer.current_epoch < self._max_epochs:
             self._trainer.train_epoch()
-            cert = stability_probe(
-                self._handle, self._probe_state, self._trainer.current_epoch
-            )
+            state = self._probe_states[
+                self._trainer.current_epoch % len(self._probe_states)
+            ]
+            cert = stability_probe(self._handle, state, self._trainer.current_epoch)
             self.certificate = cert
             if cert.kill:
                 self._trainer._harvest_finalize()
@@ -305,13 +341,19 @@ class _GuardedRun:
         self._trainer._harvest_finalize()
 
 
-def _probe_batch(train_data: object, device: str) -> dict[str, object]:
-    """First training batch as the guard's probe state (zeros fallback)."""
+def _probe_batch(
+    train_data: object, device: str, k: int = 4
+) -> list[dict[str, object]]:
+    """First ``k`` training batches as rolling guard probe states."""
+    states: list[dict[str, object]] = []
     try:
-        x, _ = next(iter(train_data))  # type: ignore[arg-type]
-        return {"x": x.to(device)}
-    except StopIteration:
-        return {"x": torch.zeros(1)}
+        for x, _ in train_data:  # type: ignore[union-attr]
+            states.append({"x": x.to(device)})
+            if len(states) >= k:
+                break
+    except TypeError:  # not iterable (already-consumed generator etc.)
+        pass
+    return states or [{"x": torch.zeros(1)}]
 
 
 def _attach_guard(model: object) -> GuardHandle:
@@ -349,12 +391,17 @@ def train_with_certificates(
 ) -> TrainingResult:
     """Single training entry point; every guarantee is opt-in (T23.2.1).
 
-    options.stability_guard: calibrated kill switch, per-epoch boundary checks.
+    options.stability_guard: calibrated kill switch, per-epoch boundary checks
+      (rolling probe batches).
     options.harvest: EMA weight resurrection wired into the trainer config.
     options.frozen_theta_audit: automatic when spec.continual=True (T23.2.4).
     options.ceec_logging + record_ledger: per-epoch CEEC evidence capture.
-    options.determinism_seal: bitwise reproducibility proof (2× training cost).
+    options.determinism_seal: bitwise reproducibility proof (2× training
+      cost) with first-divergence localization.
+    options.val_data: validation loader → trainer validate() surfaces
+      val_loss/val_acc in metrics and best-snapshot selection.
     """
+    val_data = options.val_data
     t0 = time.perf_counter()
     audit_on = (
         options.frozen_theta_audit
@@ -385,6 +432,7 @@ def train_with_certificates(
             epochs=epochs,
             batch_size=batch_size,
             harvest_mode=harvest_mode_eff,
+            val_data=val_data,
         )
     elif options.stability_guard:
         torch.manual_seed(seed)
@@ -396,6 +444,7 @@ def train_with_certificates(
             epochs=epochs,
             batch_size=batch_size,
             harvest_mode=harvest_mode_eff,
+            val_data=val_data,
         )
         handle = _attach_guard(trainer.system.geometry)  # type: ignore[attr-defined]
         run = _GuardedRun(trainer, handle, _probe_batch(train_data, device), epochs)
@@ -410,6 +459,7 @@ def train_with_certificates(
             epochs=epochs,
             batch_size=batch_size,
             harvest_mode=harvest_mode_eff,
+            val_data=val_data,
         )
     history = trainer.history
 
@@ -425,6 +475,8 @@ def train_with_certificates(
         "loss": float(final.get("train_loss", final.get("loss", 0.0))),
         "accuracy": float(final.get("train_acc", final.get("free_accuracy", 0.0))),
     }
+    if val_data is not None:
+        metrics.update(trainer.validate())
 
     ceec_ids: tuple[str, ...] = ()
     if options.ceec_logging and record_ledger:

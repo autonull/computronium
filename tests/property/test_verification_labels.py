@@ -41,9 +41,7 @@ def _docstrings(path: Path):
         ):
             doc = ast.get_docstring(node)
             if doc:
-                yield (
-                1 if isinstance(node, ast.Module) else node.lineno
-            ), doc.lower()
+                yield (1 if isinstance(node, ast.Module) else node.lineno), doc.lower()
 
 
 def _collect_violations(scanned):

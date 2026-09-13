@@ -74,7 +74,7 @@ def test_block_vs_per_edge_equivalence(block_view, tile_graph):
     x = torch.randn(4, 20)
     z = op(x, per_edge["input_proj.weight"])
     for k, slots in enumerate(block_view.edge_slots, start=1):
-        z_edge = torch.zeros_like(z[:, :block_view.layer_widths[k]])
+        z_edge = torch.zeros_like(z[:, : block_view.layer_widths[k]])
         for name, d_off, d_n, s_off, s_n in slots:
             z_edge[:, d_off : d_off + d_n] += op(
                 z[:, s_off : s_off + s_n], per_edge[name]
@@ -133,9 +133,18 @@ def test_all_seven_factories_learn():
 
     for f, kwargs in factories:
         m = f(
-            10, 8, 3, num_layers=2, neurons_per_tile=8, tiles_per_layer=2, lr=1e-2, **kwargs
+            10,
+            8,
+            3,
+            num_layers=2,
+            neurons_per_tile=8,
+            tiles_per_layer=2,
+            lr=1e-2,
+            **kwargs,
         )
         before = [p.detach().clone() for p in m.parameters()]
         m.train_step(x, y)
-        moved = any(not torch.equal(p.detach(), b) for p, b in zip(m.parameters(), before))
+        moved = any(
+            not torch.equal(p.detach(), b) for p, b in zip(m.parameters(), before)
+        )
         assert moved, f"{f.__name__}: no parameters moved"

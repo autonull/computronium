@@ -522,7 +522,7 @@ def select_z3_operator(x: Tensor, y: Tensor) -> Z3Selection:
     for index, name, op in _Z3_LIBRARY:
         try:
             out = op(x)  # type: ignore[operator]
-        except Exception:  # noqa: BLE001 — shape-invalid ops simply lose
+        except Exception:  # ruff: ignore[blind-except] - shape-invalid ops simply lose
             scores[name] = 0.0
             continue
         if out.shape == y.shape:

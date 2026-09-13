@@ -5,7 +5,6 @@ its source demo test (sidecar map: ``scripts/readme_snippets.json``). A
 locked snippet that no longer matches its test fails CI.
 """
 
-
 from readme_snippet_lock import check_readme_snippets
 
 

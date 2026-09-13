@@ -500,6 +500,20 @@ No internal metrics without a user-facing report.
 
 **Gates:** lab suite **73 passed**; D22 demo + gallery lock green; ruff clean; pyright clean on touched modules. Committed through 03a87fea (TODO23 synthesis layer).
 
+### Session 2026-09-13 — NCA Verdict + Training Surface + Hygiene Round Close
+- [~] **NCA catalog row — verdict recorded, deliberately not forced**: `GeometryConfig.nca` is grid-structured (`input_dim=output_dim=channels`, `(H,W)` grid) — the flat 32-d quick tier cannot host it without a contrived reshape + readout hybrid the ontology doesn't compose. An NCA row needs a **grid task class in the Lab surface** (like the NLP/neuromorphic tiers), which is a task-class extension, not a metadata edit. Same principle as the NTM blocker: no construction/metadata mismatch.
+- [x] **Training-surface refinements (all three queued items redeemed)**:
+  - **Rolling guard probe** — `_probe_batch(train_data, device, k=4)` now returns the first *k* training batches and `_GuardedRun` cycles them per epoch (a fixed batch misses late-run divergence in weight drift).
+  - **Per-epoch determinism trace** — `seal_determinism` localizes the first diverging epoch between replicas: `DeterminismSeal.first_divergence_epoch` (None when verified).
+  - **`val_data` wiring** — `TrainOptions.val_data` → trainer `val_data`: `validate()` surfaces `val_loss`/`val_acc` in `TrainingResult.metrics`, and best_snapshot harvest selection uses the loader. `Lab.train(..., val_data=...)` convenience kwarg (defaults off; the internal synthetic val split is NOT auto-wired to keep metrics keys stable).
+- [x] **Hygiene round close (Register C scope)**:
+  - Repo-wide `ruff check`: 47 findings fixed (45 = pyproject rule-code→name migration in `lint.ignore`, done by ruff's own fixer so semantics are exact; 2 legacy `# noqa` in lab modules). `ruff format --check`: 970 files clean after 6 reformats.
+  - **Repo-wide pyright baseline recorded: 2409 errors / 34 warnings** — legacy numpy/tensor typing across the research code (`object`-typed research kernels, ndarray attribute access). Strict-on-new-modules contract maintained: all lab/ceec modules touched this round are 0-error. This is the Register C backlog; triage by dominant class: `object`-not-callable (45), ndarray-attrs (~60), ConvertibleToFloat (~67).
+  - `pip-audit`: **no known vulnerabilities** (workspace packages skipped — un published).
+  - **Full suite: 1539 passed, 48 skipped, 27 xfailed, 3:29** — green with the difficulty-calibrated task and all session changes.
+
+**Gates:** lab suite 74 passed; full suite green; ruff repo-wide clean; pyright 0 on touched modules.
+
 ---
 
 **This redeems everything. The primitive layer is done. The governance layer is done. TODO23 builds the synthesis layer that makes them generative.**

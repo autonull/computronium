@@ -55,13 +55,11 @@ def test_adam_first_step_is_signed_sqrt_normalized():
     |Δθ| ≈ lr for every coordinate regardless of gradient magnitude."""
     adam = AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3))
     params = {"layer_0_weight": torch.zeros(1, 10)}
-    grads = [
-        torch.tensor([[1e-3, 1e-1, 1.0, 2.0, 5.0, 1e-3, 1e-1, 1.0, 2.0, 5.0]])
-    ]
+    grads = [torch.tensor([[1e-3, 1e-1, 1.0, 2.0, 5.0, 1e-3, 1e-1, 1.0, 2.0, 5.0]])]
     out = adam.step(params, grads, _geometry())["layer_0_weight"]
-    assert torch.allclose(
-        out.abs(), torch.full((1, 10), 1e-3), rtol=1e-4
-    ), "first Adam step must be magnitude-normalized (bias-corrected)"
+    assert torch.allclose(out.abs(), torch.full((1, 10), 1e-3), rtol=1e-4), (
+        "first Adam step must be magnitude-normalized (bias-corrected)"
+    )
 
 
 def test_adam_state_reuse_fails_loud():
@@ -83,9 +81,7 @@ def test_adam_is_distinct_from_euclidean():
     torch.manual_seed(2)
     g = [torch.randn(1, 6)]
     p0 = torch.zeros(1, 6)
-    sgd = EuclideanUpdate(
-        ParameterUpdateConfig.euclidean(step_size=0.1, momentum=0.0)
-    )
+    sgd = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1, momentum=0.0))
     adam = AdamUpdate(ParameterUpdateConfig.adam(step_size=0.1))
     p = {"layer_0_weight": p0.clone()}
     sgd_out = sgd.step(dict(p), g, _geometry())["layer_0_weight"]

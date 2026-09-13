@@ -65,7 +65,9 @@ class TestHardConstraints:
         results = selection.check_hard_constraints(store, registered)
         assert all(r.passed for r in results)
 
-    def test_quarantined_dependency_rejected_before_scoring(self, store, scope, link_belief):
+    def test_quarantined_dependency_rejected_before_scoring(
+        self, store, scope, link_belief
+    ):
         bootstrap_belief(store, scope, link_belief)
         instrument = store.create_belief(
             "instrument", "instrument", scope, id_="I-1", evidence_refs=[]
@@ -91,7 +93,9 @@ class TestHardConstraints:
         failed = decision.constraints_checked[experiment.id]
         assert any(not r["passed"] for r in failed)
 
-    def test_high_score_cannot_override_hard_constraint(self, store, scope, link_belief):
+    def test_high_score_cannot_override_hard_constraint(
+        self, store, scope, link_belief
+    ):
         bootstrap_belief(store, scope, link_belief, "B-H1", "G-1")
         # expensive candidate with failing constraints
         experiment = make_experiment(
@@ -247,7 +251,9 @@ class TestDecide:
                 overrides=[{"select_experiment": experiment.id}],
             )
 
-    def test_override_cannot_target_constraint_failed_candidate(self, store, scope, link_belief):
+    def test_override_cannot_target_constraint_failed_candidate(
+        self, store, scope, link_belief
+    ):
         bootstrap_belief(store, scope, link_belief)
         experiment = make_experiment(
             experiment_id="X-BAD",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import torch
@@ -198,12 +198,22 @@ class Lab:
         *,
         spec: ProblemSpec | None = None,
         options: TrainOptions | None = None,
+        val_data: object | None = None,
     ) -> TrainingResult:
-        """Train with opt-in guarantees; returns a TrainingResult (T23.2.1)."""
+        """Train with opt-in guarantees; returns a TrainingResult (T23.2.1).
+
+        ``val_data`` (or ``TrainOptions.val_data``) wires a validation
+        loader through to the trainer: per-epoch best-snapshot selection
+        when harvest_mode="best_snapshot", and val_loss/val_acc in
+        ``TrainingResult.metrics``.
+        """
         if task != "synthetic":
             raise ValueError(
                 f"task {task!r} not wired; Lab quick mode ships 'synthetic'"
             )
+        opts = options or TrainOptions()
+        if val_data is not None and opts.val_data is None:
+            opts = replace(opts, val_data=val_data)
         torch.manual_seed(self.seed)
         train_loader, _ = synthetic_task(
             seed=self.seed,
@@ -219,7 +229,7 @@ class Lab:
             epochs=epochs,
             batch_size=batch_size,
             spec=spec,
-            options=options or TrainOptions(),
+            options=opts,
             record_ledger=self.record_ledger,
         )
 
