@@ -69,7 +69,7 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
     return dynamics_from_config(dynamics)
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
+def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-return-statements]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     match config.credit_type.lower():
         case "thermodynamic_contrast" | "equilibrium":
@@ -94,7 +94,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
-def _update_from_config(update: ParameterUpdateConfig):
+def _update_from_config(update: ParameterUpdateConfig) -> ParameterUpdate:
     """Instantiate update from config (canonical dispatch in ontology.update)."""
     return update_from_config(update)
 

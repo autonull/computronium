@@ -512,6 +512,24 @@ class CreditAssignment(Protocol):
         )
 
 
+class _SurrogateUndefined:
+    """Shared default for credit rules without a layer-local objective.
+
+    Implements the CreditAssignment protocol's raising default once;
+    structural conformance without duplicating the body per class.
+    """
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        raise NotImplementedError(
+            "Surrogate objective not defined for this credit rule"
+        )
+
+
 def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
     """Normalize activations to a list of layer tensors."""
     if activations is None:
@@ -1827,7 +1845,7 @@ class LocalContrastiveCredit:
         ]
 
 
-class TemporalTraceCredit:
+class TemporalTraceCredit(_SurrogateUndefined):
     """Spike-timing correlations (STDP).
 
     Supports two modes:
@@ -2217,7 +2235,7 @@ class TargetInversionCredit:
         return total
 
 
-class HomeostaticCredit:
+class HomeostaticCredit(_SurrogateUndefined):
     """Homeostatic credit assignment (autonomous Lipschitz scaling).
 
     Per-layer scaling to keep activation norms near homeostatic_target.

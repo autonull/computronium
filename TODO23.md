@@ -514,6 +514,13 @@ No internal metrics without a user-facing report.
 
 **Gates:** lab suite 74 passed; full suite green; ruff repo-wide clean; pyright 0 on touched modules.
 
+### Session 2026-09-13 — NCA/Verdicts + Credit Protocol Conformance (queued slice)
+- [~] **NCA verdict refined (recorded)** — deeper than "needs grid data": NCA's problem class is **state-prediction** (grid→grid MSE, W8.1 demos); `NcaGeometry.forward` = one CA `step` over `(B, C, H, W)` states, so a classification System would need a pooled readout head the geometry protocol doesn't compose (new ontology construction — not a metadata edit). An NCA row needs a **state-prediction/regression task class in the Lab trainer**, same class of extension as the NLP/neuromorphic tiers.
+- [x] **Credit protocol conformance** — `TemporalTraceCredit`/`HomeostaticCredit` lacked `surrogate_objective`, so the `_credit_from_config` return union was not assignable to the `CreditAssignment` protocol (the 2 pre-existing pyright errors in `system_trainer/spec.py`, flagged in the Catalog Coverage session). Fix: shared `_SurrogateUndefined` mixin (the protocol's raising default, single source) + explicit `-> CreditAssignment` / `-> ParameterUpdate` return annotations on the config dispatchers. `system_trainer/spec.py` now **pyright 0**; repo-wide baseline drops 2409 → 2407. No new errors introduced in `credit.py` (21 pre-existing legacy, unchanged).
+- [~] **Z3 learned-controller fallback — verdict recorded** — the queued "route to Z3Controller when closed-form match rate is low" needs a *trained* controller (raw nn.Module, untrained weights are useless); training it is a campaign (§11), not a wiring edit. Blocked on a Z3-controller campaign, which itself rides the NLP tier (sequence tasks).
+
+**Gates:** unit-core/ceec credit+compose 48 passed; property credit 58 passed; ruff clean; pyright 0 on `spec.py`, unchanged legacy baseline in `credit.py`.
+
 ---
 
 **This redeems everything. The primitive layer is done. The governance layer is done. TODO23 builds the synthesis layer that makes them generative.**
