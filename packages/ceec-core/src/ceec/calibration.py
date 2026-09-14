@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ceec.store import StoreError
+
 if TYPE_CHECKING:
     from ceec import models
     from ceec.store import CEECStore
@@ -122,3 +124,74 @@ def review_flags(report: dict[str, Any]) -> list[str]:
     if report["quarantines"] >= 3:
         flags.append("quarantine_rate_spike")
     return flags
+
+
+DRIFT_TAU = 0.15
+
+
+def belief_drift(
+    store: CEECStore, *, tau: float = DRIFT_TAU
+) -> dict[str, dict[str, Any]]:
+    """§24 drift review cadence (TODO25 C.5): per-belief Brier drift
+    across calibration rounds, chronologically ordered.
+
+    A belief whose Brier spread exceeds ``tau`` is flagged for review;
+    the review itself is recorded via :func:`review_belief`.
+    """
+    series: dict[str, list[tuple[str, float]]] = {}
+    for record in store.calibration_records():
+        if record.belief_id and record.brier_score is not None:
+            series.setdefault(record.belief_id, []).append((
+                record.created_at,
+                record.brier_score,
+            ))
+    out: dict[str, dict[str, Any]] = {}
+    for belief_id, points in sorted(series.items()):
+        points.sort()
+        values = [b for _, b in points]
+        drift = max(values) - min(values)
+        out[belief_id] = {
+            "brier_series": values,
+            "drift": drift,
+            "flagged": drift > tau,
+        }
+    return out
+
+
+def review_belief(
+    store: CEECStore,
+    belief_id: str,
+    *,
+    action: str,
+    reason: str,
+    actor: str | None = None,
+    trigger: str | None = None,
+    evidence_refs: list[str] | None = None,
+) -> models.StatusChange | models.InstrumentNote:
+    """Record a drift review's outcome (TODO25 C.5).
+
+    ``action="acknowledge"`` notes the review on the belief (an open
+    belief has no legal status transition); ``"reopen"``/``"quarantine"``
+    move the belief through the gated status machine, which records the
+    reviewed state as a ``StatusChange``.
+    """
+    store._require("beliefs", belief_id)
+    if action == "acknowledge":
+        return store.record_instrument_note(
+            belief_id,
+            f"drift review ({actor or 'reviewer'}): {reason}",
+            kind="hygiene",
+        )
+    from ceec.gates import quarantine, reopen
+
+    if action == "reopen":
+        if trigger is None:
+            raise StoreError("reopen review requires a trigger")
+        return reopen(store, belief_id, trigger, reason, evidence_refs=evidence_refs)
+    if action == "quarantine":
+        if trigger is None:
+            raise StoreError("quarantine review requires a trigger")
+        return quarantine(
+            store, belief_id, trigger, reason, evidence_refs=evidence_refs
+        )[0]
+    raise ValueError(f"unknown review action {action!r}")

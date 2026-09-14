@@ -160,6 +160,86 @@ class _FlatClassification:
         return {"accuracy": float(metrics.get("val_acc", metrics.get("accuracy", 0.0)))}
 
 
+class _FlatClassificationHard:
+    """Non-saturating flat variant (TODO25 D.2): higher dims + stronger
+    noise so 20 epochs does not saturate — rank-based hypothesis tests
+    (H24.2) stay decisive where ``flat_classification`` censors."""
+
+    name = "flat_classification_hard"
+    task = "flat_classification_hard"
+    dataset = "gaussian_blob_hard"
+
+    def __init__(self, spec: ProblemSpec, scratch: Path | None = None) -> None:
+        self.spec = spec
+
+    def generate_task(self, seed: int) -> object:
+        from computronium_lab.lab import HARD_TASK_PARAMS, synthetic_task
+
+        return synthetic_task(
+            seed=seed,
+            input_dim=self.spec.input_dim,
+            num_classes=self.spec.num_classes,
+            **HARD_TASK_PARAMS,
+        )
+
+    def default_metrics(self) -> tuple[str, ...]:
+        return ("accuracy",)
+
+    def control_arm(self, arm: str) -> str | None:
+        if arm.endswith("::permuted"):
+            return None
+        return f"{arm}::permuted"
+
+    def run_arm(
+        self, lab: Lab, arm: str, seed: int, *, epochs: int
+    ) -> dict[str, float]:
+        from computronium_lab.lab import HARD_TASK_PARAMS, synthetic_task
+        from computronium_lab.training import StabilityGuardKill, TrainOptions
+
+        mechanism, _, control = arm.partition("::")
+        lab.seed = seed
+        system = _row(mechanism).build(self.spec)
+        train_loader, val_loader = synthetic_task(
+            seed=seed,
+            input_dim=self.spec.input_dim,
+            num_classes=self.spec.num_classes,
+            **HARD_TASK_PARAMS,
+        )
+        if control == "permuted":
+            from torch.utils.data import DataLoader, TensorDataset
+
+            gen = torch.Generator().manual_seed(seed + 9999)
+            dataset = train_loader.dataset
+            if not isinstance(dataset, TensorDataset):
+                raise TypeError("synthetic task dataset is not a TensorDataset")
+            x, y = dataset.tensors
+            permuted = DataLoader(
+                TensorDataset(x, y[torch.randperm(len(y), generator=gen)].clone()),
+                batch_size=train_loader.batch_size or 32,
+            )
+            lab.train(
+                system,
+                epochs=epochs,
+                spec=self.spec,
+                train_data=permuted,
+            )
+            return {"accuracy": _score_accuracy(system, val_loader)}
+        try:
+            result = lab.train(
+                system,
+                task="synthetic",
+                epochs=epochs,
+                spec=self.spec,
+                options=TrainOptions(stability_guard=True),
+                val_data=val_loader,
+                train_data=train_loader,
+            )
+        except StabilityGuardKill:
+            return {"accuracy": 0.0}
+        metrics = result.metrics
+        return {"accuracy": float(metrics.get("val_acc", metrics.get("accuracy", 0.0)))}
+
+
 class _SequenceClass:
     """NTM sequence tier; one class per recorded Z3 task."""
 
@@ -558,6 +638,7 @@ def _sequence_class(seq_task: str) -> type[_SequenceClass]:
 
 CLASS_BY_NAME: dict[str, Callable[..., ProblemClassProtocol]] = {
     "flat_classification": _FlatClassification,
+    "flat_classification_hard": _FlatClassificationHard,
     "sequence_last_symbol": _sequence_class("last_symbol"),
     "sequence_threshold": _sequence_class("threshold"),
     "sequence_parity": _sequence_class("parity"),
@@ -570,6 +651,12 @@ _SPEC_DEFAULTS: dict[str, dict[str, object]] = {
     "flat_classification": {
         "task": "flat_classification",
         "dataset": "gaussian_blob",
+    },
+    "flat_classification_hard": {
+        "task": "flat_classification_hard",
+        "dataset": "gaussian_blob_hard",
+        "input_dim": 64,
+        "num_classes": 8,
     },
     "sequence_last_symbol": {
         "task": "sequence_last_symbol",
@@ -749,7 +836,34 @@ class MeasurementRunner:
                 state.store._conn.commit()
                 state.store.close()
 
+    def _trainability_block(self, state: _CorpusState, arm: str) -> str | None:
+        """Trainable_on consult (TODO25 D.1): resolve the arm's mechanism
+        and return a block reason when the construction path has no
+        training path for this problem class — before any build."""
+        mechanism = arm.partition("::")[0]
+        try:
+            row = _row(mechanism)
+        except ValueError:
+            return None
+        if state.problem_class.name in row.trainable_on:
+            return None
+        return (
+            f"{mechanism} has no training path for {state.problem_class.name} "
+            f"(trainable_on={sorted(row.trainable_on)})"
+        )
+
     def _run_arm_seeds(self, state: _CorpusState, arm: str) -> None:
+        blocked = self._trainability_block(state, arm)
+        if blocked is not None:
+            state.blocks.append(
+                MeasurementBlock(
+                    problem_class=state.problem_class.name,
+                    mechanism=arm,
+                    reason=blocked,
+                    tier=state.tier.value,
+                )
+            )
+            return
         for seed in state.seeds:
             try:
                 metrics = state.problem_class.run_arm(

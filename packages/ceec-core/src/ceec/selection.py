@@ -227,9 +227,14 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
 ) -> models.Decision:
     """§22 selection loop.
 
-    ``candidate_ids`` (TODO25 F3) restricts the pool to a pre-registered
+    ``candidate_ids`` (TODO25 T25.A.3) restricts the pool to a pre-registered
     subset — e.g. one evolution generation's experiments — without
     widening the loop's logic. ``None`` keeps the store-wide default.
+
+    A ``select_experiment`` override on a single-eligible-candidate pool
+    is vacuous (no alternative to select against): it is validated but
+    not recorded, so §24 ``override_rate`` keeps signal for real
+    overrides.
     """
     gamma = float(profile.get("cost_model", {}).get("gamma", 1.0))
     budget_limit = profile.get("budget_limit")
@@ -252,6 +257,7 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
 
     eligible = [c for c in scored if c.all_constraints_passed]
     selected = max(eligible, key=lambda c: c.score or 0.0, default=None)
+    recorded_overrides = list(overrides or [])
     if overrides:
         if not all(o.get("rationale") for o in overrides):
             raise StoreError("every override requires a rationale")
@@ -267,6 +273,10 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
                     f"override target {override_id!r} failed hard constraints"
                 )
             selected = next(c for c in eligible if c.experiment_id == override_id)
+            if len(eligible) <= 1:
+                recorded_overrides = [
+                    o for o in recorded_overrides if o is not selection_override
+                ]
 
     constraint_map = {
         c.experiment_id: [_asdict(r) for r in c.constraints] for c in scored
@@ -277,7 +287,7 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
         scores={c.experiment_id: c.score for c in eligible if c.score is not None},
         rationale=rationale,
         selected_experiment=selected.experiment_id if selected else None,
-        overrides=overrides or [],
+        overrides=recorded_overrides,
         constraints_checked=constraint_map,
     )
     return decision

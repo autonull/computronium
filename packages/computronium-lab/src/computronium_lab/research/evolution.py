@@ -828,11 +828,22 @@ def _pre_register_candidate(
 def _evaluate_round(
     state: _RunState, contenders: list[CoordinateGenome]
 ) -> list[CandidateEvaluation]:
+    from computronium_lab.research.autopoiesis import NotTrainableError
+
     round_evaluations = []
     for genome in contenders:
-        evaluation = state.fitness.evaluate(
-            genome, state.lab, seeds=state.seeds(), epochs=state.epochs()
-        )
+        try:
+            evaluation = state.fitness.evaluate(
+                genome, state.lab, seeds=state.seeds(), epochs=state.epochs()
+            )
+        except NotTrainableError as exc:
+            state.negatives.append({
+                "kind": "not_trainable",
+                "mechanism": genome.mechanism,
+                "digest": genome.digest,
+                "detail": str(exc),
+            })
+            continue
         state.evaluated[genome.digest] = evaluation
         round_evaluations.append(evaluation)
         state.campaigns_used += 1

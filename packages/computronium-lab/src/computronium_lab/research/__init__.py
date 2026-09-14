@@ -37,6 +37,7 @@ __all__ = [
     "MeasurementBlock",
     "MeasurementProtocol",
     "MeasurementRunner",
+    "NotTrainableError",
     "ParetoSelection",
     "ProblemClassProtocol",
     "ResearchConstitution",
@@ -71,6 +72,7 @@ __all__ = [
     "render_cookbook",
     "render_corpus",
     "render_evolution",
+    "render_ledger",
     "render_manifesto",
     "render_transfer",
     "results_dir",
@@ -78,11 +80,13 @@ __all__ = [
     "run_ledger_audit",
     "score_hypotheses",
     "seed_genomes_from_proposals",
+    "spearman_rho",
     "vector_evidence",
     "write_hypothesis_reports",
     "write_manifest",
 ]
 
+from computronium.validation.statistics import spearman_rho
 from computronium_lab.research.adapters import (
     LabRecorder,
     mirror_hypotheses,
@@ -93,6 +97,7 @@ from computronium_lab.research.autopoiesis import (
     CampaignFitness,
     CandidateEvaluation,
     CoordinateGenome,
+    NotTrainableError,
     ParetoSelection,
     ResearchConstitution,
     ResearchStagnationDetector,
@@ -153,6 +158,7 @@ from computronium_lab.research.reports import (
     render_continual,
     render_corpus,
     render_evolution,
+    render_ledger,
     render_manifesto,
     render_transfer,
     score_hypotheses,

@@ -1,19 +1,27 @@
-"""F6 (TODO25): surrogate-vs-campaign rank comparison at the certified
-operating point (flat_classification, 20 epochs, 1 seed per row).
+"""F6 (TODO25): surrogate-vs-campaign rank comparison at a certified
+operating point.
 
-Re-scores H24.2: TODO24 smoke found 0/4 rank agreement at 1 epoch
-(noise-dominated); the certified operating point is the recorded
-comparison that the hypothesis actually asks about.
+Round 2 re-scored H24.2 on flat_classification (20ep, 1 seed/row) and
+measured Spearman rho = 0.418 with saturation censoring (6/10 rows at
+1.0). Round 3 (``todo25_recal_record.py``) runs the closed-loop
+equivalent on flat_classification_hard through ``ceec.run.run_experiment``;
+this probe remains the standalone comparator for any registered task:
 
-Writes ``scratch/todo25_surrogate_recal.json``; informs a H24.6 refit.
+- candidate rows come from ``MechanismCandidate.trainable_on`` (TODO25
+  D.1) — no exception-driven skipping;
+- ``spearman_rho`` (average-rank ties) comes from
+  ``computronium.validation.statistics`` (TODO25 D.4).
 
-Usage: uv run python scripts/probes/todo25_surrogate_recal.py
+Usage: uv run python scripts/probes/todo25_surrogate_recal.py \
+          [--task flat_classification] [--epochs 20] [--seed 0]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 import torch
 from computronium_lab import Lab
@@ -22,59 +30,41 @@ from computronium_lab.research.autopoiesis import (
     CoordinateGenome,
     SurrogateFitness,
 )
-from computronium_lab.research.corpus import _row
+from computronium_lab.research.corpus import problem_class_defaults
 from computronium_lab.synthesis.catalog import CATALOG
-from computronium_lab.synthesis.spec import Constraints, ProblemSpec
 
-EPOCHS = 20
-SEED = 0
-OUT = Path("scratch/todo25_surrogate_recal.json")
+from computronium.validation.statistics import spearman_rho
 
-
-def _spearman(a: list[float], b: list[float]) -> float:
-    def _ranks(xs: list[float]) -> list[float]:
-        order = sorted(range(len(xs)), key=lambda i: xs[i])
-        ranks = [0.0] * len(xs)
-        for rank, i in enumerate(order):
-            ranks[i] = float(rank)
-        return ranks
-
-    ra, rb = _ranks(a), _ranks(b)
-    n = len(a)
-    ma, mb = sum(ra) / n, sum(rb) / n
-    num = sum((x - ma) * (y - mb) for x, y in zip(ra, rb, strict=True))
-    da = sum((x - ma) ** 2 for x in ra) ** 0.5
-    db = sum((y - mb) ** 2 for y in rb) ** 0.5
-    return num / (da * db) if da and db else 0.0
+DEFAULT_TASK = "flat_classification"
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--task", default=DEFAULT_TASK)
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+
     torch.set_num_threads(4)
-    spec = ProblemSpec(
-        task="flat_classification",
-        dataset="gaussian_blob",
-        constraints=Constraints(),
-        input_dim=32,
-        num_classes=4,
+    defaults = problem_class_defaults(args.task)
+    spec = Lab().specify(
+        args.task,
+        str(defaults["dataset"]),
+        input_dim=int(defaults.get("input_dim", 32)),
+        num_classes=int(defaults.get("num_classes", 4)),
     )
+    rows = [c.name for c in CATALOG if c.trainable_on_task(args.task)]
     surrogate = SurrogateFitness(spec)
-    lab = Lab(seed=SEED)
-    rows = [c.name for c in CATALOG if "digital" in c.substrates]
-    rows = [r for r in rows if _constructible(r, spec)]
+    fitness = CampaignFitness(spec)
+    lab = Lab(seed=args.seed)
     surrogate_scores: dict[str, float] = {}
     campaign_acc: dict[str, float] = {}
-    fitness = CampaignFitness(spec)
     for name in rows:
         genome = CoordinateGenome.seed(name, spec)
         surrogate_scores[name] = surrogate.screen(genome)
-        try:
-            evaluation = fitness.evaluate(genome, lab, seeds=(SEED,), epochs=EPOCHS)
-        except Exception as exc:
-            # Not campaign-trainable on this spec (e.g. psi-readout rows
-            # without a geometry): excluded from the rank comparison,
-            # like the evolution kernel's skipped candidates.
-            print(f"{name}: campaign skipped ({type(exc).__name__})", flush=True)
-            continue
+        evaluation = fitness.evaluate(
+            genome, lab, seeds=(args.seed,), epochs=args.epochs
+        )
         acc = float(evaluation.objectives.get("accuracy", 0.0))
         campaign_acc[name] = acc
         print(
@@ -83,7 +73,7 @@ def main() -> int:
         )
 
     names = sorted(campaign_acc)
-    rho = _spearman(
+    rho = spearman_rho(
         [surrogate_scores[n] for n in names], [campaign_acc[n] for n in names]
     )
     agreement = sum(
@@ -91,30 +81,30 @@ def main() -> int:
         for a, b in zip(
             sorted(names, key=lambda n: -surrogate_scores[n])[:3],
             sorted(names, key=lambda n: -campaign_acc[n])[:3],
+            strict=True,
         )
         if a == b
     )
-    report = {
-        "operating_point": {"epochs": EPOCHS, "seed": SEED},
+    saturated = [n for n, a in campaign_acc.items() if a >= 0.995]
+    report: dict[str, Any] = {
+        "task": args.task,
+        "operating_point": {"epochs": args.epochs, "seed": args.seed},
         "rows": names,
         "surrogate_scores": surrogate_scores,
         "campaign_accuracy": campaign_acc,
         "spearman_rho": rho,
         "top3_agreement": agreement,
+        "saturated_rows": saturated,
     }
-    OUT.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
-    print(json.dumps({"spearman_rho": rho, "top3_agreement": agreement}, indent=2))
+    out = Path(f"scratch/todo25_surrogate_recal_{args.task}.json")
+    out.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    print(
+        json.dumps(
+            {"spearman_rho": rho, "top3_agreement": agreement, "saturated": saturated},
+            indent=2,
+        )
+    )
     return 0
-
-
-def _constructible(name: str, spec: ProblemSpec) -> bool:
-    try:
-        _row(name).build(spec)
-    except Exception as exc:
-        print(f"{name}: not constructible ({type(exc).__name__})", flush=True)
-        return False
-    else:
-        return True
 
 
 if __name__ == "__main__":

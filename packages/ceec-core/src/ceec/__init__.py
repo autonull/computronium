@@ -7,7 +7,7 @@ project; no Computronium imports.
 
 from __future__ import annotations
 
-from ceec import models
+from ceec import builders, models
 from ceec.constraints import ConstraintResult, ConstraintValidator
 from ceec.ids import PREFIX_BY_KIND, prefix_for, validate_id
 from ceec.store import CEECError, CEECStore, StoreError, now
@@ -19,6 +19,7 @@ __all__ = [
     "ConstraintResult",
     "ConstraintValidator",
     "StoreError",
+    "builders",
     "models",
     "now",
     "prefix_for",

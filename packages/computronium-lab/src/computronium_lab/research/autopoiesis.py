@@ -527,6 +527,11 @@ class ResearchConstitution:
             )
         if effective.constraints.local_credit and not row.local_credit:
             return f"{row.name} is not local-credit"
+        if effective.task not in row.trainable_on:
+            return (
+                f"{row.name} has no training path for task {effective.task!r} "
+                f"(trainable_on={sorted(row.trainable_on)})"
+            )
         return self._resource_reason(candidate, row)
 
     def _resource_reason(
@@ -628,6 +633,16 @@ class CandidateEvaluation:
     notes: tuple[str, ...] = ()
 
 
+_FLAT_TASKS = ("flat_classification", "flat_classification_hard")
+
+
+class NotTrainableError(Exception):
+    """A row's construction path has no campaign training path for the
+    spec task (TODO25 D.1): consult ``MechanismCandidate.trainable_on``
+    before building; a mismatch is a measurement block, not a traceback.
+    """
+
+
 class CampaignFitness:
     """Campaign-backed fitness over Lab construction paths (T24.1.5)."""
 
@@ -650,6 +665,12 @@ class CampaignFitness:
 
         t0 = time.perf_counter()
         row = genome.candidate
+        if self.spec.task not in row.trainable_on:
+            raise NotTrainableError(
+                f"{genome.mechanism} has no campaign training path for "
+                f"task {self.spec.task!r} "
+                f"(trainable_on={sorted(row.trainable_on)})"
+            )
         accuracies: list[float] = []
         stability_ok: bool | None = True
         metric_source = "task_accuracy"
@@ -671,7 +692,7 @@ class CampaignFitness:
             bool(stability_ok) if stability_ok is not None else None
         )
         certified = bool(reproduction) and (stability_gate is not False)
-        if stability_gate is None and self.spec.task == "flat_classification":
+        if stability_gate is None and self.spec.task in _FLAT_TASKS:
             certified = False
         objectives = {
             "accuracy": mean_accuracy,
@@ -702,12 +723,24 @@ class CampaignFitness:
         self, lab: Lab, genome: CoordinateGenome, system: object, seed: int, epochs: int
     ) -> tuple[float, bool | None, str]:
         task = self.spec.task
-        if task == "flat_classification":
-            _, val_loader = synthetic_task(
-                seed=seed,
-                input_dim=self.spec.input_dim,
-                num_classes=self.spec.num_classes,
-            )
+        if task in _FLAT_TASKS:
+            from computronium_lab.lab import HARD_TASK_PARAMS
+
+            hard = task == "flat_classification_hard"
+            if hard:
+                train_loader, val_loader = synthetic_task(
+                    seed=seed,
+                    input_dim=self.spec.input_dim,
+                    num_classes=self.spec.num_classes,
+                    **HARD_TASK_PARAMS,
+                )
+            else:
+                _, val_loader = synthetic_task(
+                    seed=seed,
+                    input_dim=self.spec.input_dim,
+                    num_classes=self.spec.num_classes,
+                )
+                train_loader = None
             try:
                 result = lab.train(
                     system,
@@ -716,6 +749,7 @@ class CampaignFitness:
                     spec=genome.effective_spec,
                     options=TrainOptions(stability_guard=True),
                     val_data=val_loader,
+                    train_data=train_loader,
                 )
             except StabilityGuardKill:
                 return 0.0, False, "train_accuracy"

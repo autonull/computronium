@@ -1,14 +1,16 @@
-"""F6 step 2 (TODO25): record the certified-tier surrogate comparison as
-evidence on the H24.2 experiment and re-score calibration.
+"""F6 step 2 (TODO25, round 3): close H24.2's round-2 experiment and run
+the decision statistic on the non-saturating ``flat_classification_hard``
+operating point through the CEEC closed-loop runner.
 
-Reads ``scratch/todo25_surrogate_recal.json`` (probe output: 10
-campaign-trainable rows at flat_classification 20ep, Spearman rho +
-top-3 agreement). Updates the H24 ledger ``scratch/todo24_h24.sqlite3``.
-
-Outcome verdict: rho improved from the smoke-tier 0/4 to 0.418, but five
-rows saturate at 1.0 accuracy, so the top-3 agreement statistic is
-degenerate — H24.2 remains OPEN pending a non-saturating task class
-(recorded as the boundary condition), never scored FOR on saturated data.
+Round 2 (``X-H24-H242-T25V1``, certified 20ep flat) measured
+Spearman rho = 0.418 but was censored by saturation (6/10 rows at 1.0)
+and left OPEN. This probe closes it as superseded (never scored on
+censored data) and executes round 3 (``X-H24-H242-T25V2``) end-to-end
+through ``ceec.run.run_experiment``: pre-register -> §22 decision ->
+10-row hard-task campaign (the probe callable trains, so the outcome is
+generated strictly after pre-registration) -> artifact/evidence ->
+calibration outcome under the recorded decision rule
+``rho > 0.5 at a non-saturating operating point``.
 
 Usage: uv run python scripts/probes/todo25_recal_record.py
 """
@@ -16,139 +18,231 @@ Usage: uv run python scripts/probes/todo25_recal_record.py
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from typing import Any
 
-from ceec.store import CEECStore, now
+import torch
+from ceec.run import ProbeResult, run_experiment
+from ceec.store import CEECStore, StoreError
+from computronium_lab import Lab
+from computronium_lab.research.autopoiesis import (
+    CampaignFitness,
+    CoordinateGenome,
+    SurrogateFitness,
+)
+from computronium_lab.research.corpus import problem_class_defaults
+from computronium_lab.synthesis.catalog import CATALOG
 
-from ceec import models
+from ceec import builders, models
+from computronium.validation.statistics import spearman_rho
 
-RESULT = Path("scratch/todo25_surrogate_recal.json")
 LEDGER = Path("scratch/todo24_h24.sqlite3")
+ROUND2_ID = "X-H24-H242-T25V1"
+ROUND3_ID = "X-H24-H242-T25V3"
+TASK = "flat_classification_hard"
+EPOCHS = 20
+SEED = 0
+OUT = Path("scratch/todo25_h24_round3.json")
+# the operating point is decisive only when rank ties stay rare: more than
+# 2 saturated rows reproduce round 2's censoring and refuse scoring
+MAX_SATURATED_ROWS = 2
 
 
-def main() -> int:
-    result = json.loads(RESULT.read_text(encoding="utf-8"))
-    rho = float(result["spearman_rho"])
-    saturated = [n for n, a in result["campaign_accuracy"].items() if a >= 0.995]
-
-    store = CEECStore(LEDGER, LEDGER.parent / "artifacts")
-    # H24.2 round 1 was scored at smoke tier (X-H24-H242-H24V1, completed).
-    # TODO25 runs round 2 at the certified operating point as a fresh
-    # pre-registered experiment; round 1 is never re-scored.
-    experiment_id = "X-H24-H242-T25V1"
-    try:
-        store.get_experiment(experiment_id)
-        exists = True
-    except Exception:
-        exists = False
-    if not exists:
-        store.pre_register_experiment(
-            models.Experiment(
-                id=experiment_id,
-                question=(
-                    "Campaign-backed fitness prevents quick-task overfitting "
-                    "better than predictor-only search (certified tier re-test)."
-                ),
-                rationale="TODO25 F6: certified operating-point surrogate comparison",
-                scope=models.Scope(
-                    domain="research",
-                    substrate=("digital",),
-                    budget="nightly",
-                    extra={"hypothesis": "H24.2", "run_id": "T25V1"},
-                ),
-                target_beliefs=[],
-                target_goals=[],
-                design={
-                    "seed_plan": [0],
-                    "evaluation_policy": "certified_operating_point_20ep_flat",
-                    "evidence_kind": "vector",
-                    "protocol": "surrogate-ranked candidates vs campaign outcomes (Spearman rho)",
-                    "decision_rule": (
-                        "Spearman rho > 0.5 at a non-saturating operating "
-                        "point; saturated operating points are not decisive"
-                    ),
-                    "boundary_conditions": [
-                        "flat_classification saturates for many rows; rho "
-                        "on a saturated operating point is not decisive"
-                    ],
-                },
-                prediction=(
-                    "Campaign-backed fitness ranks candidates better than "
-                    "predictor-only search at the certified operating point."
-                ),
-                prediction_probability=models.Probability(
-                    low=0.5, high=0.8, point=0.7, method="session_prior"
-                ),
-                controls=[],
-                metrics=["accuracy"],
-                budget="nightly",
-                falsification_criterion=(
-                    "certified-tier Spearman rho <= 0 at a non-saturating "
-                    "operating point"
-                ),
-                overturn_criterion=(
-                    "replication of the rho comparison overturns the rank ordering"
-                ),
-                hard_gates=["BenchmarkReproduction"],
-                created_at=now(),
-            )
+def _campaign(_experiment: models.Experiment) -> ProbeResult:
+    """The closed-loop probe: campaign-train every trainable row on the
+    hard operating point and compare surrogate vs campaign ranks."""
+    torch.set_num_threads(4)
+    defaults = problem_class_defaults(TASK)
+    spec = Lab().specify(
+        TASK,
+        str(defaults["dataset"]),
+        input_dim=int(defaults.get("input_dim", 32)),
+        num_classes=int(defaults.get("num_classes", 4)),
+    )
+    rows = [c.name for c in CATALOG if c.trainable_on_task(TASK)]
+    surrogate = SurrogateFitness(spec)
+    fitness = CampaignFitness(spec)
+    lab = Lab(seed=SEED)
+    surrogate_scores: dict[str, float] = {}
+    campaign_accuracy: dict[str, float] = {}
+    for name in rows:
+        genome = CoordinateGenome.seed(name, spec)
+        surrogate_scores[name] = surrogate.screen(genome)
+        evaluation = fitness.evaluate(genome, lab, seeds=(SEED,), epochs=EPOCHS)
+        campaign_accuracy[name] = float(evaluation.objectives["accuracy"])
+        print(
+            f"{name}: surrogate={surrogate_scores[name]:.3f} "
+            f"campaign={campaign_accuracy[name]:.3f}",
+            flush=True,
         )
 
-    scope = models.Scope(
-        domain="research",
-        substrate=("digital",),
-        budget="nightly",
-        extra={"hypothesis": "H24.2", "probe": "todo25_f6"},
+    names = sorted(campaign_accuracy)
+    rho = spearman_rho(
+        [surrogate_scores[n] for n in names], [campaign_accuracy[n] for n in names]
     )
-    artifact = store.ingest_artifact(
-        json.dumps(result, sort_keys=True).encode(),
-        "research_corpus_summary",
-        {"hypothesis": "H24.2", "probe": "todo25_f6"},
+    top3 = sum(
+        1
+        for a, b in zip(
+            sorted(names, key=lambda n: -surrogate_scores[n])[:3],
+            sorted(names, key=lambda n: -campaign_accuracy[n])[:3],
+            strict=True,
+        )
+        if a == b
     )
-    store.record_evidence(
-        kind="vector",
-        scope=scope,
-        artifact_refs=[artifact.id],
+    saturated = [n for n, a in campaign_accuracy.items() if a >= 0.995]
+    payload: dict[str, Any] = {
+        "task": TASK,
+        "operating_point": {"epochs": EPOCHS, "seed": SEED},
+        "rows": names,
+        "surrogate_scores": surrogate_scores,
+        "campaign_accuracy": campaign_accuracy,
+        "spearman_rho": rho,
+        "top3_agreement": top3,
+        "saturated_rows": saturated,
+        "decision_rule": "spearman_rho > 0.5 at a non-saturating operating point",
+    }
+    OUT.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    if len(saturated) > MAX_SATURATED_ROWS:
+        raise RuntimeError(
+            f"operating point censored: {len(saturated)} saturated rows "
+            f"({saturated}); decision rule requires a non-saturating point"
+        )
+    for_hypothesis = rho > 0.5
+    return ProbeResult(
+        label="FOR" if for_hypothesis else "AGAINST",
+        outcome_boolean=for_hypothesis,
+        payload=payload,
+        axes=("mechanism",),
+        values=tuple(campaign_accuracy[n] for n in names),
+        values_ref=f"{OUT}#campaign_accuracy",
         quality={
             "seeds": 1,
             "matched_control": False,
-            "evaluation_policy": "certified_operating_point_20ep_flat",
+            "evaluation_policy": "certified_operating_point_20ep_hard",
             "defect_audit": "pass",
             "integrity_checks": "pass",
         },
-        axes=["mechanism"],
-        values_ref="scratch/todo25_surrogate_recal.json#campaign_accuracy",
         notes=(
-            f"certified-tier surrogate-vs-campaign comparison: Spearman "
-            f"rho={rho:.3f} across {len(result['campaign_accuracy'])} rows "
-            f"(smoke tier: 0/4 top-3 agreement); saturation censoring — "
-            f"{len(saturated)} rows at accuracy 1.0 ({', '.join(saturated)}) "
-            f"make top-3 agreement degenerate; sharper test needs a "
-            f"non-saturating task class (H24.6 refit input)"
+            f"H24.2 round 3 on {TASK}: Spearman rho={rho:.3f} over "
+            f"{len(names)} rows, top-3 agreement {top3}/3, "
+            f"{len(saturated)} saturated rows; round-2 censoring resolved"
         ),
     )
 
-    # H24.2 round 2 stays open: rho moved toward FOR (0.418 vs smoke's
-    # 0/4) but the decision statistic is censored by saturation. The
-    # experiment is left running; scoring rides a non-saturating task
-    # class (H24.6 refit input).
+
+def main() -> int:
+    store = CEECStore(LEDGER, LEDGER.parent / "artifacts")
+    try:
+        return _run(store)
+    finally:
+        store._conn.commit()
+        store.close()
+
+
+def _run(store: CEECStore) -> int:
+    round2 = store.get_experiment(ROUND2_ID)
+    if round2.status != "completed":
+        # round 2 was censored by saturation and never scored; closing it
+        # as superseded records the calibration line without an outcome
+        store.set_experiment_status(ROUND2_ID, "completed")
+        store.record_calibration(
+            prediction=round2.prediction,
+            experiment_id=ROUND2_ID,
+            predicted_probability=round2.prediction_probability,
+            outcome="censored_superseded",
+            outcome_boolean=None,
+            scope=round2.scope,
+            notes=(
+                "round-2 statistic censored by saturation (6/10 rows at "
+                "1.0); superseded by X-H24-H242-T25V2 on "
+                "flat_classification_hard — never scored FOR on "
+                "saturated data"
+            ),
+        )
+        print(f"round 2 {ROUND2_ID}: closed as censored_superseded", flush=True)
+
+    try:
+        existing = store.get_experiment(ROUND3_ID)
+    except StoreError:  # ruff: ignore[try-except-pass]  idempotent re-run: an absent experiment is the first-run path
+        pass
+    else:
+        print(
+            json.dumps(
+                {
+                    "round3": ROUND3_ID,
+                    "status": existing.status,
+                    "note": "already executed; nothing to do",
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    draft = builders.experiment(
+        id_=ROUND3_ID,
+        question=(
+            "Campaign-backed fitness prevents quick-task overfitting "
+            "better than predictor-only search (rank agreement at a "
+            "non-saturating operating point)."
+        ),
+        prediction=(
+            "Surrogate ranks correlate with campaign outcomes on "
+            "flat_classification_hard (Spearman rho > 0.5)."
+        ),
+        scope=models.Scope(
+            domain="research",
+            substrate=("digital",),
+            budget="nightly",
+            extra={"hypothesis": "H24.2", "run_id": "T25V2"},
+        ),
+        tier="certified",
+        prediction_probability=(0.5, 0.8, 0.7),
+        design={
+            "evaluation_policy": "certified_operating_point_20ep_hard",
+            "decision_rule": (
+                "Spearman rho > 0.5 at a non-saturating operating point; "
+                "more than 2 saturated rows refuse scoring"
+            ),
+            "boundary_conditions": [
+                "round 2 (X-H24-H242-T25V1) was censored by saturation and "
+                "is closed as superseded, not scored; round 3 attempt 1 "
+                "(X-H24-H242-T25V2) failed on fixed-dim build paths "
+                "(role_split/spatial_lattice hard-spec defect, since fixed)"
+            ],
+        },
+        falsification_criterion=(
+            "certified-tier Spearman rho <= 0.5 at the non-saturating operating point"
+        ),
+        hard_gates=["BenchmarkReproduction"],
+    )
+    run = run_experiment(
+        store,
+        draft,
+        _campaign,
+        decision_rationale=(
+            "H24.2 round 3: single pre-registered measurement on the "
+            "non-saturating hard operating point"
+        ),
+    )
+    verdict = "FOR" if run.outcome == "FOR" else "AGAINST"
     print(
         json.dumps(
             {
-                "h24_2_round2": experiment_id,
-                "status": store.get_experiment(experiment_id).status,
-                "spearman_rho": rho,
-                "saturated_rows": saturated,
-                "verdict": "OPEN — evidence recorded, statistic censored by saturation",
+                "round3": ROUND3_ID,
+                "status": run.status,
+                "decision_id": run.decision_id,
+                "calibration_id": run.calibration_id,
+                "verdict": verdict,
+                "error": run.error,
+                "payload": str(OUT),
             },
             indent=2,
         ),
         flush=True,
     )
-    store._conn.commit()
-    store.close()
-    return 0
+    return 0 if run.status == "completed" else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

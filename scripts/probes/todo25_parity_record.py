@@ -1,7 +1,10 @@
 """F5 step 2 (TODO25): record the parity boundary belief from the probe
 result and run the CEEC-Core §19 boundary gates via ``declare_boundary``.
 
-Reads ``scratch/todo25_parity_boundary.json`` (probe output, cert tier:
+Rewritten on the TODO25 C.1 builders (``gate_evidence`` assembles the
+§18/§19 quality flags; ``chance_verdict`` in the boundary probe computes
+the verdict) — no hand-assembled payloads. Reads
+``scratch/todo25_parity_boundary.json`` (probe output, cert tier:
 120ep x 3 seeds + lr lever sweep) and writes the ledger
 ``scratch/todo25_parity.sqlite3``.
 
@@ -11,15 +14,18 @@ Usage: uv run python scripts/probes/todo25_parity_record.py
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
+from ceec.builders import gate_evidence
 from ceec.gates import declare_boundary
-from ceec.store import CEECStore
+from ceec.store import CEECStore, StoreError
 
 from ceec import models
 
 RESULT = Path("scratch/todo25_parity_boundary.json")
 LEDGER = Path("scratch/todo25_parity.sqlite3")
+BELIEF_ID = "B-PARITY-CHANCE-001"
 
 
 def main() -> int:
@@ -29,7 +35,28 @@ def main() -> int:
         return 1
     certified = result["certified"]
 
-    store = CEECStore(LEDGER, LEDGER.parent / "todo25_parity_artifacts")
+    with CEECStore(LEDGER, LEDGER.parent / "todo25_parity_artifacts") as store:
+        return _record(store, result, certified)
+
+
+def _record(store: CEECStore, result: dict, certified: dict) -> int:
+    try:
+        store.get_belief(BELIEF_ID)
+    except StoreError:  # ruff: ignore[try-except-pass]  idempotent re-run: an absent belief is the first-record path
+        pass
+    else:
+        print(
+            json.dumps(
+                {
+                    "belief": BELIEF_ID,
+                    "status": store.current_status(BELIEF_ID),
+                    "note": "already recorded; nothing to do",
+                },
+                indent=2,
+            )
+        )
+        return 0
+
     scope = models.Scope(
         domain="research",
         substrate=("digital",),
@@ -41,20 +68,17 @@ def main() -> int:
         "research_corpus_summary",
         {"problem_class": "sequence_parity", "mechanism": "ntm_classifier"},
     )
-    evidence = store.record_evidence(
-        kind="vector",
-        scope=scope,
-        artifact_refs=[artifact.id],
-        quality={
-            "seeds": len(certified["seeds"]),
-            "matched_control": True,
-            "evaluation_policy": "certified_operating_point_120ep",
-            "defect_audit": "pass",
-            "integrity_checks": "pass",
-            "known_levers_exhausted": True,
-        },
+    evidence = gate_evidence(
+        store,
+        scope,
         axes=["seed"],
+        values=[float(a) for a in certified["accuracies"]],
         values_ref="scratch/todo25_parity_boundary.json#certified.accuracies",
+        artifact_refs=[artifact.id],
+        seeds=len(certified["seeds"]),
+        matched_control=True,
+        evaluation_policy="certified_operating_point_120ep",
+        known_levers_exhausted=bool(result["levers_exhausted"]),
         notes=(
             f"parity certified at chance: accuracies "
             f"{[round(a, 4) for a in certified['accuracies']]} "
@@ -70,7 +94,7 @@ def main() -> int:
         "mechanism",
         scope,
         posterior_method="certified_chance_boundary",
-        id_="B-PARITY-CHANCE-001",
+        id_=BELIEF_ID,
         evidence_refs=[evidence.id],
     )
     store.update_belief(
@@ -101,9 +125,8 @@ def main() -> int:
         )
     )
     store._conn.commit()
-    store.close()
     return 0 if evaluation.all_passed else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

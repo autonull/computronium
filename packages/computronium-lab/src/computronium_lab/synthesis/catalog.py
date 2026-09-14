@@ -24,6 +24,18 @@ if TYPE_CHECKING:
     from computronium_lab.synthesis.spec import ProblemSpec
 
 
+_FLAT_TRAINABLE = frozenset({
+    "flat_classification",
+    "flat_classification_hard",
+})
+
+_SEQUENCE_TRAINABLE = _FLAT_TRAINABLE | frozenset({
+    "sequence_last_symbol",
+    "sequence_threshold",
+    "sequence_parity",
+})
+
+
 @dataclass(frozen=True, slots=True)
 class Pareto:
     """Pareto metadata for one mechanism (measured, not speculative)."""
@@ -51,12 +63,22 @@ class MechanismCandidate:
     substrates: tuple[str, ...] = ("digital",)
     local_credit: bool = False
     continual_capable: bool = False
+    trainable_on: frozenset[str] = frozenset()
     build_kind: str = "preset"  # "preset" | "recipe"
     build_name: str = ""
     pareto: Pareto = Pareto(0.5, 10.0, 1.0, 0.5)
     provenance: str = ""
     config_builder: Callable[[str, str], SystemConfig] | None = None
     recipe_kwargs: tuple[tuple[str, str], ...] = field(default=())
+
+    def trainable_on_task(self, task: str) -> bool:
+        """Whether the construction path trains on a corpus task class.
+
+        ``trainable_on`` is keyed by problem-class/task name; consult it
+        before building (TODO25 D.1) — a mismatch is a structured
+        measurement block, never an exception-driven skip.
+        """
+        return task in self.trainable_on
 
     def features(self, spec: ProblemSpec) -> MechanismFeatures:
         return MechanismFeatures(
@@ -286,6 +308,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         credit="bp",
         update="euclid",
         substrates=("digital", "memristive"),
+        trainable_on=_FLAT_TRAINABLE,
         build_name="backprop_mlp",
         pareto=Pareto(accuracy=0.91, latency_ms=5.0, memory_gb=1.2, stability=0.95),
         provenance=(
@@ -300,8 +323,13 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         credit="bp",
         update="ortho",
         substrates=("digital",),
+        trainable_on=_FLAT_TRAINABLE,
         build_kind="recipe",
         build_name="role_split_muon_readout",
+        recipe_kwargs=(
+            ("input_dim", "input_dim"),
+            ("output_dim", "num_classes"),
+        ),
         pareto=Pareto(accuracy=0.92, latency_ms=6.0, memory_gb=1.4, stability=0.9),
         provenance="X-USU-001: role-split readout beats both parents on mlp",
         config_builder=_role_split_config,
@@ -314,6 +342,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         substrates=("digital",),
         local_credit=False,
         continual_capable=True,
+        trainable_on=frozenset(),
         build_kind="recipe",
         build_name="temporal_psi",
         recipe_kwargs=(("feature_dim", "input_dim"), ("num_classes", "num_classes")),
@@ -324,7 +353,13 @@ CATALOG: tuple[MechanismCandidate, ...] = (
             stability=0.92,
             adaptation_speed=0.9,
         ),
-        provenance="X-TPC-001..003: frozen-θ task switching via temporal ψ",
+        provenance=(
+            "X-TPC-001..003: frozen-θ task switching via temporal ψ. "
+            "trainable_on is empty (TODO25 D.1): the ψ readout path has no "
+            "campaign/corpus arm for flat or sequence specs — the row is "
+            "reached through Lab.adapt / continual curricula, not "
+            "CampaignFitness"
+        ),
         config_builder=_bp_config,
     ),
     MechanismCandidate(
@@ -333,6 +368,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         update="euclid",
         local_credit=True,
         substrates=("digital",),
+        trainable_on=_FLAT_TRAINABLE,
         build_name="ff_mlp",
         pareto=Pareto(accuracy=0.92, latency_ms=4.0, memory_gb=0.4, stability=0.9),
         provenance=(
@@ -354,6 +390,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         credit="fa",
         update="euclid",
         substrates=("digital",),
+        trainable_on=_FLAT_TRAINABLE,
         build_name="fa_mlp",
         pareto=Pareto(accuracy=0.52, latency_ms=4.5, memory_gb=0.8, stability=0.6),
         provenance=(
@@ -374,6 +411,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=128,
         substrates=("digital",),
         local_credit=True,
+        trainable_on=_FLAT_TRAINABLE,
         build_kind="recipe",
         build_name="epc_deep",
         recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
@@ -395,6 +433,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=128,
         substrates=("digital",),
         local_credit=True,
+        trainable_on=_FLAT_TRAINABLE,
         build_name="eqprop_mlp",
         pareto=Pareto(accuracy=0.86, latency_ms=12.0, memory_gb=0.8, stability=0.85),
         provenance=(
@@ -412,8 +451,13 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=64,
         substrates=("digital",),
         local_credit=False,
+        trainable_on=_FLAT_TRAINABLE,
         build_kind="recipe",
         build_name="spatial_lattice_bp",
+        recipe_kwargs=(
+            ("input_dim", "input_dim"),
+            ("output_dim", "num_classes"),
+        ),
         pareto=Pareto(
             accuracy=0.83,
             latency_ms=6.0,  # param-count-scaled estimate (D11 measures accuracy only)
@@ -437,6 +481,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=32,
         substrates=("digital", "memristive"),
         local_credit=False,
+        trainable_on=_SEQUENCE_TRAINABLE,
         build_kind="recipe",
         build_name="ntm_classifier",
         recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
@@ -465,6 +510,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=32,
         substrates=("digital",),
         local_credit=False,
+        trainable_on=_SEQUENCE_TRAINABLE,
         build_kind="recipe",
         build_name="ntm_sequence",
         recipe_kwargs=(("input_dim", "input_dim"), ("output_dim", "num_classes")),
@@ -497,6 +543,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         width=32,
         substrates=("digital",),
         local_credit=False,
+        trainable_on=frozenset({"nca_state_prediction"}),
         build_kind="recipe",
         build_name="nca_predictor",
         pareto=Pareto(
@@ -516,7 +563,9 @@ CATALOG: tuple[MechanismCandidate, ...] = (
             "seeds (<7s each); permuted control ≈0.607 (chance floor 0.25; "
             "identity prior explains the gap). Matched control flagged "
             "against the 0.96-0.15 bar. W8.1 growth/distill regime with "
-            "label conditioning is NOT wired into the tier"
+            "label conditioning is NOT wired into the tier. trainable_on "
+            "(TODO25 D.1): grid-rollout construction only — no flat/sequence "
+            "campaign arm"
         ),
         config_builder=_nca_predictor_config,
     ),
@@ -525,6 +574,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         credit="pepita",
         update="euclid",
         substrates=("digital",),
+        trainable_on=_FLAT_TRAINABLE,
         build_name="pepita_mlp",
         pareto=Pareto(accuracy=0.97, latency_ms=6.0, memory_gb=1.0, stability=0.9),
         provenance=(

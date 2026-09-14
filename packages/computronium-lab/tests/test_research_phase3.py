@@ -25,6 +25,7 @@ def _runner(tier: BudgetTier = BudgetTier.QUICK) -> MeasurementRunner:
 def test_problem_classes_registered() -> None:
     assert set(CLASS_BY_NAME) == {
         "flat_classification",
+        "flat_classification_hard",
         "sequence_last_symbol",
         "sequence_threshold",
         "sequence_parity",

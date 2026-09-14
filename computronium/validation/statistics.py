@@ -29,6 +29,7 @@ __all__ = [
     "fisher_exact_p_one_sided",
     "permutation_test_p",
     "power_for_two_sample",
+    "spearman_rho",
 ]
 
 Statistic = Callable[[np.ndarray], float]
@@ -420,3 +421,39 @@ def fisher_exact_p_one_sided(
             math.comb(total, arm_size),
         )
     return float(p)
+
+
+def _average_ranks(values: np.ndarray) -> np.ndarray:
+    order = np.argsort(values, kind="stable")
+    ranks = np.empty(values.size, dtype=float)
+    sorted_vals = values[order]
+    i = 0
+    while i < values.size:
+        j = i
+        while j + 1 < values.size and sorted_vals[j + 1] == sorted_vals[i]:
+            j += 1
+        ranks[order[i : j + 1]] = (i + j) / 2.0 + 1.0
+        i = j + 1
+    return ranks
+
+
+def spearman_rho(a: Sequence[float], b: Sequence[float]) -> float:
+    """Spearman rank correlation with average ranks for ties.
+
+    Constant inputs (zero rank variance) return 0.0 rather than NaN — the
+    TODO25 surrogate comparison degenerates to "no measured association"
+    under saturation, not an error.
+    """
+    if len(a) != len(b):
+        raise ValueError("spearman_rho requires equal-length inputs")
+    if len(a) < 2:
+        raise ValueError("spearman_rho requires at least 2 points")
+    ra, rb = (
+        _average_ranks(np.asarray(a, dtype=float)),
+        _average_ranks(np.asarray(b, dtype=float)),
+    )
+    da, db = ra - ra.mean(), rb - rb.mean()
+    denom = float(np.sqrt((da**2).sum() * (db**2).sum()))
+    if denom == 0.0:
+        return 0.0
+    return float((da * db).sum() / denom)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import torch
 from torch import Tensor
@@ -22,6 +22,8 @@ from computronium_lab.training import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from computronium_lab.adaptation import (
         AdaptationMode,
         AdaptationResult,
@@ -47,6 +49,21 @@ if TYPE_CHECKING:
 PSI_ONLY = "psi_only"
 
 
+class _HardTaskParams(TypedDict):
+    """Difficulty overrides for the flat_classification_hard generator."""
+
+    scale: float
+    noise: float
+
+
+# flat_classification_hard operating point (TODO25 D.2): dims ride the
+# registered spec defaults (64 x 8); the measured calibration sweep
+# (scripts/probes/todo25_hard_task.json) pins the same scale/noise as the
+# flat tier — hardness comes from dims/classes, which clears saturation at
+# 20ep (top row 0.984, no row >= 0.995) while weak rules separate.
+HARD_TASK_PARAMS: _HardTaskParams = {"scale": 1.2, "noise": 1.5}
+
+
 @dataclass(frozen=True, slots=True)
 class ComparisonResult:
     """One preset's quick training outcome."""
@@ -64,12 +81,18 @@ def synthetic_task(
     input_dim: int = 32,
     num_classes: int = 4,
     batch_size: int = 32,
+    *,
+    scale: float = 1.2,
+    noise: float = 1.5,
 ) -> tuple[DataLoader[tuple[Tensor, ...]], DataLoader[tuple[Tensor, ...]]]:
     """Deterministic gaussian-blob classification task (quick mode).
 
     Calibrated difficulty (scale=1.2, noise=1.5): strong gradient-trained
     mechanisms land ~0.90 at 20 epochs while weaker credit rules separate
-    below — see the difficulty-sweep note in the body.
+    below — see the difficulty-sweep note in the body. The
+    ``flat_classification_hard`` corpus class (TODO25 D.2) passes harder
+    ``scale``/``noise`` via ``HARD_TASK_PARAMS`` so 20 epochs no longer
+    saturates.
     """
     gen = torch.Generator().manual_seed(seed)
     # (1.2, 1.5) is the calibrated difficulty operating point (2026-09-13
@@ -78,7 +101,7 @@ def synthetic_task(
     # stopped discriminating. At (1.2, 1.5) backprop lands ~0.90 @ 20ep
     # while weaker credit rules separate below it.
     x, y = gaussian_blobs(
-        n, input_dim, num_classes, scale=1.2, noise=1.5, generator=gen
+        n, input_dim, num_classes, scale=scale, noise=noise, generator=gen
     )
     split = int(n * 0.75)
     train = DataLoader(
@@ -501,6 +524,131 @@ class Lab:
         from computronium_lab.report import write_report
 
         return write_report(self.last_results, path)
+
+    def research_report(
+        self,
+        spec: ProblemSpec | str | None = None,
+        *,
+        tier: str = "quick",
+        path: str | Path | None = None,
+    ) -> dict[str, object]:
+        """One call per practitioner question (TODO25 C.3 + D.3).
+
+        Dry-run only: synthesis, an evolution plan, the corpus arm plan
+        (trainable vs expected measurement blocks), and the ledger rollup.
+        ``spec`` is a ``ProblemSpec`` or its ``key()`` string; ``tier`` is
+        a lab budget tier. ``path`` writes the ledger report
+        (``ledger_report.md`` + ``.json``) into that directory.
+        """
+        from pathlib import Path as _Path
+
+        from computronium_lab.research.corpus import CLASS_BY_NAME
+        from computronium_lab.research.evolution import (
+            EvolutionBudget,
+            EvolutionSpec,
+            plan_evolution,
+        )
+        from computronium_lab.research.reports import render_ledger
+        from computronium_lab.research.schema import BudgetTier
+        from computronium_lab.synthesis.catalog import CATALOG
+
+        resolved = self._spec_from_key(spec) if isinstance(spec, str) else spec
+        tier_budget = {
+            BudgetTier.SMOKE: EvolutionBudget.smoke,
+            BudgetTier.QUICK: EvolutionBudget.quick,
+            BudgetTier.CERTIFIED: EvolutionBudget.certified,
+        }[BudgetTier(tier)]
+
+        report: dict[str, object] = {"tier": tier}
+        if resolved is not None:
+            trainable = tuple(
+                c.name for c in CATALOG if c.trainable_on_task(resolved.task)
+            )
+            blocked = ()
+            if resolved.task in CLASS_BY_NAME:
+                blocked = tuple(
+                    c.name for c in CATALOG if not c.trainable_on_task(resolved.task)
+                )
+            synthesis = self.synthesize(resolved)
+            evolution = EvolutionSpec(
+                seed_candidates=trainable[:4] or ("backprop_mlp",),
+                budget=tier_budget(),
+                tier=BudgetTier(tier),
+            )
+            plan = plan_evolution(resolved, evolution)
+            report.update({
+                "spec_key": resolved.key(),
+                "synthesis": {
+                    "mechanism": synthesis.name,
+                    "coordinate": synthesis.coordinate,
+                    "predicted_viability": synthesis.predicted_viability,
+                    "provenance": list(synthesis.provenance),
+                },
+                "evolution_plan": {
+                    "seed_candidates": list(evolution.seed_candidates),
+                    "genomes": [g.mechanism for g in plan.genomes],
+                    "admission": [
+                        {"mechanism": m, "admitted": ok, "reason": reason}
+                        for m, ok, reason in plan.admission
+                    ],
+                    "expected_campaigns": plan.expected_campaigns,
+                    "expected_epochs": plan.expected_epochs,
+                },
+                "corpus_arms": {
+                    "problem_class": resolved.task,
+                    "trainable": trainable,
+                    "expected_blocks": blocked,
+                    "dims": {
+                        "input_dim": resolved.input_dim,
+                        "num_classes": resolved.num_classes,
+                    },
+                },
+            })
+
+        if self.record_ledger:
+            from ceec.store import CEECStore
+
+            db = _Path(self.record_ledger)
+            with CEECStore(db, db.parent / "artifacts") as store:
+                markdown, data = render_ledger(store)
+            report["ledger"] = {"markdown": markdown, **data}
+            if path is not None:
+                out_dir = _Path(path)
+                out_dir.mkdir(parents=True, exist_ok=True)
+                (out_dir / "ledger_report.md").write_text(markdown, encoding="utf-8")
+                import json
+
+                (out_dir / "ledger_report.json").write_text(
+                    json.dumps(data, indent=2, sort_keys=True, default=str),
+                    encoding="utf-8",
+                )
+        return report
+
+    def _spec_from_key(self, key: str) -> ProblemSpec:
+        """Rebuild a ProblemSpec from its ``key()`` string."""
+        import re
+
+        parts = key.split("/")
+        if len(parts) != 7:
+            raise ValueError(f"not a ProblemSpec key: {key!r}")
+        task, dataset, substrate, precision, continual, local, dims = parts
+        cont = re.fullmatch(r"continual=(\w+)", continual)
+        loc = re.fullmatch(r"local=(\w+)", local)
+        dim = re.fullmatch(r"dims=(\d+)x(\d+)", dims)
+        if not (cont and loc and dim):
+            raise ValueError(f"not a ProblemSpec key: {key!r}")
+        return ProblemSpec(
+            task=task,
+            dataset=dataset,
+            constraints=Constraints(
+                substrate=substrate,
+                precision=precision,
+                continual=cont.group(1) == "True",
+                local_credit=loc.group(1) == "True",
+            ),
+            input_dim=int(dim.group(1)),
+            num_classes=int(dim.group(2)),
+        )
 
     def _record_ceec(self, results: list[ComparisonResult]) -> None:
         """Opt-in CEEC-Core evidence recording for a comparison run."""

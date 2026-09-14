@@ -248,6 +248,9 @@ _ALLOWED_ARTIFACT_TYPES = {
     "measurement_block",
     # Structured-evidence payload attachments (T24.0.6 helpers):
     "evidence_payload",
+    # Closed-loop runner records (TODO25 C.4):
+    "experiment_payload",
+    "experiment_failure",
 }
 
 
