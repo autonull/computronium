@@ -33,7 +33,7 @@ Generality = Literal["narrow", "moderate", "broad", "universal"]
 GoalKind = Literal["science", "program", "resource", "hygiene"]
 GoalStatus = Literal["active", "blocked", "satisfied", "retired"]
 ExperimentStatus = Literal["draft", "pre_registered", "running", "completed", "failed"]
-GateStatus = Literal["pass", "fail", "not_evaluated"]
+GateStatus = Literal["passed", "failed", "unknown", "waived_with_justification"]
 
 STRUCTURED_KINDS: frozenset[str] = frozenset({
     "vector",

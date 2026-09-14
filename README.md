@@ -448,7 +448,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 | `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
-| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget**; task tiers: classification quick tier, sequence tier (`train_sequence`), state-prediction tier (`train_state_prediction` — NCA grid rollout), ψ-only continual adaptation (`Lab.adapt`), validation campaigns + `promote_mechanism` + `ledger_audit` |
+| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget**; task tiers: classification quick tier, sequence tier (`train_sequence`), state-prediction tier (`train_state_prediction` — NCA grid rollout), ψ-only continual adaptation (`Lab.adapt`), validation campaigns + `promote_mechanism` + `ledger_audit`; **research layer (TODO24): budgeted evolution (`Lab.plan_evolution/run_evolution`), certified corpus (`MeasurementRunner`, 7 problem classes), continual benchmark (`Lab.benchmark_continual`), substrate-transfer benchmark (`Lab.benchmark_substrate_transfer`), cookbook (`certify_entry`) — see `docs/research/todo24/`** |
 | `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
 
 Platform docs (recipe book, edge blueprint, external summary, release
@@ -479,6 +479,32 @@ frontier = lab.explore(spec)       # Pareto frontier of constraint-satisfying me
 adapted = lab.adapt(system, task_stream, mode="conflict_adaptive")  # ψ-only, θ bitwise frozen
 print(adapted.theta.bitwise_invariant, adapted.metrics["psi_accuracy"])
 ```
+
+### Quickstart: Evolve a Mechanism Under Budget (TODO24)
+
+```python
+from computronium_lab import EvolutionBudget, EvolutionSpec, Lab
+
+lab = Lab(record_ledger="scratch/todo24.sqlite3")
+spec = lab.specify("flat_classification", "gaussian_blob")
+plan = lab.plan_evolution(          # dry run: genomes, checks, budgets
+    spec,
+    EvolutionSpec(
+        population=6, generations=3,
+        seed_candidates=("backprop_mlp", "temporal_psi_task_switcher"),
+        budget=EvolutionBudget.quick(),
+    ),
+)
+report = lab.run_evolution(plan)    # campaign-backed fitness, audited ledger
+print(report.best_candidates[0].mechanism, report.negative_results)
+```
+
+Evolution proposes, campaigns dispose: every generation pre-registers as
+a CEEC `Experiment`, measured Pareto points persist in
+`data/research/todo24/frontier/`, and only campaign-certified mechanisms
+become cookbook entries. Gallery demo D24
+(`tests/integration/test_demo_evolution_search.py`); guides in
+`docs/research/todo24/`.
 
 ### Quickstart: Forward-Forward vs Backprop in <2 Minutes
 

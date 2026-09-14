@@ -28,6 +28,13 @@ if TYPE_CHECKING:
         TaskBoundary,
     )
     from computronium_lab.deployment import ExportResult
+    from computronium_lab.research.continual import ContinualReport
+    from computronium_lab.research.evolution import (
+        EvolutionPlan,
+        EvolutionReport,
+        EvolutionSpec,
+    )
+    from computronium_lab.research.substrate import TransferReport
     from computronium_lab.sequential import SequenceTrainingResult
     from computronium_lab.state_prediction import (
         StatePredictionResult as StatePredictionResult,
@@ -123,14 +130,81 @@ class Lab:
         )
         return spec
 
-    def synthesize(self, spec: ProblemSpec) -> SynthesisResult:
-        """Spec → best valid mechanism coordinate with provenance (T23.1.5)."""
+    def synthesize(
+        self, spec: ProblemSpec, *, include_evolved: bool = False
+    ) -> SynthesisResult:
+        """Spec → best valid mechanism coordinate with provenance (T23.1.5).
+
+        ``include_evolved`` (TODO24 T24.2.6) folds archived *measured*
+        accuracies from the frontier archive into selection; off by
+        default so TODO23 behavior is unchanged.
+        """
         from computronium_lab.synthesis.engine import synthesize as _synthesize
 
-        result = _synthesize(spec, campaigns_run=self._campaigns)
+        frontier = None
+        if include_evolved:
+            from computronium_lab.research.evolution import FrontierArchive
+
+            frontier = FrontierArchive(spec).measured_accuracy()
+        result = _synthesize(spec, campaigns_run=self._campaigns, frontier=frontier)
         if result.exploratory:
             self._record_exploratory(result, spec)
         return result
+
+    def plan_evolution(
+        self, spec: ProblemSpec, evolution: EvolutionSpec
+    ) -> EvolutionPlan:
+        """Dry-run evolution plan: genomes, checks, budgets. No training."""
+        from computronium_lab.research.evolution import plan_evolution
+
+        return plan_evolution(spec, evolution)
+
+    def run_evolution(self, plan: EvolutionPlan) -> EvolutionReport:
+        """Execute an evolution plan end-to-end (T24.2.3)."""
+        from computronium_lab.research.evolution import run_evolution
+
+        return run_evolution(self, plan)
+
+    def benchmark_continual(
+        self,
+        mechanism: str = "temporal_psi_task_switcher",
+        curriculum: str = "two_task_switch",
+        modes: tuple[str, ...] = ("temporal", "role_split", "conflict_adaptive"),
+        controls: tuple[str, ...] = (
+            "frozen_no_psi",
+            "theta_finetune_matched_compute",
+        ),
+        seeds: tuple[int, ...] = (0, 1, 2),
+    ) -> ContinualReport:
+        """ψ-mode benchmark against matched controls (T24.4.4)."""
+        from computronium_lab.research.continual import benchmark_continual
+
+        return benchmark_continual(
+            self,
+            mechanism=mechanism,
+            curriculum=curriculum,
+            modes=modes,
+            controls=controls,
+            seeds=seeds,
+        )
+
+    def benchmark_substrate_transfer(
+        self,
+        mechanism: str = "backprop_mlp",
+        source_substrate: str = "digital",
+        target_constraints: tuple[str, ...] = ("int8", "ternary", "memristive"),
+        seeds: tuple[int, ...] = (0, 1, 2),
+    ) -> TransferReport:
+        """Deployment transfer robustness campaign (T24.5.1)."""
+        from computronium_lab.research.substrate import benchmark_substrate_transfer
+
+        return benchmark_substrate_transfer(
+            self,
+            mechanism=mechanism,
+            source_substrate=source_substrate,
+            target_constraints=target_constraints,
+            seeds=seeds,
+        )
 
     def _record_exploratory(self, result: SynthesisResult, spec: ProblemSpec) -> None:
         """Opt-in CEEC artifact for an exploratory synthesis (T23.1.7)."""
@@ -206,9 +280,14 @@ class Lab:
         spec: ProblemSpec | None = None,
         options: TrainOptions | None = None,
         val_data: object | None = None,
+        train_data: object | None = None,
     ) -> TrainingResult:
         """Train with opt-in guarantees; returns a TrainingResult (T23.2.1).
 
+        ``train_data`` (TODO25 F1) supplies an explicit training loader,
+        bypassing the default synthetic task — permuted controls, task
+        streams, and any runner that already holds its loader pass it
+        here instead of calling ``train_with_certificates`` directly.
         ``val_data`` (or ``TrainOptions.val_data``) wires a validation
         loader through to the trainer: per-epoch best-snapshot selection
         when harvest_mode="best_snapshot", and val_loss/val_acc in
@@ -222,6 +301,18 @@ class Lab:
         if val_data is not None and opts.val_data is None:
             opts = replace(opts, val_data=val_data)
         torch.manual_seed(self.seed)
+        if train_data is not None:
+            return train_with_certificates(
+                system,
+                train_data,
+                device=self.device,
+                seed=self.seed,
+                epochs=epochs,
+                batch_size=batch_size,
+                spec=spec,
+                options=opts,
+                record_ledger=self.record_ledger,
+            )
         train_loader, _ = synthetic_task(
             seed=self.seed,
             batch_size=batch_size,

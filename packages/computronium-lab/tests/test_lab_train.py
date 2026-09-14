@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import torch
 from computronium_lab import Lab
 
 
@@ -48,3 +49,17 @@ def test_report_writes_markdown(tmp_path) -> None:
     assert content.startswith("# Computronium Lab comparison")
     with pytest.raises(ValueError, match="nothing to report"):
         Lab().report(str(tmp_path / "empty.md"))
+
+
+def test_train_data_passthrough(tmp_path) -> None:
+    """Explicit train_data bypasses the synthetic task (TODO25 F1)."""
+    from torch.utils.data import DataLoader, TensorDataset
+
+    loader = DataLoader(
+        TensorDataset(torch.randn(16, 8), torch.randint(0, 2, (16,))),
+        batch_size=8,
+    )
+    lab = Lab(seed=0)
+    system = lab.compose("backprop_mlp", input_dim=8, output_dim=2)
+    result = lab.train(system, epochs=1, train_data=loader)
+    assert result.metrics["loss"] > 0.0

@@ -48,6 +48,15 @@ from computronium_lab.ecosystem import (
 from computronium_lab.lab import ComparisonResult, Lab
 from computronium_lab.presets import PRESETS
 from computronium_lab.recipes import RECIPES, build_recipe
+from computronium_lab.research.autopoiesis import objective_names
+from computronium_lab.research.continual import CurriculumSpec, register_curriculum
+from computronium_lab.research.corpus import register_problem_class
+from computronium_lab.research.evolution import (
+    EvolutionBudget,
+    EvolutionReport,
+    EvolutionSpec,
+    FrontierArchive,
+)
 from computronium_lab.sequential import (
     SEQUENCE_TASKS,
     SequenceCampaignReport,
@@ -72,6 +81,7 @@ from computronium_lab.synthesis import (
     explore,
     synthesize,
 )
+from computronium_lab.synthesis.engine import register_objective
 from computronium_lab.training import (
     DeterminismSeal,
     StabilityCertificate,
@@ -91,10 +101,15 @@ __all__ = [
     "CampaignReport",
     "ComparisonResult",
     "Constraints",
+    "CurriculumSpec",
     "DeterminismSeal",
     "EnergyEstimate",
+    "EvolutionBudget",
+    "EvolutionReport",
+    "EvolutionSpec",
     "ExplorationBudgetExhausted",
     "ExportResult",
+    "FrontierArchive",
     "HuggingFaceCallback",
     "Lab",
     "LightningStabilityCallback",
@@ -125,8 +140,12 @@ __all__ = [
     "export_system",
     "grid_transition_task",
     "ledger_audit",
+    "objective_names",
     "probe_campaign",
     "promote_mechanism",
+    "register_curriculum",
+    "register_objective",
+    "register_problem_class",
     "report_json",
     "run_benchmark",
     "run_campaign",

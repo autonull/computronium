@@ -343,7 +343,7 @@ def _record(lab: Lab, report: StatePredictionCampaignReport, deploy_note: str) -
         ):
             store.record_gate_outcome(
                 gate=gate,
-                status="pass" if ok else "fail",
+                status="passed" if ok else "failed",
                 rationale="state-prediction tier campaign (grid_transition)",
                 evidence_refs=[evidence.id],
             )

@@ -1,0 +1,176 @@
+"""Certified Research Corpus and autopoiesis kernel (TODO24).
+
+Research-layer extensions over the TODO23 synthesis surface: problem
+classes, measurement protocols, statistics, evolutionary search, frontier
+archive, continual/substrate benchmarks, and cookbook generation.
+"""
+
+from __future__ import annotations
+
+__all__ = [
+    "BUDGET_CAPS",
+    "CLASS_BY_NAME",
+    "CURRICULA",
+    "HYPOTHESES",
+    "ArmSummary",
+    "BudgetCap",
+    "BudgetTier",
+    "CampaignFitness",
+    "CandidateEvaluation",
+    "ContinualComparison",
+    "ContinualReport",
+    "CookbookEntry",
+    "CookbookRefusal",
+    "CoordinateGenome",
+    "CorpusReport",
+    "CorpusSpec",
+    "CurriculumSpec",
+    "EvolutionBudget",
+    "EvolutionPlan",
+    "EvolutionReport",
+    "EvolutionSpec",
+    "FrontierArchive",
+    "FrontierPoint",
+    "GenerationSummary",
+    "HypothesisSpec",
+    "LabRecorder",
+    "MeasurementBlock",
+    "MeasurementProtocol",
+    "MeasurementRunner",
+    "ParetoSelection",
+    "ProblemClassProtocol",
+    "ResearchConstitution",
+    "ResearchStagnationDetector",
+    "SafeMutationOperator",
+    "StatisticalSummary",
+    "SurrogateFitness",
+    "TransferReport",
+    "TransferScore",
+    "attempt_promotion",
+    "benchmark_continual",
+    "benchmark_substrate_transfer",
+    "build_failure_manifesto",
+    "certify_entry",
+    "corpus_root",
+    "crowding_distance",
+    "curve_evidence",
+    "frontier_evidence",
+    "hypervolume",
+    "mirror_hypotheses",
+    "mirror_proposals",
+    "nondominated_sort",
+    "objective_names",
+    "plan_evolution",
+    "preregister_hypotheses",
+    "problem_class_defaults",
+    "register_curriculum",
+    "register_objective",
+    "register_problem_class",
+    "remeasure_catalog",
+    "render_continual",
+    "render_cookbook",
+    "render_corpus",
+    "render_evolution",
+    "render_manifesto",
+    "render_transfer",
+    "results_dir",
+    "run_evolution",
+    "run_ledger_audit",
+    "score_hypotheses",
+    "seed_genomes_from_proposals",
+    "vector_evidence",
+    "write_hypothesis_reports",
+    "write_manifest",
+]
+
+from computronium_lab.research.adapters import (
+    LabRecorder,
+    mirror_hypotheses,
+    mirror_proposals,
+    seed_genomes_from_proposals,
+)
+from computronium_lab.research.autopoiesis import (
+    CampaignFitness,
+    CandidateEvaluation,
+    CoordinateGenome,
+    ParetoSelection,
+    ResearchConstitution,
+    ResearchStagnationDetector,
+    SafeMutationOperator,
+    SurrogateFitness,
+    crowding_distance,
+    hypervolume,
+    nondominated_sort,
+    objective_names,
+)
+from computronium_lab.research.continual import (
+    CURRICULA,
+    ContinualComparison,
+    ContinualReport,
+    CurriculumSpec,
+    benchmark_continual,
+    register_curriculum,
+)
+from computronium_lab.research.cookbook import (
+    CookbookEntry,
+    CookbookRefusal,
+    certify_entry,
+    render_cookbook,
+)
+from computronium_lab.research.corpus import (
+    CLASS_BY_NAME,
+    ArmSummary,
+    CorpusReport,
+    MeasurementRunner,
+    problem_class_defaults,
+    register_problem_class,
+    remeasure_catalog,
+)
+from computronium_lab.research.evidence import (
+    curve_evidence,
+    frontier_evidence,
+    run_ledger_audit,
+    vector_evidence,
+)
+from computronium_lab.research.evolution import (
+    EvolutionBudget,
+    EvolutionPlan,
+    EvolutionReport,
+    EvolutionSpec,
+    FrontierArchive,
+    FrontierPoint,
+    GenerationSummary,
+    plan_evolution,
+    run_evolution,
+)
+from computronium_lab.research.paths import corpus_root, results_dir, write_manifest
+from computronium_lab.research.reports import (
+    HYPOTHESES,
+    HypothesisSpec,
+    attempt_promotion,
+    build_failure_manifesto,
+    preregister_hypotheses,
+    render_continual,
+    render_corpus,
+    render_evolution,
+    render_manifesto,
+    render_transfer,
+    score_hypotheses,
+    write_hypothesis_reports,
+)
+from computronium_lab.research.schema import (
+    BUDGET_CAPS,
+    BudgetCap,
+    BudgetTier,
+    CorpusSpec,
+    MeasurementBlock,
+    MeasurementProtocol,
+    ProblemClassProtocol,
+    StatisticalSummary,
+)
+from computronium_lab.research.substrate import (
+    TransferReport,
+    TransferScore,
+    benchmark_substrate_transfer,
+)
+from computronium_lab.synthesis.engine import register_objective

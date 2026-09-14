@@ -164,7 +164,19 @@
       "figure_png": "d22_mechanism_explorer.png",
       "provenance": {
         "config_sha256": "1328089d6207667e650861bd3c5e7941c0b164fba807311f89f4ea91f2890e17",
-        "git_commit": "355122cf4b2e9e66115ec11c5a38dd71d793b94e"
+        "git_commit": "2def14f3de352fa8753056ffbead66a2784746df"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D24",
+      "capability_name": "evolution_search",
+      "data_sha256": "082d02dd08c9da0b02f4baf2736d2080f58054ebb87dd3a4e458f0e101fabf9f",
+      "demo_test": "tests/integration/test_demo_evolution_search.py",
+      "figure_png": "d24_evolution_search.png",
+      "provenance": {
+        "config_sha256": "082d02dd08c9da0b02f4baf2736d2080f58054ebb87dd3a4e458f0e101fabf9f",
+        "git_commit": "unknown"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },

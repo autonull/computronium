@@ -7,13 +7,13 @@ from typing import Literal
 
 Objective = Literal["accuracy", "adaptation_speed", "stability", "latency", "memory"]
 SubstrateName = Literal["digital", "memristive", "neuromorphic", "photonic", "quantum"]
-KNOWN_OBJECTIVES: frozenset[str] = frozenset({
+KNOWN_OBJECTIVES: set[str] = {
     "accuracy",
     "adaptation_speed",
     "stability",
     "latency",
     "memory",
-})
+}
 KNOWN_SUBSTRATES: frozenset[str] = frozenset({
     "digital",
     "memristive",

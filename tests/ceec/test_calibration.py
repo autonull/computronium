@@ -66,7 +66,7 @@ class TestCalibration:
 
     def test_report_rates(self, store, predicted_experiment):
         gate = store.record_gate_outcome(
-            "probability_threshold", "pass", "ok", belief_id=predicted_experiment
+            "probability_threshold", "passed", "ok", belief_id=predicted_experiment
         )
         store.change_status(
             predicted_experiment, "promoted", "strong", gate_refs=[gate.id]
@@ -82,7 +82,7 @@ class TestCalibration:
 
     def test_review_flags(self, store, predicted_experiment):
         gate = store.record_gate_outcome(
-            "probability_threshold", "pass", "ok", belief_id=predicted_experiment
+            "probability_threshold", "passed", "ok", belief_id=predicted_experiment
         )
         store.change_status(
             predicted_experiment, "promoted", "strong", gate_refs=[gate.id]

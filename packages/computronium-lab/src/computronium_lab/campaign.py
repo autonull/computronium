@@ -211,7 +211,7 @@ def _record(lab: Lab, report: CampaignReport, deploy_note: str) -> None:
         ):
             store.record_gate_outcome(
                 gate=gate,
-                status="pass" if ok else "fail",
+                status="passed" if ok else "failed",
                 rationale=f"campaign for {report.mechanism} ({report.spec_key})",
                 evidence_refs=[evidence.id],
             )
@@ -241,6 +241,13 @@ _ALLOWED_ARTIFACT_TYPES = {
     "exploratory_synthesis",
     "lab_comparison",
     "mechanism_belief",
+    # TODO24 research-layer records (T24.0.4):
+    "evolution_generation",
+    "evolution_candidate",
+    "research_corpus_summary",
+    "measurement_block",
+    # Structured-evidence payload attachments (T24.0.6 helpers):
+    "evidence_payload",
 }
 
 
@@ -351,20 +358,16 @@ def _control_accuracy(
     cannot inflate it.
     """
     from computronium_lab.lab import synthetic_task
-    from computronium_lab.training import train_with_certificates
 
     accuracies = []
     for seed in seeds:
         lab.seed = seed
         system = cand.build(spec)
-        train_with_certificates(
+        lab.train(
             system,
-            _permuted_task(spec, seed),
-            device=lab.device,
-            seed=seed,
             epochs=epochs,
             spec=spec,
-            options=TrainOptions(),
+            train_data=_permuted_task(spec, seed),
         )
         _, val = synthetic_task(
             seed=seed,
@@ -564,25 +567,13 @@ def _link_campaign_evidence(
 
 
 def ledger_audit(db_path: str | Path) -> dict[str, object]:
-    """TODO23 §10 audit: campaign records only, zero ``X-*`` codes.
+    """TODO23 §10 audit, T24.0.6 unified: ceec structural findings plus the
+    lab campaign-only allowlist and ``X-*`` probe-code rejection.
 
     Returns counts per artifact type, any leaked experiment codes found in
-    artifact provenance or evidence notes, and an overall ``clean`` flag.
+    artifact provenance or evidence notes, ceec audit findings, and an
+    overall ``clean`` flag.
     """
-    import sqlite3
+    from computronium_lab.research.evidence import run_ledger_audit
 
-    conn = sqlite3.connect(db_path)
-    types = [t for (t,) in conn.execute("SELECT type FROM artifacts")]
-    notes = [n for (n,) in conn.execute("SELECT notes FROM evidence")]
-    provenance = [p for (p,) in conn.execute("SELECT provenance FROM artifacts")]
-    conn.close()
-
-    haystack = [str(n) for n in notes] + [str(p) for p in provenance]
-    x_codes = sorted({m for h in haystack for m in _X_CODE.findall(h)})
-    campaign_only = set(types) <= _ALLOWED_ARTIFACT_TYPES
-    return {
-        "artifact_types": types,
-        "campaign_only": campaign_only,
-        "x_codes": x_codes,
-        "clean": campaign_only and not x_codes,
-    }
+    return run_ledger_audit(db_path)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -217,17 +217,27 @@ def expected_value(
     return ev, cost, score
 
 
-def decide(
+def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored candidates
     store: CEECStore,
     profile: dict[str, Any],
     rationale: str,
     coordinate_validator: CoordinateValidator | None = None,
     overrides: list[dict[str, Any]] | None = None,
+    candidate_ids: Sequence[str] | None = None,
 ) -> models.Decision:
+    """§22 selection loop.
+
+    ``candidate_ids`` (TODO25 F3) restricts the pool to a pre-registered
+    subset — e.g. one evolution generation's experiments — without
+    widening the loop's logic. ``None`` keeps the store-wide default.
+    """
     gamma = float(profile.get("cost_model", {}).get("gamma", 1.0))
     budget_limit = profile.get("budget_limit")
 
     candidates = generate_candidates(store)
+    if candidate_ids is not None:
+        wanted = set(candidate_ids)
+        candidates = [e for e in candidates if e.id in wanted]
     scored: list[ScoredCandidate] = []
     for experiment in candidates:
         constraints = check_hard_constraints(

@@ -321,7 +321,7 @@ def _record(lab: Lab, report: SequenceCampaignReport, deploy_note: str) -> None:
         ):
             store.record_gate_outcome(
                 gate=gate,
-                status="pass" if ok else "fail",
+                status="passed" if ok else "failed",
                 rationale=f"sequence campaign ({report.task})",
                 evidence_refs=[evidence.id],
             )

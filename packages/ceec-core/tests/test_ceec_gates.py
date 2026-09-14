@@ -53,7 +53,7 @@ def test_promotion_flow(store: CEECStore) -> None:
     belief = _belief_with_evidence(store)
     outcome = store.record_gate_outcome(
         gate="promotion",
-        status="pass",
+        status="passed",
         rationale="multi-seed replication",
         belief_id=belief.id,
     )
@@ -70,7 +70,7 @@ def test_boundary_then_reopen_requires_trigger(store: CEECStore) -> None:
     belief = _belief_with_evidence(store)
     outcome = store.record_gate_outcome(
         gate="boundary",
-        status="pass",
+        status="passed",
         rationale="scope limit found",
         belief_id=belief.id,
     )

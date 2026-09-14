@@ -13,8 +13,12 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from computronium_lab.lab import Lab
+
+if TYPE_CHECKING:
+    from stability.guard import StabilityGuard
 
 __all__ = [
     "BenchmarkReport",
@@ -133,8 +137,10 @@ class LightningStabilityCallback:
 
         if self.handle is None or self._probe_batch is None:
             return
-        verdict = self.handle.check_external(  # type: ignore[attr-defined]
-            dict(self._probe_batch),
+        guard = cast("StabilityGuard", self.handle)
+        state = cast("dict[str, object]", self._probe_batch)
+        verdict = guard.check_external(
+            state,
             lambda s: {**s, "y": self._forward(s)},
             step=int(getattr(trainer, "current_epoch", 0)),
         )
@@ -149,8 +155,9 @@ class LightningStabilityCallback:
 
         if self._system is None:
             raise RuntimeError("on_train_start has not run; no system attached")
+        geometry = getattr(self._system, "geometry")
         with torch.no_grad():
-            return self._system.geometry(state["x"])  # type: ignore[attr-defined]
+            return geometry(state["x"])
 
 
 @dataclass(frozen=True, slots=True)

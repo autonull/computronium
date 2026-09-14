@@ -285,7 +285,7 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         name="backprop_mlp",
         credit="bp",
         update="euclid",
-        substrates=("digital", "memristive", "neuromorphic"),
+        substrates=("digital", "memristive"),
         build_name="backprop_mlp",
         pareto=Pareto(accuracy=0.91, latency_ms=5.0, memory_gb=1.2, stability=0.95),
         provenance=(
@@ -332,10 +332,14 @@ CATALOG: tuple[MechanismCandidate, ...] = (
         credit="ff",
         update="euclid",
         local_credit=True,
-        substrates=("digital", "neuromorphic"),
+        substrates=("digital",),
         build_name="ff_mlp",
         pareto=Pareto(accuracy=0.92, latency_ms=4.0, memory_gb=0.4, stability=0.9),
         provenance=(
+            "substrate claim narrowed to digital (TODO25 F2): ff_mlp's "
+            "instantaneous pass fails SystemConfig.validate() under "
+            "neuromorphic (requires temporal dynamics); a temporal "
+            "neuromorphic row is future work. "
             "w1_credit_ladder: ff×euclid 0.83 @ d2. Re-measured on the "
             "calibrated (scale 1.2, noise 1.5) quick tier, guard path, "
             "val-split via forward: 0.953/0.938/0.922 @10ep, "

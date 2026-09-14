@@ -17,6 +17,8 @@ from computronium_lab.synthesis.catalog import CATALOG, MechanismCandidate
 from computronium_lab.synthesis.predictor import ViabilityModel
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium_lab.synthesis.spec import ProblemSpec
 
 LOW_CONFIDENCE = 0.7
@@ -29,6 +31,23 @@ OBJECTIVE_FIELDS: dict[str, tuple[str, bool]] = {
     "latency": ("latency_ms", False),
     "memory": ("memory_gb", False),
 }
+
+
+def register_objective(name: str, *, pareto_field: str, maximize: bool) -> None:
+    """Plug a new optimization objective (TODO24 §14).
+
+    Registers ``name`` in ``OBJECTIVE_FIELDS`` (Pareto field + direction)
+    and in ``KNOWN_OBJECTIVES`` so ``ProblemSpec`` validation, the
+    evolution kernel (via ``objective_names``), and the frontier archive
+    consume it generically. The ``FitnessMetric`` itself (objective value
+    per candidate) is supplied by the caller's campaign runner.
+    """
+    from computronium_lab.synthesis.spec import KNOWN_OBJECTIVES
+
+    if name in OBJECTIVE_FIELDS:
+        raise ValueError(f"objective {name!r} is already registered")
+    OBJECTIVE_FIELDS[name] = (pareto_field, maximize)
+    KNOWN_OBJECTIVES.add(name)
 
 
 class ExplorationBudgetExhausted(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] — CEEC gate name is pre-registered
@@ -104,12 +123,37 @@ def card_factor(credit: str, update: str) -> tuple[float, str | None]:
             return 1.0, card.status
 
 
+def _score_candidates(
+    candidates: tuple[MechanismCandidate, ...],
+    spec: ProblemSpec,
+    model: ViabilityModel,
+    measured: Mapping[str, float],
+) -> list[tuple[float, float, str | None, MechanismCandidate]]:
+    scored: list[tuple[float, float, str | None, MechanismCandidate]] = []
+    for cand in candidates:
+        screen_config(cand, spec)
+        p = model.predict(cand.features(spec))
+        factor, verdict = card_factor(cand.credit, cand.update)
+        if spec.constraints.continual and cand.continual_capable:
+            factor *= 1.5
+        effective = max(p * factor, measured.get(cand.name, 0.0))
+        scored.append((effective, p, verdict, cand))
+    return scored
+
+
 def synthesize(
     spec: ProblemSpec,
     model: ViabilityModel | None = None,
     campaigns_run: dict[str, int] | None = None,
+    frontier: Mapping[str, float] | None = None,
 ) -> SynthesisResult:
-    """Spec → best valid coordinate with provenance (T23.1.5/1.7)."""
+    """Spec → best valid coordinate with provenance (T23.1.5/1.7).
+
+    ``frontier`` (TODO24 T24.2.6) maps mechanism names to archived
+    *measured* accuracies; a candidate wins on the max of its predicted
+    viability and its measured accuracy, with the archive cited in
+    provenance. Predictions alone decide when no frontier is given.
+    """
     model = model or _shared_model()
     candidates = filter_catalog(spec)
     if not candidates:
@@ -118,19 +162,16 @@ def synthesize(
             f"catalog: {[c.name for c in CATALOG]}"
         )
 
-    scored: list[tuple[float, float, str | None, MechanismCandidate]] = []
-    for cand in candidates:
-        screen_config(cand, spec)
-        p = model.predict(cand.features(spec))
-        factor, verdict = card_factor(cand.credit, cand.update)
-        if spec.constraints.continual and cand.continual_capable:
-            factor *= 1.5
-        scored.append((p * factor, p, verdict, cand))
+    measured = dict(frontier or {})
+    scored = _score_candidates(candidates, spec, model, measured)
 
     scored.sort(key=lambda t: (-t[0], -t[1]))
-    _, top_p, top_verdict, top = scored[0]
+    top_score, top_p, top_verdict, top = scored[0]
     exploratory = top_p < LOW_CONFIDENCE
     provenance = _provenance(spec, model, top, top_p, top_verdict, len(candidates))
+    archived = measured.get(top.name, 0.0)
+    if archived >= top_score and archived > 0.0:
+        provenance = (*provenance, f"frontier_archive:measured_accuracy={archived:.3f}")
 
     if exploratory and campaigns_run is not None:
         key = spec.key()
@@ -222,6 +263,7 @@ __all__ = [
     "card_factor",
     "explore",
     "filter_catalog",
+    "register_objective",
     "screen_config",
     "synthesize",
 ]

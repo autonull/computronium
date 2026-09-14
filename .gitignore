@@ -20,6 +20,7 @@ dist/
 htmlcov/
 results/
 logs/
+scratch/
 /data/
 *.log
 .DS_Store

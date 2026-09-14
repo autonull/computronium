@@ -85,7 +85,7 @@ def _record(
     for res in results:
         outcome = store.record_gate_outcome(
             gate=res.gate,
-            status="pass" if res.passed else "fail",
+            status="passed" if res.passed else "failed",
             rationale=res.rationale,
             evidence_refs=[e.id for e in evidence],
             derived_refs=[d.id for d in derived],

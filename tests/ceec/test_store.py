@@ -146,9 +146,9 @@ def _seed_all_tables(store, scope, evidence):
     goal = store.create_goal("seed goal", "science", belief_refs=["B-SEED"])
     store.revise_goal(goal.id, {"science": 1.0})
     gate = store.record_gate_outcome(
-        "scope_explicit", "pass", "seed", belief_id="B-SEED"
+        "scope_explicit", "passed", "seed", belief_id="B-SEED"
     )
-    store.record_gate_outcome("seed_plan_present", "pass", "seed", belief_id="B-SEED")
+    store.record_gate_outcome("seed_plan_present", "passed", "seed", belief_id="B-SEED")
     store.change_status("B-SEED", "promoted", "seed", gate_refs=[gate.id])
     store.record_decision("hash", [], {}, "seed")
     store.record_calibration(
@@ -191,7 +191,7 @@ class TestAppendOnly:
     ):
         belief_id = link_belief(evidence)
         gate = store.record_gate_outcome(
-            "probability_threshold", "pass", "ok", belief_id=belief_id
+            "probability_threshold", "passed", "ok", belief_id=belief_id
         )
         store.change_status(belief_id, "promoted", "gates", gate_refs=[gate.id])
         store.change_status(belief_id, "open", "reversal")
