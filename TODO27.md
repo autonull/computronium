@@ -1,13 +1,15 @@
-# TODO27 — Discovery Round: Credit-Channel Inventions + Lean Autopoiesis
+# TODO27 — Discovery Round: The Rescue Matrix + Lean Autopoiesis
 
-**Status:** PLANNED 2026-09-14. Course-corrects the program from
-infrastructure rounds (TODO23–26) to **general-purpose ML discovery and
-invention**: falsifiable experiments on the credit channel (RESEARCH4's
-six levers) and the lean Autopoiesis self-modification probe
-(AUTOTILE.md), both riding the certification spine we just finished.
-**Builds on:** TODO26 (all phases + Phase S; H24.3 carries two
-certified verdicts). **Explicit exclusions:** PyPI publishing; physical
-hardware; LLM-scale claims.
+**Status:** PLANNED 2026-09-14 (rev 2: algorithm-agnostic restructure —
+interventions live on the axes, the catalog provides the subjects, the
+AutoScientist provides the scheduler; no single algorithm or axis is
+load-bearing). Course-corrects the program from infrastructure rounds
+(TODO23–26) to **general-purpose ML discovery**: axis-level
+interventions evaluated across the full mechanism catalog under
+certified matched-compute rules, plus the lean Autopoiesis
+self-modification probe. **Builds on:** TODO26 (all phases + Phase S).
+**Explicit exclusions:** PyPI publishing; physical hardware; LLM-scale
+claims; new substrate models.
 
 ---
 
@@ -19,169 +21,189 @@ TODO23–26 spent four consecutive rounds mostly on measurement and
 governance infrastructure (synthesis layer, evolution, corpus, CEEC
 kernel) plus one P-axis thread (temporal ψ on synthetic gaussian
 blobs). RESEARCH4's credit-channel agenda — the unifying diagnosis that
-**every local-algorithm defect is a credit-fidelity failure that
-compounds with depth** — has zero executed experiments. The six-axis
-substrate story, the benchmark paper, and Z3/ICL are likewise idle.
-Infrastructure was reproducing itself: TODO25→TODO26 was largely CEEC
-refactoring CEEC.
+**local-learning defects are credit-fidelity failures that compound
+with depth/width** — has zero executed experiments. Infrastructure was
+reproducing itself: TODO25→TODO26 was largely CEEC refactoring CEEC.
 
 **TODO27 freezes infrastructure work.** Rule for the whole round: *no
 CEEC/lab architectural change is in scope unless it unblocks a named
 discovery experiment below.* Instrument quality is a multiplier; this
 round multiplies.
 
-### 0.2 What the last four rounds actually bought (the justification)
+### 0.2 Design principle: interventions on axes, subjects from the catalog
+
+The rev-1 draft anchored on RESEARCH4's worked examples (PEPITA, ePC).
+That under-uses the platform: the zoo ships ~13 factories and a
+catalog of mechanism coordinates spanning every credit × update family,
+and the synthesis/corpus/campaign stack already enumerates, screens,
+budgets, and measures them. The fix is structural, not thematic:
+
+1. **Implement each intervention once, on its axis**, as a drop-in
+   primitive — a `ParameterUpdate` (per-layer magnitude normalization),
+   a credit-path option (propagation normalization), a credit-rule
+   variant (learnable feedback). Every catalog mechanism that composes
+   that axis then inherits the intervention for free. No per-algorithm
+   patching.
+2. **Let the catalog supply the subjects.** The question is never "does
+   this fix PEPITA" but "**which mechanisms does each intervention
+   rescue, at which width/depth regimes, and which families are
+   immune?**" — answered by a grid over the catalog, not anecdotes.
+3. **Let the AutoScientist schedule it.** The proposer/campaign stack
+   (which has never completed a commissioned run — RESEARCH3 PR-9)
+   prioritizes which grid cells earn certified-tier budget. The
+   campaign stack finally consumes real work; the sweep avoids
+   hand-picked ordering.
+4. **Tier the cost.** Screen the whole grid at smoke tier (seconds per
+   cell), promote only the top contrasts to certified quick tier — the
+   E-1 ladder, which the corpus already institutionalizes. Maximum
+   benefit per certified GPU-minute.
+
+### 0.3 What the last four rounds actually bought (the justification)
 
 The infrastructure is not the program — it is what makes the program's
 own protocol (RESEARCH3 E-1..E-11, PR-2/PR-4/PR-6) executable instead
-of aspirational. Concretely, each RESEARCH3 protocol rule now has an
-operational counterpart:
+of aspirational. Each protocol rule now has an operational counterpart:
 
 | RESEARCH3 requirement | Instrument that now executes it |
 |---|---|
 | E-1 smoke→pilot→full ladder | corpus tiers + `Lab.research_report` dry runs |
-| E-3 reproducibility contract | CEEC ledger: append-only artifacts with sha256 + execution provenance (code commit, seed policy, config hash — TODO26 F.2) |
-| E-4 baseline protection | corpus matched-compute arms (`theta_finetune_matched_compute`, capacity-matched controls) |
-| E-10 minimum-viable controls | continual benchmark arm structure (frozen floor + matched-θ control + mechanism) |
-| E-11 decision log | CEEC `policy_version` stamping + pre-registration-before-probe (`run_experiment` records the §22 decision strictly before measurement) |
+| E-3 reproducibility contract | CEEC ledger: append-only sha256 artifacts + execution provenance (code commit, seed policy, config hash — TODO26 F.2) |
+| E-4 baseline protection | corpus matched-compute arms (matched-θ control, capacity-matched control, frozen floor) |
+| E-10 minimum-viable controls | continual benchmark arm structure |
+| E-11 decision log | `policy_version` stamping + decision-recorded-before-probe (`run_experiment`) |
 | PR-2 θ-invariance audit | `FrozenThetaAudit` + `theta_digest` (bitwise, adversarially tested) |
 | PR-4 statistics kit | `permutation_test_p`, paired comparisons in corpus/continual reports |
-| PR-6 fairness contract | profile-bound budgets (`Profile.tier_budget`), keyword-only record APIs, gate families |
+| PR-6 fairness contract | profile-bound budgets, keyword-only record APIs, gate families |
+| PR-9 campaign commissioning | **open — this round finally exercises it (T27.B.3)** |
 
-And the round-trip proof that the spine works end-to-end: **H24.3**
-moved from instrument-blocked → certified AGAINST (accuracy rule) →
-certified FOR (speed rule) inside one session, with the instrument
-defect root-caused (ψ statistics discarded between episodes) and fixed
-in place. A blocked instrument no longer silently produces misleading
-evidence. Negative results are first-class: both H24.3 verdicts and the
-round-1 caveat are ledger-persistent, machine-readable, and citeable.
+Round-trip proof: **H24.3** moved from instrument-blocked → certified
+AGAINST (accuracy rule) → certified FOR (speed rule) inside one
+session, with the instrument defect root-caused (ψ statistics discarded
+between episodes) and fixed in place. Negative results are first-class
+and ledger-persistent.
 
 **Justification verdict:** the four rounds are justified as the
 precondition for this one — *if and only if* TODO27 spends them on
-discovery. That is the round's whole design.
+discovery. The infrastructure-freeze gate (§Gates) makes that binding.
 
-### 0.3 The best we can honestly hope for
+### 0.4 The best we can honestly hope for
 
-With a CPU-tier certified loop costing ~a session per round-trip, the
-realistic ceiling of this round:
-
-1. **A new local learning rule candidate** — if RESEARCH4 levers 1+2
-   compose (learned, orthogonally-normalized feedback), that is a
-   publishable mechanism claim with certified width/depth sweeps behind
-   it: "credit direction was right; magnitude was broken; here is the
-   rule that fixes magnitude locally."
-2. **A falsification with teeth** — if the levers fail their
-   pre-registered predictions, we hold certified boundaries (width
-   windows, decay profiles) that prune the search space for everyone,
-   recorded in the failure manifesto.
+1. **A rescue map** — machine-readable, certified: which of the
+   catalog's mechanisms fail at which width/depth regimes, and which
+   axis-level intervention rescues which failure. Even all-negative
+   cells are pruning results.
+2. **A new general-purpose rule candidate** — if normalization and/or
+   learned-feedback compose across *multiple* families (not one
+   algorithm), that is a mechanism claim with certified sweeps behind
+   it, family-coverage being the credibility multiplier.
 3. **The first honest three-tier self-modification measurement** —
-   lean Autopoiesis (Tier 1+2, fixed menu) with oracle-rescue pilots;
-   if Tier 2 passes, the catalog's "which credit family can use depth"
-   question becomes an *autonomous search result* rather than a manual
-   sweep.
-4. **Generalization beyond the operating point** — the ψ speed result
-   (1-episode acquisition) replicated on a second curriculum; width
-   sweeps on a real-data tier (MNIST quick) instead of gaussian blobs.
+   lean Autopoiesis with oracle-rescue pilots; a pass on Tier 2 makes
+   "which interventions help" an autonomous search result.
+4. **A commissioned AutoScientist loop** — the campaign stack
+   completing real iterate → measure → frontier cycles on discovery
+   work, unblocking RESEARCH3's frontier campaign and discovery items.
+5. **Generalization checks** — findings re-tested off their discovery
+   task (second curriculum, real-data tier).
 
-What we cannot hope for and do not claim: hardware measurements,
-LLM-scale validation, or Level 1–3 formal claims. Quick/standard-tier
-certified mechanisms are the ceiling — stated up front, per the
-verification taxonomy.
+Not claimed: hardware measurements, LLM-scale validation, Level 1–3
+formal claims. Quick/standard-tier certified mechanisms are the ceiling.
 
 ---
 
-## 1. The discovery agenda (two tracks, one spine)
+## 1. How it all fits together
 
-**Track 1 — Credit-channel inventions (RESEARCH4).** The measured
-defect map (RESEARCH4 §Unifying Diagnosis) already tells us what to
-engineer: a local credit channel that is *aligned, non-attenuating,
-gain-normalized, task-coupled, well-conditioned*. Execute its phases in
-impact order with certified gates.
+- **Ontology (6 axes)** — the space of possible mechanisms; every
+  intervention below is a new primitive on one axis, so the whole
+  compatible region inherits it.
+- **Catalog + synthesis** — the roster of subjects and the constraint
+  screen (`trainable_on`, `SystemConfig.validate()`) that keeps the
+  grid honest.
+- **Corpus + MeasurementRunner** — the arenas: problem classes, budget
+  tiers, matched-compute controls, manifest writing.
+- **CEEC** — the referee: pre-registration, artifacts, evidence, gates,
+  calibration, audit, failure manifesto. Zero kernel changes planned
+  (§Phase F); one new lab profile.
+- **AutoScientist** — the scheduler: proposes which grid cells deserve
+  certified budget, records lineages, renders frontiers.
+- **Lean Autopoiesis** — search internalized: the same
+  propose→probe→accept loop running inside a single organism at episode
+  boundaries, using the catalog as its registry and the stability guard
+  as its constitution.
 
-**Track 2 — Lean Autopoiesis (AUTOTILE.md as amended).** Constitutional
-self-modification reduced to its load-bearing core: neutral birth +
-slope-based selection on forked-copy adaptation probes, Tier 1+2 only,
-no Tier 3, single organism, paired statistical acceptance with a genome
-size penalty. The corpus catalog (trainable_on, mechanism rows, CEEC
-ledger) *is* its registry and constitution bookkeeping.
-
-Tracks share the spine: pre-register on Session → certified corpus arm
-→ gates → calibration → failure-manifesto on nulls.
+The phases are deliberately redundant: B (external, exhaustive) and D
+(internal, autonomous) attack "which interventions help" by different
+mechanisms; if they agree, the conclusion is robust; if they disagree,
+that disagreement is itself the finding.
 
 ---
 
-## Phase A — Kill the Optimizer Crutch (RESEARCH4 Phase 1)
+## Phase A — Axis-level interventions (build once, inherit everywhere)
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.A.1 `LocalAdamUpdate`** | New U-axis primitive: per-layer Adam normalization (per-layer m/v state, `EuclideanUpdate`-drop-in). Identity card required (`AlgorithmIdentityCard`), registry row + config classmethod per the ontology checklist | — |
-| **T27.A.2 PEPITA width sweep, certified** | Arms: PEPITA × {Muon, Euclidean, LocalAdam} at widths {32, 64, 128, 256}; pre-registered prediction: LocalAdam trains at w128 where Euclidean collapses and matches Muon within noise | A.1 |
-| **T27.A.3 ePC width sweep, certified** | Arms: ePC × {OrthoAdam, Euclidean, LocalAdam} same widths; prediction: LocalAdam does not explode at w32 (activity compounding 0.93→2028 under Euclid is contained) | A.1 |
+| **T27.A.1 `LocalAdamUpdate`** | New U-axis primitive: per-layer Adam-style magnitude normalization (per-layer m/v state; `EuclideanUpdate` drop-in). Identity card, registry row, config classmethod per the ontology checklist | — |
+| **T27.A.2 `credit_norm` propagation option** | Credit-path option normalizing the pseudo-gradient per layer as it propagates (spectral/RMS), composable with any C-axis primitive | — |
+| **T27.A.3 Trainable feedback variant** | `LocalGoodnessCredit` gains learnable B (autograd-trained with θ; fixed-random-B preserved as control) | — |
+| **T27.A.4 ψ warm-start arm** | `LocalAdamUpdate`-style composition on the continual side: ψ-acquire (1-episode) → θ-consolidate from the warm readout — the H24.3 frontier-closing arm as a catalog-level option | — |
 
-**Decision rule (pre-registered at A.1 landing, before any sweep):**
-"Credit direction is approximately right; magnitude is broken" is
-confirmed iff **both** A.2 and A.3 predictions hold at ≥2 seeds;
-falsified if either fails. Confirmed → Track 1 proceeds on magnitude
-levers only. Falsified → direction levers (B/C) get priority instead.
-Either outcome is a certified result.
-
-**Why first:** U-axis-only change, no new credit rules, existing width
-harnesses; the F1 failure-manifesto and P3/P4 audits supply the
-baselines verbatim (E-4: reuse, don't rerun).
+Each intervention carries its falsifiable story from RESEARCH4 (A.1:
+magnitude-broken-not-direction; A.2: attenuating-channel; A.3:
+misaligned-channel) — but the stories are tested across the catalog,
+not on one algorithm.
 
 ---
 
-## Phase B — Credit-Space Normalization (RESEARCH4 lever 1)
+## Phase B — The Rescue Matrix (screen wide, certify narrow)
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.B.1 `credit_norm` option** | Normalization hook in the credit path: per-layer spectral/RMS normalization of the pseudo-gradient as it propagates down from layer ℓ to ℓ−1 (probe first on ePC's `ThermodynamicContrast` channel) | — |
-| **T27.B.2 Decay-profile probe** | Measure ePC credit magnitude per layer at depth {4, 8, 16, 20}: does the ~4×/layer attenuation flatten toward ~1× with `credit_norm` on? Does credit at layer 1 reach non-vanishing norm at depth 20? | B.1 |
-| **T27.B.3 Depth sweep, certified** | ePC ± credit_norm at depths {8, 16, 20} on the F1 harness; pre-registered: credit_norm arm trains where the unnormalized arm loses the contrastive signal | B.2 |
+| **T27.B.1 Failure-regime screen (smoke tier)** | Grid: catalog mechanisms × regimes (width {32,64,128,256}, depth {4,8,16,20}) × interventions {none, A.1, A.2, A.3, A.1+A.2}. Output: which cells fail today (reproduces F1/P3/P4 boundaries cheaply) and which interventions flip them. Machine-readable matrix artifact | A.1–A.3 |
+| **T27.B.2 Certified promotions (quick tier)** | Top-k contrasting cells promoted through Session closed loops with pre-registered decision rules — e.g. "intervention X rescues family Y at width 128 with matched compute and ≥2 seeds". Both rescues and refusals certify | B.1 |
+| **T27.B.3 AutoScientist scheduling + commissioning (PR-9)** | The proposer prioritizes promotion order from screen slopes; one full campaign iterate → measure → frontier → resume cycle runs on this real workload (finally discharges RESEARCH3 PR-9); frontier rendered via `comp frontier` | B.1 |
+| **T27.B.4 The map** | Certified rescue matrix + frontier: which families are magnitude-limited vs direction-limited vs immune — the round's headline deliverable either way | B.2, B.3 |
 
-**Gate:** if B.2 shows the decay profile unchanged, the unifying
-"attenuating channel" diagnosis is falsified for ePC — record it and
-re-weight toward lever 2 (learned feedback).
+**Decision rules are registered per promoted cell before its data
+exists** (Session ordering makes this structural). The RESEARCH4
+unifying hypothesis ("direction right, magnitude broken") is confirmed
+iff magnitude-only interventions (A.1) rescue across ≥2 distinct credit
+families; falsified if rescues require direction interventions (A.3)
+or don't replicate across families.
 
 ---
 
-## Phase C — Learned Feedback Projections (RESEARCH4 lever 2)
+## Phase C — ψ × θ composition check (close the H24.3 frontier)
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.C.1 Trainable B** | `LocalGoodnessCredit` gains a learnable projection B (autograd-trained alongside θ — PEPITA-as-inference-network); fixed-random-B path preserved as the control | — |
-| **T27.C.2 Depth sweep, certified** | Learned-B vs fixed-B PEPITA at depths {4, 8, 16}; measure cos(B, Wᵀ) alignment drift over training (the known directional-collapse metric) | C.1 |
-| **T27.C.3 Composition probe** | If B.3 and C.2 both positive: learned-B × credit_norm × LocalAdam — the "learned, orthogonally-normalized feedback alignment" candidate rule, one certified quick-tier round on flat_classification_hard | B.3, C.2 |
+| **T27.C.1 Warm-start certified round** | On the continual benchmark: arm ψ-acquire→θ-consolidate (A.4) vs θ-cold vs ψ-only vs θ-only; pre-registered rule: warm-start reaches the θ-only ceiling in fewer epochs than cold start | A.4 |
 
-**Deliverable if C.3 lands:** a named candidate rule with a certified
-operating point — the round's headline invention. If it fails its gate,
-the failure modes (alignment drift? normalization insufficient?) are
-the recorded result.
+Cheap (existing harness, one new arm); converts the certified speed/
+accuracy Pareto frontier into a composition claim or a certified
+boundary on it.
 
 ---
 
 ## Phase D — Lean Autopoiesis: Ouroboros Probe (AUTOTILE.md, amended)
 
-Scope per the AUTOTILE simplification analysis — **Tier 3 deleted,
-protocol stack reduced to one metric + one selection rule, asexual
-mutations only.**
+Tier 3 deleted, protocol stack reduced to one metric + one selection
+rule, asexual mutations only — per AUTOTILE's own simplification
+analysis.
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.D.1 Lean consolidator** | `AutopoieticConsolidator` (sleep-phase only): stagnation gate → propose (`DuplicateAndPerturb` / `SpliceOperator`) → constitution veto (stability guard) → neutral birth (zero-output edges, identity nodes; bit-identical forward at insertion — the J6 θ-projection correctness test) → paired adaptation probe on **forked copies** with held-out batches → statistical acceptance vs parent slope, penalized by `GenomeSizePenalty` | — |
-| **T27.D.2 Amendment compliance** | Probes resource-budgeted (settle-step cost reported, not just step count — the E-4 confound); rollback: accepted genome checkpointed, revertible on degradation; Ω + lineage written into the E-3 manifest; prior-art gate logged (NEAT neutral birth, PBT slope-fitness, Gödel machine — delta: typed property-locked ontology, enforced constitution, slope currency, falsifiable tiers) | D.1 |
-| **T27.D.3 Oracle-rescue pilot** | For each tier: hand-inject the correct mutation, verify the pressure bites (seed Tier 1 deliberately under-capacity, hidden_dim 2–4) and the probe selects the rescue. **No autonomous run before this passes** — the anti-false-negative gate | D.1, D.2 |
-| **T27.D.4 Tier 1 probe** | Growing Context Parity (lag 5→50), seed Ω₀ = one under-capacity RecurrentBlock; success: \|Ω\| grows as lag increases, accuracy >90%, neutral birth verified at every insertion | D.3 |
-| **T27.D.5 Tier 2 probe** | Episode-30 credit-noise injection; success: Ω swaps the Credit axis (visible **only** under slope selection — the load-bearing claim), accuracy recovers | D.4 |
-| **T27.D.6 Certified recording** | The probe run (whichever tiers pass/fail) pre-registered and recorded through Session; Tier failures land in the failure manifesto as the first honest three-tier self-modification measurement | D.4 |
+| **T27.D.1 Lean consolidator** | Sleep-phase-only loop: stagnation gate → propose (`DuplicateAndPerturb` / `SpliceOperator`) → constitution veto (stability guard) → neutral birth (zero-output edges, identity nodes; bit-identical forward at insertion — doubles as the θ-projection correctness test) → paired adaptation probe on **forked copies** with held-out batches → statistical acceptance vs parent slope, penalized by `GenomeSizePenalty`; rollback checkpoint on every acceptance | — |
+| **T27.D.2 Amendment compliance** | Probes resource-budgeted (settle-step cost reported, not just step count — the E-4 confound); Ω + lineage in the E-3 manifest; prior-art gate logged (NEAT neutral birth, PBT slope-fitness, Gödel machine — delta: typed property-locked ontology, enforced constitution, slope currency, falsifiable tiers) | D.1 |
+| **T27.D.3 Oracle-rescue pilot** | Per tier: hand-inject the correct mutation; verify pressure bites (Tier 1 seeded under-capacity, hidden_dim 2–4) and the probe selects the rescue. **No autonomous run before this passes** | D.1, D.2 |
+| **T27.D.4 Tier 1 probe** | Growing Context Parity (lag 5→50); success: \|Ω\| grows with lag, accuracy >90%, neutral birth verified at every insertion | D.3 |
+| **T27.D.5 Tier 2 probe** | Episode-30 credit-noise injection; success: Ω swaps the Credit axis (visible only under slope selection — the load-bearing claim), accuracy recovers | D.4 |
+| **T27.D.6 Certified recording** | Whatever passes/fails is pre-registered and recorded through Session; tier failures land in the failure manifesto as the first honest three-tier self-modification measurement | D.4 |
 
 **Kill criterion (pre-committed):** Tier 2 fails after ≤3 tuning rounds
 → Autopoiesis shelves to a neuroevolution-tier artifact; the probe
-publishes as a falsification. **Strategic upside if Tier 1 passes:**
-the Tier-1 consolidator *is* a progressive-deepening operator — the
-memory-wall/depth-scaling chart becomes a grown lineage rather than a
-hand-picked sweep (AUTOTILE §8.7), queued as the next round's
-flagship candidate.
+publishes as a falsification. **Strategic upside if Tier 1 passes:** the
+Tier-1 consolidator *is* a progressive-deepening operator — the
+depth-scaling chart becomes a grown lineage (AUTOTILE §8.7), queued as
+the next round's flagship candidate.
 
 ---
 
@@ -189,58 +211,78 @@ flagship candidate.
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.E.1 Second continual curriculum** | Register a second curriculum (new offset/threshold); re-run the H24.3 speed rule — turns the 1-episode acquisition result from an operating-point finding into a (still tier-scoped) mechanism claim or a certified boundary | — |
-| **T27.E.2 Real-data quick tier** | One width-sweep arm from Phase A re-run on the MNIST quick tier instead of gaussian blobs — checks that Phase A's conclusion survives leaving the synthetic tier | A.2/A.3 |
+| **T27.E.1 Off-discovery replication** | The round's top certified claim re-tested on a task family it was not discovered on (second continual curriculum; real-data MNIST quick tier for one rescue-matrix row). Findings that don't travel get their scope narrowed in the ledger — that correction is itself a certified result | B.2 |
+
+---
+
+## Phase F — CEEC support (adapter-only)
+
+| Task | Deliverable | Depends On |
+|---|---|---|
+| **T27.F.1 Discovery profile** | ~60-line lab profile: scope dims (width/depth/credit_family/mechanism), quality flags for the matrix (regime, intervention, replicates), constraint "promoted cell must have its smoke-tier screen row on record". **No kernel changes** — this is the TODO26 architecture's generalization test | — |
+
+If a kernel change starts looking necessary mid-round, that is a
+course-drift signal — raise it against the freeze gate instead of
+implementing it.
 
 ---
 
 ## Gates (whole round)
 
 1. **Infrastructure freeze:** zero CEEC/lab architectural commits
-   except those unblocking a named task above (auditable from the git
-   log — enforced by review, listed in the progress log).
-2. **Pre-registration discipline:** every sweep/probe has its decision
-   rule registered before its data exists (Session run ordering makes
-   this structural; violations are review blockers).
-3. **Certified or manifesto:** every Phase lands exactly one of — a
+   except T27.F.1 and changes unblocking a named task (auditable in
+   the progress log).
+2. **Pre-registration discipline:** every promoted cell and probe has
+   its decision rule registered before its data exists.
+3. **Certified or manifesto:** every phase lands exactly one of — a
    certified verdict, a manifesto entry with root cause, or an
-   infra-failure (which restarts the round, per E-7).
-4. **Suites:** repo-wide ruff clean maintained; ceec + lab suites green
-   per phase; new primitives (LocalAdamUpdate, trainable-B) ship with
-   identity cards + property locks.
-5. **Tier honesty:** all claims stay Level 4/5 at quick/standard tier;
-   no wording drift toward validated-scale claims.
+   infra-failure (restarts the round, per E-7).
+4. **Family coverage:** no mechanism claim ships from a single
+   algorithm; the matrix reports per-family outcomes (E-4/PR-6).
+5. **Suites:** repo-wide ruff clean maintained; ceec + lab suites green
+   per phase; new axis primitives ship with identity cards + property
+   locks.
+6. **Tier honesty:** all claims stay Level 4/5 at quick/standard tier.
 
 ---
 
 ## 17. Progress Log
 
-### Session 2026-09-14 — PLANNED
+### Session 2026-09-14 — PLANNED (rev 2)
 - [x] Course-correct diagnosis verified against the session record
   (TODO23–26 infrastructure drift; RESEARCH4 unexecuted; AUTOTILE
   amendments incorporated: Tier 3 cut, single selection policy,
   resource-budgeted probes, rollback, oracle-rescue, prior-art gate)
+- [x] Rev 2: de-anchored from RESEARCH4's example algorithms —
+  interventions moved to axis primitives (catalog inherits them),
+  AutoScientist commissioned as scheduler (discharges PR-9), smoke-
+  screen → certified-promotion tiering added for maximum benefit per
+  certified GPU-minute
 
 ---
 
 ## 18. Implementation notes
 
-- **Sequencing rationale:** A is first because it is U-axis-only and
-  its outcome *routes* the rest (magnitude levers vs direction levers);
-  B and C are independent and can interleave; D is CPU-minutes cheap
-  and runs whenever a long sweep blocks; E rides spare capacity.
+- **Sequencing rationale:** A is first (primitives are the grid's
+  columns); B is the round's core and its cost center — the smoke
+  screen keeps certified spend proportional to signal; C rides the
+  existing continual harness; D is CPU-minutes and runs whenever a
+  sweep blocks; E and F are spillover capacity.
 - **Reuse inventory (E-4: don't rerun baselines):** F1 depth/width
-  audit harness (ePC decay profile, sPC zero-credit, PEPITA collapse),
-  P3 optimizer-crutch measurements (ePC gradient 400× small under
-  Euclid; Muon load-bearing), P4/P5 width sweeps, `probe_campaign`
-  (forked-copy paired-slope machinery already in `adaptation.py` —
-  D's probe primitive), catalog `trainable_on` + campaign fitness
-  (D's registry/constitution bookkeeping), corpus matched-compute
-  controls (A/B/E arms).
-- **Existing-ledger hygiene:** prior scratch ledgers predate
-  `policy_version` 26.0; their rows read as pre-T26 semantics — new
-  rounds write to fresh per-round ledgers as TODO26 S.3 did.
-- **Out of scope:** Tier 3 meta-morphogenesis (deferred until Tier 1+2
-  demonstrates measurable benefit — AUTOTILE's own red line);
-  population/crossover; open-field self-modification; hardware;
-  multi-GPU scaling; anything requiring new substrate models.
+  audit harness, P3 optimizer-crutch measurements, P4/P5 width sweeps,
+  `probe_campaign` (forked-copy paired-slope machinery already in
+  `adaptation.py` — D's probe primitive), catalog `trainable_on` +
+  campaign fitness (D's registry/constitution bookkeeping), corpus
+  matched-compute controls, `comp scientist`/`comp frontier` (B.3's
+  scheduler and renderer), presets/catalog rows (grid subjects).
+- **Cost control:** the grid is M×W×D×I — combinatorial by nature.
+  Smoke tier makes screening nearly free; certified promotions are
+  capped per phase (k ≤ 5 cells) and chosen by screen slope, not
+  preference. The matrix artifact records *why* unpromoted cells were
+  left unpromoted.
+- **Existing-ledger hygiene:** fresh per-round ledgers (TODO26 S.3
+  pattern); prior scratch ledgers read as pre-T26 semantics.
+- **Out of scope:** Tier 3 meta-morphogenesis (until Tier 1+2 shows
+  measurable benefit), population/crossover, open-field
+  self-modification, hardware, multi-GPU scaling, new substrate
+  models, portfolio budgeting.
