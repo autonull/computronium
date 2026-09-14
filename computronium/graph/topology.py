@@ -120,7 +120,7 @@ class GraphStructure:
         """Get all outgoing edges from this node."""
         return self._successors.get(node.name, [])
 
-    def topological_order(self) -> list[NodeBase]:  # ruff: ignore[complex-structure]
+    def topological_order(self) -> list[NodeBase]:  # noqa: C901
         """Return nodes in topological order via Kahn's algorithm.
 
         Raises:

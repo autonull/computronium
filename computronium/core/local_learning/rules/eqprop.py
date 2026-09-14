@@ -7,7 +7,7 @@ Classes: EqProp, AdamEqProp, HolomorphicEqProp, FiniteNudgeEqProp, LazyEqProp
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
 from computronium.core.local_learning.settling import energy_gradient_descent
@@ -37,7 +37,7 @@ class EqProp(LearningRuleOptimizer):
     Reference: Scellier & Bengio, 2017
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         params,
         model: nn.Module,
@@ -198,7 +198,7 @@ class EqProp(LearningRuleOptimizer):
         prev = x
         for i, (layer, state) in enumerate(zip(layers, states)):
             pred = layer(prev)
-            E = (  # ruff: ignore[non-augmented-assignment]
+            E = (  # noqa: PLR6104
                 E
                 + 0.5
                 * torch.nn.functional.mse_loss(
@@ -217,7 +217,7 @@ class EqProp(LearningRuleOptimizer):
                     target_vec = torch.nn.functional.one_hot(
                         target, num_classes=output.shape[1]
                     ).float()
-                E = (  # ruff: ignore[non-augmented-assignment]
+                E = (  # noqa: PLR6104
                     E
                     + beta
                     * torch.nn.functional.mse_loss(
@@ -229,7 +229,7 @@ class EqProp(LearningRuleOptimizer):
                 target_vec = target
                 if target.dim() > 1 and target.shape[1] > 1:
                     target_vec = target.argmax(dim=1)
-                E = (  # ruff: ignore[non-augmented-assignment]
+                E = (  # noqa: PLR6104
                     E
                     + beta
                     * torch.nn.functional.cross_entropy(
@@ -287,7 +287,7 @@ class AdamEqProp(EqProp):
     decoupled from the settling dynamics.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         params,
         model: nn.Module,
@@ -406,7 +406,7 @@ class FiniteNudgeEqProp(LearningRuleOptimizer):
 
         for param in self.params:
             if param.grad is not None:
-                param.grad = param.grad * self.beta  # ruff: ignore[non-augmented-assignment]
+                param.grad = param.grad * self.beta  # noqa: PLR6104
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:

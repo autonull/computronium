@@ -352,7 +352,7 @@ def _run_scratch_baseline(
     }
 
 
-def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: ignore[complex-structure]
+def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # noqa: C901
     """Run cross-domain transfer experiments."""
     device = _resolve_device(config.device)
     config = TransferConfig(**{**config.__dict__, "device": device})
@@ -395,7 +395,7 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
         * sum(len(tasks) for tasks in config.target_tasks.values())
         * config.seeds
     )
-    total_scratch = (  # ruff: ignore[unused-variable]
+    total_scratch = (  # noqa: F841
         len(config.algorithms)
         * sum(len(tasks) for tasks in config.target_tasks.values())
         * config.seeds
@@ -404,7 +404,7 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
     logger.info("Phase 2: Finetuning (%d experiments)", total_finetune)
     finetune_count = 0
 
-    for source_task in config.source_tasks:  # ruff: ignore[too-many-nested-blocks]
+    for source_task in config.source_tasks:  # noqa: PLR1702
         for algorithm in config.algorithms:
             for target_domain, target_tasks in config.target_tasks.items():
                 for target_task in target_tasks:
@@ -448,7 +448,7 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
     return results
 
 
-def _analyze_transfer_efficiency(results: list[dict]) -> dict:  # ruff: ignore[too-many-locals]
+def _analyze_transfer_efficiency(results: list[dict]) -> dict:  # noqa: PLR0914
     """Analyze transfer efficiency: finetune vs scratch."""
     import pandas as pd
 
@@ -518,7 +518,7 @@ def _analyze_transfer_efficiency(results: list[dict]) -> dict:  # ruff: ignore[t
     return analysis
 
 
-def _compare_local_vs_global(results: list[dict]) -> dict:  # ruff: ignore[complex-structure]
+def _compare_local_vs_global(results: list[dict]) -> dict:  # noqa: C901
     """Compare local learning (EP, FA, PC, Hebbian) vs global (backprop) transfer."""
     import pandas as pd
 

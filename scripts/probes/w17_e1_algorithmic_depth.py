@@ -112,7 +112,7 @@ def _null_arm() -> nn.Sequential:
     )
 
 
-def main() -> int:  # ruff: ignore[complex-structure, too-many-locals] - probe harness
+def main() -> int:  # noqa: C901, PLR0914 - probe harness
     t0 = time.time()
     results: dict[tuple[str, int], list[float]] = {}
 

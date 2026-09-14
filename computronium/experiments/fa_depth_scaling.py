@@ -375,7 +375,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     logger.info("Saved results to %s", output_path)
 
 
-def _generate_plots(results: list[dict], output_dir: str) -> None:  # ruff: ignore[complex-structure, too-many-statements]
+def _generate_plots(results: list[dict], output_dir: str) -> None:  # noqa: C901, PLR0915
     """Generate depth scaling plots."""
     import pandas as pd
 

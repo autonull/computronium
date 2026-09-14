@@ -45,7 +45,7 @@ class HebbianKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # noqa: PLR6201
             else "cpu"
         )
         self._dtype = config.dtype
@@ -165,7 +165,7 @@ class HebbianKernelBackend:
 
             # Apply modulator to nudged phase if provided (3-factor)
             if modulator is not None and i == len(self._layers) - 1:
-                dst_nudged = dst_nudged * modulator  # ruff: ignore[non-augmented-assignment]
+                dst_nudged = dst_nudged * modulator  # noqa: PLR6104
 
             delta = contrastive_hebbian_update(
                 src_free, dst_free, src_nudged, dst_nudged, self._learning_rate, beta
@@ -252,7 +252,7 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
 
         # Backproject modulator through output weights
         hidden_modulator = output_modulator @ self._out_layer.weight.data
-        hidden_modulator = hidden_modulator / max(  # ruff: ignore[non-augmented-assignment]
+        hidden_modulator = hidden_modulator / max(  # noqa: PLR6104
             hidden_modulator.abs().max().item(), 1.0
         )
 
@@ -287,16 +287,16 @@ for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, HebbianKernelBackend)
 # ThreeFactorKernelBackend is a variant; register explicitly if needed by users
 # for hw in HardwareTarget:
-#     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, ThreeFactorKernelBackend)  # ruff: ignore[commented-out-code]
+#     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, ThreeFactorKernelBackend)  # noqa: ERA001
 
 
 # Triton kernels for fused Hebbian operations
-try:  # ruff: ignore[too-many-statements-in-try-clause]
+try:  # noqa: too-many-statements-in-try-clause
     import triton
     import triton.language as tl
 
     @triton.jit
-    def _hebbian_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _hebbian_update_kernel(  # noqa: PLR0913, PLR0917
         pre_ptr,
         post_ptr,
         weight_ptr,
@@ -332,7 +332,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             )
             acc += tl.dot(tl.trans(post), pre)
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc = acc / B  # noqa: PLR6104
 
         if use_oja:
             # Oja's subtraction term: post^2 @ W
@@ -344,14 +344,14 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
                     other=0.0,
                 )
                 post_sq += post * post
-            post_sq = post_sq / B  # ruff: ignore[non-augmented-assignment]
+            post_sq = post_sq / B  # noqa: PLR6104
 
             weight = tl.load(
                 weight_ptr + offs_out[:, None] * D_in + offs_in[None, :],
                 mask=mask_out[:, None] & mask_in[None, :],
                 other=0.0,
             )
-            acc = acc - post_sq * weight  # ruff: ignore[non-augmented-assignment]
+            acc = acc - post_sq * weight  # noqa: PLR6104
 
         delta = lr * acc
 
@@ -362,7 +362,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         )
 
     @triton.jit
-    def _three_factor_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _three_factor_hebbian_kernel(  # noqa: PLR0913, PLR0917
         pre_ptr,
         post_ptr,
         modulator_ptr,
@@ -403,7 +403,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             post_mod = post * mod
             acc += tl.dot(tl.trans(post_mod), pre)
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc = acc / B  # noqa: PLR6104
         delta = lr * acc
 
         tl.store(
@@ -413,7 +413,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         )
 
     @triton.jit
-    def _contrastive_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _contrastive_hebbian_kernel(  # noqa: PLR0913, PLR0917
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,
@@ -465,8 +465,8 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             )
             acc_nudged += tl.dot(tl.trans(post_n), pre_n)
 
-        acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
-        acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]
+        acc_free = acc_free / B  # noqa: PLR6104
+        acc_nudged = acc_nudged / B  # noqa: PLR6104
 
         delta = lr * (acc_nudged - acc_free) / beta
 

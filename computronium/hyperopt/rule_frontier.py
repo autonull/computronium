@@ -128,7 +128,7 @@ class RuleFrontierFinder(_FrontierFinder[RuleFrontierDecision]):
     _default_budget: int = 100
     _default_epochs: int = _DEFAULT_EPOCHS
 
-    def __init__(  # ruff: ignore[too-many-arguments]
+    def __init__(  # noqa: PLR0913
         self,
         driver: FrontierDriver,
         *,
@@ -206,7 +206,7 @@ class RuleFrontierFinder(_FrontierFinder[RuleFrontierDecision]):
         )
 
 
-def find_rule_frontier(  # ruff: ignore[too-many-arguments]
+def find_rule_frontier(  # noqa: PLR0913
     driver: FrontierDriver,
     *,
     rule: str,

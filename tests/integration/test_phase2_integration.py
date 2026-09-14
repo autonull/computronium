@@ -55,7 +55,7 @@ class TestPhase2Integration(unittest.TestCase):
         traj = cursor.fetchone()
 
         self.assertIsNotNone(traj, "No training_trajectory found")
-        self.assertTrue(traj["converged"] in [0, 1])  # ruff: ignore[literal-membership]
+        self.assertTrue(traj["converged"] in [0, 1])  # noqa: PLR6201
 
         # Check Checkpoints
         cursor.execute(

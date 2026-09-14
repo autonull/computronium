@@ -325,7 +325,7 @@ def create_fa_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
-def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
+def create_ff_mlp(  # noqa: C901, PLR0914
     input_dim: int,
     hidden_dims: tuple[int, ...],
     output_dim: int,
@@ -359,7 +359,7 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
         A composed 5-D System with custom Forward-Forward train_step.
     """
     import torch
-    import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+    import torch.nn.functional as F  # noqa: N812
     from torch import nn
     from torch.optim import Adam
 
@@ -377,7 +377,7 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
     # Build per-layer linear modules with ReLU and L2 normalization to match FFLayer
     # Geometry params are at even indices: 0, 2, 4... (Linear layers)
     # with ReLU at odd indices: 1, 3, 5...
-    layer_dims = [input_dim] + list(hidden_dims[:n_layers])  # ruff: ignore[collection-literal-concatenation]
+    layer_dims = [input_dim] + list(hidden_dims[:n_layers])  # noqa: RUF005
     layers = nn.ModuleList()
     layer_opts = []
     for i in range(n_layers):
@@ -421,7 +421,7 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
             self.credit = base.credit
             self.update = base.update
 
-        def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:  # ruff: ignore[too-many-locals]
+        def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:  # noqa: PLR0914
             if x.dim() > 2:
                 x = x.view(x.size(0), -1)
             x = x.to(device)
@@ -974,7 +974,7 @@ def create_tile_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # 5-D factories
     "create_backprop_mlp",
     "create_eqprop_mlp",

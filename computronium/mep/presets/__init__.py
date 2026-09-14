@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     )
 
 
-def smep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
+def smep(  # noqa: PLR0913, PLR0917, RUF067
     params: Iterable[nn.Parameter],
     model: nn.Module,
     mode: str = "backprop",
@@ -149,7 +149,7 @@ def smep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non
     )
 
 
-def sdmep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
+def sdmep(  # noqa: PLR0913, PLR0917, RUF067
     params: Iterable[nn.Parameter],
     model: nn.Module,
     mode: str = "ep",
@@ -237,7 +237,7 @@ def sdmep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, no
     )
 
 
-def local_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
+def local_ep(  # noqa: PLR0913, PLR0917, RUF067
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.02,
@@ -302,7 +302,7 @@ def local_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments,
     )
 
 
-def natural_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
+def natural_ep(  # noqa: PLR0913, PLR0917, RUF067
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.02,
@@ -385,7 +385,7 @@ def natural_ep(  # ruff: ignore[too-many-arguments, too-many-positional-argument
     )
 
 
-def muon_backprop(  # ruff: ignore[non-empty-init-module]
+def muon_backprop(  # noqa: RUF067
     params: Iterable[nn.Parameter],
     lr: float = 0.02,
     momentum: float = 0.9,
@@ -433,7 +433,7 @@ def muon_backprop(  # ruff: ignore[non-empty-init-module]
     )
 
 
-def smep_fast(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
+def smep_fast(  # noqa: PLR0913, PLR0917, RUF067
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.01,

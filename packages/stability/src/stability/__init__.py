@@ -110,7 +110,7 @@ from stability.spectral_radius import (
 
 __version__ = "0.1.0"
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # Guard API (primary)
     "attach",
     "StabilityGuard",

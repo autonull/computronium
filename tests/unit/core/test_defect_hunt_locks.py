@@ -161,7 +161,7 @@ class TestH3ThermoInstantaneousHiddenZero:
         y = torch.randint(0, 8, (4,))
         states, loss = _phases(system, x, y)
         grads = system.credit.compute_pseudo_gradient(states, loss, system.geometry)
-        assert grads[0].abs().max().item() == 0.0  # ruff: ignore[float-equality-comparison] — exact structural zero
+        assert grads[0].abs().max().item() == 0.0  # noqa: RUF069 — exact structural zero
         assert grads[1].abs().max().item() > 0.0  # output: live
 
 
@@ -180,7 +180,7 @@ class TestH8ClampedCE:
             allow_unused=True,
         )
         assert all(
-            gi is None or gi.abs().max().item() == 0.0  # ruff: ignore[float-equality-comparison] — exact zero
+            gi is None or gi.abs().max().item() == 0.0  # noqa: RUF069 — exact zero
             for gi in g
         )
 

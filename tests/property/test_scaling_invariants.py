@@ -251,7 +251,7 @@ class TestDeepNetworkCreditAssignment:
 
         # Check gradient flow through first layer
         model.train()  # type: ignore[attr-defined]
-        metrics = model.train_step(x, y)  # ruff: ignore[unused-variable]
+        metrics = model.train_step(x, y)  # noqa: F841
 
         # Find first layer weight via geometry params
         params = model.geometry.params
@@ -361,7 +361,7 @@ class TestEqPropBackpropAccuracyParity:
 
         # Backprop - uses native model directly
         bp_model.train()  # type: ignore[attr-defined]
-        optimizer = optim.Adam([p for p in bp_model.geometry.params.values()], lr=0.01)  # ruff: ignore[unnecessary-comprehension]
+        optimizer = optim.Adam([p for p in bp_model.geometry.params.values()], lr=0.01)  # noqa: C416
         for epoch in range(5):
             optimizer.zero_grad()
             logits = bp_model.forward(x_train)
@@ -440,7 +440,7 @@ class TestNoiseDampingSelfHealing:
             # running the dynamics with the noisy state. For now, we verify
             # the model can train without error after noise injection.
             model.train()  # type: ignore[attr-defined]
-            result = model.train_step(x[:4], y[:4])  # ruff: ignore[unused-variable]
+            result = model.train_step(x[:4], y[:4])  # noqa: F841
 
             # Get final hidden state after settling
             with torch.no_grad():

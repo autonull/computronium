@@ -182,13 +182,13 @@ def spectral_normalize(
 
     if u is None:
         u = xp.random.randn(out_dim).astype(w_matrix.dtype)
-    u = u / xp.linalg.norm(u)  # ruff: ignore[non-augmented-assignment]
+    u = u / xp.linalg.norm(u)  # noqa: PLR6104
 
     for _ in range(num_iters):
         v = w_matrix.T @ u
-        v = v / (xp.linalg.norm(v) + 1e-12)  # ruff: ignore[non-augmented-assignment]
+        v = v / (xp.linalg.norm(v) + 1e-12)  # noqa: PLR6104
         u = w_matrix @ v
-        u = u / (xp.linalg.norm(u) + 1e-12)  # ruff: ignore[non-augmented-assignment]
+        u = u / (xp.linalg.norm(u) + 1e-12)  # noqa: PLR6104
 
     sigma = float(u @ w_matrix @ v)
     w_normalized = w_matrix / (sigma + 1e-12)

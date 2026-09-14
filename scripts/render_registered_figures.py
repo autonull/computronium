@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess  # noqa: S404
 from pathlib import Path
 
 import matplotlib
@@ -40,7 +40,7 @@ ARM_STYLE = {
 def _git_commit() -> str:
     try:
         return subprocess.check_output(
-            [  # ruff: ignore[start-process-with-partial-path] git is on PATH
+            [  # noqa: S607 git is on PATH
                 "git",
                 "rev-parse",
                 "HEAD",

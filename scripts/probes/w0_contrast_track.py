@@ -42,7 +42,7 @@ from w0_tf_local_optimizers import (
 CHECKPOINTS = (0, 200, 400, 600, 900, 1200)
 
 
-def _contrast_row(  # ruff: ignore[too-many-locals] — measurement axis assembly
+def _contrast_row(  # noqa: PLR0914 — measurement axis assembly
     system, x, y
 ) -> list[tuple[str, float, float]]:
     credit, geometry = system.credit, system.geometry
@@ -69,7 +69,7 @@ def _contrast_row(  # ruff: ignore[too-many-locals] — measurement axis assembl
     return rows
 
 
-def _tf_goodness(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] — mirrors _tf_layer_grad's signature
+def _tf_goodness(  # noqa: PLR0913, PLR0917 — mirrors _tf_layer_grad's signature
     credit, geometry, w, a_pos, a_neg, i, y_flat, y_neg, b, t
 ):
     """G+/G- streams exactly as ``LocalContrastiveCredit._tf_layer_grad``."""
@@ -87,7 +87,7 @@ def _tf_goodness(  # ruff: ignore[too-many-arguments, too-many-positional-argume
     return g_pos, g_neg
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] — probe loop
+def main() -> int:  # noqa: PLR0914 — probe loop
     t0 = time.time()
     train_t, val_t = _tokens()
     val = _val_windows(val_t, 0)

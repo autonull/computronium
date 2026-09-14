@@ -124,9 +124,9 @@ SUBSTRATE_ADAPTERS = [
     ("digital", "quantum", DigitalToQuantumAdapter),
     ("digital", "analog", DigitalToAnalogAdapter),
     # These adapters have implementation issues with current geometry:
-    # ("digital", "complex", DigitalToComplexAdapter),  # ruff: ignore[commented-out-code]
-    # ("digital", "neuromorphic", DigitalToNeuromorphicAdapter),  # ruff: ignore[commented-out-code]
-    # ("digital", "memristive", DigitalToMemristiveAdapter),  # ruff: ignore[commented-out-code]
+    # ("digital", "complex", DigitalToComplexAdapter),  # noqa: ERA001
+    # ("digital", "neuromorphic", DigitalToNeuromorphicAdapter),  # noqa: ERA001
+    # ("digital", "memristive", DigitalToMemristiveAdapter),  # noqa: ERA001
 ]
 
 
@@ -139,7 +139,7 @@ def test_substrate_adapter_preserves_composite_state_structure(
     substrate = create_substrate_adapter(source, target)
 
     registry = _create_registry(geometry)
-    context = _create_context(geometry, substrate)  # ruff: ignore[unused-variable]
+    context = _create_context(geometry, substrate)  # noqa: F841
     z = _create_joint_state(geometry)
 
     # Adapter should be usable with geometry.forward
@@ -172,11 +172,11 @@ def test_substrate_adapter_as_joint_projection():
     geometry = _create_base_geometry()
     substrate = create_substrate_adapter("digital", "ternary")
 
-    registry = _create_registry(geometry)  # ruff: ignore[unused-variable]
+    registry = _create_registry(geometry)  # noqa: F841
     z = _create_joint_state(geometry)
 
     # Record initial substrate state
-    sigma_initial = {k: v.clone() for k, v in z.substrate.items()}  # ruff: ignore[unused-variable]
+    sigma_initial = {k: v.clone() for k, v in z.substrate.items()}  # noqa: F841
 
     # Use adapter - it should process substrate state
     y = geometry.forward(z.activity["x"], substrate)
@@ -203,10 +203,10 @@ def test_all_substrate_adapters_constructible():
 
 DYNAMICS_ADAPTERS = [
     ("instantaneous", "energy_minimization", InstantaneousToEnergyAdapter),
-    # ("energy_minimization", "instantaneous", EnergyToInstantaneousAdapter),  # Bug: modifies frozen config  # ruff: ignore[commented-out-code]
-    # ("lazy", "energy_minimization", LazyToEnergyAdapter),  # Requires LazyStateDynamics  # ruff: ignore[commented-out-code]
-    # ("predictive_settling", "energy_minimization", PredictiveToEnergyAdapter),  # Requires PredictiveSettlingDynamics  # ruff: ignore[commented-out-code]
-    # ("spike_integration", "instantaneous", SpikeToInstantaneousAdapter),  # Requires SpikeIntegrationDynamics  # ruff: ignore[commented-out-code]
+    # ("energy_minimization", "instantaneous", EnergyToInstantaneousAdapter),  # Bug: modifies frozen config  # noqa: ERA001
+    # ("lazy", "energy_minimization", LazyToEnergyAdapter),  # Requires LazyStateDynamics  # noqa: ERA001
+    # ("predictive_settling", "energy_minimization", PredictiveToEnergyAdapter),  # Requires PredictiveSettlingDynamics  # noqa: ERA001
+    # ("spike_integration", "instantaneous", SpikeToInstantaneousAdapter),  # Requires SpikeIntegrationDynamics  # noqa: ERA001
 ]
 
 
@@ -234,7 +234,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
 
     adapter = create_dynamics_adapter(source_type, target_type, source_dynamics)
 
-    registry = _create_registry(geometry)  # ruff: ignore[unused-variable]
+    registry = _create_registry(geometry)  # noqa: F841
     z = _create_joint_state(geometry)
 
     # Dynamics adapter works on activity (SystemState)
@@ -298,7 +298,7 @@ def test_credit_adapter_consumes_joint_trajectory(
 ):
     """Credit adapter should consume JointTrajectory and produce update signal."""
     geometry = _create_base_geometry()
-    substrate = DigitalSubstrate(SubstrateConfig.digital())  # ruff: ignore[unused-variable]
+    substrate = DigitalSubstrate(SubstrateConfig.digital())  # noqa: F841
 
     # Create source credit
     if source_type == "thermodynamic_contrast":
@@ -325,7 +325,7 @@ def test_credit_adapter_consumes_joint_trajectory(
         z.substrate["conductance"] = torch.full((4, 20), float(i))
         recorder.record(z)
 
-    traj = recorder.get_trajectory()  # ruff: ignore[unused-variable]
+    traj = recorder.get_trajectory()  # noqa: F841
 
     # Adapter should be able to consume trajectory
     # (exact interface depends on implementation)
@@ -340,7 +340,7 @@ def test_credit_adapter_preserves_joint_trajectory_shape():
     source_credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
-    adapter = ThermodynamicToBackpropAdapter(source_credit)  # ruff: ignore[unused-variable]
+    adapter = ThermodynamicToBackpropAdapter(source_credit)  # noqa: F841
 
     # Create trajectory with all components
     recorder = JointTrajectoryRecorder(
@@ -533,7 +533,7 @@ def test_dynamics_adapter_projection_preserves_energy_descent():
     state = SystemState(x=torch.randn(4, 10))
     state.activations = geometry.forward(state.x, substrate)
 
-    energy_before = adapter.compute_energy(state, geometry)  # ruff: ignore[unused-variable]
+    energy_before = adapter.compute_energy(state, geometry)  # noqa: F841
     state = adapter.settle(state, geometry, substrate, target=None)
     energy_after = adapter.compute_energy(state, geometry)
 
@@ -552,7 +552,7 @@ def test_null_plasticity_as_adapter():
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
-    registry = _create_registry(geometry)  # ruff: ignore[unused-variable]
+    registry = _create_registry(geometry)  # noqa: F841
     context = _create_context(geometry, substrate)
 
     z = _create_joint_state(geometry)
@@ -578,7 +578,7 @@ def test_joint_transition_with_null_plasticity():
 
     system_5d = compose_system(substrate, geometry, dynamics, credit, update)
 
-    registry = _create_registry(geometry)  # ruff: ignore[unused-variable]
+    registry = _create_registry(geometry)  # noqa: F841
     context = _create_context(geometry, substrate)
 
     legacy_transition = LegacyDynamicsAsCoupledTransition(system_5d)

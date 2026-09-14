@@ -135,7 +135,7 @@ def expected_value(
     return ev, cost, score
 
 
-def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored candidates
+def decide(  # noqa: PLR0914 -- §22 loop accumulates scored candidates
     store: CEECStore,
     profile: Profile | None,
     rationale: str,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import] — runtime isinstance
+from collections.abc import Mapping  # noqa: TC003 — runtime isinstance
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
@@ -1201,7 +1201,7 @@ class SpectralConstrainedUpdate:
             # Normalize gradient to target spectral norm
             grad_norm = torch.linalg.matrix_norm(grad, ord=2)
             if grad_norm > self.config.spectral_norm:
-                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # ruff: ignore[non-augmented-assignment]
+                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # noqa: PLR6104
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)

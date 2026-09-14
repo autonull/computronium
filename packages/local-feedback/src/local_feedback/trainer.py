@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]  (torch-idiomatic alias)
+import torch.nn.functional as F  # noqa: N812  (torch-idiomatic alias)
 from torch import Tensor, nn
 
 from local_feedback.metrics import improvement_per_norm
@@ -87,7 +87,7 @@ class LocalFeedbackTrainer:
         before = {k: param.detach().clone() for k, param in params.items()}
         with torch.no_grad():
             for k, param in params.items():
-                param -= self.lr * grads[k]  # ruff: ignore[redefined-loop-name]  in-place tensor update
+                param -= self.lr * grads[k]  # noqa: PLW2901  in-place tensor update
         displacement = (
             sum(
                 float((params[k].detach() - before[k]).norm().item()) ** 2

@@ -20,14 +20,14 @@ from computronium.acceleration.kernel_backend import (
 # Triton Kernels for Tile Substrate
 # ──────────────────────────────────────────────
 
-try:  # ruff: ignore[too-many-statements-in-try-clause]
+try:  # noqa: too-many-statements-in-try-clause
     import triton
     import triton.language as tl
 
     # ── Fused Tile Activity Update ─────────────────────────────────────────
     # Computes: activity = clamp(activity - step_size * importance * (error + lambda*activity + sum(feedback)))
     @triton.jit
-    def _tile_activity_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _tile_activity_update_kernel(  # noqa: PLR0913, PLR0917
         activity_ptr,
         error_ptr,
         feedback_ptr,  # [num_feedback, B, N] flattened
@@ -78,7 +78,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
                 mask=mask_b[:, None] & mask_n[None, :],
                 other=0.0,
             )
-            grad = grad + fb  # ruff: ignore[non-augmented-assignment]
+            grad = grad + fb  # noqa: PLR6104
 
         delta = step_size * importance * grad
         new_activity = activity - delta
@@ -94,7 +94,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         )
 
     # ── Fused Tile Prediction ──────────────────────────────────────────────
-    # Computes: prediction = sum(inputs) + bias  # ruff: ignore[commented-out-code]
+    # Computes: prediction = sum(inputs) + bias  # noqa: ERA001
     @triton.jit
     def _tile_prediction_kernel(
         input_ptrs,  # [num_inputs] array of pointers
@@ -138,9 +138,9 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         )
 
     # ── Fused Contrastive Hebbian Update ───────────────────────────────────
-    # Computes: delta = lr/beta * (src_free.T @ dst_free - src_nudged.T @ dst_nudged) / B  # ruff: ignore[commented-out-code]
+    # Computes: delta = lr/beta * (src_free.T @ dst_free - src_nudged.T @ dst_nudged) / B  # noqa: ERA001
     @triton.jit
-    def _tile_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _tile_contrastive_update_kernel(  # noqa: PLR0913, PLR0917
         src_free_ptr,
         dst_free_ptr,
         src_nudged_ptr,
@@ -194,8 +194,8 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             )
             acc_nudged += tl.dot(tl.trans(post_n), pre_n)
 
-        acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
-        acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]
+        acc_free = acc_free / B  # noqa: PLR6104
+        acc_nudged = acc_nudged / B  # noqa: PLR6104
 
         delta = (lr / beta) * (acc_free - acc_nudged)
 
@@ -206,9 +206,9 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
         )
 
     # ── Fused Hebbian Update ───────────────────────────────────────────────
-    # Computes: delta = importance * (src.T @ dst) / B  # ruff: ignore[commented-out-code]
+    # Computes: delta = importance * (src.T @ dst) / B  # noqa: ERA001
     @triton.jit
-    def _tile_hebbian_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _tile_hebbian_update_kernel(  # noqa: PLR0913, PLR0917
         src_ptr,
         dst_ptr,
         weight_ptr,
@@ -245,7 +245,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             )
             acc += tl.dot(tl.trans(post), pre)
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc = acc / B  # noqa: PLR6104
         delta = importance * acc
 
         # Oja's subtraction term if weight provided
@@ -258,13 +258,13 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
                     other=0.0,
                 )
                 post_sq += post * post
-            post_sq = post_sq / B  # ruff: ignore[non-augmented-assignment]
+            post_sq = post_sq / B  # noqa: PLR6104
             weight = tl.load(
                 weight_ptr + offs_out[:, None] * D_in + offs_in[None, :],
                 mask=mask_out[:, None] & mask_in[None, :],
                 other=0.0,
             )
-            delta = delta - post_sq * weight  # ruff: ignore[non-augmented-assignment]
+            delta = delta - post_sq * weight  # noqa: PLR6104
 
         tl.store(
             delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
@@ -348,7 +348,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
                 topk_values_ptr[b * K + k] = val
 
     @triton.jit
-    def _tile_learned_routing_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _tile_learned_routing_kernel(  # noqa: PLR0913, PLR0917
         logits_ptr,
         router_weights_ptr,
         router_bias_ptr,
@@ -382,7 +382,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Simplified: use logits directly with learned temperature
             # Full MLP would require more shared memory
             temp = tl.load(router_weights_ptr) if router_weights_ptr != 0 else 1.0
-            logits = logits * temp  # ruff: ignore[non-augmented-assignment]
+            logits = logits * temp  # noqa: PLR6104
 
             if router_bias_ptr != 0:
                 bias = tl.load(
@@ -390,7 +390,7 @@ try:  # ruff: ignore[too-many-statements-in-try-clause]
                     mask=tl.arange(0, N) < N,
                     other=0.0,
                 )
-                logits = logits + bias  # ruff: ignore[non-augmented-assignment]
+                logits = logits + bias  # noqa: PLR6104
 
             # Softmax
             max_logit = tl.max(logits, axis=0)
@@ -452,7 +452,7 @@ class TileShardedBackend:
                 torch.distributed.all_reduce(
                     grad, op=torch.distributed.ReduceOp.SUM, group=self._process_group
                 )
-                grad = grad / self.world_size  # ruff: ignore[non-augmented-assignment, redefined-loop-name]
+                grad = grad / self.world_size  # noqa: PLR6104, PLW2901
             reduced[name] = grad
         return reduced
 
@@ -508,7 +508,7 @@ class TileKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # noqa: PLR6201
             else "cpu"
         )
         self._dtype = config.dtype
@@ -523,7 +523,7 @@ class TileKernelBackend:
         self._num_tiles = self._tiles_per_layer * self._num_hidden_layers
 
         # Multi-GPU sharding
-        if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON):  # ruff: ignore[literal-membership]
+        if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON):  # noqa: PLR6201
             world_size = extra.get("world_size", 1)
             rank = extra.get("rank", 0)
             if world_size > 1 and torch.distributed.is_initialized():
@@ -841,9 +841,9 @@ class TileKernelBackend:
             values = torch.gather(logits, 1, indices)
         elif strategy == "learned":
             if router_weights is not None:
-                logits = logits @ router_weights.t()  # ruff: ignore[non-augmented-assignment]
+                logits = logits @ router_weights.t()  # noqa: PLR6104
             if router_bias is not None:
-                logits = logits + router_bias  # ruff: ignore[non-augmented-assignment]
+                logits = logits + router_bias  # noqa: PLR6104
             probs = torch.softmax(logits, dim=1)
             values, indices = torch.topk(probs, num_routes, dim=1)
 

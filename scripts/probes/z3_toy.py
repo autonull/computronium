@@ -68,7 +68,7 @@ def _eval(op_out: torch.Tensor, w: torch.Tensor, y: torch.Tensor) -> float:
     return ((op_out @ w).argmax(-1) == y).float().mean().item()
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     results: dict[tuple[str, str], list[float]] = {}
     theta_invariant = True

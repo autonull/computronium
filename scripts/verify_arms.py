@@ -86,8 +86,8 @@ def single_task_accuracy(
     model.train()
     for epoch in range(config.epochs_per_task):
         for x, y in train_loader:
-            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
-            y = y.to(device)  # ruff: ignore[redefined-loop-name]
+            x = x.view(x.shape[0], -1).to(device)  # noqa: PLW2901
+            y = y.to(device)  # noqa: PLW2901
             if arm_name == "lwf":
                 from computronium.core.system_trainer import _lwf_train_step
 
@@ -104,8 +104,8 @@ def single_task_accuracy(
     correct = total = 0
     with torch.no_grad():
         for x, y in test_loader:
-            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
-            y = y.to(device)  # ruff: ignore[redefined-loop-name]
+            x = x.view(x.shape[0], -1).to(device)  # noqa: PLW2901
+            y = y.to(device)  # noqa: PLW2901
             logits = model(x, task_id=task_id)
             task_logits = logits[:, task_id * 2 : task_id * 2 + 2]
             pred = task_logits.argmax(dim=1)

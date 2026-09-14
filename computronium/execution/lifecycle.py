@@ -61,7 +61,7 @@ class ExecutionStrategy:
                     total_standard_trials,
                 )
 
-        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)  # noqa: S311
         return candidates[0]
 
     def plan_batch(self, batch_size: int) -> list[ExperimentTask]:
@@ -74,7 +74,7 @@ class ExecutionStrategy:
 
         # Add noise to priority for diversity
         for c in candidates:
-            c.priority += random.uniform(0, 5)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            c.priority += random.uniform(0, 5)  # noqa: S311
 
         candidates.sort(key=lambda x: x.priority, reverse=True)
 

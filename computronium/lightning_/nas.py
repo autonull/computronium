@@ -88,7 +88,7 @@ def create_nas_objective(
             acc = metrics.get("val_acc", 0.0).item() if "val_acc" in metrics else 0.0
             trial.set_user_attr("model_name", model_name)
             trial.set_user_attr("optimizer_name", optimizer_name)
-            return acc  # ruff: ignore[try-consider-else]
+            return acc  # noqa: TRY300
         except Exception:  # broad: best-effort
             logger.warning("Fit failed for trial, returning 0.0")
             return 0.0

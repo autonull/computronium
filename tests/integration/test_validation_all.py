@@ -1,6 +1,6 @@
 import pytest
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -221,4 +221,4 @@ class TestValidationAll:
 
 
 if __name__ == "__main__":
-    unittest.main()  # ruff: ignore[undefined-name]
+    unittest.main()  # noqa: F821

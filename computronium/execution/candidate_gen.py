@@ -158,12 +158,12 @@ class CandidateGenerator:
         if model_name in saturated_tasks and task in saturated_tasks[model_name]:
             return False
 
-        if not self._check_curriculum(progress, model_name, task):  # ruff: ignore[needless-bool]
+        if not self._check_curriculum(progress, model_name, task):  # noqa: SIM103
             return False
 
         return True
 
-    def _generate_candidates_for_task(  # ruff: ignore[too-many-return-statements]
+    def _generate_candidates_for_task(  # noqa: PLR0911
         self, model: str, task: str, progress: dict, failure_constraints: dict
     ) -> list[ExperimentTask]:
         """Generate candidates for a specific model/task pair across tiers."""
@@ -178,7 +178,7 @@ class CandidateGenerator:
         smoke_stats = self._get_stats(progress, model, task, PatientLevel.SMOKE)
         if not check_criterion(PatientLevel.SMOKE, task, smoke_stats["best_acc"]):
             # Retry chance for failed smoke
-            if random.random() < 0.01:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            if random.random() < 0.01:  # noqa: S311
                 retry_task = self._make_task(model, task, PatientLevel.SMOKE, 10.0)
                 if model in failure_constraints:
                     retry_task.constraints = failure_constraints[model]
@@ -289,7 +289,7 @@ class CandidateGenerator:
             return task_obj
         return None
 
-    def _generate_standard_candidates(  # ruff: ignore[complex-structure]
+    def _generate_standard_candidates(  # noqa: C901
         self,
         model: str,
         task: str,
@@ -619,7 +619,7 @@ class CandidateGenerator:
                 }
         return constraints
 
-    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:  # noqa: C901, PLR0912
         """
         Analyze failure rates to suggest constraints.
         Returns: Dict[model_name, constraint_dict]
@@ -627,8 +627,8 @@ class CandidateGenerator:
         constraints = {}
 
         # 1. Query FailureTracker via State for Hard Failures
-        if hasattr(self.state, "get_failure_analysis"):  # ruff: ignore[too-many-nested-blocks]
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+        if hasattr(self.state, "get_failure_analysis"):  # noqa: PLR1702
+            try:  # noqa: too-many-statements-in-try-clause
                 analysis = self.state.get_failure_analysis()
                 recommendations = analysis.get("recommendations", [])
 
@@ -693,7 +693,7 @@ class CandidateGenerator:
                         ):  # Divergence or random chance
                             failures += 1
 
-            if total > 5 and (failures / total) > 0.3:  # ruff: ignore[collapsible-if]
+            if total > 5 and (failures / total) > 0.3:  # noqa: SIM102
                 # If not already constrained more strictly
                 if model not in constraints:
                     constraints[model] = {}
@@ -702,7 +702,7 @@ class CandidateGenerator:
 
         return constraints
 
-    def _analyze_saturation(self, progress) -> dict[str, list[str]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def _analyze_saturation(self, progress) -> dict[str, list[str]]:  # noqa: C901, PLR0912
         """
         Identify tasks that are effectively "solved" (saturated) for a given model.
         Returns: Dict[model, List[task_name]]
@@ -753,11 +753,11 @@ class CandidateGenerator:
             return True
         if self.task_filter == task:
             return True
-        if self.task_filter in TASK_GROUPS:  # ruff: ignore[undefined-name]
-            return task in TASK_GROUPS[self.task_filter]  # ruff: ignore[undefined-name]
+        if self.task_filter in TASK_GROUPS:  # noqa: F821
+            return task in TASK_GROUPS[self.task_filter]  # noqa: F821
         return False
 
-    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # ruff: ignore[complex-structure]
+    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # noqa: C901
         """
         Check if we are allowed to run this task based on curriculum.
         """

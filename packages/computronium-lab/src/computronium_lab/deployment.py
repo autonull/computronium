@@ -268,7 +268,7 @@ def _try_export_onnx(
             dynamo=False,
         )
         return str(path), report
-    except Exception as exc:  # ruff: ignore[blind-except] - best-effort by convention
+    except Exception as exc:  # noqa: BLE001 - best-effort by convention
         return None, _replace_report(
             report,
             note=f"{report.note}; onnx export skipped: {exc}",

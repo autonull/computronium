@@ -23,31 +23,31 @@ from computronium.ontology import System
 
 apply_compat_shims()  # must run before `import nicegui`
 
-from campaign_tab import (  # ruff: ignore[module-import-not-at-top-of-file]
+from campaign_tab import (  # noqa: E402
     build_campaign_tab,
 )
-from charts import (  # ruff: ignore[module-import-not-at-top-of-file]
+from charts import (  # noqa: E402
     loss_series,
     parity_gap,
 )
-from nicegui import ui  # ruff: ignore[module-import-not-at-top-of-file]
-from persistence import (  # ruff: ignore[module-import-not-at-top-of-file]
+from nicegui import ui  # noqa: E402
+from persistence import (  # noqa: E402
     config_to_url,
     export_run_csv,
     export_run_png,
     load_config,
     save_config,
 )
-from renderer import render_group  # ruff: ignore[module-import-not-at-top-of-file]
-from runner import (  # ruff: ignore[module-import-not-at-top-of-file]
+from renderer import render_group  # noqa: E402
+from runner import (  # noqa: E402
     TRAINABLE_MODELS,
     DemoPanel,
     default_trainer_config,
     prepare_trainer_config,
     run_async,
 )
-from tasks import build_tasks  # ruff: ignore[module-import-not-at-top-of-file]
-from widgets import build_widget_tree  # ruff: ignore[module-import-not-at-top-of-file]
+from tasks import build_tasks  # noqa: E402
+from widgets import build_widget_tree  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

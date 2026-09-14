@@ -25,7 +25,7 @@ import json
 import os
 import shutil
 import signal
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess  # noqa: S404
 import sys
 import time
 from collections import Counter, defaultdict
@@ -203,7 +203,7 @@ def _stage_kill(args: argparse.Namespace, seed: int, log_path: Path) -> dict:
     killed = False
     cid = _campaign_id(args, seed)
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]
+        proc = subprocess.Popen(  # noqa: S603
             _seed_cli(args, seed=seed, resume=False, iterations=args.iterations_first),
             cwd=REPO_ROOT,
             stdout=log,
@@ -245,7 +245,7 @@ def _stage_run(
 ) -> float:
     started = time.monotonic()
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+        proc = subprocess.run(  # noqa: S603
             _seed_cli(args, seed=seed, resume=resume, iterations=iterations),
             cwd=REPO_ROOT,
             stdout=log,
@@ -260,7 +260,7 @@ def _stage_run(
 
 def _git_commit() -> str:
     git = shutil.which("git") or sys.exit("git not found")
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+    return subprocess.run(  # noqa: S603
         [git, "rev-parse", "HEAD"],
         cwd=REPO_ROOT,
         capture_output=True,

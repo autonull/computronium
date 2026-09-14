@@ -100,7 +100,7 @@ def _make_credit(config: CreditAssignmentConfig):
         return RandomProjectionsCredit(config)
     if config.credit_type == "local_goodness" and config.local_objective == "lemma":
         return LocalGoodnessCredit(config)
-    raise ValueError("audit supports rp/pepita configs only")  # ruff: ignore[raise-vanilla-args]
+    raise ValueError("audit supports rp/pepita configs only")  # noqa: TRY003
 
 
 def main() -> int:
@@ -173,7 +173,7 @@ def main() -> int:
             }
             # Exact zero is the signature: pseudo-grads are exactly
             # torch.zeros_like when a weight has no credit route.
-            dead = {n for n, d in moved.items() if d == 0.0}  # ruff: ignore[float-equality-comparison]
+            dead = {n for n, d in moved.items() if d == 0.0}  # noqa: RUF069
             finite = all(math.isfinite(d) for d in moved.values())
             expected_zero = (
                 {"recurrent_weight"}

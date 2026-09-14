@@ -29,7 +29,7 @@ from computronium.domains.trainer import TaskProtocol, _resolve_task_loss, _Task
 from computronium.domains.vision import VisionTask
 
 # Registry for domain tasks
-_DOMAIN_REGISTRY = {  # ruff: ignore[non-empty-init-module]
+_DOMAIN_REGISTRY = {  # noqa: RUF067
     "vision": VisionTask,
     "lm": LMTask,
     "rl": RLTask,
@@ -40,7 +40,7 @@ _DOMAIN_REGISTRY = {  # ruff: ignore[non-empty-init-module]
 }
 
 
-def create_domain_task(domain: str, name: str, **kwargs) -> DomainTask:  # ruff: ignore[non-empty-init-module]
+def create_domain_task(domain: str, name: str, **kwargs) -> DomainTask:  # noqa: RUF067
     """Create a domain task by name."""
     if domain not in _DOMAIN_REGISTRY:
         raise ValueError(
@@ -51,17 +51,17 @@ def create_domain_task(domain: str, name: str, **kwargs) -> DomainTask:  # ruff:
     return task_class(name=name, **kwargs)
 
 
-def register_domain_task(domain: str, task_class: type) -> None:  # ruff: ignore[non-empty-init-module]
+def register_domain_task(domain: str, task_class: type) -> None:  # noqa: RUF067
     """Register a new domain task class."""
     _DOMAIN_REGISTRY[domain] = task_class
 
 
-def list_domains() -> list:  # ruff: ignore[non-empty-init-module]
+def list_domains() -> list:  # noqa: RUF067
     """List available domains."""
     return list(_DOMAIN_REGISTRY.keys())
 
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # Base classes
     "DomainTask",
     "DomainType",

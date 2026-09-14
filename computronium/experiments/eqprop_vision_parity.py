@@ -481,7 +481,7 @@ def _analyze_dynamics(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    analyzer = DynamicsAnalyzer()  # ruff: ignore[unused-variable]
+    analyzer = DynamicsAnalyzer()  # noqa: F841
 
     for task in df["task"].unique():
         task_df = df[df["task"] == task]

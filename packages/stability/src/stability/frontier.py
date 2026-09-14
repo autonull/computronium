@@ -86,7 +86,7 @@ class FrontierAggregator:
         """Add a frontier record."""
         self._records.append(record)
 
-    def get_pareto_frontier(  # ruff: ignore[complex-structure, too-many-branches]
+    def get_pareto_frontier(  # noqa: C901, PLR0912
         self,
         objectives: list[str] | None = None,
         maximize: list[bool] | None = None,

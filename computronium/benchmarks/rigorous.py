@@ -181,7 +181,7 @@ def compute_speedup_with_uncertainty(
         # but t-distribution is better for small N.
         # Here we stick to 1.96 (z-score) or t for n_runs
         n = baseline_metrics.n_runs
-        if n > 1:  # ruff: ignore[if-else-block-instead-of-if-exp]
+        if n > 1:  # noqa: SIM108
             crit_val = stats.t.ppf((1 + confidence) / 2, df=n - 1)
         else:
             crit_val = 0.0  # No uncertainty interval for single run
@@ -290,7 +290,7 @@ class RigorousBenchmark:
         self.results_dir = Path("benchmark_results")
         self.results_dir.mkdir(exist_ok=True)
 
-    def run_single_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def run_single_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
         self,
         model: torch.nn.Module,
         model_name: str,

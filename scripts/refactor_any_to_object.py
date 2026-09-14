@@ -28,7 +28,7 @@ def _find_py_files(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(root.rglob("*.py"))
 
 
-def _replace_any_in_file(filepath: pathlib.Path) -> bool:  # ruff: ignore[complex-structure, too-many-branches]
+def _replace_any_in_file(filepath: pathlib.Path) -> bool:  # noqa: C901, PLR0912
     """Replace Any with object. Returns True if changed."""
     original = filepath.read_text(encoding="utf-8")
     lines = original.splitlines(keepends=True)
@@ -47,7 +47,7 @@ def _replace_any_in_file(filepath: pathlib.Path) -> bool:  # ruff: ignore[comple
             continue
 
         # Replace whole-word Any → object (skip import lines handled above)
-        if stripped.startswith("import typing") or stripped.startswith(  # ruff: ignore[multiple-starts-ends-with]
+        if stripped.startswith("import typing") or stripped.startswith(  # noqa: PIE810
             "from typing import"
         ):
             new_lines.append(line)
@@ -70,7 +70,7 @@ def _replace_any_in_file(filepath: pathlib.Path) -> bool:  # ruff: ignore[comple
             # Build content excluding this line
             content = "".join(clean_lines) + "".join(
                 l
-                for l in new_lines[len(clean_lines) + 1 :]  # ruff: ignore[ambiguous-variable-name]
+                for l in new_lines[len(clean_lines) + 1 :]  # noqa: E741
             )
             if "object" not in content and "Any" not in content:
                 # Any was the only thing imported and is now object — but if
@@ -95,7 +95,7 @@ def _replace_any_in_file(filepath: pathlib.Path) -> bool:  # ruff: ignore[comple
             if stripped.startswith("import typing"):
                 content = "".join(clean_lines) + "".join(
                     l
-                    for l in new_lines[len(clean_lines) + 1 :]  # ruff: ignore[ambiguous-variable-name]
+                    for l in new_lines[len(clean_lines) + 1 :]  # noqa: E741
                 )
                 if "typing.Any" not in content and "typing.object" not in content:
                     continue  # Remove unused import

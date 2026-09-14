@@ -86,7 +86,7 @@ def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor
         return torch.zeros(1, inp_dim, device=device)
 
 
-def _estimate_activation_sparsity(  # ruff: ignore[complex-structure]
+def _estimate_activation_sparsity(  # noqa: C901
     model: nn.Module,
     sample_input: torch.Tensor | None = None,
     threshold: float = 1e-5,
@@ -226,7 +226,7 @@ def measure_suite_resources(
     )
 
 
-def count_flops_detailed(  # ruff: ignore[complex-structure]
+def count_flops_detailed(  # noqa: C901
     model: nn.Module, input_shape: tuple[int, ...]
 ) -> dict[str, int]:
     """Count FLOPs per layer type using module inspection.
@@ -303,7 +303,7 @@ def get_gpu_memory_mb() -> float:
         handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
         info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         return info.used / (1024 * 1024)
-    except Exception:  # ruff: ignore[try-except-pass]
+    except Exception:  # noqa: S110
         pass
 
     # Fallback to torch
@@ -409,7 +409,7 @@ class EnergyTracker:
             )
             weight_sparsity = zero_weights / max(params, 1)
 
-            device = next(self.model.parameters()).device  # ruff: ignore[unused-variable]
+            device = next(self.model.parameters()).device  # noqa: F841
             # Pass None so _estimate_activation_sparsity builds a proper
             # spatial/flat dummy matching the model's input format.
             activation_sparsity = _estimate_activation_sparsity(self.model, None)
@@ -470,8 +470,8 @@ def _activity_jacobian_amplification(
         return None
 
 
-def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
-    coordinate: str | SystemConfig,  # ruff: ignore[undefined-name]
+def analyze_joint_system(  # noqa: C901, PLR0912, PLR0914, PLR0915
+    coordinate: str | SystemConfig,  # noqa: F821
     batch_size: int = 64,
     device: str = "auto",
     iterations: int = 10,
@@ -560,7 +560,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
         torch.cuda.reset_peak_memory_stats()
         mem_before = get_gpu_memory_mb()
     else:
-        mem_before = 0.0  # ruff: ignore[unused-variable]
+        mem_before = 0.0  # noqa: F841
 
     # Profile train_step (full pipeline)
     import time
@@ -576,7 +576,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
         latencies.append((end - start) * 1000)  # ms
 
     # Measure peak memory
-    if device == "cuda":  # ruff: ignore[if-else-block-instead-of-if-exp]
+    if device == "cuda":  # noqa: SIM108
         peak_mem = get_gpu_peak_memory_mb()
     else:
         peak_mem = 0.0
@@ -606,7 +606,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
     flops_info = count_flops_detailed(system.geometry, input_shape)
     fwd_flops = flops_info["total"]
     # For bio-plausible methods, backward may not be 2x forward
-    requires_backward = credit_type in ("backprop", "gradient")  # ruff: ignore[literal-membership]
+    requires_backward = credit_type in ("backprop", "gradient")  # noqa: PLR6201
     bwd_flops = 2 * fwd_flops if requires_backward else 0
 
     # Sparsity
@@ -621,7 +621,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
 
     # Plastic state capacity (for joint systems)
     plastic_state_capacity = 0
-    if hasattr(system, "plasticity") and system.plasticity is not None:  # ruff: ignore[collapsible-if]
+    if hasattr(system, "plasticity") and system.plasticity is not None:  # noqa: SIM102
         if hasattr(system.plasticity, "initial_psi"):
             # Estimate plastic state size using a simple context
             try:
@@ -641,8 +641,8 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
                     registry=system._registry if hasattr(system, "_registry") else None,
                 )
                 psi = system.plasticity.initial_psi(context, batch_size=batch_size)
-                plastic_state_capacity = sum(v.numel() for v in psi.values())  # ruff: ignore[unused-variable]
-            except Exception:  # ruff: ignore[try-except-pass]
+                plastic_state_capacity = sum(v.numel() for v in psi.values())  # noqa: F841
+            except Exception:  # noqa: S110
                 pass
 
     jacobian_amplification = _activity_jacobian_amplification(
@@ -668,7 +668,7 @@ def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, 
     )
 
 
-def _create_joint_system_from_parts(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments, too-many-positional-arguments]
+def _create_joint_system_from_parts(  # noqa: C901, PLR0912, PLR0913, PLR0917
     substrate_type: str,
     geometry_type: str,
     dynamics_type: str,
@@ -775,7 +775,7 @@ def _create_joint_system_from_parts(  # ruff: ignore[complex-structure, too-many
     # Credit
     if credit_type == "backprop":
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
-    elif credit_type in ("thermodynamic_contrast", "thermo"):  # ruff: ignore[literal-membership]
+    elif credit_type in ("thermodynamic_contrast", "thermo"):  # noqa: PLR6201
         credit = ThermodynamicContrast(
             CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
         )

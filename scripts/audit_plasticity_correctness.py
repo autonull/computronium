@@ -100,7 +100,7 @@ def make_composite_state(
     return CompositeState(activity=activity, plastic=plastic, substrate=substrate)
 
 
-def test_fast_weight_round_trip() -> AuditTest:  # ruff: ignore[too-many-locals]
+def test_fast_weight_round_trip() -> AuditTest:  # noqa: PLR0914
     """Test 1: FastWeightPlasticity round-trip changes output."""
     device = torch.device("cpu")
     plasticity = FastWeightPlasticity(fast_weight_dim=512, decay=0.9, learning_rate=0.1)
@@ -392,7 +392,7 @@ def test_device_management() -> AuditTest:
     results["rule_state"] = rsp_device_ok
 
     # Test NullPlasticity (no internal state)
-    np = NullPlasticity()  # ruff: ignore[unused-variable]
+    np = NullPlasticity()  # noqa: F841
     results["null"] = True
 
     all_passed = all(results.values())
@@ -420,7 +420,7 @@ def run_audit() -> dict:
 
     for test_fn in tests:
         print(f"\nRunning {test_fn.__name__}...")
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             result = test_fn()
             results.append(result)
             status = "PASS" if result.passed else "FAIL"

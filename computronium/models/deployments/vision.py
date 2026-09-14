@@ -116,10 +116,10 @@ class ConvTileNet(BioModel):
         spec,
         input_dim,
         output_dim,
-        hidden_dim,  # ruff: ignore[unused-class-method-argument]
+        hidden_dim,  # noqa: ARG003
         num_layers,
         device,
-        task_type,  # ruff: ignore[unused-class-method-argument]
+        task_type,  # noqa: ARG003
         **kwargs,
     ):
         """Build ConvTileNet from factory arguments."""
@@ -309,10 +309,10 @@ class VisionAugmentation:
     def _color_jitter(self, x: Tensor) -> Tensor:
         """Simple color jitter."""
         brightness = torch.empty(1).uniform_(0.8, 1.2).item()
-        x = x * brightness  # ruff: ignore[non-augmented-assignment]
+        x = x * brightness  # noqa: PLR6104
 
         contrast = torch.empty(1).uniform_(0.8, 1.2).item()
-        x = x * contrast  # ruff: ignore[non-augmented-assignment]
+        x = x * contrast  # noqa: PLR6104
 
         return x
 

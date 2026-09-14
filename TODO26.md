@@ -556,7 +556,10 @@ files. Pyright on ceec/lab trees is blocked by the same env import
 resolution skew as the LSP (Register C).
 
 **Phase S — closed.** Round 3 follow-on (improvement #8) executed the
-same session: certified FOR on the speed rule — see Improvements.
+same session: certified FOR on the speed rule. Register C hygiene
+(improvements #4/#9) landed the same session: repo-wide ruff clean,
+single-invocation test collection, no private write access outside the
+store package — see Improvements.
 
 ---
 
@@ -596,13 +599,22 @@ same session: certified FOR on the speed rule — see Improvements.
    en route: `ingest_artifact` now reuses an existing content-addressed
    file (digest-verified) instead of colliding when a fresh ledger
    shares an artifacts dir.
-9. **Open — Register C, ruff 0.15 directive migration:** ~1.5k legacy
-   `# ruff: ignore[rule-name]` comments and per-file-ignores outside the
-   trees touched this session still use descriptive names; ruff 0.15
-   only honors canonical codes. Also: `tests/ceec/test_integration_loop.py`
-   and `packages/computronium-lab/tests/test_integration_loop.py`
-   share a basename and cannot be collected in one pytest invocation
-   (rename one).
+4. **Landed — probe_adapter Session-aware:** `record_probe_result`
+   accepts `CEECStore | Session` (Session targets ingest the artifact
+   through the façade; evidence quality validates against
+   `Profile.quality` on both paths). `ingest_verdict` links evidence
+   through the new public `CEECStore.link_belief_evidence` — the last
+   `_link`/`_conn.commit()` write access outside the store package is
+   gone. Remaining `_conn` uses are SELECT-only reads inside the
+   kernel's own gates/audit (query-surface consolidation = future
+   hygiene).
+9. **Landed — Register C, ruff 0.15 directive migration:** all ~2.8k
+   legacy `# ruff: ignore[rule-name]` directives across 720 files
+   converted to canonical `# noqa: CODE` (two names have no ruff 0.15
+   rule and are vacuous); repo-wide `ruff check .` is clean, and the
+   `test_integration_loop` basename collision is resolved (lab copy →
+   `test_lab_integration_loop.py`) so ceec + lab collect in one pytest
+   invocation. Pyright env skew remains open.
 
 ---
 

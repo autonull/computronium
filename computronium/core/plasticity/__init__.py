@@ -44,7 +44,7 @@ from computronium.core.plasticity.temporal_psi import (
     temporal_psi_from_config,
 )
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # Base
     "PlasticityConfig",
     "PlasticityPrimitive",

@@ -256,7 +256,7 @@ class StateDynamicsConfig:
     gain_control: GainControlMode = "none"
 
     @classmethod
-    def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
+    def energy_minimization(  # noqa: PLR0913 (config mirrors the knobs)
         cls,
         *,
         max_steps: int = 30,
@@ -610,7 +610,7 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
+def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # noqa: C901, PLR0912, PLR0914
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -674,7 +674,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             # Output layer: last feedforward weight (hidden -> output)
             weight_idx = num_ff_weights - 1
             # For linear network (no hidden layers), h_prev should be input
-            if num_hidden == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
+            if num_hidden == 0:  # noqa: SIM108
                 h_prev = all_acts[0]
             else:
                 h_prev = acts[i - 1]  # Last hidden layer
@@ -703,7 +703,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     num_ff_biases = len(bias_names)
     for i in range(len(acts)):
         h = acts[i]
-        if i < num_hidden:  # ruff: ignore[if-else-block-instead-of-if-exp]
+        if i < num_hidden:  # noqa: SIM108
             bias_idx = i
         else:
             bias_idx = num_ff_biases - 1
@@ -737,7 +737,7 @@ class EnergyMinimizationDynamics:
         self._velocity: list[Tensor] | None = None
         self._free_energy_history: list[float] | None = None
 
-    def settle(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def settle(  # noqa: C901, PLR0912, PLR0914, PLR0915
         self,
         state: CompositeState,
         geometry: Geometry,
@@ -775,7 +775,7 @@ class EnergyMinimizationDynamics:
         )
 
         # Number of hidden layers (excluding input and output)
-        # all_acts = [input, hidden1, hidden2, ..., output]  # ruff: ignore[commented-out-code]
+        # all_acts = [input, hidden1, hidden2, ..., output]  # noqa: ERA001
         num_hidden = len(all_acts) - 2
 
         # Initialize velocity for momentum (per hidden layer)
@@ -808,7 +808,7 @@ class EnergyMinimizationDynamics:
             use_checkpointing = False
         elif use_checkpointing is False and device.type == "cuda":
             # Auto-enable if model + activations would exceed ~80% of available VRAM
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+            try:  # noqa: too-many-statements-in-try-clause
                 free_vram, _ = torch.cuda.mem_get_info(device)
                 # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
                 total_params = sum(
@@ -831,7 +831,7 @@ class EnergyMinimizationDynamics:
                 ) + est_activation_mem  # params + optimizer + activations
                 if est_total > free_vram * 0.8:
                     use_checkpointing = True
-            except Exception:  # ruff: ignore[try-except-pass]
+            except Exception:  # noqa: S110
                 pass  # Fall back to config value
 
         # Kernel step function for checkpointing
@@ -872,7 +872,7 @@ class EnergyMinimizationDynamics:
         elif use_checkpointing:
             from torch.utils import checkpoint
 
-            for _step in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
+            for _step in range(self.config.max_steps):  # noqa: RUF052
                 prev_output = all_acts[-1].detach()
                 # Checkpoint the kernel step function
                 all_acts, self._velocity = checkpoint.checkpoint(
@@ -1491,7 +1491,7 @@ class SpikeIntegrationDynamics:
 
         for weight, bias in layer_params:
             if use_compiled:
-                assert bias is not None  # guarded: compiled requires biases  # ruff: ignore[assert]
+                assert bias is not None  # guarded: compiled requires biases  # noqa: S101
                 I_syn = h @ weight.T + bias
                 h, rasters = _compiled_lif_layer(
                     I_syn, self.config.step_size, threshold, self.config.max_steps

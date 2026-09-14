@@ -261,11 +261,11 @@ def _additive_migrate(conn: sqlite3.Connection) -> None:
     for table, column in _POLICY_COLUMNS.items():
         cols = {
             r["name"]
-            for r in conn.execute(f"PRAGMA table_info({table})").fetchall()  # ruff: ignore[hardcoded-sql-expression]  internal table map
+            for r in conn.execute(f"PRAGMA table_info({table})").fetchall()  # noqa: S608  internal table map
         }
         if column not in cols:
             conn.execute(
-                f"ALTER TABLE {table} ADD COLUMN {column} TEXT"  # ruff: ignore[hardcoded-sql-expression]  internal table map
+                f"ALTER TABLE {table} ADD COLUMN {column} TEXT"  # noqa: S608  internal table map
             )
 
 

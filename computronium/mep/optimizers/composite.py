@@ -45,7 +45,7 @@ class CompositeOptimizer(StrategyOptimizer):
         feedback: Strategy for error accumulation.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         params: Iterable[nn.Parameter],
         gradient,

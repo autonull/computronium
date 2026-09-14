@@ -120,7 +120,7 @@ class SafetyWrapper:
                 "step": self.step_count,
             }
 
-        total_norm = total_norm**0.5  # ruff: ignore[non-augmented-assignment]
+        total_norm = total_norm**0.5  # noqa: PLR6104
 
         clip_value = clip_norm if clip_norm is not None else self.config.max_grad_norm
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip_value)
@@ -306,10 +306,10 @@ def check_verification_needed(
     target_config = {
         k: v
         for k, v in best_trial.config.items()
-        if k not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # ruff: ignore[literal-membership]
+        if k not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # noqa: PLR6201
     }
 
-    target_hash = hashlib.md5(  # ruff: ignore[hashlib-insecure-hash-function]
+    target_hash = hashlib.md5(  # noqa: S324
         json.dumps(target_config, sort_keys=True).encode()
     ).hexdigest()
 
@@ -318,7 +318,7 @@ def check_verification_needed(
             k: v
             for k, v in t.config.items()
             if k
-            not in [  # ruff: ignore[literal-membership]
+            not in [  # noqa: PLR6201
                 "tier",
                 "task",
                 "model",
@@ -329,7 +329,7 @@ def check_verification_needed(
             ]
         }
         if (
-            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
+            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # noqa: S324
             == target_hash
         ):
             repeats += 1
@@ -353,7 +353,7 @@ def check_verification_needed(
 def _compute_config_hash(config: dict) -> str:
     """Compute a hash of the experiment config for dedup."""
     config_str = json.dumps(config, sort_keys=True)
-    return hashlib.md5(config_str.encode()).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
+    return hashlib.md5(config_str.encode()).hexdigest()  # noqa: S324
 
 
 def check_cv_needed(
@@ -374,9 +374,9 @@ def check_cv_needed(
     target_config = {
         k: v
         for k, v in best_trial.config.items()
-        if k not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # ruff: ignore[literal-membership]
+        if k not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # noqa: PLR6201
     }
-    target_hash = hashlib.md5(  # ruff: ignore[hashlib-insecure-hash-function]
+    target_hash = hashlib.md5(  # noqa: S324
         json.dumps(target_config, sort_keys=True).encode()
     ).hexdigest()
 
@@ -385,10 +385,10 @@ def check_cv_needed(
             k: v
             for k, v in t.config.items()
             if k
-            not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # ruff: ignore[literal-membership]
+            not in ["tier", "task", "model", "epochs", "batch_size", "job_id", "fold"]  # noqa: PLR6201
         }
         if (
-            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
+            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # noqa: S324
             == target_hash
         ):
             repeats += 1
@@ -405,7 +405,7 @@ def check_cv_needed(
             k: v
             for k, v in t.config.items()
             if k
-            not in [  # ruff: ignore[literal-membership]
+            not in [  # noqa: PLR6201
                 "tier",
                 "task",
                 "model",
@@ -418,7 +418,7 @@ def check_cv_needed(
             ]
         }
         if (
-            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
+            hashlib.md5(json.dumps(t_conf, sort_keys=True).encode()).hexdigest()  # noqa: S324
             == target_hash
         ):
             fold = t.config.get("fold")
@@ -570,7 +570,7 @@ def check_low_data_needed(
     task: str,
 ) -> ExperimentTask | None:
     """Check if low-data regime experiment should be scheduled."""
-    if task not in ["mnist", "cifar10", "fashion_mnist"]:  # ruff: ignore[literal-membership]
+    if task not in ["mnist", "cifar10", "fashion_mnist"]:  # noqa: PLR6201
         return None
 
     trials = stats.get("trials", [])
@@ -612,7 +612,7 @@ def check_low_data_needed(
     return None
 
 
-def check_ablation_needed(  # ruff: ignore[complex-structure, too-many-branches]
+def check_ablation_needed(  # noqa: C901, PLR0912
     stats: dict,
     progress: dict,
     model: str,

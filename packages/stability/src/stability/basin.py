@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from stability.state import SystemContext
 
 
-def estimate_basin_stability(  # ruff: ignore[too-many-locals]
+def estimate_basin_stability(  # noqa: PLR0914
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z_attractor: CompositeState,
     context: SystemContext,
@@ -60,7 +60,7 @@ def estimate_basin_stability(  # ruff: ignore[too-many-locals]
     for _ in range(num_samples):
         # Sample random perturbation on sphere of radius perturbation_radius
         direction = torch.randn_like(x_attractor)
-        direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
+        direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)  # noqa: PLR6104
 
         # Scale by random radius in [0, perturbation_radius]
         radius = (
@@ -154,7 +154,7 @@ class BasinStabilityEstimator:
         J_norms = []
         for _ in range(min(5, x.shape[-1])):  # Sample a few directions
             v = torch.randn_like(x)
-            v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
+            v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # noqa: PLR6104
 
             x_perturbed = x + eps * v
             z_perturbed = CompositeState(

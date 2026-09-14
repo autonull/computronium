@@ -15,7 +15,7 @@ from computronium.knowledge import KnowledgeBase, KnowledgeEntry
 logger = get_logger()
 
 
-class ReasoningTemplate(str, Enum):  # ruff: ignore[replace-str-enum]
+class ReasoningTemplate(str, Enum):  # noqa: UP042
     """Chain-of-thought reasoning templates."""
 
     FAILURE_ANALYSIS = "failure_analysis"
@@ -120,7 +120,7 @@ class HypothesisReasoner:
         for r in recent_results:
             if r.get("val_accuracy", 0) > 0.6:
                 model = r.get("model", "")
-                if r.get("task") in ["mnist", "cifar10", "fashion_mnist"]:  # ruff: ignore[literal-membership]
+                if r.get("task") in ["mnist", "cifar10", "fashion_mnist"]:  # noqa: PLR6201
                     successful_propagators.add(model)
 
         for prop in successful_propagators:
@@ -359,7 +359,7 @@ class HypothesisReasoner:
         self._reasoning_chains.append(chain)
         return chain
 
-    def transfer_reasoning(  # ruff: ignore[complex-structure]
+    def transfer_reasoning(  # noqa: C901
         self,
         source_domain: str,
         target_domain: str,
@@ -690,7 +690,7 @@ class HypothesisReasoner:
         self._reasoning_chains.append(chain)
         return chain
 
-    def experimental_design(  # ruff: ignore[complex-structure]
+    def experimental_design(  # noqa: C901
         self,
         research_question: str,
         available_algorithms: list[str],
@@ -831,7 +831,7 @@ class LLMHypothesisGenerator:
 
     def _generate_openai(self, context: str) -> list[Hypothesis]:
         """Generate using OpenAI API."""
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             from openai import OpenAI
 
             client = OpenAI(api_key=self.api_key)

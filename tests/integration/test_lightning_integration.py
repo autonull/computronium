@@ -133,7 +133,7 @@ class TestBuildTrainer:
     def test_build_trainer_with_wandb(self):
         """Test trainer can be configured with W&B logger."""
         try:
-            import wandb  # ruff: ignore[unused-import]
+            import wandb  # noqa: F401
         except ModuleNotFoundError:
             import pytest
 
@@ -282,7 +282,7 @@ class TestHPOIntegration:
         assert "lr" in hparams
         assert "hidden_dim" in hparams
         # hidden_dim should be constrained to [32, 64, 128] for small task
-        assert hparams["hidden_dim"] in [32, 64, 128]  # ruff: ignore[literal-membership]
+        assert hparams["hidden_dim"] in [32, 64, 128]  # noqa: PLR6201
 
     def test_ray_tune_search_init(self):
         """Test BioRayTuneSearch initialization."""
@@ -350,7 +350,7 @@ class TestPLTrialIntegration:
 
         # Create mock data loaders
         mock_loader = MagicMock()
-        mock_loader.__iter__ = lambda self: iter([])  # ruff: ignore[unused-lambda-argument]
+        mock_loader.__iter__ = lambda self: iter([])  # noqa: ARG005
 
         # Create a real simple model for testing
         class SimpleModel(torch.nn.Module):
@@ -403,13 +403,13 @@ class TestPLTrialIntegration:
 
         # Create mock data loaders
         mock_loader = MagicMock()
-        mock_loader.__iter__ = lambda self: iter([])  # ruff: ignore[unused-lambda-argument]
+        mock_loader.__iter__ = lambda self: iter([])  # noqa: ARG005
 
         with patch("pytorch_lightning.Trainer") as MockTrainer:
             mock_trainer_instance = MagicMock()
 
             def mock_fit_failure(module, train_loader, val_loader, *args, **kwargs):
-                raise Exception("Training failed")  # ruff: ignore[raise-vanilla-class]
+                raise Exception("Training failed")  # noqa: TRY002
 
             mock_trainer_instance.fit = mock_fit_failure
             MockTrainer.return_value = mock_trainer_instance

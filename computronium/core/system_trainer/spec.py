@@ -69,7 +69,7 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
     return dynamics_from_config(dynamics)
 
 
-def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # ruff: ignore[too-many-return-statements]
+def _credit_from_config(config: CreditAssignmentConfig) -> CreditAssignment:  # noqa: PLR0911
     """Instantiate the credit implementation named by ``config.credit_type``."""
     match config.credit_type.lower():
         case "thermodynamic_contrast" | "equilibrium":

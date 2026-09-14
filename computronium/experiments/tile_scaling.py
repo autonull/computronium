@@ -208,7 +208,7 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     logger.info("Seeds per config: %d", config.seeds)
 
     exp_count = 0
-    for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
+    for task in config.tasks:  # noqa: PLR1702
         for algorithm in config.algorithms:
             model_name = _get_model_for_task(algorithm, task)
 
@@ -328,7 +328,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_depth = model_df["depth"].median()
             width_df = model_df[model_df["depth"] == median_depth]
             if len(width_df) >= 3:
-                try:  # ruff: ignore[too-many-statements-in-try-clause]
+                try:  # noqa: too-many-statements-in-try-clause
                     params = width_df["params"].values
                     acc = width_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)
@@ -344,7 +344,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_width = model_df["width"].median()
             depth_df = model_df[model_df["width"] == median_width]
             if len(depth_df) >= 3:
-                try:  # ruff: ignore[too-many-statements-in-try-clause]
+                try:  # noqa: too-many-statements-in-try-clause
                     params = depth_df["params"].values
                     acc = depth_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)

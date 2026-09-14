@@ -66,7 +66,7 @@ class ScientificTask(DomainTask):
                 f"Available: pendulum, lorenz"
             )
 
-    def _setup_pendulum(self) -> None:  # ruff: ignore[too-many-locals]
+    def _setup_pendulum(self) -> None:  # noqa: PLR0914
         """Simple pendulum ODE: predict next state from current state."""
         seed_everything(42)
         g = 9.81
@@ -106,7 +106,7 @@ class ScientificTask(DomainTask):
         self._output_dim = y.shape[1]
         self._setup_done = True
 
-    def _setup_lorenz(self) -> None:  # ruff: ignore[too-many-locals]
+    def _setup_lorenz(self) -> None:  # noqa: PLR0914
         """Lorenz system: predict next state from current state."""
         seed_everything(42)
 
@@ -172,7 +172,7 @@ class ScientificTask(DomainTask):
                 if max_batches and i >= max_batches:
                     break
 
-                inputs, targets = inputs.to(self.device), targets.to(self.device)  # ruff: ignore[redefined-loop-name]
+                inputs, targets = inputs.to(self.device), targets.to(self.device)  # noqa: PLW2901
                 outputs = model(inputs)
                 loss = self.compute_loss(outputs, targets)
 

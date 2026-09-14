@@ -52,7 +52,7 @@ def run_compare(args: argparse.Namespace) -> None:
     from computronium.hyperopt.comparison import compute_algorithm_rankings
 
     if getattr(args, "db", None):
-        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # ruff: ignore[used-dummy-variable]
+        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # noqa: RUF052
 
     study_names = []
     if args.studies:

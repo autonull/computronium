@@ -82,12 +82,12 @@ def _adapt_feedback(credit: RandomProjectionsCredit, geometry) -> None:
         ).to(fb.dtype)
 
 
-def run_arm(seed: int, adaptive: bool) -> dict[str, object]:  # ruff: ignore[too-many-locals]  probe payload assembly
+def run_arm(seed: int, adaptive: bool) -> dict[str, object]:  # noqa: PLR0914  probe payload assembly
     torch.manual_seed(seed)
     credit_cfg = CreditAssignmentConfig.random_projections(
         feedback_scale=FEEDBACK_SCALE
     )
-    euclid = lambda lr: ParameterUpdateConfig.euclidean(step_size=lr, momentum=0.0)  # ruff: ignore[lambda-assignment]
+    euclid = lambda lr: ParameterUpdateConfig.euclidean(step_size=lr, momentum=0.0)  # noqa: E731
 
     # Norm-matched lr: calibrate on the fixed arm's first-step displacement.
     torch.manual_seed(seed + 777)

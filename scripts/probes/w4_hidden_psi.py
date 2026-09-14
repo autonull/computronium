@@ -456,7 +456,7 @@ def main() -> int:
     settled_post = _settled_acts(parity_system, x)[-1]
     driven_post = _drive(parity_system, x, {})
     if not torch.allclose(settled_post, driven_post, atol=1e-6):
-        raise RuntimeError(  # ruff: ignore[raise-vanilla-args] - probe gate
+        raise RuntimeError(  # noqa: TRY003 - probe gate
             "seam parity: _drive must reproduce the settle forward exactly"
         )
     del parity_system
@@ -512,7 +512,7 @@ def main() -> int:
                 flush=True,
             )
         if len(shas) != 1:
-            raise RuntimeError(  # ruff: ignore[raise-vanilla-args] - probe gate
+            raise RuntimeError(  # noqa: TRY003 - probe gate
                 f"stage-A theta mismatch across arms: {shas}"
             )
         print("stage-A theta matched across arms: True", flush=True)

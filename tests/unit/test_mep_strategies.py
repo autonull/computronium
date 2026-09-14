@@ -154,7 +154,7 @@ class TestConstraintStrategies:
         """SpectralConstraint ensures spectral norm <= gamma."""
         torch.manual_seed(42)
         param = nn.Parameter(torch.randn(10, 5))
-        original_sigma = torch.linalg.svdvals(param.data).max()  # ruff: ignore[unused-variable]
+        original_sigma = torch.linalg.svdvals(param.data).max()  # noqa: F841
 
         gamma = 0.5
         strategy = SpectralConstraint(gamma=gamma, power_iter=10)

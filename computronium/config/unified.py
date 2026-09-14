@@ -188,7 +188,7 @@ class ModelConfig:
             raise ValueError(f"output_dim must be > 0, got {self.output_dim}")
 
 
-def _build_model_config(  # contract for zoo models' build classmethods  # ruff: ignore[too-many-arguments]
+def _build_model_config(  # contract for zoo models' build classmethods  # noqa: PLR0913
     spec,
     input_dim: int,
     output_dim: int,

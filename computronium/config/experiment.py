@@ -21,7 +21,7 @@ from computronium.ontology import SystemConfig
 
 if TYPE_CHECKING:
     from computronium.ontology import (
-        SystemConfig,  # ruff: ignore[redefined-while-unused, runtime-import-in-type-checking-block]
+        SystemConfig,  # noqa: F811, TC004
     )
 
 __all__ = [
@@ -930,7 +930,7 @@ def make_rl_preset(
     )
 
 
-def make_timeseries_preset(  # ruff: ignore[too-many-arguments]
+def make_timeseries_preset(  # noqa: PLR0913
     *,
     name: str = "ts_forecast",
     seed: int = 42,

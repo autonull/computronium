@@ -75,7 +75,7 @@ class MEPConfig:
             "feedback_type": self.feedback,
         })
         # Task-specific dims
-        if self.task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
+        if self.task in ("mnist", "fashion_mnist"):  # noqa: PLR6201
             kwargs["input_dim"] = 784
             kwargs["output_dim"] = 10
         else:
@@ -128,7 +128,7 @@ def _run_single_mep_experiment(config: MEPConfig, device: str) -> dict:
         device=device,
     )
 
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
+    try:  # noqa: too-many-statements-in-try-clause
         trainer = CoreTrainer(trainer_config)
         start_time = time.time()
         history = trainer.fit()
@@ -259,7 +259,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
 
         # Two-way interactions
         for f1, f2 in itertools.combinations(factor_cols, 2):
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+            try:  # noqa: too-many-statements-in-try-clause
                 # Create interaction groups
                 task_df[f"{f1}_{f2}"] = task_df[f1] + "_" + task_df[f2]
                 groups = [
@@ -281,7 +281,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
                         "p_value": float(p_val),
                         "significant": p_val < 0.05,
                     }
-            except Exception:  # ruff: ignore[try-except-pass]
+            except Exception:  # noqa: S110
                 pass
 
         importance[task] = task_importance
@@ -367,7 +367,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    if args.factors:  # ruff: ignore[if-else-block-instead-of-if-exp]
+    if args.factors:  # noqa: SIM108
         factors = json.loads(args.factors)
     else:
         factors = MEP_FACTORS

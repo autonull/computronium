@@ -238,7 +238,7 @@ def _task_output_dim(task: str) -> int:
     return int(resolve_task(task).output_dim)
 
 
-def _run_probe(  # probe call mirrors the driver contract  # ruff: ignore[too-many-arguments]
+def _run_probe(  # probe call mirrors the driver contract  # noqa: PLR0913
     driver: object,
     model: str,
     task: str,
@@ -463,7 +463,7 @@ def _effect_sizes(
     }
 
 
-def _make_comparison(  # comparison-record contract  # ruff: ignore[too-many-arguments]
+def _make_comparison(  # comparison-record contract  # noqa: PLR0913
     *,
     contract: Contract,
     model_name: str,
@@ -539,7 +539,7 @@ def _width_search_backprop_for_bio_params(
     )
 
 
-def _run_cell(  # cell bundles the three §15.4 contract arms; locals track per-arm probes/notes  # ruff: ignore[too-many-arguments, too-many-locals]
+def _run_cell(  # cell bundles the three §15.4 contract arms; locals track per-arm probes/notes  # noqa: PLR0913, PLR0914
     *,
     driver: object,
     model_name: str,
@@ -727,7 +727,7 @@ def _run_cell(  # cell bundles the three §15.4 contract arms; locals track per-
     return entry, comparisons, note
 
 
-def run_parity(  # campaign signature; per-depth baseline + cells accumulate locals  # ruff: ignore[too-many-arguments, too-many-locals]
+def run_parity(  # campaign signature; per-depth baseline + cells accumulate locals  # noqa: PLR0913, PLR0914
     *,
     task: str,
     depths: tuple[int, ...],

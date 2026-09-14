@@ -28,7 +28,7 @@ import argparse
 import json
 import logging
 import platform
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess  # noqa: S404
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -50,7 +50,7 @@ def _git_sha() -> str:
     """Current git HEAD short hash, or ``"unknown"`` outside a git repo."""
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
+            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
@@ -183,7 +183,7 @@ def _write_summary(summary: dict, model_dir: Path) -> None:
     write_report(summary, model_dir / "summary.md")
 
 
-def profile_model(args: _ProfileArgs) -> dict:  # ruff: ignore[complex-structure, too-many-locals]
+def profile_model(args: _ProfileArgs) -> dict:  # noqa: C901, PLR0914
     """Profile a single model and write diagnostics."""
     torch.manual_seed(args.seed)
 

@@ -284,7 +284,7 @@ def _writer_target(bits: Tensor, t: int) -> Tensor:
     return c
 
 
-def _local_step(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments] - probe harness
+def _local_step(  # noqa: PLR0913, PLR0914, PLR0917 - probe harness
     controller,
     heads,
     mem,
@@ -454,7 +454,7 @@ def _local_episode(
     return torch.stack(losses).mean()
 
 
-def _diagnose(  # ruff: ignore[too-many-locals] - probe harness
+def _diagnose(  # noqa: PLR0914 - probe harness
     controller, heads, bits: Tensor, perm: Tensor | None = None
 ) -> dict[str, float]:
     """Read hit-rate diagnostic (§11.9 finding 3, the decisive split):
@@ -615,7 +615,7 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
     return controller, heads, best_fg
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
 
     t0 = time.time()
     args = __import__("sys").argv[1:]
@@ -625,7 +625,7 @@ def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
     lr = float(opt.get("lr", 1e-3))
     # Q4 slot-identity fix: mem_slots <= mem_width gives exact one-hot
     # slot embeddings (default 8 = the validated r6 config).
-    global MEM_WIDTH, REPEATS  # ruff: ignore[global-statement] - probe CLI overrides module constants
+    global MEM_WIDTH, REPEATS  # noqa: PLW0603 - probe CLI overrides module constants
     MEM_WIDTH = int(opt.get("width", 8))
     REPEATS = int(opt.get("repeats", 1))
     globals()["TASK"] = opt.get("task", "copy")

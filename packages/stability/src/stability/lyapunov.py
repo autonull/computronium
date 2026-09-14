@@ -46,7 +46,7 @@ def estimate_lyapunov_exponent(
 
     # Initialize perturbation vector
     v = torch.randn_like(x)
-    v = v * (perturbation_scale / (v.norm(dim=-1, keepdim=True) + 1e-8))  # ruff: ignore[non-augmented-assignment]
+    v = v * (perturbation_scale / (v.norm(dim=-1, keepdim=True) + 1e-8))  # noqa: PLR6104
 
     x_base = x.clone()
     x_perturbed = x_base + v
@@ -136,7 +136,7 @@ class LyapunovEstimator:
         eps = self.perturbation_scale
 
         v = torch.randn_like(x)
-        v = v * (eps / (v.norm(dim=-1, keepdim=True) + 1e-8))  # ruff: ignore[non-augmented-assignment]
+        v = v * (eps / (v.norm(dim=-1, keepdim=True) + 1e-8))  # noqa: PLR6104
 
         x_perturbed = x + v
         z_perturbed = CompositeState(
@@ -162,7 +162,7 @@ class LyapunovEstimator:
         return 0.0
 
 
-def estimate_lyapunov_spectrum(  # ruff: ignore[too-many-locals]
+def estimate_lyapunov_spectrum(  # noqa: PLR0914
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,

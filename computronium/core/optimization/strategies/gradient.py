@@ -7,7 +7,7 @@ MEP-specific EP strategies live in ``zoo.mep.optimizers.strategies.gradient``.
 from typing import Protocol, cast
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
 from .base import GradientStrategy
@@ -419,7 +419,7 @@ class PCGradient(GradientStrategy):
             upper = activations[i + 1].detach()
             lower_target = activations[i].detach()
             prediction = pc_model.top_down[i](upper)
-            pc_loss = pc_loss + F.mse_loss(prediction, lower_target)  # ruff: ignore[non-augmented-assignment]
+            pc_loss = pc_loss + F.mse_loss(prediction, lower_target)  # noqa: PLR6104
 
         # Composite loss
         loss = cls_loss + self.pc_weight * pc_loss

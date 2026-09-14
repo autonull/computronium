@@ -13,7 +13,7 @@ def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
     content = filepath.read_text(encoding="utf-8")
 
     # Pattern to match test functions and classes
-    test_pattern = r"(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)"  # ruff: ignore[unused-variable]
+    test_pattern = r"(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)"  # noqa: F841
     lock_labels = {
         "test_l1": "L1",
         "test_l2": "L2",
@@ -27,7 +27,7 @@ def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
         "test_d_": "D",
         "test_c_": "C",
         "test_u_": "U",
-        "test_u_": "U",  # ruff: ignore[multi-value-repeated-key-literal]
+        "test_u_": "U",  # noqa: F601
     }
 
     # Also check for class-based tests

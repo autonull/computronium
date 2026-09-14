@@ -265,7 +265,7 @@ class HyperparameterMetamodel:
         )
         self._spec_dict = {spec.name: spec for spec in self.all_specs}
 
-    def get_search_space_for_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def get_search_space_for_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
         self, model_spec: object, task_name: str | None = None
     ) -> dict[str, HyperparamSpec]:
         """
@@ -305,25 +305,25 @@ class HyperparameterMetamodel:
         elif family == "hebbian":
             applicable_scopes.add(HyperparamScope.HEBBIAN)
 
-        elif family == "fa" or family == "feedback_alignment":  # ruff: ignore[repeated-equality-comparison]
+        elif family == "fa" or family == "feedback_alignment":  # noqa: PLR1714
             applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
 
-        elif family == "mep" or family == "forward_only" or family == "forward-only":  # ruff: ignore[repeated-equality-comparison]
+        elif family == "mep" or family == "forward_only" or family == "forward-only":  # noqa: PLR1714
             applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
 
-        elif family == "target_prop" or family == "target-prop":  # ruff: ignore[repeated-equality-comparison]
+        elif family == "target_prop" or family == "target-prop":  # noqa: PLR1714
             applicable_scopes.add(HyperparamScope.TARGET_PROP)
 
         elif family == "spiking":
             applicable_scopes.add(HyperparamScope.SPIKING)
 
-        elif family == "predictive_coding" or family == "predictive-coding":  # ruff: ignore[repeated-equality-comparison]
+        elif family == "predictive_coding" or family == "predictive-coding":  # noqa: PLR1714
             applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
 
         elif family == "tile":
             applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
 
-        elif family == "backprop" or family == "backpropagation":  # ruff: ignore[repeated-equality-comparison]
+        elif family == "backprop" or family == "backpropagation":  # noqa: PLR1714
             applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
 
         # Fallback: infer from credit_assignment_type if family not recognized
@@ -378,7 +378,7 @@ class HyperparameterMetamodel:
             search_space["activation"] = constrained_act
 
         # Constraint: EqProp is computationally heavy (steps * layers), so limit depth
-        if family == "eqprop" or "eqprop" in model_spec.name.lower():  # ruff: ignore[collapsible-if]
+        if family == "eqprop" or "eqprop" in model_spec.name.lower():  # noqa: SIM102
             if "num_layers" in search_space:
                 layer_spec = self._spec_dict["num_layers"]
                 # EqProp effectively unrolls network 'steps' times.
@@ -394,7 +394,7 @@ class HyperparameterMetamodel:
 
         # Constraint: Small Tasks (Efficiency)
         # For small datasets, we don't need huge models. Constrain to smaller sizes.
-        is_small_task = task_name and task_name in [  # ruff: ignore[literal-membership]
+        is_small_task = task_name and task_name in [  # noqa: PLR6201
             "digits",
             "usps",
             "mnist",
@@ -431,7 +431,7 @@ class HyperparameterMetamodel:
         # Apply based on model family/type for vision-oriented models
         is_vision_model = (
             "vision" in model_spec.model_type.lower()
-            or model_spec.family in ("backprop", "eqprop", "fa", "tile")  # ruff: ignore[literal-membership]
+            or model_spec.family in ("backprop", "eqprop", "fa", "tile")  # noqa: PLR6201
         )
         if is_vision_model and "hidden_dim" in search_space and not is_small_task:
             hd_spec = search_space["hidden_dim"]
@@ -470,7 +470,7 @@ class HyperparameterMetamodel:
         valid_space = self.get_search_space_for_model(model_spec)
 
         for key, value in config.items():
-            if key not in valid_space:  # ruff: ignore[collapsible-if]
+            if key not in valid_space:  # noqa: SIM102
                 # Some infrastructure keys might be passed (e.g., 'epochs', 'device')
                 # Only flag if it matches a known hyperparam that ISN'T available
                 if key in self._spec_dict:

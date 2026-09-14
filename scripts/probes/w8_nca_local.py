@@ -77,7 +77,7 @@ import time
 from dataclasses import replace
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 from computronium import ParameterUpdateConfig
@@ -250,7 +250,7 @@ def _rollout_states(
             _, delta, _logits = _cell_forward(p, states, labels)
         delta_grid = _unflatten(delta, targets.size(0), *targets.shape[1:])
         # non-augmented: states enters the autograd graph mid-rollout
-        states = states + delta_grid * mask.unsqueeze(1)  # ruff: ignore[non-augmented-assignment]
+        states = states + delta_grid * mask.unsqueeze(1)  # noqa: PLR6104
         if grad:
             step_losses.append((states - target_states).pow(2).mean())
     return states, step_losses
@@ -261,7 +261,7 @@ def _target_states(targets: Tensor) -> Tensor:
     return F.one_hot(targets, CHANNELS).permute(0, 3, 1, 2).float()
 
 
-def _distill_init(  # ruff: ignore[too-many-locals] - probe harness; locals are orthogonal modes
+def _distill_init(  # noqa: PLR0914 - probe harness; locals are orthogonal modes
     p: dict[str, Tensor],
     targets: Tensor,
     n_mixes: int = 10,
@@ -304,7 +304,7 @@ def _distill_init(  # ruff: ignore[too-many-locals] - probe harness; locals are 
                 X.append(teacher)
             mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
             # non-augmented: teacher enters the autograd-free distill set
-            teacher = teacher + (target_states - teacher).clamp(  # ruff: ignore[non-augmented-assignment]
+            teacher = teacher + (target_states - teacher).clamp(  # noqa: PLR6104
                 -DELTA_SCALE, DELTA_SCALE
             ) * mask.unsqueeze(1)
     else:
@@ -470,7 +470,7 @@ def _episode_grads(
     return {**w_grads, **b_grads}, stats
 
 
-def _train(  # ruff: ignore[too-many-locals, too-many-arguments, too-many-positional-arguments] - probe harness
+def _train(  # noqa: PLR0914, PLR0913, PLR0917 - probe harness
     arm: str,
     update_name: str,
     seed: int,
@@ -680,7 +680,7 @@ def _screen() -> dict[str, float]:
     return best
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     args = __import__("sys").argv[1:]
     opt = dict(a[2:].split("=") for a in args if a.startswith("--") and "=" in a)

@@ -269,7 +269,7 @@ class CampaignStore(SqliteStore):
             )
             conn.commit()
             row_id = cursor.lastrowid
-            assert row_id is not None  # ruff: ignore[assert]
+            assert row_id is not None  # noqa: S101
             return row_id
 
     def add_registry_snapshot(
@@ -304,7 +304,7 @@ class CampaignStore(SqliteStore):
             )
             conn.commit()
             row_id = cursor.lastrowid
-            assert row_id is not None  # ruff: ignore[assert]
+            assert row_id is not None  # noqa: S101
             return row_id
 
     def get_episodes(self, campaign_id: str) -> list[EpisodeRecord]:

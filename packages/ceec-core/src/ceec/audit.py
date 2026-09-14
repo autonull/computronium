@@ -97,7 +97,7 @@ def _silent_scalarization(store: CEECStore) -> list[Finding]:
 
             try:
                 payload = json.loads(Path(artifact.uri).read_text(encoding="utf-8"))
-            except Exception:  # ruff: ignore[try-except-continue]  unreadable payloads flagged by missing-artifact audit
+            except Exception:  # noqa: S112  unreadable payloads flagged by missing-artifact audit
                 continue
             values = _payload_numeric_rows(payload)
             if values and all(not isinstance(v, dict) for v in values):
@@ -386,7 +386,7 @@ def _measurement_block_mechanisms(store: CEECStore) -> list[tuple[str, str]]:
     for r in rows:
         try:
             payload = json.loads(Path(r["uri"]).read_text(encoding="utf-8"))
-        except Exception:  # ruff: ignore[try-except-continue]  unreadable payloads are flagged by the missing-artifact audit
+        except Exception:  # noqa: S112  unreadable payloads are flagged by the missing-artifact audit
             continue
         mechanism = payload.get("mechanism") if isinstance(payload, dict) else None
         if mechanism:

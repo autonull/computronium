@@ -102,7 +102,7 @@ from computronium.core.utils.activations import (
 )
 
 
-def get_kernel_classes() -> tuple[type[object], type[object]]:  # ruff: ignore[non-empty-init-module]
+def get_kernel_classes() -> tuple[type[object], type[object]]:  # noqa: RUF067
     """Lazily import kernel classes to avoid circular imports."""
     from computronium.acceleration.kernels import EqPropKernel as _EqPropKernel
     from computronium.acceleration.kernels import (
@@ -112,7 +112,7 @@ def get_kernel_classes() -> tuple[type[object], type[object]]:  # ruff: ignore[n
     return _EqPropKernel, _EqPropKernelBPTT
 
 
-def get_triton_ops() -> type[object] | None:  # ruff: ignore[non-empty-init-module]
+def get_triton_ops() -> type[object] | None:  # noqa: RUF067
     """Lazily import Triton ops, returning None if unavailable."""
     try:
         from computronium.acceleration.triton_kernels import (
@@ -123,7 +123,7 @@ def get_triton_ops() -> type[object] | None:  # ruff: ignore[non-empty-init-modu
     return _TritonEqPropOps
 
 
-def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
+def get_algorithm_kernels() -> dict[str, type[object]]:  # noqa: RUF067
     """Get all algorithm-specific kernel backends (uniform interface)."""
     kernels = {}
     kernel_specs = [
@@ -168,7 +168,7 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
     return kernels
 
 
-def get_contrastive_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
+def get_contrastive_kernels() -> dict[str, type[object]]:  # noqa: RUF067
     """Get all contrastive Hebbian kernel backends (O(1) memory interface).
 
     Pure getter: does NOT touch the KernelRegistry (registering would clobber

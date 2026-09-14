@@ -29,7 +29,7 @@ __all__ = [
 logger = get_logger()
 
 
-def track_20_transfer_learning(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
+def track_20_transfer_learning(verifier) -> TrackResult:  # noqa: PLR0914
     """Track 20: Transfer Learning Efficacy."""
     start = track_header(20, "Transfer Learning Efficacy")
     input_dim, hidden_dim = 64, 128
@@ -148,7 +148,7 @@ Compare against training from scratch on Task B.
     )
 
 
-def track_21_continual_learning(verifier) -> TrackResult:  # ruff: ignore[too-many-locals, too-many-statements]
+def track_21_continual_learning(verifier) -> TrackResult:  # noqa: PLR0914, PLR0915
     """Track 21: Continual Learning Robustness with EWC."""
     start = track_header(21, "Continual Learning Robustness (EWC)")
     input_dim, hidden_dim = 64, 128

@@ -145,7 +145,7 @@ def run_campaign(
                 and Path(export.manifest_path).exists()
             )
             deploy_note = f"manifest={Path(export.manifest_path).name}"
-        except Exception as exc:  # ruff: ignore[blind-except] - gate failure is data
+        except Exception as exc:  # noqa: BLE001 - gate failure is data
             deployability = False
             deploy_note = f"export failed: {exc}"
 

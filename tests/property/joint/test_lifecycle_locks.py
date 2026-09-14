@@ -44,7 +44,7 @@ from computronium.ontology import (
     GeometryConfig,
     ParameterUpdateConfig,
     RecurrentGeometry,
-    StateDynamicsConfig,  # ruff: ignore[redefined-while-unused]
+    StateDynamicsConfig,  # noqa: F811
     SubstrateConfig,
     SystemConfig,
     SystemState,
@@ -100,7 +100,7 @@ def _create_dummy_state_for_registry(
 # ============================================================
 
 
-def test_j1_null_plasticity_zero_extension():  # ruff: ignore[too-many-locals]
+def test_j1_null_plasticity_zero_extension():  # noqa: PLR0914
     """J1 (Level 4): Joint system with M=Null ≡ 5-D system (Zero-Extension Theorem)."""
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
@@ -240,7 +240,7 @@ class TestPlasticity:
     ) -> dict[str, Tensor]:
         # Only plasticity projection should modify psi
         new_psi = {k: v.clone() for k, v in psi.items()}
-        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(  # ruff: ignore[non-augmented-assignment]
+        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(  # noqa: PLR6104
             new_psi["test_psi"]
         )
         return new_psi
@@ -322,7 +322,7 @@ def test_j4_substrate_owned_respects_physics():
     # Substrate-owned state for ternary
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
-    context = SystemContext(  # ruff: ignore[unused-variable]
+    context = SystemContext(  # noqa: F841
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -374,7 +374,7 @@ def test_j4_substrate_adapter_preserves_constraints():
         CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
     )
 
-    context = SystemContext(  # ruff: ignore[unused-variable]
+    context = SystemContext(  # noqa: F841
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -564,7 +564,7 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
         CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
     )
 
-    context = SystemContext(  # ruff: ignore[unused-variable]
+    context = SystemContext(  # noqa: F841
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -614,7 +614,7 @@ def test_j6_dynamics_adapter_preserves_shape():
 
     registry = _create_registry_with_geometry(geometry)
 
-    context = SystemContext(  # ruff: ignore[unused-variable]
+    context = SystemContext(  # noqa: F841
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,

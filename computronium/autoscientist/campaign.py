@@ -520,7 +520,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
+        new_state = db.create_campaign(  # noqa: F841
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -609,7 +609,7 @@ class AutoScientistCampaign:
             })
             self.db.update_iteration(self.campaign_id, self._iteration, merged_meta)
 
-    def run_iteration(  # ruff: ignore[complex-structure]
+    def run_iteration(  # noqa: C901
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -720,7 +720,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # ruff: ignore[assert]
+        assert input_dim is not None  # noqa: S101
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr", 1e-3)

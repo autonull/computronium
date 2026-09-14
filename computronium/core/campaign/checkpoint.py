@@ -8,7 +8,7 @@ Enables multi-hour AutoScientist campaigns on spot instances.
 
 from __future__ import annotations
 
-import pickle  # ruff: ignore[suspicious-pickle-import]
+import pickle  # noqa: S403
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -179,7 +179,7 @@ class CheckpointManager:
     def load_checkpoint(self, filepath: str | Path) -> JointCheckpoint:
         """Load a checkpoint from file."""
         with Path(filepath).open("rb") as f:
-            checkpoint = pickle.load(f)  # ruff: ignore[suspicious-pickle-usage]
+            checkpoint = pickle.load(f)  # noqa: S301
         return checkpoint
 
     def restore_rng_states(self, checkpoint: JointCheckpoint) -> None:
@@ -188,11 +188,11 @@ class CheckpointManager:
 
         import numpy as np
 
-        torch.set_rng_state(pickle.loads(checkpoint.torch_rng_state))  # ruff: ignore[suspicious-pickle-usage]
-        np.random.set_state(pickle.loads(checkpoint.numpy_rng_state))  # ruff: ignore[suspicious-pickle-usage]
-        random.setstate(pickle.loads(checkpoint.python_rng_state))  # ruff: ignore[suspicious-pickle-usage]
+        torch.set_rng_state(pickle.loads(checkpoint.torch_rng_state))  # noqa: S301
+        np.random.set_state(pickle.loads(checkpoint.numpy_rng_state))  # noqa: S301
+        random.setstate(pickle.loads(checkpoint.python_rng_state))  # noqa: S301
         if checkpoint.cuda_rng_state and torch.cuda.is_available():
-            torch.cuda.set_rng_state_all(pickle.loads(checkpoint.cuda_rng_state))  # ruff: ignore[suspicious-pickle-usage]
+            torch.cuda.set_rng_state_all(pickle.loads(checkpoint.cuda_rng_state))  # noqa: S301
 
     def restore_composite_state(
         self,
@@ -269,7 +269,7 @@ class CheckpointManager:
             return False
 
         # Validate theta
-        if not isinstance(checkpoint.theta, dict) or len(checkpoint.theta) == 0:  # ruff: ignore[needless-bool]
+        if not isinstance(checkpoint.theta, dict) or len(checkpoint.theta) == 0:  # noqa: SIM103
             return False
 
         return True

@@ -153,7 +153,7 @@ def _quantify_disagreement(
     return reports
 
 
-def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
+def calibrate_demo_harvest(  # noqa: PLR0913
     *,
     input_dim: int = 784,
     hidden_dims: tuple[int, ...] = (32,),
@@ -293,7 +293,7 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
     )
 
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     "DEMO_GOOD_COORDINATES",
     "DISAGREEMENT_COORDINATES",
     "calibrate_demo_harvest",

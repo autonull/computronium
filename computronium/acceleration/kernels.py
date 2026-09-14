@@ -165,7 +165,7 @@ if _detected_cuda_path:
         os.environ["PATH"] = str(bin_path) + os.pathsep + os.environ.get("PATH", "")
 
 # Try to import CuPy for GPU
-try:  # ruff: ignore[too-many-statements-in-try-clause]
+try:  # noqa: too-many-statements-in-try-clause
     import cupy as cp
 
     # Guard against mock/stub cupy (e.g. from test conftest mocking)
@@ -293,7 +293,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         input_dim: int,
         hidden_dim: int,
@@ -412,7 +412,7 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(  # ruff: ignore[too-many-return-statements]
+    def forward_step(  # noqa: PLR0911
         self,
         h: np.ndarray,
         x_emb: np.ndarray,
@@ -581,7 +581,7 @@ class EqPropKernel:
     def _check_convergence(self, h: np.ndarray, h_prev: np.ndarray, step: int) -> bool:
         """Check if the equilibrium has converged."""
         # OPTIMIZATION: Use max norm (simpler, faster)
-        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))  # ruff: ignore[commented-out-code]
+        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))  # noqa: ERA001
         diff = self.xp.abs(h - h_prev).max()
         threshold = self._get_convergence_threshold(step)
         return diff < threshold
@@ -920,7 +920,7 @@ class EqPropKernelBPTT:
             dtanh = dh * tanh_deriv(pre_act, xp)  # [batch, hidden]
 
             # Accumulate gradients
-            if t > 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
+            if t > 0:  # noqa: SIM108
                 h_prev = trajectory[t - 1][1]
             else:
                 h_prev = xp.zeros_like(h)

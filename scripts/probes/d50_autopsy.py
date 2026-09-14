@@ -59,7 +59,7 @@ TASK = "mnist"
 INPUT_DIM = 784
 
 
-def main() -> int:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def main() -> int:  # noqa: C901, PLR0912, PLR0914, PLR0915
     t0 = time.time()
     task = create_task(TASK, device=DEVICE, quick_mode=True, num_workers=0)
     task.setup()

@@ -185,7 +185,7 @@ def test_parameter_update_application() -> AuditTest:
     """Test 3: ParameterUpdate application modifies params in-place."""
     device = torch.device("cpu")
     continual = make_joint_system(device, "null")  # Null plasticity for simplicity
-    context = continual.context  # ruff: ignore[unused-variable]
+    context = continual.context  # noqa: F841
     update = continual.update
     geometry = continual.geometry
 
@@ -281,7 +281,7 @@ def test_device_propagation() -> AuditTest:
     return AuditTest(test="device_propagation", passed=passed, details=all_checks)
 
 
-def test_state_registry_integrity() -> AuditTest:  # ruff: ignore[too-many-locals]
+def test_state_registry_integrity() -> AuditTest:  # noqa: PLR0914
     """Test 5: StateRegistry integrity - flags match component configs."""
     device = torch.device("cpu")
     continual = make_joint_system(device, "fast_weights")
@@ -352,7 +352,7 @@ def test_all_plasticity_types() -> AuditTest:
     results = {}
 
     for plasticity_type in ["fast_weights", "routing", "rule_state", "null"]:
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             continual = make_joint_system(device, plasticity_type)
             context = continual.context
 
@@ -411,7 +411,7 @@ def run_audit() -> dict:
 
     for test_fn in tests:
         print(f"\nRunning {test_fn.__name__}...")
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             result = test_fn()
             results.append(result)
             status = "PASS" if result.passed else "FAIL"

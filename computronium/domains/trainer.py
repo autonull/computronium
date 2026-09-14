@@ -81,7 +81,7 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
 
 def _accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
     """Classification accuracy; 0.0 for non-index targets (regression)."""
-    if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):  # ruff: ignore[literal-membership]
+    if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):  # noqa: PLR6201
         return 0.0
     preds = logits[:, -1, :] if logits.dim() == 3 else logits
     return (preds.argmax(-1) == y).float().mean().item()
@@ -101,7 +101,7 @@ class _TaskTrainer:
     - Energy tracking placeholder (via ``track_energy``; no-op for plain modules)
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         model: nn.Module,
         task: TaskProtocol,

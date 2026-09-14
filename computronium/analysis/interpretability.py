@@ -253,7 +253,7 @@ def plot_weight_spectra(
 # =============================================================================
 
 
-def compute_receptive_field(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def compute_receptive_field(  # noqa: C901, PLR0912, PLR0914, PLR0915
     model: nn.Module,
     layer_name: str,
     unit_index: int,
@@ -312,7 +312,7 @@ def compute_receptive_field(  # ruff: ignore[complex-structure, too-many-branche
             grad = input_tensor.grad[0].abs().cpu().numpy()
 
             # For conv, grad is (C, H, W) - take max over channels
-            if grad.ndim == 3:  # ruff: ignore[if-else-block-instead-of-if-exp]
+            if grad.ndim == 3:  # noqa: SIM108
                 rf_map = grad.max(axis=0)
             else:
                 rf_map = grad
@@ -463,7 +463,7 @@ def compute_mutual_information(
     return mi
 
 
-def analyze_information_flow(  # ruff: ignore[complex-structure, too-many-locals]
+def analyze_information_flow(  # noqa: C901, PLR0914
     model: nn.Module,
     dataloader: DataLoader,
     layers: list[str],
@@ -505,7 +505,7 @@ def analyze_information_flow(  # ruff: ignore[complex-structure, too-many-locals
     sample_count = 0
     with torch.no_grad():
         for batch in dataloader:
-            if isinstance(batch, (list, tuple)):  # ruff: ignore[if-else-block-instead-of-if-exp]
+            if isinstance(batch, (list, tuple)):  # noqa: SIM108
                 x = batch[0]
             else:
                 x = batch
@@ -629,7 +629,7 @@ def compute_concept_alignment(
         concept_acts = []
         activations = []
         handle = target_module.register_forward_hook(
-            lambda m, i, o: activations.append(o.detach().cpu())  # ruff: ignore[unused-lambda-argument]
+            lambda m, i, o: activations.append(o.detach().cpu())  # noqa: ARG005
         )
 
         with torch.no_grad():
@@ -675,7 +675,7 @@ def compute_concept_alignment(
 # =============================================================================
 
 
-def causal_mediation_analysis(  # ruff: ignore[too-many-locals]
+def causal_mediation_analysis(  # noqa: PLR0914
     model: nn.Module,
     dataloader: DataLoader,
     mediator_layer: str,
@@ -812,7 +812,7 @@ class InterpretabilityConfig:
     device: str = "cpu"
 
 
-def run_interpretability_analysis(  # ruff: ignore[complex-structure, too-many-branches]
+def run_interpretability_analysis(  # noqa: C901, PLR0912
     model: nn.Module,
     dataloader: DataLoader,
     config: InterpretabilityConfig,

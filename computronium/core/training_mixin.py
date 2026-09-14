@@ -23,7 +23,7 @@ type LossFn = Callable[
 ]
 
 
-class _HasTrainStep(Protocol):  # ruff: ignore[unused-private-protocol]
+class _HasTrainStep(Protocol):  # noqa: PYI046
     """Protocol for objects that implement _forward_train."""
 
     @abstractmethod

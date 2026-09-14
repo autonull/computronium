@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 from computronium import GeometryConfig, NcaGeometry
@@ -119,7 +119,7 @@ class StatePredictionResult:
     walltime_s: float
 
 
-def train_state_prediction(  # ruff: ignore[too-many-arguments] - flat state-prediction knobs
+def train_state_prediction(  # noqa: PLR0913 - flat state-prediction knobs
     system: object,
     task: TransitionTask,
     *,
@@ -288,7 +288,7 @@ def state_prediction_campaign(
                 and Path(export.manifest_path).exists()
             )
             deploy_note = f"manifest={Path(export.manifest_path).name}"
-        except Exception as exc:  # ruff: ignore[blind-except] - gate failure is data
+        except Exception as exc:  # noqa: BLE001 - gate failure is data
             deployability = False
             deploy_note = f"export failed: {exc}"
 

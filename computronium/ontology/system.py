@@ -245,14 +245,14 @@ class SystemConfig:
             plasticity if plasticity is not None else PlasticityConfig.null(),
         )
 
-    def validate(self) -> None:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+    def validate(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """Cross-axis validation (hard constraints only).
 
         Raises:
             ValueError: If configuration violates hard compatibility constraints.
         """
         # Recurrent geometry requires energy-based dynamics
-        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership, collapsible-if]
+        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):  # noqa: PLR6201, SIM102
             if self.dynamics.dynamics_type != "energy_minimization":
                 raise ValueError(
                     f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
@@ -273,8 +273,8 @@ class SystemConfig:
         # dynamics (R5.2: the PC family — sPC/ePC — consumes thermo contrast
         # legitimately; the dormant contradiction with the predictive-settling
         # branch below is reconciled by whitelisting it here).
-        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # ruff: ignore[literal-membership, collapsible-if]
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # noqa: PLR6201, SIM102
+            if self.dynamics.dynamics_type not in (  # noqa: PLR6201
                 "energy_minimization",
                 "predictive_settling",
                 "error_predictive_coding",
@@ -286,8 +286,8 @@ class SystemConfig:
                 )
 
         # Spiking dynamics requires temporal trace or STDP credit
-        if self.dynamics.dynamics_type == "spike_integration":  # ruff: ignore[collapsible-if]
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+        if self.dynamics.dynamics_type == "spike_integration":  # noqa: SIM102
+            if self.credit.credit_type not in (  # noqa: PLR6201
                 "temporal_trace",
                 "spiking",
                 "target_inversion",
@@ -299,8 +299,8 @@ class SystemConfig:
                 )
 
         # Tile mesh geometry requires compatible dynamics
-        if self.geometry.topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership, collapsible-if]
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+        if self.geometry.topology_type in ("tile_mesh", "tile"):  # noqa: PLR6201, SIM102
+            if self.dynamics.dynamics_type not in (  # noqa: PLR6201
                 "energy_minimization",
                 "instantaneous",
             ):
@@ -321,7 +321,7 @@ class SystemConfig:
             )
 
         # Beta matching: StateDynamics.beta should match CreditAssignment.beta for energy-based systems
-        if self.dynamics.dynamics_type == "energy_minimization":  # ruff: ignore[collapsible-if]
+        if self.dynamics.dynamics_type == "energy_minimization":  # noqa: SIM102
             if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
                 # Soft constraint: warn but don't fail
                 warnings.warn(
@@ -337,9 +337,9 @@ class SystemConfig:
 
         # Neuromorphic substrate requires spike integration or energy minimization dynamics
         # (instantaneous pass-through doesn't capture neuromorphic temporal dynamics)
-        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:  # ruff: ignore[collapsible-if]
+        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:  # noqa: SIM102
             # Likely neuromorphic substrate
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+            if self.dynamics.dynamics_type not in (  # noqa: PLR6201
                 "spike_integration",
                 "energy_minimization",
                 "diffusion",
@@ -352,7 +352,7 @@ class SystemConfig:
                 )
 
         # Analog substrate with noise requires dynamics that support noise injection
-        if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:  # ruff: ignore[collapsible-if]
+        if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:  # noqa: SIM102
             if self.dynamics.dynamics_type == "instantaneous":
                 # Instantaneous dynamics doesn't use substrate noise during settling
                 # (only single forward pass). Warn but don't fail.
@@ -367,11 +367,11 @@ class SystemConfig:
         # Complex substrate requires compatible credit assignment
         # Complex/holomorphic networks work best with thermodynamic contrast
         # (phase-sensitive gradients) or backprop (Wirtinger calculus)
-        if self.substrate.precision == "float32" and getattr(  # ruff: ignore[collapsible-if]
+        if self.substrate.precision == "float32" and getattr(  # noqa: SIM102
             self.substrate, "_complex_emulated", False
         ):
             # This is a complex substrate (emulated via real/imag channels)
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+            if self.credit.credit_type not in (  # noqa: PLR6201
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
@@ -388,7 +388,7 @@ class SystemConfig:
         # Quantum substrate requires compatible dynamics
         # Quantum circuits need energy-based or instantaneous dynamics
         if self.substrate.precision == "complex64":
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+            if self.dynamics.dynamics_type not in (  # noqa: PLR6201
                 "energy_minimization",
                 "instantaneous",
                 "diffusion",
@@ -399,7 +399,7 @@ class SystemConfig:
                 )
 
             # Quantum substrate with thermodynamic contrast needs matching beta
-            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # ruff: ignore[literal-membership, collapsible-if]
+            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # noqa: PLR6201, SIM102
                 if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
                     warnings.warn(
                         f"Quantum substrate with thermodynamic contrast: "
@@ -411,7 +411,7 @@ class SystemConfig:
 
         # Sparse substrate requires compatible update rule
         # Sparse weights need updates that preserve sparsity structure
-        if self.substrate.sparsity > 0.5:  # ruff: ignore[collapsible-if]
+        if self.substrate.sparsity > 0.5:  # noqa: SIM102
             if self.update.update_type == "riemannian_orthogonal":
                 warnings.warn(
                     f"Sparse substrate (sparsity={self.substrate.sparsity}) with "
@@ -424,13 +424,13 @@ class SystemConfig:
         # Ternary substrate requires compatible credit assignment
         # Ternary quantization works best with equilibrium/thermodynamic contrast
         # (contrastive learning naturally handles weight quantization)
-        if (  # ruff: ignore[collapsible-if]
+        if (  # noqa: SIM102
             self.substrate.precision == "float32"
             and self.substrate.sparsity == 0.0
             and self.substrate.weight_bounds == (-1.0, 1.0)
         ):
             # Heuristic: likely ternary substrate (sparsity emerges from thresholding)
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+            if self.credit.credit_type not in (  # noqa: PLR6201
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
@@ -445,7 +445,7 @@ class SystemConfig:
                 )
 
         # Diffusion dynamics requires noise-aware substrate
-        if self.dynamics.dynamics_type == "diffusion":  # ruff: ignore[collapsible-if]
+        if self.dynamics.dynamics_type == "diffusion":  # noqa: SIM102
             if self.substrate.noise_level == 0.0:
                 warnings.warn(
                     "Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
@@ -456,11 +456,11 @@ class SystemConfig:
 
         # Predictive settling dynamics requires compatible credit
         # PC uses local errors, works with thermodynamic contrast or local goodness
-        if self.dynamics.dynamics_type in (  # ruff: ignore[literal-membership, collapsible-if]
+        if self.dynamics.dynamics_type in (  # noqa: PLR6201, SIM102
             "predictive_settling",
             "error_predictive_coding",
         ):
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+            if self.credit.credit_type not in (  # noqa: PLR6201
                 "thermodynamic_contrast",
                 "equilibrium",
                 "local_goodness",
@@ -487,7 +487,7 @@ class SystemConfig:
 
         # Geometry-Substrate constraints
         # Spatial lattice / neuromorphic geometry requires neuromorphic substrate
-        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):  # ruff: ignore[literal-membership, collapsible-if]
+        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):  # noqa: PLR6201, SIM102
             if not (
                 self.substrate.precision == "float16" and self.substrate.sparsity > 0.9
             ):
@@ -502,7 +502,7 @@ class SystemConfig:
 
         # Tile mesh geometry with sparse substrate
         if (
-            self.geometry.topology_type in ("tile_mesh", "tile")  # ruff: ignore[literal-membership]
+            self.geometry.topology_type in ("tile_mesh", "tile")  # noqa: PLR6201
             and self.substrate.sparsity > 0.5
         ):
             warnings.warn(
@@ -544,7 +544,7 @@ class SystemConfig:
             )
 
     @classmethod
-    def valid_combinations(cls) -> list[dict[str, str]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def valid_combinations(cls) -> list[dict[str, str]]:  # noqa: C901, PLR0912
         """Return all valid 6-D coordinate combinations for AutoScientist.
 
         Returns:
@@ -670,7 +670,7 @@ class SystemConfig:
         ]
 
         # Generate combinations and validate
-        for sub in substrates:  # ruff: ignore[too-many-nested-blocks]
+        for sub in substrates:  # noqa: PLR1702
             for geom in geometries:
                 for dyn in dynamics_options:
                     for plas in plasticities:
@@ -686,45 +686,45 @@ class SystemConfig:
                                 }
                                 # Quick validation: skip known invalid combos
                                 # Recurrent geometry requires energy_minimization
-                                if geom["topology_type"] in (  # ruff: ignore[literal-membership, collapsible-if]
+                                if geom["topology_type"] in (  # noqa: PLR6201, SIM102
                                     "recurrent",
                                     "recurrent_attractor",
                                 ):
                                     if dyn["dynamics_type"] != "energy_minimization":
                                         continue
                                 # Thermodynamic contrast requires energy_minimization
-                                if cred["credit_type"] in (  # ruff: ignore[literal-membership, collapsible-if]
+                                if cred["credit_type"] in (  # noqa: PLR6201, SIM102
                                     "thermodynamic_contrast",
                                     "equilibrium",
                                 ):
                                     if dyn["dynamics_type"] != "energy_minimization":
                                         continue
                                 # Spike integration requires temporal trace or target inversion credit
-                                if dyn["dynamics_type"] == "spike_integration":  # ruff: ignore[collapsible-if]
-                                    if cred["credit_type"] not in (  # ruff: ignore[literal-membership]
+                                if dyn["dynamics_type"] == "spike_integration":  # noqa: SIM102
+                                    if cred["credit_type"] not in (  # noqa: PLR6201
                                         "temporal_trace",
                                         "target_inversion",
                                         "target_prop",
                                     ):
                                         continue
                                 # Tile mesh requires compatible dynamics
-                                if geom["topology_type"] in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership, collapsible-if]
-                                    if dyn["dynamics_type"] not in (  # ruff: ignore[literal-membership]
+                                if geom["topology_type"] in ("tile_mesh", "tile"):  # noqa: PLR6201, SIM102
+                                    if dyn["dynamics_type"] not in (  # noqa: PLR6201
                                         "energy_minimization",
                                         "instantaneous",
                                     ):
                                         continue
                                 # Quantum substrate requires compatible dynamics
-                                if sub["precision"] == "complex64":  # ruff: ignore[collapsible-if]
-                                    if dyn["dynamics_type"] not in (  # ruff: ignore[literal-membership]
+                                if sub["precision"] == "complex64":  # noqa: SIM102
+                                    if dyn["dynamics_type"] not in (  # noqa: PLR6201
                                         "energy_minimization",
                                         "instantaneous",
                                         "diffusion",
                                     ):
                                         continue
                                 # Predictive settling requires compatible credit
-                                if dyn["dynamics_type"] == "predictive_settling":  # ruff: ignore[collapsible-if]
-                                    if cred["credit_type"] not in (  # ruff: ignore[literal-membership]
+                                if dyn["dynamics_type"] == "predictive_settling":  # noqa: SIM102
+                                    if cred["credit_type"] not in (  # noqa: PLR6201
                                         "thermodynamic_contrast",
                                         "equilibrium",
                                         "local_goodness",

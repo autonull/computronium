@@ -236,8 +236,8 @@ class GeometryConfig:
         input_dim: int,
         output_dim: int,
         num_layers: int,
-        neurons_per_tile: int,  # ruff: ignore[unused-class-method-argument]
-        tiles_per_layer: int,  # ruff: ignore[unused-class-method-argument]
+        neurons_per_tile: int,  # noqa: ARG003
+        tiles_per_layer: int,  # noqa: ARG003
         init_scale: float = 0.1,
     ) -> GeometryConfig:
         return cls(
@@ -636,7 +636,7 @@ class FeedforwardGeometry(nn.Module):
                 if layer.bias is not None:
                     # Out-of-place add: in-place adds on grad-tracking tensors
                     # pin the whole downstream settle graph (CUDA leak)
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
+                    h = h + layer.bias  # noqa: PLR6104
             else:
                 h = layer(h)
                 if self.residual and h.shape == h_in.shape:
@@ -673,14 +673,14 @@ class FeedforwardGeometry(nn.Module):
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
                 h_in = h
-                h = h @ layer.weight.T  # ruff: ignore[non-augmented-assignment]
+                h = h @ layer.weight.T  # noqa: PLR6104
                 if layer.bias is not None:
                     # Out-of-place adds on autograd break
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
+                    h = h + layer.bias  # noqa: PLR6104
             else:
                 h = layer(h)
                 if self.residual and h.shape == h_in.shape:
-                    h = h + h_in  # ruff: ignore[non-augmented-assignment]
+                    h = h + h_in  # noqa: PLR6104
         return h
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:
@@ -946,13 +946,13 @@ class RecurrentGeometry(nn.Module):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
                     # Out-of-place: in-place adds break autograd
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
+                    h = h + layer.bias  # noqa: PLR6104
             else:
                 h = layer(h)
             # Apply recurrent connection after each hidden layer (except output)
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
                 # Out-of-place: in-place adds break autograd
-                h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
+                h = h + op(h, self._recurrent_weight)  # noqa: PLR6104
         return h
 
     def route(self, activations: Tensor) -> Tensor:
@@ -965,7 +965,7 @@ class RecurrentGeometry(nn.Module):
             # Hidden state should match recurrent weight dimensions
             if h.shape[-1] == self._recurrent_weight.shape[0]:
                 # Out-of-place: in-place matmul breaks autograd
-                h = h @ self._recurrent_weight.T  # ruff: ignore[non-augmented-assignment]
+                h = h @ self._recurrent_weight.T  # noqa: PLR6104
             else:
                 # Activations are output dim; we can't apply recurrent weight
                 # This happens when route is called on output instead of hidden state
@@ -1008,7 +1008,7 @@ class RecurrentGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
+                    h = h + layer.bias  # noqa: PLR6104
             else:
                 h = layer(h)
                 # Add after activation functions
@@ -1016,7 +1016,7 @@ class RecurrentGeometry(nn.Module):
             # Apply recurrent connection after each hidden layer (except output)
             # Out-of-place: in-place adds pin the downstream settle graph
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
-                h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
+                h = h + op(h, self._recurrent_weight)  # noqa: PLR6104
         # Add final output if last layer was Linear (no trailing activation)
         if isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
@@ -1140,7 +1140,7 @@ class TileGeometry(nn.Module):
         params.update({f"tile_weight.{k}": v for k, v in self._tile_weights.items()})
         return params
 
-    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:  # ruff: ignore[complex-structure]
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:  # noqa: C901
         """Route input through the tile mesh using substrate's forward operator."""
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -1270,7 +1270,7 @@ class TileGeometry(nn.Module):
                     acts.append(act)
         return torch.cat(acts, dim=1) if acts else torch.empty(1, 0)
 
-    def update_params(self, new_params: dict[str, Tensor]) -> None:  # ruff: ignore[complex-structure]
+    def update_params(self, new_params: dict[str, Tensor]) -> None:  # noqa: C901
         """Update geometry parameters in-place from ParameterUpdate output."""
         for name, param in new_params.items():
             if name.startswith("input_proj.") and self._input_projection is not None:
@@ -1347,7 +1347,7 @@ class TileGeometry(nn.Module):
         """
         return self._graph.get_boundary_tiles(device_map)
 
-    def forward_with_intermediates(  # ruff: ignore[complex-structure]
+    def forward_with_intermediates(  # noqa: C901
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
@@ -1519,7 +1519,7 @@ class ConvGeometry(nn.Module):
             patches, n = self._im2col(x)
             out = op(patches, self._conv_weights[f"layer_{i}"])
             # Out-of-place: in-place adds pin the downstream settle graph
-            out = out + self._conv_biases[f"layer_{i}"]  # ruff: ignore[non-augmented-assignment]
+            out = out + self._conv_biases[f"layer_{i}"]  # noqa: PLR6104
             x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
             x = x.reshape(x.shape[0], -1, side, side)
         return nn.functional.adaptive_avg_pool2d(x, self.config.pool_hw).flatten(1)
@@ -1555,7 +1555,7 @@ class ConvGeometry(nn.Module):
             patches, n = self._im2col(x)
             out = op(patches, self._conv_weights[f"layer_{i}"])
             # Out-of-place: in-place adds pin the downstream settle graph
-            out = out + self._conv_biases[f"layer_{i}"]  # ruff: ignore[non-augmented-assignment]
+            out = out + self._conv_biases[f"layer_{i}"]  # noqa: PLR6104
             x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
             x = x.reshape(x.shape[0], -1, side, side)
             acts.append(x.flatten(1))
@@ -1700,7 +1700,7 @@ class GraphGeometry(nn.Module):
             # Feature transformation via substrate operator
             h = op(h, weight)
             # Out-of-place: in-place adds pin the downstream settle graph
-            h = h + bias  # ruff: ignore[non-augmented-assignment]
+            h = h + bias  # noqa: PLR6104
             # Non-linearity
             h = torch.relu(h)
             # Neighborhood aggregation
@@ -1737,7 +1737,7 @@ class GraphGeometry(nn.Module):
             weight = self._layer_weights[f"layer_{i}"]
             bias = self._layer_biases[f"layer_{i}"]
             h = op(h, weight)
-            h = h + bias  # ruff: ignore[non-augmented-assignment]
+            h = h + bias  # noqa: PLR6104
             h = torch.relu(h)
             h = self._aggregate(h)
             acts.append(h)
@@ -1950,7 +1950,7 @@ class AttentionGeometry(nn.Module):
         # Input projection
         h = op(h, self._input_projection.weight)
         if self._input_projection.bias is not None:
-            h = h + self._input_projection.bias  # ruff: ignore[non-augmented-assignment]
+            h = h + self._input_projection.bias  # noqa: PLR6104
         # Treat flat input as single token: [B, H] -> [B, 1, H]
         h = h.unsqueeze(1) if h.dim() == 2 else h  # [B, 1, H] for single token
 
@@ -1979,7 +1979,7 @@ class AttentionGeometry(nn.Module):
         h = h.mean(dim=1) if h.dim() == 3 else h  # [B, H]
         out = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            out = out + self._output_projection.bias  # noqa: PLR6104
         return out
 
     def route(self, activations: Tensor) -> Tensor:
@@ -2013,7 +2013,7 @@ class AttentionGeometry(nn.Module):
         h = h.mean(dim=1) if h.dim() == 3 else h
         out = h @ self._output_projection.weight.T
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            out = out + self._output_projection.bias  # noqa: PLR6104
         return out
 
     def forward_with_intermediates(
@@ -2029,7 +2029,7 @@ class AttentionGeometry(nn.Module):
         h = x.flatten(1) if x.dim() > 2 else x
         h = op(h, self._input_projection.weight)
         if self._input_projection.bias is not None:
-            h = h + self._input_projection.bias  # ruff: ignore[non-augmented-assignment]
+            h = h + self._input_projection.bias  # noqa: PLR6104
         h = h.unsqueeze(1) if h.dim() == 2 else h
         acts = [h.squeeze(1) if h.shape[1] == 1 else h]
 
@@ -2056,7 +2056,7 @@ class AttentionGeometry(nn.Module):
         h = h.mean(dim=1) if h.dim() == 3 else h
         out = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            out = out + self._output_projection.bias  # noqa: PLR6104
         acts.append(out)
         return acts
 
@@ -2163,7 +2163,7 @@ class SpatialLattice3DGeometry(nn.Module):
         d, h, w = self._lattice_dims
         self._neighbors = {}
 
-        for dz in range(d):  # ruff: ignore[too-many-nested-blocks]
+        for dz in range(d):  # noqa: PLR1702
             for dy in range(h):
                 for dx in range(w):
                     site = (dz * h + dy) * w + dx
@@ -2230,7 +2230,7 @@ class SpatialLattice3DGeometry(nn.Module):
             else:
                 agg = torch.zeros(b, c_in, device=x.device, dtype=x.dtype)
             # Include self
-            agg = agg + x[:, site, :]  # ruff: ignore[non-augmented-assignment]
+            agg = agg + x[:, site, :]  # noqa: PLR6104
 
             # Transform via substrate operator
             weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
@@ -2262,7 +2262,7 @@ class SpatialLattice3DGeometry(nn.Module):
         h = h.flatten(1)
         h = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            h = h + self._output_projection.bias  # noqa: PLR6104
         return h
 
     def route(self, activations: Tensor) -> Tensor:
@@ -2281,7 +2281,7 @@ class SpatialLattice3DGeometry(nn.Module):
                     agg = nbr_acts.mean(dim=1)
                 else:
                     agg = torch.zeros(b, c_in, device=h.device, dtype=h.dtype)
-                agg = agg + h[:, site, :]  # ruff: ignore[non-augmented-assignment]
+                agg = agg + h[:, site, :]  # noqa: PLR6104
 
                 weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
                 bias = self._site_biases[f"layer_{layer_idx}_site_{site}"]
@@ -2293,9 +2293,9 @@ class SpatialLattice3DGeometry(nn.Module):
 
         # Flatten and project to output
         h = h.flatten(1)
-        h = h @ self._output_projection.weight.T  # ruff: ignore[non-augmented-assignment]
+        h = h @ self._output_projection.weight.T  # noqa: PLR6104
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            h = h + self._output_projection.bias  # noqa: PLR6104
         return h
 
     def forward_with_intermediates(
@@ -2321,7 +2321,7 @@ class SpatialLattice3DGeometry(nn.Module):
         h = h.flatten(1)
         h = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
+            h = h + self._output_projection.bias  # noqa: PLR6104
         acts.append(h)
         return acts
 
@@ -2818,12 +2818,12 @@ class NtmGeometry(nn.Module):
 # ============================================================
 
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[complex-structure, too-many-return-statements] - dispatch table
+def geometry_from_config(config: GeometryConfig) -> Geometry:  # noqa: C901, PLR0911 - dispatch table
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
     if topology_type == "ntm":
         return NtmGeometry(config)
-    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
+    if topology_type in ("recurrent", "recurrent_attractor"):  # noqa: PLR6201
         hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
         recurrent_weight = None
         if config.recurrent_weight is not None:
@@ -2831,7 +2831,7 @@ def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[co
         return RecurrentGeometry(
             config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
-    if topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
+    if topology_type in ("tile_mesh", "tile"):  # noqa: PLR6201
         return TileGeometry(config, neurons_per_tile=8, tiles_per_layer=2)
     if topology_type == "conv":
         return ConvGeometry(config)

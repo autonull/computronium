@@ -2,7 +2,7 @@ import os
 import pathlib
 
 
-def verify_backend():  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def verify_backend():  # noqa: C901, PLR0912, PLR0915
     print("=" * 60)
     print("Backend Verification")
     print("=" * 60)
@@ -61,7 +61,7 @@ def verify_backend():  # ruff: ignore[complex-structure, too-many-branches, too-
 
     # 4. Check Triton
     print("\n[Checking Triton]...")
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
+    try:  # noqa: too-many-statements-in-try-clause
         from computronium.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
 
         print(f"HAS_TRITON: {HAS_TRITON}")

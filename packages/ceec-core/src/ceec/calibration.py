@@ -97,7 +97,7 @@ def _status_change_count(
         clauses.append("from_status = ?")
         params.append(from_status)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    sql = f"SELECT COUNT(*) AS n FROM status_changes {where}"  # ruff: ignore[hardcoded-sql-expression]  clause built internally
+    sql = f"SELECT COUNT(*) AS n FROM status_changes {where}"  # noqa: S608  clause built internally
     row = store._conn.execute(sql, params).fetchone()
     return row["n"]
 

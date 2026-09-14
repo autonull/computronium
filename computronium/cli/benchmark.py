@@ -57,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # list
-    list_parser = subparsers.add_parser("list", help="List available benchmark suites")  # ruff: ignore[unused-variable]
+    list_parser = subparsers.add_parser("list", help="List available benchmark suites")  # noqa: F841
 
     # report
     report_parser = subparsers.add_parser("report", help="Generate benchmark report")
@@ -191,7 +191,7 @@ def _get_suite_coordinates(suite: str) -> list[str]:
 
 def _run_benchmark(args) -> int:
     """Run a benchmark suite by delegating to experiment modules."""
-    import subprocess  # ruff: ignore[suspicious-subprocess-import]
+    import subprocess  # noqa: S404
     from pathlib import Path
 
     coordinates = args.coordinates or _get_suite_coordinates(args.suite)
@@ -265,7 +265,7 @@ def _run_benchmark(args) -> int:
     print(f"Device: {args.device}")
 
     # Run the experiment module
-    result = subprocess.run(cmd, capture_output=False, text=True)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
+    result = subprocess.run(cmd, capture_output=False, text=True)  # noqa: PLW1510, S603
 
     if result.returncode != 0:
         print(
@@ -452,7 +452,7 @@ def _generate_html_report(all_results: dict) -> str:
 
 def _compare_plasticity(args) -> int:
     """Compare plasticity types by running adaptation efficiency benchmark."""
-    import subprocess  # ruff: ignore[suspicious-subprocess-import]
+    import subprocess  # noqa: S404
     import sys
     from pathlib import Path
 
@@ -496,7 +496,7 @@ def _compare_plasticity(args) -> int:
     print(f"Coordinates: {coordinates}")
     print(f"Command: {' '.join(cmd)}")
 
-    result = subprocess.run(cmd, capture_output=False, text=True)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
+    result = subprocess.run(cmd, capture_output=False, text=True)  # noqa: PLW1510, S603
 
     if result.returncode != 0:
         print(f"Comparison failed with return code {result.returncode}")
@@ -677,7 +677,7 @@ def _generate_plasticity_comparison_html(
 
 def _profile_kernels(args) -> int:
     """Profile joint system kernels by delegating to kernel_profile module."""
-    import subprocess  # ruff: ignore[suspicious-subprocess-import]
+    import subprocess  # noqa: S404
     import sys
 
     cmd = [
@@ -703,11 +703,11 @@ def _profile_kernels(args) -> int:
     print(f"Profiling kernels for: {args.coordinate}")
     print(f"Command: {' '.join(cmd)}")
 
-    result = subprocess.run(cmd, capture_output=False, text=True)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
+    result = subprocess.run(cmd, capture_output=False, text=True)  # noqa: PLW1510, S603
     return result.returncode
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # ruff: ignore[too-many-return-statements]
+def main(argv: Sequence[str] | None = None) -> int:  # noqa: PLR0911
     """Console-script entry point for ``comp benchmark``."""
     args = _build_parser().parse_args(argv)
 

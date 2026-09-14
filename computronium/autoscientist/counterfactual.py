@@ -233,7 +233,7 @@ class CounterfactualGenerator:
 
         current_hidden = base_config.get("hidden_dim", 256)
         current_layers = base_config.get("num_layers", 2)
-        current_model = base_config.get("model", "eqprop_mlp")  # ruff: ignore[unused-variable]
+        current_model = base_config.get("model", "eqprop_mlp")  # noqa: F841
 
         # Hidden dimension variations
         for hidden in [128, 256, 512, 1024]:
@@ -311,7 +311,7 @@ class CounterfactualGenerator:
         counterfactuals = []
 
         current_model = base_config.get("model", "eqprop_mlp")
-        current_propagator = base_config.get("propagator")  # ruff: ignore[unused-variable]
+        current_propagator = base_config.get("propagator")  # noqa: F841
 
         # Model family alternatives
         model_alternatives = {
@@ -350,7 +350,7 @@ class CounterfactualGenerator:
             )
 
         # Propagator alternatives (if using MEP/structured)
-        if current_model in ["eqprop_mlp", "tile_pc", "tile_ep"]:  # ruff: ignore[literal-membership]
+        if current_model in ["eqprop_mlp", "tile_pc", "tile_ep"]:  # noqa: PLR6201
             propagator_alts = ["muon_backprop", "local_ep", "natural_ep"]
             for alt_prop in propagator_alts:
                 new_config = copy.deepcopy(base_config)
@@ -546,7 +546,7 @@ class CounterfactualGenerator:
                 pred = self.kb.predict_outcome(config, "val_accuracy")
                 if pred > 0:
                     return {"val_accuracy": pred}
-            except Exception:  # ruff: ignore[try-except-pass]
+            except Exception:  # noqa: S110
                 pass
 
         # Heuristic fallback
@@ -627,8 +627,8 @@ class BetaScheduleCounterfactuals:
     This addresses the specific P2.10 idea: "Meta-Learned β Schedule"
     """
 
-    SCHEDULES = {  # ruff: ignore[mutable-class-default]
-        "constant": lambda step, total, beta: beta,  # ruff: ignore[unused-lambda-argument]
+    SCHEDULES = {  # noqa: RUF012
+        "constant": lambda step, total, beta: beta,  # noqa: ARG005
         "linear_anneal": lambda step, total, beta: beta * (1 - step / total),
         "cosine_anneal": lambda step, total, beta: (
             beta * 0.5 * (1 + np.cos(np.pi * step / total))
@@ -636,7 +636,7 @@ class BetaScheduleCounterfactuals:
         "exponential_anneal": lambda step, total, beta: (
             beta * np.exp(-3 * step / total)
         ),
-        "cyclic": lambda step, total, beta: (  # ruff: ignore[unused-lambda-argument]
+        "cyclic": lambda step, total, beta: (  # noqa: ARG005
             beta * (0.5 + 0.5 * np.sin(2 * np.pi * step / 10))
         ),
         "warmup_then_anneal": lambda step, total, beta: (

@@ -73,7 +73,7 @@ class CompiledPC(PredictiveSettlingDynamics):
             acts, layered.weights, layered.biases, step, self.config.max_steps
         )
         if target is not None:
-            acts[-1] = acts[-1] + self.config.beta * (  # ruff: ignore[non-augmented-assignment]  out-of-place add: settle graph-safety idiom (R5.3)
+            acts[-1] = acts[-1] + self.config.beta * (  # noqa: PLR6104  out-of-place add: settle graph-safety idiom (R5.3)
                 _one_hot(target, acts[-1]) - acts[-1]
             )
         return _create_output_state(

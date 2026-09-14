@@ -377,9 +377,9 @@ class TestPlasticityDeviceConsistency:
             lambda d: FastWeightPlasticity(
                 fast_weight_dim=512, decay=0.9, learning_rate=0.1
             ).to(d),
-            lambda d: RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01),  # ruff: ignore[unused-lambda-argument]
+            lambda d: RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01),  # noqa: ARG005
             lambda d: RuleStatePlasticity(num_operators=8, operator_dim=64, device=d),
-            lambda d: NullPlasticity(),  # ruff: ignore[unused-lambda-argument]
+            lambda d: NullPlasticity(),  # noqa: ARG005
         ],
     )
     def test_plasticity_device_consistency(self, plasticity_factory, device):
@@ -407,7 +407,7 @@ class TestPlasticityDeviceConsistency:
                 assert p.device.type == device_cuda.type
 
         # NullPlasticity has no internal state
-        elif isinstance(plasticity, NullPlasticity) or isinstance(  # ruff: ignore[duplicate-isinstance-call]
+        elif isinstance(plasticity, NullPlasticity) or isinstance(  # noqa: SIM101
             plasticity, RoutingPlasticity
         ):
             pass  # Nothing to check

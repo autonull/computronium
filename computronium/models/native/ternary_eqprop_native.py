@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     import torch
 
 
-def create_native_ternary_eqprop(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def create_native_ternary_eqprop(  # noqa: PLR0913, PLR0917
     input_dim: int,
     hidden_dim: int,
     output_dim: int,

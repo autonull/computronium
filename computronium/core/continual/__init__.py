@@ -50,7 +50,7 @@ from computronium.core.continual.training import (
     run_continual_train_step,
 )
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # System
     "ContinualJointSystem",
     # Arms

@@ -115,7 +115,7 @@ CONTROL_ARM = ArmConfig(
     "Backprop", "backprop", use_optimizer_state=True, local_rule=False
 )
 
-ALL_ARMS = LOCAL_RULE_ARMS + (CONTROL_ARM,)  # ruff: ignore[collection-literal-concatenation]
+ALL_ARMS = LOCAL_RULE_ARMS + (CONTROL_ARM,)  # noqa: RUF005
 
 # Factory mapping
 FACTORY_MAP = {
@@ -206,8 +206,8 @@ class MemoryAccountedModel:
         total = 0
         with torch.no_grad():
             for x, y in dataloader:
-                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
-                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
+                x = x.to(self.device)  # noqa: PLW2901
+                y = y.to(self.device)  # noqa: PLW2901
                 logits = self.system.forward(x)
                 pred = logits.argmax(-1)
                 correct += (pred == y).sum().item()
@@ -236,7 +236,7 @@ class MemoryAccountedModel:
         optimizer_memory_mb = 0.0
         if self.arm.use_optimizer_state:
             # Adam: 2x params (m, v) + params (grad) = 3x param memory approx
-            optimizer_memory_mb = param_memory_mb * 3  # ruff: ignore[unused-variable]
+            optimizer_memory_mb = param_memory_mb * 3  # noqa: F841
 
         return ResourceUsage(
             coordinate=f"{self.arm.name}/{self.envelope.name}",
@@ -394,8 +394,8 @@ class GradientCheckpointedModel(MemoryAccountedModel):
         total = 0
         with torch.no_grad():
             for x, y in dataloader:
-                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
-                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
+                x = x.to(self.device)  # noqa: PLW2901
+                y = y.to(self.device)  # noqa: PLW2901
                 logits = self.system.forward(x)
                 pred = logits.argmax(-1)
                 correct += (pred == y).sum().item()
@@ -444,7 +444,7 @@ class GradientCheckpointedModel(MemoryAccountedModel):
 # ──────────────────────────────────────────────
 
 
-def run_single_benchmark(  # ruff: ignore[too-many-locals]
+def run_single_benchmark(  # noqa: PLR0914
     arm: ArmConfig,
     envelope: EnvelopeConfig,
     seed: int,
@@ -508,8 +508,8 @@ def run_single_benchmark(  # ruff: ignore[too-many-locals]
         epochs_completed = epoch + 1
 
         for batch_idx, (x, y) in enumerate(train_loader):
-            x = x.view(x.shape[0], -1)  # ruff: ignore[redefined-loop-name]
-            metrics = model.train_step(x, y)  # ruff: ignore[unused-variable]
+            x = x.view(x.shape[0], -1)  # noqa: PLW2901
+            metrics = model.train_step(x, y)  # noqa: F841
 
             if optimizer is not None:
                 optimizer.step()

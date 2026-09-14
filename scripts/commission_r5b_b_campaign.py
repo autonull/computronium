@@ -17,7 +17,7 @@ import json
 import os
 import shutil
 import signal
-import subprocess  # ruff: ignore[suspicious-subprocess-import]
+import subprocess  # noqa: S404
 import sys
 import time
 from collections import Counter
@@ -171,8 +171,8 @@ def _stage_kill(
     killed = False
     cid = _campaign_id(args, seed)
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]
-            [  # ruff: ignore[start-process-with-partial-path]
+        proc = subprocess.Popen(  # noqa: S603
+            [  # noqa: S607
                 "uv",
                 "run",
                 "comp",
@@ -275,7 +275,7 @@ def _stage_run(
     if resume:
         cmd.append("--resume")
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+        proc = subprocess.run(  # noqa: S603
             cmd,
             cwd=REPO_ROOT,
             stdout=log,
@@ -289,7 +289,7 @@ def _stage_run(
 
 def _git_commit() -> str:
     git = shutil.which("git") or sys.exit("git not found")
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
+    return subprocess.run(  # noqa: S603
         [git, "rev-parse", "HEAD"],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -546,7 +546,7 @@ def _replication_summary(args: argparse.Namespace, records: list) -> dict:
     }
 
 
-def main() -> None:  # ruff: ignore[too-many-locals]
+def main() -> None:  # noqa: PLR0914
     args = _parse_args()
 
     # Load fidelity-passing coordinates

@@ -327,7 +327,7 @@ def _walk_seed(
     return probe, late, records, mean_saved
 
 
-def _walk_arm(  # ruff: ignore[too-many-locals]
+def _walk_arm(  # noqa: PLR0914
     credit: str,
     frozen: bool,
     envs: tuple[DepthEnv, ...],
@@ -472,7 +472,7 @@ class TrialResult:
         }
 
 
-def run_trial(  # ruff: ignore[too-many-locals]
+def run_trial(  # noqa: PLR0914
     config: DeepCreditConfig,
     preregistration: PowerPreregistration | None = None,
 ) -> TrialResult:

@@ -246,7 +246,7 @@ class RoutingPlasticity:
             routes.scatter_(-1, indices, 1.0)
             return routes
         else:
-            # Threshold-based (sigmoid > 0.5)  # ruff: ignore[commented-out-code]
+            # Threshold-based (sigmoid > 0.5)  # noqa: ERA001
             return (torch.sigmoid(logits) > 0.5).float()
 
     def modulate(

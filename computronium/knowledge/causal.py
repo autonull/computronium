@@ -57,7 +57,7 @@ class CausalAnalyzer:
         Returns:
             Dict with causal analysis results.
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import pandas as pd
 
             exps = self.list_experiments(limit=500)
@@ -127,13 +127,13 @@ class CausalAnalyzer:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
+                "SELECT * FROM experiments"  # noqa: S608
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"
             )
-            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
+            cursor = conn.execute(sql, params + [limit])  # noqa: RUF005
             return [dict(row) for row in cursor]
 
-    def meta_fit_scaling_laws(  # ruff: ignore[complex-structure, too-many-locals]
+    def meta_fit_scaling_laws(  # noqa: C901, PLR0914
         self,
         model_families: list[str] | None = None,
         tasks: list[str] | None = None,
@@ -151,7 +151,7 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {alpha, beta, E, A, B, r2}
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import numpy as np
             import pandas as pd
             from scipy.optimize import curve_fit
@@ -200,7 +200,7 @@ class CausalAnalyzer:
                 if len(model_df) < 10:
                     continue
 
-                try:  # ruff: ignore[too-many-statements-in-try-clause]
+                try:  # noqa: too-many-statements-in-try-clause
                     X = np.column_stack([
                         model_df["n_params"].values,
                         model_df["n_data"].values,
@@ -240,13 +240,13 @@ class CausalAnalyzer:
                     continue
 
             logger.info("Meta-fit scaling laws for %d model families", len(results))
-            return results  # ruff: ignore[try-consider-else]
+            return results  # noqa: TRY300
 
         except Exception as e:
             logger.exception("Scaling law meta-fit failed")
             raise KnowledgeBaseError("Scaling law meta-fit failed") from e
 
-    def compute_algorithm_fingerprints(  # ruff: ignore[complex-structure, too-many-branches]
+    def compute_algorithm_fingerprints(  # noqa: C901, PLR0912
         self,
         model_families: list[str] | None = None,
     ) -> dict[str, dict[str, float]]:
@@ -262,7 +262,7 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {hyperparam: sensitivity_score}
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import numpy as np
             import pandas as pd
 
@@ -320,13 +320,13 @@ class CausalAnalyzer:
                 fingerprints[model] = sensitivity
 
             logger.info("Computed fingerprints for %d algorithms", len(fingerprints))
-            return fingerprints  # ruff: ignore[try-consider-else]
+            return fingerprints  # noqa: TRY300
 
         except Exception as e:
             logger.exception("Algorithm fingerprint computation failed")
             raise KnowledgeBaseError("Algorithm fingerprint computation failed") from e
 
-    def map_failure_manifold(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def map_failure_manifold(  # noqa: C901, PLR0912, PLR0914, PLR0915
         self,
         min_samples: int = 5,
     ) -> dict[str, dict[str, object]]:
@@ -341,7 +341,7 @@ class CausalAnalyzer:
         Returns:
             Dict of failure_cluster -> {error_pattern, algorithms, tasks, count, characteristics}
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import numpy as np
             import pandas as pd
             from sklearn.cluster import DBSCAN
@@ -446,7 +446,7 @@ class CausalAnalyzer:
             logger.info(
                 "Mapped failure manifold with %d clusters", len(failure_manifold)
             )
-            return failure_manifold  # ruff: ignore[try-consider-else]
+            return failure_manifold  # noqa: TRY300
 
         except Exception as e:
             logger.exception("Failure manifold mapping failed")
@@ -467,7 +467,7 @@ class CausalAnalyzer:
         Returns:
             Dict with tree structure and cluster assignments.
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import numpy as np
             from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
             from sklearn.preprocessing import StandardScaler
@@ -520,7 +520,7 @@ class CausalAnalyzer:
             logger.info(
                 "Generated algorithm phylogeny with %d clusters", tree["n_clusters"]
             )
-            return tree  # ruff: ignore[try-consider-else]
+            return tree  # noqa: TRY300
 
         except Exception as e:
             logger.exception("Algorithm phylogeny generation failed")

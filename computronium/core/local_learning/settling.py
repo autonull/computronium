@@ -204,7 +204,7 @@ def settle_state(
     return h, steps_taken, converged
 
 
-def settle_universal(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def settle_universal(  # noqa: C901, PLR0912, PLR0914, PLR0915
     model: SettleProtocol,
     x: torch.Tensor,
     *,
@@ -425,7 +425,7 @@ def _inf_norm_converged(
 # ---------------------------------------------------------------------------
 
 
-def energy_gradient_descent(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments]
+def energy_gradient_descent(  # noqa: C901, PLR0912, PLR0913
     states: list[torch.Tensor],
     energy_fn: Callable[[list[torch.Tensor]], torch.Tensor],
     steps: int,
@@ -478,7 +478,7 @@ def energy_gradient_descent(  # ruff: ignore[complex-structure, too-many-branche
 
     states_backup = [s.clone() for s in states] if adaptive else None
 
-    for step in range(steps):  # ruff: ignore[too-many-nested-blocks]
+    for step in range(steps):  # noqa: PLR1702
         with torch.enable_grad():
             E = energy_fn(states)
 
@@ -546,7 +546,7 @@ def energy_gradient_descent(  # ruff: ignore[complex-structure, too-many-branche
 # ---------------------------------------------------------------------------
 
 
-def settle_single_state(  # ruff: ignore[complex-structure]
+def settle_single_state(  # noqa: C901
     h_0: torch.Tensor,
     forward_step: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     x_transformed: torch.Tensor,
@@ -675,7 +675,7 @@ def settle_single_state(  # ruff: ignore[complex-structure]
 # ---------------------------------------------------------------------------
 
 
-def settle_activations_list(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments]
+def settle_activations_list(  # noqa: C901, PLR0912, PLR0913
     activations_0: list[torch.Tensor],
     forward_dynamics: Callable[
         [list[torch.Tensor], float, torch.Tensor | None],
@@ -884,7 +884,7 @@ class EquilibriumFunction(autograd.Function):
         return h
 
     @staticmethod
-    def backward(  # ruff: ignore[too-many-locals]
+    def backward(  # noqa: PLR0914
         ctx: object, grad_output: torch.Tensor
     ) -> tuple[torch.Tensor | None, ...]:
         h_star, x_transformed, *params = ctx.saved_tensors

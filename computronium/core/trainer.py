@@ -79,7 +79,7 @@ def _default_bptt_step(
     return _step
 
 
-def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
+def dispatch_train_step(  # noqa: C901, PLR0911, PLR0912
     model: nn.Module,
     x: torch.Tensor,
     y: torch.Tensor,

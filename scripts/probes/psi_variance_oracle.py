@@ -97,7 +97,7 @@ def main() -> int:
             [(streams[k + 1] > 0).flatten(1) for k in range(1, n - 1)], dim=1
         ).cpu()
         hashes = [
-            hashlib.md5(row.numpy().tobytes()).hexdigest()[:8]  # ruff: ignore[hashlib-insecure-hash-function]
+            hashlib.md5(row.numpy().tobytes()).hexdigest()[:8]  # noqa: S324
             for row in mask_bits
         ]
 

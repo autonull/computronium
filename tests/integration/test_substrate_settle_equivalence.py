@@ -40,7 +40,7 @@ class _DummyState:
         self.activations = activations
 
 
-def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def _reference_settle_step(  # noqa: PLR0913, PLR0917
     all_acts: list[Tensor],
     weights: tuple[Tensor, ...],
     biases: tuple[Tensor | None, ...],
@@ -66,7 +66,7 @@ def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positio
         pre = torch.nn.functional.linear(all_acts[i], weights[i], biases[i])
 
         if recurrent_weight is not None and i == num_hidden - 1:
-            pre = pre + all_acts[i + 1] @ recurrent_weight.T  # ruff: ignore[non-augmented-assignment]
+            pre = pre + all_acts[i + 1] @ recurrent_weight.T  # noqa: PLR6104
 
         top_down = all_acts[i + 2] @ weights[i + 1]
 
@@ -89,14 +89,14 @@ def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positio
             target_oh.scatter_(1, target.unsqueeze(1), 1.0)
         else:
             target_oh = target
-        out = out + beta * (target_oh - out)  # ruff: ignore[non-augmented-assignment]
+        out = out + beta * (target_oh - out)  # noqa: PLR6104
 
     new_acts.append(out)
 
     return new_acts, new_velocity
 
 
-def _reference_settle(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def _reference_settle(  # noqa: PLR0913, PLR0917
     init_acts: list[Tensor],
     weights: tuple[Tensor, ...],
     biases: tuple[Tensor | None, ...],
@@ -342,7 +342,7 @@ class TestSubstrateSettleTernaryRouting:
         kernel = _build_kernel_from_geometry(geometry, substrate)
         init_acts = _get_init_acts(geometry, substrate)
 
-        kernel_acts = kernel.step(init_acts, 0.0, None, None)[0]  # ruff: ignore[unused-variable]
+        kernel_acts = kernel.step(init_acts, 0.0, None, None)[0]  # noqa: F841
 
         # Verify effective weights are ternary
         eff_weights = kernel.effective_weights()

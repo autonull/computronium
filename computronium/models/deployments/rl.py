@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import nn
 from torch.distributions import Categorical, Normal
 
@@ -610,7 +610,7 @@ def compute_gae(
     gae = 0.0
 
     for t in reversed(range(len(rewards))):
-        if t == len(rewards) - 1:  # ruff: ignore[if-else-block-instead-of-if-exp]
+        if t == len(rewards) - 1:  # noqa: SIM108
             next_value = last_value
         else:
             next_value = values[t + 1]

@@ -62,7 +62,7 @@ def main() -> int:
             fitness.evaluate(genome, Lab(), seeds=(SEED,), epochs=1)
         except NotTrainableError as exc:
             report["trainability_flat"][name] = f"NotTrainableError: {exc}"
-        except Exception as exc:  # ruff: ignore[try-consider-else]  documenting the raw legacy failure mode
+        except Exception as exc:  # noqa: TRY300  documenting the raw legacy failure mode
             report["trainability_flat"][name] = f"{type(exc).__name__}: {exc}"
 
     for scale, noise in CANDIDATES:

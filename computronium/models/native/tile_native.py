@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     import torch
 
 
-def create_native_tile_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def create_native_tile_ep(  # noqa: PLR0913, PLR0917
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -156,7 +156,7 @@ def create_native_tile_fa(
     return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_tp(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def create_native_tile_tp(  # noqa: PLR0913, PLR0917
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -336,7 +336,7 @@ def create_native_tile_hebbian(
     return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_pc(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def create_native_tile_pc(  # noqa: PLR0913, PLR0917
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -400,7 +400,7 @@ def create_native_tile_pc(  # ruff: ignore[too-many-arguments, too-many-position
     return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_gnn(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+def create_native_tile_gnn(  # noqa: PLR0913, PLR0917
     input_dim: int,
     hidden_dim: int,
     output_dim: int,

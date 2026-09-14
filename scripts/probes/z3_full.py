@@ -85,7 +85,7 @@ def _ridge(z: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return torch.linalg.solve(z.T @ z + RIDGE * torch.eye(d), z.T @ y_oh)
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     gen = torch.Generator().manual_seed(11)
     x = torch.randint(0, 2, (512, DIN), generator=gen).float()

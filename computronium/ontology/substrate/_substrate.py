@@ -294,7 +294,7 @@ class DigitalSubstrate:
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.digital()
 
-    def _to_precision(self, tensor: Tensor) -> Tensor:  # ruff: ignore[too-many-return-statements]
+    def _to_precision(self, tensor: Tensor) -> Tensor:  # noqa: PLR0911
         """Convert tensor to the configured precision."""
         precision = self.config.precision
         if precision == "float32":
@@ -383,7 +383,7 @@ class MemristiveSubstrate:
     range is symmetric while every physical device stays positive-bounded.
     """
 
-    _CONDUCTANCE_LEVELS = {"int4": 15, "int8": 255}  # ruff: ignore[mutable-class-default]
+    _CONDUCTANCE_LEVELS = {"int4": 15, "int8": 255}  # noqa: RUF012
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.memristive()
@@ -453,9 +453,9 @@ class NeuromorphicSubstrate:
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         if self.config.noise_level > 0:
-            s = s + torch.randn_like(s) * self.config.noise_level  # ruff: ignore[non-augmented-assignment]
+            s = s + torch.randn_like(s) * self.config.noise_level  # noqa: PLR6104
         if self.config.sparsity > 0:
-            s = s * (torch.rand_like(s) >= self.config.sparsity)  # ruff: ignore[non-augmented-assignment]
+            s = s * (torch.rand_like(s) >= self.config.sparsity)  # noqa: PLR6104
         return s
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
@@ -675,7 +675,7 @@ class TernarySubstrate:
         return self.inject_state_noise(x)
 
 
-def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[too-many-return-statements]
+def substrate_from_config(config: SubstrateConfig) -> Substrate:  # noqa: PLR0911
     """Factory function to instantiate substrate from config."""
     match config.substrate_type:
         case SubstrateType.DIGITAL:

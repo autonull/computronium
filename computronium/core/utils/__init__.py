@@ -23,7 +23,7 @@ from computronium.core.utils.reproducibility import (
 )
 from computronium.core.utils.seeds import set_all_seeds
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # activations
     "ActivationName",
     "approx_spectral_norm",

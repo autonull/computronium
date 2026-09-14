@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from torch import nn
 from torch.nn import (
-    functional as F,  # ruff: ignore[lowercase-imported-as-non-lowercase]
+    functional as F,  # noqa: N812
 )
 
 from computronium.core.checkpoint import (
@@ -91,7 +91,7 @@ class ModelExporter:
     def __init__(self, device: str = "cpu"):
         self.device = device
 
-    def export(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments, too-many-positional-arguments]
+    def export(  # noqa: C901, PLR0912, PLR0913, PLR0917
         self,
         model: nn.Module,
         model_name: str,
@@ -533,7 +533,7 @@ class ModelLoader:
             import onnxruntime as ort
 
             session = ort.InferenceSession(onnx_path)
-            return session  # ruff: ignore[try-consider-else]
+            return session  # noqa: TRY300
         except ImportError:
             raise ImportError("onnxruntime required: pip install onnxruntime")
 
@@ -888,11 +888,11 @@ class InferenceServer:
         if not self.tensorrt_config.enabled:
             return
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
-            import torch_tensorrt  # type: ignore  # ruff: ignore[blanket-type-ignore]
+        try:  # noqa: too-many-statements-in-try-clause
+            import torch_tensorrt  # type: ignore  # noqa: PGH003
 
             self.model.eval()
-            example_input = torch.randn(  # ruff: ignore[unused-variable]
+            example_input = torch.randn(  # noqa: F841
                 self.tensorrt_config.max_batch_size,
                 *self.input_shape[1:],
                 device=self.device,
@@ -976,7 +976,7 @@ class InferenceServer:
 
         start_time = time.perf_counter()
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Stack inputs
             batch_data = []
             for req in requests:
@@ -1059,7 +1059,7 @@ class InferenceServer:
         self._running = False
         if self._batch_task:
             self._batch_task.cancel()
-            try:  # ruff: ignore[suppressible-exception]
+            try:  # noqa: SIM105
                 await self._batch_task
             except asyncio.CancelledError:
                 pass
@@ -1101,7 +1101,7 @@ class _AppState:
         self,
         model: object,
         config: dict[str, object] | None = None,
-        host: str = "0.0.0.0",  # ruff: ignore[hardcoded-bind-all-interfaces]
+        host: str = "0.0.0.0",  # noqa: S104
         port: int = 8000,
         max_batch_size: int = 32,
         batch_timeout_ms: int = 10,
@@ -1122,7 +1122,7 @@ class _AppState:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             await self.server.start()
-            yield  # ruff: ignore[fallible-context-manager]
+            yield  # noqa: fallible-context-manager
             await self.server.stop()
 
         self.app = FastAPI(
@@ -1200,7 +1200,7 @@ def get_app() -> FastAPI:
 def serve_model(
     model: object,
     config: dict[str, object] | None = None,
-    host: str = "0.0.0.0",  # ruff: ignore[hardcoded-bind-all-interfaces]
+    host: str = "0.0.0.0",  # noqa: S104
     port: int = 8000,
     max_batch_size: int = 32,
     batch_timeout_ms: int = 10,

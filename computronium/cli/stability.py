@@ -301,7 +301,7 @@ def _compare_stability(args) -> int:
     return 0
 
 
-def _summary_stability(args) -> int:  # ruff: ignore[complex-structure, too-many-branches]
+def _summary_stability(args) -> int:  # noqa: C901, PLR0912
     """Summary stability statistics."""
     import statistics
 

@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 class BenchmarkRegistry:
     """Registry of named benchmarks."""
 
-    _benchmarks: dict[str, Callable] = {}  # ruff: ignore[mutable-class-default]
+    _benchmarks: dict[str, Callable] = {}  # noqa: RUF012
 
     @classmethod
     def register(cls, name: str, fn: Callable) -> None:

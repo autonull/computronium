@@ -121,7 +121,7 @@ def _create_trainer_config(
     base_kwargs.update(algo_kwargs)
 
     # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
+    if task in ("mnist", "fashion_mnist"):  # noqa: PLR6201
         base_kwargs.update({
             "input_channels": 1,
             "input_size": 28,
@@ -378,7 +378,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     logger.info("Saved results to %s", output_path)
 
 
-def _generate_report(  # ruff: ignore[complex-structure]
+def _generate_report(  # noqa: C901
     analysis: dict,
     bio_scores: dict,
     output_dir: str,

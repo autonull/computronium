@@ -6,7 +6,7 @@ from contextlib import nullcontext
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 from computronium.core.continual.constants import CL_CLASSES_PER_TASK
@@ -32,7 +32,7 @@ def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) ->
     return loss
 
 
-def run_continual_train_step(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def run_continual_train_step(  # noqa: C901, PLR0912, PLR0914, PLR0915
     joint_system,
     x: Tensor,
     y: Tensor,
@@ -153,7 +153,7 @@ def run_continual_train_step(  # ruff: ignore[complex-structure, too-many-branch
         return metrics, psi
 
 
-def _continual_step(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def _continual_step(  # noqa: C901, PLR0912, PLR0914, PLR0915
     model,
     x: Tensor,
     y: Tensor,

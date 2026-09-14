@@ -91,7 +91,7 @@ def _create_mot_config(
         config["top_k"] = top_k
 
     # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
+    if task in ("mnist", "fashion_mnist"):  # noqa: PLR6201
         config["input_dim"] = 784
         config["output_dim"] = 10
     elif task == "cifar10":
@@ -206,13 +206,13 @@ def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
     logger.info("MoT Ablation: ~%d total experiments", total)
 
     exp_count = 0
-    for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
+    for task in config.tasks:  # noqa: PLR1702
         for routing_mode in config.routing_modes:
             for tile_algorithm in config.tile_algorithms:
                 for num_tiles in config.num_tiles:
                     top_k_values = (
                         config.topk_values
-                        if routing_mode in ("sparse", "topk", "random")  # ruff: ignore[literal-membership]
+                        if routing_mode in ("sparse", "topk", "random")  # noqa: PLR6201
                         else [None]
                     )
                     for top_k in top_k_values:
@@ -243,7 +243,7 @@ def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
     return results
 
 
-def _analyze_routing_efficiency(results: list[dict]) -> dict:  # ruff: ignore[too-many-locals]
+def _analyze_routing_efficiency(results: list[dict]) -> dict:  # noqa: PLR0914
     """Analyze sparse vs dense routing efficiency."""
     import pandas as pd
 

@@ -37,7 +37,7 @@ def get_config_hash(config: dict) -> str:
 
     # sort keys to ensure determinism
     s = json.dumps(config, sort_keys=True, default=_default)
-    return hashlib.md5(s.encode()).hexdigest()  # ruff: ignore[hashlib-insecure-hash-function]
+    return hashlib.md5(s.encode()).hexdigest()  # noqa: S324
 
 
 class P2PEvolution:
@@ -95,9 +95,9 @@ class P2PEvolution:
                 self._log(f"Could not lower priority: {e}")
 
         # Start DHT
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Try to bind to a port, with retries
-            base_port = 8468 + random.randint(0, 1000)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            base_port = 8468 + random.randint(0, 1000)  # noqa: S311
             for i in range(10):
                 try:
                     local_port = base_port + i
@@ -176,11 +176,11 @@ class P2PEvolution:
         self._log(f"[OK]  Verification PASSED (Real: {real_score:.4f})")
         return True
 
-    def _evolution_loop(self):  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def _evolution_loop(self):  # noqa: C901, PLR0912, PLR0914, PLR0915
         self._log("Joined P2P Mesh network.")
 
         while self.running:
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+            try:  # noqa: too-many-statements-in-try-clause
                 # 1. Fetch Global Best
                 self._update_status("Syncing with Mesh...")
                 best_record = self.dht.get_best_model(self.task)
@@ -191,11 +191,11 @@ class P2PEvolution:
                 global_gen = 0
                 parent_hash = None
 
-                if best_record:  # ruff: ignore[collapsible-if]
+                if best_record:  # noqa: SIM102
                     # PROOF OF ACCURACY CHECK
                     # 10% chance to verify if we haven't seen this hash before
                     # For simplicity, just random check
-                    if random.random() < 0.1:  # ruff: ignore[suspicious-non-cryptographic-random-usage, collapsible-if]
+                    if random.random() < 0.1:  # noqa: S311, SIM102
                         if not self._verify_model(best_record):
                             self._log("Ignoring invalid global best.")
                             best_record = None  # Discard it for this iteration
@@ -217,7 +217,7 @@ class P2PEvolution:
 
                 # 2. Decide Strategy (Manual, New Arch, Crossover, or Mutate)
                 action = "mutate"
-                rnd = random.random()  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+                rnd = random.random()  # noqa: S311
 
                 # Check manual queue first
                 if self.manual_queue:
@@ -259,7 +259,7 @@ class P2PEvolution:
                     self._update_status("Exploring New Architecture...")
                     # Pick random model from registry spaces
                     available_models = get_available_models()
-                    target_model_name = random.choice(available_models)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+                    target_model_name = random.choice(available_models)  # noqa: S311
                     space = get_search_space(target_model_name)
                     target_config = space.sample()
                     target_config["model_name"] = target_model_name
@@ -295,7 +295,7 @@ class P2PEvolution:
                         parent_config["model_name"] = global_model_name
                         parent_gen = 0
                         parent_hash = None
-                    elif self.local_best_config and random.random() < 0.3:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+                    elif self.local_best_config and random.random() < 0.3:  # noqa: S311
                         parent_config = self.local_best_config
                         parent_model = parent_config.get("model_name", "EqProp MLP")
                         parent_gen = parent_config.get("generation", 0)
@@ -356,7 +356,7 @@ class P2PEvolution:
                 self._update_status(f"Evaluating: {target_model_name} (Gen {next_gen})")
 
                 # Use Worker's logic to run job locally
-                job_id = random.randint(1000, 9999)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+                job_id = random.randint(1000, 9999)  # noqa: S311
 
                 metrics = run_single_trial_task(
                     task=self.task,

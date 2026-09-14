@@ -23,7 +23,7 @@ __all__ = [
 class TrackStatus(StrEnum):
     """Status of a verification track."""
 
-    PASS = "pass"  # ruff: ignore[hardcoded-password-string]
+    PASS = "pass"  # noqa: S105
     FAIL = "fail"
     PARTIAL = "partial"
     STUB = "stub"
@@ -256,7 +256,7 @@ class ValidationTrack:
 
         start_time = time.time()
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Execute validation
             # Tracks assume self-contained or use global settings.
             # Pass verifier props if needed.

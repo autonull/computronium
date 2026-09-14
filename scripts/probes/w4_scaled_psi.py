@@ -466,7 +466,7 @@ def main() -> int:
         for k, v in system.geometry.params.items():
             v.data.copy_(snapshot[k])
         if _theta_sha256(system) != sha_stage_a:
-            raise RuntimeError(  # ruff: ignore[raise-vanilla-args] - probe gate
+            raise RuntimeError(  # noqa: TRY003 - probe gate
                 "stage-A snapshot restore drifted"
             )
         result = stage_b(system, {})

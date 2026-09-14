@@ -144,8 +144,8 @@ class LeaderboardGenerator:
             return {"total": 0}
         return {
             "total": len(self._entries),
-            "tasks": list(set(e.task for e in self._entries)),  # ruff: ignore[unnecessary-generator-set]
-            "models": list(set(e.model for e in self._entries)),  # ruff: ignore[unnecessary-generator-set]
+            "tasks": list(set(e.task for e in self._entries)),  # noqa: C401
+            "models": list(set(e.model for e in self._entries)),  # noqa: C401
             "best_accuracy": max(e.accuracy for e in self._entries),
             "avg_accuracy": sum(e.accuracy for e in self._entries) / len(self._entries),
         }

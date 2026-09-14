@@ -41,7 +41,7 @@ class SpectralConstraint(ConstraintStrategy):
     ):
         if not (0 < gamma <= 1):
             raise ValueError(f"gamma must be in (0, 1], got {gamma}")
-        if timing not in ("post_update", "during_settling", "both"):  # ruff: ignore[literal-membership]
+        if timing not in ("post_update", "during_settling", "both"):  # noqa: PLR6201
             raise ValueError(
                 "Spectral timing must be 'post_update', 'during_settling', or "
                 f"'both', got '{timing}'"

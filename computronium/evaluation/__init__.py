@@ -29,7 +29,7 @@ from computronium.evaluation.fairness import (
     validate_fairness,
 )
 
-__all__ = [  # ruff: ignore[unsorted-dunder-all]
+__all__ = [  # noqa: RUF022
     # Base
     "EvaluatorBase",
     "MetricSuite",
@@ -49,7 +49,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "BenchmarkSuiteResult",
     "CrossDomainBenchmarkSuite",
     "run_cross_domain_benchmark",
-    # Fairness (PR-6)  # ruff: ignore[commented-out-code]
+    # Fairness (PR-6)  # noqa: ERA001
     "FairnessContract",
     "validate_fairness",
     "BenchmarkRunner",

@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-class DirectionMethod(str, Enum):  # ruff: ignore[replace-str-enum]
+class DirectionMethod(str, Enum):  # noqa: UP042
     """Method for selecting the 2D slice directions."""
 
     GRADIENT = "gradient"  # Steepest descent direction
@@ -107,7 +107,7 @@ class LandscapeSlice:
     metadata: dict
 
 
-def _orthonormal_directions(  # ruff: ignore[too-many-statements]
+def _orthonormal_directions(  # noqa: PLR0915
     params: Sequence[torch.Tensor],
     grad: list[torch.Tensor],
     method: DirectionMethod = DirectionMethod.GRADIENT_RANDOM,
@@ -127,12 +127,12 @@ def _orthonormal_directions(  # ruff: ignore[too-many-statements]
         d1 = torch.from_numpy(rng.standard_normal(g.shape)).to(
             dtype=g.dtype, device=g.device
         )
-        d1 = d1 / (d1.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+        d1 = d1 / (d1.norm() + 1e-8)  # noqa: PLR6104
         d2 = torch.from_numpy(rng.standard_normal(g.shape)).to(
             dtype=g.dtype, device=g.device
         )
-        d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
-        d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+        d2 = d2 - (d2 @ d1) * d1  # noqa: PLR6104
+        d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
         return d1, d2
 
     d1 = g / g_norm
@@ -143,35 +143,35 @@ def _orthonormal_directions(  # ruff: ignore[too-many-statements]
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+            d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
 
         case DirectionMethod.GRADIENT_PCA:
             # Use top eigenvector of Hessian if available, else random
             if hessian_evecs is not None and len(hessian_evecs) > 0:
                 d2 = flat([hessian_evecs[0]])
-                d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
-                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 - (d2 @ d1) * d1  # noqa: PLR6104
+                d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
             else:
                 rng = np.random.default_rng(seed)
                 r = rng.standard_normal(d1.shape)
                 r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
                 d2 = r - (r @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
 
         case DirectionMethod.TOP_EIGEN:
             if hessian_evecs is not None and len(hessian_evecs) >= 2:
                 d1 = flat([hessian_evecs[0]])
-                d1 = d1 / (d1.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+                d1 = d1 / (d1.norm() + 1e-8)  # noqa: PLR6104
                 d2 = flat([hessian_evecs[1]])
-                d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
-                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 - (d2 @ d1) * d1  # noqa: PLR6104
+                d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
             else:
                 # Fallback to gradient + random
                 rng = np.random.default_rng(seed)
                 r = rng.standard_normal(d1.shape)
                 r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
                 d2 = r - (r @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
 
         case DirectionMethod.PCA:
             # Would need parameter covariance - fallback to gradient + random
@@ -179,14 +179,14 @@ def _orthonormal_directions(  # ruff: ignore[too-many-statements]
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+            d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
 
         case _:
             rng = np.random.default_rng(seed)
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
+            d2 = d2 / (d2.norm() + 1e-8)  # noqa: PLR6104
 
     return d1, d2
 
@@ -252,7 +252,7 @@ def compute_hessian_spectrum(
         eigenvectors: Corresponding eigenvectors (flattened)
     """
     model.eval()
-    params = list(p for p in model.parameters() if p.requires_grad)  # ruff: ignore[unnecessary-generator-list]
+    params = list(p for p in model.parameters() if p.requires_grad)  # noqa: C400
     if not params:
         raise ValueError("model has no trainable parameters")
 
@@ -310,7 +310,7 @@ def compute_hessian_spectrum(
         return eigvals, eigvecs_torch
 
 
-def compute_energy_landscape(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
+def compute_energy_landscape(  # noqa: PLR0913, PLR0914, PLR0917
     model: nn.Module,
     x: torch.Tensor,
     y: torch.Tensor,
@@ -339,7 +339,7 @@ def compute_energy_landscape(  # ruff: ignore[too-many-arguments, too-many-local
         A populated :class:`EnergyLandscape`.
     """
     model.eval()
-    params = list(p for p in model.parameters() if p.requires_grad)  # ruff: ignore[unnecessary-generator-list]
+    params = list(p for p in model.parameters() if p.requires_grad)  # noqa: C400
     if not params:
         raise ValueError("model has no trainable parameters")
 
@@ -432,7 +432,7 @@ def compute_multiple_slices(
     return landscapes
 
 
-def plot_energy_landscape(  # ruff: ignore[too-many-locals]
+def plot_energy_landscape(  # noqa: PLR0914
     landscape: EnergyLandscape,
     output_dir: str | pathlib.Path = "results/figures",
     cmap: str = "viridis",
@@ -648,7 +648,7 @@ def find_minima(energy: np.ndarray, threshold: float = 1e-4) -> list[tuple[int, 
     return minima
 
 
-def analyze_landscape_curvature(  # ruff: ignore[too-many-locals]
+def analyze_landscape_curvature(  # noqa: PLR0914
     landscape: EnergyLandscape,
 ) -> dict[str, float]:
     """Analyze curvature properties of the energy landscape.

@@ -86,7 +86,7 @@ class ResearchSynthesizer:
                         )
                     )
 
-            return df  # ruff: ignore[try-consider-else]
+            return df  # noqa: TRY300
         except (ValueError, TypeError, OSError, KeyError, pd.errors.DatabaseError) as e:
             logger.warning("[WARN]  Error loading convergence data: %s", e)
             return pd.DataFrame()
@@ -98,7 +98,7 @@ class ResearchSynthesizer:
         Returns:
             Dict[str, object]: Structured insights dictionary.
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             conn = sqlite3.connect(self.db_path)
 
             # Load Data with full metadata
@@ -128,12 +128,12 @@ class ResearchSynthesizer:
                 "research_gaps": self._identify_gaps(trials_df),
             }
             conn.close()
-            return insights  # ruff: ignore[try-consider-else]
+            return insights  # noqa: TRY300
         except Exception as e:  # broad: best-effort analysis/reporting
             traceback.print_exc()
             return {"error": str(e)}
 
-    def _get_trials_df(self, conn: sqlite3.Connection) -> pd.DataFrame:  # ruff: ignore[complex-structure]
+    def _get_trials_df(self, conn: sqlite3.Connection) -> pd.DataFrame:  # noqa: C901
         """
         Query and denormalize Optuna trials with full hyperparameters.
 
@@ -193,7 +193,7 @@ class ResearchSynthesizer:
             "pendulum",
         ]
 
-        def rescue_metadata(row: pd.Series) -> pd.Series:  # ruff: ignore[complex-structure, too-many-branches]
+        def rescue_metadata(row: pd.Series) -> pd.Series:  # noqa: C901, PLR0912
             if not row.get("model_name") and row.get("study_name"):
                 for task in known_tasks:
                     if f"_{task}_" in row["study_name"]:
@@ -202,7 +202,7 @@ class ResearchSynthesizer:
                             row["model_name"] = parts[0]
                             row["task_name"] = task
                             tier_cand = parts[-1]
-                            if tier_cand in ["smoke", "shallow", "standard", "deep"]:  # ruff: ignore[literal-membership]
+                            if tier_cand in ["smoke", "shallow", "standard", "deep"]:  # noqa: PLR6201
                                 row["tier"] = tier_cand
             # Estimate epochs if missing
             if not row.get("num_epochs") or row["num_epochs"] == 0:
@@ -255,7 +255,7 @@ class ResearchSynthesizer:
             return []
 
         ablations = []
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Helper to check if trial is ablation
             def is_ablation(row: pd.Series) -> bool:
                 if "config" in row and isinstance(row["config"], dict):
@@ -294,12 +294,12 @@ class ResearchSynthesizer:
 
         return ablations
 
-    def _analyze_significance(self, df: pd.DataFrame) -> list[dict[str, str | float]]:  # ruff: ignore[complex-structure]
+    def _analyze_significance(self, df: pd.DataFrame) -> list[dict[str, str | float]]:  # noqa: C901
         """Perform statistical significance tests between top models."""
         if df.empty or "model_name" not in df.columns:
             return []
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             from scipy import stats
 
             model_accs = {}
@@ -345,7 +345,7 @@ class ResearchSynthesizer:
                         })
 
             results.sort(key=lambda x: x["p_value"])  # type: ignore[unknown]
-            return results  # ruff: ignore[try-consider-else]
+            return results  # noqa: TRY300
 
         except ImportError:
             return [{"error": "SciPy not installed, skipping statistical tests."}]
@@ -357,7 +357,7 @@ class ResearchSynthesizer:
         if df.empty or "model_name" not in df.columns:
             return "No model data available."
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             summary = (
                 df
                 .groupby("model_name")
@@ -408,7 +408,7 @@ class ResearchSynthesizer:
             ]
         return task_winners
 
-    def _analyze_efficiency(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
+    def _analyze_efficiency(  # noqa: C901, PLR0912, PLR0914
         self, df: pd.DataFrame, convergence_df: pd.DataFrame
     ) -> dict[str, list[dict[str, object]]]:
         """Analyze parameter efficiency (Acc/Param) and epoch efficiency (Acc/Epoch)."""
@@ -529,17 +529,17 @@ class ResearchSynthesizer:
         if df.empty:
             return "No failures recorded."
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             if "failure_type" in df.columns:
                 counts = df["failure_type"].value_counts().to_dict()
 
                 patterns = []
-                if any("nan" in str(k).lower() for k in counts.keys()):  # ruff: ignore[in-dict-keys]
+                if any("nan" in str(k).lower() for k in counts.keys()):  # noqa: SIM118
                     patterns.append(
                         "NaN instability detected"
                         " (likely exploding gradients or high LR)"
                     )
-                if any("timeout" in str(k).lower() for k in counts.keys()):  # ruff: ignore[in-dict-keys]
+                if any("timeout" in str(k).lower() for k in counts.keys()):  # noqa: SIM118
                     patterns.append(
                         "Timeout issues"
                         " (consider reducing model depth"
@@ -547,11 +547,11 @@ class ResearchSynthesizer:
                     )
 
                 return {"counts": counts, "patterns": patterns}
-            return "Failures exist but missing failure_type."  # ruff: ignore[try-consider-else]
+            return "Failures exist but missing failure_type."  # noqa: TRY300
         except Exception as e:  # broad: best-effort analysis/reporting
             return f"Failure analysis failed: {e}"
 
-    def _find_quick_wins(  # ruff: ignore[complex-structure]
+    def _find_quick_wins(  # noqa: C901
         self, trials: pd.DataFrame, failures: pd.DataFrame
     ) -> list[str]:
         """Actionable recommendations."""
@@ -640,7 +640,7 @@ class ResearchSynthesizer:
 
         return gaps
 
-    def _analyze_backprop_gap(self, df: pd.DataFrame) -> dict[str, object]:  # ruff: ignore[complex-structure, too-many-locals]
+    def _analyze_backprop_gap(self, df: pd.DataFrame) -> dict[str, object]:  # noqa: C901, PLR0914
         """
         Analyze performance gap between bio-plausible models and Backprop Baseline.
 

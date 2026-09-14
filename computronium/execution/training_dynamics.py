@@ -32,7 +32,7 @@ class ContinuousTrainingSchedule:
     """
 
     # Standard checkpoints (logarithmic-ish scale)
-    DEFAULT_CHECKPOINTS = [1, 2, 5, 10, 20, 50, 100, 200, 300, 400, 500]  # ruff: ignore[mutable-class-default]
+    DEFAULT_CHECKPOINTS = [1, 2, 5, 10, 20, 50, 100, 200, 300, 400, 500]  # noqa: RUF012
 
     def __init__(self, max_epochs: int = 100, enable_pruning: bool = True) -> None:
         """

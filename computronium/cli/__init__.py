@@ -9,7 +9,7 @@ first. With lazy top-level imports that pre-warming is gone, so the console
 scripts now expose their entry points on demand instead.
 """
 
-_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
+_LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     "main": ("computronium.cli.__main__", "main"),
     "run_benchmark": ("computronium.cli.run", "run_benchmark"),
     "run_core_train": ("computronium.cli.run", "run_core_train"),
@@ -18,7 +18,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "run_training": ("computronium.cli.run", "run_training"),
 }
 
-__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]
+__all__ = sorted(_LAZY)  # noqa: PLE0605
 
 
 def __getattr__(name: str) -> object:

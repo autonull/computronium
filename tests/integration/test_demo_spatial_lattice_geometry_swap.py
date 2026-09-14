@@ -63,7 +63,7 @@ def _probe_spatial_noise(system, batches, noise_level: float) -> float:
         for x, y in batches:
             flat = x.view(x.size(0), -1)
             if noise_level > 0:
-                flat = flat + noise_level * torch.randn_like(flat)  # ruff: ignore[non-augmented-assignment]
+                flat = flat + noise_level * torch.randn_like(flat)  # noqa: PLR6104
             pred = system.forward(flat.to(device)).argmax(-1)
             correct += (pred.cpu() == y).sum().item()
             total += y.numel()

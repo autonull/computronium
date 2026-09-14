@@ -60,7 +60,7 @@ class StrategyOptimizer(Optimizer):
         energy_fn: Optional energy / loss callable for EP gradients.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         params: Iterable[nn.Parameter],
         gradient: GradientStrategy,
@@ -108,7 +108,7 @@ class StrategyOptimizer(Optimizer):
         self._error_beta = getattr(feedback, "beta", 0.9)
         self._use_error_feedback = not isinstance(feedback, NoFeedback)
 
-    def step(  # type: ignore[override]  # ruff: ignore[complex-structure]
+    def step(  # type: ignore[override]  # noqa: C901
         self,
         closure: Callable[[], float] | None = None,
         x: torch.Tensor | None = None,

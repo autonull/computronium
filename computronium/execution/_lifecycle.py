@@ -77,20 +77,20 @@ class PromotionGate:
         rew = metrics.get("reward")
 
         # Check Accuracy
-        if "accuracy" in thresholds:  # ruff: ignore[collapsible-if]
+        if "accuracy" in thresholds:  # noqa: SIM102
             if acc is None or acc < thresholds["accuracy"]:
                 return False
 
         # Check Reward
-        if "reward" in thresholds:  # ruff: ignore[collapsible-if]
+        if "reward" in thresholds:  # noqa: SIM102
             if rew is None or rew < thresholds["reward"]:
                 return False
 
         # Check Efficiency (if available)
-        if (  # ruff: ignore[needless-bool]
+        if (  # noqa: SIM103
             "time" in metrics
             and metrics["time"] > 0
-            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)  # ruff: ignore[literal-membership]
+            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)  # noqa: PLR6201
         ):  # > 10 mins for MNIST is bad
             return False
 
@@ -148,7 +148,7 @@ class ExperimentArchiver:
         Returns:
             Path to the created ZIP file, or None if failed.
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             trial_name = f"trial_{trial_id}_{config.get('model', 'unknown')}"
             trial_dir = self.base_dir / trial_name
             trial_dir.mkdir(exist_ok=True)
@@ -307,7 +307,7 @@ class CheckpointManager:
             return
 
         conn = sqlite3.connect(self.db_path, timeout=10.0)
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             data = []
             for r in self.buffer:
                 train_acc = r.metrics.get(
@@ -367,7 +367,7 @@ class CurriculumManager:
         TRACKS (Dict[str, List[str]]): Mapping of track names to ordered task lists.
     """
 
-    TRACKS: dict[str, list[str]] = {  # ruff: ignore[mutable-class-default]
+    TRACKS: dict[str, list[str]] = {  # noqa: RUF012
         "vision": [
             "digits",
             "usps",

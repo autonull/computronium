@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def load_trials(db_path: str) -> list[dict[str, object]]:  # noqa: C901, PLR0912, PLR0915
     """
     Load all trials from Optuna SQLite database.
     """
@@ -140,7 +140,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[comple
         trial["user_attrs"] = user_attrs
 
         # Merge with hyperopt_logs for detailed metrics (param_count, time)
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             cursor.execute(
                 """
                 SELECT param_count, iteration_time
@@ -149,7 +149,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[comple
             """,
                 (trial_id,),
             )
-            row = cursor.fetchone()  # ruff: ignore[redefined-loop-name]
+            row = cursor.fetchone()  # noqa: PLW2901
             if row:
                 if row["param_count"]:
                     trial["param_count"] = row["param_count"]

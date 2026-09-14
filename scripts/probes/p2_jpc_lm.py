@@ -45,7 +45,7 @@ BUDGET_MIN = 2.0
 GAMMA = 0.1
 
 
-def run_arm(beta: float, tokens, val, seed: int) -> dict:  # ruff: ignore[too-many-locals]
+def run_arm(beta: float, tokens, val, seed: int) -> dict:  # noqa: PLR0914
     torch.manual_seed(seed)
     cfg = lmc.MLP_CFG
     geometry = FeedforwardGeometry(
@@ -125,7 +125,7 @@ def main() -> None:
     train_t, val_t = lmc.load_tokens()
     _, m_val = lmc._val_sets(val_t, lmc.MLP_CFG["ctx"])
     # patch lmc._eval so the curve uses the jpc free-settle readout
-    lmc._eval = lambda system, val, geom=None: _eval_jpc(*system[:3], val)  # ruff: ignore[unused-lambda-argument]
+    lmc._eval = lambda system, val, geom=None: _eval_jpc(*system[:3], val)  # noqa: ARG005
     for beta in BETAS:
         run_arm(beta, train_t, m_val, seed=0)
 

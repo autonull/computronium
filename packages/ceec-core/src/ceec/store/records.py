@@ -128,6 +128,19 @@ class RecordsMixin(QueryMixin):
             )
         return evidence
 
+    def link_belief_evidence(self, belief_id: str, evidence_ids: list[str]) -> None:
+        """Attach evidence to a belief and flush (public ingest surface)."""
+        self._require("beliefs", belief_id)
+        self._link(
+            self._conn,
+            "belief_evidence",
+            "belief_id",
+            belief_id,
+            "evidence_id",
+            evidence_ids,
+        )
+        self._conn.commit()
+
     def record_derived(  # noqa: PLR0913  mirrors derived fields
         self,
         type_: str,

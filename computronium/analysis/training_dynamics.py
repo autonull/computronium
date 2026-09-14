@@ -91,7 +91,7 @@ def save_trajectory(
         json.dump(data, f, indent=2)
 
 
-def plot_training_dynamics(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def plot_training_dynamics(  # noqa: C901, PLR0912, PLR0915
     trajectory: JointTrajectory,
     coordinate: dict[str, str] | None = None,
     save_html: str | Path | None = None,

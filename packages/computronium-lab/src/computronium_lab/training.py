@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 DEFAULT_TAU = 1.029
 
 
-class StabilityGuardKill(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] - CEEC gate name is pre-registered
+class StabilityGuardKill(RuntimeError):  # noqa: N818 - CEEC gate name is pre-registered
     """CEEC-gated stop: the stability guard flagged divergence mid-training."""
 
 
@@ -237,7 +237,7 @@ def stability_probe(
     """One StabilityVerdict → StabilityCertificate (never raises)."""
     try:
         verdict = handle.check(state, step=step)
-    except Exception as exc:  # ruff: ignore[blind-except] - certificate, not a crash path
+    except Exception as exc:  # noqa: BLE001 - certificate, not a crash path
         return StabilityCertificate(
             checked=False, kill=False, note=f"guard unavailable: {exc}"
         )

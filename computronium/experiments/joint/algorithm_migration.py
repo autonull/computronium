@@ -61,7 +61,7 @@ def create_task_a1(
     return x, y
 
 
-def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def evaluate_migration(  # noqa: C901, PLR0912, PLR0914, PLR0915
     coordinate: str,
     epochs_a0: int = 30,
     epochs_a1: int = 30,

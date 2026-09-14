@@ -325,7 +325,7 @@ class SafeMutationOperator:
 
     def mutate(self, genome: dict[str, object], rng: object) -> dict[str, object]:
         """Return a mutated payload; structurally valid by construction."""
-        if not isinstance(rng, random.Random):  # ruff: ignore[suspicious-non-cryptographic-random-usage] - seeded deterministic evolution requires a pseudo-random RNG
+        if not isinstance(rng, random.Random):  # noqa: S311 - seeded deterministic evolution requires a pseudo-random RNG
             raise TypeError(
                 f"mutate requires a random.Random, got {type(rng).__name__}"
             )

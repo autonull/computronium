@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from ceec import bootstrap as _bootstrap
 from ceec import models
+from ceec.session import Session
 from ceec.store import CEECStore, StoreError
 
 if TYPE_CHECKING:
@@ -59,22 +60,26 @@ def _evidence_kind(probe_output: dict[str, Any]) -> str:
 
 
 def record_probe_result(
-    store: CEECStore,
+    target: CEECStore | Session,
     probe_output: dict[str, Any],
     probe_name: str,
     id_: str | None = None,
 ) -> ProbeEvidence:
+    """Record one probe output; evidence quality validates against the
+    store's ``Profile.quality`` in both paths (TODO26 improvement #4)."""
     kind = _evidence_kind(probe_output)
     scope = probe_scope(probe_output)
     payload = json.dumps(
         {"probe": probe_name, "values": probe_output.get("values")},
         sort_keys=True,
     ).encode()
-    artifact = store.ingest_artifact(
-        payload,
-        "probe_result",
-        {"probe": probe_name, "status": probe_output.get("status")},
-    )
+    provenance = {"probe": probe_name, "status": probe_output.get("status")}
+    if isinstance(target, Session):
+        store = target.store
+        artifact = target.artifact(payload, "probe_result", provenance)
+    else:
+        store = target
+        artifact = store.ingest_artifact(payload, "probe_result", provenance)
     status = probe_output.get("status", "ok")
     notes = probe_output.get("notes")
     if status in {"inert", "missing"} and not notes:
@@ -90,6 +95,16 @@ def record_probe_result(
         notes=notes,
         id_=id_,
     )
+    return _finish_probe_result(store, probe_output, scope, artifact, evidence)
+
+
+def _finish_probe_result(
+    store: CEECStore,
+    probe_output: dict[str, Any],
+    scope: models.Scope,
+    artifact: models.Artifact,
+    evidence: models.Evidence,
+) -> ProbeEvidence:
     derived = None
     if probe_output.get("summary") is not None:
         derived = store.record_derived(
@@ -117,7 +132,7 @@ class IngestVerdict:
     violations: Sequence[audit.Finding]
 
 
-def ingest_verdict(  # ruff: ignore[too-many-arguments]
+def ingest_verdict(  # noqa: PLR0913
     store: CEECStore,
     *,
     probe_name: str,
@@ -148,15 +163,7 @@ def ingest_verdict(  # ruff: ignore[too-many-arguments]
             store.pre_register_experiment(experiment)
 
     probe_result = record_probe_result(store, probe_output, probe_name)
-    store._link(
-        store._conn,
-        "belief_evidence",
-        "belief_id",
-        belief_id,
-        "evidence_id",
-        [probe_result.evidence.id],
-    )
-    store._conn.commit()
+    store.link_belief_evidence(belief_id, [probe_result.evidence.id])
     store.update_belief(
         belief_id,
         models.Probability(

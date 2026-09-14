@@ -45,7 +45,7 @@ _CONFIG_FACTORIES = {
 }
 
 
-class _DataProvider(Protocol):  # ruff: ignore[unused-private-protocol]
+class _DataProvider(Protocol):  # noqa: PYI046
     """Protocol for data providers (DataLoader, etc.)."""
 
     def __iter__(self): ...
@@ -86,7 +86,7 @@ class _FlattenLoader:
     def __iter__(self):
         for x, y in self.loader:
             if x.dim() > 2:
-                x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
+                x = x.view(x.size(0), -1)  # noqa: PLW2901
             yield x, y
 
     def __len__(self) -> int:
@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             args.device,
         )
     except Exception as e:
-        logger.error("comp parity failed: %s", e)  # ruff: ignore[error-instead-of-exception]
+        logger.error("comp parity failed: %s", e)  # noqa: TRY400
         return 2
 
     if args.json:

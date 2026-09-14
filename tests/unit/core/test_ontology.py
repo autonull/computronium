@@ -185,7 +185,7 @@ class TestGeometry:
         params = geometry.params
         assert len(params) > 0
         # Should have weight and bias for each Linear layer
-        assert any("weight" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+        assert any("weight" in k for k in params.keys())  # noqa: SIM118
 
     def test_init_scale_scales_feedforward_weights(self):
         """GeometryConfig.init_scale rescales Linear weights multiplicatively."""
@@ -375,10 +375,10 @@ class TestGeometry:
         params = geometry.params
         assert len(params) > 0
         # Should have input/output projections and tile weights/biases
-        assert any("input_proj" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
-        assert any("output_proj" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
-        assert any("tile_weight" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
-        assert any("tile_bias" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+        assert any("input_proj" in k for k in params.keys())  # noqa: SIM118
+        assert any("output_proj" in k for k in params.keys())  # noqa: SIM118
+        assert any("tile_weight" in k for k in params.keys())  # noqa: SIM118
+        assert any("tile_bias" in k for k in params.keys())  # noqa: SIM118
 
     def test_tile_geometry_transition_modules(self):
         geometry = TileGeometry(

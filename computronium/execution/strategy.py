@@ -48,15 +48,15 @@ class ExecutionStrategy:
     The Brains. Decides what to run next.
     """
 
-    CRITERIA = {  # ruff: ignore[mutable-class-default]
+    CRITERIA = {  # noqa: RUF012
         PatientLevel.SMOKE: lambda acc: acc > 0.12,  # Beat random (0.10) slightly
         PatientLevel.SHALLOW: lambda acc: acc > 0.30,  # Relaxed for early feedback
         PatientLevel.STANDARD: lambda acc: acc > 0.60,
-        PatientLevel.CROSS_VAL: lambda acc: True,  # CV just needs to run 5 times  # ruff: ignore[unused-lambda-argument]
+        PatientLevel.CROSS_VAL: lambda acc: True,  # CV just needs to run 5 times  # noqa: ARG005
         PatientLevel.DEEP: lambda acc: acc > 0.80,  # Deep bar
     }
 
-    TASK_WEIGHTS = {  # ruff: ignore[mutable-class-default]
+    TASK_WEIGHTS = {  # noqa: RUF012
         "digits": 0.50,  # Fastest proxy (Tiny) - Boosted for early filtering
         "usps": 0.45,  # Fast proxy (Small) - Boosted
         "kmnist": 0.35,  # Boosted
@@ -71,7 +71,7 @@ class ExecutionStrategy:
         "cifar10": 0.15,
         "cifar100": 0.10,
     }
-    TASK_GROUPS = {  # ruff: ignore[mutable-class-default]
+    TASK_GROUPS = {  # noqa: RUF012
         "vision": [
             "digits",
             "usps",
@@ -128,7 +128,7 @@ class ExecutionStrategy:
 
         self._events.set_insight(desc)
 
-    def _check_criterion(self, tier: PatientLevel, task: str, acc: float) -> bool:  # ruff: ignore[complex-structure, too-many-return-statements]
+    def _check_criterion(self, tier: PatientLevel, task: str, acc: float) -> bool:  # noqa: C901, PLR0911
         """
         Check if accuracy meets the success criterion for a given tier and task.
         Allows task-specific overrides (e.g., lower threshold for CIFAR-100).
@@ -145,7 +145,7 @@ class ExecutionStrategy:
                 return acc > 0.50
 
         # Fast Fail for Easy Tasks
-        if task in ["digits", "usps"]:  # ruff: ignore[literal-membership]
+        if task in ["digits", "usps"]:  # noqa: PLR6201
             if tier == PatientLevel.SMOKE:
                 return acc > 0.50  # Must be much better than random
             elif tier == PatientLevel.SHALLOW:
@@ -274,12 +274,12 @@ class ExecutionStrategy:
         if model_name in saturated_tasks and task in saturated_tasks[model_name]:
             return False
 
-        if not self._check_curriculum(progress, model_name, task):  # ruff: ignore[needless-bool]
+        if not self._check_curriculum(progress, model_name, task):  # noqa: SIM103
             return False
 
         return True
 
-    def _generate_candidates_for_task(  # ruff: ignore[too-many-return-statements]
+    def _generate_candidates_for_task(  # noqa: PLR0911
         self, model: str, task: str, progress: dict, failure_constraints: dict
     ) -> list[ExperimentTask]:
         """Generate candidates for a specific model/task pair across tiers."""
@@ -300,7 +300,7 @@ class ExecutionStrategy:
         smoke_stats = self._get_stats(progress, model, task, PatientLevel.SMOKE)
         if not self._check_criterion(PatientLevel.SMOKE, task, smoke_stats["best_acc"]):
             # Retry chance for failed smoke
-            if random.random() < 0.01:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            if random.random() < 0.01:  # noqa: S311
                 retry_task = self._make_task(model, task, PatientLevel.SMOKE, 10.0)
                 if model in failure_constraints:
                     retry_task.constraints = failure_constraints[model]
@@ -415,7 +415,7 @@ class ExecutionStrategy:
             return task_obj
         return None
 
-    def _generate_standard_candidates(  # ruff: ignore[complex-structure]
+    def _generate_standard_candidates(  # noqa: C901
         self,
         model: str,
         task: str,
@@ -650,7 +650,7 @@ class ExecutionStrategy:
             if limit_level != -1:
                 # Can't modify list in place while iterating, create new list
                 # Actually modifying the list passed by reference
-                # candidates[:] = [c for c in candidates if ...]  # ruff: ignore[commented-out-code]
+                # candidates[:] = [c for c in candidates if ...]  # noqa: ERA001
                 candidates[:] = [
                     c
                     for c in candidates
@@ -776,7 +776,7 @@ class ExecutionStrategy:
                 }
         return constraints
 
-    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:  # noqa: C901, PLR0912
         """
         Analyze failure rates to suggest constraints.
         Returns: Dict[model_name, constraint_dict]
@@ -784,8 +784,8 @@ class ExecutionStrategy:
         constraints = {}
 
         # 1. Query FailureTracker via State for Hard Failures
-        if hasattr(self.state, "get_failure_analysis"):  # ruff: ignore[too-many-nested-blocks]
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+        if hasattr(self.state, "get_failure_analysis"):  # noqa: PLR1702
+            try:  # noqa: too-many-statements-in-try-clause
                 analysis = self.state.get_failure_analysis()
                 recommendations = analysis.get("recommendations", [])
 
@@ -850,7 +850,7 @@ class ExecutionStrategy:
                         ):  # Divergence or random chance
                             failures += 1
 
-            if total > 5 and (failures / total) > 0.3:  # ruff: ignore[collapsible-if]
+            if total > 5 and (failures / total) > 0.3:  # noqa: SIM102
                 # If not already constrained more strictly
                 if model not in constraints:
                     constraints[model] = {}
@@ -859,7 +859,7 @@ class ExecutionStrategy:
 
         return constraints
 
-    def _analyze_saturation(self, progress) -> dict[str, list[str]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def _analyze_saturation(self, progress) -> dict[str, list[str]]:  # noqa: C901, PLR0912
         """
         Identify tasks that are effectively "solved" (saturated) for a given model.
         Returns: Dict[model, List[task_name]]
@@ -936,7 +936,7 @@ class ExecutionStrategy:
                     total_standard_trials,
                 )
 
-        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)  # noqa: S311
         return candidates[0]
 
     def plan_batch(self, batch_size: int) -> list[ExperimentTask]:
@@ -949,7 +949,7 @@ class ExecutionStrategy:
 
         # Add noise to priority for diversity
         for c in candidates:
-            c.priority += random.uniform(0, 5)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            c.priority += random.uniform(0, 5)  # noqa: S311
 
         candidates.sort(key=lambda x: x.priority, reverse=True)
 
@@ -972,7 +972,7 @@ class ExecutionStrategy:
         initial = self.curriculum.get_initial_task(model_name)
         return [initial] if initial else ["mnist"]
 
-    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # ruff: ignore[complex-structure]
+    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # noqa: C901
         """
         Check if we are allowed to run this task based on curriculum.
         """

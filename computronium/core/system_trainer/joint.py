@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     )
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
+def _credit_from_config(config: CreditAssignmentConfig):  # noqa: PLR0911
     """Instantiate the credit implementation named by ``config.credit_type``."""
     from computronium.ontology import (
         BackpropCredit,
@@ -89,7 +89,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
-def compose_joint_system[  # ruff: ignore[complex-structure]
+def compose_joint_system[  # noqa: C901
     TS: Substrate,
     TG: Geometry,
     TD: StateDynamics,
@@ -233,7 +233,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-        def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+        def _make_context(self) -> SystemContext:  # noqa: F821
             """Create SystemContext from this joint system."""
             from computronium.core.joint.transition import PlasticityConfig
             from computronium.state import StateRegistry, StateVariable, SystemContext
@@ -291,7 +291,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             )
 
         @property
-        def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+        def context(self) -> SystemContext:  # noqa: F821
             """SystemContext bound to the current θ and component configs."""
             return self._make_context()
 
@@ -370,11 +370,11 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 return self
 
             @property
-            def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+            def context(self) -> SystemContext:  # noqa: F821
                 """SystemContext bound to the current θ and component configs."""
                 return self._make_context()
 
-            def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+            def _make_context(self) -> SystemContext:  # noqa: F821
                 from computronium.core.joint.transition import PlasticityConfig
                 from computronium.state import (
                     StateRegistry,
@@ -465,7 +465,7 @@ def _joint_from_spec(spec: dict) -> JointSystem:
     return joint
 
 
-def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
+def compose_joint_system_from_configs(  # noqa: C901
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,

@@ -110,7 +110,7 @@ class SurrogateManager:
         Returns:
             Surrogate model ID if successful, None otherwise.
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             import pandas as pd
             from sklearn.ensemble import RandomForestRegressor
 
@@ -156,7 +156,7 @@ class SurrogateManager:
                 performance={"r2": float(score), "n_samples": len(records)},
             )
             logger.info("Trained surrogate %s with R2=%s", surrogate_id, score)
-            return surrogate_id  # ruff: ignore[try-consider-else]
+            return surrogate_id  # noqa: TRY300
 
         except Exception as e:
             logger.exception("Surrogate training failed")
@@ -213,10 +213,10 @@ class SurrogateManager:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
+                "SELECT * FROM experiments"  # noqa: S608
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"
             )
-            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
+            cursor = conn.execute(sql, params + [limit])  # noqa: RUF005
             return [dict(row) for row in cursor]
 
 

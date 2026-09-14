@@ -6,9 +6,9 @@ import logging
 import os
 from typing import TYPE_CHECKING, Final
 
-PURE: Final = os.environ.get("COMPUTRONIUM_PURE_DASHBOARD", "true").lower() == "true"  # ruff: ignore[non-empty-init-module]
+PURE: Final = os.environ.get("COMPUTRONIUM_PURE_DASHBOARD", "true").lower() == "true"  # noqa: RUF067
 
-if TYPE_CHECKING or PURE:  # ruff: ignore[non-empty-init-module]
+if TYPE_CHECKING or PURE:  # noqa: RUF067
     from computronium.execution.dashboard._pure import BRAILLE_FRAMES, Dashboard
 else:
     from computronium.execution.dashboard._rich import Dashboard
@@ -23,5 +23,5 @@ __all__ = [
     "logger",
 ]
 
-logger = logging.getLogger(__name__)  # ruff: ignore[non-empty-init-module]
-DASHBOARD = Dashboard()  # ruff: ignore[non-empty-init-module]
+logger = logging.getLogger(__name__)  # noqa: RUF067
+DASHBOARD = Dashboard()  # noqa: RUF067

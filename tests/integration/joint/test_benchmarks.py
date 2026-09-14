@@ -194,8 +194,8 @@ class TestBenchmarkCLI:
         import os
         import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
-        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # noqa: PTH120
+        result = subprocess.run(  # noqa: PLW1510
             ["uv", "run", "comp", "benchmark", "list"],
             capture_output=True,
             text=True,
@@ -213,8 +213,8 @@ class TestBenchmarkCLI:
         import os
         import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
-        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # noqa: PTH120
+        result = subprocess.run(  # noqa: PLW1510
             [
                 "uv",
                 "run",
@@ -225,7 +225,7 @@ class TestBenchmarkCLI:
                 "adaptation_efficiency",
                 "--quick",
                 "--output-dir",
-                "/tmp/test_bench",  # ruff: ignore[hardcoded-temp-file]
+                "/tmp/test_bench",  # noqa: S108
             ],
             capture_output=True,
             text=True,
@@ -240,8 +240,8 @@ class TestBenchmarkCLI:
         import os
         import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
-        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # noqa: PTH120
+        result = subprocess.run(  # noqa: PLW1510
             [
                 "uv",
                 "run",
@@ -252,7 +252,7 @@ class TestBenchmarkCLI:
                 "compute_efficiency",
                 "--quick",
                 "--output-dir",
-                "/tmp/test_bench",  # ruff: ignore[hardcoded-temp-file]
+                "/tmp/test_bench",  # noqa: S108
             ],
             capture_output=True,
             text=True,

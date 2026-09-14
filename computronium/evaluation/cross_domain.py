@@ -126,7 +126,7 @@ class CrossDomainBenchmarkSuite:
         try:
             task = task_cls(name=name, **kwargs)
             task.setup()
-            return task  # ruff: ignore[try-consider-else]
+            return task  # noqa: TRY300
         except (ValueError, TypeError, KeyError) as e:
             logger.warning("Failed to create task %s/%s: %s", domain, name, e)
             return None
@@ -175,7 +175,7 @@ class CrossDomainBenchmarkSuite:
         from computronium.core.trainer import CoreTrainer, TrainerConfig
         from computronium.experiment.param_estimator import resolve_native_model
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             config = TrainerConfig(
                 model=model_name,
                 task=task.name,

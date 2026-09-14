@@ -182,7 +182,7 @@ def write_program(task: str, n: int) -> list[tuple[str, int, int]]:
     raise ValueError(task)
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     ok_all = True
     print("ψ acquisition: WRITTEN (closed-form; recorded per §4.4)")

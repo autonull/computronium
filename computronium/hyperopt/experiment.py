@@ -40,7 +40,7 @@ __all__ = [
 class TrialRunner:
     """Runs individual hyperparameter optimization trials."""
 
-    def __init__(  # ruff: ignore[too-many-arguments]
+    def __init__(  # noqa: PLR0913
         self,
         storage: HyperoptStorage = None,
         device: str = "auto",
@@ -97,7 +97,7 @@ class TrialRunner:
         self.input_dim = self.task_obj.input_dim
         self.output_dim = self.task_obj.output_dim
 
-    def run_trial(self, trial_id: int, pruning_callback=None) -> bool:  # ruff: ignore[complex-structure, too-many-statements]
+    def run_trial(self, trial_id: int, pruning_callback=None) -> bool:  # noqa: C901, PLR0915
         """Run a single trial and record results."""
         trial = self.storage.get_trial(trial_id)
         if not trial:
@@ -112,7 +112,7 @@ class TrialRunner:
             config=trial.config,
         )
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # 1. Create Model and Trainer
             model, trainer = self._create_model_and_trainer(trial, tracker)
 
@@ -151,7 +151,7 @@ class TrialRunner:
                         trial_id,
                         self.timeout,
                     )
-                    raise TimeoutError(f"Trial exceeded {self.timeout}s limit.")  # ruff: ignore[raise-within-try]
+                    raise TimeoutError(f"Trial exceeded {self.timeout}s limit.")  # noqa: TRY301
 
                 self.storage.log_epoch(
                     trial_id,
@@ -223,7 +223,7 @@ class TrialRunner:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def _create_model_and_trainer(self, trial, tracker):  # ruff: ignore[complex-structure, too-many-locals]
+    def _create_model_and_trainer(self, trial, tracker):  # noqa: C901, PLR0914
         """Instantiate model and trainer based on trial config."""
         config = trial.config
         hidden_dim = config.get("hidden_dim", 128)
@@ -322,7 +322,7 @@ class TrialRunner:
         if beta is not None:
             config_obj = getattr(model, "config", None)
             if config_obj is not None and hasattr(config_obj, "beta"):
-                try:  # ruff: ignore[suppressible-exception]
+                try:  # noqa: SIM105
                     object.__setattr__(config_obj, "beta", beta)
                 except AttributeError, TypeError:
                     pass
@@ -400,7 +400,7 @@ class TrialRunner:
         return True
 
 
-def run_single_trial_task(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def run_single_trial_task(  # noqa: C901, PLR0912, PLR0915
     task: str,
     model_name: str,
     config: dict[str, object],
@@ -423,7 +423,7 @@ def run_single_trial_task(  # ruff: ignore[complex-structure, too-many-branches,
 
     storage = None
 
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
+    try:  # noqa: too-many-statements-in-try-clause
         storage = HyperoptStorage(str(db_path))
 
         # Create trial entry

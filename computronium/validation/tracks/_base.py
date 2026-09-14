@@ -29,7 +29,7 @@ def track_header(track_id: int, name: str, width: int = 60) -> float:
     return time.time()
 
 
-def build_track_result(  # ruff: ignore[too-many-arguments]
+def build_track_result(  # noqa: PLR0913
     *,
     track_id: int,
     name: str,

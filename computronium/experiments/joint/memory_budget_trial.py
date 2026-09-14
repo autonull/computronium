@@ -476,7 +476,7 @@ class TrialResult:
         }
 
 
-def run_trial(  # ruff: ignore[too-many-locals]
+def run_trial(  # noqa: PLR0914
     config: MemoryBudgetConfig,
     preregistration: PowerPreregistration | None = None,
 ) -> TrialResult:
@@ -761,7 +761,7 @@ def _verify_walled_premise(
         raise ValueError(msg)
 
 
-def run_boundary_map(  # ruff: ignore[too-many-locals]
+def run_boundary_map(  # noqa: PLR0914
     config: MemoryBudgetConfig,
     *,
     depths: tuple[int, ...] = BOUNDARY_DEPTHS,

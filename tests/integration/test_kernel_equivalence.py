@@ -61,7 +61,7 @@ class TestTritonEqPropEquivalence:
     @pytest.mark.xfail(
         reason="Layered step requires CuPy for Triton path; skipping until fixed"
     )
-    def test_layered_step_equivalence(self):  # ruff: ignore[too-many-locals]
+    def test_layered_step_equivalence(self):  # noqa: PLR0914
         """Test Triton fused layered MLP step matches PyTorch."""
         torch.manual_seed(42)
 
@@ -123,7 +123,7 @@ class TestMEPKernelsEquivalence:
 
         for _ in range(5):
             WT_W = out.T @ out
-            out = out @ (  # ruff: ignore[non-augmented-assignment]
+            out = out @ (  # noqa: PLR6104
                 1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
             )
 
@@ -157,7 +157,7 @@ class TestMEPKernelsEquivalence:
     @pytest.mark.xfail(
         reason="EP settle tolerance needs tuning for accumulated operations"
     )
-    def test_ep_settle_equivalence(self):  # ruff: ignore[too-many-locals]
+    def test_ep_settle_equivalence(self):  # noqa: PLR0914
         """Test Triton fused EP settle matches PyTorch loop."""
         torch.manual_seed(42)
 
@@ -199,7 +199,7 @@ class TestCuPyEquivalence:
     @pytest.mark.xfail(
         reason="CuPy-Torch zero-copy path returns empty tensors; needs investigation"
     )
-    def test_step_layered_cupy_torch_equivalence(self):  # ruff: ignore[too-many-locals]
+    def test_step_layered_cupy_torch_equivalence(self):  # noqa: PLR0914
         """Test CuPy-Torch zero-copy layered step matches pure PyTorch."""
         torch.manual_seed(42)
 

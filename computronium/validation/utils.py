@@ -162,7 +162,7 @@ def format_metrics_table(
     separator = (
         "|" + "-" * (len(headers[0]) + 2) + "|" + "-" * (len(headers[1]) + 2) + "|"
     )
-    return "\n".join([header, separator] + rows)  # ruff: ignore[collection-literal-concatenation]
+    return "\n".join([header, separator] + rows)  # noqa: RUF005
 
 
 def format_value(v: object) -> str:
@@ -332,7 +332,7 @@ def format_statistical_comparison(
     mean1 = np.mean(values1)
     mean2 = np.mean(values2)
 
-    # 95% CI  # ruff: ignore[commented-out-code]
+    # 95% CI  # noqa: ERA001
     se1 = np.std(values1, ddof=1) / np.sqrt(n1) if n1 > 1 else 0
     se2 = np.std(values2, ddof=1) / np.sqrt(n2) if n2 > 1 else 0
     ci1 = 1.96 * se1
@@ -401,4 +401,4 @@ def compute_reproducibility_hash(
     import hashlib
 
     content = f"{seed}-{n_samples}-{epochs}-{model_name}"
-    return hashlib.md5(content.encode()).hexdigest()[:8]  # ruff: ignore[hashlib-insecure-hash-function]
+    return hashlib.md5(content.encode()).hexdigest()[:8]  # noqa: S324

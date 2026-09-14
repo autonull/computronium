@@ -20,7 +20,7 @@ def test_fresh_readout_raises() -> None:
         readout.forward(torch.zeros(2, FEATURE_DIM))
 
 
-def test_trace_decay_math_matches_manual() -> None:  # ruff: ignore[too-many-locals] mirrors the manual accumulation inline
+def test_trace_decay_math_matches_manual() -> None:  # noqa: PLR0914 mirrors the manual accumulation inline
     gen = _gen(0)
     task = SyntheticTask(gen, FEATURE_DIM, NUM_CLASSES)
     readout = PsiReadout(FEATURE_DIM, NUM_CLASSES, trace_decay=0.5)

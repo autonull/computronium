@@ -40,7 +40,7 @@ __all__ = [
 ]
 
 
-class BackendType(str, Enum):  # ruff: ignore[replace-str-enum]
+class BackendType(str, Enum):  # noqa: UP042
     """Compute backend types in priority order."""
 
     TRITON = "triton"
@@ -118,7 +118,7 @@ class KernelProfiler:
         backend: BackendType,
     ) -> BackendBenchmark:
         """Benchmark a single operation on a specific backend."""
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Prepare inputs
             inputs = self._prepare_inputs(shape, backend)
 
@@ -127,17 +127,17 @@ class KernelProfiler:
                 _ = operation(*inputs)
 
             # Synchronize for accurate timing
-            if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+            if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
                 torch.cuda.synchronize()
 
             # Benchmark
             times = []
             for _ in range(self.benchmark_runs):
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
                     torch.cuda.synchronize()
                 start = time.perf_counter()
                 _ = operation(*inputs)
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
                     torch.cuda.synchronize()
                 elapsed = time.perf_counter() - start
                 times.append(elapsed * 1000)  # ms
@@ -170,7 +170,7 @@ class KernelProfiler:
 
     def _prepare_inputs(self, shape: tuple[int, ...], backend: BackendType):
         """Prepare inputs for benchmarking based on backend."""
-        if backend in (BackendType.CUPY,):  # ruff: ignore[literal-membership]
+        if backend in (BackendType.CUPY,):  # noqa: PLR6201
             import cupy as cp
 
             return [cp.random.randn(*shape).astype(cp.float32) for _ in range(2)]
@@ -272,7 +272,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except Exception:  # ruff: ignore[try-except-continue]
+                    except Exception:  # noqa: S112
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 
@@ -358,7 +358,7 @@ def check_cupy_available() -> tuple[bool, str]:
         import cupy as cp
 
         _ = cp.zeros(10)
-        return True, "CuPy available with CUDA"  # ruff: ignore[try-consider-else]
+        return True, "CuPy available with CUDA"  # noqa: TRY300
     except ImportError:
         return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
     except Exception as e:
@@ -386,7 +386,7 @@ except ImportError:
     tl = None
 
 HAS_CUPY = False
-try:  # ruff: ignore[too-many-statements-in-try-clause]
+try:  # noqa: too-many-statements-in-try-clause
     import cupy as cp
 
     if hasattr(cp, "cuda") and cp.cuda.is_available():
@@ -419,7 +419,7 @@ def profile_kernel(
     shapes: list[tuple[int, ...]],
 ) -> dict[str, list[BackendBenchmark]]:
     """Profile a kernel operation across backends and shapes."""
-    profiler = KernelProfiler()  # ruff: ignore[unused-variable]
+    profiler = KernelProfiler()  # noqa: F841
     # This is a placeholder - actual implementation would need
     # to extract the operation from the registered backend
     return {}

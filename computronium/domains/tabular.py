@@ -59,7 +59,7 @@ class TabularTask(DomainTask):
             load_wine,
         )
 
-        _DATASETS = {  # ruff: ignore[used-dummy-variable]
+        _DATASETS = {  # noqa: RUF052
             "digits": load_digits,
             "breast_cancer": load_breast_cancer,
             "wine": load_wine,
@@ -123,7 +123,7 @@ class TabularTask(DomainTask):
                 if max_batches and i >= max_batches:
                     break
 
-                inputs, targets = inputs.to(self.device), targets.to(self.device)  # ruff: ignore[redefined-loop-name]
+                inputs, targets = inputs.to(self.device), targets.to(self.device)  # noqa: PLW2901
                 outputs = model(inputs)
                 loss = self.compute_loss(outputs, targets)
 

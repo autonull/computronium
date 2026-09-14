@@ -113,7 +113,7 @@ class _NullAdapter(nn.Module):
         return self.net(r0)
 
 
-def main() -> int:  # ruff: ignore[too-many-locals] - probe harness
+def main() -> int:  # noqa: PLR0914 - probe harness
     t0 = time.time()
     results: dict[tuple[str, int], list[float]] = {}
 

@@ -40,7 +40,7 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
     default_activation: str = "relu"
 
     # Capability declaration for Registry (REFACTOR3 §4).
-    provides: list[str] = ["transition_graph", "standard_autograd"]  # ruff: ignore[mutable-class-default]
+    provides: list[str] = ["transition_graph", "standard_autograd"]  # noqa: RUF012
 
     def __init__(
         self,

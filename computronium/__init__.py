@@ -264,7 +264,7 @@ if TYPE_CHECKING:
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
-_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
+_LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     # 6-D Joint Architecture (facade exports only)
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),

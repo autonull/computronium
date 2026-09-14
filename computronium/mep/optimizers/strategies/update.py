@@ -95,7 +95,7 @@ class DionUpdate:
             state["error_buffer"] = torch.zeros_like(residual)
         state["error_buffer"].mul_(error_beta).add_(residual)
 
-    def transform_gradient(  # ruff: ignore[too-many-locals]
+    def transform_gradient(  # noqa: PLR0914
         self,
         param: nn.Parameter,
         gradient: torch.Tensor,
@@ -121,12 +121,12 @@ class DionUpdate:
         max_rank = min(gradient.shape)
         rank = min(rank, max_rank)
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Gradient clipping
             max_norm = group_config.get("max_grad_norm", 10.0)
             grad_norm = gradient.norm()
             if grad_norm > max_norm:
-                gradient = gradient * (max_norm / (grad_norm + 1e-8))  # ruff: ignore[non-augmented-assignment]
+                gradient = gradient * (max_norm / (grad_norm + 1e-8))  # noqa: PLR6104
 
             # Low-rank SVD
             if self.backend == "triton":
@@ -156,7 +156,7 @@ class DionUpdate:
             if orig_shape is not None:
                 update = update.view(orig_shape)
 
-            return update  # ruff: ignore[try-consider-else]
+            return update  # noqa: TRY300
 
         except RuntimeError, torch.linalg.LinAlgError:
             # Fallback to Muon

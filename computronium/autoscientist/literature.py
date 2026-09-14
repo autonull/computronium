@@ -99,26 +99,26 @@ class ArxivClient:
         url = f"{self.BASE_URL}?{urllib.parse.urlencode(params)}"
 
         try:
-            req = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage]
+            req = urllib.request.Request(  # noqa: S310
                 url, headers={"User-Agent": "computronium-autoscientist/1.0"}
             )
-            with urllib.request.urlopen(req, timeout=30) as response:  # ruff: ignore[suspicious-url-open-usage]
+            with urllib.request.urlopen(req, timeout=30) as response:  # noqa: S310
                 xml_content = response.read().decode("utf-8")
         except urllib.error.HTTPError as e:
-            logger.error("arXiv API error %s: %s", e.code, e.read().decode())  # ruff: ignore[error-instead-of-exception]
+            logger.error("arXiv API error %s: %s", e.code, e.read().decode())  # noqa: TRY400
             raise
         except urllib.error.URLError as e:
-            logger.error("Network error querying arXiv: %s", e)  # ruff: ignore[error-instead-of-exception]
+            logger.error("Network error querying arXiv: %s", e)  # noqa: TRY400
             raise
 
         return self._parse_atom_feed(xml_content)
 
-    def _parse_atom_feed(self, xml_content: str) -> list[ArxivPaper]:  # ruff: ignore[too-many-locals]
+    def _parse_atom_feed(self, xml_content: str) -> list[ArxivPaper]:  # noqa: PLR0914
         """Parse arXiv Atom feed XML into ArxivPaper objects."""
-        import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import]
+        import xml.etree.ElementTree as ET  # noqa: S405
 
         papers = []
-        root = ET.fromstring(xml_content)  # ruff: ignore[suspicious-xml-element-tree-usage]
+        root = ET.fromstring(xml_content)  # noqa: S314
 
         # Namespace handling
         ns = {
@@ -484,7 +484,7 @@ class LiteratureRetriever:
             finding=paper.title,
             details=f"arXiv:{paper.arxiv_id} | {paper.summary[:500]}...",
             confidence=0.9,
-            tags=["literature", "arxiv"] + paper.categories,  # ruff: ignore[collection-literal-concatenation]
+            tags=["literature", "arxiv"] + paper.categories,  # noqa: RUF005
             source="arxiv",
             extra={
                 "arxiv_id": paper.arxiv_id,
@@ -508,7 +508,7 @@ class LiteratureCache:
         """Generate cache file path from query."""
         import hashlib
 
-        query_hash = hashlib.md5(query.encode()).hexdigest()[:16]  # ruff: ignore[hashlib-insecure-hash-function]
+        query_hash = hashlib.md5(query.encode()).hexdigest()[:16]  # noqa: S324
         return self.cache_dir / f"{query_hash}.json"
 
     def get(self, query: str, max_age_hours: float = 24) -> list[ArxivPaper] | None:

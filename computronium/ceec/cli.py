@@ -6,7 +6,7 @@ package (uv workspace member ``packages/ceec-core``).
 
 from __future__ import annotations
 
-from ceec.cli import *  # ruff: ignore[undefined-local-with-import-star]
+from ceec.cli import *  # noqa: F403
 from ceec.cli import main
 
 if __name__ == "__main__":

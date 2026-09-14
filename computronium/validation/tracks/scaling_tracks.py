@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+import torch.nn.functional as F  # noqa: N812
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
@@ -317,7 +317,7 @@ every layer's input activation for the backward pass, growing linearly.
     )
 
 
-def track_11_deep_network(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
+def track_11_deep_network(verifier) -> TrackResult:  # noqa: PLR0914
     """Scaling: 100-layer network with gradient flow."""
     start = track_header(11, "Deep Network (100 layers)")
 

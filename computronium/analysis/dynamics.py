@@ -118,7 +118,7 @@ class DynamicsAnalyzer:
 
             # Helper to check signature or try/except
             # We'll try passing kwargs.
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
+            try:  # noqa: too-many-statements-in-try-clause
                 # Most EqProp models (LoopedMLP, etc) support this
                 output = self.model(h, **kwargs)
 
@@ -249,7 +249,7 @@ class DynamicsAnalyzer:
             steps=steps_arr,
         )
 
-    def compute_gradient_alignment(  # ruff: ignore[too-many-locals]
+    def compute_gradient_alignment(  # noqa: PLR0914
         self, x: torch.Tensor, y: torch.Tensor, criterion=nn.CrossEntropyLoss()
     ) -> GradientAlignment:
         """
@@ -524,7 +524,7 @@ class DynamicsAnalyzer:
         unique_layers = np.unique(heatmap_data.layer_ids)
         max_tiles_per_layer = max(
             np.sum(heatmap_data.layer_ids == l)
-            for l in unique_layers  # ruff: ignore[ambiguous-variable-name]
+            for l in unique_layers  # noqa: E741
         )
 
         heatmap_grid = np.zeros((len(unique_layers), max_tiles_per_layer))
@@ -546,7 +546,7 @@ class DynamicsAnalyzer:
 
         im = ax.imshow(heatmap_grid, aspect="auto", cmap=cmap, interpolation="nearest")
         ax.set_yticks(range(len(unique_layers)))
-        ax.set_yticklabels([f"Layer {l}" for l in unique_layers])  # ruff: ignore[ambiguous-variable-name]
+        ax.set_yticklabels([f"Layer {l}" for l in unique_layers])  # noqa: E741
         ax.set_xlabel("Tile Index within Layer")
         ax.set_title(f"{title} ({label})")
         plt.colorbar(im, ax=ax, label=label)
@@ -716,7 +716,7 @@ class DynamicsAnalyzer:
         unique_layers = np.unique(heatmap_data.layer_ids)
         max_tiles_per_layer = max(
             np.sum(heatmap_data.layer_ids == l)
-            for l in unique_layers  # ruff: ignore[ambiguous-variable-name]
+            for l in unique_layers  # noqa: E741
         )
 
         heatmap_grid = np.full((len(unique_layers), max_tiles_per_layer), np.nan)
@@ -740,7 +740,7 @@ class DynamicsAnalyzer:
             data=go.Heatmap(
                 z=heatmap_grid,
                 x=[f"Tile {j}" for j in range(max_tiles_per_layer)],
-                y=[f"Layer {l}" for l in unique_layers],  # ruff: ignore[ambiguous-variable-name]
+                y=[f"Layer {l}" for l in unique_layers],  # noqa: E741
                 colorscale=colorscale,
                 colorbar={"title": label},
                 hoverongaps=False,
@@ -846,7 +846,7 @@ class DynamicsAnalyzer:
 
         return fig
 
-    def generate_full_report(  # ruff: ignore[complex-structure, too-many-statements]
+    def generate_full_report(  # noqa: C901, PLR0915
         self,
         x: torch.Tensor,
         y: torch.Tensor,

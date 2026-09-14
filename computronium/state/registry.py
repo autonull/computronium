@@ -100,7 +100,7 @@ class StateRegistry:
         """Get a state variable by name."""
         return self._variables.get(name)
 
-    def validate(self, z: CompositeState) -> None:  # ruff: ignore[complex-structure]
+    def validate(self, z: CompositeState) -> None:  # noqa: C901
         """Validate that CompositeState contains all registered variables.
 
         Args:

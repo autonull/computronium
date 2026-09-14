@@ -268,7 +268,7 @@ class ExecutionEngine:
             self.num_workers,
         )
 
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             # Resolve configs first. This duplicates logic in _process_task a
             # bit, but is necessary to pass resolved configs to the runner.
             configs = []
@@ -383,7 +383,7 @@ class ExecutionEngine:
         try:
             self._events.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
-            return metrics is not None  # ruff: ignore[try-consider-else]
+            return metrics is not None  # noqa: TRY300
         except Exception:  # broad: best-effort
             logger.exception("Diagnostic failed")
             return False
@@ -567,7 +567,7 @@ class ExecutionEngine:
 
                 # Save extended metrics (like robustness scores)
                 for k, v in metrics.items():
-                    if k not in ["accuracy", "loss"] and isinstance(  # ruff: ignore[literal-membership]
+                    if k not in ["accuracy", "loss"] and isinstance(  # noqa: PLR6201
                         v, (int, float, str)
                     ):
                         trial.set_user_attr(k, v)
@@ -650,7 +650,7 @@ class ExecutionEngine:
 
     def _attempt_warm_start(self, study: optuna.Study, task: ExperimentTask) -> None:
         """Attempt to warm-start the study from best previous trials."""
-        if random.random() < 0.2:  # 20% chance to warm start  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+        if random.random() < 0.2:  # 20% chance to warm start  # noqa: S311
             try:
                 if study.trials:
                     best_trial = study.best_trial

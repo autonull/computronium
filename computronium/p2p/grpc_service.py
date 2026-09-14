@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import pickle  # ruff: ignore[suspicious-pickle-import]
+import pickle  # noqa: S403
 import threading
 import time
 from concurrent import futures
@@ -23,42 +23,42 @@ if TYPE_CHECKING:
         shape: list[int]
         dtype: str
 
-    class _TileActivationRequest(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _TileActivationRequest(Protocol):  # noqa: PYI046
         tile_id: int
         request_id: int
 
-    class _TileActivationResponse(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _TileActivationResponse(Protocol):  # noqa: PYI046
         tile_id: int
         request_id: int
         activation: _TensorProto
         success: bool
         error: str
 
-    class _BoundarySyncRequest(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _BoundarySyncRequest(Protocol):  # noqa: PYI046
         source_node_id: str
         boundary_activations: list[_TensorProto]
         boundary_tile_ids: list[int]
         step: int
 
-    class _BoundarySyncResponse(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _BoundarySyncResponse(Protocol):  # noqa: PYI046
         success: bool
         error: str
 
-    class _HeartbeatRequest(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _HeartbeatRequest(Protocol):  # noqa: PYI046
         node_id: str
         timestamp: int
         metadata: dict[str, str]
 
-    class _HeartbeatResponse(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _HeartbeatResponse(Protocol):  # noqa: PYI046
         success: bool
         active_nodes: list[str]
 
-    class _ParameterUpdateRequest(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _ParameterUpdateRequest(Protocol):  # noqa: PYI046
         node_id: str
         step: int
         updates: dict[str, _TensorProto]
 
-    class _ParameterUpdateResponse(Protocol):  # ruff: ignore[unused-private-protocol]
+    class _ParameterUpdateResponse(Protocol):  # noqa: PYI046
         success: bool
         aggregated_updates: dict[str, _TensorProto]
         error: str
@@ -85,7 +85,7 @@ def _tensor_to_proto(tensor: torch.Tensor) -> tile_mesh_pb2.TensorProto:
 
 def _proto_to_tensor(proto: tile_mesh_pb2.TensorProto) -> torch.Tensor:
     """Convert TensorProto to torch.Tensor."""
-    tensor = pickle.loads(proto.data)  # type: ignore[union-attr]  # ruff: ignore[suspicious-pickle-usage]
+    tensor = pickle.loads(proto.data)  # type: ignore[union-attr]  # noqa: S301
     return tensor.to(dtype=getattr(torch, proto.dtype))  # type: ignore[union-attr]
 
 
@@ -112,7 +112,7 @@ class TileMeshServicer(_ServicerBase):
         self._boundary_cache: dict[int, torch.Tensor] = {}
         self._lock = threading.Lock()
 
-    def FetchTileActivation(  # ruff: ignore[invalid-function-name]
+    def FetchTileActivation(  # noqa: N802
         self,
         request: tile_mesh_pb2.TileActivationRequest,
         context: grpc.ServicerContext,
@@ -148,13 +148,13 @@ class TileMeshServicer(_ServicerBase):
                 error=str(e),
             )
 
-    def SyncBoundaryTiles(  # ruff: ignore[invalid-function-name]
+    def SyncBoundaryTiles(  # noqa: N802
         self,
         request: tile_mesh_pb2.BoundarySyncRequest,
         context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.BoundarySyncResponse:
         """Receive boundary tile activations from neighbor."""
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             with self._lock:
                 for tile_id, activation_proto in zip(
                     request.boundary_tile_ids, request.boundary_activations
@@ -174,7 +174,7 @@ class TileMeshServicer(_ServicerBase):
                 success=False, error=str(e)
             )
 
-    def Heartbeat(  # ruff: ignore[invalid-function-name]
+    def Heartbeat(  # noqa: N802
         self,
         request: tile_mesh_pb2.HeartbeatRequest,
         context: grpc.ServicerContext,
@@ -187,7 +187,7 @@ class TileMeshServicer(_ServicerBase):
             active_nodes=[self.node_id],  # Simplified
         )
 
-    def PushParameterUpdate(  # ruff: ignore[invalid-function-name]
+    def PushParameterUpdate(  # noqa: N802
         self,
         request: tile_mesh_pb2.ParameterUpdateRequest,
         context: grpc.ServicerContext,
@@ -200,7 +200,7 @@ class TileMeshServicer(_ServicerBase):
             aggregated_updates={},
         )
 
-    def ExecuteStep(  # ruff: ignore[invalid-function-name]
+    def ExecuteStep(  # noqa: N802
         self,
         request: tile_mesh_pb2.ExecuteStepRequest,
         context: grpc.ServicerContext,
@@ -360,7 +360,7 @@ class GRPCClient:
                 return _proto_to_tensor(response.activation).to(self.device)
 
             logger.debug("Fetch failed for tile %s: %s", tile_id, response.error)
-            return None  # ruff: ignore[try-consider-else]
+            return None  # noqa: TRY300
         except TimeoutError:
             logger.warning("Fetch timeout for tile %s from %s", tile_id, self.target)
             return None
@@ -391,7 +391,7 @@ class GRPCClient:
             response = await asyncio.wait_for(
                 self._stub.SyncBoundaryTiles(request), timeout=timeout
             )
-            return response.success  # ruff: ignore[try-consider-else]
+            return response.success  # noqa: TRY300
         except Exception as e:
             logger.debug("Sync boundary error to %s: %s", self.target, e)
             return False
@@ -440,7 +440,7 @@ class GRPCClient:
                     name: _proto_to_tensor(proto).to(self.device)
                     for name, proto in response.aggregated_updates.items()
                 }
-            return None  # ruff: ignore[try-consider-else]
+            return None  # noqa: TRY300
         except Exception as e:
             logger.debug("Parameter update error to %s: %s", self.target, e)
             return None
@@ -470,7 +470,7 @@ class GRPCClient:
                     response.energy,
                 )
             logger.debug("ExecuteStep failed: %s", response.error)
-            return None  # ruff: ignore[try-consider-else]
+            return None  # noqa: TRY300
         except Exception as e:
             logger.debug("ExecuteStep error to %s: %s", self.target, e)
             return None
@@ -513,7 +513,7 @@ class GRPCConnectionPool:
         self._peer_addresses.pop(node_id, None)
         client = self._clients.pop(node_id, None)
         if client:
-            asyncio.create_task(client.close())  # ruff: ignore[asyncio-dangling-task]
+            asyncio.create_task(client.close())  # noqa: RUF006
 
     async def get_client(self, node_id: str) -> GRPCClient | None:
         """Get or create a client for a peer."""

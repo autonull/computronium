@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - reads the repo's own commit hash
+import subprocess  # noqa: S404 - reads the repo's own commit hash
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field

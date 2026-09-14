@@ -274,7 +274,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def local_goodness(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
+    def local_goodness(  # noqa: PLR0913 (config mirrors the knobs)
         cls,
         *,
         beta: float = 0.5,
@@ -303,7 +303,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def temporal_trace(  # ruff: ignore[too-many-arguments] (config mirrors the STDP knobs)
+    def temporal_trace(  # noqa: PLR0913 (config mirrors the STDP knobs)
         cls,
         *,
         beta: float = 0.5,
@@ -560,7 +560,7 @@ def _propagate_targets(
     out_dim = acts[-1].shape[-1]
     targets: list[Tensor | None] = [None] * len(acts)
     targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
-    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # ruff: ignore[ambiguous-variable-name]
+    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # noqa: E741
         nxt = targets[l + 1]
         if nxt is None:
             break
@@ -1071,7 +1071,7 @@ class LocalGoodnessCredit:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "learned-feedback credit state is missing the step counter"
-            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error]
+            raise RuntimeError(msg)  # noqa: TRY004
         self._feedback_step = int(step.item())
         for key, tensor in state.get("learned_feedback", {}).items():
             name, shape_s, device, dtype = key.split("|", 3)
@@ -1442,7 +1442,7 @@ class LocalContrastiveCredit:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "local-contrastive credit state is missing the step counter"
-            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error] — snapshot protocol precedent
+            raise RuntimeError(msg)  # noqa: TRY004 — snapshot protocol precedent
         self._step = int(step.item())
         self._ema = {
             name: tensor.detach().clone()
@@ -1533,7 +1533,7 @@ class LocalContrastiveCredit:
             )
         return {bias_name: self.config.readout_scale * gb}
 
-    def compute_pseudo_gradient(  # ruff: ignore[too-many-locals] — protocol axis assembly, kept linear
+    def compute_pseudo_gradient(  # noqa: PLR0914 — protocol axis assembly, kept linear
         self,
         states: Mapping[Phase, SystemState],
         loss: Tensor | None,
@@ -2231,7 +2231,7 @@ class TargetInversionCredit:
             if tgt is None:
                 continue
             delta = nudged_acts[i] - tgt
-            total = total + (delta**2).mean()  # ruff: ignore[non-augmented-assignment]
+            total = total + (delta**2).mean()  # noqa: PLR6104
         return total
 
 

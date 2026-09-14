@@ -134,7 +134,7 @@ def _step_psi(
     return new_psi
 
 
-def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
+def run_train_step(  # 5/6-axis pipeline contract + x/y  # noqa: PLR0913, PLR0914
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,

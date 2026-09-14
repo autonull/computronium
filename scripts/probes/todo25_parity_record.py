@@ -42,7 +42,7 @@ def main() -> int:
 def _record(store: CEECStore, result: dict, certified: dict) -> int:
     try:
         store.get_belief(BELIEF_ID)
-    except StoreError:  # ruff: ignore[try-except-pass]  idempotent re-run: an absent belief is the first-record path
+    except StoreError:  # noqa: S110  idempotent re-run: an absent belief is the first-record path
         pass
     else:
         print(

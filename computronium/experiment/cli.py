@@ -143,7 +143,7 @@ def _measure_epoch(  # passes the full probe identity + calibration knobs
             param_count=0,
         )
     except Exception as exc:  # broad: a broken calibration probe is a 0.0, not an abort
-        logger.error("Model %s: ERROR %s", model, exc)  # ruff: ignore[error-instead-of-exception]
+        logger.error("Model %s: ERROR %s", model, exc)  # noqa: TRY400
         return 0.0
     if result.status != "ok":
         logger.error(t"    {model}: FAILED ({result.error})")
@@ -628,7 +628,7 @@ def _cmd_plan(
     return 0
 
 
-def _cmd_run(  # run threads every operator knob; grouped by the parser, not the signature  # ruff: ignore[too-many-locals]
+def _cmd_run(  # run threads every operator knob; grouped by the parser, not the signature  # noqa: PLR0914
     config: str,
     report_override: str | None,
     device: str | None,
@@ -681,7 +681,7 @@ def _cmd_run(  # run threads every operator knob; grouped by the parser, not the
     try:
         outcomes = runner.run()
     except KeyboardInterrupt:
-        logger.info(  # ruff: ignore[logging-too-few-args]
+        logger.info(  # noqa: PLE1206
             "#'--report' path is the resume contract; a partial run must be re-runnable; interrupted: %s holds %d finished probes; rerun to resume",
             f"{report_path} holds {len(report.finished_keys())} finished probes; rerun to resume",
         )
@@ -693,7 +693,7 @@ def _cmd_run(  # run threads every operator knob; grouped by the parser, not the
             exc,
             exc_info=True,
         )
-        logger.error(  # ruff: ignore[error-instead-of-exception]
+        logger.error(  # noqa: TRY400
             t"run aborted: {report_path} holds {len(report.finished_keys())} finished probes and is resumable (rerun to continue)"
         )
         return 1
@@ -749,7 +749,7 @@ def main_report(argv: Sequence[str] | None = None) -> int:
     try:
         print(render_report(args.report, baseline=args.baseline))
     except (FileNotFoundError, ValueError, KeyError) as exc:
-        logger.error("report error: %s", exc)  # user-facing CLI: a traceback is noise  # ruff: ignore[error-instead-of-exception]
+        logger.error("report error: %s", exc)  # user-facing CLI: a traceback is noise  # noqa: TRY400
         return 1
     return 0
 

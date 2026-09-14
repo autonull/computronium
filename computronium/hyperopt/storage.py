@@ -165,11 +165,11 @@ class HyperoptStorage(SqliteStore):
         if updates:
             values.append(trial_id)
             set_clause = ", ".join(updates)
-            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # ruff: ignore[hardcoded-sql-expression]
+            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # noqa: S608
             self.conn.execute(query, values)
             self.conn.commit()
 
-    def log_epoch(  # ruff: ignore[too-many-arguments]
+    def log_epoch(  # noqa: PLR0913
         self,
         trial_id: int,
         epoch: int,
@@ -337,7 +337,7 @@ class HyperoptStorage(SqliteStore):
         if trial_ids:
             placeholders = ",".join("?" * len(trial_ids))
             self.conn.execute(
-                f"UPDATE hyperopt_logs SET is_pareto = 1"  # ruff: ignore[hardcoded-sql-expression]
+                f"UPDATE hyperopt_logs SET is_pareto = 1"  # noqa: S608
                 f" WHERE trial_id IN ({placeholders})",
                 trial_ids,
             )
@@ -365,7 +365,7 @@ class HyperoptStorage(SqliteStore):
             trajectory: TrainingTrajectory object
                 (from computronium.execution.training_dynamics)
         """
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
+        try:  # noqa: too-many-statements-in-try-clause
             cursor = self.conn.cursor()
 
             # Insert Trajectory
