@@ -54,7 +54,7 @@ def test_closed_loop_records_decision_evidence_and_calibration(
         question="is the mean at chance?",
         prediction="mean within the 2-SE chance band",
         scope=SCOPE,
-        tier="certified",
+        tier="nightly",
         prediction_probability=(0.3, 0.7, 0.5),
     )
     run = run_experiment(store, draft, _probe(_good_result()))
@@ -100,7 +100,7 @@ def test_boundary_evaluation_gates_the_status_change(store: CEECStore) -> None:
         question="does the boundary hold?",
         prediction="no lever breaks chance",
         scope=SCOPE,
-        tier="certified",
+        tier="nightly",
         target_beliefs=[belief.id],
     )
     run = run_experiment(store, draft, _probe(_good_result()), evaluate="boundary")

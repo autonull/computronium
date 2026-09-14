@@ -354,11 +354,12 @@ CATALOG: tuple[MechanismCandidate, ...] = (
             adaptation_speed=0.9,
         ),
         provenance=(
-            "X-TPC-001..003: frozen-θ task switching via temporal ψ. "
-            "trainable_on is empty (TODO25 D.1): the ψ readout path has no "
-            "campaign/corpus arm for flat or sequence specs — the row is "
-            "reached through Lab.adapt / continual curricula, not "
-            "CampaignFitness"
+            "X-TPC-001..003 + TODO26 S.1: composed backbone+ψ — trainable θ "
+            "feature extractor, ψ-owned readout role re-solved per episode "
+            "through Lab.adapt. trainable_on stays empty (TODO25 D.1): the "
+            "mechanism's registered surface is the continual corpus "
+            "benchmark (Lab.adapt / continual curricula), not "
+            "CampaignFitness; task-A lab.train feeds the continual path"
         ),
         config_builder=_bp_config,
     ),

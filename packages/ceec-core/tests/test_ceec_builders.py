@@ -28,7 +28,7 @@ def _experiment(store: CEECStore, **overrides: object) -> models.Experiment:
         "question": "does the mechanism learn?",
         "prediction": "accuracy clears chance",
         "scope": SCOPE,
-        "tier": "certified",
+        "tier": "nightly",
         "prediction_probability": (0.4, 0.8, 0.6),
     }
     kwargs.update(overrides)
@@ -46,17 +46,21 @@ def test_experiment_defaults_satisfy_hard_constraints(store: CEECStore) -> None:
     assert failed == []
 
 
-def test_experiment_tier_mapping_and_rejection() -> None:
+def test_experiment_budget_pass_through() -> None:
     assert (
         builders.experiment(
-            id_="X-B-2", question="q", prediction="p", scope=SCOPE, tier="smoke"
+            id_="X-B-2", question="q", prediction="p", scope=SCOPE, tier="nightly"
         ).budget
-        == "quick"
+        == "nightly"
     )
-    with pytest.raises(ValueError, match="budget/tier"):
+    # domain vocabulary passes through; the profile validates at the
+    # store boundary (Phase E)
+    assert (
         builders.experiment(
-            id_="X-B-3", question="q", prediction="p", scope=SCOPE, tier="bogus"
-        )
+            id_="X-B-3", question="q", prediction="p", scope=SCOPE, tier="sweep"
+        ).budget
+        == "sweep"
+    )
 
 
 def test_gate_evidence_flags_validate_against_gate_readers(store: CEECStore) -> None:

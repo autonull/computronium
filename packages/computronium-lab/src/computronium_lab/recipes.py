@@ -38,17 +38,37 @@ class Recipe:
 def build_temporal_psi(
     feature_dim: int = 64,
     num_classes: int = 4,
-    conflict_threshold: float = 0.6,
-    forget_decay: float = 0.5,
+    hidden_dim: int = 64,
+    step_size: float = 0.05,
 ) -> object:
-    """AdaptivePsiReadout from packages/psi-peft (X-TPC-001..003)."""
-    from psi_peft import AdaptivePsiReadout
+    """Composed backbone+ψ system (TODO26 S.1, X-TPC-001..003).
 
-    return AdaptivePsiReadout(
-        feature_dim=feature_dim,
-        num_classes=num_classes,
-        conflict_threshold=conflict_threshold,
-        forget_decay=forget_decay,
+    Trainable θ feature extractor (feedforward, gradient+euclidean) with
+    a ψ-owned readout role: per-episode ridge re-solve through the P-axis
+    plasticity primitives via ``Lab.adapt`` (temporal / conflict_adaptive /
+    closed_form / role_split). Task-A ``lab.train`` shapes θ; ψ
+    adaptation on task B freezes θ bitwise (``_FrozenThetaUpdate``) and
+    re-solves the ridge readout from settled features — the composed
+    replacement for the bare ``AdaptivePsiReadout`` (which no longer
+    survives ``lab.train``/``theta_digest`` on the continual path).
+    """
+    return compose_system_from_configs(
+        substrate=SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ),
+        geometry=GeometryConfig.feedforward(
+            input_dim=feature_dim,
+            output_dim=num_classes,
+            hidden_dims=(hidden_dim,),
+            init_scale=0.1,
+        ),
+        dynamics=StateDynamicsConfig.instantaneous(),
+        credit=CreditAssignmentConfig.gradient(),
+        update=ParameterUpdateConfig.euclidean(step_size=step_size),
     )
 
 
@@ -337,12 +357,16 @@ def build_nca_predictor(
 RECIPES: dict[str, Recipe] = {
     "temporal_psi": Recipe(
         name="temporal_psi",
-        summary="Adaptive temporal-ψ ridge readout for frozen-backbone task "
-        "switching with conflict-adaptive trace decay.",
-        when_to_use="A frozen backbone must acquire/switch tasks without "
-        "retraining θ; label geometry conflicts between tasks.",
+        summary="Composed backbone+ψ: trainable θ feature extractor with a "
+        "ψ-owned readout role (per-episode ridge re-solve, conflict-adaptive "
+        "trace decay via Lab.adapt).",
+        when_to_use="Continual A→B task switching: train θ on task A, then "
+        "acquire task B through ψ ridge re-solve under bitwise-frozen θ "
+        "(frozen_no_psi and θ-finetune matched controls ride the corpus "
+        "continual benchmark).",
         when_not="Non-conflicting incremental tasks, generative modeling, "
-        "cases requiring backbone adaptation.",
+        "campaign fitness on flat tasks (the continual corpus path is the "
+        "mechanism's registered surface, not CampaignFitness).",
         evidence=("X-TPC-001", "X-TPC-002", "X-TPC-003", "X-TAC-001"),
         build=build_temporal_psi,
     ),

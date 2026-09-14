@@ -436,11 +436,13 @@ class Lab:
         boundary: TaskBoundary | None = None,
         stability_check: bool = False,
         psi_step: str = "final",
+        psi: dict | None = None,
     ) -> AdaptationResult:
         """ψ-only continual adaptation on frozen θ (TODO23 Phase 3).
 
         ``psi_step="every_timestep"`` accumulates ψ statistics across
-        sequence timesteps (see ``adaptation.adapt``).
+        sequence timesteps (see ``adaptation.adapt``). ``psi`` seeds a
+        carried ψ state (see ``adaptation.adapt``).
         """
         from computronium_lab.adaptation import adapt as _adapt
 
@@ -453,6 +455,7 @@ class Lab:
             boundary=boundary,
             stability_check=stability_check,
             psi_step=psi_step,
+            psi=psi,
         )
 
     def export(

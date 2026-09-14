@@ -164,7 +164,7 @@ def _run(store: CEECStore) -> int:
 
     try:
         existing = store.get_experiment(ROUND3_ID)
-    except StoreError:  # ruff: ignore[try-except-pass]  idempotent re-run: an absent experiment is the first-run path
+    except StoreError:  # ruff: ignore[S110]  idempotent re-run: an absent experiment is the first-run path
         pass
     else:
         print(
@@ -196,7 +196,7 @@ def _run(store: CEECStore) -> int:
             budget="nightly",
             extra={"hypothesis": "H24.2", "run_id": "T25V2"},
         ),
-        tier="certified",
+        tier="nightly",
         prediction_probability=(0.5, 0.8, 0.7),
         design={
             "evaluation_policy": "certified_operating_point_20ep_hard",

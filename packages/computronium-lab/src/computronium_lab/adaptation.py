@@ -182,6 +182,7 @@ class AdaptationResult:
     boundary: TaskBoundary | None
     stability: StabilityCertificate | None = None
     walltime_s: float = 0.0
+    psi: dict[str, Tensor] | None = None  # carried ψ state (ridge statistics)
 
 
 class _RoleSplitRidge(ClosedFormRidgePlasticity):
@@ -356,7 +357,7 @@ def _psi_only_episodes(
     return history, psi
 
 
-def _sequence_episode(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - flat pipeline tuple, psi_step keyword-only
+def _sequence_episode(  # noqa: PLR0913, PLR0917  flat pipeline tuple, psi_step keyword-only
     substrate: object,
     geometry: object,
     dynamics: object,
@@ -395,11 +396,11 @@ def _sequence_episode(  # ruff: ignore[too-many-arguments, too-many-positional-a
             psi=psi,
             context=object(),  # ψ primitives never read the context
         )
-    assert metrics is not None  # ruff: ignore[assert] - loop runs at least once
+    assert metrics is not None  # noqa: S101  loop runs at least once
     return metrics
 
 
-def adapt(
+def adapt(  # noqa: PLR0914
     system: object,
     task_data: object,
     mode: AdaptationMode | str = PSI_ONLY,
@@ -408,6 +409,7 @@ def adapt(
     boundary: TaskBoundary | None = None,
     stability_check: bool = False,
     psi_step: str = "final",
+    psi: dict[str, Tensor] | None = None,
 ) -> AdaptationResult:
     """ψ-only adaptation: θ bitwise frozen, ψ updated, certificate returned.
 
@@ -417,6 +419,10 @@ def adapt(
     ``psi_step="every_timestep"`` accumulates ψ statistics across sequence
     timesteps instead of stepping once on the final timestep (sequence
     variants; the A/B campaign lives in TODO23 §12).
+    ``psi`` seeds a carried ψ state (ridge sufficient statistics) so the
+    composed backbone+ψ mechanism re-solves per episode against the
+    cumulative trace — the law's ``G_t = ρG_{t−1} + …`` contract; the
+    returned result carries the stepped state for the next episode.
     """
     t0 = time.perf_counter()
     match mode:
@@ -431,13 +437,15 @@ def adapt(
 
     sha_before = theta_digest(system)
     plasticity = psi_plasticity(resolved)
-    psi: dict[str, Tensor] = plasticity.initial_psi(None)  # type: ignore[arg-type]
+    psi_state: dict[str, Tensor] = (
+        psi if psi is not None else plasticity.initial_psi(None)  # type: ignore[arg-type]
+    )
     batches = list(task_data)  # type: ignore[arg-type]
     if not batches:
         raise ValueError("task_data is empty; ψ-only adaptation needs episodes")
 
     history, psi = _psi_only_episodes(
-        system, batches, plasticity, psi, episodes, psi_step=psi_step
+        system, batches, plasticity, psi_state, episodes, psi_step=psi_step
     )
 
     sha_after = theta_digest(system)
@@ -470,6 +478,7 @@ def adapt(
         boundary=detected,
         stability=stability,
         walltime_s=time.perf_counter() - t0,
+        psi=psi,
     )
 
 
@@ -605,7 +614,7 @@ def select_z3_operator(x: Tensor, y: Tensor) -> Z3Selection:
     for index, name, op in _Z3_LIBRARY:
         try:
             out = op(x)  # type: ignore[operator]
-        except Exception:  # ruff: ignore[blind-except] - shape-invalid ops simply lose
+        except Exception:  # ruff: ignore[BLE001] - shape-invalid ops simply lose
             scores[name] = 0.0
             continue
         if out.shape == y.shape:

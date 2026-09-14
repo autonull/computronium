@@ -85,6 +85,23 @@ def _decide(args: argparse.Namespace) -> int:
     return 0
 
 
+def _close_round(args: argparse.Namespace) -> int:
+    from ceec import selection
+    from ceec.session import ledger
+
+    profile = selection.load_profile(Path(args.profile))
+    path = Path(args.ledger_dir) / "ceec.sqlite3"
+    with ledger(path, profile, role=args.role) as sess:
+        report = sess.close_round()
+        for f in report.findings:
+            print(f"[{f.severity}] {f.check}: {f.detail}")
+        triggers = sorted(set(report.violations))
+        print(f"close-round triggers: {triggers or 'none'}")
+        if args.fail_on_trigger and triggers:
+            return 1
+    return 0
+
+
 def _audit(args: argparse.Namespace) -> int:
     from ceec import audit
 
@@ -213,6 +230,19 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=_decide)
 
     sub.add_parser("audit").set_defaults(func=_audit)
+
+    p = sub.add_parser("close-round")
+    p.add_argument(
+        "--profile", default=str(REPO_ROOT / "configs" / "ceec" / "profile.yaml")
+    )
+    p.add_argument("--role", default="main", choices=["main", "campaign", "scratch"])
+    p.add_argument(
+        "--fail-on-trigger",
+        action="store_true",
+        help="exit non-zero when audit violations or review flags fire",
+    )
+    p.set_defaults(func=_close_round)
+
     sub.add_parser("calibration-report").set_defaults(func=_calibration_report)
 
     p = sub.add_parser("status-history")

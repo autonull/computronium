@@ -1,12 +1,14 @@
 # TODO26 — CEEC Kernel Architecture + ψ Composition
 
-**Status:** PHASES A–H LANDED 2026-09-14 (Phase S open — see Progress
-Log). Architecture verified against four live usage patterns (probe
-closed loop, evolution kernel, MeasurementRunner, per-epoch training
-capture); Profile/Session/store-split/derived-registry all shipped.
-**Builds on:** TODO25 (all phases + continuation executed; root `CEEC.md`
-reference landed; improvement #6 vacuous-override rule shipped).
-**Explicit exclusion:** PyPI publishing remains out of scope.
+**Status:** PHASES A–H + S LANDED 2026-09-14 (H24.3 carries a certified
+round-2 AGAINST verdict; see Progress Log). Open follow-ons are Register
+C hygiene items only (see Improvements). Architecture verified against
+four live usage patterns (probe closed loop, evolution kernel,
+MeasurementRunner, per-epoch training capture); Profile/Session/
+store-split/derived-registry all shipped. **Builds on:** TODO25 (all
+phases + continuation executed; root `CEEC.md` reference landed;
+improvement #6 vacuous-override rule shipped). **Explicit exclusion:**
+PyPI publishing remains out of scope.
 
 ---
 
@@ -492,13 +494,68 @@ packages/ceec-core/tests); lab suite 164 passed; platform parity +
 boundary tests green; ruff clean on all touched trees; pyright clean on
 ceec-core.
 
-**Phase S — open (infrastructure ready):** T26.S.1–S.4 are unexecuted.
-The composed backbone+ψ measurement now rides `Session.run`
-(record_result → artifact → evidence → calibration → close_round), so
-S.3's certified H24.3 round-2 run is unblocked but requires its own
-training-budget session (GPU, background execution per AGENTS cell
-walltime rules). S.1/S.2 (composed mechanism + continual wiring) remain
-the prerequisite implementation work.
+**Phase S — composed backbone+ψ + H24.3 round 2 (landed)**
+
+- T26.S.1: `recipes.build_temporal_psi` now returns a **composed
+  system** (trainable θ feedforward feature extractor + ψ-owned readout
+  role via the P-axis plasticity primitives) instead of the bare
+  `AdaptivePsiReadout`. Catalog provenance updated; `trainable_on`
+  intentionally stays empty (CampaignFitness is not the mechanism's
+  registered surface; task-A `lab.train` feeds the continual path).
+- Root-cause fix en route: `adaptation.adapt` discarded ψ statistics
+  between calls (fresh `initial_psi` per episode), so the corpus
+  per-episode loop re-solved the ridge from one 32-sample batch every
+  episode (val 0.19 despite a direct 192-sample ridge hitting 0.95).
+  `adapt`/`Lab.adapt` now accept a carried `psi` dict and
+  `AdaptationResult.psi` returns the stepped state — the law's
+  `G_t = ρG_{t−1} + …` cumulative contract. `corpus._adapt_tracked`
+  carries ψ across episodes (and through the zero-episode val probes).
+- T26.S.2: `temporal_psi_task_switcher` rides the registered continual
+  corpus benchmark end-to-end (`test_benchmark_continual_composed_psi`:
+  threshold reached, θ bitwise invariant, beats frozen_no_psi).
+- T26.S.3: `scripts/probes/todo26_h243_round2.py` — the first
+  end-to-end certification on the Session API (pre-register → §22
+  decision → probe → artifact → evidence → calibration). Certified
+  round-2 verdict on `two_task_switch`, 3 seeds × 10 episodes, ledger
+  `scratch/todo26_h243_round2.sqlite3`: best ψ mode conflict_adaptive
+  0.729 (threshold 3/3 seeds, θ invariant) vs frozen_no_psi 0.234 vs
+  θ-finetune 0.979 — **AGAINST** under the round-1 rule (ψ beats frozen
+  but not the θ-update control at this operating point). H24.3 moves
+  from BLOCKED to certified-verdict; hypothesis stays open for other
+  curricula and speed-based (episodes-to-threshold) rules.
+- T26.S.4: round-1 "instrument ≠ registered benchmark" caveat recorded
+  in `docs/research/todo24/hypotheses/H24.3.md` alongside the round-2
+  result; round-1's 0.125 is explicitly marked unciteable as a ψ bound.
+
+**Session A follow-ons (improvements #3/#5/#6 landed)**
+
+- CLI `ceec close-round` (`--profile`, `--role`, `--fail-on-trigger`):
+  renders + audits + flags; non-zero exit on triggers (T26.D.3 CLI
+  slice). Smoke-tested against the round-2 campaign ledger (clean).
+- `CEECStore.commit()` public flush; `corpus` drops the last
+  `store._conn` private access outside the store package.
+- `builders.TIER_BUDGET` deleted: tier is the budget literal; ladders
+  live only on `Profile.tier_budget`. `builders.experiment` passes
+  domain budget vocabulary through (profile validates at the store
+  boundary); `Session.experiment` gained
+  `falsification_criterion`/`overturn_criterion`/`hard_gates`.
+- `Session.run` gained `decision_rationale` (probe parity with
+  `run_experiment`).
+
+**Toolchain repair (env skew, landed this session):** ruff 0.15 rejects
+descriptive-name selectors — `pyproject.toml` ignore lists converted to
+canonical codes (44 entries) and the `# ruff: ignore[rule-name]`
+directives on touched files converted to `# noqa: CODE`. The remaining
+~1.5k legacy directives across untouched modules are Register C work
+(lint currently only honored on touched trees).
+
+**Verification:** ceec suites 154 passed (tests/ceec +
+packages/ceec-core/tests); lab suite 165 passed (incl. the new composed
+mechanism + continual benchmark tests); ruff clean on all touched
+files. Pyright on ceec/lab trees is blocked by the same env import
+resolution skew as the LSP (Register C).
+
+**Phase S — closed.** Remaining round work: Register C hygiene only.
 
 ---
 
@@ -512,28 +569,36 @@ the prerequisite implementation work.
    undeclared keys (live ledgers carry `verification_level` etc.);
    `not_run` added to the audit alphabets as a first-class pre-hunt
    state instead of forcing a false "fail".
-3. **Open — CLI `close-round`:** `Session.close_round(fail_on_trigger)`
-   exists but the `ceec` CLI has no `close-round --fail-on-trigger`
-   subcommand yet (T26.D.3's CLI slice). Add `--ledger-dir` +
-   `--profile yaml` wiring; load_profile already returns a `Profile`.
-4. **Open — probe_adapter:** `record_probe_result` still hand-builds
-   evidence via the store API; a Session-aware variant (or routing
-   through `Session.evidence`) would finish the Phase D success
-   criterion "probes rewritten on Session" for the legacy probe
-   adapter.
-5. **Open — builders TIER_BUDGET:** still the lab ladder
-   (smoke→quick→…); the profile `tier_budget` is authoritative for
-   Session callers but `builders.experiment(tier=...)` retains the old
-   map for direct builder callers. Delete it once the last direct
-   callers migrate (next hygiene pass).
-6. **Open — measurement-block commit hack:** `corpus._record_ledger`
-   still reaches `state.store._conn.commit()`; a `Session.commit()`/
-   transaction-scoped context on the façade would remove the last
-   private-access site outside the store package.
+3. **Landed — CLI `close-round`:** `ceec close-round --profile <yaml>
+   --role <role> --fail-on-trigger` renders + audits + flags with
+   non-zero exit on triggers.
+4. **Landed — psi carry + composed mechanism:** `adapt(psi=…)` seeds a
+   carried ψ state; the composed backbone+ψ system replaced the bare
+   `AdaptivePsiReadout` (S.1); the legacy probe adapter's
+   `record_probe_result` hand-assembly remains the only non-Session
+   ingest site (route through `Session.evidence` next hygiene pass).
+5. **Landed — builders TIER_BUDGET deleted:** tier is the budget
+   literal; ladders live only on `Profile.tier_budget`.
+6. **Landed — measurement-block commit:** `CEECStore.commit()` public
+   flush; no `_conn` access outside the store package remains.
 7. **Open — `Scope.dims` typing:** dims values are `object` (spec §6
    open map) rather than the planned `str | tuple[str, ...]` because
    legacy `extra` dicts must survive the one-way absorption; tighten
    after the legacy-row window closes (Phase H+).
+8. **Open — H24.3 round 3 rule refinement:** round 2 scored mean
+   post-switch accuracy; the registered hypothesis is about *speed*
+   (episodes to threshold under matched compute). A round-3 pre-
+   registration with an episodes-to-threshold decision rule (and/or a
+   second curriculum) is the natural next scientific step — the ψ arm
+   already reaches threshold within the budget, so the speed comparison
+   is measurable on the same instrument.
+9. **Open — Register C, ruff 0.15 directive migration:** ~1.5k legacy
+   `# ruff: ignore[rule-name]` comments and per-file-ignores outside the
+   trees touched this session still use descriptive names; ruff 0.15
+   only honors canonical codes. Also: `tests/ceec/test_integration_loop.py`
+   and `packages/computronium-lab/tests/test_integration_loop.py`
+   share a basename and cannot be collected in one pytest invocation
+   (rename one).
 
 ---
 

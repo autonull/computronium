@@ -73,7 +73,7 @@ class Session:
 
     # -- construction ------------------------------------------------------
 
-    def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment field surface
+    def experiment(  # noqa: PLR0913  mirrors the Experiment field surface
         self,
         *,
         question: str,
@@ -88,6 +88,9 @@ class Session:
         prediction_probability: object = None,
         controls: Sequence[str] = ("seed_catalog_baseline",),
         metrics: Sequence[str] = ("accuracy",),
+        falsification_criterion: str | None = None,
+        overturn_criterion: str | None = None,
+        hard_gates: Sequence[str] | None = None,
     ) -> models.Experiment:
         """Build a draft experiment; ``tier`` resolves through the profile."""
         tier_budget = self.profile.tier_budget or {}
@@ -112,6 +115,9 @@ class Session:
             target_goals=goals,
             controls=controls,
             metrics=metrics,
+            falsification_criterion=falsification_criterion,
+            overturn_criterion=overturn_criterion,
+            hard_gates=hard_gates,
         )
 
     def artifact(
@@ -217,6 +223,7 @@ class Session:
         probe: Callable[[models.Experiment], ProbeResult],
         *,
         evaluate: str | None = None,
+        decision_rationale: str | None = None,
     ) -> ExperimentRun:
         """Closed-loop run: pre-register → decide → probe → ingest → gates."""
         return run_experiment(
@@ -224,6 +231,7 @@ class Session:
             exp,
             probe,
             evaluate=evaluate,  # type: ignore[arg-type]
+            decision_rationale=decision_rationale,
         )
 
     def record_result(

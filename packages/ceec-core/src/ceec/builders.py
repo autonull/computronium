@@ -26,22 +26,12 @@ _CeecBudget = Literal["quick", "standard", "nightly"]
 
 __all__ = [
     "DEFAULT_HARD_GATES",
-    "TIER_BUDGET",
     "ChanceVerdict",
     "chance_verdict",
     "experiment",
     "gate_evidence",
     "quality_flags",
 ]
-
-TIER_BUDGET: Mapping[str, str] = {
-    "smoke": "quick",
-    "quick": "standard",
-    "certified": "nightly",
-    # direct ceec budget literals pass through
-    "standard": "standard",
-    "nightly": "nightly",
-}
 
 DEFAULT_HARD_GATES: tuple[str, ...] = ("BenchmarkReproduction", "StabilityCertificate")
 
@@ -58,13 +48,6 @@ _FALSIFICATION_DEFAULT = (
 _OVERTURN_DEFAULT = "replication under the recorded protocol overturns the outcome"
 
 
-def _budget(tier_or_budget: str) -> _CeecBudget:
-    mapped = TIER_BUDGET.get(tier_or_budget)
-    if mapped is None:
-        raise ValueError(f"budget/tier {tier_or_budget!r} not in {sorted(TIER_BUDGET)}")
-    return cast("_CeecBudget", mapped)
-
-
 def _probability(
     spec: models.Probability | tuple[float, float] | tuple[float, float, float],
 ) -> models.Probability:
@@ -75,7 +58,7 @@ def _probability(
     return models.Probability(low=low, high=high, point=point, method="session_prior")
 
 
-def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment field surface
+def experiment(  # noqa: PLR0913  mirrors the Experiment field surface
     *,
     id_: str,
     question: str,
@@ -100,8 +83,8 @@ def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment fiel
 
     ``design`` is merged over defaults that satisfy the §22 hard
     constraints (``seed_plan``/``evaluation_policy``/``evidence_kind``);
-    ``tier`` accepts a lab budget tier (``BudgetTier.<X>.value``) or a
-    direct ceec budget literal. Pre-register the returned draft via
+    ``tier`` is the budget literal; tier ladders resolve through
+    ``Session``/``Profile.tier_budget`` before reaching the builder. Pre-register the returned draft via
     ``CEECStore.pre_register_experiment`` or ``ceec.run.run_experiment``.
     """
     merged_design: dict[str, Any] = {**_DEFAULT_DESIGN, **dict(design or {})}
@@ -119,15 +102,15 @@ def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment fiel
         ),
         controls=list(controls),
         metrics=list(metrics),
-        budget=budget or _budget(tier),
+        budget=budget or cast("_CeecBudget", tier),
         falsification_criterion=falsification_criterion or _FALSIFICATION_DEFAULT,
         overturn_criterion=overturn_criterion or _OVERTURN_DEFAULT,
-        hard_gates=list(hard_gates),
+        hard_gates=list(DEFAULT_HARD_GATES if hard_gates is None else hard_gates),
         created_at=now(),
     )
 
 
-def quality_flags(  # ruff: ignore[too-many-arguments]  one parameter per §18/§19 gate flag
+def quality_flags(  # noqa: PLR0913  one parameter per §18/§19 gate flag
     *,
     seeds: int = 0,
     matched_control: bool = False,
@@ -226,4 +209,4 @@ def gate_evidence(
 
 
 # chance_verdict lives in ceec.stats (TODO26 §2.5); re-exported here.
-from ceec.stats import ChanceVerdict, chance_verdict  # ruff: ignore[module-import-not-at-top-of-file]
+from ceec.stats import ChanceVerdict, chance_verdict  # noqa: E402

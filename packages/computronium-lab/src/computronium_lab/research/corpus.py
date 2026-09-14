@@ -502,11 +502,13 @@ class _ContinualSwitch:
         first_sha: str | None = None
         last_sha: str | None = None
         accuracy, episodes_used, reached, psi_updated = 0.0, budget, False, False
+        psi_state: dict[str, Tensor] | None = None
         with FrozenThetaAudit(system) as audit_ctx:
             for episode in range(1, budget + 1):
-                result = lab.adapt(system, train_b, mode=arm, episodes=1)
+                result = lab.adapt(system, train_b, mode=arm, episodes=1, psi=psi_state)
+                psi_state = result.psi
                 psi_updated = psi_updated or bool(result.psi_updated)
-                probe = lab.adapt(system, val_b, mode=arm, episodes=0)
+                probe = lab.adapt(system, val_b, mode=arm, episodes=0, psi=psi_state)
                 accuracy = float(
                     probe.metrics.get(
                         "psi_accuracy", probe.metrics.get("accuracy", 0.0)
@@ -834,7 +836,7 @@ class MeasurementRunner:
             return self._assemble(state)
         finally:
             if state.store is not None:
-                state.store._conn.commit()
+                state.store.commit()
                 state.store.close()
 
     def _trainability_block(self, state: _CorpusState, arm: str) -> str | None:
