@@ -328,7 +328,7 @@ def _record(lab: Lab, report: StatePredictionCampaignReport, deploy_note: str) -
         )
         evidence = store.record_evidence(
             kind="scalar",
-            scope=Scope(domain="lab", substrate=("digital",), budget="quick"),
+            scope=Scope.of(domain="lab", substrate=("digital",), budget="quick"),
             artifact_refs=[artifact.id],
             quality={
                 "seeds": len(report.seeds),

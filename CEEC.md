@@ -176,15 +176,55 @@ Supporting instruments:
 - `ceec.builders` — `experiment(...)` (auto `created_at`, design defaults,
   tier→budget map), `gate_evidence(...)`/`quality_flags(...)` (§18/§19
   spellings, validated against gate readers), `chance_verdict(accuracies,
-  n_eval)` (2·binomial-SE band + across-seed mean rule).
+  n_eval)` (2·binomial-SE band + across-seed mean rule; canonical home is
+  `ceec.stats`).
 - `ceec.audit.audit_decisions(store, record=False)` — decision-quality
   findings (unresolved selected experiment, missing override rationale,
   candidate-vs-later-measurement-block overlap); `run_audit(store)` for
-  full-ledger integrity.
-- `computronium_lab.research.reports.render_ledger(store)` — markdown/JSON
+  full-ledger integrity, including the §27 anti-pattern extensions
+  (single-seed promotion attempt, untested-lever boundary declaration,
+  silent scalarization) and campaign-ledger instrument gating.
+- `ceec.report.render_ledger(store, record_rollups=False)` — markdown/JSON
   rollup; `Lab.research_report(...)` writes it beside the corpus report.
 - `ceec.bootstrap` seeds instruments, hypotheses, goals, and
   pre-registered experiments from `configs/ceec/`.
+
+## Profiles and the Session façade (TODO26)
+
+The kernel is parameterized by a `ceec.profile.Profile`: gate thresholds
+(`Thresholds`), budget vocabulary (`budget_tiers`, `tier_budget`,
+`default_cost`), the hard-constraint registry (`Constraint` tuples —
+`CORE_CONSTRAINTS` plus the `coordinate_constraint(validator)` factory),
+and the evidence quality schema (`QualitySchema`, validated at
+`record_evidence`; undeclared keys stay open per spec §6). Domain
+adapters may only add constraints and declare vocabulary — never weaken
+gate families (§17). `LedgerRole` (`main | campaign | scratch`) is
+stamped into `ledger_meta` at init; `policy_version` (TODO25 #10b) is
+stamped from the profile onto every Decision and CalibrationRecord row.
+`Scope` is an open dimension map built with `Scope.of(**dims)`.
+
+Applications use the `Session` façade instead of hand-assembling
+payloads:
+
+```python
+from ceec.profile import LedgerRole
+from ceec.session import ledger
+
+with ledger(LEDGER_PATH, PROFILE, role=LedgerRole.CAMPAIGN) as sess:
+    draft = sess.experiment(question=..., prediction=..., scope=...,
+                            tier="certified", targets=["B-1"])
+    run = sess.run(draft, probe, evaluate="boundary")   # or sess.record_result
+    report = sess.close_round()                         # render+audit+drift flags
+```
+
+`Session.decide(focus_id=...)` pre-checks the focus candidate's hard
+constraints natively (no StoreError fallback), `Session.render` writes
+the rollup, and `Session.close_round(fail_on_trigger=True)` is the CLI
+equivalent of TODO25 #10c. `ceec.derived` registers recomputable
+`summary`/`relation` operators (`mean`, `median`, `spread`, `contrast`,
+`slope`, `dominance`, `replication`, `chance_band`) over ledger inputs;
+`compute_derived` records rows that recompute byte-identically from the
+ledger alone.
 
 ## CLI
 

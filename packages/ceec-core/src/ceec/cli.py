@@ -15,16 +15,20 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LEDGER_DIR = REPO_ROOT / "ceec"
 
 
-def _open_store(ledger_dir: Path):
+def _open_store(ledger_dir: Path, role: str | None = None):
     from ceec import CEECStore
 
+    if role:
+        return CEECStore(
+            ledger_dir / "ceec.sqlite3", ledger_dir / "artifacts", role=role
+        )
     return CEECStore(ledger_dir / "ceec.sqlite3", ledger_dir / "artifacts")
 
 
 def _init(args: argparse.Namespace) -> int:
     ledger_dir = Path(args.ledger_dir)
-    with _open_store(ledger_dir) as store:
-        print(f"initialized ledger at {store.db_path}")
+    with _open_store(ledger_dir, role=args.role) as store:
+        print(f"initialized ledger at {store.db_path} (role={store.role.value})")
     return 0
 
 
@@ -63,7 +67,6 @@ def _propose(args: argparse.Namespace) -> int:
 
 def _decide(args: argparse.Namespace) -> int:
     from ceec import selection
-    from ceec.store import _SCHEMA  # ruff: ignore[unused-import]
 
     profile = selection.load_profile(Path(args.profile))
     with _open_store(Path(args.ledger_dir)) as store:
@@ -188,7 +191,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ledger-dir", default=str(DEFAULT_LEDGER_DIR))
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("init").set_defaults(func=_init)
+    p = sub.add_parser("init")
+    p.add_argument("--role", default="main", choices=["main", "campaign", "scratch"])
+    p.set_defaults(func=_init)
 
     p = sub.add_parser("bootstrap")
     p.add_argument("--config", default=str(REPO_ROOT / "configs" / "ceec"))

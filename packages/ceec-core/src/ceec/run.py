@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from ceec.gates import Evaluation
     from ceec.store import CEECStore
 
-__all__ = ["ExperimentRun", "ProbeResult", "run_experiment"]
+__all__ = ["ExperimentRun", "ProbeResult", "record_result", "run_experiment"]
 
 Probe = Callable[["models.Experiment"], "ProbeResult"]
 
@@ -58,6 +58,52 @@ class ExperimentRun:
     evaluation: Evaluation | None
     outcome: str
     error: str | None = None
+
+
+def record_result(
+    store: CEECStore,
+    experiment: models.Experiment,
+    result: ProbeResult,
+) -> tuple[str, str, str | None]:
+    """One-call ingest (TODO26 T26.C.3): artifact → evidence → calibration.
+
+    Returns ``(artifact_id, evidence_id, calibration_id)``; the caller
+    owns experiment status transitions and gate evaluation.
+    """
+    from ceec.builders import gate_evidence
+    from ceec.calibration import record_experiment_outcome
+
+    artifact = store.ingest_artifact(
+        json.dumps(dict(result.payload), sort_keys=True, default=str).encode(),
+        "experiment_payload",
+        {
+            "experiment_id": experiment.id,
+            "mechanisms": sorted(mechanisms_of_design(experiment.design)),
+            "code_commit": _code_commit(),
+            "seed_policy": experiment.design.get("seed_plan"),
+            "evaluation_policy": experiment.design.get("evaluation_policy"),
+            "deviations": experiment.design.get("deviations", []),
+            "config_hash": _config_hash(experiment.design),
+        },
+    )
+    evidence = gate_evidence(
+        store,
+        experiment.scope,
+        axes=result.axes,
+        values=result.values,
+        values_ref=result.values_ref or f"artifact:{artifact.id}",
+        artifact_refs=[artifact.id],
+        notes=result.notes,
+        **dict(result.quality),
+    )
+    calibration = record_experiment_outcome(
+        store,
+        experiment.id,
+        outcome=result.label,
+        outcome_boolean=result.outcome_boolean,
+        notes=result.notes,
+    )
+    return artifact.id, evidence.id, calibration.id if calibration else None
 
 
 def run_experiment(
@@ -102,11 +148,15 @@ def run_experiment(
     if failed:
         raise StoreError(
             f"experiment {experiment_id} failed hard constraints: "
-            + "; ".join(f"{c.constraint} ({c.detail})" for c in failed)
+            + "; ".join(
+                f"{c.name} ({c.detail})"
+                for c in check_hard_constraints(store, registered)
+                if not c.passed
+            )
         )
     decision = decide(
         store,
-        {},
+        None,
         decision_rationale
         or f"run_experiment: single pre-registered candidate {experiment_id}",
         candidate_ids=[experiment_id],
@@ -159,32 +209,8 @@ def run_experiment(
             error=str(exc),
         )
 
-    artifact = store.ingest_artifact(
-        json.dumps(dict(result.payload), sort_keys=True, default=str).encode(),
-        "experiment_payload",
-        {
-            "experiment_id": experiment_id,
-            "mechanisms": sorted(mechanisms_of_design(registered.design)),
-        },
-    )
-    evidence = gate_evidence(
-        store,
-        registered.scope,
-        axes=result.axes,
-        values=result.values,
-        values_ref=result.values_ref or f"artifact:{artifact.id}",
-        artifact_refs=[artifact.id],
-        notes=result.notes,
-        **dict(result.quality),
-    )
+    artifact_id, evidence_id, calibration_id = record_result(store, registered, result)
     store.set_experiment_status(experiment_id, "completed")
-    calibration = record_experiment_outcome(
-        store,
-        experiment_id,
-        outcome=result.label,
-        outcome_boolean=result.outcome_boolean,
-        notes=result.notes,
-    )
     evaluation = None
     if evaluate is not None:
         if not registered.target_beliefs:
@@ -201,12 +227,42 @@ def run_experiment(
         experiment_id=experiment_id,
         status="completed",
         decision_id=decision.id,
-        artifact_id=artifact.id,
-        evidence_id=evidence.id,
-        calibration_id=calibration.id if calibration else None,
+        artifact_id=artifact_id,
+        evidence_id=evidence_id,
+        calibration_id=calibration_id,
         evaluation=evaluation,
         outcome=result.label,
     )
+
+
+def _code_commit() -> str | None:
+    import os
+    import subprocess  # ruff: ignore[suspicious-subprocess-import]  git provenance stamp is intentional
+
+    if os.environ.get("CEEC_CODE_COMMIT"):
+        return os.environ["CEEC_CODE_COMMIT"]
+    try:
+        return subprocess.run(  # ruff: ignore[start-process-with-partial-path]  pinned read-only git probe
+            [  # ruff: ignore[start-process-with-partial-path]  pinned read-only git probe
+                "git",
+                "rev-parse",
+                "--short",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        ).stdout.strip()
+    except Exception:
+        return None
+
+
+def _config_hash(design: Mapping[str, object]) -> str:
+    import hashlib
+
+    blob = json.dumps(dict(design), sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def _failure_artifact(

@@ -43,28 +43,7 @@ class ProbeEvidence:
 
 
 def probe_scope(probe_output: dict[str, Any]) -> models.Scope:
-    scope = probe_output.get("scope", {})
-    return models.Scope(
-        domain=scope.get("domain", "probe"),
-        substrate=tuple(scope.get("substrate", ())),
-        geometry=tuple(scope.get("geometry", ())),
-        credit=tuple(scope.get("credit", ())),
-        budget=scope.get("budget"),
-        code_commit=scope.get("code_commit"),
-        extra={
-            k: v
-            for k, v in scope.items()
-            if k
-            not in {
-                "domain",
-                "substrate",
-                "geometry",
-                "credit",
-                "budget",
-                "code_commit",
-            }
-        },
-    )
+    return models.Scope(**probe_output.get("scope", {"domain": "probe"}))
 
 
 def _evidence_kind(probe_output: dict[str, Any]) -> str:

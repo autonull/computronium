@@ -450,48 +450,22 @@ def _scoped_decision(
     rationale: str,
     focus_id: str,
 ) -> Decision:
-    """§22 loop scoped to one generation's experiments (ceec ``decide``).
+    """§22 loop scoped to one generation (TODO26: Session.decide focus).
 
-    ``candidate_ids`` restricts the pool to this generation so unrelated
-    pre-registered experiments in a shared ledger cannot hijack selection;
-    the override records the surrogate-ranked measurement focus
-    transparently.
+    Kept as a thin compatibility wrapper for the evolution pipeline; the
+    native focus fallback now lives on ``Session.decide``.
     """
-    from ceec.selection import decide
-    from ceec.store import StoreError
+    from ceec.session import Session
 
-    eligible_override = (
-        [
-            {
-                "rationale": (
-                    "surrogate-ranked measurement focus within the "
-                    "eligible set; hard constraints already enforced"
-                ),
-                "select_experiment": focus_id,
-            }
-        ]
-        if experiment_ids
-        else []
+    from computronium_lab.ceec_profile import COMPUTRONIUM_PROFILE
+
+    sess = Session(store=store, profile=COMPUTRONIUM_PROFILE, role=store.role)
+    return sess.decide(
+        rationale=rationale,
+        candidate_ids=experiment_ids,
+        focus_id=focus_id,
+        validator=_coordinate_validator,
     )
-    try:
-        return decide(
-            store,
-            {},
-            rationale,
-            coordinate_validator=_coordinate_validator,
-            overrides=eligible_override,
-            candidate_ids=experiment_ids,
-        )
-    except StoreError:
-        # Focus candidate failed hard constraints: fall back to the §22
-        # default (highest expected-value-per-cost among eligible).
-        return decide(
-            store,
-            {},
-            rationale,
-            coordinate_validator=_coordinate_validator,
-            candidate_ids=experiment_ids,
-        )
 
 
 def _record_candidate(

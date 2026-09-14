@@ -13,7 +13,7 @@ def store(tmp_path):
 
 @pytest.fixture
 def scope():
-    return models.Scope(domain="probe", substrate=("digital",), budget="quick")
+    return models.Scope.of(domain="probe", substrate=("digital",), budget="quick")
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def evidence(store, scope):
     return store.record_evidence(
         "vector",
         scope,
-        [artifact.id],
+        artifact_refs=[artifact.id],
         axes=["seed", "metric"],
         values_ref=artifact.uri,
         quality={"verification_level": 4},

@@ -32,13 +32,13 @@ def test_artifact_dedupe_by_sha256(store: CEECStore) -> None:
 
 
 def test_record_evidence_requires_artifact_or_justification(store: CEECStore) -> None:
-    scope = models.Scope(domain="credit", credit=("gradient",))
+    scope = models.Scope.of(domain="credit", credit=("gradient",))
     with pytest.raises(StoreError, match="no_artifact_justification"):
         store.record_evidence(kind="vector", scope=scope)
 
 
 def test_belief_requires_existing_evidence(store: CEECStore) -> None:
-    scope = models.Scope(domain="credit", credit=("gradient",))
+    scope = models.Scope.of(domain="credit", credit=("gradient",))
     with pytest.raises(StoreError, match="evidence"):
         store.create_belief(
             statement="s", type_="mechanism", scope=scope, evidence_refs=["E-999999"]
@@ -46,7 +46,7 @@ def test_belief_requires_existing_evidence(store: CEECStore) -> None:
 
 
 def test_experiment_lifecycle(store: CEECStore) -> None:
-    scope = models.Scope(domain="credit", credit=("gradient",))
+    scope = models.Scope.of(domain="credit", credit=("gradient",))
     artifact = store.ingest_artifact(b"x", "blob")
     evidence = store.record_evidence(
         kind="vector",

@@ -144,9 +144,9 @@ def run_probe() -> dict[str, object]:
 
 def _ingest_ceec(result: dict[str, object]) -> None:
     """Full governance loop into the real ledger (X-STA-001)."""
-    from computronium.ceec import audit, calibration, gates, models, selection
-    from computronium.ceec.probe_adapter import record_probe_result
-    from computronium.ceec.store import CEECStore
+    from ceec import audit, calibration, gates, models, selection
+    from ceec.probe_adapter import record_probe_result
+    from ceec.store import CEECStore
 
     found = bool(result["found_all_seeds"])
     output = {

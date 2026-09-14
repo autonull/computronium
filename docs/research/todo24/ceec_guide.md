@@ -1,52 +1,94 @@
-# CEEC Practitioner Guide (TODO25 Phase C)
+# CEEC Practitioner Guide (TODO25 Phase C; TODO26 Session rewrite)
+
+The closed loop from question to certified outcome in five steps:
+**pre-register → run → decide → boundary/promote → calibrate**. On the
+TODO26 `Session` API every step is one method call on a profile-bound
+session — no hand-assembled payloads, no direct store construction.
+
+Core rule: evolution/campaigns produce evidence; gates dispose; claims
+only at certified tier. Nothing here widens a gate.
+
+## 0. Setup: `ceec.session.ledger`
+
+```python
+from ceec.models import Scope
+from ceec.profile import LedgerRole
+from ceec.session import ledger
+from computronium_lab.ceec_profile import COMPUTRONIUM_PROFILE
+
+with ledger(
+    "scratch/my_ledger.sqlite3", COMPUTRONIUM_PROFILE, role=LedgerRole.CAMPAIGN
+) as sess:
+    scope = Scope.of(
+        domain="research",
+        substrate="digital",
+        task="flat_classification_hard",
+        budget="certified",
+    )
+    ...  # steps 1-5 below
+```
+
+The session binds the ledger file, the `Profile` (thresholds, budget
+vocabulary, hard-constraint registry, quality schema), and the ledger
+role. `Lab(...).ledger_session(role=...)` is the lab-side shortcut.
+
+## 1. Pre-register: `sess.experiment`
+
+`sess.experiment(...)` populates every required field (`created_at`,
+`falsification_criterion`, `overturn_criterion`, `hard_gates`, and the
+§22 design keys `seed_plan` / `evaluation_policy` / `evidence_kind`) and
+resolves `tier=` through `profile.tier_budget` (`smoke→quick`,
+`quick→standard`, `certified→nightly`).
+
+```python
+draft = sess.experiment(
+    question="does mechanism M beat its matched control?",
+    prediction="M clears the control by 2 seed-SE",
+    scope=scope,
+    tier="certified",
+    targets=["B-MYHYP"],                      # belief ids
+    prediction_probability=(0.5, 0.8, 0.7),   # (low, high, point) prior
+    design={"decision_rule": "paired permutation p < 0.05"},
+)
+```
+
+## 2-5. The one-call closed loop: `sess.run`
+
+```python
+def probe(experiment):
+    return ProbeResult(
+        label="passed", outcome_boolean=True,
+        payload={"acc": ...}, axes=("seed",), values=(...), values_ref="acc",
+        quality={"seeds": 3, "matched_control": True,
+                 "evaluation_policy": "...", "defect_audit": "pass"},
+    )
+
+run = sess.run(draft, probe, evaluate="boundary")   # or "promotion"
+report = sess.close_round()                          # render + audit + drift flags
+```
+
+`sess.run` pre-registers the draft, records the §22 single-candidate
+decision, executes the probe, ingests artifact + evidence (quality
+validated against the profile schema) + calibration, and optionally
+evaluates the gate family. For manual probe control use
+`sess.record_result(draft, result)` — same ingest, you own execution.
+For per-generation selection use `sess.decide(candidate_ids=...,
+focus_id=..., validator=...)` — the focus candidate's hard constraints
+are pre-checked natively (no StoreError fallback).
+
+Every artifact carries execution provenance (code commit, seed policy,
+evaluation policy, config hash, deviations) and every Decision /
+CalibrationRecord carries the profile's `policy_version`.
+
+---
+
+# Legacy store-level walkthrough (TODO25, still valid)
 
 The closed loop from question to certified outcome in five steps:
 **pre-register → run → decide → boundary/promote → calibrate**. Every
 step rides a builder or store API — no hand-assembled payloads. Worked
 examples: the TODO25 ledgers (`scratch/todo25_parity.sqlite3`,
 `scratch/todo24_h24.sqlite3`, both git-ignored).
-
-Core rule: evolution/campaigns produce evidence; gates dispose; claims
-only at certified tier. Nothing here widens a gate.
-
-## 0. Setup
-
-```python
-from ceec import builders, models
-from ceec.store import CEECStore
-
-store = CEECStore("scratch/my_ledger.sqlite3", "scratch/my_artifacts")
-scope = models.Scope(
-    domain="research",
-    substrate=("digital",),
-    budget="certified",                      # or a lab tier: BudgetTier.CERTIFIED.value
-    extra={"problem_class": "flat_classification_hard"},
-)
-```
-
-## 1. Pre-register: `builders.experiment`
-
-`experiment(...)` populates every required field (`created_at`,
-`falsification_criterion`, `overturn_criterion`, `hard_gates`, and the
-§22 design keys `seed_plan` / `evaluation_policy` / `evidence_kind`) and
-maps a lab budget tier onto a ceec budget (`smoke→quick`,
-`quick→standard`, `certified→nightly`).
-
-```python
-draft = builders.experiment(
-    id_="X-MYHYP-001",                        # ids must carry the X prefix
-    question="does mechanism M beat its matched control?",
-    prediction="M clears the control by 2 seed-SE",
-    scope=scope,
-    tier="certified",
-    prediction_probability=(0.5, 0.8, 0.7),   # (low, high, point) prior
-    design={"decision_rule": "paired permutation p < 0.05"},
-)
-```
-
-You never write the quality-flag dict by hand — that is step 2's job —
-and you never call `pre_register_experiment` yourself when measuring
-through step 3's runner.
 
 ## 2. Evidence: `builders.gate_evidence`
 

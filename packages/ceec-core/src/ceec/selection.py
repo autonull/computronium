@@ -14,24 +14,16 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ceec.gates import effective_status
+from ceec.profile import DEFAULT_PROFILE, Profile
 from ceec.store import CEECStore, StoreError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from ceec import models
-
-BUDGET_DEFAULT_COST = {"quick": 1.0, "standard": 4.0, "nightly": 16.0}
+    from ceec.constraints import ConstraintResult
 
 CoordinateValidator = Callable[[Any], None]
-
-
-@dataclass(frozen=True, slots=True)
-class ConstraintResult:
-    constraint: str
-    passed: bool
-    detail: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,96 +48,19 @@ def check_hard_constraints(
     store: CEECStore,
     experiment: models.Experiment,
     coordinate_validator: CoordinateValidator | None = None,
-    budget_limit: float | None = None,
+    profile: Profile | None = None,
 ) -> tuple[ConstraintResult, ...]:
-    design = experiment.design
-    coordinate = design.get("coordinate")
+    """Run the profile's constraint registry in order."""
+    from ceec.profile import coordinate_constraint
 
-    if coordinate is not None and coordinate_validator is not None:
-        try:
-            coordinate_validator(coordinate)
-            coord_result = ConstraintResult("coordinate_valid", True, "validated")
-        except Exception as exc:
-            coord_result = ConstraintResult("coordinate_valid", False, str(exc))
-    else:
-        coord_result = ConstraintResult(
-            "coordinate_valid", True, "not applicable (no coordinate / no validator)"
-        )
-
-    quarantined = []
-    for belief_id in experiment.target_beliefs:
-        eff = effective_status(store, belief_id)
-        if eff.effective == "quarantined":
-            quarantined.append(belief_id)
-
-    results = [
-        coord_result,
-        ConstraintResult(
-            "pre_registration_complete",
-            experiment.status == "pre_registered",
-            f"status={experiment.status}",
-        ),
-        ConstraintResult(
-            "no_quarantined_dependencies",
-            not quarantined,
-            f"quarantined targets={quarantined or 'none'}",
-        ),
-        ConstraintResult(
-            "budget_within_limit",
-            budget_limit is None
-            or (experiment.cost_high or BUDGET_DEFAULT_COST[experiment.budget])
-            <= budget_limit,
-            f"cost_high={experiment.cost_high}, budget={experiment.budget}, "
-            f"limit={budget_limit}",
-        ),
-        ConstraintResult(
-            "controls_present_or_justified",
-            bool(experiment.controls) or bool(design.get("controls_justification")),
-            f"controls={len(experiment.controls)}, justification="
-            f"{design.get('controls_justification')}",
-        ),
-        ConstraintResult(
-            "seed_plan_present",
-            bool(design.get("seed_plan")),
-            f"seed_plan={design.get('seed_plan')!r}",
-        ),
-        ConstraintResult(
-            "evaluation_policy_present",
-            bool(design.get("evaluation_policy")),
-            f"evaluation_policy={design.get('evaluation_policy')!r}",
-        ),
-        ConstraintResult(
-            "structured_evidence_plan_present",
-            bool(design.get("evidence_kind")),
-            f"evidence_kind={design.get('evidence_kind')!r}",
-        ),
-        ConstraintResult(
-            "instrument_valid_for_claim",
-            _instruments_valid(store, design.get("instruments", [])),
-            f"instruments={design.get('instruments', [])}",
-        ),
-        ConstraintResult(
-            "frozen_theta_audit_for_psi_only_claims",
-            not design.get("psi_only") or "frozen_theta_audit" in experiment.hard_gates,
-            f"psi_only={design.get('psi_only')}, "
-            f"frozen_theta_audit gate={'frozen_theta_audit' in experiment.hard_gates}",
-        ),
-        ConstraintResult(
-            "identity_card_for_new_primitive",
-            not design.get("new_primitive") or bool(design.get("identity_card_ref")),
-            f"new_primitive={design.get('new_primitive')}, card="
-            f"{design.get('identity_card_ref')!r}",
-        ),
-    ]
-    return tuple(results)
-
-
-def _instruments_valid(store: CEECStore, instruments: list[str]) -> bool:
-    for instrument in instruments:
-        eff = effective_status(store, instrument)
-        if eff.effective == "quarantined":
-            return False
-    return True
+    profile = profile or DEFAULT_PROFILE
+    coord = (
+        coordinate_constraint(coordinate_validator) if coordinate_validator else None
+    )
+    return tuple(
+        constraint.check(store, experiment, profile)
+        for constraint in ((coord,) if coord else ()) + profile.constraints
+    )
 
 
 def state_hash(store: CEECStore) -> str:
@@ -177,7 +92,7 @@ def state_hash(store: CEECStore) -> str:
 
 
 def expected_value(
-    store: CEECStore, experiment: models.Experiment, gamma: float = 1.0
+    store: CEECStore, experiment: models.Experiment, profile: Profile | None = None
 ) -> tuple[float, float, float]:
     """Documented scoring model.
 
@@ -186,6 +101,8 @@ def expected_value(
     Cost(x) = mean(cost_low, cost_high) or budget default.
     Score(x) = EV / Cost^gamma.
     """
+    profile = profile or store.profile or DEFAULT_PROFILE
+    gamma = profile.gamma
     ev = 0.0
     for belief_id in experiment.target_beliefs:
         revision = store.latest_revision(belief_id)
@@ -207,10 +124,11 @@ def expected_value(
             if goal_rev is not None and goal_rev.scalar_utility is not None:
                 priority = max(priority, goal_rev.scalar_utility)
         ev += priority * (1.0 - mid) * generality_multiplier
+    default_cost = profile.default_cost or {}
     cost = (
         (experiment.cost_low + experiment.cost_high) / 2
         if experiment.cost_low is not None and experiment.cost_high is not None
-        else BUDGET_DEFAULT_COST[experiment.budget]
+        else default_cost.get(experiment.budget, 1.0)
     )
     cost = max(cost, 1e-9)
     score = ev / math.pow(cost, gamma)
@@ -219,7 +137,7 @@ def expected_value(
 
 def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored candidates
     store: CEECStore,
-    profile: dict[str, Any],
+    profile: Profile | None,
     rationale: str,
     coordinate_validator: CoordinateValidator | None = None,
     overrides: list[dict[str, Any]] | None = None,
@@ -236,8 +154,7 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
     not recorded, so §24 ``override_rate`` keeps signal for real
     overrides.
     """
-    gamma = float(profile.get("cost_model", {}).get("gamma", 1.0))
-    budget_limit = profile.get("budget_limit")
+    profile = profile or store.profile or DEFAULT_PROFILE
 
     candidates = generate_candidates(store)
     if candidate_ids is not None:
@@ -246,13 +163,13 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
     scored: list[ScoredCandidate] = []
     for experiment in candidates:
         constraints = check_hard_constraints(
-            store, experiment, coordinate_validator, budget_limit
+            store, experiment, coordinate_validator, profile
         )
         candidate = ScoredCandidate(experiment.id, constraints)
         if not candidate.all_constraints_passed:
             scored.append(candidate)
             continue
-        ev, cost, score = expected_value(store, experiment, gamma)
+        ev, cost, score = expected_value(store, experiment, profile)
         scored.append(ScoredCandidate(experiment.id, constraints, ev, cost, score))
 
     eligible = [c for c in scored if c.all_constraints_passed]
@@ -278,9 +195,6 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
                     o for o in recorded_overrides if o is not selection_override
                 ]
 
-    constraint_map = {
-        c.experiment_id: [_asdict(r) for r in c.constraints] for c in scored
-    }
     decision = store.record_decision(
         state_hash=state_hash(store),
         candidate_experiments=[c.experiment_id for c in scored],
@@ -288,20 +202,37 @@ def decide(  # ruff: ignore[too-many-locals] -- §22 loop accumulates scored can
         rationale=rationale,
         selected_experiment=selected.experiment_id if selected else None,
         overrides=recorded_overrides,
-        constraints_checked=constraint_map,
+        constraints_checked={
+            c.experiment_id: [
+                {"constraint": r.name, "passed": r.passed, "detail": r.detail}
+                for r in c.constraints
+            ]
+            for c in scored
+        },
+        policy_version=profile.policy_version,
     )
     return decision
 
 
-def _asdict(obj: ConstraintResult) -> dict[str, Any]:
-    return {
-        "constraint": obj.constraint,
-        "passed": obj.passed,
-        "detail": obj.detail,
-    }
-
-
-def load_profile(path: Path) -> dict[str, Any]:
+def load_profile(path: Path) -> Profile:
+    """Load a YAML profile file into a :class:`Profile` (thresholds, gamma,
+    budget_limit); constraint membership is code-registered, never YAML."""
     from omegaconf import OmegaConf
 
-    return OmegaConf.to_container(OmegaConf.load(path), resolve=True)  # type: ignore[return-value]
+    from ceec.profile import Thresholds
+
+    raw: dict[str, Any] = OmegaConf.to_container(OmegaConf.load(path), resolve=True)  # type: ignore[assignment]
+    thresholds_raw = raw.get("thresholds") or {}
+    cost_model = raw.get("cost_model") or {}
+    return Profile(
+        name=str(raw.get("name", "yaml-profile")),
+        policy_version=str(raw.get("policy_version", "1.0")),
+        thresholds=Thresholds(
+            promote_low=float(thresholds_raw.get("promote", 0.95)),
+            boundary_high=float(thresholds_raw.get("boundary", 0.05)),
+            reopen_min=float(thresholds_raw.get("reopen", 0.10)),
+        ),
+        gamma=float(cost_model.get("gamma", 1.0)),
+        constraints=DEFAULT_PROFILE.constraints,
+        default_cost=DEFAULT_PROFILE.default_cost,
+    )

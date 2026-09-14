@@ -6,6 +6,7 @@ kept strictly separate from goal utility; both flow through revisions.
 
 from __future__ import annotations
 
+from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import]  runtime-resolved by pydantic
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -71,13 +72,31 @@ class Probability(_Frozen):
 
 
 class Scope(_Frozen):
-    domain: str
-    substrate: tuple[str, ...] = ()
-    geometry: tuple[str, ...] = ()
-    credit: tuple[str, ...] = ()
-    budget: str | None = None
-    code_commit: str | None = None
-    extra: dict[str, Any] = Field(default_factory=dict)
+    """Open dimension map (spec §6); ``Scope.of(domain=..., ...)`` builds one.
+
+    Legacy ledger rows carrying substrate/geometry/credit/budget/extra
+    fields are absorbed into ``dims`` at parse time (one-way migration).
+    """
+
+    dims: Mapping[str, object] = Field(default_factory=dict)
+
+    @classmethod
+    def of(cls, **dims: object) -> Scope:
+        return cls(dims=dims)
+
+    @property
+    def domain(self) -> str:
+        return str(self.dims.get("domain", ""))
+
+    @model_validator(mode="before")
+    @classmethod
+    def _absorb_legacy(cls, data: object) -> object:
+        if isinstance(data, dict) and "dims" not in data:
+            legacy = data.pop("extra", None)
+            if isinstance(legacy, dict):
+                data = {**legacy, **data}
+            return {"dims": data}
+        return data
 
 
 class Artifact(_Frozen):
@@ -203,7 +222,7 @@ class Experiment(_Frozen):
     prediction_probability: Probability | None = None
     controls: list[str]
     metrics: list[str]
-    budget: Literal["quick", "standard", "nightly"]
+    budget: str
     cost_low: float | None = None
     cost_high: float | None = None
     falsification_criterion: str
@@ -225,6 +244,7 @@ class Decision(_Frozen):
     selected_experiment: str | None
     overrides: list[dict[str, Any]] = Field(default_factory=list)
     constraints_checked: dict[str, Any] = Field(default_factory=dict)
+    policy_version: str | None = None
     rationale: str
 
     def model_post_init(self, _) -> None:
@@ -283,6 +303,7 @@ class CalibrationRecord(_Frozen):
     log_score: float | None = None
     scope: Scope | None = None
     notes: str | None = None
+    policy_version: str | None = None
     created_at: str
 
     def model_post_init(self, _) -> None:

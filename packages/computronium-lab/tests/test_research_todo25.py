@@ -127,7 +127,7 @@ def _seeded_store(path: Path):
     from ceec import builders, models
 
     store = CEECStore(path / "ledger.sqlite3", path / "artifacts")
-    scope = models.Scope(domain="test", substrate=("digital",), budget="quick")
+    scope = models.Scope.of(domain="test", substrate=("digital",), budget="quick")
     draft = builders.experiment(
         id_="X-RENDER-001",
         question="q?",

@@ -10,7 +10,7 @@ def add_flagged_evidence(store, scope, quality, belief_id="B-T1"):
     ev = store.record_evidence(
         "vector",
         scope,
-        [artifact.id],
+        artifact_refs=[artifact.id],
         axes=["seed", "metric"],
         values_ref=artifact.uri,
         quality=quality,
@@ -82,7 +82,11 @@ def boundary_belief(store, scope, link_belief):
 def _placeholder_evidence(store, scope):
     artifact = store.ingest_artifact(b"base", "result")
     return store.record_evidence(
-        "vector", scope, [artifact.id], axes=["seed"], values_ref=artifact.uri
+        "vector",
+        scope,
+        artifact_refs=[artifact.id],
+        axes=["seed"],
+        values_ref=artifact.uri,
     )
 
 

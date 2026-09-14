@@ -12,8 +12,6 @@ callers pass ``BudgetTier.<X>.value``.
 from __future__ import annotations
 
 import json
-import math
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ceec import models
@@ -30,6 +28,7 @@ __all__ = [
     "DEFAULT_HARD_GATES",
     "TIER_BUDGET",
     "ChanceVerdict",
+    "chance_verdict",
     "experiment",
     "gate_evidence",
     "quality_flags",
@@ -85,6 +84,7 @@ def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment fiel
     rationale: str = "TODO25 builder-constructed experiment",
     design: Mapping[str, Any] | None = None,
     tier: str = "quick",
+    budget: str | None = None,
     prediction_probability: (
         models.Probability | tuple[float, float] | tuple[float, float, float] | None
     ) = None,
@@ -119,7 +119,7 @@ def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment fiel
         ),
         controls=list(controls),
         metrics=list(metrics),
-        budget=_budget(tier),
+        budget=budget or _budget(tier),
         falsification_criterion=falsification_criterion or _FALSIFICATION_DEFAULT,
         overturn_criterion=overturn_criterion or _OVERTURN_DEFAULT,
         hard_gates=list(hard_gates),
@@ -139,20 +139,13 @@ def quality_flags(  # ruff: ignore[too-many-arguments]  one parameter per §18/�
     multi_seed_justified: bool | None = None,
     multi_seed_infeasible: bool | None = None,
     extra: Mapping[str, Any] | None = None,
+    **open_flags: Any,
 ) -> dict[str, Any]:
-    """Assemble the §18/§19 evidence ``quality`` dict with exact flag
-    spellings read by ``ceec.gates`` (the gate readers are the schema).
+    """Assemble the §18/§19 evidence ``quality`` dict.
 
-    ``None`` flags are omitted; ``defect_audit``/``integrity_checks``
-    validate against their gate alphabet.
+    Flag spellings and alphabets are enforced by ``Profile.quality`` at
+    ``record_evidence`` (TODO26 T26.B.2); ``None`` flags are omitted.
     """
-    for flag, allowed in (
-        ("defect_audit", ("pass", "fail")),
-        ("integrity_checks", ("pass", "fail")),
-    ):
-        value = locals()[flag]
-        if value not in allowed:
-            raise ValueError(f"{flag}={value!r} not in {allowed}")
     flags: dict[str, Any] = {
         "seeds": seeds,
         "matched_control": matched_control,
@@ -170,6 +163,7 @@ def quality_flags(  # ruff: ignore[too-many-arguments]  one parameter per §18/�
             flags[name] = value
     if extra:
         flags.update(extra)
+    flags.update(open_flags)
     return flags
 
 
@@ -231,60 +225,5 @@ def gate_evidence(
     )
 
 
-@dataclass(frozen=True, slots=True)
-class ChanceVerdict:
-    """At-chance statistics for a multi-seed accuracy campaign (TODO25 B.1).
-
-    ``per_seed_band`` is the honest 2·binomial-SE width over the eval
-    split; ``mean_at_chance`` carries the certified decision
-    (``abs(mean − chance) ≤ 2·SE(n_seeds)``).
-    """
-
-    chance: float
-    n_eval: int
-    accuracies: tuple[float, ...]
-    mean: float
-    per_seed_band: float
-    per_seed_in_band: tuple[bool, ...]
-    mean_se: float
-    mean_at_chance: bool
-
-    @property
-    def at_chance(self) -> bool:
-        return self.mean_at_chance
-
-
-def chance_verdict(
-    accuracies: Sequence[float],
-    n_eval: int,
-    *,
-    chance: float = 0.5,
-) -> ChanceVerdict:
-    """2·binomial-SE per-seed band + across-seed mean rule.
-
-    ``n_eval`` is the per-seed evaluation-set size the accuracies were
-    measured over; the band is ``2·sqrt(chance·(1−chance)/n_eval)``.
-    """
-    if not accuracies:
-        raise ValueError("chance_verdict requires at least one accuracy")
-    if n_eval < 1:
-        raise ValueError("n_eval must be >= 1")
-    n = len(accuracies)
-    mean = sum(accuracies) / n
-    band = 2.0 * math.sqrt(chance * (1.0 - chance) / n_eval)
-    in_band = tuple(abs(a - chance) <= band for a in accuracies)
-    if n > 1:
-        var = sum((a - mean) ** 2 for a in accuracies) / (n - 1)
-        se = max(math.sqrt(var / n), 1e-9)
-    else:
-        se = band / 2.0
-    return ChanceVerdict(
-        chance=chance,
-        n_eval=n_eval,
-        accuracies=tuple(accuracies),
-        mean=mean,
-        per_seed_band=band,
-        per_seed_in_band=in_band,
-        mean_se=se,
-        mean_at_chance=abs(mean - chance) <= 2.0 * se,
-    )
+# chance_verdict lives in ceec.stats (TODO26 §2.5); re-exported here.
+from ceec.stats import ChanceVerdict, chance_verdict  # ruff: ignore[module-import-not-at-top-of-file]

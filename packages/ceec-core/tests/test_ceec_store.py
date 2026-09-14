@@ -42,7 +42,7 @@ def test_duplicate_id_rejected(store: CEECStore) -> None:
 
 
 def test_invalid_reference_rejected(store: CEECStore) -> None:
-    scope = models.Scope(domain="credit", credit=("gradient",))
+    scope = models.Scope.of(domain="credit", credit=("gradient",))
     with pytest.raises(StoreError):
         store.record_evidence(
             kind="vector",

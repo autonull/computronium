@@ -18,7 +18,7 @@ class TestStructuredEvidence:
         ev = store.record_evidence(
             "tensor",
             scope,
-            [artifact.id],
+            artifact_refs=[artifact.id],
             axes=["depth", "seed"],
             values_ref=artifact.uri,
         )
@@ -140,7 +140,11 @@ class TestIngestVerdict:
             scope,
             evidence_refs=[
                 store.record_evidence(
-                    "vector", scope, [artifact.id], axes=["a"], values_ref=artifact.uri
+                    "vector",
+                    scope,
+                    artifact_refs=[artifact.id],
+                    axes=["a"],
+                    values_ref=artifact.uri,
                 ).id
             ],
         ).id

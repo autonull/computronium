@@ -46,7 +46,7 @@ def main() -> int:
             type_="lever_analysis",
             operator="consolidate",
             inputs={"instrument_notes": [d22_note.id]},
-            scope=models.Scope(domain="plasticity", extra={"belief": BELIEF}),
+            scope=models.Scope.of(domain="plasticity", extra={"belief": BELIEF}),
             value={
                 "exhausted_levers": ["instantaneous_psi_update"],
                 "untested_levers": [

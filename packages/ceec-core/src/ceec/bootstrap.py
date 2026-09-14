@@ -33,7 +33,7 @@ def _provenance_evidence(
     )
     return store.record_evidence(
         kind=PROVENANCE_KIND,
-        scope=models.Scope(domain="bootstrap", extra={"config": str(config_path)}),
+        scope=models.Scope.of(domain="bootstrap", extra={"config": str(config_path)}),
         artifact_refs=[artifact.id],
         axes=["bootstrap"],
         values_ref=artifact.uri,
@@ -177,30 +177,7 @@ def bootstrap(store: CEECStore, config_dir: Path | str) -> dict[str, list[str]]:
 
 
 def _scope(raw: dict[str, Any]) -> models.Scope:
-    list_fields = {
-        k: tuple(v) for k, v in raw.items() if k in {"substrate", "geometry", "credit"}
-    }
-    return models.Scope(
-        domain=raw.get("domain", "unknown"),
-        substrate=list_fields.get("substrate", ()),
-        geometry=list_fields.get("geometry", ()),
-        credit=list_fields.get("credit", ()),
-        budget=raw.get("budget"),
-        code_commit=raw.get("code_commit"),
-        extra={
-            k: v
-            for k, v in raw.items()
-            if k
-            not in {
-                "domain",
-                "substrate",
-                "geometry",
-                "credit",
-                "budget",
-                "code_commit",
-            }
-        },
-    )
+    return models.Scope(**{"domain": "unknown", **raw})
 
 
 def _now() -> str:

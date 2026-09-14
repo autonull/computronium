@@ -15,7 +15,7 @@ from ceec.store import CEECStore, StoreError
 
 from ceec import builders, models
 
-SCOPE = models.Scope(domain="test", substrate=("digital",), budget="quick")
+SCOPE = models.Scope.of(domain="test", substrate=("digital",), budget="quick")
 
 
 @pytest.fixture()

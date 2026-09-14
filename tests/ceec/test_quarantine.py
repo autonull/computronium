@@ -9,7 +9,7 @@ def make_instrument_chain(store, scope):
     )
     evidence = store.ingest_artifact(b"chain", "result")
     ev = store.record_evidence(
-        "scalar", scope, [evidence.id], notes="direct observation"
+        "scalar", scope, artifact_refs=[evidence.id], notes="direct observation"
     )
     mid = store.create_belief(
         "depends on instrument", "mechanism", scope, id_="B-MID", evidence_refs=[ev.id]
@@ -81,7 +81,11 @@ class TestStaleDependencies:
         instrument, mid, _ = make_instrument_chain(store, scope)
         artifact = store.ingest_artifact(b"instr-ev", "result")
         ev = store.record_evidence(
-            "vector", scope, [artifact.id], axes=["seed"], values_ref=artifact.uri
+            "vector",
+            scope,
+            artifact_refs=[artifact.id],
+            axes=["seed"],
+            values_ref=artifact.uri,
         )
         store._link(
             store._conn,

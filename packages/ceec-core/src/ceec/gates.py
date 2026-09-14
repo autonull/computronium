@@ -19,14 +19,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from ceec.profile import DEFAULT_PROFILE, Profile
 from ceec.store import CEECStore, StoreError
 
 if TYPE_CHECKING:
     from ceec import models
-
-PROMOTE_THRESHOLD = 0.95
-BOUNDARY_THRESHOLD = 0.05
-REOPEN_THRESHOLD = 0.10
 
 MIN_SEEDS = 3
 
@@ -69,9 +66,7 @@ def _quality_flags(evidence: list[models.Evidence]) -> dict[str, object]:
 
 def _scope_explicit(belief: models.Belief) -> bool:
     scope = belief.scope
-    return bool(scope.domain) and bool(
-        scope.substrate or scope.geometry or scope.credit or scope.extra
-    )
+    return bool(scope.domain) and len(scope.dims) > 1
 
 
 def _record(
@@ -95,14 +90,19 @@ def _record(
     return tuple(ids)
 
 
-def evaluate_promotion(store: CEECStore, belief_id: str) -> Evaluation:
+def evaluate_promotion(
+    store: CEECStore, belief_id: str, profile: Profile | None = None
+) -> Evaluation:
+    thresholds = (profile or store.profile or DEFAULT_PROFILE).thresholds
     belief = store.get_belief(belief_id)
     revision = store.latest_revision(belief_id)
     evidence = _evidence_for(store, belief_id)
     derived = _derived_for(store, belief_id)
     flags = _quality_flags(evidence)
 
-    prob_ok = revision is not None and revision.probability.low >= PROMOTE_THRESHOLD
+    prob_ok = (
+        revision is not None and revision.probability.low >= thresholds.promote_low
+    )
     seeds = max([int(ev.quality.get("seeds", 0)) for ev in evidence] + [0])
     quarantined_deps = _quarantined_deps(store, belief_id)
     self_quarantined = store.current_status(belief_id) == "quarantined"
@@ -111,7 +111,7 @@ def evaluate_promotion(store: CEECStore, belief_id: str) -> Evaluation:
             "probability_threshold",
             prob_ok,
             f"probability_low={revision.probability.low if revision else None} "
-            f"vs threshold {PROMOTE_THRESHOLD}",
+            f"vs threshold {thresholds.promote_low}",
         ),
         GateResult(
             "multi_seed",
@@ -163,21 +163,26 @@ def evaluate_promotion(store: CEECStore, belief_id: str) -> Evaluation:
     )
 
 
-def evaluate_boundary(store: CEECStore, belief_id: str) -> Evaluation:
+def evaluate_boundary(
+    store: CEECStore, belief_id: str, profile: Profile | None = None
+) -> Evaluation:
+    thresholds = (profile or store.profile or DEFAULT_PROFILE).thresholds
     belief = store.get_belief(belief_id)
     revision = store.latest_revision(belief_id)
     evidence = _evidence_for(store, belief_id)
     derived = _derived_for(store, belief_id)
     flags = _quality_flags(evidence)
 
-    rescue_ok = revision is not None and revision.probability.high <= BOUNDARY_THRESHOLD
+    rescue_ok = (
+        revision is not None and revision.probability.high <= thresholds.boundary_high
+    )
     seeds = max([int(ev.quality.get("seeds", 0)) for ev in evidence] + [0])
     results = [
         GateResult(
             "rescue_probability_threshold",
             rescue_ok,
             f"rescue probability_high={revision.probability.high if revision else None} "
-            f"vs threshold {BOUNDARY_THRESHOLD}",
+            f"vs threshold {thresholds.boundary_high}",
         ),
         GateResult(
             "defect_hunt_passed",
@@ -216,8 +221,10 @@ def evaluate_boundary(store: CEECStore, belief_id: str) -> Evaluation:
     )
 
 
-def promote(store: CEECStore, belief_id: str, reason: str) -> Evaluation:
-    evaluation = evaluate_promotion(store, belief_id)
+def promote(
+    store: CEECStore, belief_id: str, reason: str, profile: Profile | None = None
+) -> Evaluation:
+    evaluation = evaluate_promotion(store, belief_id, profile)
     if evaluation.all_passed and store.current_status(belief_id) != "promoted":
         store.change_status(
             belief_id,
@@ -228,8 +235,10 @@ def promote(store: CEECStore, belief_id: str, reason: str) -> Evaluation:
     return evaluation
 
 
-def declare_boundary(store: CEECStore, belief_id: str, reason: str) -> Evaluation:
-    evaluation = evaluate_boundary(store, belief_id)
+def declare_boundary(
+    store: CEECStore, belief_id: str, reason: str, profile: Profile | None = None
+) -> Evaluation:
+    evaluation = evaluate_boundary(store, belief_id, profile)
     if evaluation.all_passed and store.current_status(belief_id) != "boundary":
         store.change_status(
             belief_id,
@@ -254,13 +263,18 @@ def reopen(
     trigger: str,
     reason: str,
     evidence_refs: list[str] | None = None,
+    profile: Profile | None = None,
 ) -> models.StatusChange:
     if trigger not in REOPEN_TRIGGERS:
         raise StoreError(f"unknown reopen trigger {trigger!r}")
     if store.current_status(belief_id) != "boundary":
         raise StoreError(f"belief {belief_id} is not at boundary; reopen refused")
     revision = store.latest_revision(belief_id)
-    if revision is not None and revision.probability.high <= REOPEN_THRESHOLD:
+    if (
+        revision is not None
+        and revision.probability.high
+        <= (profile or DEFAULT_PROFILE).thresholds.reopen_min
+    ):
         pass  # trigger itself is the credible basis; probability updated by caller
     return store.change_status(
         belief_id,

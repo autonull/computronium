@@ -19,7 +19,7 @@ def store(tmp_path):
     s.close()
 
 
-SCOPE = models.Scope(domain="test", substrate=("digital",), budget="quick")
+SCOPE = models.Scope.of(domain="test", substrate=("digital",), budget="quick")
 
 
 def _experiment(store: CEECStore, **overrides: object) -> models.Experiment:
@@ -94,9 +94,15 @@ def test_gate_evidence_flags_validate_against_gate_readers(store: CEECStore) -> 
 
 
 def test_gate_evidence_rejects_bad_flags_and_missing_payload(store: CEECStore) -> None:
+    artifact = store.ingest_artifact(b"payload", "evidence_payload")
     with pytest.raises(ValueError, match="defect_audit"):
         builders.gate_evidence(
-            store, SCOPE, artifact_refs=["A-000001"], defect_audit="ok"
+            store,
+            SCOPE,
+            artifact_refs=[artifact.id],
+            axes=("probe",),
+            values_ref=f"artifact:{artifact.id}",
+            defect_audit="ok",
         )
     with pytest.raises(ValueError, match="axes and values_ref"):
         builders.gate_evidence(store, SCOPE, seeds=1, values=[1.0])

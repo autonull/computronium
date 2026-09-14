@@ -1,8 +1,9 @@
 # TODO26 — CEEC Kernel Architecture + ψ Composition
 
-**Status:** PLANNED 2026-09-14 — architecture verified against four live
-usage patterns (probe closed loop, evolution kernel, MeasurementRunner,
-per-epoch training capture); design and identifiers finalized below.
+**Status:** PHASES A–H LANDED 2026-09-14 (Phase S open — see Progress
+Log). Architecture verified against four live usage patterns (probe
+closed loop, evolution kernel, MeasurementRunner, per-epoch training
+capture); Profile/Session/store-split/derived-registry all shipped.
 **Builds on:** TODO25 (all phases + continuation executed; root `CEEC.md`
 reference landed; improvement #6 vacuous-override rule shipped).
 **Explicit exclusion:** PyPI publishing remains out of scope.
@@ -385,15 +386,154 @@ end-to-end certification on the new Session API.
 ## 17. Progress Log
 
 ### Session 2026-09-14 — PLANNED
-- [ ] Design verified against 4 live call sites; identifiers finalized (this document)
+- [x] Design verified against 4 live call sites; identifiers finalized (this document)
+
+### Session 2026-09-14 — Phases A–H executed (Phases A–G complete; Phase S open)
+
+**Phase A — kernel parameterization (landed)**
+- `ceec/profile.py`: `Profile` / `Thresholds` / `QualitySchema` /
+  `Constraint` / `LedgerRole`; `CORE_CONSTRAINTS` extracted verbatim;
+  `DEFAULT_PROFILE` (core budget tiers + costs + quality schema).
+- `ledger_meta` table; `CEECStore(..., role=, profile=)`; `ceec init
+  --role`; `run_audit` scope check (`campaign_ledger_instrument_gating`).
+- `policy_version` additive migration on `decisions` +
+  `calibration_records`; stamped from `store.profile` on every write.
+- Gates read `store.profile.thresholds` (module constants deleted;
+  decision-time profile overrides per call).
+
+**Phase B — registries (landed)**
+- `check_hard_constraints` iterates `profile.constraints`; ψ/θ +
+  identity-card constraints moved to the lab profile
+  (`computronium_lab/ceec_profile.py::COMPUTRONIUM_PROFILE`). Kernel
+  grep gate passes: zero `psi|frozen_theta|identity_card` in ceec-core.
+- `QualitySchema.validate` enforced at `record_evidence`; builders'
+  spelling table deleted (schema is the single spelling source).
+  NOTE: undeclared quality keys are *accepted* (open map, spec §6) —
+  live usage records `verification_level`/`predicted_viability`/`tier`;
+  `defect_audit`/`integrity_checks` alphabets extended with `not_run`
+  (legitimate pre-hunt state used by tests and probes).
+
+**Phase C — store split (landed)**
+- `ceec/store/` package: `schema.py` (DDL + `_additive_migrate`),
+  `records.py` (`RecordsMixin`), `query.py` (`QueryMixin`),
+  `base.py` (`StoreBase` lifecycle/internals), `_store.py` +
+  `__init__.py` (composed `CEECStore` facade; import path stable).
+- `record_evidence`/`record_derived`/`record_decision` keyword-only
+  (kind/scope/type_/operator/inputs stay positional); ruff
+  positional-arg ignores deleted; all call sites migrated.
+- `ceec.run.record_result(store, experiment, result)` one-call ingest
+  (artifact → evidence → calibration); `run_experiment` refactored onto
+  it.
+
+**Phase D — Session façade (landed)**
+- `ceec/session.py`: `ledger(path, profile, role=)` + `Session` with
+  `experiment`/`artifact`/`evidence`/`decide`/`run`/`record_result`/
+  `render`/`audit`/`calibration_report`/`close_round`.
+- `Session.decide(focus_id=...)` pre-checks focus constraints natively;
+  the kernel's `StoreError` fallback hack is deleted from
+  `evolution._scoped_decision` (now a thin wrapper). The failed-constraint
+  names are appended to the decision rationale (improvement #1 landed).
+- `render_ledger` migrated to `ceec.report`; lab module re-exports.
+- `close_round` = render + `run_audit` + `audit_decisions` + review
+  flags; `fail_on_trigger=True` raises on violations/flags (TODO25
+  #10c; CLI parity still open, see improvements).
+- Tests: `tests/ceec/test_session.py` (closed-loop promote, manual
+  `record_result`, native focus fallback, role stamp, render).
+
+**Phase E — Scope generalization (landed)**
+- `Scope` is now an open `dims` map (`Scope.of(**dims)`); legacy
+  `domain/substrate/geometry/credit/budget/extra` kwargs are absorbed
+  into `dims` at parse time (one-way data migration — old ledger rows
+  keep reading). `.substrate/.geometry/.credit` readers updated
+  (`_scope_explicit`, `_beliefs_without_scope`).
+- `Experiment.budget: str`, validated against `profile.budget_tiers` at
+  pre-registration; `BUDGET_DEFAULT_COST` deleted (profile
+  `default_cost`); declared scope dims type-checked at record time
+  (`_validate_scope`), undeclared dims stay open (§6).
+- Construction sweep: all `Scope(domain=...)` → `Scope.of(domain=...)`.
+
+**Phase F — derived operators + provenance (landed)**
+- `ceec/derived.py`: `Operator` registry (`mean`, `median`, `spread`,
+  `contrast`, `slope`, `dominance`, `replication`, `chance_band`);
+  `compute_derived` resolves refs from the ledger and records
+  provenance-stamped rows. Recompute byte-identically:
+  `tests/ceec/test_derived.py`.
+- `ceec/stats.py` is the canonical `chance_verdict` home;
+  `builders.chance_verdict` re-exported.
+- `Session.run`/`run_experiment` artifacts carry execution provenance:
+  code commit (`CEEC_CODE_COMMIT` override, git probe fallback), seed
+  policy, evaluation policy, deviations, config hash.
+- `run_audit` §27 extensions: `single_seed_promotion_attempt` (violation),
+  `untested_lever_boundary_declaration` (warning),
+  `silent_scalarization` (warning).
+- `render_ledger(store, record_rollups=True)` opt-in records the rollup
+  as a recomputable `summary` Derived; read-only default preserved.
+
+**Phase G — Computronium adapter (landed)**
+- `computronium_lab/ceec_profile.py::COMPUTRONIUM_PROFILE`: scope dims
+  (domain/task/run_id/substrate/geometry/credit/budget), tier ladder,
+  ψ/θ + identity-card constraints, core quality schema.
+- `Lab.ledger_session(role=...)`; `_record_exploratory`, `_record_ceec`,
+  `research_report` ledger block, `training.ceec_campaign` (scratch
+  role), and `evolution._scoped_decision` migrated onto Session.
+- `computronium/ceec` shim emits DeprecationWarning; legacy probes
+  (`x_ali/x_sta/x_tac/x_tpc/x_rse_001`) import `ceec` directly.
+
+**Phase H — domain-enablement proof (landed)**
+- `tests/ceec/test_domain_profile.py`: sentiment-eval profile (own scope
+  dims, `cheap/standard/sweep` tiers) runs experiment → run → promotion
+  → calibration → clean `close_round` with zero core changes.
+- `CEEC.md` architecture section + `docs/research/todo24/ceec_guide.md`
+  walkthrough rewritten on Profile/Session (legacy store walkthrough
+  retained below the fold).
+
+**Verification:** ceec suites 154 passed (tests/ceec +
+packages/ceec-core/tests); lab suite 164 passed; platform parity +
+boundary tests green; ruff clean on all touched trees; pyright clean on
+ceec-core.
+
+**Phase S — open (infrastructure ready):** T26.S.1–S.4 are unexecuted.
+The composed backbone+ψ measurement now rides `Session.run`
+(record_result → artifact → evidence → calibration → close_round), so
+S.3's certified H24.3 round-2 run is unblocked but requires its own
+training-budget session (GPU, background execution per AGENTS cell
+walltime rules). S.1/S.2 (composed mechanism + continual wiring) remain
+the prerequisite implementation work.
 
 ---
 
 ### 💡 Improvements discovered this session
 
-*(record during execution — first candidate: Session.decide's focus
-pre-check should share the constraint result with the recorded decision
-so the fallback rationale cites the exact failed constraint.)*
+1. **Landed:** `Session.decide`'s focus pre-check shares the constraint
+   results with the recorded decision — the fallback rationale cites the
+   exact failed constraint names (`focus X fell back to default
+   selection (failed: seed_plan_present)`).
+2. **Landed:** quality-schema enforcement keeps an open map for
+   undeclared keys (live ledgers carry `verification_level` etc.);
+   `not_run` added to the audit alphabets as a first-class pre-hunt
+   state instead of forcing a false "fail".
+3. **Open — CLI `close-round`:** `Session.close_round(fail_on_trigger)`
+   exists but the `ceec` CLI has no `close-round --fail-on-trigger`
+   subcommand yet (T26.D.3's CLI slice). Add `--ledger-dir` +
+   `--profile yaml` wiring; load_profile already returns a `Profile`.
+4. **Open — probe_adapter:** `record_probe_result` still hand-builds
+   evidence via the store API; a Session-aware variant (or routing
+   through `Session.evidence`) would finish the Phase D success
+   criterion "probes rewritten on Session" for the legacy probe
+   adapter.
+5. **Open — builders TIER_BUDGET:** still the lab ladder
+   (smoke→quick→…); the profile `tier_budget` is authoritative for
+   Session callers but `builders.experiment(tier=...)` retains the old
+   map for direct builder callers. Delete it once the last direct
+   callers migrate (next hygiene pass).
+6. **Open — measurement-block commit hack:** `corpus._record_ledger`
+   still reaches `state.store._conn.commit()`; a `Session.commit()`/
+   transaction-scoped context on the façade would remove the last
+   private-access site outside the store package.
+7. **Open — `Scope.dims` typing:** dims values are `object` (spec §6
+   open map) rather than the planned `str | tuple[str, ...]` because
+   legacy `extra` dicts must survive the one-way absorption; tighten
+   after the legacy-row window closes (Phase H+).
 
 ---
 

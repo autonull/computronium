@@ -34,7 +34,118 @@ def run_audit(store: CEECStore) -> list[Finding]:
     findings.extend(_quarantined_dependencies_in_active_experiments(store))
     findings.extend(_missing_artifacts_for_evidence(store))
     findings.extend(_missing_calibration_outcomes(store))
+    findings.extend(_ledger_role_scope(store))
+    findings.extend(_single_seed_promotion_attempt(store))
+    findings.extend(_untested_lever_boundary(store))
+    findings.extend(_silent_scalarization(store))
     return findings
+
+
+def _single_seed_promotion_attempt(store: CEECStore) -> list[Finding]:
+    """§27 anti-pattern: promotion from evidence with fewer than 3 seeds."""
+    out = []
+    for belief_id in store.beliefs_by_status("promoted"):
+        seeds = []
+        justified = False
+        for ref in _belief_evidence(store, belief_id):
+            evidence = store.get_evidence(ref)
+            seeds.append(int(evidence.quality.get("seeds", 0)))
+            justified = (
+                justified or evidence.quality.get("multi_seed_justified") is True
+            )
+        if seeds and max(seeds) < 3 and not justified:
+            out.append(
+                Finding(
+                    "single_seed_promotion_attempt",
+                    "violation",
+                    f"{belief_id} promoted with max seeds={max(seeds)}",
+                )
+            )
+    return out
+
+
+def _untested_lever_boundary(store: CEECStore) -> list[Finding]:
+    """§27 anti-pattern: boundary declared without known_levers_exhausted."""
+    out = []
+    for belief_id in store.beliefs_by_status("boundary"):
+        exhausted = any(
+            store.get_evidence(ref).quality.get("known_levers_exhausted") is True
+            for ref in _belief_evidence(store, belief_id)
+        )
+        if not exhausted:
+            out.append(
+                Finding(
+                    "untested_lever_boundary_declaration",
+                    "warning",
+                    f"{belief_id} at boundary without known_levers_exhausted",
+                )
+            )
+    return out
+
+
+def _silent_scalarization(store: CEECStore) -> list[Finding]:
+    """§27 anti-pattern: structured evidence whose payload is scalar-only."""
+    out = []
+    rows = store._conn.execute(
+        "SELECT id FROM evidence WHERE kind IN ('vector','tensor','curve')"
+    ).fetchall()
+    for r in rows:
+        evidence = store.get_evidence(r["id"])
+        for artifact_id in store.evidence_artifacts(evidence.id):
+            artifact = store.get_artifact(artifact_id)
+            from pathlib import Path
+
+            try:
+                payload = json.loads(Path(artifact.uri).read_text(encoding="utf-8"))
+            except Exception:  # ruff: ignore[try-except-continue]  unreadable payloads flagged by missing-artifact audit
+                continue
+            values = _payload_numeric_rows(payload)
+            if values and all(not isinstance(v, dict) for v in values):
+                out.append(
+                    Finding(
+                        "silent_scalarization",
+                        "warning",
+                        f"{evidence.id} kind={evidence.kind} payload is "
+                        "scalar-only (structured kind reduced to scalar)",
+                    )
+                )
+    return out
+
+
+def _payload_numeric_rows(payload: object) -> list[object]:
+    if isinstance(payload, dict):
+        rows = payload.get("rows") or payload.get("values")
+        return rows if isinstance(rows, list) else []
+    return payload if isinstance(payload, list) else []
+
+
+def _belief_evidence(store: CEECStore, belief_id: str) -> list[str]:
+    rows = store._conn.execute(
+        "SELECT evidence_id FROM belief_evidence WHERE belief_id = ?", (belief_id,)
+    ).fetchall()
+    return [r["evidence_id"] for r in rows]
+
+
+def _ledger_role_scope(store: CEECStore) -> list[Finding]:
+    """TODO26 T26.A.2: campaign ledgers may not gate against instruments."""
+    if store.role.value != "campaign":
+        return []
+    out = []
+    for experiment in [
+        *store.experiments_by_status("running"),
+        *store.experiments_by_status("completed"),
+    ]:
+        instruments = experiment.design.get("instruments", [])
+        if instruments:
+            out.append(
+                Finding(
+                    "campaign_ledger_instrument_gating",
+                    "violation",
+                    f"{experiment.id} gates against instruments {instruments} "
+                    "in a campaign ledger",
+                )
+            )
+    return out
 
 
 def _all_belief_ids(store: CEECStore) -> list[str]:
@@ -59,9 +170,7 @@ def _beliefs_without_scope(store: CEECStore) -> list[Finding]:
     for belief_id in _all_belief_ids(store):
         belief = store.get_belief(belief_id)
         scope = belief.scope
-        if not scope.domain or not (
-            scope.substrate or scope.geometry or scope.credit or scope.extra
-        ):
+        if not scope.domain or len(scope.dims) <= 1:
             out.append(
                 Finding(
                     "belief_without_scope",
@@ -329,7 +438,7 @@ def audit_decisions(
             type_="decision_quality",
             operator="audit_decisions_v1",
             inputs={},
-            scope=models.Scope(domain="audit", extra={"check": "decision_quality"}),
+            scope=models.Scope.of(domain="audit", extra={"check": "decision_quality"}),
             value=summary,
             provenance={"decisions": [row["id"] for row in decisions]},
         )

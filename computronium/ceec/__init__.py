@@ -6,6 +6,14 @@ package (uv workspace member ``packages/ceec-core``).
 
 from __future__ import annotations
 
+import warnings
+
+warnings.warn(
+    "computronium.ceec is deprecated; import `ceec` directly (TODO26 T26.G.3)",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from ceec import *  # ruff: ignore[undefined-local-with-import-star]
 from ceec import __all__ as _pkg_all
 from ceec import (
@@ -36,10 +44,22 @@ from ceec import (
     probe_adapter as probe_adapter,
 )
 from ceec import (
+    profile as profile,
+)
+from ceec import (
+    report as report,
+)
+from ceec import (
+    run as run,
+)
+from ceec import (
     schemas as schemas,
 )
 from ceec import (
     selection as selection,
+)
+from ceec import (
+    session as session,
 )
 from ceec import (
     store as store,

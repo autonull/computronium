@@ -259,34 +259,31 @@ def theta_outcome(system: object, report: FrozenThetaAuditReport) -> ThetaAuditO
 
 
 def ceec_campaign(
-    ledger: str,
+    ledger_path: str,
     history: tuple[dict[str, float], ...],
     source: str,
 ) -> tuple[str, ...]:
     """Opt-in per-epoch CEEC evidence (T23.2.5); returns artifact ids."""
-    from pathlib import Path
-
     from ceec.models import Scope
-    from ceec.store import CEECStore
+    from ceec.session import ledger
 
-    db = Path(ledger)
+    from computronium_lab.ceec_profile import COMPUTRONIUM_PROFILE
+
     ids: list[str] = []
-    with CEECStore(db, db.parent / "artifacts") as store:
+    with ledger(ledger_path, COMPUTRONIUM_PROFILE, role="scratch") as sess:
         for row in history:
             payload = json.dumps(row, sort_keys=True).encode()
-            artifact = store.ingest_artifact(
+            artifact = sess.artifact(
                 payload, "lab_training_epoch", {"source": source, "status": "ok"}
             )
             ids.append(artifact.id)
-            store.record_evidence(
-                kind="scalar",
-                scope=Scope(domain="lab", substrate=("digital",), budget="quick"),
+            sess.evidence(
+                Scope.of(domain="lab", substrate="digital", budget="quick"),
                 artifact_refs=[artifact.id],
-                quality={"seeds": 1, "matched_control": False},
-                defects=[],
+                seeds=1,
+                matched_control=False,
                 notes=f"epoch {int(row.get('epoch', -1))} training metrics",
             )
-        store._conn.commit()
     return tuple(ids)
 
 

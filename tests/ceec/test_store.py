@@ -38,13 +38,17 @@ class TestEvidence:
     def test_structured_evidence_preserved(self, store, scope):
         a = store.ingest_artifact(b"tensor-data", "result")
         ev = store.record_evidence(
-            "tensor", scope, [a.id], axes=["depth", "seed"], values_ref=a.uri
+            "tensor",
+            scope,
+            artifact_refs=[a.id],
+            axes=["depth", "seed"],
+            values_ref=a.uri,
         )
         assert store.get_evidence(ev.id).axes == ["depth", "seed"]
 
     def test_invalid_artifact_ref_rejected(self, store, scope):
         with pytest.raises(StoreError, match="missing"):
-            store.record_evidence("scalar", scope, ["A-does-not-exist"])
+            store.record_evidence("scalar", scope, artifact_refs=["A-does-not-exist"])
 
 
 class TestDerived:
@@ -118,7 +122,7 @@ class TestBeliefRevisions:
 
 def _seed_all_tables(store, scope, evidence):
     artifact = store.ingest_artifact(b"seed", "result")
-    store.record_evidence("scalar", scope, [artifact.id])
+    store.record_evidence("scalar", scope, artifact_refs=[artifact.id])
     derived = store.record_derived(
         "summary", "mean", {"evidence": [evidence.id]}, scope
     )

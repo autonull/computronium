@@ -35,7 +35,11 @@ def predicted_experiment(store, scope, link_belief):
 def _evidence(store, scope):
     artifact = store.ingest_artifact(b"ev", "result")
     return store.record_evidence(
-        "vector", scope, [artifact.id], axes=["seed"], values_ref=artifact.uri
+        "vector",
+        scope,
+        artifact_refs=[artifact.id],
+        axes=["seed"],
+        values_ref=artifact.uri,
     )
 
 

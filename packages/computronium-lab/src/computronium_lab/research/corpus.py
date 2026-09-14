@@ -12,6 +12,7 @@ frontier archive, and files unmeasurable rows as measurement blocks.
 from __future__ import annotations
 
 import copy
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
@@ -930,10 +931,6 @@ class MeasurementRunner:
             state.manifests.append(str(write_manifest(run_dir, payload)))
 
     def _record_ledger(self, state: _CorpusState) -> None:
-        import json as _json
-
-        from computronium_lab.research.evidence import vector_evidence
-        from computronium_lab.research.schema import StatisticalSummary
 
         if state.store is None or state.scope is None:
             return
@@ -946,7 +943,7 @@ class MeasurementRunner:
             "blocks": len(state.blocks),
         }
         artifact = state.store.ingest_artifact(
-            _json.dumps(summary_payload, sort_keys=True).encode(),
+            json.dumps(summary_payload, sort_keys=True).encode(),
             "research_corpus_summary",
             {"problem_class": state.problem_class.name, "run_id": state.run_id},
         )
@@ -957,41 +954,6 @@ class MeasurementRunner:
             scope=state.scope,
             value=summary_payload,
         )
-        for arm, metrics in state.values.items():
-            for metric, values in metrics.items():
-                if not values:
-                    continue
-                evidence_id = vector_evidence(
-                    state.store,
-                    state.scope,
-                    axes=["seed"],
-                    values=values,
-                    values_ref=f"corpus/{state.run_id}/{arm}/{metric}",
-                    quality={
-                        "seeds": len(values),
-                        "matched_control": arm in state.controls
-                        or state.problem_class.control_arm(arm) in state.controls,
-                        "evaluation_policy": "corpus_protocol_v1",
-                        "tier": state.tier.value,
-                    },
-                    notes=f"corpus {arm}/{metric}",
-                )
-                summary = StatisticalSummary.from_samples(metric, values)
-                state.store.record_derived(
-                    type_="seed_statistics",
-                    operator="bootstrap_ci_percentile",
-                    inputs={"e": [evidence_id]},
-                    scope=state.scope,
-                    value={
-                        "mean": summary.mean,
-                        "std": summary.std,
-                        "ci_low": summary.ci_low,
-                        "ci_high": summary.ci_high,
-                        "n": summary.n,
-                    },
-                )
-        for block in state.blocks:
-            block.record(state.store, state.scope)
 
     def _append_frontier(self, state: _CorpusState) -> None:
         from computronium_lab.research.autopoiesis import (

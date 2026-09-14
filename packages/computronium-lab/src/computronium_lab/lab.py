@@ -229,28 +229,50 @@ class Lab:
             seeds=seeds,
         )
 
-    def _record_exploratory(self, result: SynthesisResult, spec: ProblemSpec) -> None:
-        """Opt-in CEEC artifact for an exploratory synthesis (T23.1.7)."""
-        from pathlib import Path
+    def _research_report_ledger(self, report: dict, path: str | None) -> None:
+        import pathlib
 
-        from ceec.models import Scope
-        from ceec.store import CEECStore
+        with self.ledger_session(role="main") as sess:
+            markdown, data = sess.render()
+        report["ledger"] = {"markdown": markdown, **data}
+        if path is not None:
+            out_dir = pathlib.Path(path)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "ledger_report.md").write_text(markdown, encoding="utf-8")
+            import json
+
+            (out_dir / "ledger_report.json").write_text(
+                json.dumps(data, indent=2, sort_keys=True, default=str),
+                encoding="utf-8",
+            )
+
+    def ledger_session(self, *, role: str = "campaign"):
+        """Session bound to ``record_ledger`` + the Computronium profile."""
+        from ceec.profile import LedgerRole
+        from ceec.session import ledger
+
+        from computronium_lab.ceec_profile import COMPUTRONIUM_PROFILE
 
         if not self.record_ledger:
+            raise ValueError("ledger_session requires record_ledger on Lab(...)")
+        return ledger(self.record_ledger, COMPUTRONIUM_PROFILE, role=LedgerRole(role))
+
+    def _record_exploratory(self, result: SynthesisResult, spec: ProblemSpec) -> None:
+        """Opt-in CEEC artifact for an exploratory synthesis (T23.1.7)."""
+        if not self.record_ledger:
             return
-        db = Path(self.record_ledger)
-        payload = json.dumps(
-            {
-                "mechanism": result.name,
-                "coordinate": result.coordinate,
-                "predicted_viability": result.predicted_viability,
-                "spec": spec.key(),
-                "provenance": list(result.provenance),
-            },
-            indent=2,
-        )
-        with CEECStore(db, db.parent / "artifacts") as store:
-            artifact = store.ingest_artifact(
+        with self.ledger_session(role="main") as sess:
+            payload = json.dumps(
+                {
+                    "mechanism": result.name,
+                    "coordinate": result.coordinate,
+                    "predicted_viability": result.predicted_viability,
+                    "spec": spec.key(),
+                    "provenance": list(result.provenance),
+                },
+                indent=2,
+            )
+            artifact = sess.artifact(
                 payload.encode(),
                 "exploratory_synthesis",
                 {
@@ -259,19 +281,12 @@ class Lab:
                     "exploratory": True,
                 },
             )
-            store.record_evidence(
-                kind="scalar",
-                scope=Scope(
-                    domain="lab",
-                    substrate=(spec.constraints.substrate,),
-                    budget="quick",
-                ),
+            sess.evidence(
+                _lab_scope(spec),
                 artifact_refs=[artifact.id],
-                quality={"predicted_viability": result.predicted_viability},
-                defects=[],
+                predicted_viability=result.predicted_viability,
                 notes="exploratory synthesis (T23.1.7): campaign pending",
             )
-            store._conn.commit()
 
     def explore(self, spec: ProblemSpec) -> list[ParetoOption]:
         """Pareto frontier of constraint-satisfying mechanisms (T23.1.6)."""
@@ -540,7 +555,6 @@ class Lab:
         a lab budget tier. ``path`` writes the ledger report
         (``ledger_report.md`` + ``.json``) into that directory.
         """
-        from pathlib import Path as _Path
 
         from computronium_lab.research.corpus import CLASS_BY_NAME
         from computronium_lab.research.evolution import (
@@ -548,7 +562,6 @@ class Lab:
             EvolutionSpec,
             plan_evolution,
         )
-        from computronium_lab.research.reports import render_ledger
         from computronium_lab.research.schema import BudgetTier
         from computronium_lab.synthesis.catalog import CATALOG
 
@@ -606,22 +619,7 @@ class Lab:
             })
 
         if self.record_ledger:
-            from ceec.store import CEECStore
-
-            db = _Path(self.record_ledger)
-            with CEECStore(db, db.parent / "artifacts") as store:
-                markdown, data = render_ledger(store)
-            report["ledger"] = {"markdown": markdown, **data}
-            if path is not None:
-                out_dir = _Path(path)
-                out_dir.mkdir(parents=True, exist_ok=True)
-                (out_dir / "ledger_report.md").write_text(markdown, encoding="utf-8")
-                import json
-
-                (out_dir / "ledger_report.json").write_text(
-                    json.dumps(data, indent=2, sort_keys=True, default=str),
-                    encoding="utf-8",
-                )
+            self._research_report_ledger(report, path)
         return report
 
     def _spec_from_key(self, key: str) -> ProblemSpec:
@@ -652,36 +650,31 @@ class Lab:
 
     def _record_ceec(self, results: list[ComparisonResult]) -> None:
         """Opt-in CEEC-Core evidence recording for a comparison run."""
-        from pathlib import Path
-
-        from ceec.models import Scope
-        from ceec.store import CEECStore
-
         if not self.record_ledger:
             return
-        db = Path(self.record_ledger)
-        with CEECStore(db, db.parent / "artifacts") as store:
-            artifact = store.ingest_artifact(
+        with self.ledger_session(role="main") as sess:
+            artifact = sess.artifact(
                 json_summary(results).encode(),
                 "lab_comparison",
                 {"source": "computronium_lab.compare", "status": "ok"},
             )
-            store.record_evidence(
-                kind="scalar",
-                scope=Scope(
-                    domain="lab",
-                    substrate=("digital",),
-                    budget="quick",
-                ),
+            sess.evidence(
+                _lab_scope(None),
                 artifact_refs=[artifact.id],
-                quality={"seeds": 1, "matched_control": False},
-                defects=[],
+                seeds=1,
+                matched_control=False,
                 notes="computronium-lab compare summary",
             )
-            store._conn.commit()
 
 
 def json_summary(results: list[ComparisonResult]) -> str:
     from computronium_lab.report import result_json
 
     return result_json(results)
+
+
+def _lab_scope(spec: ProblemSpec | None):
+    from ceec.models import Scope
+
+    substrate = spec.constraints.substrate if spec is not None else "digital"
+    return Scope.of(domain="lab", substrate=substrate, budget="quick")

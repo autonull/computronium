@@ -1,6 +1,44 @@
 import pytest
+from ceec.constraints import ConstraintResult
 
-from computronium.ceec import StoreError, gates, models, selection
+from computronium.ceec import (
+    CORE_CONSTRAINTS,
+    Constraint,
+    Profile,
+    StoreError,
+    gates,
+    models,
+    selection,
+)
+
+
+def _domain_constraints() -> tuple[Constraint, ...]:
+    """Computronium-domain constraints (ψ/θ), added by profile per TODO26 §2.1."""
+
+    def frozen_theta(store, experiment: models.Experiment, _profile: Profile):
+        d = experiment.design
+        ok = not d.get("psi_only") or "frozen_theta_audit" in experiment.hard_gates
+        return ConstraintResult(
+            "frozen_theta_audit_for_psi_only_claims",
+            ok,
+            f"psi_only={d.get('psi_only')}, "
+            f"gate={'frozen_theta_audit' in experiment.hard_gates}",
+        )
+
+    def identity_card(store, experiment: models.Experiment, _profile: Profile):
+        d = experiment.design
+        ok = not d.get("new_primitive") or bool(d.get("identity_card_ref"))
+        return ConstraintResult(
+            "identity_card_for_new_primitive",
+            ok,
+            f"new_primitive={d.get('new_primitive')}, card="
+            f"{d.get('identity_card_ref')!r}",
+        )
+
+    return (
+        Constraint("frozen_theta_audit_for_psi_only_claims", frozen_theta),
+        Constraint("identity_card_for_new_primitive", identity_card),
+    )
 
 
 def make_experiment(
@@ -16,7 +54,7 @@ def make_experiment(
         id=experiment_id,
         question="does adaptive feedback improve credit?",
         rationale="tests H1",
-        scope=models.Scope(domain="probe", substrate=("digital",), budget="quick"),
+        scope=models.Scope.of(domain="probe", substrate=("digital",), budget="quick"),
         target_beliefs=list(belief_ids),
         target_goals=list(goal_ids),
         design=design or {},
@@ -36,7 +74,11 @@ def make_experiment(
 def bootstrap_belief(store, scope, link_belief, belief_id="B-H1", goal_id=None):
     artifact = store.ingest_artifact(b"ev", "result")
     ev = store.record_evidence(
-        "vector", scope, [artifact.id], axes=["seed"], values_ref=artifact.uri
+        "vector",
+        scope,
+        artifact_refs=[artifact.id],
+        axes=["seed"],
+        values_ref=artifact.uri,
     )
     link_belief(ev, belief_id)
     if goal_id:
@@ -44,10 +86,12 @@ def bootstrap_belief(store, scope, link_belief, belief_id="B-H1", goal_id=None):
         store.revise_goal(goal_id, {"science": 1.0}, scalar_utility=1.0)
 
 
-PROFILE = {
-    "cost_model": {"gamma": 1.0},
-    "budget_limit": None,
-}
+PROFILE = Profile(
+    name="test",
+    gamma=1.0,
+    budget_limit=None,
+    constraints=CORE_CONSTRAINTS + _domain_constraints(),
+)
 
 
 class TestHardConstraints:
@@ -62,7 +106,7 @@ class TestHardConstraints:
             controls=["fixed_random_feedback"],
         )
         registered = store.pre_register_experiment(experiment)
-        results = selection.check_hard_constraints(store, registered)
+        results = selection.check_hard_constraints(store, registered, profile=PROFILE)
         assert all(r.passed for r in results)
 
     def test_quarantined_dependency_rejected_before_scoring(
@@ -121,8 +165,8 @@ class TestHardConstraints:
             controls=[],
         )
         registered = store.pre_register_experiment(experiment)
-        results = selection.check_hard_constraints(store, registered)
-        failed = {r.constraint for r in results if not r.passed}
+        results = selection.check_hard_constraints(store, registered, profile=PROFILE)
+        failed = {r.name for r in results if not r.passed}
         assert "controls_present_or_justified" in failed
         # justified absence passes
         justified = make_experiment(
@@ -135,7 +179,7 @@ class TestHardConstraints:
             },
         )
         registered = store.pre_register_experiment(justified)
-        results = selection.check_hard_constraints(store, registered)
+        results = selection.check_hard_constraints(store, registered, profile=PROFILE)
         assert all(r.passed for r in results)
 
     def test_psi_only_requires_frozen_theta_audit_gate(self, store, scope, link_belief):
@@ -151,8 +195,8 @@ class TestHardConstraints:
             controls=["c"],
         )
         registered = store.pre_register_experiment(experiment)
-        results = selection.check_hard_constraints(store, registered)
-        failed = {r.constraint for r in results if not r.passed}
+        results = selection.check_hard_constraints(store, registered, profile=PROFILE)
+        failed = {r.name for r in results if not r.passed}
         assert "frozen_theta_audit_for_psi_only_claims" in failed
 
     def test_new_primitive_requires_identity_card(self, store, scope, link_belief):
@@ -168,8 +212,8 @@ class TestHardConstraints:
             controls=["c"],
         )
         registered = store.pre_register_experiment(experiment)
-        results = selection.check_hard_constraints(store, registered)
-        failed = {r.constraint for r in results if not r.passed}
+        results = selection.check_hard_constraints(store, registered, profile=PROFILE)
+        failed = {r.name for r in results if not r.passed}
         assert "identity_card_for_new_primitive" in failed
 
 
@@ -218,7 +262,11 @@ class TestDecide:
         h1 = selection.state_hash(store)
         artifact = store.ingest_artifact(b"more", "result")
         store.record_evidence(
-            "vector", scope, [artifact.id], axes=["s"], values_ref=artifact.uri
+            "vector",
+            scope,
+            artifact_refs=[artifact.id],
+            axes=["s"],
+            values_ref=artifact.uri,
         )
         store.update_belief(
             "B-H1",

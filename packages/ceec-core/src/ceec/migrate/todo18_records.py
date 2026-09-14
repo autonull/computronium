@@ -42,10 +42,10 @@ def _migrate_claim_record(store: CEECStore, path: Path, campaign: str) -> str:
     artifact = store.ingest_artifact(
         path.read_bytes(), "claim_record", {"campaign": campaign, "source": str(path)}
     )
-    scope = models.Scope(
+    scope = models.Scope.of(
         domain=campaign,
         substrate=("digital",),
-        extra={"migrated_from": str(path)},
+        migrated_from=str(path),
     )
     evidence = store.record_evidence(
         kind="frontier",
@@ -85,7 +85,7 @@ def migrate_corrections_log(store: CEECStore) -> str | None:
     )
     evidence = store.record_evidence(
         kind="event",
-        scope=models.Scope(domain="corrections", extra={"migrated_from": str(path)}),
+        scope=models.Scope.of(domain="corrections", extra={"migrated_from": str(path)}),
         artifact_refs=[artifact.id],
         axes=["correction"],
         values_ref=artifact.uri,

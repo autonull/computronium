@@ -28,7 +28,7 @@ from computronium_lab.research import (
 
 
 def _scope() -> Scope:
-    return Scope(domain="lab", substrate=("digital",), budget="quick")
+    return Scope.of(domain="lab", substrate=("digital",), budget="quick")
 
 
 def test_budget_caps_follow_ladder() -> None:

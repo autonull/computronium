@@ -21,7 +21,7 @@ def store():
 
 
 def _belief_with_evidence(store: CEECStore):
-    scope = models.Scope(domain="credit", credit=("gradient",))
+    scope = models.Scope.of(domain="credit", credit=("gradient",))
     artifact = store.ingest_artifact(b"x", "blob")
     evidence = store.record_evidence(
         kind="vector",
