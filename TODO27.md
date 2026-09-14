@@ -1,12 +1,12 @@
 # TODO27 — Discovery Round: The Rescue Matrix + Lean Autopoiesis
 
-**Status:** PLANNED 2026-09-14 (rev 2: algorithm-agnostic restructure —
-interventions live on the axes, the catalog provides the subjects, the
-AutoScientist provides the scheduler; no single algorithm or axis is
-load-bearing). Course-corrects the program from infrastructure rounds
-(TODO23–26) to **general-purpose ML discovery**: axis-level
-interventions evaluated across the full mechanism catalog under
-certified matched-compute rules, plus the lean Autopoiesis
+**Status:** PLANNED 2026-09-14 (rev 3: complete task-space view —
+registered + candidate problem classes; certification space = product of
+mechanisms × problem classes × tiers × substrates × interventions).
+Course-corrects the program from infrastructure rounds (TODO23–26) to
+**general-purpose ML discovery and invention**: axis-level interventions
+evaluated across the full mechanism catalog on the full registered task
+space under certified matched-compute rules, plus the lean Autopoiesis
 self-modification probe. **Builds on:** TODO26 (all phases + Phase S).
 **Explicit exclusions:** PyPI publishing; physical hardware; LLM-scale
 claims; new substrate models.
@@ -30,24 +30,28 @@ CEEC/lab architectural change is in scope unless it unblocks a named
 discovery experiment below.* Instrument quality is a multiplier; this
 round multiplies.
 
-### 0.2 Design principle: interventions on axes, subjects from the catalog
+### 0.2 Design principle: interventions on axes, subjects from the catalog, the full task space is the arena
 
-The rev-1 draft anchored on RESEARCH4's worked examples (PEPITA, ePC).
-That under-uses the platform: the zoo ships ~13 factories and a
-catalog of mechanism coordinates spanning every credit × update family,
-and the synthesis/corpus/campaign stack already enumerates, screens,
-budgets, and measures them. The fix is structural, not thematic:
+The rev-2 draft anchored on RESEARCH4's worked examples (PEPITA, ePC)
+and a single synthetic problem class. That under-uses the platform: the
+zoo ships ~13 factories and a catalog of mechanism coordinates spanning
+every credit × update family, and the corpus already registers **7
+problem classes** across classification, sequence, state-prediction,
+and continual learning. The fix is structural:
 
 1. **Implement each intervention once, on its axis**, as a drop-in
    primitive — a `ParameterUpdate` (per-layer magnitude normalization),
    a credit-path option (propagation normalization), a credit-rule
-   variant (learnable feedback). Every catalog mechanism that composes
-   that axis then inherits the intervention for free. No per-algorithm
-   patching.
-2. **Let the catalog supply the subjects.** The question is never "does
-   this fix PEPITA" but "**which mechanisms does each intervention
-   rescue, at which width/depth regimes, and which families are
-   immune?**" — answered by a grid over the catalog, not anecdotes.
+   variant (learnable feedback), a ψ-warm-start arm (continual arm).
+   Every catalog mechanism that composes that axis inherits the
+   intervention for free. No per-algorithm patching.
+2. **Let the catalog supply the mechanisms; let the corpus supply the
+   tasks.** The question is never "does this fix PEPITA" but
+   "**which mechanisms does each intervention rescue, on which problem
+   classes, at which width/depth regimes, and which families are
+   immune?**" — answered by a grid over the full certified product
+   space: `{Mechanisms} × {ProblemClasses} × {Tiers} × {Substrates}
+   × {Interventions}`.
 3. **Let the AutoScientist schedule it.** The proposer/campaign stack
    (which has never completed a commissioned run — RESEARCH3 PR-9)
    prioritizes which grid cells earn certified-tier budget. The
@@ -88,8 +92,8 @@ discovery. The infrastructure-freeze gate (§Gates) makes that binding.
 
 ### 0.4 The best we can honestly hope for
 
-1. **A rescue map** — machine-readable, certified: which of the
-   catalog's mechanisms fail at which width/depth regimes, and which
+1. **A certified rescue map** — machine-readable: which mechanisms fail
+   on which problem classes at which width/depth regimes, and which
    axis-level intervention rescues which failure. Even all-negative
    cells are pruning results.
 2. **A new general-purpose rule candidate** — if normalization and/or
@@ -103,23 +107,62 @@ discovery. The infrastructure-freeze gate (§Gates) makes that binding.
    completing real iterate → measure → frontier cycles on discovery
    work, unblocking RESEARCH3's frontier campaign and discovery items.
 5. **Generalization checks** — findings re-tested off their discovery
-   task (second curriculum, real-data tier).
+   task (second curriculum, real-data tier, new substrate).
 
 Not claimed: hardware measurements, LLM-scale validation, Level 1–3
 formal claims. Quick/standard-tier certified mechanisms are the ceiling.
 
 ---
 
-## 1. How it all fits together
+## 1. The Task Space — Registered + Candidate
 
-- **Ontology (6 axes)** — the space of possible mechanisms; every
-  intervention below is a new primitive on one axis, so the whole
-  compatible region inherits it.
-- **Catalog + synthesis** — the roster of subjects and the constraint
+The corpus currently registers **7 problem classes** via
+`register_problem_class()` in `corpus.py`:
+
+| Problem Class | Tier | Type | Example Tasks |
+|---|---|---|---|
+| `flat_classification` | quick/standard | Static → class | Gaussian blobs, MNIST, CIFAR-10/100 (if wired) |
+| `flat_classification_hard` | quick/standard | Static → class, harder | Harder blobs, higher dimension |
+| `continual_switch` | quick/standard | Task A → B | Synthetic A→B switch (current), real curricula (candidate) |
+| `sequence_last_symbol` | quick/standard | Sequence → class | Last symbol recall |
+| `sequence_threshold` | quick/standard | Sequence → class | Threshold counting |
+| `sequence_parity` | quick/standard | Sequence → class | Parity over sequence |
+| `nca_state_prediction` | quick | Grid t→t+1 | NCA rollout, label-free |
+
+**Candidate problem classes** (not yet registered, but part of the
+certification space the framework is designed for):
+
+| Candidate | Tier | Type | Why it matters |
+|---|---|---|---|
+| `image_classification` | standard/nightly | Image → class | CIFAR-10/100, ImageNet subset — the canonical "local vs backprop" claim space |
+| `language_modeling` | standard/nightly | Next-token | WikiText, TinyStories — LM is the dominant workload; local rules need to prove here |
+| `reinforcement_learning` | standard | Policy/value | Minigrid, Procgen — local credit + ψ adaptation is a natural fit for RL |
+| `generative_modeling` | standard | Density/sample | VAE/GAN-style — local rules on generation is an open question |
+| `regression` | quick/standard | Continuous target | Physical dynamics, control — local rules on continuous targets |
+| `anomaly_detection` | quick | Binary/ood | Security, monitoring — local rules' error-blindness is tested here |
+| `multi_task` | standard | Multi-head | MTL/continual — ψ-swap and routing are designed for this |
+
+**The certification space is the full product:**
+`{Mechanisms from CATALOG} × {Registered + Candidate Problem Classes} ×
+{Tiers} × {Substrates} × {Interventions}`
+
+**This round's scope:** we certify on the **registered 7** (smoke
+screen) and promote the top cells on the **highest-practitioner-
+relevance** candidates (`image_classification`, `language_modeling`) to
+standard tier. The candidate classes are not blockers — they are the
+next-round expansion targets.
+
+---
+
+## 1. The Unified Stack — How It All Fits Together
+
+- **Ontology (6 axes)** — the space; every intervention below is a new
+  primitive on one axis, so the whole compatible region inherits it.
+- **Catalog + synthesis** — the roster of mechanisms and the validity
   screen (`trainable_on`, `SystemConfig.validate()`) that keeps the
   grid honest.
-- **Corpus + MeasurementRunner** — the arenas: problem classes, budget
-  tiers, matched-compute controls, manifest writing.
+- **Corpus + MeasurementRunner** — the arenas: 7 registered problem
+  classes, budget tiers, matched-compute controls, manifests.
 - **CEEC** — the referee: pre-registration, artifacts, evidence, gates,
   calibration, audit, failure manifesto. Zero kernel changes planned
   (§Phase F); one new lab profile.
@@ -130,10 +173,10 @@ formal claims. Quick/standard-tier certified mechanisms are the ceiling.
   boundaries, using the catalog as its registry and the stability guard
   as its constitution.
 
-The phases are deliberately redundant: B (external, exhaustive) and D
-(internal, autonomous) attack "which interventions help" by different
-mechanisms; if they agree, the conclusion is robust; if they disagree,
-that disagreement is itself the finding.
+The phases are deliberately redundant: B (external, exhaustive sweep)
+and D (internal, autonomous) attack the same question by different
+mechanisms — agreement makes the conclusion robust, disagreement is
+itself the finding.
 
 ---
 
@@ -157,17 +200,17 @@ not on one algorithm.
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.B.1 Failure-regime screen (smoke tier)** | Grid: catalog mechanisms × regimes (width {32,64,128,256}, depth {4,8,16,20}) × interventions {none, A.1, A.2, A.3, A.1+A.2}. Output: which cells fail today (reproduces F1/P3/P4 boundaries cheaply) and which interventions flip them. Machine-readable matrix artifact | A.1–A.3 |
-| **T27.B.2 Certified promotions (quick tier)** | Top-k contrasting cells promoted through Session closed loops with pre-registered decision rules — e.g. "intervention X rescues family Y at width 128 with matched compute and ≥2 seeds". Both rescues and refusals certify | B.1 |
-| **T27.B.3 AutoScientist scheduling + commissioning (PR-9)** | The proposer prioritizes promotion order from screen slopes; one full campaign iterate → measure → frontier → resume cycle runs on this real workload (finally discharges RESEARCH3 PR-9); frontier rendered via `comp frontier` | B.1 |
-| **T27.B.4 The map** | Certified rescue matrix + frontier: which families are magnitude-limited vs direction-limited vs immune — the round's headline deliverable either way | B.2, B.3 |
+| **T27.B.1 Full-product smoke screen** | Grid: `{Mechanisms from CATALOG} × {7 Registered Problem Classes} × {Regimes: width {32,64,128,256}, depth {4,8,16,20}} × {Interventions {none, A.1, A.2, A.3, A.1+A.2}}`. Output: which cells fail today (reproduces F1/P3/P4 boundaries cheaply) and which interventions flip them. Machine-readable matrix artifact | A.1–A.3 |
+| **T27.B.2 Certified promotions (standard tier)** | Top-k contrasting cells promoted through Session closed loops with pre-registered decision rules — e.g. "intervention X rescues family Y on `image_classification` at width 128 with matched compute and ≥2 seeds". Both rescues and refusals certify | B.1 |
+| **T27.B.3 AutoScientist scheduling + commissioning (PR-9)** | The proposer prioritizes promotion order from screen slopes, weighted by `PractitionerRelevance` (image_classification > language_modeling > continual > sequence > state_prediction > synthetic). One full campaign iterate → measure → frontier → resume cycle runs on this real workload (finally discharges RESEARCH3 PR-9); frontier rendered via `comp frontier` | B.1 |
+| **T27.B.4 The rescue map** | Certified rescue map + frontier: which families are magnitude-limited vs direction-limited vs immune, on which problem classes — the round's headline deliverable either way | B.2, B.3 |
 
 **Decision rules are registered per promoted cell before its data
 exists** (Session ordering makes this structural). The RESEARCH4
 unifying hypothesis ("direction right, magnitude broken") is confirmed
 iff magnitude-only interventions (A.1) rescue across ≥2 distinct credit
-families; falsified if rescues require direction interventions (A.3)
-or don't replicate across families.
+families *and* on ≥2 problem classes; falsified if rescues require
+direction interventions (A.3) or don't replicate across families.
 
 ---
 
@@ -211,7 +254,7 @@ the next round's flagship candidate.
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.E.1 Off-discovery replication** | The round's top certified claim re-tested on a task family it was not discovered on (second continual curriculum; real-data MNIST quick tier for one rescue-matrix row). Findings that don't travel get their scope narrowed in the ledger — that correction is itself a certified result | B.2 |
+| **T27.E.1 Off-discovery replication** | The round's top certified claim re-tested on a problem class it was not discovered on (e.g., if rescue found on `flat_classification`, re-test on `image_classification` or `continual_switch`). Findings that don't travel get their scope narrowed in the ledger — that correction is itself a certified result | B.2 |
 
 ---
 
@@ -219,7 +262,7 @@ the next round's flagship candidate.
 
 | Task | Deliverable | Depends On |
 |---|---|---|
-| **T27.F.1 Discovery profile** | ~60-line lab profile: scope dims (width/depth/credit_family/mechanism), quality flags for the matrix (regime, intervention, replicates), constraint "promoted cell must have its smoke-tier screen row on record". **No kernel changes** — this is the TODO26 architecture's generalization test | — |
+| **T27.F.1 Discovery profile** | ~60-line lab profile: scope dims (width/depth/credit_family/mechanism/problem_class), quality flags for the matrix (regime, intervention, replicates, problem_class), constraint "promoted cell must have its smoke-tier screen row on record". **No kernel changes** — this is the TODO26 architecture's generalization test | — |
 
 If a kernel change starts looking necessary mid-round, that is a
 course-drift signal — raise it against the freeze gate instead of
@@ -238,7 +281,8 @@ implementing it.
    certified verdict, a manifesto entry with root cause, or an
    infra-failure (restarts the round, per E-7).
 4. **Family coverage:** no mechanism claim ships from a single
-   algorithm; the matrix reports per-family outcomes (E-4/PR-6).
+   algorithm; the matrix reports per-family outcomes on ≥2 problem
+   classes (E-4/PR-6).
 5. **Suites:** repo-wide ruff clean maintained; ceec + lab suites green
    per phase; new axis primitives ship with identity cards + property
    locks.
@@ -248,7 +292,7 @@ implementing it.
 
 ## 17. Progress Log
 
-### Session 2026-09-14 — PLANNED (rev 2)
+### Session 2026-09-14 — PLANNED (rev 3)
 - [x] Course-correct diagnosis verified against the session record
   (TODO23–26 infrastructure drift; RESEARCH4 unexecuted; AUTOTILE
   amendments incorporated: Tier 3 cut, single selection policy,
@@ -258,6 +302,10 @@ implementing it.
   AutoScientist commissioned as scheduler (discharges PR-9), smoke-
   screen → certified-promotion tiering added for maximum benefit per
   certified GPU-minute
+- [x] Rev 3: complete task-space view — 7 registered + 7 candidate
+  problem classes; certification space = full product; practitioner-
+  relevance weighting; smoke-screen over full product; AutoScientist
+  prioritization with `PractitionerRelevance` weight
 
 ---
 
@@ -275,13 +323,17 @@ implementing it.
   campaign fitness (D's registry/constitution bookkeeping), corpus
   matched-compute controls, `comp scientist`/`comp frontier` (B.3's
   scheduler and renderer), presets/catalog rows (grid subjects).
-- **Cost control:** the grid is M×W×D×I — combinatorial by nature.
+- **Cost control:** the grid is M×P×R×I — combinatorial by nature.
   Smoke tier makes screening nearly free; certified promotions are
-  capped per phase (k ≤ 5 cells) and chosen by screen slope, not
-  preference. The matrix artifact records *why* unpromoted cells were
-  left unpromoted.
+  capped per phase (k ≤ 5 cells) and chosen by screen slope weighted
+  by `PractitionerRelevance`, not preference. The matrix records *why*
+  unpromoted cells were left unpromoted.
 - **Existing-ledger hygiene:** fresh per-round ledgers (TODO26 S.3
   pattern); prior scratch ledgers read as pre-T26 semantics.
+- **Candidate expansion:** `image_classification`, `language_modeling`,
+  `reinforcement_learning` are the next three registrations; they are
+  not this round's scope but are explicitly called out as the
+  certification space's expansion frontier.
 - **Out of scope:** Tier 3 meta-morphogenesis (until Tier 1+2 shows
   measurable benefit), population/crossover, open-field
   self-modification, hardware, multi-GPU scaling, new substrate
