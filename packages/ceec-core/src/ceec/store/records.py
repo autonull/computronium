@@ -38,8 +38,13 @@ class RecordsMixin(QueryMixin):
         uri_dir.mkdir(parents=True, exist_ok=True)
         uri = uri_dir / digest
         if uri.exists():
-            raise StoreError(f"artifact file collision at {uri}")
-        uri.write_bytes(data)
+            # content-addressed store: an existing file with the digest's
+            # name IS the artifact (e.g. a fresh ledger over a shared
+            # artifacts dir); only a mismatched payload is a collision
+            if hashlib.sha256(uri.read_bytes()).hexdigest() != digest:
+                raise StoreError(f"artifact file collision at {uri}")
+        else:
+            uri.write_bytes(data)
         artifact = models.Artifact(
             id=self._next_id("artifact", "artifacts", id_),
             sha256=digest,
@@ -62,7 +67,7 @@ class RecordsMixin(QueryMixin):
             )
         return artifact
 
-    def record_evidence(  # ruff: ignore[too-many-arguments] - mirrors evidence fields
+    def record_evidence(  # noqa: PLR0913  mirrors evidence fields
         self,
         kind: str,
         scope: models.Scope,
@@ -123,7 +128,7 @@ class RecordsMixin(QueryMixin):
             )
         return evidence
 
-    def record_derived(  # ruff: ignore[too-many-arguments] - mirrors derived fields
+    def record_derived(  # noqa: PLR0913  mirrors derived fields
         self,
         type_: str,
         operator: str,
@@ -462,7 +467,7 @@ class RecordsMixin(QueryMixin):
         }.get(status)
         with self._tx() as conn:
             if ts_col:
-                sql = f"UPDATE experiments SET status = ?, {ts_col} = ? WHERE id = ?"  # ruff: ignore[hardcoded-sql-expression]  ts_col internal
+                sql = f"UPDATE experiments SET status = ?, {ts_col} = ? WHERE id = ?"  # noqa: S608  ts_col internal
                 conn.execute(sql, (status, now(), id_))
             else:
                 conn.execute(

@@ -555,7 +555,8 @@ mechanism + continual benchmark tests); ruff clean on all touched
 files. Pyright on ceec/lab trees is blocked by the same env import
 resolution skew as the LSP (Register C).
 
-**Phase S — closed.** Remaining round work: Register C hygiene only.
+**Phase S — closed.** Round 3 follow-on (improvement #8) executed the
+same session: certified FOR on the speed rule — see Improvements.
 
 ---
 
@@ -585,13 +586,16 @@ resolution skew as the LSP (Register C).
    open map) rather than the planned `str | tuple[str, ...]` because
    legacy `extra` dicts must survive the one-way absorption; tighten
    after the legacy-row window closes (Phase H+).
-8. **Open — H24.3 round 3 rule refinement:** round 2 scored mean
-   post-switch accuracy; the registered hypothesis is about *speed*
-   (episodes to threshold under matched compute). A round-3 pre-
-   registration with an episodes-to-threshold decision rule (and/or a
-   second curriculum) is the natural next scientific step — the ψ arm
-   already reaches threshold within the budget, so the speed comparison
-   is measurable on the same instrument.
+8. **Landed — H24.3 round 3 (speed rule, certified FOR):**
+   `scripts/probes/todo26_h243_round3.py` pre-registered the
+   episodes-to-threshold rule on the same instrument: ψ modes
+   (role_split / conflict_adaptive) reach the 0.5 threshold in **1
+   episode** (3/3 seeds, accuracy ≥ 0.5, θ bitwise invariant) vs the
+   θ-finetune control's full 10-epoch budget. Speed advantage FOR;
+   round 2's final-accuracy disadvantage stands. Reproduction fix
+   en route: `ingest_artifact` now reuses an existing content-addressed
+   file (digest-verified) instead of colliding when a fresh ledger
+   shares an artifacts dir.
 9. **Open — Register C, ruff 0.15 directive migration:** ~1.5k legacy
    `# ruff: ignore[rule-name]` comments and per-file-ignores outside the
    trees touched this session still use descriptive names; ruff 0.15
