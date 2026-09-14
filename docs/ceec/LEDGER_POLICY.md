@@ -23,7 +23,7 @@ Append-only tables: `artifacts`, `evidence`, `derived`, `decisions`, `gate_outco
 
 ## Export procedure
 
-`uv run python -m computronium.ceec.cli export --output ceec/exports/` writes human-readable JSON/markdown summaries of beliefs, statuses, decisions, gates, and calibration. Exports are derived artifacts, not primary records.
+`ceec export --output ceec/exports/` (or `uv run python -m ceec.cli export`) writes human-readable JSON/markdown summaries of beliefs, statuses, decisions, gates, and calibration. Exports are derived artifacts, not primary records.
 
 ## Retention
 

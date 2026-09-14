@@ -31,6 +31,8 @@ Review calibration when any of:
 - override rate increases round-over-round,
 - quarantine rate spikes (> 2 instruments in a round).
 
+A `select_experiment` override on a single-eligible-candidate pool is vacuous (no alternative to select against) and is not recorded, so the override rate counts real selections only.
+
 ## Report
 
-`uv run python -m computronium.ceec.cli calibration-report` emits predicted vs observed success, mean Brier, promotion/boundary durability, reopen/quarantine/override rates.
+`ceec calibration-report` emits predicted vs observed success, mean Brier, promotion/boundary durability, reopen/quarantine/override rates.

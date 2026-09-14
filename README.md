@@ -445,10 +445,10 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 
 | Package | Import | What it is |
 |---|---|---|
-| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit); CLI `ceec` |
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
 | `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
 | `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
-| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget**; task tiers: classification quick tier, sequence tier (`train_sequence`), state-prediction tier (`train_state_prediction` — NCA grid rollout), ψ-only continual adaptation (`Lab.adapt`), validation campaigns + `promote_mechanism` + `ledger_audit`; **research layer (TODO24): budgeted evolution (`Lab.plan_evolution/run_evolution`), certified corpus (`MeasurementRunner`, 7 problem classes), continual benchmark (`Lab.benchmark_continual`), substrate-transfer benchmark (`Lab.benchmark_substrate_transfer`), cookbook (`certify_entry`) — see `docs/research/todo24/`** |
+| `packages/computronium-lab` | `computronium_lab` | High-level Lab API: compose/train/compare/report ontology coordinates + mechanism recipes; **synthesis layer (TODO23 Phase 1): `Lab.specify/synthesize/explore` — ProblemSpec → I(C,U,P)-predicted, constraint-screened mechanism coordinate with provenance + CEEC exploration budget**; task tiers: classification quick tier, sequence tier (`train_sequence`), state-prediction tier (`train_state_prediction` — NCA grid rollout), ψ-only continual adaptation (`Lab.adapt`), validation campaigns + `promote_mechanism` + `ledger_audit`; **research layer (TODO24): budgeted evolution (`Lab.plan_evolution/run_evolution`), certified corpus (`MeasurementRunner`, 8 problem classes incl. `flat_classification_hard`), continual benchmark (`Lab.benchmark_continual`), substrate-transfer benchmark (`Lab.benchmark_substrate_transfer`), cookbook (`certify_entry`) — see `docs/research/todo24/`**; **instrument layer (TODO25): `trainable_on` catalog field, ledger report renderer (`render_ledger`), one-shot research report (`Lab.research_report`)** |
 | `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
 
 Platform docs (recipe book, edge blueprint, external summary, release
@@ -505,6 +505,25 @@ a CEEC `Experiment`, measured Pareto points persist in
 become cookbook entries. Gallery demo D24
 (`tests/integration/test_demo_evolution_search.py`); guides in
 `docs/research/todo24/`.
+
+### Quickstart: One Call per Practitioner Question (TODO25)
+
+```python
+from computronium_lab import Lab
+
+lab = Lab(record_ledger="scratch/todo25.sqlite3")
+report = lab.research_report(spec, tier="certified", path="scratch/reports")
+# → synthesis (coordinate + provenance), evolution plan (dry run),
+#   corpus arm plan (trainable vs expected measurement blocks), and the
+#   CEEC ledger rollup (experiments, beliefs, calibration, decisions)
+```
+
+Dry-run only: nothing trains. The ledger report is also written as
+`ledger_report.md`/`.json` beside the corpus results. The measurement
+side of the loop (pre-register → decide → run → calibrate) is
+`ceec.run.run_experiment` with `ceec.builders` payloads — walkthrough in
+[`docs/research/todo24/ceec_guide.md`](docs/research/todo24/ceec_guide.md),
+full system reference in [`CEEC.md`](CEEC.md).
 
 ### Quickstart: Forward-Forward vs Backprop in <2 Minutes
 
@@ -1286,22 +1305,29 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 
 ---
 
-## 🧭 CEEC Epistemic Operating System (`computronium/ceec/`)
+## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
 
 Governs research claims via the CEEC-Core chain (TODO19 Epistemic Foundry):
 `Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
+**Full reference: [`CEEC.md`](CEEC.md)** — policies in `docs/ceec/`.
 
-| Module | Purpose |
+| Module (`ceec.*`) | Purpose |
 |--------|---------|
 | `store.py` | Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability |
 | `gates.py` | Promotion/boundary gate engine, quarantine propagation, effective-status resolution |
-| `selection.py` | EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions |
-| `calibration.py` | Brier/log-score calibration tracker and report |
-| `audit.py` | Ledger integrity audit (evidence-less beliefs, ungated promotions, …) |
+| `selection.py` | EV/cost experiment selection (§22) with pre-scoring hard-constraint filter and audited decisions |
+| `calibration.py` | Brier/log-score calibration (§24), drift cadence, review flags |
+| `builders.py` | Payload builders: `experiment`, `gate_evidence`/`quality_flags`, `chance_verdict` |
+| `run.py` | Closed-loop runner `run_experiment`: pre-register → decide → probe → calibrate → optional gate |
+| `audit.py` | Ledger integrity audit + decision-quality audit |
 | `bootstrap.py` | Seeds instruments, hypotheses, goals, pre-registered experiments from `configs/ceec/` |
-| `cli.py` | `uv run python -m computronium.ceec.cli init\|bootstrap\|decide\|audit\|calibration-report\|export` |
+| `schemas.py` | Mechanism-schema emission from gated evidence |
+| `probe_adapter.py` / `constraints.py` / `migrate/` / `cli.py` | Probe ingestion, constraint validators, TODO18 migration, CLI |
 
-Ledger lives at `ceec/ceec.sqlite3`; policies in `docs/ceec/`.
+CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export`
+(or `uv run python -m ceec.cli`; `computronium/ceec/` is a legacy re-export
+shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
+ledgers under `scratch/`.
 
 ---
 

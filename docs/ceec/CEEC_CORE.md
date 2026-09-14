@@ -2,7 +2,9 @@
 
 CEEC — the Controlled Epistemic Evidence Chain — is the epistemic operating
 system governing the Epistemic Foundry (TODO19). This document summarizes the
-core chain and invariants as implemented in `computronium/ceec/`.
+core chain and invariants as implemented in `packages/ceec-core` (import
+`ceec`; `computronium/ceec/` is a legacy re-export shim). Full system
+reference: [`CEEC.md`](../../CEEC.md).
 
 ## The chain
 

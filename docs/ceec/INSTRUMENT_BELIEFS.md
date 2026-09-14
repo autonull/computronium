@@ -30,6 +30,6 @@ quarantine cascades back through dependents (`gates.unquarantine`).
 ## CLI
 
 ```
-uv run python -m computronium.ceec.cli quarantine-report
-uv run python -m computronium.ceec.cli status-history --belief I-FROZEN-THETA-AUDIT
+ceec quarantine-report
+ceec status-history --belief I-FROZEN-THETA-AUDIT
 ```
