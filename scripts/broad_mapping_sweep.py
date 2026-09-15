@@ -72,10 +72,11 @@ def enumerate_constraint_voids(
     known = (
         {
             (r["dynamics"], r["credit"], r["update"], r["topology"])
-            for r in map(
-                json.loads, voids_path.read_text(encoding="utf-8").splitlines()
+            for r in (
+                json.loads(line)
+                for line in voids_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
             )
-            if r.strip()
         }
         if voids_path.exists()
         else set()
@@ -146,7 +147,7 @@ class StratifiedRandomDriver:
     run does not re-measure cells the G1 sweep already covered.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments] (driver mirrors sweep axes)
         self,
         kb_path: Path,
         *,
@@ -157,16 +158,18 @@ class StratifiedRandomDriver:
         depth: int = 2,
         hidden_dim: int = 64,
         param_budget: int = 0,
+        credit_trace: bool = False,
         viable: frozenset[str] | None = None,
     ) -> None:
         # Sampling RNG, not security-sensitive (S311).
-        self.rng = random.Random(seed)  # noqa: S311
+        self.rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] (sampling RNG, not security)
         self.task = task
         self.cells = cells
         self.epochs = epochs
         self.depth = depth
         self.hidden_dim = hidden_dim
         self.param_budget = param_budget
+        self.credit_trace = credit_trace
         self.viable = viable
         self.seen: set[str] = set()
         self._reload_covered(kb_path)
@@ -241,6 +244,7 @@ class StratifiedRandomDriver:
                     hyperparams={
                         "epochs": self.epochs,
                         "param_budget": self.param_budget,
+                        "credit_trace": self.credit_trace,
                     },
                     justification="broad-map stratified random cell (TODO28)",
                     expected_outcome="measured cell in the atlas",
@@ -349,6 +353,13 @@ def main() -> None:
         "hidden_dim rescale per cell brings topologies within ~25%% of the "
         "budget — fixed depth/hidden spans a ~400x param spread.",
     )
+    parser.add_argument(
+        "--credit-trace",
+        action="store_true",
+        help="Capture per-cell BP-gradient alignment (credit_trace "
+        "instrument: settle phases + split-half + BP reference on one "
+        "batch). Adds settle overhead per cell.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -369,6 +380,7 @@ def main() -> None:
         depth=args.depth,
         hidden_dim=args.hidden_dim,
         param_budget=args.param_budget,
+        credit_trace=args.credit_trace,
         viable=frozenset(viable),
     )
     campaign = BroadMappingCampaign(

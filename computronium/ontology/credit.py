@@ -274,7 +274,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def local_goodness(  # noqa: PLR0913 (config mirrors the knobs)
+    def local_goodness(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
         cls,
         *,
         beta: float = 0.5,
@@ -303,7 +303,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def temporal_trace(  # noqa: PLR0913 (config mirrors the STDP knobs)
+    def temporal_trace(  # ruff: ignore[too-many-arguments] (config mirrors the STDP knobs)
         cls,
         *,
         beta: float = 0.5,
@@ -560,7 +560,7 @@ def _propagate_targets(
     out_dim = acts[-1].shape[-1]
     targets: list[Tensor | None] = [None] * len(acts)
     targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
-    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # noqa: E741
+    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # ruff: ignore[ambiguous-variable-name]
         nxt = targets[l + 1]
         if nxt is None:
             break
@@ -799,9 +799,29 @@ class RandomProjectionsCredit:
             return  # Already initialized
         for name in _learnable_weight_names(geometry.params):
             param = geometry.params[name]
-            # Initialize with small random values
-            fb = torch.randn_like(param, device=device) * self.config.feedback_scale
+            # Initialize with small random values — always on the weight's
+            # device (an init during a CPU-batch probe must not strand
+            # feedback matrices off the training device).
+            fb = torch.randn_like(param) * self.config.feedback_scale
+            if device is not None:
+                fb = fb.to(device)
             self._feedback_weights[name] = fb
+
+    def _sync_feedback_device(self, geometry: Geometry) -> None:
+        """Re-home cached feedback matrices onto the weights' device.
+
+        The cell is composed (and dry-run probed) on CPU before the
+        trainer moves geometry to the accelerator; matrices initialized
+        in that phase must follow the weights, not stay stranded.
+        """
+        params = geometry.params
+        weight_names = _learnable_weight_names(params)
+        if not weight_names or not self._feedback_weights:
+            return
+        target = params[weight_names[0]].device
+        for name, fb in self._feedback_weights.items():
+            if fb.device != target:
+                self._feedback_weights[name] = fb.to(target)
 
     def compute_pseudo_gradient(
         self,
@@ -819,6 +839,7 @@ class RandomProjectionsCredit:
         if len(acts) < 2 or not weight_names:
             return []
 
+        self._sync_feedback_device(geometry)
         self._init_feedback_weights(geometry, acts[-1].device)
         logits = acts[-1]
         if not logits.requires_grad:
@@ -1071,7 +1092,7 @@ class LocalGoodnessCredit:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "learned-feedback credit state is missing the step counter"
-            raise RuntimeError(msg)  # noqa: TRY004
+            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error]
         self._feedback_step = int(step.item())
         for key, tensor in state.get("learned_feedback", {}).items():
             name, shape_s, device, dtype = key.split("|", 3)
@@ -1442,7 +1463,7 @@ class LocalContrastiveCredit:
         step = step_group.get("counter") if isinstance(step_group, dict) else None
         if not isinstance(step, Tensor):
             msg = "local-contrastive credit state is missing the step counter"
-            raise RuntimeError(msg)  # noqa: TRY004 — snapshot protocol precedent
+            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error] — snapshot protocol precedent
         self._step = int(step.item())
         self._ema = {
             name: tensor.detach().clone()
@@ -1533,7 +1554,7 @@ class LocalContrastiveCredit:
             )
         return {bias_name: self.config.readout_scale * gb}
 
-    def compute_pseudo_gradient(  # noqa: PLR0914 — protocol axis assembly, kept linear
+    def compute_pseudo_gradient(  # ruff: ignore[too-many-locals] — protocol axis assembly, kept linear
         self,
         states: Mapping[Phase, SystemState],
         loss: Tensor | None,
@@ -2207,7 +2228,9 @@ class TargetInversionCredit:
         block_grads = [
             (acts[i + 1] - targets[i + 1]).T @ acts[i] / batch
             if targets[i + 1] is not None
-            else torch.zeros(acts[i + 1].shape[-1], acts[i].shape[-1])
+            else torch.zeros(
+                acts[i + 1].shape[-1], acts[i].shape[-1], device=acts[i].device
+            )
             for i in range(n_trans)
         ]
         return geometry.scatter_block_grads(block_grads)
@@ -2231,7 +2254,7 @@ class TargetInversionCredit:
             if tgt is None:
                 continue
             delta = nudged_acts[i] - tgt
-            total = total + (delta**2).mean()  # noqa: PLR6104
+            total = total + (delta**2).mean()  # ruff: ignore[non-augmented-assignment]
         return total
 
 

@@ -818,7 +818,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             use_checkpointing = False
         elif use_checkpointing is False and device.type == "cuda":
             # Auto-enable if model + activations would exceed ~80% of available VRAM
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 free_vram, _ = torch.cuda.mem_get_info(device)
                 # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
                 total_params = sum(
@@ -1609,10 +1609,39 @@ class InstantaneousDynamics(_SettleTelemetry):
 
 
 class DiffusionDynamics(_SettleTelemetry):
-    """Langevin/diffusion dynamics for continuous-time settling."""
+    """Langevin dynamics over the geometry's Hopfield energy.
+
+    The settle is a noisy relaxer: each step descends the same symmetric
+    energy the em family settles (``_compute_hopfield_energy`` through the
+    geometry's weights) with Langevin noise
+    ``dh = -∇E dt + sqrt(2·D)·dW``. This makes diffusion a stochastic
+    sampler over the *geometry's* fixed points — not a prior-only random
+    walk (the pre-TODO28-audit defect: the energy never read the
+    weights, so every topology produced the same trajectory statistics).
+
+    Layer-structured geometries only (the validate() constraint map
+    already forbids the rest): the energy is defined over the full
+    activation stack. Falls back to a documented prior-only walk on the
+    raw state when no layer structure exists (never reached through the
+    campaign grid).
+    """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.diffusion()
+
+    def _langevin_energy(
+        self,
+        leaves: list[Tensor],
+        geometry: Geometry,
+        target: Tensor | None,
+        beta: float,
+    ) -> Tensor:
+        """Hopfield energy through the geometry + β output nudge."""
+        energy = _compute_hopfield_energy(leaves, geometry)
+        if target is not None and beta > 0:
+            out = leaves[-1]
+            energy = energy + beta * (out - _one_hot(target, out)).pow(2).sum()
+        return energy
 
     def settle(
         self,
@@ -1625,33 +1654,68 @@ class DiffusionDynamics(_SettleTelemetry):
         if x is None:
             raise ValueError("State must contain input 'x'")
 
-        h = substrate.initial_state(x).detach().requires_grad_(True)
-
         self._note_settle_start()
-        for _step in range(self.config.max_steps):
-            # Langevin dynamics: dh = -∇E dt + sqrt(2*D) dW
-            # Internal autograd must run even if pipeline is in no_grad context
-            with torch.enable_grad():
-                energy = self.compute_energy_from_state(
-                    h, geometry, substrate, target=target, beta=self.config.beta
+        layered = extract_layered_params(geometry)
+        if layered is not None and layered.weights:
+            block_builder = getattr(geometry, "settle_blocks", None)
+            acts: list[Tensor] = (
+                list(cast("list[Tensor]", block_builder(x, substrate)))
+                if callable(block_builder)
+                else list(geometry.forward_with_intermediates(x, substrate))
+            )
+            if len(acts) < 2:
+                raise TypeError(
+                    "Diffusion settling requires a layered activation stack"
                 )
-                energy_grad = torch.autograd.grad(energy, h)[0]
-            noise = torch.randn_like(h) * math.sqrt(2 * self.config.step_size)
-            with torch.no_grad():
-                h = h - self.config.step_size * energy_grad + noise
-            # Re-enable grad for next iteration
-            h = h.detach().requires_grad_(True)
+            input_act = acts[0]
+            for _step in range(self.config.max_steps):
+                leaves = [a.detach().requires_grad_(True) for a in acts]
+                with torch.enable_grad():
+                    energy = self._langevin_energy(
+                        leaves, geometry, target, self.config.beta
+                    )
+                    grads = torch.autograd.grad(energy, leaves)
+                with torch.no_grad():
+                    noise_scale = math.sqrt(2 * self.config.step_size)
+                    acts = [
+                        a
+                        - self.config.step_size * g
+                        + noise_scale * torch.randn_like(a)
+                        for a, g in zip(leaves, grads, strict=True)
+                    ]
+                acts[0] = input_act  # clamp the input
+
+            acts = [a.detach() for a in acts]
+        else:
+            # Fallback: prior-only walk on the raw state (no geometry
+            # weights to descend) — unreachable through the campaign grid.
+            h = substrate.initial_state(x).detach().requires_grad_(True)
+            for _step in range(self.config.max_steps):
+                with torch.enable_grad():
+                    energy = self._prior_energy(h, target)
+                    energy_grad = torch.autograd.grad(energy, h)[0]
+                noise = torch.randn_like(h) * math.sqrt(2 * self.config.step_size)
+                with torch.no_grad():
+                    h = h - self.config.step_size * energy_grad + noise
+                h = h.detach().requires_grad_(True)
+            acts = [h.detach()]
 
         new_state = _create_output_state(
             state,
             x=x,
-            output=h.detach(),
-            free_state=[h.detach()] if target is None else None,
-            nudged_state=[h.detach()] if target is not None else None,
-            activations=[h.detach()],
+            output=acts[-1],
+            free_state=acts if target is None else None,
+            nudged_state=acts if target is not None else None,
+            activations=acts,
         )
-
         return new_state
+
+    def _prior_energy(self, h: Tensor, target: Tensor | None) -> Tensor:
+        """Fallback energy: weight shrinkage + β one-hot pull (prior-only)."""
+        energy = h.pow(2).sum()
+        if target is not None and self.config.beta > 0:
+            energy = energy + self.config.beta * (h - _one_hot(target, h)).pow(2).sum()
+        return energy
 
     def compute_energy_from_state(
         self,
@@ -1661,29 +1725,29 @@ class DiffusionDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         beta: float = 0.0,
     ) -> Tensor:
+        """Prior-only energy of the raw state (shrinkage + β one-hot pull).
+
+        The geometry-dependent energy lives in ``settle``/
+        ``_langevin_energy`` over the full activation stack; this scalar
+        form only serves the single-vector fallback and external probes.
+        """
         energy = h.pow(2).sum()
         if target is not None and beta > 0:
-            # Add nudged term: beta * ||h - target_onehot||^2
             target_onehot = _one_hot(target, h)
             energy += beta * (h - target_onehot).pow(2).sum()
         return energy
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+        """Hopfield energy of the last settle's activation stack."""
+        acts = state.free_state
+        if acts is None:
+            acts = state.nudged_state
+        if acts is None:
+            acts = state.activations
+        if isinstance(acts, list) and len(acts) >= 2:
+            return _compute_hopfield_energy(acts, geometry)
         h = _state_energy_vector(state)
-        # Use a default substrate for energy computation if not available
-        substrate_obj = (
-            state.substrate.get("substrate") if _is_composite_state(state) else None
-        )
-        if substrate_obj is None:
-            from computronium.ontology.substrate import (
-                DigitalSubstrate,
-                SubstrateConfig,
-            )
-
-            substrate = DigitalSubstrate(SubstrateConfig.digital())
-        else:
-            substrate = cast("Substrate", substrate_obj)
-        return self.compute_energy_from_state(_energy_tensor(h), geometry, substrate)
+        return self._prior_energy(_energy_tensor(h), None)
 
 
 class LazyStateDynamics(_SettleTelemetry):

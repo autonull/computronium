@@ -44,6 +44,7 @@ class AtlasRow(TypedDict):
     lr: float
     spectral_radius: float
     settle_horizon: float
+    credit_alignment: float
     is_void: bool
 
 
@@ -83,6 +84,7 @@ def load_cells(kb_path: Path, task: str) -> pd.DataFrame:
             "lr": float(metrics.get("lr", 0.0)),
             "spectral_radius": float(metrics.get("spectral_radius", 0.0)),
             "settle_horizon": float(metrics.get("settle_horizon", 0.0)),
+            "credit_alignment": float(metrics.get("credit_alignment", 0.0)),
             "is_void": False,
         })
     df = pd.DataFrame(rows)

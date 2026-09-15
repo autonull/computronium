@@ -146,7 +146,7 @@ class TestNcaCreditUpdateComposition:
             credit=_credit(),
             update=ParameterUpdateConfig.euclidean(),
         )
-        with pytest.raises(ValueError, match="NCA geometry requires instantaneous"):
+        with pytest.raises(ValueError, match="state-shape contract|NCA geometry requires instantaneous"):
             config.validate()
 
 

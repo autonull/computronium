@@ -38,14 +38,20 @@ if TYPE_CHECKING:
     from computronium.autoscientist.bridge import ExperimentProposal
     from computronium.autoscientist.ceec_link import CEECLink
     from computronium.knowledge import KnowledgeBase
-    from computronium.ontology import Geometry, StateDynamics, Substrate
+    from computronium.ontology import (
+        CreditAssignment,
+        Geometry,
+        StateDynamics,
+        Substrate,
+    )
 
     class ProbeSystem(Protocol):
-        """Minimal settle-capable system surface for the spectral probe."""
+        """Minimal settle-capable system surface for the probes."""
 
         dynamics: StateDynamics
         geometry: Geometry
         substrate: Substrate
+        credit: CreditAssignment
 
 
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
@@ -62,6 +68,41 @@ def _metric(value: object) -> float:
 
 
 _RULER_LR: dict[str, float] = {}
+
+
+def _probe_credit_alignment(
+    system: ProbeSystem, proposal: ExperimentProposal, task: object
+) -> float:
+    """Cosine alignment of the cell's credit signal against the BP ruler.
+
+    Opt-in (``hyperparams["credit_trace"]``): one batch, settle phases +
+    split-half + BP reference from ``analysis.instruments.credit_trace``.
+    Returns the min per-layer BP cosine (0.0 when the read fails — some
+    credit families reach no learnable weight on a given geometry).
+    """
+    if not proposal.hyperparams.get("credit_trace"):
+        return 0.0
+    try:
+        from computronium.analysis.instruments import credit_trace
+
+        return _credit_alignment_read(system, task, credit_trace)
+    except (RuntimeError, TypeError, ValueError, StopIteration) as e:
+        logger.warning("credit_trace probe failed: %s", e)
+        return 0.0
+
+
+def _credit_alignment_read(system: ProbeSystem, task: object, read) -> float:
+    """One-batch BP-alignment read on the system's device."""
+    x, y = next(iter(task.get_dataloader("train")))  # type: ignore[union-attr, attr-defined]
+    # Canonical flat input on the system's device — the read must see
+    # exactly what the trainer sees, or families that initialize state on
+    # first contact (e.g. FA feedback matrices) poison themselves with a
+    # CPU batch.
+    device = getattr(system, "device", x.device)
+    x = x.reshape(x.size(0), -1).to(device)
+    y = y.to(device)
+    trace = read(system, x, y, bp_reference=True)
+    return float(trace["bp_min_cosine"])  # type: ignore[arg-type]
 
 
 def probe_spectral_radius(
@@ -1038,6 +1079,8 @@ class AutoScientistCampaign:
                 "lr": lr,
             }
 
+        credit_alignment = _probe_credit_alignment(system, proposal, task)
+
         epochs_raw = proposal.hyperparams.get("epochs")
         max_epochs = (
             int(epochs_raw) if isinstance(epochs_raw, int | float) and epochs_raw else 5
@@ -1080,6 +1123,7 @@ class AutoScientistCampaign:
             "settle_horizon": int(
                 getattr(system.dynamics, "_settle_steps_used", 0) or 0
             ),
+            "credit_alignment": credit_alignment,
             "lr": lr,
         }
 
