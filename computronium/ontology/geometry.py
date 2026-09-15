@@ -640,7 +640,9 @@ class FeedforwardGeometry(nn.Module):
             else:
                 h = layer(h)
                 if self.residual and h.shape == h_in.shape:
-                    h += h_in
+                    # Out-of-place add: in-place adds on grad-tracking
+                    # tensors pin the whole downstream settle graph
+                    h = h + h_in  # noqa: PLR6104
                 if intermediates is not None:
                     # Add after activation function and skip (post-skip
                     # activities align with settle-kernel acts)

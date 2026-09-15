@@ -609,6 +609,41 @@ class AutoScientistCampaign:
             })
             self.db.update_iteration(self.campaign_id, self._iteration, merged_meta)
 
+    @staticmethod
+    def _load_jsonish(value: object) -> dict[str, object]:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
+    def _recent_kb_results(self) -> list[dict[str, object]]:
+        """Read the loop's own history back from the KnowledgeBase.
+
+        The rule-based hypothesis generators are inert without recent
+        experiment records (defect: generate_hypotheses() was always
+        called with recent_results=None, so a campaign could never
+        propose anything from its own history).
+        """
+        if not self.knowledge_base:
+            return []
+        recent: list[dict[str, object]] = []
+        for rec in self.knowledge_base.list_experiments(limit=20):
+            # list_experiments returns metrics/config as JSON strings
+            metrics = self._load_jsonish(rec.get("metrics"))
+            recent.append({
+                "model": rec.get("model_family", "unknown"),
+                "task": rec.get("task", "unknown"),
+                "val_accuracy": metrics.get("val_accuracy", 0),
+                "bio_score": metrics.get("bio_score", 0),
+                "config": self._load_jsonish(rec.get("config")),
+            })
+        return recent
+
     def run_iteration(  # noqa: C901
         self,
         n_experiments: int = 5,
@@ -641,6 +676,7 @@ class AutoScientistCampaign:
         if self.proposer:
             proposals = self.proposer.propose_batch(
                 n_proposals=n_experiments,
+                recent_results=self._recent_kb_results(),
             )
 
         if not proposals:

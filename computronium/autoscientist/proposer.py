@@ -79,6 +79,7 @@ class ExperimentProposer:
         self,
         n_proposals: int = 10,
         objective: ProposalObjective | str = ProposalObjective.ACCURACY,
+        recent_results: list[dict[str, object]] | None = None,
     ) -> list[ExperimentProposal]:
         """
         Propose a batch of hypothesis-driven experiments.
@@ -89,6 +90,10 @@ class ExperimentProposer:
                 ACCURACY (historical behavior); a non-accuracy objective forces
                 the cycle to rank by memory/settling-speed/noise-robustness so
                 the engine's bias is explicit and auditable (plan §5 cycle 2).
+            recent_results: Recent experiment metrics for the rule-based
+                hypothesis generators. Callers with a KnowledgeBase should
+                pass their latest experiment records — the generators are
+                inert without them.
 
         Returns:
             List of experiment proposals.
@@ -101,7 +106,7 @@ class ExperimentProposer:
         proposals = []
 
         # 1. Generate hypotheses
-        hypotheses = self.reasoner.generate_hypotheses()
+        hypotheses = self.reasoner.generate_hypotheses(recent_results)
 
         # 2. Convert hypotheses to proposals
         for h in hypotheses[:n_proposals]:
