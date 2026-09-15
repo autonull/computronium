@@ -549,6 +549,21 @@ def actual_parameter_displacement(
 # ============================================================
 
 
+def _fresh_buffer(
+    store: dict[str, Tensor], name: str, param: Tensor, buf: Tensor | None
+) -> Tensor:
+    """Cache-hit validity check: re-init when shape OR device diverged.
+
+    A system composed (or probed) on CPU before the trainer moves the
+    geometry strands cached momentum buffers off the weights' device —
+    same lazy-init poisoning class as credit feedback matrices. Momentum
+    state is zero-warm-started, so re-init on device change is lossless.
+    """
+    if buf is None or buf.shape != param.shape or buf.device != param.device:
+        return torch.zeros_like(param)
+    return buf
+
+
 class EuclideanUpdate:
     """Standard Euclidean update: plain SGD (optionally with momentum).
 
@@ -617,8 +632,7 @@ class EuclideanUpdate:
                         "system-scoped)"
                     )
                     raise RuntimeError(msg)
-                if buf is None:
-                    buf = torch.zeros_like(param)
+                buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 return param - self.config.step_size * buf
@@ -686,8 +700,7 @@ class UnitRMSUpdate:
                 "system-scoped)"
             )
             raise RuntimeError(msg)
-        if buf is None:
-            buf = torch.zeros_like(param)
+        buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
         return buf
 
     def step(
@@ -763,9 +776,8 @@ class LocalAdamUpdate:
                 "system-scoped)"
             )
             raise RuntimeError(msg)
-        if buf is None:
-            buf = torch.zeros_like(param)
-            store[name] = buf
+        buf = _fresh_buffer(store, name, param, buf)
+        store[name] = buf
         return buf
 
     def step(
@@ -874,9 +886,8 @@ class AdamUpdate:
                 "update per system (optimizer state is system-scoped)"
             )
             raise RuntimeError(msg)
-        if buf is None:
-            buf = torch.zeros_like(param)
-            store[name] = buf
+        buf = _fresh_buffer(store, name, param, buf)
+        store[name] = buf
         return buf
 
     def step(
@@ -1156,8 +1167,7 @@ class RiemannianOrthogonalUpdate:
             # EMA buffer must accumulate signal across batches first.
             if self.config.momentum > 0:
                 buf = self._momentum_buffers.get(name)
-                if buf is None or buf.shape != param.shape:
-                    buf = torch.zeros_like(param)
+                buf = _fresh_buffer(self._momentum_buffers, name, param, buf)
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 grad = buf
