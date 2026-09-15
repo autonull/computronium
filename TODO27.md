@@ -185,7 +185,7 @@ deliverable regardless of which structures appear.
   table (a fenced lane is acceptable if sequence tasks never enter the
   campaign).
 
-## 5. Progress log (rev 4 — Phase 1 complete)
+## 5. Progress log
 
 ### Rev 2 (engine round)
 - **P1.1 complete.** New `computronium/autoscientist/compose.py` is the
@@ -357,19 +357,271 @@ deliverable regardless of which structures appear.
   path for them (now fails loudly instead of silently hitting the LM
   lane) — add the tabular cases or drop them from the registry before
   the catalog claims them.
+### Rev 11 (credibility round: BP-leakage audit + matched-budget BP control)
+
+Operator asked the right questions: are we comparing to BP; do we trust
+the results; do they indicate bugs. Two instruments added:
+
+- **`scripts/probes/credit_channel_audit.py`**
+  (`artifacts/credit_channel_audit.json`): BP-cosine of the credit
+  signal for all four measured family|credit pairs. **No leakage** —
+  every cosine is far below the 0.9 GradientCredit gate. The pattern is
+  itself a finding: em|tc's credit is substantially gradient-aligned
+  (0.44-0.60 across layers, consistent with the rev-3 attenuation
+  profile) while ps|tc is near-orthogonal (0.0-0.23). So
+  predictive_settling beating em is NOT ps secretly doing backprop.
+- **Matched-budget BP control arm**: `ruler_calibration.py --epochs 1`
+  now sweeps epoch budgets; `artifacts/bp_control_ep1.json` holds the
+  1-epoch BP control on the catalog. Verdict vs the 1-epoch ps cells:
+  **ps beats matched-budget BP on digits (+0.53), spiral (+0.16),
+  circles (+0.09)**; parity on wine/breast_cancer; loses on xor/usps/
+  iris. A local method beating same-budget BP per epoch is a
+  plausible local-learning result (per-epoch sample efficiency), but a
+  +0.53 gap is large enough that the verdict is **provisional until
+  multi-seed replication** (the C-cert gate set: seeds, matched
+  control at multiple budgets, defect hunt).
+- Resolved: the campaign log's "mean accuracy 0.000" insight is the
+  reasoner averaging confidence over the 50 confidence-0.0
+  `structurally_incompatible` entries — read-path artifact, not a
+  measurement bug; the reasoner should exclude them.
+- Tests: compose suite green; ruff clean on all touched probe scripts.
+
+### Rev 10 (shallow breadth run: predictive_settling measured, first cross-family signal)
+
+- **Protocol change honored:** `--epochs N` / `--skip-dynamics` /
+  `--cells-per-iter` rapid-breadth run (1-epoch cells) measured 84
+  predictive_settling task-cells in ~25 min (was: 51 em cells in ~2.5 h
+  at 5 epochs). 193 task-cells / 92 distinct coordinates / 207
+  structural rejections recorded total. Sweep stopped at its kill
+  deadline, 0 stray processes.
+- **First cross-family signal:** predictive_settling *out-measures*
+  energy_minimization on the same grid (mean 0.545 vs 0.508) with a
+  much lower vision failure rate (7/29 vs 15/26 below 0.3) — the
+  em-slice vision weakness is looking family-specific, not a general
+  local-learning limit.
+- **ps axis readings (n>=6):** credit tc 0.566 > local_contrastive
+  0.487 (credit ranking FLIPS vs em — the atlas's first family x credit
+  interaction); update lion 0.732 > ortho_adam 0.713 > local_adam;
+  topology ff 0.579 ~ recurrent 0.557 > tile 0.462.
+- **Still unreachable:** attention/spatial_lattice/ntm/nca/graph for
+  both families so far (layered-geometry requirement). Error_predictive_
+  coding / spike_integration / diffusion / lazy remain unmeasured —
+  next shallow run should skip em + predictive_settling.
+- Tests: compose suite green; ruff/pyright clean on touched files.
+
+### Rev 9 (decision snapshot at 109 cells + shallow-run protocol)
+
+- **Sweep run 3 stopped by operator at 109 measured task-cells
+  (51 distinct coordinates), 132 structural rejections recorded, 0
+  stray processes.** Still all `energy_minimization` — the em slice's
+  product-order region is dominated by structurally impossible
+  coordinates (em x attention 55, em x spatial_lattice 54 recorded
+  rejections), which the coverage driver burns gate probes on before
+  reaching composable cells. The `avoid_characterized` task-level
+  prune was removed from `propose_coverage_cells` (it had killed all
+  novel proposals once any task exceeded 0.5 — cell novelty is the cell
+  key, not the task).
+- **Decision-relevant readings (5-epoch cells, n>=6):**
+  - credit: local_contrastive 0.528 >= random_projections 0.520 >
+    thermodynamic_contrast 0.499 — tc is the most-used but
+    weakest-measuring credit so far.
+  - update: adam 0.597 > ortho_adam 0.562 > euclidean 0.560 >
+    local_adam 0.529.
+  - topology: feedforward 0.534 ~ tile_mesh 0.531 > recurrent 0.469.
+  - 15/26 vision cells read < 0.3 while their BP ruler is 0.83-0.97:
+    either genuine family limits or under-training at the cell budget
+    (per-topology ruler calibration is the discriminating instrument).
+  - Structural map: em composes with {ff, recurrent, tile_mesh};
+    attention/spatial_lattice/ntm/nca/graph are em-blocked (layered
+    geometry). These axes need the OTHER dynamics families to matter.
+- **Shallow-run protocol (operator directive):** future sweeps default
+  to rapid shallow breadth. `--epochs N` on `scripts/g1_core_sweep.py`
+  (default 5) stamps epochs into every coverage proposal;
+  `_execute_proposal` honors `hyperparams["epochs"]`. Run
+  `--epochs 1 --cells-per-iter 8` for many datapoints suitable for
+  high-dimensional analysis; reserve 5-epoch runs for confirmatory
+  depth on survivors.
+- Tests: compose suite 18/18; ruff/pyright clean on touched files.
+
+### Rev 8 (G4 analysis + two KB-write defects fixed + live surrogate)
+
+- **Defect: experiments-table rows collided within an iteration.**
+  `experiment_id`/`name` were `campaign_iter{N}` for every result, so 51
+  executions produced 18 rows — all but one cell per iteration was
+  silently lost to the surrogate's read path. Fixed: cell-unique
+  identity (`campaign_iter{N}_{cell_key}`).
+- **Defect: surrogate target metric never matched.** The executor
+  records `final_accuracy`; `train_surrogate` targets `val_accuracy` —
+  the surrogate had zero valid records (rev-4 featurization was dead
+  code in practice). Fixed: both names recorded. KB repaired by
+  backfilling the 51 measured results from the authoritative
+  `surrogate_reliability.jsonl` (same measured values, honest alias)
+  and aliasing `val_accuracy` on existing rows.
+- **Surrogate is now live:** trained (rf) on 69 experiment rows; real
+  predictions on covered (em|tc|eucl|recurrent -> 0.533) and unseen
+  (ps|pepita|lion|attention -> 0.35) cells. No-model floor only until
+  the first fit.
+- **`artifacts/g1/atlas.md` written (G4 partial):** top-15 cells, mean
+  accuracy by credit/update/topology axis (local_contrastive 0.538 vs
+  thermodynamic_contrast 0.491; local_adam best update), failure
+  manifolds by dynamics x topology pair, G2 topology-survival preview,
+  surrogate reliability summary. The KB's `compute_algorithm_fingerprints`
+  / `generate_algorithm_phylogeny` return empty for this data (they key
+  on model_family diversity — all cells are eqprop) — the atlas is
+  computed from the grid axes instead.
+- **Tests:** reproducibility suite 8/8 (bit-for-bit excluded from the
+  quick loop only when re-running cheap tiers), pyright 0/ruff clean on
+  campaign.py (3 pre-existing findings remain: Register C).
+
+### Rev 7 (G1 run 2 complete — first measured atlas slice)
+
+Sweep run 2 (24 iterations x up to 6 cells, full ruler catalog) finished
+inside its kill deadline, **0 stray processes**, ledger audit-clean:
+
+- **Measured: 51 cells / 43 distinct coordinates** — all
+  `energy_minimization` (registry product order is dynamics-outer, so the
+  sweep covered the em slice: 9 credits x 12 updates x 10 topologies
+  precedes any other family). Best cells: local_contrastive x adam on
+  xor 1.000, thermodynamic_contrast x euclidean x recurrent on
+  breast_cancer 0.956, tc x local_adam x ff on digits 0.911,
+  tc x muon x ff on mnist 0.851.
+- **Gated: 58 rejections, all recorded covered** — 24
+  "requires a layered geometry" (em x attention/lattice/ntm), 3
+  local_contrastive x non-linear-stack, and **8 role_split
+  compositions that were an implementation defect, not structure**:
+  `compose_cell_system` passed `step_size=` to a factory that doesn't
+  take it. Fixed (signature-aware kwargs) — but the real finding is that
+  `role_split` requires role metadata the grid does not parameterize, so
+  it is **removed from `GRID_UPDATES`** and its 8 wrongly-attributed
+  `structurally_incompatible` KB entries purged (wrong claims in the
+  atlas are worse than missing ones).
+- **Stop-rule behavior validated:** once cheap cells were exhausted the
+  sweep advanced through gate-only iterations at ~0s each and terminated
+  cleanly on the iteration cap — no limbo, no budget burn.
+- **Reliability curve:** 51 predicted-vs-measured rows; the first ~10
+  are the R2 floor (surrogate cold start), the tail reflects real fits.
+  Curve analysis is a G4 input.
+- **Tests:** compose suite (18) + reproducibility suite (8) + ceec_link —
+  30 passed; ruff/pyright clean on touched files.
+
+**G4 partial (to finish next):** the coverage matrix, fingerprints, and
+phylogeny over `artifacts/g1/kb.sqlite` remain; the em-slice numbers
+above are the seed of `artifacts/g1/atlas.md`.
+
+### Rev 6 (G1 run-1 triage: three sweep defects fixed, sweep relaunched)
+
+G1 sweep run 1 (rev 5, 12x4) hit the stop rule after 8 iterations with
+only 8 governed cells measured and 18 dry-run rejections — triage found
+three defects, all structural, all fixed:
+
+1. **Coverage matrix never accumulated.** `_covered_cells` reads
+   `hp["dynamics"]` from KnowledgeEntry records, but
+   `_update_knowledge_base` never wrote `dynamics/credit/update` into
+   the entry's hyperparameters — every visit re-proposed the same first
+   product-order cells and the stop rule fired spuriously. Fixed: the
+   entry now carries the full cell key.
+2. **Gated cells were re-proposed forever.** A dry-run rejection left no
+   record, so structurally impossible cells
+   (`energy_minimization x attention/lattice/ntm` — "requires a layered
+   geometry"; tile-mesh shape mismatches) burned the campaign in a loop.
+   Fixed: `_dry_run_gate` now records the rejected cell as covered via a
+   `structurally_incompatible` KnowledgeEntry (no `add_experiment` row —
+   a zero-accuracy row would poison the surrogate). The gate remains
+   ledger-free; the incompatibility verdict is data, measured not
+   assumed.
+3. **Cells under-trained at the fixed default lr.** G1 run-1 vision
+   cells measured ~ chance (mnist 0.089 vs ruler 0.971) — the exact
+   fixed-lr mismeasure the rev-3 ruler round caught. Fixed:
+   `_ruler_lr(task, topology)` defaults a proposal's lr to the task's
+   ruler-calibrated lr — **scoped to feedforward**, the topology the
+   ruler actually measured (recurrent at the ruler's 1e-2 destabilizes:
+   0.13 measured in triage; extrapolating a calibration instrument past
+   its measured scope is fabrication, not calibration).
+
+- **Tests:** `test_campaign_reproducibility.py` now 8 cases (added:
+  incompatible cell enters the coverage matrix and stops re-proposal —
+  verified against a real `energy_minimization x attention` rejection;
+  ruler-lr scoping; explicit-lr precedence via the dry-run payload, which
+  now reports the resolved `lr`). 8/8 + compose/ceec suites pass; ruff +
+  pyright clean on touched files.
+- **Sweep run 2 launched (rev 6):** 24 iterations x 6 cells, full
+  ruler-eligible catalog, fresh `artifacts/g1`, seed 20260914. Iteration
+  1 measured 3/4 (one gate rejection, now recorded). Kill deadline 3 h.
+- **Reliability-curve caveat (carried):** `predict_outcome` returns the
+  R2 floor (0.0) until ~10 experiment rows exist; run 1's reliability
+  JSONL is all-floor. Meaningful curve starts mid-run-2.
+
+### Rev 5 (acceptance + gate + G1 launch)
+
+- **Reproducibility acceptance complete.**
+  `tests/unit/test_campaign_reproducibility.py`:
+  `test_geometry_execution_is_bit_for_bit_reproducible` double-runs a
+  geometry proposal (recurrent/mupc on digits) through
+  `_execute_proposal` with `seed_everything(1234, deterministic=True)` and
+  asserts bit-for-bit identical training histories. P1.1 acceptance is now
+  fully closed.
+- **Improvement 2 landed (dry-run constructor gate).**
+  `compose.dry_run_system` runs one synthetic `train_step` on the composed
+  system;
+  `AutoScientistCampaign._dry_run_gate` runs it *before*
+  `CEECLink.pre_register` for governed campaigns — an incompatible cell is
+  rejected with no ledger row (log carries the reason; `run_iteration`
+  skips it). Note: pepita×recurrent no longer crashes at depth-2/hidden-16
+  (the rev-3 round-trip path evidently fixed it); the gate remains the
+  mechanism, the specific pair is no longer a known failure.
+- **Surrogate reliability logging landed.** `_execute_proposal` now
+  returns `dynamics`/`credit`/`update` in its result payload (they were
+  missing — caught live by the reliability log recording `None` cells).
+  `scripts/g1_core_sweep.py` appends predicted-vs-measured rows to
+  `surrogate_reliability.jsonl` each iteration; the surrogate retrains
+  per iteration (graceful skip below the minimum row count).
+- **G1 core sweep launched (rev 5).** `scripts/g1_core_sweep.py`:
+  fresh KB, ruler-eligible tasks from `artifacts/ruler_table.json`,
+  CEEC-governed (`--root artifacts/g1`, ledger SQLite + campaign db +
+  reliability JSONL under one root), coverage driver rotating tasks per
+  visit, stop rule on no-novel-cells. First sweep: 12 iterations × 4
+  cells, full catalog, seed 20260914. Kill deadline 3 h after launch.
+- **Tests:** `tests/unit/test_campaign_reproducibility.py` (5 cases);
+  smoke gate `test_autoscientist_compose + test_ceec_link +
+  test_campaign_stack` 61 passed; ruff/pyright clean on all touched
+
+### Improvement opportunities (rev 8)
+1. **Continue the sweep for the other 6 dynamics families** — same KB,
+   new campaign root; coverage skips completed/incompatible cells; the
+   surrogate trains from ~iteration 2 now (target metric fixed).
+2. **KB analysis stack keys on model_family, not grid axes** —
+   `compute_algorithm_fingerprints`/`phylogeny` return empty for
+   single-model campaigns; extend analyzers to the axis featurization
+   or record axes as family variants (decision rides G4 completion).
+3. **G3 instrument triage on divergence cells** (energy -> -1e19):
+   classify instability vs trap with credit_trace/settle_horizon
+   before G2 re-runs them on other topologies.
+4. **Per-topology ruler calibration** before trusting G2 (ruler lr is
+   feedforward-only by design).
+5. **Surrogate persistence**: pickle to `model_path` for cross-process
+   resume.
+6. **role_split accessibility**: needs `update_params` in the proposal
+   schema if the axis matters.
+
+### Fresh-session entry point (rev 8)
+1. Continue G1 (background, with kill deadline):
+   `setsid nohup uv run python scripts/g1_core_sweep.py --iterations 24
+   --cells-per-iter 6 --root artifacts/g1 >> logs/g1_sweep.log 2>&1 &`
+   — same KB advances past the em slice into predictive_settling et al.
+   Verify `experiments` rows grow per-cell (collision fixed).
+2. Extend `artifacts/g1/atlas.md` after each run from
+   `surrogate_reliability.jsonl` + the KB.
+3. G2 topology extension once multiple dynamics families have measured
+   survivors; G3 divergence triage first.
+4. Phase 4 (C-cert, substrate unlock) only after G1-G4.
+5. Smoke gate: `uv run python -m pytest
+   tests/unit/test_autoscientist_compose.py
+   tests/unit/test_campaign_reproducibility.py
+   tests/unit/test_ceec_link.py -q`.
+
 ## 6. Fresh-session entry point
-State at rev 4: Phase 0 acceptance-complete, Phase 1 complete,
-P2.1/P2.4 landed (commit 13c63790). Next actions in order:
-1. Reproducibility acceptance: seeded double-run test of a geometry
-   proposal through `_execute_proposal` (bit-for-bit history).
-2. Dry-run constructor probe before `CEECLink.pre_register` — catches
-   credit×topology crashes (pepita×recurrent is a known bad pair)
-   without burning a governed ledger row.
-3. G1 core sweep as a background campaign: fresh KB, ruler-eligible
-   tasks only, `ceec_ledger_path` set, `propose_coverage_cells` +
-   `train_surrogate` each iteration. Stop rules in §3/G1.
-4. After G1: G2 topology extension (tile dims now round-trip), G4
-   fingerprint/phylogeny analysis.
-Watch: `git log` for this file's rev headers; `uv run python -m pytest
-tests/unit/test_autoscientist_compose.py tests/unit/test_ceec_link.py
-tests/unit/core/test_campaign_stack.py -q` is the smoke gate.
+Superseded by the **rev 8** entry point above.
+
+State at rev 8: Phases 0-2 complete, G1 run 2 measured the em slice
+(51 cells, atlas written, surrogate live), two KB-write defects fixed.
+Next front: sweep continuation -> G2/G4 -> Phase 4.

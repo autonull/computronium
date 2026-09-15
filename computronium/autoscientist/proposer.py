@@ -53,9 +53,11 @@ GRID_UPDATES: tuple[str, ...] = (
     "spectral_constrained",
     "ortho_adam",
     "lion",
-    "role_split",
     "elastic_consolidation",
 )
+# role_split is excluded: its factory requires role metadata (role_names/
+# on_role/other) the grid does not parameterize — it is not composable as
+# a bare grid cell (rev 6; the sweep gated 5 such compositions before).
 GRID_TOPOLOGIES: tuple[str, ...] = (
     "feedforward",
     "recurrent",
@@ -295,6 +297,8 @@ class ExperimentProposer:
         depth: int = 2,
         hidden_dim: int = 64,
         init_scheme: str = "default",
+        hyperparams: dict[str, object] | None = None,
+        dynamics_order: tuple[str, ...] | None = None,
     ) -> list[ExperimentProposal]:
         """Propose the first coverage-novel grid cells in registry order.
 
@@ -305,7 +309,7 @@ class ExperimentProposer:
         """
         covered = self._covered_cells()
         proposals: list[ExperimentProposal] = []
-        for dynamics in GRID_DYNAMICS:
+        for dynamics in dynamics_order or GRID_DYNAMICS:
             for credit in GRID_CREDITS:
                 for update in GRID_UPDATES:
                     for topology in GRID_TOPOLOGIES:
@@ -331,13 +335,18 @@ class ExperimentProposer:
                             dynamics=dynamics,
                             credit=credit,
                             update=update,
+                            hyperparams=dict(hyperparams or {}),
                             justification="coverage-novel cell (P1.2a)",
                             expected_outcome="measured cell in the atlas",
                             priority=0.5,
                             tags=["autoscientist", "coverage", key],
                         )
-                        kept, _ = self.avoid_characterized([proposal])
-                        proposals.extend(kept)
+                        proposals.append(proposal)
+        # No avoid_characterized here: its task-level redundancy check
+        # prunes any cell whose task has a prior result >= 0.5, which after
+        # a productive sweep kills every novel coordinate (rev 8: 0 novel
+        # cells proposed with ~93/1080 covered). Grid-cell novelty is the
+        # cell key, already handled by the covered set above.
         return proposals
 
     def _hypothesis_to_proposal(

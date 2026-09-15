@@ -34,11 +34,12 @@ HIDDEN = 64
 LR_SWEEP = (1e-3, 1e-2)
 
 
-def calibrate_task(task_name: str) -> dict[str, object]:
+def calibrate_task(task_name: str, epochs: int = BUDGET_EPOCHS) -> dict[str, object]:
     """Measure the BP ceiling and chance band for one task.
 
     The lr is micro-swept (P0.3) and the best run is the ruler row —
     the ceiling must not be an artifact of one arbitrary lr.
+    ``epochs`` matches a cell budget for the control arm (rev 10).
     """
     task = create_task(task_name, device=str(get_device()), quick_mode=True)
     task.setup()
@@ -57,7 +58,7 @@ def calibrate_task(task_name: str) -> dict[str, object]:
         t0 = time.time()
         with SystemTrainer(
             system,  # type: ignore[arg-type]
-            SystemTrainerConfig(max_epochs=BUDGET_EPOCHS, batch_size=BUDGET_BATCH),
+            SystemTrainerConfig(max_epochs=epochs, batch_size=BUDGET_BATCH),
             task.get_dataloader("train"),  # type: ignore[attr-defined]
             task.get_dataloader("val"),  # type: ignore[attr-defined]
         ) as trainer:
@@ -79,7 +80,7 @@ def calibrate_task(task_name: str) -> dict[str, object]:
         "chance_band": chance,
         "beats_chance": val_acc > chance + 0.05,
         "eligible": val_acc > chance + 0.05,
-        "epochs": BUDGET_EPOCHS,
+        "epochs": epochs,
         "batch_size": BUDGET_BATCH,
         "hidden_dim": HIDDEN,
         "lr": best["lr"],
@@ -97,17 +98,25 @@ def main() -> None:
     parser.add_argument(
         "--out", default="artifacts/ruler_table.json", help="Output ruler table path"
     )
+    parser.add_argument(
+        "--epochs",
+        default="3",
+        help="Comma-separated epoch budgets (e.g. '1,5' for the rev-10 "
+        "matched-budget control arm; 3 = the standard ruler)",
+    )
     args = parser.parse_args()
 
     rows = []
-    for name in args.tasks.split(","):
-        name = name.strip()
-        try:
-            row = calibrate_task(name)
-        except Exception as exc:  # ruff: ignore[blind-except] — one bad task must not kill the sweep
-            row = {"task": name, "error": str(exc), "eligible": False}
-        rows.append(row)
-        print(json.dumps(row))
+    for epochs_str in args.epochs.split(","):
+        epochs = int(epochs_str.strip())
+        for name in args.tasks.split(","):
+            name = name.strip()
+            try:
+                row = calibrate_task(name, epochs=epochs)
+            except Exception as exc:  # ruff: ignore[blind-except] — one bad task must not kill the sweep
+                row = {"task": name, "error": str(exc), "eligible": False}
+            rows.append(row)
+            print(json.dumps(row))
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

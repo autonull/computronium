@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from computronium.autoscientist.ceec_link import CEECLink
     from computronium.knowledge import KnowledgeBase
 
-from computronium.autoscientist.proposer import ExperimentProposer
+from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.autoscientist.reasoner import HypothesisReasoner
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
@@ -48,6 +48,35 @@ logger = get_logger(__name__)
 def _metric(value: object) -> float:
     """Coerce a possibly-missing result metric to float (zeros stay zeros)."""
     return float(value) if isinstance(value, int | float) else 0.0
+
+
+_RULER_LR: dict[str, float] = {}
+
+
+def _ruler_lr(task: str | None, topology: str | None = None) -> float:
+    """Per-task best lr from the committed ruler table (P0.3 protocol).
+
+    A proposal without its own ``lr`` trains at the task's calibrated
+    ceiling lr — but only for ``feedforward``, the topology the ruler
+    actually measured. Other topologies keep the conservative default:
+    lr is topology-coupled (recurrent at the ruler's 1e-2 destabilizes),
+    and extrapolating a calibration instrument past its measured scope
+    is fabrication, not calibration.
+    """
+    if topology not in {None, "feedforward"}:  # ruff: ignore[rule-codes-in-suppression-comments]
+        return 1e-3
+    if not _RULER_LR:
+        path = Path(__file__).parents[2] / "artifacts/ruler_table.json"
+        try:
+            rows = json.loads(path.read_text(encoding="utf-8"))["rows"]
+            for row in rows:
+                lr = row.get("lr")
+                if isinstance(lr, int | float):
+                    _RULER_LR[str(row["task"])] = float(lr)
+        except OSError, ValueError, KeyError:
+            logger.warning("Ruler table missing at %s; defaulting lr 1e-3", path)
+        _RULER_LR.setdefault("*", 1e-3)
+    return _RULER_LR.get(task or "*", _RULER_LR["*"])
 
 
 @dataclass(frozen=True, slots=True)
@@ -730,6 +759,10 @@ class AutoScientistCampaign:
                     proposal.model,
                     proposal.task,
                 )
+                if self.ceec is not None and not self._dry_run_gate(proposal):
+                    # Dry-run gate rejected the proposal: no pre-registration,
+                    # no ledger row (TODO27 rev 4, improvement 1).
+                    continue
                 experiment = self._pre_register(proposal)
                 try:
                     result = self._execute_proposal(proposal)
@@ -788,7 +821,73 @@ class AutoScientistCampaign:
         if experiment is not None and self.ceec is not None:
             self.ceec.record_failure(experiment, proposal, error)
 
-    def _execute_proposal(self, proposal: ExperimentProposal) -> dict[str, object]:
+    def _dry_run_gate(self, proposal: ExperimentProposal) -> bool:
+        """Constructor probe before pre-registration (TODO27 rev 4, imp. 1).
+
+        Runs one synthetic ``train_step`` through the composed system. An
+        incompatible cell (credit × topology shape crash, bad geometry)
+        is rejected here without burning a governed ledger row — but it
+        *is* recorded as covered (``_record_incompatible``), so the
+        coverage proposer never re-proposes a structurally impossible
+        cell (rev 5 fix: the first sweep stalled re-proposing 4 rejected
+        cells forever).
+        """
+        try:
+            self._execute_proposal(proposal, dry_run=True)
+        except Exception as e:  # broad: any compose/settle crash rejects
+            logger.exception("Dry-run gate rejected proposal on %s", proposal.task)
+            self._record_incompatible(proposal, str(e))
+            return False
+        return True
+
+    def _record_incompatible(self, proposal: ExperimentProposal, error: str) -> None:
+        """Mark a dry-run-rejected cell covered in the KB (not the ledger).
+
+        The KnowledgeEntry carries the full cell key, so
+        ``ExperimentProposer._covered_cells`` treats the coordinate as
+        measured (verdict: cannot execute). No ``add_experiment`` row —
+        a zero-accuracy row would poison the surrogate.
+        """
+        kb = self.knowledge_base
+        if kb is None:
+            return
+        if not (proposal.dynamics and proposal.credit and proposal.update):
+            return
+        from computronium.knowledge import KnowledgeEntry
+
+        entry = KnowledgeEntry(
+            id=(
+                f"incompatible_{self.campaign_id}_{self._iteration}_"
+                f"{int(time.time() * 1000)}"
+            ),
+            topic=f"incompatible:{proposal.task}",
+            model_family=proposal.model,
+            finding=f"cell cannot execute: {error[:160]}",
+            details=str(proposal.geometry),
+            confidence=0.0,
+            tags=[
+                "experiment",
+                "structurally_incompatible",
+                f"campaign:{self.campaign_id}",
+            ],
+            source="experiment",
+            metrics={},
+            hyperparameters={
+                "geometry": proposal.geometry or {},
+                "dynamics": proposal.dynamics,
+                "credit": proposal.credit,
+                "update": proposal.update,
+            },
+            extra={"campaign_id": self.campaign_id},
+        )
+        try:
+            kb.add_entry(entry)
+        except (KnowledgeBaseError, OSError, ValueError) as e:
+            logger.warning("Failed to record incompatible cell: %s", e)
+
+    def _execute_proposal(
+        self, proposal: ExperimentProposal, dry_run: bool = False
+    ) -> dict[str, object]:
         """Execute a proposal: 5-D system -> SystemTrainer.
 
         Geometry overrides compose through the single round-trip path
@@ -818,8 +917,15 @@ class AutoScientistCampaign:
         assert input_dim is not None  # ruff: ignore[assert]
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
-        lr_raw = proposal.hyperparams.get("lr", 1e-3)
-        lr = float(lr_raw) if isinstance(lr_raw, int | float) else 1e-3
+        lr_raw = proposal.hyperparams.get("lr")
+        lr = (
+            float(lr_raw)
+            if isinstance(lr_raw, int | float)
+            else _ruler_lr(
+                proposal.task,
+                str((proposal.geometry or {}).get("topology_type", "feedforward")),
+            )
+        )
         system = compose_proposal_system(
             proposal.model,
             input_dim=int(input_dim),
@@ -831,8 +937,22 @@ class AutoScientistCampaign:
             update=proposal.update,
         )
 
+        if dry_run:
+            from computronium.autoscientist.compose import dry_run_system
+
+            dry_run_system(system)
+            return {
+                "proposal": {"task": proposal.task},
+                "status": "dry_run_ok",
+                "lr": lr,
+            }
+
+        epochs_raw = proposal.hyperparams.get("epochs")
+        max_epochs = (
+            int(epochs_raw) if isinstance(epochs_raw, int | float) and epochs_raw else 5
+        )
         config = SystemTrainerConfig(
-            max_epochs=5,
+            max_epochs=max_epochs,
             batch_size=64,
             track_energy=True,
         )
@@ -853,6 +973,9 @@ class AutoScientistCampaign:
                 "propagator": proposal.propagator,
                 "optimizer": proposal.optimizer,
                 "geometry": proposal.geometry,
+                "dynamics": proposal.dynamics,
+                "credit": proposal.credit,
+                "update": proposal.update,
                 "justification": proposal.justification,
             },
             "status": "completed",
@@ -870,61 +993,86 @@ class AutoScientistCampaign:
         kb = self.knowledge_base
         if kb is None:
             return
-        try:
-            from computronium.knowledge import KnowledgeEntry
+        from computronium.knowledge import KnowledgeEntry
 
-            entry = KnowledgeEntry(
-                id=f"campaign_{self.campaign_id}_iter{self._iteration}_{int(time.time())}",
-                topic=f"experiment:{proposal.task}",
-                model_family=proposal.model,
-                finding=(
-                    f"Accuracy: {result.get('final_accuracy', 'N/A'):.4f}, "
-                    f"Loss: {result.get('final_loss', 'N/A'):.4f}"
-                ),
-                details=(
-                    f"Hypothesis: {proposal.hypothesis}\n"
-                    f"Propagator: {proposal.propagator}\n"
-                    f"Optimizer: {proposal.optimizer}\n"
-                    f"Config: {proposal.hyperparams}\n"
-                    f"Epochs: {result.get('epochs_completed', 'N/A')}"
-                ),
-                confidence=_metric(result.get("final_accuracy")),
-                tags=[
-                    "experiment",
-                    proposal.task,
-                    proposal.model,
-                    f"campaign:{self.campaign_id}",
-                ],
-                source="experiment",
-                metrics={
-                    k: v
-                    for k, v in result.items()
-                    if isinstance(v, (int, float)) and v is not None
-                },
-                hyperparameters={
-                    **(
-                        proposal.hyperparams
-                        if isinstance(proposal.hyperparams, dict)
-                        else {"raw": str(proposal.hyperparams)}
-                    ),
-                    "geometry": proposal.geometry or {},
-                },
-                extra={
-                    "campaign_id": self.campaign_id,
-                    "campaign_iteration": self._iteration,
-                    "branch": self.branch_name,
-                },
-            )
-            kb.add_entry(entry)
-            # Experiments-table row: the surrogate's and coverage matrix's
-            # read path (P1.2b) — config carries the full grid axes.
-            metrics: dict[str, float] = {
-                k: float(v)
+        entry = KnowledgeEntry(
+            id=f"campaign_{self.campaign_id}_iter{self._iteration}_{int(time.time())}",
+            topic=f"experiment:{proposal.task}",
+            model_family=proposal.model,
+            finding=(
+                f"Accuracy: {result.get('final_accuracy', 'N/A'):.4f}, "
+                f"Loss: {result.get('final_loss', 'N/A'):.4f}"
+            ),
+            details=(
+                f"Hypothesis: {proposal.hypothesis}\n"
+                f"Propagator: {proposal.propagator}\n"
+                f"Optimizer: {proposal.optimizer}\n"
+                f"Config: {proposal.hyperparams}\n"
+                f"Epochs: {result.get('epochs_completed', 'N/A')}"
+            ),
+            confidence=_metric(result.get("final_accuracy")),
+            tags=[
+                "experiment",
+                proposal.task,
+                proposal.model,
+                f"campaign:{self.campaign_id}",
+            ],
+            source="experiment",
+            metrics={
+                k: v
                 for k, v in result.items()
                 if isinstance(v, (int, float)) and v is not None
-            }
+            },
+            hyperparameters={
+                **(
+                    proposal.hyperparams
+                    if isinstance(proposal.hyperparams, dict)
+                    else {"raw": str(proposal.hyperparams)}
+                ),
+                "geometry": proposal.geometry or {},
+                "dynamics": proposal.dynamics,
+                "credit": proposal.credit,
+                "update": proposal.update,
+            },
+            extra={
+                "campaign_id": self.campaign_id,
+                "campaign_iteration": self._iteration,
+                "branch": self.branch_name,
+            },
+        )
+        try:
+            kb.add_entry(entry)
+        except (KnowledgeBaseError, OSError, ValueError) as e:
+            logger.warning("Failed to update KnowledgeBase: %s", e)
+        # Experiments-table row: the surrogate's and coverage matrix's
+        # read path (P1.2b) — config carries the full grid axes.
+        metrics: dict[str, float] = {
+            k: float(v)
+            for k, v in result.items()
+            if isinstance(v, (int, float)) and v is not None
+        }
+        # The surrogate's default target is val_accuracy; the executor
+        # reports final_accuracy. Record both names or the surrogate
+        # never sees a target (rev 7 defect: 0 valid records).
+        if "final_accuracy" in metrics:
+            metrics.setdefault("val_accuracy", metrics["final_accuracy"])
+        # Cell-unique identity: campaign_iter + cell key. The earlier
+        # iteration-only id collided across results, so all but one
+        # cell per iteration was silently lost to the surrogate's
+        # read path (rev 7: 51 executions -> 18 rows).
+        cell_tag = (
+            cell_key(
+                str(proposal.dynamics),
+                str(proposal.credit),
+                str(proposal.update),
+                str((proposal.geometry or {}).get("topology_type", "feedforward")),
+            )
+            if proposal.dynamics
+            else f"{proposal.model}|{proposal.task}"
+        )
+        try:
             kb.add_experiment(
-                name=f"campaign_iter{self._iteration}",
+                name=f"campaign_iter{self._iteration}_{cell_tag}",
                 model_family=proposal.model,
                 task=proposal.task or "unknown",
                 config={
@@ -939,7 +1087,7 @@ class AutoScientistCampaign:
                     "update": proposal.update,
                 },
                 metrics=metrics,
-                experiment_id=f"camp_{self.campaign_id}_iter{self._iteration}",
+                experiment_id=f"camp_{self.campaign_id}_iter{self._iteration}_{cell_tag}",
             )
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to update KnowledgeBase: %s", e)

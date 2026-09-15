@@ -11,6 +11,7 @@ Unknown or topology-inappropriate geometry keys fail loudly (plan §1
 ``assert_task_runnable`` until the sequence executor lands (P1.4).
 """
 
+import inspect
 from typing import TYPE_CHECKING, Final, cast
 
 from computronium.core.logging import get_logger
@@ -32,6 +33,7 @@ __all__ = [
     "build_geometry_config",
     "compose_cell_system",
     "compose_proposal_system",
+    "dry_run_system",
     "logger",
 ]
 
@@ -300,6 +302,23 @@ def compose_proposal_system(
     )
 
 
+def dry_run_system(system: System, *, batch_size: int = 2) -> None:
+    """Constructor probe: one ``train_step`` on a synthetic batch.
+
+    Catches credit × topology (and any other settle/loss-shape) crashes
+    before a proposal burns governed budget — a failure here raises, the
+    caller skips the proposal without pre-registering it (TODO27 rev 4,
+    improvement 1).
+    """
+    import torch
+
+    gcfg = system.geometry.config
+    device = torch.device(cast("str", getattr(system, "device", "cpu")))
+    x = torch.zeros(batch_size, int(gcfg.input_dim), device=device)
+    y = torch.zeros(batch_size, dtype=torch.long, device=device)
+    system.train_step(x, y)
+
+
 def compose_cell_system(
     *,
     dynamics: str,
@@ -327,7 +346,13 @@ def compose_cell_system(
     try:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         ccfg = getattr(CreditAssignmentConfig, credit)()
-        ucfg = getattr(ParameterUpdateConfig, update)(step_size=lr)
+        update_factory = getattr(ParameterUpdateConfig, update)
+        kwargs = (
+            {"step_size": lr}
+            if "step_size" in inspect.signature(update_factory).parameters
+            else {}
+        )
+        ucfg = update_factory(**kwargs)
     except AttributeError as exc:
         msg = f"Unknown cell axis: {exc.args[0]!r} is not a config factory"
         raise ProposalComposeError(msg) from exc
