@@ -251,12 +251,60 @@ class SystemConfig:
         Raises:
             ValueError: If configuration violates hard compatibility constraints.
         """
-        # Recurrent geometry requires energy-based dynamics
+        # Recurrent geometry requires energy-based or instantaneous dynamics.
+        # Measured evidence (TODO28 broad map): predictive_settling ×
+        # recurrent (max 0.867) and error_predictive_coding × recurrent
+        # (max 0.647) train; instantaneous settles by a single forward
+        # pass, valid on any topology. spike_integration's raw route-loop
+        # and lazy's Gauss-Seidel sweep remain forbidden (their own
+        # fail-loud checks below/in-class cover those).
         if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):  # noqa: PLR6201, SIM102
-            if self.dynamics.dynamics_type != "energy_minimization":
+            if self.dynamics.dynamics_type not in {
+                "energy_minimization",
+                "predictive_settling",
+                "error_predictive_coding",
+                "instantaneous",
+            }:
                 raise ValueError(
                     f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
-                    f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
+                    f"requires energy-based or instantaneous dynamics, "
+                    f"got {self.dynamics.dynamics_type!r}"
+                )
+
+        # Non-layered geometries cannot host settling dynamics: their
+        # route()/head paths assume geometry-internal state shapes
+        # (attention head-split, lattice (b,n,c) unpack), while settling
+        # families feed raw membrane states. Only instantaneous — a single
+        # forward() pass — is compatible (measured: instantaneous ×
+        # attention/spatial_lattice train; every settling × non-layered
+        # pairing crashes). Broad-map audit TODO28 2026-09-15.
+        if self.dynamics.dynamics_type != "instantaneous" and (  # noqa: PLR6201
+            self.geometry.topology_type
+            in {
+                "attention",
+                "spatial_lattice",
+                "graph",
+                "conv",
+                "nca",
+                "ntm",
+                "causal_transformer",
+            }
+        ):
+            raise ValueError(
+                f"{self.dynamics.dynamics_type!r} settling feeds raw states "
+                f"into geometry.route(), which {self.geometry.topology_type!r} "
+                f"geometry does not support (state-shape contract)"
+            )
+
+        # Diffusion settle is a detached Langevin sampler: its output
+        # carries no autograd graph, so gradient/backprop credit has
+        # nothing to consume (TODO28 broad-map audit: autograd_break).
+        if self.dynamics.dynamics_type == "diffusion":  # noqa: SIM102
+            if self.credit.credit_type in {"gradient", "backprop"}:
+                raise ValueError(
+                    f"Diffusion dynamics produce a non-differentiable settled "
+                    f"state; gradient/backprop credit "
+                    f"(credit_type={self.credit.credit_type!r}) is unsupported"
                 )
 
         # Residual skips are implemented for the feedforward stack only

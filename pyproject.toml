@@ -88,6 +88,7 @@ dev = [
     "datasets",
     "nicegui>=3.16.0",
     "plotly>=6.9.0",
+    "umap-learn>=0.5.9",
     "cryptography==50.0.0",
 ]
 

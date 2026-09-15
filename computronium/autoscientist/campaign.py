@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import yaml
 
@@ -63,7 +63,7 @@ def _ruler_lr(task: str | None, topology: str | None = None) -> float:
     and extrapolating a calibration instrument past its measured scope
     is fabrication, not calibration.
     """
-    if topology not in {None, "feedforward"}:  # ruff: ignore[rule-codes-in-suppression-comments]
+    if topology not in {None, "feedforward"}:  # noqa: SIM102
         return 1e-3
     if not _RULER_LR:
         path = Path(__file__).parents[2] / "artifacts/ruler_table.json"
@@ -432,7 +432,7 @@ class AutoScientistCampaign:
         - Human approval gates
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
@@ -567,7 +567,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
+        new_state = db.create_campaign(  # noqa: F841
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -697,7 +697,7 @@ class AutoScientistCampaign:
             })
         return recent
 
-    def run_iteration(  # ruff: ignore[complex-structure]
+    def run_iteration(  # noqa: C901, PLR0912
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -885,7 +885,7 @@ class AutoScientistCampaign:
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to record incompatible cell: %s", e)
 
-    def _execute_proposal(
+    def _execute_proposal(  # noqa: PLR0914
         self, proposal: ExperimentProposal, dry_run: bool = False
     ) -> dict[str, object]:
         """Execute a proposal: 5-D system -> SystemTrainer.
@@ -914,7 +914,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # ruff: ignore[assert]
+        assert input_dim is not None  # noqa: S101
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr")
@@ -926,16 +926,45 @@ class AutoScientistCampaign:
                 str((proposal.geometry or {}).get("topology_type", "feedforward")),
             )
         )
+        geometry = dict(proposal.geometry or {})
         system = compose_proposal_system(
             proposal.model,
             input_dim=int(input_dim),
             output_dim=int(task.output_dim or 1),
             lr=lr,
-            geometry=proposal.geometry,
+            geometry=geometry,
             dynamics=proposal.dynamics,
             credit=proposal.credit,
             update=proposal.update,
         )
+
+        # Parameter-budget rematch (TODO28 fairness): fixed depth/hidden
+        # spans a ~400x parameter spread across topologies (conv 3.8K vs
+        # spatial_lattice 1.63M). One hidden_dim rescale per cell brings
+        # geometry capacity within ~25% of the budget so mechanisms — not
+        # capacity — dominate the comparison.
+        budget_raw = proposal.hyperparams.get("param_budget")
+        if isinstance(budget_raw, int | float) and budget_raw > 0:
+            for _ in range(3):
+                n_params = sum(p.numel() for p in system.geometry.parameters())
+                if n_params <= 0 or abs(n_params - budget_raw) / budget_raw <= 0.25:
+                    break
+                scale = math.sqrt(float(budget_raw) / n_params)
+                current = float(cast("int | float", geometry.get("hidden_dim", 64)))
+                geometry["hidden_dim"] = max(8, int(current * scale))
+                if geometry["hidden_dim"] == int(current):
+                    break
+                system = compose_proposal_system(
+                    proposal.model,
+                    input_dim=int(input_dim),
+                    output_dim=int(task.output_dim or 1),
+                    lr=lr,
+                    geometry=geometry,
+                    dynamics=proposal.dynamics,
+                    credit=proposal.credit,
+                    update=proposal.update,
+                )
+        param_count = sum(p.numel() for p in system.geometry.parameters())
 
         if dry_run:
             from computronium.autoscientist.compose import dry_run_system
@@ -984,6 +1013,7 @@ class AutoScientistCampaign:
             "final_loss": last.get("val_loss", 0.0),
             "train_accuracy": last.get("train_acc", 0.0),
             "epochs_completed": len(history),
+            "param_count": param_count,
         }
 
     def _update_knowledge_base(

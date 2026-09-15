@@ -415,7 +415,7 @@ All subcommands of the `comp` dispatcher:
 | `comp campaign` | Run/compare/resume joint campaigns; render the static discovery report (HTML/JSON) | `comp campaign run --config <campaign.yaml>` |
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
-| `comp gallery` | Render the demo suite's figures + manifest from live run records | `comp gallery --run` |
+| `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, Pareto radar) | `comp gallery --run` |
 
 Module entry points (not installed as scripts):
 

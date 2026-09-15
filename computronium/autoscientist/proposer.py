@@ -14,7 +14,6 @@ from computronium.autoscientist.reasoner import Hypothesis, HypothesisReasoner
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
 from computronium.knowledge import KnowledgeBase
-from computronium.ontology import ParameterUpdateConfig
 from computronium.ontology.dynamics import DYNAMICS_REGISTRY
 
 if TYPE_CHECKING:
@@ -48,7 +47,9 @@ GRID_UPDATES: tuple[str, ...] = (
     "euclidean",
     "adam",
     "local_adam",
-    "muon" if hasattr(ParameterUpdateConfig, "muon") else "unit_rms",
+    "muon",
+    "unit_rms",
+    "riemannian_orthogonal",
     "mean_norm",
     "spectral_constrained",
     "ortho_adam",
@@ -64,7 +65,13 @@ GRID_TOPOLOGIES: tuple[str, ...] = (
     "tile_mesh",
     "attention",
     "spatial_lattice",
+    "ntm",
 )
+# Task-shape-specialized geometries are excluded: their factories need
+# inputs the flat-classification grid cannot parameterize — conv (spatial
+# H×W), nca (channels × grid == input_dim), causal_transformer ([B, T]
+# int64 token ids), graph (explicit edge_index). Same rationale as
+# role_split below.
 
 
 def cell_key(dynamics: str, credit: str, update: str, topology: str) -> str:

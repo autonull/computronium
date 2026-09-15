@@ -76,6 +76,7 @@ _TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
         "pool_hw",
     }),
     "graph": frozenset({"edge_index"}),
+    "causal_transformer": frozenset({"num_heads", "seq_len"}),
 }
 
 
@@ -122,7 +123,7 @@ def _allowed_keys(topology: str) -> frozenset[str]:
     return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
 
 
-def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
+def build_geometry_config(  # noqa: C901, PLR0911, PLR0912
     geometry: dict[str, object],
     *,
     input_dim: int,
@@ -246,6 +247,14 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 hidden_dims=hidden_dims,
                 init_scale=init_scale,
             )
+        case "causal_transformer":
+            return GeometryConfig.causal_transformer(
+                vocab_size=input_dim,
+                d_model=hidden,
+                n_layers=depth,
+                n_heads=_as_int(geometry.get("num_heads"), 4),
+                seq_len=_as_int(geometry.get("seq_len"), 32),
+            )
         case _:
             msg = f"Unknown topology_type {topology!r}"
             raise ProposalComposeError(msg)  # pragma: no cover - guarded above
@@ -341,6 +350,7 @@ def compose_cell_system(
         ParameterUpdateConfig,
         StateDynamicsConfig,
     )
+    from computronium.ontology.system import SystemConfig
 
     gcfg = build_geometry_config(geometry, input_dim=input_dim, output_dim=output_dim)
     try:
@@ -356,6 +366,16 @@ def compose_cell_system(
     except AttributeError as exc:
         msg = f"Unknown cell axis: {exc.args[0]!r} is not a config factory"
         raise ProposalComposeError(msg) from exc
+    # Cross-axis hard constraints are the single source of truth (TODO28:
+    # the campaign path previously skipped validate(), executing cells
+    # validate() forbids — e.g. spike × thermodynamic_contrast at chance).
+    SystemConfig(
+        substrate=DigitalSubstrate().config,
+        geometry=gcfg,
+        dynamics=dcfg,
+        credit=ccfg,
+        update=ucfg,
+    ).validate()
     return compose_system_from_configs(
         DigitalSubstrate().config,
         gcfg,

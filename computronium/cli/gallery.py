@@ -31,6 +31,35 @@ def _run_demo_suite() -> int:
     return subprocess.run(cmd, check=False).returncode  # noqa: S603
 
 
+def _run_broad_demo(epochs: int, sample_size: int) -> int:
+    """Broad-map demonstration (TODO28): stratified sweep + atlas render."""
+    root = REPO_ROOT / "artifacts" / "broad_map"
+    sweep = [
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "broad_mapping_sweep.py"),
+        "--sample-size",
+        str(sample_size),
+        "--epochs",
+        str(epochs),
+        "--root",
+        str(root),
+    ]
+    if subprocess.run(sweep, check=False).returncode != 0:  # noqa: S603
+        print("broad-demo: sweep failed", file=sys.stderr)
+        return 1
+    atlas = [
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "visualize_atlas.py"),
+        "--root",
+        str(root),
+    ]
+    if subprocess.run(atlas, check=False).returncode != 0:  # noqa: S603
+        print("broad-demo: atlas render failed", file=sys.stderr)
+        return 1
+    print(f"broad-demo: atlas written to {root / 'atlas.html'}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="comp gallery", description=__doc__)
     parser.add_argument(
@@ -38,7 +67,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="run the demo suite first to regenerate the run records",
     )
+    parser.add_argument(
+        "--generate-broad-demo",
+        action="store_true",
+        help="run the broad mapping sweep (TODO28) and render the atlas HTML",
+    )
+    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--sample-size", type=int, default=500)
     args = parser.parse_args(argv)
+
+    if args.generate_broad_demo:
+        return _run_broad_demo(args.epochs, args.sample_size)
 
     if args.run and _run_demo_suite() != 0:
         print("gallery: demo suite failed; refusing to render", file=sys.stderr)
