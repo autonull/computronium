@@ -184,3 +184,192 @@ deliverable regardless of which structures appear.
 - LM loader defect is P1.4's; fix or fence, decided by P0.1's ruler
   table (a fenced lane is acceptable if sequence tasks never enter the
   campaign).
+
+## 5. Progress log (rev 4 — Phase 1 complete)
+
+### Rev 2 (engine round)
+- **P1.1 complete.** New `computronium/autoscientist/compose.py` is the
+  single composition path for proposals:
+  - `ExperimentProposal.geometry` (topology/depth/hidden_dim/init_scheme/
+    init_scale + topology extras) added; `Bridge.proposal_to_task` and
+    `Campaign._execute_proposal` pass it through. Unknown or
+    topology-inappropriate geometry keys raise `ProposalComposeError`
+    (fail loudly).
+  - `compose_proposal_system` resolves a geometry override by
+    round-tripping the base native factory through
+    `extract_config`/`compose_system_from_configs` — proposal and trainer
+    cannot diverge on construction. Verified end-to-end: a geometry
+    proposal (recurrent/mupc on digits) executes via `SystemTrainer`.
+  - `compose_cell_system` composes a full G1 cell
+    (dynamics × credit × update × topology) from the single-source config
+    classmethods — no preset tables (quarantine rule respected).
+  - `build_geometry_config` reaches all of feedforward/recurrent/
+    tile_mesh/attention/spatial_lattice/nca/ntm/conv/graph.
+- **P1.2(a) complete.** `ExperimentProposer.propose_coverage_cells`:
+  novelty read from the KB's own experiment records (cell key =
+  `dynamics|credit|update|topology`), product-ordered over the registries
+  (no ranking priors), pruned by `conditional_query` via
+  `avoid_characterized`. P1.2(b) surrogate-guided ranking and P1.2(c)
+  instrument-triggered follow-ups remain.
+- **P1.4 complete (fence variant).** `assert_task_runnable` fences
+  char_ngram/shakespeare/wikitext2/penn_treebank with reasons and rejects
+  unknown task names (closing the domain factory's silent LM fallback at
+  the proposal layer). The executor path cannot spend budget on a fenced
+  task. The fix variant (sequence batches for SystemTrainer) stays open
+  and is only worth doing if sequence tasks enter the campaign.
+- **P0.1 instrument built, partial table.**
+  `scripts/probes/ruler_calibration.py` measures the BP ceiling +
+  chance band per task at the standard budget and writes
+  `artifacts/ruler_table.json`. First (small) table: digits 0.189 @
+  3-epoch quick budget (eligible), iris 1.0 (eligible), spiral at
+  chance (ineligible — parity-class, as predicted). Full-catalog sweep
+  is a background job, not yet run.
+- **Riders cleared.** campaign.py/proposer.py flagged pyright lines and
+  geometry.py LSP strictness (5 errors) now report 0. Ruff 0.15
+  directive conversion applied across `autoscientist/`.
+- **Tests:** `tests/unit/test_autoscientist_compose.py` (17 cases:
+  override composition, loud failures, LM fence, coverage novelty/dedup,
+  bridge pass-through) + existing `test_campaign_stack.py` — 56 passed.
+
+### Done in rev 4 (CEEC + surrogate round)
+- **P2.1/P2.4 complete.** New `computronium/autoscientist/ceec_link.py`:
+  `CEECLink` wraps a `ceec.session.Session` ledger. One trace per
+  governed proposal — `pre_register` (question/prediction/threshold via
+  `falsification_criterion`/scope with the resolved cell key, design
+  carries geometry + all grid axes) -> execute -> `ProbeResult` ->
+  `Session.record_result` (decision, artifact, vector evidence,
+  calibration, gate evaluation). Failures land as a `failed` experiment
+  status plus a `missing` probe-output evidence — never limbo. The
+  campaign runs governed whenever `ceec_ledger_path` is passed
+  (`AutoScientistCampaign(..., ceec_ledger_path=...)`); ungoverned runs
+  are unchanged. Verified end-to-end including the failure path.
+- **P1.2(b) complete.** `train_surrogate` now featurizes the grid axes
+  (`dynamics`/`credit`/`update`/`topology` one-hot via `get_dummies`)
+  and `predict_outcome` makes real predictions from the in-process
+  fitted model (`_LIVE_SURROGATES`; no-model fallback reports the stored
+  R2 floor, never a fabricated number). The campaign writes every result
+  to the experiments table via `kb.add_experiment` with the full axes in
+  config, so surrogate and coverage matrix read one record format
+  (shared with the CEEC artifact payload). Verified: prediction on an
+  unseen cell returns a real value; covered cells are no longer
+  re-proposed.
+- **P1.2(c) complete.** `ExperimentProposer.propose_instrument_triggered`:
+  reads a `credit_trace` reading and proposes the *discriminating*
+  follow-up — zero input-layer credit -> same cell at depth+8 with muPC
+  init; unreliable split-half cosine -> doubled-batch reliability
+  recheck. Quiet readings propose nothing.
+- **Phase 1 acceptance status:** coverage-novel proposals across >=3
+  axes (dynamics/credit/update/topology) done; geometry proposal
+  executes and composes through one round-trip path done (bit-for-bit
+  reproducibility still needs an explicit seeded double-run test);
+  surrogate reliability logging during G1 ranking is the remaining
+  wiring.
+
+### Improvement opportunities (rev 4)
+1. **Family-geometry compatibility is unmeasured**: pepita x recurrent
+   crashes with a shape mismatch at settle time. The fence catches task
+   incompatibility, but credit x topology crashes cost a failed ledger
+   row each. A static compatibility table (or a dry-run constructor
+   probe before pre-registration) would save governed budget —
+   candidate for the G1 dry-run gate.
+2. **Reproducibility test**: P1.1 acceptance asks for bit-for-bit
+   reproducible geometry execution; needs an explicit seeded double-run
+   test before G1.
+3. **`predict_outcome` model persistence**: live models are process-
+   local; a restart drops them (registry rows persist). Pickle to
+   `model_path` if G1 needs cross-process ranking.
+- **Surrogate features are hyperparameters-only** — RESOLVED in rev 4
+  (grid-axis featurization; campaign records the axes).
+
+### Done in rev 3 (instrument round)
+- **P0.2 complete.** New `computronium/analysis/instruments.py`:
+  - `credit_trace`: per-weight-layer credit norm, split-half cosine
+    reliability, and an optional BP-reference cosine computed against a
+    plain routed-forward autograd gradient of the same batch.
+  - `settle_horizon`: settle steps actually consumed (None when the
+    dynamics does not expose a free-energy history — recorded as an
+    instrument gap, not fabricated).
+  - Self-check PASSED: GradientCredit reads BP's own gradient at
+    cos 0.9998 ≥ gate 0.9 (`BP_COSINE_GATE`). ThermodynamicContrast
+    reports a depth-attenuating alignment profile (0.574 → 0.242 →
+    0.163 across layers 1/2/3) — an instrument reading consistent with
+    the quarantined attenuation finding, here re-derived, not assumed.
+  - Probe: `scripts/probes/instrument_selfcheck.py` (asserts the gate;
+    recorded-measurement script per the probe conventions).
+- **P0.3 NaN-path exercised once, on purpose.** A NaN input batch
+  surfaces as NaN in every credit norm — the failure is loud, never
+  zero-filled (asserted in the self-check probe).
+- **Improvement 1 landed.** `domains/factory.create_task` no longer
+  silently defaults unknown task names to the LM lane — it raises with
+  the registry pointer. The proposal-layer fence
+  (`assert_task_runnable`) remains as belt-and-suspenders.
+- **Improvement 3 landed (trap removed).** `GeometryConfig` now carries
+  `neurons_per_tile`/`tiles_per_layer`; `geometry_from_config` dispatch
+  uses them (was hardcoded 8/2 — the G2 round-trip would have silently
+  rebuilt every tile system at the wrong dims). `core/presets.py` tile
+  preset stores the values too.
+- **Full-catalog ruler sweep complete (rev 3).** The final table
+  (`artifacts/ruler_table.json`) sweeps the offline-resolvable
+  vision+tabular catalog with the lr micro-sweep; all 11 tasks eligible.
+  First-pass defect caught by skepticism rider: the fixed-lr ruler
+  under-measured digits at 0.189 (true ceiling 0.831 at lr 1e-2) —
+  exactly the mismeasure that would have corrupted G1 eligibility
+  verdicts.
+
+### Improvement opportunities from rev 2 (status)
+1. **Route `domains/factory.create_task` through
+   `domains/registry.resolve_task`** — DONE in rev 3 (loud-raise
+   variant: unknown names now raise with the registry pointer).
+2. **`geometry_from_config` tile dispatch hardcodes
+   `neurons_per_tile=8, tiles_per_layer=2`** — DONE in rev 3 (config
+   now carries tile dims; dispatch and presets use them).
+3. **No `muon` classmethod on `ParameterUpdateConfig`** — DONE in rev 3
+   (exact-polar alias; `GRID_UPDATES` covers the full axis).
+4. **digits BP ceiling 0.189 at the quick budget is suspiciously low**
+   — RESOLVED in rev 3: root cause was the fixed lr (1e-3 under-trains
+   the small offline datasets at the 3-epoch budget). The ruler now
+   micro-sweeps lr {1e-3, 1e-2} per task (P0.3's own rule) and the
+   re-measured table reads digits 0.831, mnist 0.971, fashion 0.858,
+   kmnist 0.862, usps 0.891, xor 1.0, spiral 0.955, circles 1.0,
+   iris/wine/breast_cancer 0.97+ — every offline catalog task eligible.
+5. **Surrogate features are hyperparameters-only** (`train_surrogate`
+   reads lr/batch_size/hidden_dim/num_layers/epochs); G1 cells need
+   dynamics/credit/update/topology features or the surrogate cannot
+   learn the atlas (P1.2b dependency) — DONE in rev 4 (featurization +
+   campaign experiments-table rows).
+
+### Changes that clarify remaining work
+- The proposal → executor contract is now "compose through
+  `compose.py` or don't execute" — Phase 2's pre-registration record can
+  cite the resolved cell key directly.
+- Campaign eligibility is now mechanically checkable from
+  `ruler_table.json` (`eligible: true` + `TASK_COMPAT`), so the G1 stop
+  rule "any verdict without ruler calibration → halt" has a concrete
+  artifact to halt on.
+- Phase 0 acceptance: **COMPLETE as of rev 3** — ruler table committed
+  (`artifacts/ruler_table.json`, micro-swept lr), instrument self-check
+  passed (BP cos 0.9998 ≥ 0.9), NaN/failure path exercised (surfaces
+  loud). Next implementation front: **Phase 2 (CEEC pre-registration
+  format)**; P1.2b/c and the G1 sweep can start from the committed
+  ruler.
+- New gap found by the sweep: `SUPPORTED_TASKS` lists
+  `diabetes`/`california_housing` but `create_task` has no resolution
+  path for them (now fails loudly instead of silently hitting the LM
+  lane) — add the tabular cases or drop them from the registry before
+  the catalog claims them.
+## 6. Fresh-session entry point
+State at rev 4: Phase 0 acceptance-complete, Phase 1 complete,
+P2.1/P2.4 landed (commit 13c63790). Next actions in order:
+1. Reproducibility acceptance: seeded double-run test of a geometry
+   proposal through `_execute_proposal` (bit-for-bit history).
+2. Dry-run constructor probe before `CEECLink.pre_register` — catches
+   credit×topology crashes (pepita×recurrent is a known bad pair)
+   without burning a governed ledger row.
+3. G1 core sweep as a background campaign: fresh KB, ruler-eligible
+   tasks only, `ceec_ledger_path` set, `propose_coverage_cells` +
+   `train_surrogate` each iteration. Stop rules in §3/G1.
+4. After G1: G2 topology extension (tile dims now round-trip), G4
+   fingerprint/phylogeny analysis.
+Watch: `git log` for this file's rev headers; `uv run python -m pytest
+tests/unit/test_autoscientist_compose.py tests/unit/test_ceec_link.py
+tests/unit/core/test_campaign_stack.py -q` is the smoke gate.

@@ -8,12 +8,37 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from computronium.core._paths import db_path
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
 
+if TYPE_CHECKING:
+    from sklearn.ensemble import RandomForestRegressor
+
 logger = get_logger()
+
+
+def _load_jsonish(value: object, default: dict[str, object]) -> dict[str, object]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return default
+        return parsed if isinstance(parsed, dict) else default
+    return default
+
+
+def _num(value: object, default: float) -> float:
+    return float(value) if isinstance(value, int | float) else default
+
+
+#: In-process fitted models (target_metric -> (model, feature_cols)). The
+#: registry rows persist metadata; sklearn models stay process-local.
+_LIVE_SURROGATES: dict[str, tuple[RandomForestRegressor, list[str]]] = {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +135,7 @@ class SurrogateManager:
         Returns:
             Surrogate model ID if successful, None otherwise.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             import pandas as pd
             from sklearn.ensemble import RandomForestRegressor
 
@@ -122,15 +147,23 @@ class SurrogateManager:
 
             records = []
             for exp in exps:
-                config = json.loads(exp.get("config", "{}"))
-                metrics = json.loads(exp.get("metrics", "{}"))
-                record = {
+                config = _load_jsonish(exp.get("config"), {})
+                metrics = _load_jsonish(exp.get("metrics"), {})
+                geometry = config.get("geometry")
+                record: dict[str, object] = {
                     "lr": config.get("lr", 0.001),
                     "batch_size": config.get("batch_size", 64),
                     "hidden_dim": config.get("hidden_dim", 256),
                     "num_layers": config.get("num_layers", 2),
                     "epochs": config.get("epochs", 10),
                 }
+                # Grid-axis features (P1.2b): the surrogate must see the
+                # atlas axes or it cannot learn the grid.
+                for axis in ("dynamics", "credit", "update"):
+                    if config.get(axis):
+                        record[axis] = config[axis]
+                if isinstance(geometry, dict) and geometry.get("topology_type"):
+                    record["topology"] = geometry["topology_type"]
                 if target_metric in metrics:
                     record["target"] = metrics[target_metric]
                     records.append(record)
@@ -140,6 +173,9 @@ class SurrogateManager:
                 return None
 
             df = pd.DataFrame(records)
+            df = pd.get_dummies(
+                df, columns=["dynamics", "credit", "update", "topology"]
+            )
             feature_cols = [c for c in df.columns if c != "target"]
             X = df[feature_cols].values
             y = df["target"].values
@@ -147,7 +183,7 @@ class SurrogateManager:
             model = RandomForestRegressor(n_estimators=100, max_depth=5)
             model.fit(X, y)
 
-            score = model.score(X, y)
+            score = float(model.score(X, y))
             surrogate_id = self.register_surrogate(
                 name=f"surrogate_{target_metric}",
                 model_type=model_type,
@@ -155,8 +191,10 @@ class SurrogateManager:
                 features=feature_cols,
                 performance={"r2": float(score), "n_samples": len(records)},
             )
+            # In-memory handle so predict_outcome is a real prediction.
+            _LIVE_SURROGATES[target_metric] = (model, feature_cols)
             logger.info("Trained surrogate %s with R2=%s", surrogate_id, score)
-            return surrogate_id  # noqa: TRY300
+            return surrogate_id  # ruff: ignore[try-consider-else]
 
         except Exception as e:
             logger.exception("Surrogate training failed")
@@ -181,10 +219,33 @@ class SurrogateManager:
         if not surrogate:
             return 0.0
 
-        try:
-            # This is a simplified prediction - in production,
-            # we'd load the actual saved model
-            return float(surrogate.get("performance", {}).get("r2", 0.0))
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
+            live = _LIVE_SURROGATES.get(target_metric)
+            performance = surrogate.get("performance")
+            if live is None:
+                # Registry row without an in-process model: report the
+                # stored fit quality as a floor, never a fabricated
+                # prediction.
+                perf = performance if isinstance(performance, dict) else {}
+                return float(perf.get("r2", 0.0))
+            model, feature_cols = live
+            config = dict(config)
+            geometry = config.get("geometry")
+            if isinstance(geometry, dict):
+                config["topology"] = geometry.get("topology_type")
+            row = {
+                "lr": _num(config.get("lr"), 0.001),
+                "batch_size": _num(config.get("batch_size"), 64.0),
+                "hidden_dim": _num(config.get("hidden_dim"), 256.0),
+                "num_layers": _num(config.get("num_layers"), 2.0),
+                "epochs": _num(config.get("epochs"), 10.0),
+            }
+            for axis in ("dynamics", "credit", "update", "topology"):
+                value = config.get(axis)
+                if value is not None:
+                    row[f"{axis}_{value}"] = 1.0
+            x = [row.get(c, 0.0) for c in feature_cols]
+            return float(model.predict([x])[0])
         except (KeyError, ValueError, TypeError) as e:
             logger.exception("Prediction failed")
             raise KnowledgeBaseError("Surrogate prediction failed") from e
@@ -213,10 +274,10 @@ class SurrogateManager:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                "SELECT * FROM experiments"  # noqa: S608
+                "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"
             )
-            cursor = conn.execute(sql, params + [limit])  # noqa: RUF005
+            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
             return [dict(row) for row in cursor]
 
 

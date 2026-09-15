@@ -27,6 +27,10 @@ class ExperimentProposal:
     task: str
     propagator: str | None = None
     optimizer: str = "adam"
+    geometry: dict[str, object] | None = None
+    dynamics: str | None = None
+    credit: str | None = None
+    update: str | None = None
     hyperparams: dict[str, object] = field(default_factory=dict)
     justification: str = ""
     expected_outcome: str = ""
@@ -58,6 +62,12 @@ class AutoScientistBridge:
         config.update(proposal.hyperparams)
         if proposal.propagator:
             config["propagator"] = proposal.propagator
+        if proposal.geometry is not None:
+            config["geometry"] = proposal.geometry
+        for axis in ("dynamics", "credit", "update"):
+            value = getattr(proposal, axis)
+            if value is not None:
+                config[axis] = value
         return config
 
     def submit_proposal(self, proposal: ExperimentProposal) -> None:

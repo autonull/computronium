@@ -7,7 +7,7 @@ for hypothesis generation and reasoning without API keys.
 
 import json
 import logging
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -76,7 +76,7 @@ class OllamaBackend(LocalLLMBackend):
             import urllib.request
 
             # Check if Ollama is running
-            with urllib.request.urlopen(f"{self.base_url}/api/tags", timeout=5) as resp:  # noqa: S310
+            with urllib.request.urlopen(f"{self.base_url}/api/tags", timeout=5) as resp:  # ruff: ignore[suspicious-url-open-usage]
                 if resp.status == 200:
                     data = json.loads(resp.read().decode())
                     models = [m["name"] for m in data.get("models", [])]
@@ -102,7 +102,7 @@ class OllamaBackend(LocalLLMBackend):
         try:
             import urllib.request
 
-            with urllib.request.urlopen(  # noqa: S310
+            with urllib.request.urlopen(  # ruff: ignore[suspicious-url-open-usage]
                 f"{self.base_url}/api/show",
                 data=json.dumps({"name": self.model}).encode(),
                 timeout=10,
@@ -138,12 +138,12 @@ class OllamaBackend(LocalLLMBackend):
 
         start = time.time()
         try:
-            req = urllib.request.Request(  # noqa: S310
+            req = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage]
                 f"{self.base_url}/api/generate",
                 data=json.dumps(payload).encode(),
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # ruff: ignore[suspicious-url-open-usage]
                 result = json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             raise RuntimeError(f"Ollama API error: {e.read().decode()}") from e
@@ -185,12 +185,12 @@ class LlamaCppBackend(LocalLLMBackend):
     def _check_cli(self) -> bool:
         """Check if llama.cpp CLI is available."""
         try:
-            result = subprocess.run(  # noqa: PLW1510
-                ["llama-cli", "--version"],  # noqa: S607
+            result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
+                ["llama-cli", "--version"],  # ruff: ignore[start-process-with-partial-path]
                 capture_output=True,
                 timeout=5,
             )
-            return result.returncode == 0  # noqa: TRY300
+            return result.returncode == 0  # ruff: ignore[try-consider-else]
         except FileNotFoundError, subprocess.TimeoutExpired:
             return False
 
@@ -199,7 +199,7 @@ class LlamaCppBackend(LocalLLMBackend):
         # Try Python bindings first
         try:
             from llama_cpp import (
-                Llama,  # type: ignore  # noqa: F401, PGH003
+                Llama,  # type: ignore  # ruff: ignore[unused-import, blanket-type-ignore]
             )
 
             return self.model_path.exists()
@@ -213,7 +213,7 @@ class LlamaCppBackend(LocalLLMBackend):
         """Lazy-load llama-cpp-python instance."""
         if self._llm is None:
             from llama_cpp import (
-                Llama,  # type: ignore  # noqa: PGH003
+                Llama,  # type: ignore  # ruff: ignore[blanket-type-ignore]
             )
 
             self._llm = Llama(
@@ -277,9 +277,9 @@ class LlamaCppBackend(LocalLLMBackend):
     def _try_import_llama_cpp(self) -> bool:
         """Try to import llama_cpp."""
         try:
-            from llama_cpp import Llama  # noqa: F401
+            from llama_cpp import Llama  # ruff: ignore[unused-import]
 
-            return True  # noqa: TRY300
+            return True  # ruff: ignore[try-consider-else]
         except ImportError:
             return False
 
@@ -312,7 +312,7 @@ class LlamaCppBackend(LocalLLMBackend):
             for stop in stop_sequences:
                 cmd.extend(["--stop", stop])
 
-        result = subprocess.run(  # noqa: PLW1510, S603
+        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
             cmd,
             capture_output=True,
             text=True,
@@ -349,14 +349,14 @@ class TransformersBackend(LocalLLMBackend):
     def is_available(self) -> bool:
         """Check if transformers and model are available."""
         try:
-            import torch  # noqa: F401
-            from transformers import (  # noqa: F401
+            import torch  # ruff: ignore[unused-import]
+            from transformers import (  # ruff: ignore[unused-import]
                 AutoModelForCausalLM,
                 AutoTokenizer,
             )
 
             # Check if we can load the model (dry run)
-            return True  # noqa: TRY300
+            return True  # ruff: ignore[try-consider-else]
         except ImportError:
             return False
 
@@ -461,9 +461,9 @@ class VLLMBackend(LocalLLMBackend):
     def is_available(self) -> bool:
         """Check if vLLM is available."""
         try:
-            import vllm  # noqa: F401
+            import vllm  # ruff: ignore[unused-import]
 
-            return True  # noqa: TRY300
+            return True  # ruff: ignore[try-consider-else]
         except ImportError:
             return False
 
@@ -628,7 +628,7 @@ class LocalLLMHypothesisGenerator:
                 self.backend.__class__.__name__,
                 response.latency_ms,
             )
-            return hypotheses  # noqa: TRY300
+            return hypotheses  # ruff: ignore[try-consider-else]
 
         except (json.JSONDecodeError, KeyError, RuntimeError) as e:
             logger.warning("Local LLM hypothesis generation failed: %s", e)
@@ -723,7 +723,7 @@ class OllamaAutoPull:
         try:
             import urllib.request
 
-            with urllib.request.urlopen(f"{self.base_url}/api/tags", timeout=5) as resp:  # noqa: S310
+            with urllib.request.urlopen(f"{self.base_url}/api/tags", timeout=5) as resp:  # ruff: ignore[suspicious-url-open-usage]
                 if resp.status == 200:
                     data = json.loads(resp.read().decode())
                     return [m["name"] for m in data.get("models", [])]
@@ -750,14 +750,14 @@ class OllamaAutoPull:
 
         payload = json.dumps({"name": model, "stream": show_progress}).encode()
 
-        for attempt in range(self.max_retries):  # noqa: PLR1702
+        for attempt in range(self.max_retries):  # ruff: ignore[too-many-nested-blocks]
             try:  # noqa: too-many-statements-in-try-clause
-                req = urllib.request.Request(  # noqa: S310
+                req = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage]
                     f"{self.base_url}/api/pull",
                     data=payload,
                     headers={"Content-Type": "application/json"},
                 )
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # ruff: ignore[suspicious-url-open-usage]
                     if show_progress:
                         for line in resp:
                             try:
@@ -819,7 +819,7 @@ class LlamaCppQuantizationSelector:
     """
 
     # Quantization options with (size_gb, quality_score, speed_score)
-    QUANTIZATIONS = {  # noqa: RUF012
+    QUANTIZATIONS = {  # ruff: ignore[mutable-class-default]
         "Q4_K_M": {"size_gb": 4.7, "quality": 0.85, "speed": 0.95},
         "Q4_K_S": {"size_gb": 4.2, "quality": 0.80, "speed": 0.98},
         "Q5_K_M": {"size_gb": 5.7, "quality": 0.90, "speed": 0.90},
@@ -849,7 +849,7 @@ class LlamaCppQuantizationSelector:
                 # Get free memory on first GPU
                 free_bytes, _total_bytes = torch.cuda.mem_get_info(0)
                 return free_bytes / (1024**3)
-        except Exception:  # noqa: S110
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
         # Default to 8GB if detection fails
         return 8.0
@@ -880,7 +880,7 @@ class LlamaCppQuantizationSelector:
             return max(candidates, key=lambda x: x[1]["quality"])[0]
         else:
             # Select best speed/quality balance (Pareto-optimal)
-            # Score = quality * 0.6 + speed * 0.4  # noqa: ERA001
+            # Score = quality * 0.6 + speed * 0.4  # ruff: ignore[commented-out-code]
             return max(
                 candidates,
                 key=lambda x: x[1]["quality"] * 0.6 + x[1]["speed"] * 0.4,

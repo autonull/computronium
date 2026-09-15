@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Mapping  # noqa: TC003 — runtime isinstance
+from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import] — runtime isinstance
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
@@ -130,6 +130,33 @@ class ParameterUpdateConfig:
         """
         return cls(
             update_type="riemannian_orthogonal",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=ortho_steps,
+            spectral_norm=spectral_norm,
+            fisher_damping=fisher_damping,
+            ewc_lambda=ewc_lambda,
+        )
+
+    @classmethod
+    def muon(
+        cls,
+        *,
+        step_size: float = 0.01,
+        momentum: float = 0.9,
+        ortho_steps: int = 0,
+        spectral_norm: float = 1.0,
+        fisher_damping: float = 1e-3,
+        ewc_lambda: float = 1000.0,
+    ) -> ParameterUpdateConfig:
+        """Muon update config (alias of the exact-polar Muon-class rule).
+
+        Registry alias for ``riemannian_orthogonal`` with the Muon name,
+        so the coverage grid can name the axis by its literature identity.
+        Same NS caveat: ``ortho_steps > 0`` is an opt-in variant.
+        """
+        return cls(
+            update_type="muon",
             step_size=step_size,
             momentum=momentum,
             ortho_steps=ortho_steps,
@@ -1201,7 +1228,7 @@ class SpectralConstrainedUpdate:
             # Normalize gradient to target spectral norm
             grad_norm = torch.linalg.matrix_norm(grad, ord=2)
             if grad_norm > self.config.spectral_norm:
-                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # noqa: PLR6104
+                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # ruff: ignore[non-augmented-assignment]
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)

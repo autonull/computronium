@@ -118,7 +118,7 @@ def _parse_split_digits(task_name: str) -> tuple[list[int] | None, str]:
     return included_classes, base_name
 
 
-def _normalize_vision_name(base_name: str) -> str:  # noqa: PLR0911
+def _normalize_vision_name(base_name: str) -> str:  # ruff: ignore[too-many-return-statements]
     """Normalize a vision dataset name to the canonical key."""
     match base_name:
         case n if "kmnist" in n or "kuzushiji" in n:
@@ -139,7 +139,7 @@ def _normalize_vision_name(base_name: str) -> str:  # noqa: PLR0911
             return base_name
 
 
-def create_task(  # noqa: PLR0911, C901
+def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
 ) -> TaskProtocol:
     """Factory function for tasks. Maps string names to Task classes via heuristics.
@@ -218,14 +218,8 @@ def create_task(  # noqa: PLR0911, C901
                 name=base_name, dataset_name=base_name, device=str(device), **kwargs
             )
         case _:
-            logger.warning(
-                "Unknown task '%s', defaulting to tiny_shakespeare LM", task_name
-            )
-            from computronium.domains.lm import LMTask
-
-            return LMTask(
-                name="tiny_shakespeare",
-                dataset_name="tiny_shakespeare",
-                device=str(device),
-                **kwargs,
+            raise ValueError(
+                f"Unknown task '{task_name}': no resolution path; "
+                "available names are in domains.registry.SUPPORTED_TASKS "
+                "(no silent fallback to the LM lane)"
             )

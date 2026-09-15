@@ -31,6 +31,10 @@ from typing import TYPE_CHECKING
 import yaml
 
 if TYPE_CHECKING:
+    from ceec.models import Experiment
+
+    from computronium.autoscientist.bridge import ExperimentProposal
+    from computronium.autoscientist.ceec_link import CEECLink
     from computronium.knowledge import KnowledgeBase
 
 from computronium.autoscientist.proposer import ExperimentProposer
@@ -39,6 +43,11 @@ from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _metric(value: object) -> float:
+    """Coerce a possibly-missing result metric to float (zeros stay zeros)."""
+    return float(value) if isinstance(value, int | float) else 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,7 +268,7 @@ class CampaignDatabase:
                 ),
             )
             conn.commit()
-            return cursor.lastrowid
+            return int(cursor.lastrowid or 0)
 
     def get_iteration_history(self, branch_name: str) -> list[IterationRecord]:
         """Get all iterations for a branch."""
@@ -405,6 +414,7 @@ class AutoScientistCampaign:
         resume: bool = False,
         max_concurrent: int = 1,
         human_approval_gate: bool = False,
+        ceec_ledger_path: str | Path | None = None,
     ):
         self.knowledge_base = knowledge_base
         self.proposer = (
@@ -428,6 +438,14 @@ class AutoScientistCampaign:
         self.campaign_id = campaign_id or f"camp_{uuid.uuid4().hex[:8]}"
         self.max_concurrent = max_concurrent
         self.human_approval_gate = human_approval_gate
+
+        # P2.1/P2.4: when a ledger path is given, every proposal runs as a
+        # CEEC pre-registration → ProbeResult trace (one shared format).
+        self.ceec: CEECLink | None = None
+        if ceec_ledger_path is not None:
+            from computronium.autoscientist.ceec_link import CEECLink
+
+            self.ceec = CEECLink(str(ceec_ledger_path))
 
         # Runtime state
         self._iteration = 0
@@ -520,7 +538,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # noqa: F841
+        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -582,7 +600,8 @@ class AutoScientistCampaign:
             best_iter = max(
                 history,
                 key=lambda r: max(
-                    (res.get("final_accuracy", 0) for res in r.results), default=0
+                    (_metric(res.get("final_accuracy")) for res in r.results),
+                    default=0.0,
                 ),
             )
             logger.info(
@@ -601,12 +620,17 @@ class AutoScientistCampaign:
         # Add merged insights to current campaign metadata
         if self._campaign_state:
             merged_meta = dict(self._campaign_state.metadata)
-            merged_meta.setdefault("merged_from", []).append({
+            merged: list[dict[str, object]] = []
+            raw_merged = merged_meta.get("merged_from")
+            if isinstance(raw_merged, list):
+                merged = [m for m in raw_merged if isinstance(m, dict)]
+            merged.append({
                 "branch": source_branch,
                 "iteration": best_iter.iteration,
                 "timestamp": datetime.now().isoformat(),
                 "strategy": strategy,
             })
+            merged_meta["merged_from"] = merged
             self.db.update_iteration(self.campaign_id, self._iteration, merged_meta)
 
     @staticmethod
@@ -644,7 +668,7 @@ class AutoScientistCampaign:
             })
         return recent
 
-    def run_iteration(  # noqa: C901
+    def run_iteration(  # ruff: ignore[complex-structure]
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -706,16 +730,18 @@ class AutoScientistCampaign:
                     proposal.model,
                     proposal.task,
                 )
+                experiment = self._pre_register(proposal)
                 try:
                     result = self._execute_proposal(proposal)
                     results.append(result)
-
+                    self._post_ledger(experiment, proposal, result)
                     if self.knowledge_base:
                         self._update_knowledge_base(proposal, result)
                 except (
                     Exception
                 ) as e:  # broad: a failing trial must not stop the campaign
                     logger.error("Proposal %d failed: %s", i, e, exc_info=True)
+                    self._fail_ledger(experiment, proposal, str(e))
                     results.append({
                         "proposal": {
                             "model": proposal.model,
@@ -735,17 +761,50 @@ class AutoScientistCampaign:
 
         return results
 
-    def _execute_proposal(self, proposal) -> dict[str, object]:
-        """Execute a proposal: native 5-D system -> SystemTrainer.
+    def _pre_register(self, proposal: ExperimentProposal) -> Experiment | None:
+        """P2.1: governed proposals are pre-registered before execution."""
+        if self.ceec is None:
+            return None
+        experiment = self.ceec.pre_register(proposal)
+        logger.info("Pre-registered %s in CEEC ledger", experiment.id)
+        return experiment
 
-        The ontology system owns its update rule, so ``proposal.optimizer`` is
-        recorded for the KB rather than overriding the composed ParameterUpdate.
+    def _post_ledger(
+        self,
+        experiment: Experiment | None,
+        proposal: ExperimentProposal,
+        result: dict[str, object],
+    ) -> object | None:
+        if experiment is not None and self.ceec is not None:
+            return self.ceec.record(experiment, proposal, result)
+        return None
+
+    def _fail_ledger(
+        self,
+        experiment: Experiment | None,
+        proposal: ExperimentProposal,
+        error: str,
+    ) -> None:
+        if experiment is not None and self.ceec is not None:
+            self.ceec.record_failure(experiment, proposal, error)
+
+    def _execute_proposal(self, proposal: ExperimentProposal) -> dict[str, object]:
+        """Execute a proposal: 5-D system -> SystemTrainer.
+
+        Geometry overrides compose through the single round-trip path
+        (``compose_proposal_system``); the task fence runs before any
+        budget is spent (P1.4 — no proposal silently targets an
+        unrunnable task).
         """
+        from computronium.autoscientist.compose import (
+            assert_task_runnable,
+            compose_proposal_system,
+        )
         from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
         from computronium.core.utils.device import get_device
         from computronium.domains.factory import create_task
-        from computronium.experiment.param_estimator import resolve_native_model
 
+        assert_task_runnable(proposal.task)
         task = create_task(
             proposal.task or "mnist",
             device=str(get_device()),
@@ -756,12 +815,20 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # noqa: S101
+        assert input_dim is not None  # ruff: ignore[assert]
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr", 1e-3)
-        system = resolve_native_model(proposal.model)(
-            input_dim, 64, task.output_dim, lr=float(lr_raw)
+        lr = float(lr_raw) if isinstance(lr_raw, int | float) else 1e-3
+        system = compose_proposal_system(
+            proposal.model,
+            input_dim=int(input_dim),
+            output_dim=int(task.output_dim or 1),
+            lr=lr,
+            geometry=proposal.geometry,
+            dynamics=proposal.dynamics,
+            credit=proposal.credit,
+            update=proposal.update,
         )
 
         config = SystemTrainerConfig(
@@ -771,7 +838,7 @@ class AutoScientistCampaign:
         )
 
         with SystemTrainer(
-            system,  # type: ignore[arg-type]
+            system,
             config,
             task.get_dataloader("train"),  # type: ignore[attr-defined]
             task.get_dataloader("val"),  # type: ignore[attr-defined]
@@ -785,6 +852,7 @@ class AutoScientistCampaign:
                 "task": proposal.task,
                 "propagator": proposal.propagator,
                 "optimizer": proposal.optimizer,
+                "geometry": proposal.geometry,
                 "justification": proposal.justification,
             },
             "status": "completed",
@@ -795,8 +863,13 @@ class AutoScientistCampaign:
             "epochs_completed": len(history),
         }
 
-    def _update_knowledge_base(self, proposal, result: dict[str, object]) -> None:
+    def _update_knowledge_base(
+        self, proposal: ExperimentProposal, result: dict[str, object]
+    ) -> None:
         """Store experiment result in KnowledgeBase with schema validation."""
+        kb = self.knowledge_base
+        if kb is None:
+            return
         try:
             from computronium.knowledge import KnowledgeEntry
 
@@ -815,7 +888,7 @@ class AutoScientistCampaign:
                     f"Config: {proposal.hyperparams}\n"
                     f"Epochs: {result.get('epochs_completed', 'N/A')}"
                 ),
-                confidence=float(result.get("final_accuracy", 0.0) or 0.0),
+                confidence=_metric(result.get("final_accuracy")),
                 tags=[
                     "experiment",
                     proposal.task,
@@ -828,18 +901,46 @@ class AutoScientistCampaign:
                     for k, v in result.items()
                     if isinstance(v, (int, float)) and v is not None
                 },
-                hyperparameters=(
-                    proposal.hyperparams
-                    if isinstance(proposal.hyperparams, dict)
-                    else {"raw": str(proposal.hyperparams)}
-                ),
+                hyperparameters={
+                    **(
+                        proposal.hyperparams
+                        if isinstance(proposal.hyperparams, dict)
+                        else {"raw": str(proposal.hyperparams)}
+                    ),
+                    "geometry": proposal.geometry or {},
+                },
                 extra={
                     "campaign_id": self.campaign_id,
                     "campaign_iteration": self._iteration,
                     "branch": self.branch_name,
                 },
             )
-            self.knowledge_base.add_entry(entry)
+            kb.add_entry(entry)
+            # Experiments-table row: the surrogate's and coverage matrix's
+            # read path (P1.2b) — config carries the full grid axes.
+            metrics: dict[str, float] = {
+                k: float(v)
+                for k, v in result.items()
+                if isinstance(v, (int, float)) and v is not None
+            }
+            kb.add_experiment(
+                name=f"campaign_iter{self._iteration}",
+                model_family=proposal.model,
+                task=proposal.task or "unknown",
+                config={
+                    **(
+                        proposal.hyperparams
+                        if isinstance(proposal.hyperparams, dict)
+                        else {}
+                    ),
+                    "geometry": proposal.geometry or {},
+                    "dynamics": proposal.dynamics,
+                    "credit": proposal.credit,
+                    "update": proposal.update,
+                },
+                metrics=metrics,
+                experiment_id=f"camp_{self.campaign_id}_iter{self._iteration}",
+            )
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to update KnowledgeBase: %s", e)
 
