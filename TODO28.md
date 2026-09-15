@@ -301,6 +301,33 @@ conservative 1e-3 flat default — a topology-lr confound), (3) a
 ~100-cell viable-only pilot to check param-rematch convergence and the
 em/instantaneous anomaly before committing the 500-cell run.
 
+### Immediate items (next session, in this order)
+
+1. **Resolve the `em`/`instantaneous` anomaly — BLOCKING.** Last
+   verification sweep: em max 0.111, instantaneous 0.242 (earlier runs:
+   0.86–0.94). Prime suspect: param-rematch shrinks `hidden_dim` while
+   `_ruler_lr` keeps a width-64-calibrated lr, so every em cell in an
+   extended run could train at a destabilizing lr. Cheap diagnosis:
+   rerun ~10 known-good em × feedforward cells with and without
+   `--param-budget 0` and diff. Must land before the 500-cell run.
+2. **Instrument capture — highest narrative value per hour.** Extend
+   `_execute_proposal`'s result dict with `settle_horizon` (the settle
+   loop already knows when it stopped) and `spectral_radius` (one
+   Jacobian probe at cell init). Feeds the radar chart's actual
+   "instruments over black boxes" wow factor. Must land before the
+   500-cell run or instrument data requires a full re-run. Skip
+   `credit_trace` cosine alignment (expensive) for now.
+3. **lr calibration for non-feedforward topologies.** `_ruler_lr` gives
+   them a flat 1e-3 — a topology-lr confound. Quick grid: lr
+   {1e-2, 1e-3, 1e-4} × 6 topologies × 1 seed on one known-good credit.
+4. **The 500-cell run** — only after 1-3:
+   `nohup uv run comp gallery --generate-broad-demo --sample-size 500 >
+   logs/broad_map_500.log 2>&1 &` with the AGENTS 2-min poll cadence.
+
+**Explicitly deferred:** P-axis 6-D expansion (own campaign, after the
+5-D map ships); diffusion's geometry-independent energy defect (recorded
+below); surrogate model (stratified mapping bypasses it by design).
+
 ### Improvement opportunities (facilitating remaining work)
 1. **Instrument capture at execution time** (unlocks both §2 metrics and
    the radar's "why"): extend `_execute_proposal`'s result dict with
