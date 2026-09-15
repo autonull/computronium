@@ -40,6 +40,10 @@ class AtlasRow(TypedDict):
     train_accuracy: float
     loss: float
     bp_deficit: float
+    param_count: float
+    lr: float
+    spectral_radius: float
+    settle_horizon: float
     is_void: bool
 
 
@@ -75,6 +79,10 @@ def load_cells(kb_path: Path, task: str) -> pd.DataFrame:
             "train_accuracy": float(metrics.get("train_accuracy", 0.0)),
             "loss": float(metrics.get("final_loss", 0.0)),
             "bp_deficit": 0.0,
+            "param_count": float(metrics.get("param_count", 0.0)),
+            "lr": float(metrics.get("lr", 0.0)),
+            "spectral_radius": float(metrics.get("spectral_radius", 0.0)),
+            "settle_horizon": float(metrics.get("settle_horizon", 0.0)),
             "is_void": False,
         })
     df = pd.DataFrame(rows)
@@ -252,21 +260,48 @@ def _river_figure(measured: pd.DataFrame) -> go_Figure:
 
 
 def _radar_figure(measured: pd.DataFrame) -> go_Figure:
-    """Instrument radar: the Pareto front against available continuous metrics."""
+    """Instrument radar: the Pareto front against available continuous metrics.
+
+    Instrument axes (settle_horizon, spectral_radius) are min-max normalized
+    across the Pareto set so all spokes share [0, 1]; they appear only when
+    the campaign recorded them.
+    """
     import plotly.graph_objects as go
 
     fig = go.Figure()
     top = pareto_top(measured)
+
+    def norm(col: str) -> list[float]:
+        vals = top[col].astype(float)
+        span = vals.max() - vals.min()
+        if span <= 0:
+            return [0.5] * len(vals)
+        return ((vals - vals.min()) / span).tolist()
+
     metric_cols = ["accuracy", "train_accuracy"]
-    for _, row in top.iterrows():
+    axes: list[tuple[str, list[float]]] = [
+        (name, norm(col))
+        for name, col in (
+            ("settle_horizon", "settle_horizon"),
+            ("σ_max(J)", "spectral_radius"),
+        )
+        if float(top[col].astype(float).abs().sum()) > 0
+    ]
+    for i, (_, row) in enumerate(top.iterrows()):
         label = f"{row['dynamics'][:12]}|{row['credit'][:12]}|{row['update'][:10]}"
         values = [float(row[c]) for c in metric_cols]
+        theta = [*metric_cols]
         values.append(1.0 - float(row["bp_deficit"]))
+        theta.append("1−bp_deficit")
         values.append(1.0 / (1.0 + float(row["loss"])))
+        theta.append("1/(1+loss)")
+        for name, normed in axes:
+            values.append(normed[i])
+            theta.append(name)
         fig.add_trace(
             go.Scatterpolar(
                 r=values,
-                theta=[*metric_cols, "1−bp_deficit", "1/(1+loss)"],
+                theta=theta,
                 fill="toself",
                 name=label,
             )

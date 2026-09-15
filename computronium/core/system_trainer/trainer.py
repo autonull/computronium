@@ -162,6 +162,12 @@ class SystemTrainer:
             x = x.to(self.device)  # noqa: PLW2901
             y = y.to(self.device)  # noqa: PLW2901
 
+            # Canonical flat input: systems compose against a flat
+            # input_dim (e.g. vision (B, C, H, W) -> (B, C*H*W)); the
+            # 4-D raw tensor crashed credit/view reshapes downstream.
+            if x.dim() > 2:
+                x = x.reshape(x.size(0), -1)  # noqa: PLW2901
+
             metrics = self.system.train_step(x, y)
             batch = x.size(0)
 
@@ -231,6 +237,8 @@ class SystemTrainer:
             for x, y in self.val_data:
                 x = x.to(self.device)  # noqa: PLW2901
                 y = y.to(self.device)  # noqa: PLW2901
+                if x.dim() > 2:
+                    x = x.reshape(x.size(0), -1)  # noqa: PLW2901
 
                 logits = self.system.forward(x)
                 ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")

@@ -1,11 +1,17 @@
-> **STATUS: IMPLEMENTED (2026-09-15).** All four phases shipped and
-> verified; interim results were invalidated twice as audit findings
-> landed (validate() enforcement, stale-rule relaxations, state-shape
-> branch, parameter-budget rematch, full constraint enumeration). The
-> implementation record, honest limitations, and remaining-work list
-> live at the bottom of this file. Current artifacts:
-> `artifacts/broad_map/` (1111 viable / 3047 enumerated voids, 34-cell
-> verification map) and `docs/figures/d28_broad_atlas.png`.
+> **STATUS: IMPLEMENTED (2026-09-15); 500-cell run unblocked.** All four
+> phases shipped and verified; interim results were invalidated twice as
+> audit findings landed (validate() enforcement, stale-rule relaxations,
+> state-shape branch, parameter-budget rematch, full constraint
+> enumeration). The 2026-09-15 second session resolved all three
+> pre-run blockers: the em/instantaneous anomaly (credit×update draw
+> composition — rematch exonerated), per-cell instrument capture
+> (settle_horizon + σ_max(J) probe, radar wired), and the topology-lr
+> confound (non-feedforward default 1e-3 → 1e-2 on probe evidence; also
+> fixed a 4-D batch input defect in SystemTrainer). The implementation
+> record, honest limitations, and remaining-work list live at the bottom
+> of this file. Current artifacts: `artifacts/broad_map/` (1111 viable /
+> 3047 enumerated voids, 34-cell verification map) and
+> `docs/figures/d28_broad_atlas.png`. **Next: the 500-cell run.**
 
 To achieve a **broad focus** with **useful preliminary results** and a **crystallizing high-dimensional visualization**, we need to temporarily pivot the AutoScientist from *intelligent search* to *stratified mapping*. 
 
@@ -303,24 +309,56 @@ em/instantaneous anomaly before committing the 500-cell run.
 
 ### Immediate items (next session, in this order)
 
-1. **Resolve the `em`/`instantaneous` anomaly — BLOCKING.** Last
-   verification sweep: em max 0.111, instantaneous 0.242 (earlier runs:
-   0.86–0.94). Prime suspect: param-rematch shrinks `hidden_dim` while
-   `_ruler_lr` keeps a width-64-calibrated lr, so every em cell in an
-   extended run could train at a destabilizing lr. Cheap diagnosis:
-   rerun ~10 known-good em × feedforward cells with and without
-   `--param-budget 0` and diff. Must land before the 500-cell run.
-2. **Instrument capture — highest narrative value per hour.** Extend
-   `_execute_proposal`'s result dict with `settle_horizon` (the settle
-   loop already knows when it stopped) and `spectral_radius` (one
-   Jacobian probe at cell init). Feeds the radar chart's actual
-   "instruments over black boxes" wow factor. Must land before the
-   500-cell run or instrument data requires a full re-run. Skip
-   `credit_trace` cosine alignment (expensive) for now.
-3. **lr calibration for non-feedforward topologies.** `_ruler_lr` gives
-   them a flat 1e-3 — a topology-lr confound. Quick grid: lr
-   {1e-2, 1e-3, 1e-4} × 6 topologies × 1 seed on one known-good credit.
-4. **The 500-cell run** — only after 1-3:
+1. ~~Resolve the `em`/`instantaneous` anomaly — BLOCKING.~~
+   **RESOLVED (2026-09-15): param rematch exonerated.** Paired probe
+   (`scripts/probes/d28_rematch_lr_probe.py`, 7 em/inst × feedforward
+   cells, budget 25000 vs 0): diffs −0.033…+0.081 with no systematic
+   sign; the strong cell (em|local_goodness|riemannian_orthogonal 0.867)
+   holds *with* rematch at healthy settle horizon (30) and ρ (0.067).
+   The anomaly was **credit × update draw composition**:
+   target_inversion / homeostatic / temporal_trace / elastic_consolidation
+   cells sit at chance (0.08–0.17) regardless of budget or lr. The
+   34-cell verification map's 3 em + 3 instantaneous draws were
+   degenerate credit/update pairs. Resolved by volume in the 500-cell
+   run; stratifying credit × update pairs (improvement 2) would prevent
+   recurrence at small n.
+2. ~~Instrument capture.~~ **DONE (2026-09-15).**
+   - Every settle implementation now records
+     `_settle_steps_used` via a shared `_SettleTelemetry` mixin
+     (dynamics/_dynamics.py) — em's compiled/checkpointed/eager paths,
+     ps (tile/layered/recurrent), ePC, spike, diffusion, lazy
+     (convergence break counts steps), instantaneous (1).
+   - `probe_spectral_radius` in campaign.py: sampled directional
+     amplification ‖Jv‖ of the free-settle map (fast-proxy semantics;
+     the settle map is dimension-changing so ρ(J) is undefined —
+     documented honestly). 0.0 on settle failure.
+   - `_execute_proposal` result dict now carries `spectral_radius`,
+     `settle_horizon`, and `lr`; they flow into the KB metrics
+     automatically (numeric-key passthrough).
+   - `visualize_atlas.py`: AtlasRow/load_cells carry the new metrics;
+     the radar appends `settle_horizon` and `σ_max(J)` spokes
+     (min-max normalized over the Pareto set, shown only when nonzero).
+   - Consolidation: `analysis/instruments.py::settle_horizon` now reads
+     the canonical `_settle_steps_used` telemetry (was free-energy
+     history length) — also fixes a pre-existing
+     `test_settle_caller_census` failure (bare settle call there).
+3. ~~lr calibration for non-feedforward topologies.~~
+   **DONE (2026-09-15) — default changed 1e-3 → 1e-2.** Probe
+   (`scripts/probes/d28_topology_lr_probe.py` + known-good follow-up):
+   the flat 1e-3 default **starved every non-feedforward cell** —
+   recurrent em|local_goodness 0.161 @ 1e-3 vs **0.856 @ 1e-2**;
+   tile_mesh 0.25→0.286 @ 1e-2; instantaneous feedforward 0.075 @ 1e-4
+   vs 0.478 @ 1e-3. No topology preferred a smaller lr.
+   `_ruler_lr` now returns 1e-2 for non-feedforward (docstring cites
+   the probe); `test_ruler_lr_scoping` updated.
+   **New defect found and fixed en route:** the executor fed raw 4-D
+   vision batches `(B, C, H, W)` into systems composed for flat
+   input_dim — credit/view reshapes crashed (mat-mismatch, ntm
+   `(32, 8, 8)`). `SystemTrainer` now canonicalizes `x` to `(B, -1)`
+   at both the train and validate boundaries. Still-open crash: ntm
+   mixes a CPU tensor into a CUDA graph (ntm-geometry device defect,
+   deferred — one topology).
+4. **The 500-cell run** — unblocked by 1–3:
    `nohup uv run comp gallery --generate-broad-demo --sample-size 500 >
    logs/broad_map_500.log 2>&1 &` with the AGENTS 2-min poll cadence.
 
@@ -329,13 +367,15 @@ em/instantaneous anomaly before committing the 500-cell run.
 below); surrogate model (stratified mapping bypasses it by design).
 
 ### Improvement opportunities (facilitating remaining work)
-1. **Instrument capture at execution time** (unlocks both §2 metrics and
-   the radar's "why"): extend `_execute_proposal`'s result dict with
-   per-cell `spectral_radius` (cheap: single Jacobian probe at init) and
-   `settle_horizon` (free: the settle loop already knows when it stopped).
-   `credit_trace` cosine alignment is heavier — optional flag.
+1. ~~Instrument capture at execution time~~ — **DONE** (see immediate
+   items 2). Remaining: `credit_trace` cosine alignment per cell
+   (heavier — optional flag), and the radar's σ_max(J) is a sampled
+   directional amplification, not a certified radius.
 2. **Stratification beyond dynamics**: balance credit × update pairs too,
-   so no river axis is starved at small sample sizes.
+   so no river axis is starved at small sample sizes. Elevated priority:
+   the anomaly diagnosis showed degenerate credit/update draws were the
+   em/instantaneous "collapse" — credit×update composition dominates
+   small-n maps.
 3. **Multi-task atlas**: `load_cells` filters by `experiment:<task>`;
    add a task facet (color/animation frame) once multi-task sweeps run.
 4. **Gallery lock**: if the broad demo ships as a gallery figure, follow
@@ -345,4 +385,13 @@ below); surrogate model (stratified mapping bypasses it by design).
    --generate-broad-demo --epochs 1 --sample-size 500 >
    logs/broad_map_500.log 2>&1 &` — est. walltime dominated by settling
    families (em/ps at max_steps); consider `--cells-per-iter 10` splits and
-   the 2-min poll cadence (AGENTS environment rules).
+   the 2-min poll cadence (AGENTS environment rules). Now also carries
+   settle_horizon/σ_max(J)/lr per cell — no re-run needed for instruments.
+6. **ntm device defect** (found by the lr probe): ntm geometry mixes a
+   CPU tensor into a CUDA graph regardless of lr — one crash-void per
+   ntm cell until fixed. Small, contained; candidate for the next
+   hygiene pass.
+7. **Per-topology lr curves**: the calibration probe used one cell per
+   topology at 1 seed/epoch. If the 500-cell map shows topology-level
+   anomalies, extend the probe to multiple credits/seeds before trusting
+   cross-topology comparisons.

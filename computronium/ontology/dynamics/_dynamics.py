@@ -256,7 +256,7 @@ class StateDynamicsConfig:
     gain_control: GainControlMode = "none"
 
     @classmethod
-    def energy_minimization(  # noqa: PLR0913 (config mirrors the knobs)
+    def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
         cls,
         *,
         max_steps: int = 30,
@@ -610,7 +610,7 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # noqa: C901, PLR0912, PLR0914
+def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -674,7 +674,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             # Output layer: last feedforward weight (hidden -> output)
             weight_idx = num_ff_weights - 1
             # For linear network (no hidden layers), h_prev should be input
-            if num_hidden == 0:  # noqa: SIM108
+            if num_hidden == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 h_prev = all_acts[0]
             else:
                 h_prev = acts[i - 1]  # Last hidden layer
@@ -703,7 +703,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     num_ff_biases = len(bias_names)
     for i in range(len(acts)):
         h = acts[i]
-        if i < num_hidden:  # noqa: SIM108
+        if i < num_hidden:  # ruff: ignore[if-else-block-instead-of-if-exp]
             bias_idx = i
         else:
             bias_idx = num_ff_biases - 1
@@ -718,7 +718,17 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     return total_energy / batch_size
 
 
-class EnergyMinimizationDynamics:
+class _SettleTelemetry:
+    """Records the horizon (steps actually used) of the most recent settle."""
+
+    config: StateDynamicsConfig  # provided by every concrete dynamics class
+    _settle_steps_used: int = 0
+
+    def _note_settle_start(self) -> None:
+        self._settle_steps_used = self.config.max_steps
+
+
+class EnergyMinimizationDynamics(_SettleTelemetry):
     """Energy-based settling (Equilibrium Propagation, Hopfield, CHL).
 
     Supports heavy-ball momentum for accelerated convergence.
@@ -737,7 +747,7 @@ class EnergyMinimizationDynamics:
         self._velocity: list[Tensor] | None = None
         self._free_energy_history: list[float] | None = None
 
-    def settle(  # noqa: C901, PLR0912, PLR0914, PLR0915
+    def settle(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
         self,
         state: CompositeState,
         geometry: Geometry,
@@ -775,7 +785,7 @@ class EnergyMinimizationDynamics:
         )
 
         # Number of hidden layers (excluding input and output)
-        # all_acts = [input, hidden1, hidden2, ..., output]  # noqa: ERA001
+        # all_acts = [input, hidden1, hidden2, ..., output]  # ruff: ignore[commented-out-code]
         num_hidden = len(all_acts) - 2
 
         # Initialize velocity for momentum (per hidden layer)
@@ -831,7 +841,7 @@ class EnergyMinimizationDynamics:
                 ) + est_activation_mem  # params + optimizer + activations
                 if est_total > free_vram * 0.8:
                     use_checkpointing = True
-            except Exception:  # noqa: S110
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass  # Fall back to config value
 
         # Kernel step function for checkpointing
@@ -856,6 +866,7 @@ class EnergyMinimizationDynamics:
             and len(all_acts) == len(params.weights) + 1
         )
         if use_compiled:
+            self._settle_steps_used = self.config.max_steps
             all_acts = list(
                 _compiled_eqprop_settle(
                     cast("list[Tensor]", all_acts),
@@ -872,7 +883,8 @@ class EnergyMinimizationDynamics:
         elif use_checkpointing:
             from torch.utils import checkpoint
 
-            for _step in range(self.config.max_steps):  # noqa: RUF052
+            self._note_settle_start()
+            for _step in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
                 prev_output = all_acts[-1].detach()
                 # Checkpoint the kernel step function
                 all_acts, self._velocity = checkpoint.checkpoint(
@@ -894,9 +906,11 @@ class EnergyMinimizationDynamics:
                 if _step >= self.config.convergence_start:
                     delta = torch.dist(all_acts[-1], prev_output, p=float("inf")).item()
                     if delta < self.config.convergence_threshold:
+                        self._settle_steps_used = _step + 1
                         break
         else:
             # Non-checkpointed path
+            self._note_settle_start()
             for step in range(self.config.max_steps):
                 new_acts, new_velocity = kernel.step(
                     all_acts, beta, target, self._velocity
@@ -917,6 +931,7 @@ class EnergyMinimizationDynamics:
                     ).item()
                     if delta < self.config.convergence_threshold:
                         all_acts = new_acts
+                        self._settle_steps_used = step + 1
                         break
                 all_acts = new_acts
 
@@ -955,7 +970,7 @@ class EnergyMinimizationDynamics:
 # ============================================================
 
 
-class PredictiveSettlingDynamics:
+class PredictiveSettlingDynamics(_SettleTelemetry):
     """Predictive coding settling (Rao & Ballard, Whittington & Bogacz).
 
     Minimizes prediction error via iterative inference.
@@ -985,6 +1000,7 @@ class PredictiveSettlingDynamics:
         # Tile meshes settle through the block-view relaxation kernel —
         # target-responsive (the nudged phase pulls the output toward the
         # target with the configured beta); R11.1.4.
+        self._note_settle_start()
         if hasattr(geometry, "_graph"):
             return self._settle_tile(state, x, geometry, substrate, target)
 
@@ -1193,6 +1209,7 @@ class PredictiveSettlingDynamics:
                 delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
                     all_acts = new_acts
+                    self._settle_steps_used = step + 1
                     break
             all_acts = new_acts
 
@@ -1230,7 +1247,7 @@ class PredictiveSettlingDynamics:
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
-class ErrorPredictiveCodingDynamics:
+class ErrorPredictiveCodingDynamics(_SettleTelemetry):
     """Error-parameterized predictive coding (ePC) — Goemaere et al., "ePC: Fast
     and Deep Predictive Coding in Digital Simulation", arXiv:2505.20137 (ICML 2026).
 
@@ -1318,6 +1335,7 @@ class ErrorPredictiveCodingDynamics:
             for s in probe_states[1:-1]
         ]
 
+        self._note_settle_start()
         for step in range(self.config.max_steps):
             with torch.enable_grad():
                 states, y_hat = self._build_forward_with_errors(
@@ -1352,6 +1370,7 @@ class ErrorPredictiveCodingDynamics:
                 step >= self.config.convergence_start
                 and delta < self.config.convergence_threshold
             ):
+                self._settle_steps_used = step + 1
                 break
 
         states, _ = self._build_forward_with_errors(
@@ -1377,7 +1396,7 @@ class ErrorPredictiveCodingDynamics:
         return energy
 
 
-class SpikeIntegrationDynamics:
+class SpikeIntegrationDynamics(_SettleTelemetry):
     """Spiking neuron integration (LIF, AdEx).
 
     Layer-structured geometries settle layer-wise: each Linear transition
@@ -1406,6 +1425,7 @@ class SpikeIntegrationDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
+        self._note_settle_start()
         layered = extract_layered_params(geometry)
         if layered is not None and layered.recurrent_weight is None:
             # Tile meshes consume the target in the nudged phase via the
@@ -1491,7 +1511,7 @@ class SpikeIntegrationDynamics:
 
         for weight, bias in layer_params:
             if use_compiled:
-                assert bias is not None  # guarded: compiled requires biases  # noqa: S101
+                assert bias is not None  # guarded: compiled requires biases  # ruff: ignore[assert]
                 I_syn = h @ weight.T + bias
                 h, rasters = _compiled_lif_layer(
                     I_syn, self.config.step_size, threshold, self.config.max_steps
@@ -1533,7 +1553,7 @@ class SpikeIntegrationDynamics:
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
-class InstantaneousDynamics:
+class InstantaneousDynamics(_SettleTelemetry):
     """Single-pass feedforward (Backprop, Forward-Forward)."""
 
     def __init__(self, config: StateDynamicsConfig | None = None):
@@ -1550,6 +1570,7 @@ class InstantaneousDynamics:
         # block layout and consume the target in the nudged phase via the
         # output clamp (R11.1.4). For standard geometries, nudge the output
         # layer toward the target when provided.
+        self._settle_steps_used = 1
         if state.x is not None:
             block_builder = getattr(geometry, "settle_blocks", None)
             if callable(block_builder):
@@ -1587,7 +1608,7 @@ class InstantaneousDynamics:
         return torch.tensor(0.0)
 
 
-class DiffusionDynamics:
+class DiffusionDynamics(_SettleTelemetry):
     """Langevin/diffusion dynamics for continuous-time settling."""
 
     def __init__(self, config: StateDynamicsConfig | None = None):
@@ -1606,6 +1627,7 @@ class DiffusionDynamics:
 
         h = substrate.initial_state(x).detach().requires_grad_(True)
 
+        self._note_settle_start()
         for _step in range(self.config.max_steps):
             # Langevin dynamics: dh = -∇E dt + sqrt(2*D) dW
             # Internal autograd must run even if pipeline is in no_grad context
@@ -1664,7 +1686,7 @@ class DiffusionDynamics:
         return self.compute_energy_from_state(_energy_tensor(h), geometry, substrate)
 
 
-class LazyStateDynamics:
+class LazyStateDynamics(_SettleTelemetry):
     """Sequential (Gauss–Seidel) EqProp settle — lazy per-layer activation.
 
     The Jacobi settle (EnergyMinimization family) updates every hidden
@@ -1726,6 +1748,7 @@ class LazyStateDynamics:
         acts = list(geometry.forward_with_intermediates(state.x, substrate))
         beta = self.config.beta if target is not None else 0.0
 
+        self._note_settle_start()
         for sweep in range(self.config.max_steps):
             max_delta = 0.0
             for i in range(len(acts) - 2):
@@ -1754,6 +1777,7 @@ class LazyStateDynamics:
             if sweep >= self.config.convergence_start:
                 self._activation_cache[sweep] = [a.clone() for a in acts]
                 if max_delta < self.config.convergence_threshold:
+                    self._settle_steps_used = sweep + 1
                     break
 
         new_state = _create_output_state(

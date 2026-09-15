@@ -164,13 +164,23 @@ def credit_trace(
 
 
 def settle_horizon(system: System, x: Tensor, y: Tensor | None = None) -> int | None:
-    """Steps the dynamics used on its last settle (None if untracked)."""
+    """Steps the dynamics used on its last settle (None if untracked).
+
+    Reads the canonical per-settle telemetry (``_settle_steps_used``,
+    recorded by every settle implementation); the free-energy history
+    length is the fallback for dynamics that predate the telemetry.
+    """
     geometry = cast("Geometry", system.geometry)
     substrate = cast("Substrate", system.substrate)
     dynamics = cast("StateDynamics", system.dynamics)
     state = SystemState(x=x, y=y)
     state.activations = forward_pass(substrate, geometry, x)
-    dynamics.settle(state, geometry, substrate, target=y)  # type: ignore[arg-type]
+    settled = dynamics.settle(state, geometry, substrate, target=y)
+    if isinstance(settled.activations, list) and not settled.activations:
+        return None
+    tracked = getattr(dynamics, "_settle_steps_used", None)
+    if isinstance(tracked, int) and tracked > 0:
+        return tracked
     get_history = getattr(dynamics, "get_free_energy_history", None)
     if get_history is None:
         return None

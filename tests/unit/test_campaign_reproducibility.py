@@ -123,12 +123,17 @@ def test_incompatible_cell_is_recorded_covered(tmp_path: Path) -> None:
 
 
 def test_ruler_lr_scoping() -> None:
-    """The calibrated ceiling lr applies to the measured topology only."""
+    """The calibrated ceiling lr applies to the measured topology only.
+
+    Non-feedforward default is 1e-2 per the topology-lr calibration
+    probe (scripts/probes/d28_topology_lr_probe.py): the old flat 1e-3
+    starved every non-feedforward cell (recurrent em 0.161 vs 0.856).
+    """
     from computronium.autoscientist.campaign import _ruler_lr
 
     assert _ruler_lr("digits", "feedforward") == 0.01
-    assert _ruler_lr("digits", "recurrent") == 1e-3
-    assert _ruler_lr("not_a_ruler_task", "feedforward") == 1e-3
+    assert _ruler_lr("digits", "recurrent") == 1e-2
+    assert _ruler_lr("not_a_ruler_task", "feedforward") == 1e-2
 
 
 def test_explicit_lr_beats_ruler_default(tmp_path: Path) -> None:

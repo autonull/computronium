@@ -31,11 +31,22 @@ from typing import TYPE_CHECKING, cast
 import yaml
 
 if TYPE_CHECKING:
+    from typing import Protocol
+
     from ceec.models import Experiment
 
     from computronium.autoscientist.bridge import ExperimentProposal
     from computronium.autoscientist.ceec_link import CEECLink
     from computronium.knowledge import KnowledgeBase
+    from computronium.ontology import Geometry, StateDynamics, Substrate
+
+    class ProbeSystem(Protocol):
+        """Minimal settle-capable system surface for the spectral probe."""
+
+        dynamics: StateDynamics
+        geometry: Geometry
+        substrate: Substrate
+
 
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.autoscientist.reasoner import HypothesisReasoner
@@ -53,18 +64,65 @@ def _metric(value: object) -> float:
 _RULER_LR: dict[str, float] = {}
 
 
+def probe_spectral_radius(
+    system: ProbeSystem, input_dim: int, *, batch: int = 8, directions: int = 3
+) -> float:
+    """Sampled directional amplification ‖Jv‖ of the free-settle map.
+
+    Mean ‖Jv‖ over random unit perturbation directions (the
+    ``stability.spectral_radius`` fast-proxy semantics, applied at the
+    composed 5-axis cell at init). The settle map input→output is
+    dimension-changing, so ρ(J) is undefined; this is a lower-bound
+    instrument on σ_max(J) — not a certified radius. Returns 0.0 on any
+    settle failure (the failure itself is a gate/void signal).
+    """
+    import torch
+
+    from computronium.state import CompositeState
+
+    x_base = torch.randn(batch, input_dim, generator=torch.Generator().manual_seed(0))
+    device = getattr(system, "device", None)
+    if device is not None:
+        x_base = x_base.to(device)
+
+    def activity(x: torch.Tensor) -> torch.Tensor:
+        state = CompositeState(activity={"x": x}, plastic={}, substrate={})
+        settled = system.dynamics.settle(
+            state, system.geometry, system.substrate, target=None
+        )
+        acts = settled.activations
+        out = x if acts is None else (acts[-1] if isinstance(acts, list) else acts)
+        return out.reshape(x.shape[0], -1)
+
+    eps = 1e-4
+    rng = torch.Generator().manual_seed(0)
+    amps: list[float] = []
+    try:
+        base = activity(x_base)
+        for _ in range(directions):
+            v = torch.randn(x_base.shape, generator=rng)
+            v /= v.norm() + 1e-8
+            jv = (activity(x_base + eps * v) - base) / eps
+            amps.append(jv.norm().item())
+        return sum(amps) / len(amps)
+    except (RuntimeError, TypeError, ValueError) as e:
+        logger.warning("Spectral probe failed: %s", e)
+        return 0.0
+
+
 def _ruler_lr(task: str | None, topology: str | None = None) -> float:
     """Per-task best lr from the committed ruler table (P0.3 protocol).
 
     A proposal without its own ``lr`` trains at the task's calibrated
     ceiling lr — but only for ``feedforward``, the topology the ruler
-    actually measured. Other topologies keep the conservative default:
-    lr is topology-coupled (recurrent at the ruler's 1e-2 destabilizes),
-    and extrapolating a calibration instrument past its measured scope
-    is fabrication, not calibration.
+    actually measured. Other topologies default to 1e-2 per the
+    topology-lr calibration probe (``scripts/probes/
+    d28_topology_lr_probe.py``, digits @ 1 epoch, 1 seed): the old flat
+    1e-3 starved every non-feedforward cell (recurrent em 0.161 vs 0.856
+    at 1e-2), while no topology preferred a smaller lr.
     """
-    if topology not in {None, "feedforward"}:  # noqa: SIM102
-        return 1e-3
+    if topology not in {None, "feedforward"}:
+        return 1e-2
     if not _RULER_LR:
         path = Path(__file__).parents[2] / "artifacts/ruler_table.json"
         try:
@@ -74,8 +132,8 @@ def _ruler_lr(task: str | None, topology: str | None = None) -> float:
                 if isinstance(lr, int | float):
                     _RULER_LR[str(row["task"])] = float(lr)
         except OSError, ValueError, KeyError:
-            logger.warning("Ruler table missing at %s; defaulting lr 1e-3", path)
-        _RULER_LR.setdefault("*", 1e-3)
+            logger.warning("Ruler table missing at %s; defaulting lr 1e-2", path)
+        _RULER_LR.setdefault("*", 1e-2)
     return _RULER_LR.get(task or "*", _RULER_LR["*"])
 
 
@@ -432,7 +490,7 @@ class AutoScientistCampaign:
         - Human approval gates
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
@@ -567,7 +625,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # noqa: F841
+        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -697,7 +755,7 @@ class AutoScientistCampaign:
             })
         return recent
 
-    def run_iteration(  # noqa: C901, PLR0912
+    def run_iteration(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -885,7 +943,7 @@ class AutoScientistCampaign:
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to record incompatible cell: %s", e)
 
-    def _execute_proposal(  # noqa: PLR0914
+    def _execute_proposal(  # ruff: ignore[too-many-locals]
         self, proposal: ExperimentProposal, dry_run: bool = False
     ) -> dict[str, object]:
         """Execute a proposal: 5-D system -> SystemTrainer.
@@ -914,7 +972,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # noqa: S101
+        assert input_dim is not None  # ruff: ignore[assert]
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr")
@@ -966,6 +1024,10 @@ class AutoScientistCampaign:
                 )
         param_count = sum(p.numel() for p in system.geometry.parameters())
 
+        spectral_radius = (
+            probe_spectral_radius(system, int(input_dim)) if param_count > 0 else 0.0
+        )
+
         if dry_run:
             from computronium.autoscientist.compose import dry_run_system
 
@@ -1014,6 +1076,11 @@ class AutoScientistCampaign:
             "train_accuracy": last.get("train_acc", 0.0),
             "epochs_completed": len(history),
             "param_count": param_count,
+            "spectral_radius": spectral_radius,
+            "settle_horizon": int(
+                getattr(system.dynamics, "_settle_steps_used", 0) or 0
+            ),
+            "lr": lr,
         }
 
     def _update_knowledge_base(
