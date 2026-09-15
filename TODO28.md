@@ -387,10 +387,13 @@ below); surrogate model (stratified mapping bypasses it by design).
    families (em/ps at max_steps); consider `--cells-per-iter 10` splits and
    the 2-min poll cadence (AGENTS environment rules). Now also carries
    settle_horizon/σ_max(J)/lr per cell — no re-run needed for instruments.
-6. **ntm device defect** (found by the lr probe): ntm geometry mixes a
-   CPU tensor into a CUDA graph regardless of lr — one crash-void per
-   ntm cell until fixed. Small, contained; candidate for the next
-   hygiene pass.
+6. ~~ntm device defect~~ — **FIXED (2026-09-15, pre-run).**
+   `NtmGeometry.init_mem/init_state/prev_read` built CPU tensors while
+   the controller lives on CUDA; all now derive device from
+   `_beta`/input (`geometry.py`). ntm train_step verified on CUDA; the
+   stale `test_ntm_geometry` regex (state-shape branch message) also
+   updated. End-to-end gate check: 4-cell smoke sweep — 4 completed,
+   0 failed, 7/7 KB rows carry instruments.
 7. **Per-topology lr curves**: the calibration probe used one cell per
    topology at 1 seed/epoch. If the 500-cell map shows topology-level
    anomalies, extend the probe to multiple credits/seeds before trusting
