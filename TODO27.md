@@ -625,3 +625,109 @@ Superseded by the **rev 8** entry point above.
 State at rev 8: Phases 0-2 complete, G1 run 2 measured the em slice
 (51 cells, atlas written, surrogate live), two KB-write defects fixed.
 Next front: sweep continuation -> G2/G4 -> Phase 4.
+
+### Rev 13 (final — sweep halted, full state + remaining work as TODO28 input)
+
+**Resolution of the integrity question (rev 12–13):** The operator asked
+whether fixing bugs invalidates results and whether to restart. Verdict
+recorded here so TODO28 does not relitigate it: the bugs found are
+**machinery bugs that waste governed budget, not measurement bugs that
+corrupt the 250 accuracy readings already committed.** Every committed
+reading went through the real `SystemTrainer` on real dataloader data
+with the same path a fixed gate would use — a gate fix changes *which*
+cells are proposed, not *how* a committed cell is measured. Restarting
+would discard 250 honest measurements over machinery inefficiency. The
+correct move (recorded as a TODO28 task, not a restart) is: fix the
+gate, keep the KB, and resume — covered cells are skipped by novelty.
+
+**Final measured state (G1, digital substrate, em+ps only):**
+- 269 experiment rows / 250 measured cells in `artifacts/g1/kb.sqlite`
+  + `surrogate_reliability.jsonl`. All `energy_minimization` (185) and
+  `predictive_settling` (84). Credits: tc 193, local_contrastive 70,
+  random_projections 6. Updates: all 9 grid rules. Topologies: ff 103,
+  recurrent 107, tile_mesh 59. Only 3 of 10 topologies reachable by
+  em/ps (layered geometries blocked).
+- **The 5 unmeasured dynamics families (error_predictive_coding,
+  spike_integration, instantaneous, diffusion, lazy) were NEVER reached
+  in any run.** This is the central unfinished deliverable.
+- Best structure so far: tc beats local_contrastive on em (flip on ps);
+  local_adam best update on em; ff ≥ recurrent > tile_mesh.
+- `artifacts/g1/atlas.md` is **stale** (rev 7, 51 cells) — needs full
+  regeneration from the 250-row KB.
+
+**Defect/structural findings (all open, prioritized for TODO28):**
+
+1. **[CRITICAL] Sweep never advances past the em slice.** Product-order
+   coverage (dynamics-outer) means the em slice's 243 cells (9 credits ×
+   9 updates × 3 reachable topologies) all precede any other dynamics
+   family. The sweep grinds through em — including re-proposing
+   structurally-impossible attention/spatial_lattice cells that fail the
+   dry-run gate and are re-recorded as incompatible — and **ends on the
+   stop rule ("no novel cells") before the 5 new families get one cell**.
+   The atlas cannot be built on 2/7 dynamics. This is the #1 thing TODO28
+   must fix: the sweep must actively *rotate* dynamics (or drive by
+   unmeasured-family quota), not exhaust em's product region first.
+2. **[CRITICAL] Surrogate has zero predictive power** (pearson r = 0.018
+   over 250 rows; R2 ≈ 0.25). `predict_outcome` returns near-constant
+   values (~0.4–0.55) while measured spans 0.0–0.9. P1.2(b) surrogate-
+   guided ranking is currently uninformative; G4's "surrogate predicts
+   the grid" is unmet. Needs: feature check (axes are one-hot, but the
+   near-constant outputs suggest the RF is collapsing on sparse classes),
+   a baseline comparison (chance / mean predictor), and possibly a
+   different model or interaction features.
+3. **Sweep script does not terminate on the stop rule.** The campaign
+   logs "Stop rule hit: no novel cells" and "Campaign ends", but the
+   outer `g1_core_sweep.py` loop keeps calling `run_iteration` and burns
+   iterations to its `--iterations` cap (observed 60+ min draining empty
+   iterations). `run_iteration` must signal "no proposals" so the driver
+   exits promptly.
+4. **Dry-run gate fidelity gap** (rev 4 imp. 1): gate passes
+   `local_contrastive` cells (synthetic `zeros(batch, 784)`) that fail on
+   real mnist `(batch, 1, 28, 28)`. Fix: run dry-run on a real task batch
+   (pull one batch from the dataloader) or a static credit×topology
+   compatibility table. Currently these failures burn a governed ledger
+   row each.
+5. **Energy divergence** (→ −1e19) observed in some cells; G3 instrument
+   triage (`credit_trace`/`settle_horizon`) is ready and unrun.
+6. **role_split** removed from `GRID_UPDATES` (rev 7); `update_params`
+   not in proposal schema — revisit only if the axis matters.
+7. **Per-topology ruler calibration** missing — the ruler is
+   feedforward-only (rev 8 imp. 4); G2 topology trust depends on it.
+
+**What works (validated, keep):** Phases 0–2 complete; geometry
+composition + reproducibility (bit-for-bit test green); CEEC governed
+trace + failure-never-limbo; coverage matrix reads one record format;
+instrument self-check (BP cos 0.9998, NaN surfaces loud); ruler table
+micro-swept, all offline catalog tasks eligible; no BP leakage in credit
+channels; ps beats matched-budget BP on digits/spiral/circles (provisional
+until multi-seed).
+
+**Remaining work → TODO28 (ordered):**
+1. **Sweep-axis fix (defect 1):** rotate dynamics actively so all 7
+   families get measured; do not exhaust em first. This unblocks the
+   entire atlas.
+2. **Stop-rule termination (defect 3):** make `g1_core_sweep.py` exit on
+   "no novel cells" instead of draining to `--iterations`.
+3. **Surrogate fix (defect 2):** baseline + feature/model revision so
+   predictions are informative; log reliability from iteration 1.
+4. **Dry-run gate fidelity (defect 4):** real-batch or compat-table gate.
+5. **Regenerate atlas** from the 250-row KB.
+6. **G3 divergence triage** on −1e19 cells (defect 5).
+7. **Per-topology ruler calibration** (defect 7).
+8. **G2 topology extension** on surviving cells once >2 dynamics families
+   are measured.
+9. **G4 analysis:** coverage matrix, `compute_algorithm_fingerprints` /
+   `generate_algorithm_phylogeny` (currently empty — key on model_family,
+   need axis featurization, rev 8 imp. 2).
+10. **Phase 4** (C-cert strongest structure through the full CEEC gate;
+    substrate unlock) — only after G1–G4.
+
+**Scripts/commands for the next session:**
+- Resume sweep (after defects 1+3): `setsid nohup uv run python
+  scripts/g1_core_sweep.py --iterations N --cells-per-iter 6 --root
+  artifacts/g1 >> logs/g1_sweep.log 2>&1 &`
+- Smoke gate: `uv run python -m pytest tests/unit/test_autoscientist_compose.py
+  tests/unit/test_campaign_reproducibility.py tests/unit/test_ceec_link.py -q`
+- Dev-env smoke: `uv run python -c "import optuna, scipy, torchvision, pytest"`
+- Instruments: `scripts/probes/instrument_selfcheck.py`,
+  `scripts/probes/credit_channel_audit.py`.
