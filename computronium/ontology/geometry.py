@@ -2664,19 +2664,21 @@ class NtmGeometry(nn.Module):
         used instead. Position is retrievable before any write; erase+add
         overwrites it."""
         slots, width = self.config.mem_slots, self.config.mem_width
+        device = self._beta.device
         if slots <= width:
-            base = torch.zeros(slots, width)
-            base[torch.arange(slots), torch.arange(slots)] = 0.5
+            base = torch.zeros(slots, width, device=device)
+            base[torch.arange(slots, device=device), torch.arange(slots, device=device)] = 0.5
         else:
             g = torch.Generator().manual_seed(0)
-            base = torch.randn(slots, width, generator=g)
+            base = torch.randn(slots, width, generator=g).to(device)
             base = 0.5 * base / base.norm(dim=-1, keepdim=True)
         return base.unsqueeze(0).expand(batch, slots, width)
 
     def init_state(self, batch: int) -> tuple[Tensor, Tensor]:
+        device = self._beta.device
         return (
-            torch.zeros(1, batch, self._controller.hidden_size),
-            torch.zeros(1, batch, self._controller.hidden_size),
+            torch.zeros(1, batch, self._controller.hidden_size, device=device),
+            torch.zeros(1, batch, self._controller.hidden_size, device=device),
         )
 
     def _address(self, mem: Tensor, key: Tensor) -> Tensor:
@@ -2716,7 +2718,9 @@ class NtmGeometry(nn.Module):
         if mem is None:
             mem = self.init_mem(x.shape[0])
         if prev_read is None:
-            prev_read = torch.zeros(x.shape[0], self.config.mem_width)
+            prev_read = torch.zeros(
+                x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype
+            )
         h_c, state_next = self._controller(
             torch.cat([x, prev_read], dim=-1).unsqueeze(0), state
         )
@@ -2810,7 +2814,9 @@ class NtmGeometry(nn.Module):
                     x,
                     read
                     if read is not None
-                    else torch.zeros(x.shape[0], self.config.mem_width),
+                    else torch.zeros(
+                        x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype
+                    ),
                 ],
                 dim=-1,
             ).unsqueeze(0),

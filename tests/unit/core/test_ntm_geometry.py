@@ -170,7 +170,12 @@ class TestNtmCreditUpdateComposition:
             credit=CreditAssignmentConfig.gradient(),
             update=ParameterUpdateConfig.euclidean(),
         )
-        with pytest.raises(ValueError, match="NTM geometry requires instantaneous"):
+        # The state-shape contract branch (TODO28 bug-fix pass) fires
+        # before the ntm-specific message; either rejection is correct.
+        with pytest.raises(
+            ValueError,
+            match="state-shape contract|NTM geometry requires instantaneous",
+        ):
             config.validate()
 
 
