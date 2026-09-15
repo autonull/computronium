@@ -442,6 +442,30 @@ run can proceed with `--credit-trace` for the full instrument set, and
 stratification beyond dynamics (improvement 2) is the next lever before
 any small-n claims.
 
+### Defect convergence + runtime-contract gate (2026-09-15, session 3 close)
+
+The suite never caught the device class because it exercised the
+ontology's *logic* (CPU, synthetic input) while every bug lived in the
+*runtime contract* (CPU probe → GPU train, real batch shapes). That
+contract is now encoded:
+
+- **`tests/property/test_device_hygiene_gate.py`** — all 429 viable
+  feedforward cells: compose → CPU train_step (forces every lazy
+  init a dry-run/probe would trigger) → `geometry.to(cuda)` → train
+  step. Would have caught every device bug pre-pilot; it found one
+  more subclass post-fix.
+- **`update.py` momentum buffers** — `_fresh_buffer` re-inits on
+  device change (zero-warm-start, lossless) at every cache site; the
+  gate went 312 failing → 429/429.
+- Property suite re-run after the gate: 761 passed, no regressions.
+
+**State:** defects in the experimental path are gated (composition =
+validate + enumeration; execution = hygiene gate; numeric health =
+per-cell instruments; resume = KB coverage seed). Known limitations
+(documented, non-corrupting): diffusion slow at 1 epoch, σ_max(J) is a
+sampled lower bound, surrogate bypassed by design, P-axis out of grid.
+Next action unchanged: the 500-cell run with `--credit-trace`.
+
 ### Improvement opportunities (facilitating remaining work)
 1. ~~Instrument capture at execution time~~ — **DONE** (2026-09-15:
    settle_horizon + σ_max(J) + opt-in credit_trace/BP alignment per
