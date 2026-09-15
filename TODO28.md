@@ -1,17 +1,13 @@
-> **STATUS: IMPLEMENTED (2026-09-15); 500-cell run unblocked.** All four
-> phases shipped and verified; interim results were invalidated twice as
-> audit findings landed (validate() enforcement, stale-rule relaxations,
-> state-shape branch, parameter-budget rematch, full constraint
-> enumeration). The 2026-09-15 second session resolved all three
-> pre-run blockers: the em/instantaneous anomaly (credit×update draw
-> composition — rematch exonerated), per-cell instrument capture
-> (settle_horizon + σ_max(J) probe, radar wired), and the topology-lr
-> confound (non-feedforward default 1e-3 → 1e-2 on probe evidence; also
-> fixed a 4-D batch input defect in SystemTrainer). The implementation
-> record, honest limitations, and remaining-work list live at the bottom
-> of this file. Current artifacts: `artifacts/broad_map/` (1111 viable /
-> 3047 enumerated voids, 34-cell verification map) and
-> `docs/figures/d28_broad_atlas.png`. **Next: the 500-cell run.**
+> **STATUS: IMPLEMENTED (2026-09-15); 50-cell pilot clean, 500-cell
+> run cleared.** All four phases shipped; three pre-run blockers
+> resolved (anomaly = credit×update draw composition; instruments
+> settle_horizon/σ_max(J)/credit_alignment captured per cell; topology
+> lr confound fixed). Deferred defects fixed before experiments:
+> diffusion now settles geometry Hopfield energy (was a prior-only
+> walk), the device-poisoning lazy-init class eliminated, sweep resume
+> crash fixed. Artifacts: `artifacts/broad_map_pilot50/` (52 cells,
+> 0 failed; `atlas.html`) and `docs/figures/d28_broad_atlas.png`.
+> Next: the 500-cell run.
 
 To achieve a **broad focus** with **useful preliminary results** and a **crystallizing high-dimensional visualization**, we need to temporarily pivot the AutoScientist from *intelligent search* to *stratified mapping*. 
 
@@ -366,10 +362,90 @@ em/instantaneous anomaly before committing the 500-cell run.
 5-D map ships); diffusion's geometry-independent energy defect (recorded
 below); surrogate model (stratified mapping bypasses it by design).
 
+### Deferred items addressed + 50-cell pilot (2026-09-15, session 3)
+
+"Nothing is sacred" pass — the two deferred defects were blocking-class
+and are now fixed; the pilot ran only after both landed.
+
+1. **Diffusion geometry-independent energy — FIXED.** The old
+   `compute_energy_from_state` was `‖h‖²` (+ β one-hot pull) — the
+   Langevin "settle" never read geometry weights: a prior-only random
+   walk, identical statistics on every topology. Layered path now
+   descends the **em-family Hopfield energy through the geometry's
+   weights** over the full activation stack (Langevin: `dh = −∇E dt +
+   √(2·D)·dW`, input clamped) + β output nudge — a stochastic sampler
+   over the geometry's fixed points (noisy em), producing per-layer
+   acts the credit rules can consume. Documented prior-only fallback
+   remains for non-layered geometries (unreachable via the campaign
+   grid). Pilot evidence: diffusion max accuracy 0.086 → **0.425**
+   with the fix (still last at 1 epoch — plausible for a stochastic
+   sampler, not a crash).
+2. **`credit_trace` per-cell capture — DONE.** Opt-in
+   (`--credit-trace` → `hyperparams["credit_trace"]`): one flat batch
+   on the system's device, settle phases + split-half + BP reference;
+   `credit_alignment` (min per-layer BP cosine) flows into the result
+   dict → KB → radar spoke.
+3. **Device-poisoning class, found by the pilot, fixed at the source.**
+   Cells are dry-run-probed on CPU before the trainer moves geometry to
+   the accelerator; any credit that lazily initializes per-weight state
+   on first contact stranded it on CPU and crashed at train time:
+   - FA feedback matrices (`RandomProjectionsCredit`):
+     `_sync_feedback_device` re-homes cached matrices onto the weight
+     device per pseudo-gradient read.
+   - LocalContrastive/TemporalTrace EMA cache: `_ema_normalize` moves
+     cached tensors to the incoming gradient's device.
+   - `_block_target_grads` zero-grad placeholder: created on the acts'
+     device.
+   - ntm `init_mem/init_state/prev_read` were the same class (fixed
+     earlier this session).
+4. **Resume-blocking bug in the sweep itself**: `enumerate_constraint_
+   voids` called `.strip()` on the *parsed* void dict — any run
+   restarting against an existing `structural_voids.jsonl` crashed at
+   startup. Fixed (strip the line, then parse). The device fixes were
+   validated by a smoke sweep (6/6, 0 device failures) before launch.
+
+### Pilot results (52 fresh cells, digits @ 1 epoch; 82 unique in KB
+with the earlier partial run — a background process died mid-iteration
+on the flaky host and the resumed run continued seamlessly from KB
+coverage, which is the resume path working as designed).
+
+**Zero failed proposals** after the device fixes (4 iterations of the
+killed run had device crashes; the fixed run: none). All 7 families
+sampled:
+
+| family | n | max | mean |
+|---|---|---|---|
+| predictive_settling | 12 | 0.942 | 0.759 |
+| instantaneous | 10 | 0.961 | 0.565 |
+| error_predictive_coding | 12 | 0.881 | 0.504 |
+| lazy | 12 | 0.944 | 0.321 |
+| spike_integration | 11 | 0.864 | 0.383 |
+| energy_minimization | 12 | 0.922 | 0.300 |
+| diffusion | 13 | 0.425 | 0.118 |
+
+- Six of seven families reach the ruler ceiling's doorstep — the
+  post-fix ontology composes and trains nearly everywhere it validates.
+- `credit_alignment` recorded for 63/82 cells (n=0 where the credit
+  reaches no learnable weight — itself an instrument signal); max 0.978
+  (gradient-class credit ≈ BP, as the instrument predicts).
+- diffusion's fix shows real (0.086 → 0.425 max) but stays last at
+  1 epoch — expected for a noisy sampler; judge at more epochs, not by
+  crash-class absence.
+- Artifacts: `artifacts/broad_map_pilot50/` (kb, ledger, voids 3051,
+  `atlas.html`), `docs/figures/d28_broad_atlas.png` regenerated at
+  n=82 measured cells.
+
+**Decision the pilot informs:** family-level maxima are stable across
+re-runs (ps/inst/em/lazy/spike within noise of prior runs); mean-level
+separation is now dominated by credit×update composition — the 500-cell
+run can proceed with `--credit-trace` for the full instrument set, and
+stratification beyond dynamics (improvement 2) is the next lever before
+any small-n claims.
+
 ### Improvement opportunities (facilitating remaining work)
-1. ~~Instrument capture at execution time~~ — **DONE** (see immediate
-   items 2). Remaining: `credit_trace` cosine alignment per cell
-   (heavier — optional flag), and the radar's σ_max(J) is a sampled
+1. ~~Instrument capture at execution time~~ — **DONE** (2026-09-15:
+   settle_horizon + σ_max(J) + opt-in credit_trace/BP alignment per
+   cell; radar wired). Remaining: radar's σ_max(J) is a sampled
    directional amplification, not a certified radius.
 2. **Stratification beyond dynamics**: balance credit × update pairs too,
    so no river axis is starved at small sample sizes. Elevated priority:
@@ -394,7 +470,10 @@ below); surrogate model (stratified mapping bypasses it by design).
    stale `test_ntm_geometry` regex (state-shape branch message) also
    updated. End-to-end gate check: 4-cell smoke sweep — 4 completed,
    0 failed, 7/7 KB rows carry instruments.
-7. **Per-topology lr curves**: the calibration probe used one cell per
-   topology at 1 seed/epoch. If the 500-cell map shows topology-level
-   anomalies, extend the probe to multiple credits/seeds before trusting
-   cross-topology comparisons.
+7. ~~Per-topology lr curves~~ — partially resolved: the probe already
+   overturned the 1e-3 default (see immediate items 3). Extend to
+   multiple credits/seeds only if the extended map shows topology-level
+   anomalies.
+8. ~~Diffusion geometry defect~~, ~~credit_trace capture~~,
+   ~~device-poisoning class~~, ~~sweep resume crash~~ — **FIXED**
+   (2026-09-15, session 3; see the deferred-items section above).

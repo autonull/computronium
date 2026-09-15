@@ -1438,6 +1438,12 @@ class LocalContrastiveCredit:
         # columns whose gradient magnitude differs from the data columns.
         sq = gw.detach().pow(2)
         cached = self._ema.get(name)
+        if cached is not None and cached.device != sq.device:
+            # The dry-run probe runs the cell on CPU before the trainer
+            # moves geometry to the accelerator; cached EMA state must
+            # follow the incoming gradient's device, not stay stranded.
+            cached = cached.to(sq.device)
+            self._ema[name] = cached
         ema = (
             self.config.ema_beta * cached + (1 - self.config.ema_beta) * sq
             if cached is not None
