@@ -2415,26 +2415,27 @@ class PCALMCredit(_SurrogateUndefined):
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
+        # PC-ALM uses the NUDGED phase dual variables for weight updates
+        # (free phase duals are zero when starting from feedforward pass)
+        nudged_state = states.get(Phase.NUDGED)
         free_state = states.get(Phase.FREE)
 
-        # PC-ALM uses the FREE phase dual variables for weight updates
-        # (nudged phase only used for energy/loss computation)
-        if free_state is None:
+        if nudged_state is None:
             return []
 
         # Get dual variables from state metrics
         dual_vars = None
-        if hasattr(free_state, "metrics") and free_state.metrics:
-            dual_vars = free_state.metrics.get("dual_vars")
+        if hasattr(nudged_state, "metrics") and nudged_state.metrics:
+            dual_vars = nudged_state.metrics.get("dual_vars")
 
         if dual_vars is None or not isinstance(dual_vars, list):
             return []
 
         acts = (
-            free_state.activations
-            if isinstance(free_state.activations, list)
-            else [free_state.activations]
-            if free_state.activations is not None
+            nudged_state.activations
+            if isinstance(nudged_state.activations, list)
+            else [nudged_state.activations]
+            if nudged_state.activations is not None
             else []
         )
 

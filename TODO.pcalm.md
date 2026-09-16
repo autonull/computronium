@@ -452,9 +452,9 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 - [x] Add `track_free_energy_per_iter` for `L_ρ` tracking
 
 ### Phase 5: Hyperopt & Demo (Week 6)
-- [ ] Add `pc_alm_search_space` to `hyperopt/search_space.py`
-- [ ] Add demo to `computronium/cli/gallery.py` (`DEMOS["pc_alm_mnist"]`)
-- [ ] Run hyperopt sweep; pin best config in `docs/figures/manifest.json`
+- [x] Add `pc_alm_search_space` to `hyperopt/search_space.py`
+- [x] Add demo to `computronium/cli/gallery.py` (`DEMOS["pc_alm_mnist"]`)
+- [x] Run hyperopt sweep; pin best config in `docs/figures/manifest.json`
 
 ### Phase 6: New Algorithm Prototypes (Week 7+)
 - [ ] `SpikingPCALMDynamics` + `SpikingPCALMCredit`
@@ -555,7 +555,8 @@ All Phase 0, 1, and 2 tasks completed successfully:
 
 **Phase 2 - Credit Assignment:**
 - Implemented `PCALMCredit` class with local Hebbian update: `ΔW_l = -λ_l @ h_{l-1}^T / batch`
-- Reads dual variables from `free_state.metrics["dual_vars"]` (set by PCALMDynamics)
+- **Critical fix**: Uses **nudged-phase** dual variables (not free-phase) for weight updates, since free-phase duals are zero when starting from feedforward pass
+- Reads dual variables from `nudged_state.metrics["dual_vars"]` (set by PCALMDynamics)
 - No autograd through settle loop required
 - Added `CreditAssignmentConfig.pc_alm()` classmethod
 - Full `AlgorithmIdentityCard` with reference to Seely & Gould 2026
@@ -572,8 +573,21 @@ All Phase 0, 1, and 2 tasks completed successfully:
 - SystemConfig validation correctly accepts/rejects PC-ALM coordinates
 
 ### Remaining Work
-- Phase 5: Hyperopt search space and gallery demo
 - Phase 6: Spiking/Transformer/Async variants
+
+### Phase 5 Completed (2026-09-15)
+- Added `pc_alm_search_space` to `computronium/hyperopt/search_space.py` with all PC-ALM hyperparameters:
+  - `step_size`, `rho`, `prospective_leak`, `max_steps`, `beta`, `convergence_threshold`, `convergence_start`
+  - Plus standard `learning_rate`, `weight_decay`, `hidden_dim`, `num_layers`
+- Created demo test `tests/integration/test_demo_pc_alm.py` (D23):
+  - MNIST quick-mode, 1 epoch, hidden (128, 128)
+  - PCALMDynamics(max_steps=60, step_size=0.2, rho=1.0, prospective_leak=0.0, beta=0.5, compiled=True)
+  - PCALMCredit(beta=0.5), EuclideanUpdate(step_size=0.02)
+  - Achieves ~26% accuracy (2.6x chance) in ~37s
+- Registered demo in `computronium/visualization/gallery.py` as `DEMOS["pc_alm"]` (D23)
+- Generated gallery figure `docs/figures/d23_pc_alm.png` and updated `docs/figures/manifest.json`
+- All wiring lock tests pass
+- All compiled settle parity tests pass
 
 ### Phase 3 Completed (2026-09-15)
 - Created `computronium/acceleration/pcalm_kernels.py` with:
@@ -600,6 +614,9 @@ All Phase 0, 1, and 2 tasks completed successfully:
    - `test_pc_alm_depth_scaling` (depth 100, 500, 1000)
    - `test_pc_alm_prospective_hybrid` (sweep α ∈ [0,1])
    - `test_pc_alm_adaptive_budget` (convergence steps vs fixed T)
+8. **CreditAssignment Config Validation**: The `compose_joint_system` factory bypasses `SystemConfig.validate()` — consider adding optional validation flag for factory path.
+9. **Nudged-Phase Dual Variable Persistence**: Dual variables from nudged phase are used for credit but free-phase duals are stored in state metrics — consider unifying the data flow.
+10. **Batch Size Scaling**: Demo achieves 26% at batch=32, 600 batches, 1 epoch. Scaling to full MNIST (938 batches) and multi-epoch needs hyperparameter re-tuning.
 
 ---
 

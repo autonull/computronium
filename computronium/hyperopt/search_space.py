@@ -295,6 +295,26 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "hidden_dim": (32, 512, "log"),
         "num_layers": (1, 4, "int"),
     },
+    "pc_alm": {
+        # PC-ALM primal-dual dynamics (Seely & Gould 2026, arXiv:2605.31022)
+        # step_size: primal/dual learning rate (eta_h = eta_lambda)
+        # rho: augmented Lagrangian penalty parameter
+        # prospective_leak: leaky dual integration coefficient (0=PC-ALM, >0=prospective config hybrid)
+        # max_steps: inference budget T (adaptive early stopping via convergence_threshold)
+        # beta: dual learning rate scale (beta_dual in paper)
+        # convergence_threshold: early stopping on max constraint violation
+        "learning_rate": (1e-3, 1e-1, "log"),
+        "weight_decay": (1e-6, 1e-2, "log"),
+        "hidden_dim": (32, 1024, "log"),
+        "num_layers": (1, 6, "int"),
+        "step_size": (1e-3, 1.0, "log"),
+        "rho": (0.1, 10.0, "log"),
+        "prospective_leak": (0.0, 1.0, "linear"),
+        "max_steps": (10, 200, "int"),
+        "beta": (0.1, 2.0, "log"),
+        "convergence_threshold": (1e-4, 1e-2, "log"),
+        "convergence_start": (2, 10, "int"),
+    },
 }
 
 
