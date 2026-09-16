@@ -531,7 +531,7 @@ class AutoScientistCampaign:
         - Human approval gates
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913, PLR0917 (mirrors the sweep's CLI axes)
         self,
         knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
@@ -666,7 +666,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
+        new_state = db.create_campaign(  # noqa: F841 (branch row persisted by create_campaign)
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -796,7 +796,7 @@ class AutoScientistCampaign:
             })
         return recent
 
-    def run_iteration(  # ruff: ignore[complex-structure, too-many-branches]
+    def run_iteration(  # noqa: C901, PLR0912 (proposal lifecycle branches are linear)
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -984,7 +984,7 @@ class AutoScientistCampaign:
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to record incompatible cell: %s", e)
 
-    def _execute_proposal(  # ruff: ignore[too-many-locals]
+    def _execute_proposal(  # noqa: PLR0914 (single compose→fit→measure pipeline)
         self, proposal: ExperimentProposal, dry_run: bool = False
     ) -> dict[str, object]:
         """Execute a proposal: 5-D system -> SystemTrainer.
@@ -1013,7 +1013,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # ruff: ignore[assert]
+        assert input_dim is not None  # noqa: S101 (task contract)
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr")
@@ -1097,7 +1097,9 @@ class AutoScientistCampaign:
             task.get_dataloader("train"),  # type: ignore[attr-defined]
             task.get_dataloader("val"),  # type: ignore[attr-defined]
         ) as trainer:
+            fit_started = time.monotonic()
             history = trainer.fit()
+            walltime_s = round(time.monotonic() - fit_started, 3)
             last = history[-1] if history else {}
         return {
             "proposal": {
@@ -1124,6 +1126,7 @@ class AutoScientistCampaign:
                 getattr(system.dynamics, "_settle_steps_used", 0) or 0
             ),
             "credit_alignment": credit_alignment,
+            "walltime_s": walltime_s,
             "lr": lr,
         }
 
@@ -1136,8 +1139,22 @@ class AutoScientistCampaign:
             return
         from computronium.knowledge import KnowledgeEntry
 
+        # Cell-unique entry id: the second-resolution timestamp collided
+        # whenever two cells completed in the same wall-clock second, and
+        # INSERT OR REPLACE silently dropped the earlier result (rev 7
+        # defect class, knowledge-entry half).
+        cell_tag = (
+            cell_key(
+                str(proposal.dynamics),
+                str(proposal.credit),
+                str(proposal.update),
+                str((proposal.geometry or {}).get("topology_type", "feedforward")),
+            )
+            if proposal.dynamics and proposal.credit and proposal.update
+            else f"{int(time.time() * 1000)}_{proposal.model}|{proposal.task}"
+        )
         entry = KnowledgeEntry(
-            id=f"campaign_{self.campaign_id}_iter{self._iteration}_{int(time.time())}",
+            id=f"campaign_{self.campaign_id}_iter{self._iteration}_{cell_tag}",
             topic=f"experiment:{proposal.task}",
             model_family=proposal.model,
             finding=(
@@ -1157,6 +1174,7 @@ class AutoScientistCampaign:
                 proposal.task,
                 proposal.model,
                 f"campaign:{self.campaign_id}",
+                *proposal.tags,
             ],
             source="experiment",
             metrics={
@@ -1197,20 +1215,6 @@ class AutoScientistCampaign:
         # never sees a target (rev 7 defect: 0 valid records).
         if "final_accuracy" in metrics:
             metrics.setdefault("val_accuracy", metrics["final_accuracy"])
-        # Cell-unique identity: campaign_iter + cell key. The earlier
-        # iteration-only id collided across results, so all but one
-        # cell per iteration was silently lost to the surrogate's
-        # read path (rev 7: 51 executions -> 18 rows).
-        cell_tag = (
-            cell_key(
-                str(proposal.dynamics),
-                str(proposal.credit),
-                str(proposal.update),
-                str((proposal.geometry or {}).get("topology_type", "feedforward")),
-            )
-            if proposal.dynamics
-            else f"{proposal.model}|{proposal.task}"
-        )
         try:
             kb.add_experiment(
                 name=f"campaign_iter{self._iteration}_{cell_tag}",

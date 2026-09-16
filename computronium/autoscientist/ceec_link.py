@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 from ceec.probe_adapter import record_probe_result
 
-from computronium.autoscientist.bridge import ExperimentProposal
 from computronium.autoscientist.proposer import cell_key
 from computronium.core.logging import get_logger
 
@@ -19,6 +18,8 @@ if TYPE_CHECKING:
     from ceec.models import Experiment
     from ceec.run import ExperimentRun
     from ceec.session import Session
+
+    from computronium.autoscientist.bridge import ExperimentProposal
 
 __all__ = ["CEECLink", "logger"]
 
@@ -74,6 +75,14 @@ class CEECLink:
                 "update": proposal.update,
                 "optimizer": proposal.optimizer,
                 "priority": proposal.priority,
+                "maturity": next(
+                    (
+                        tag.split(":", 1)[1]
+                        for tag in proposal.tags
+                        if tag.startswith("maturity:")
+                    ),
+                    "l0",
+                ),
                 "tags": list(proposal.tags),
             },
             falsification_criterion=falsifier,
@@ -150,5 +159,5 @@ class CEECLink:
                 },
                 f"campaign_failure:{self._cell(proposal)}",
             )
-        except StoreError as exc:
-            logger.error("CEEC ledger: failure ingest rejected: %s", exc)
+        except StoreError:
+            logger.exception("CEEC ledger: failure ingest rejected")

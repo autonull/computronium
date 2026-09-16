@@ -1,6 +1,10 @@
 # TODO29 — Continuous Discovery: Budgeted Bursts, Defect Funnel, Live Atlas
 
-> **STATUS: PLAN (revised 2026-09-16 against the post-TODO28 codebase).**
+> **STATUS: IMPLEMENTED (2026-09-16, Phases 1–5 landed).** The only open
+> item from §12 is the §8 shakedown launch of the 500-cell run through
+> `comp continuous` (needs GPU wall-time; operational steps unchanged).
+> See §13 for the progress log, mid-flight fixes, and new opportunities.
+>
 > The philosophy stands: shift from one-shot experiment runs to a continuous,
 > time-budgeted discovery loop that harvests defects as data. This revision
 > turns that philosophy into a build plan wired to what already exists —
@@ -423,14 +427,67 @@ lockstep lock is untouched — assert it stays green in the round-close run.
 
 ## 12. Immediate Next Actions (in order)
 
-1. **Phase 1** — extract `broad_map.py` + `atlas.py`, add `walltime_s`,
-   re-point script wrappers; targeted tests green.
-2. **Phase 2** — `defects.py` + failure-branch wiring + quarantine seeding;
-   property tests.
-3. **Phase 3** — `ContinuousBudget` + `run_burst` + `comp continuous` +
-   `_SUBCOMMANDS` row; integration burst test.
-4. **Phase 8** — launch the 500-cell shakedown through `comp continuous`;
-   poll at ≤2 min; fix-and-unquarantine defects as they surface.
-5. **Phase 4** — maturation tags, promotion query, `deep-tier`.
-6. **Phase 5** — `comp dashboard`; README CLI table rows for
-   `comp continuous` and `comp dashboard` (added when they ship, not before).
+1. **§8 shakedown** — launch the 500-cell run through `comp continuous`
+   (`nohup … --target-cells 500 --credit-trace --loop --sleep 15`), poll at
+   ≤2 min, fix-and-`unquarantine` defects as they surface. This is the
+   defect funnel's acceptance test.
+2. **Adaptive scheduler revisit (§10)** — after the shakedown, per-family
+   mean `walltime_s` (already logged per burst) gives the cost-compensated
+   scheduler its input data; design on top of `run_burst`'s summary dict.
+3. **Defect ID hardening (§11)** — if the funnel shows collisions on
+   generic messages, add the first traceback frame to `defect_id`.
+4. **Optional lockfile (§11)** — only if concurrent bursts on one root
+   ever bite (`<root>/continuous.lock`, `O_EXCL`).
+5. **Multi-task maturation** — `promote_candidates`/`deep-tier` accept a
+   `--task` filter; per-task Pareto fronts within one KB are the natural
+   next step if multi-task sweeps resume.
+
+---
+
+## 13. Progress Log (2026-09-16)
+
+### Landed (Phases 1–5)
+
+| Phase | Delivered |
+|---|---|
+| **1 — Library extraction** | `computronium/autoscientist/broad_map.py` + `computronium/visualization/atlas.py` are the single implementations; `scripts/broad_mapping_sweep.py` / `scripts/visualize_atlas.py` are thin argparse wrappers (gallery shell-out unchanged). `walltime_s` (monotonic around `trainer.fit()`) rides the KB numeric-key passthrough; the radar gains an `acc/walltime` spoke. |
+| **2 — Defect funnel** | `computronium/autoscientist/defects.py` (`DefectRecord`, `defect_id` sha256[:12] with address/tmp-path normalization, `read_defects`, `quarantined_cells` replay, `resolve_defect`, `append_defect`). `BroadMappingCampaign._execute_proposal` wraps the base executor dry-run-aware — gate rejections stay voids, gate-passing crashes become defects *then* the CEEC trace closes (never-limbo untouched). Driver gains `quarantined` seeded from the JSONL; `comp continuous unquarantine` re-opens cells. |
+| **3 — Budgeted bursts** | `ContinuousBudget` (frozen/slotted, `parse("5m")`, soft/hard/target, immutable `advance`) + `run_burst` in `broad_map.py`: budget checks at proposal-batch boundaries only, the final batch is *trimmed* to the target cap (no overshoot), a 3-empty-iteration streak distinguishes gate-rejected batches from true exhaustion, checkpoint on stop, per-family mean walltime in the log. `computronium/cli/continuous.py` wires `--budget/--target-cells/--loop/--sleep/--log-path` + `_SUBCOMMANDS` row; SIGTERM/^C share one graceful flush path (no `finally` returns, PEP 765). |
+| **4 — Maturation** | Burst proposals tagged `maturity:l0` + `burst:<utc-date>-<seq>` (`next_burst_tag`); proposal tags now propagate into KB entries; CEEC `design` records `maturity`. `promote_candidates` (front via `atlas.pareto_top`, void-excluded, l1/l2-suppressed) + `--maturation N` L1 re-runs at epochs=3. `comp continuous deep-tier --top --epochs --seeds --dry-run`: front-stable-across-≥2-bursts cells re-executed per seed as separate CEEC experiments; claim-grade rows + `seed_sensitivity` variance audit land in `maturation.jsonl`. |
+| **5 — Live window** | `computronium/visualization/live_atlas.py`: headless `DashboardSnapshot` render (funnel, health, Pareto strip, ticker, islands figure via `EmbedCache` — UMAP re-fit only when the cell count changes, honesty caption on the layout) + `build_dashboard` (NiceGUI, `ui.timer` poll on the (mtime,size) signature of kb/voids/defects). `computronium/cli/dashboard.py` = `comp dashboard --root --port --log-path --poll`, read-only. |
+
+Tests: `tests/property/test_defect_ledger.py` (7), `tests/property/test_continuous_budget.py` (17),
+`tests/integration/test_continuous_burst.py` (5, includes L1 promotion + deep-tier scan/dry-run),
+`tests/integration/test_dashboard_smoke.py` (5). All green; ruff + pyright clean on every touched file.
+
+### Mid-flight fixes (each exposed by the new machinery)
+
+- **pyproject/ruff skew (blocked every gate):** ruff 0.16.6 rejects bare
+  pylint-style rule names (`line-too-long`, …) in `ignore` lists and no
+  longer honors the legacy `# ruff: ignore[...]` directives. Selectors
+  rewritten to codes; dead directives converted to working `# noqa:`
+  on touched lines only (canonical migration stays Register C).
+- **KB entry-id collision (silent data loss):** `_update_knowledge_base`
+  built entry ids from a second-resolution timestamp; two cells completing
+  in the same wall-clock second hit `INSERT OR REPLACE` and one result
+  vanished. Ids are now cell-key-unique (the rev-7 fix's knowledge-entry
+  half — the experiments-table half existed already).
+- **`enumerate_constraint_voids`** now creates the voids file's parent
+  dirs (library callers don't pre-mkdir).
+- **`atlas.embed`** falls back to t-SNE on UMAP crashes from broken
+  optional GPU stacks (test conftest stubs `cupy` as a `MagicMock`), and
+  scales t-SNE perplexity below the sample count for small maps.
+- **`docs/IDENTITY_CARDS.md`** regenerated (PCALMCredit card drifted since
+  the pre-TODO29 PC-ALM commits); drift lock green again.
+
+### Changes that facilitate the remaining work
+
+- `build_sweep(args)` is the one construction path shared by the sweep
+  script and the CLI — new instruments only wire once.
+- `run_burst`'s summary dict (completed/failed/stop_reason/walltime means)
+  is the adaptive scheduler's ready-made input.
+- `_load_measured_cells`/`_Candidate` (typed frozen dataclasses with burst
+  and maturity provenance) are the shared read path for maturation and the
+  dashboard; walltime now rides along.
+- `DashboardSnapshot` decouples panel data from NiceGUI — the whole
+  dashboard is testable headless.

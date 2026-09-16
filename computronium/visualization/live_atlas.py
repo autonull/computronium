@@ -1,0 +1,362 @@
+"""Live dashboard library (TODO29 Phase 5) — the continuous-discovery window.
+
+Read-only: polls the campaign root's artifacts (KB, voids, defects, burst
+log) on a timer and re-renders panels on change only. The polling signature
+pattern is lifted from ``demo/campaign_tab.py`` (mtime_ns, size).
+
+Instrument honesty: the map embeds a *sampled* σ_max(J) proxy and a UMAP
+layout that is refit per cell-count change — the dashboard labels it as a
+recomputed snapshot, never a trajectory or a stability frontier.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import deque
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import numpy as np
+    import pandas as pd
+    from nicegui.element import Element
+    from plotly.graph_objects import Figure
+
+logger = logging.getLogger("live_atlas")
+
+POLL_SECONDS = 2.0
+TICKER_LINES = 30
+MESSAGE_HEAD_CHARS = 80
+WATCHED = ("kb.sqlite", "structural_voids.jsonl", "runtime_defects.jsonl")
+
+
+def watch_signature(root: Path) -> tuple[tuple[int, int], ...]:
+    """Combined (mtime_ns, size) change signature over the watched
+    artifacts — empty tuple until any artifact exists."""
+    stamps: list[tuple[int, int]] = []
+    for name in WATCHED:
+        try:
+            stat = (root / name).stat()
+        except OSError:
+            continue
+        stamps.append((stat.st_mtime_ns, stat.st_size))
+    return tuple(stamps)
+
+
+def defect_funnel_rows(defects_path: Path) -> list[dict[str, object]]:
+    """The bug-bounty board: one row per defect_id — count, affected cells,
+    open/resolved, last-seen, message head."""
+    from computronium.autoscientist.defects import DefectRecord, read_defects
+
+    by_id: dict[str, list[DefectRecord]] = {}
+    for record in read_defects(defects_path):
+        by_id.setdefault(record.defect_id, []).append(record)
+    rows: list[dict[str, object]] = []
+    for did, group in by_id.items():
+        last = max(group, key=lambda r: r.timestamp)
+        rows.append({
+            "defect_id": did,
+            "count": len(group),
+            "cells": len({r.cell for r in group}),
+            "status": last.status,
+            "error_class": last.error_class,
+            "last_seen": round(last.timestamp, 1),
+            "message": last.message[:MESSAGE_HEAD_CHARS],
+        })
+    rows.sort(
+        key=lambda r: (
+            0 if r["status"] == "open" else 1,
+            -int(r["count"]) if isinstance(r["count"], int) else 0,
+        )
+    )
+    return rows
+
+
+def health_stats(root: Path) -> dict[str, object]:
+    """Open/resolved defects, cells-per-burst rate, last-burst mean walltime."""
+    from computronium.autoscientist.broad_map import _load_measured_cells
+    from computronium.autoscientist.defects import read_defects
+
+    records = read_defects(root / "runtime_defects.jsonl")
+    last_status: dict[str, str] = {}
+    for record in records:
+        last_status[record.defect_id] = record.status
+    open_defects = sum(1 for status in last_status.values() if status == "open")
+
+    rows = _load_measured_cells(root / "kb.sqlite")
+    bursts = {b for r in rows for b in r.bursts}
+    last_burst = max(bursts) if bursts else None
+    last_walltimes = [
+        r.walltime
+        for r in rows
+        if r.walltime > 0 and (last_burst is None or last_burst in r.bursts)
+    ]
+    return {
+        "open_defects": open_defects,
+        "resolved_defects": len(last_status) - open_defects,
+        "measured_cells": len(rows),
+        "bursts": len(bursts),
+        "cells_per_burst": round(len(rows) / len(bursts), 1) if bursts else 0.0,
+        "last_burst": last_burst,
+        "last_burst_walltime_s": (
+            round(sum(last_walltimes) / len(last_walltimes), 3)
+            if last_walltimes
+            else None
+        ),
+    }
+
+
+def pareto_strip_rows(root: Path, k: int = 3) -> list[dict[str, object]]:
+    """Current top-k Pareto cells with their instrument spokes."""
+    from computronium.visualization.atlas import (
+        apply_bp_deficit,
+        load_cells,
+        pareto_top,
+    )
+
+    ruler_table = root / "ruler_table.json"
+    df = load_cells(root / "kb.sqlite")
+    if df.empty:
+        return []
+    df = apply_bp_deficit(df, ruler_table, None)
+    top = pareto_top(df, k)
+    rows: list[dict[str, object]] = []
+    for _, row in top.iterrows():
+        rows.append({
+            "label": f"{row['dynamics'][:14]}|{row['credit'][:14]}|{row['update'][:12]}|{row['topology'][:10]}",
+            "accuracy": float(row["accuracy"]),  # type: ignore[arg-type]
+            "bp_deficit": float(row["bp_deficit"]),  # type: ignore[arg-type]
+            "credit_alignment": float(row["credit_alignment"]),  # type: ignore[arg-type]
+            "settle_horizon": float(row["settle_horizon"]),  # type: ignore[arg-type]
+            "walltime_s": float(row["walltime_s"]),  # type: ignore[arg-type]
+        })
+    return rows
+
+
+def log_tail(log_path: Path | None, lines: int = TICKER_LINES) -> list[str]:
+    """Tail of the burst log (empty when no log has been written yet)."""
+    if log_path is None or not log_path.exists():
+        return []
+    with log_path.open(encoding="utf-8", errors="replace") as fh:
+        return [line.rstrip("\n") for line in deque(fh, maxlen=lines)]
+
+
+def resolve_log_path(root: Path, log_path: Path | None = None) -> Path | None:
+    """Explicit flag wins; otherwise the newest ``logs/continuous*.log``
+    under the root."""
+    if log_path is not None:
+        return log_path
+    logs_dir = root / "logs"
+    if not logs_dir.is_dir():
+        return None
+    candidates = sorted(
+        logs_dir.glob("continuous*.log"),
+        key=lambda p: p.stat().st_mtime_ns,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+class EmbedCache:
+    """UMAP re-fit only when the cell count changes (a 2 s re-fit is
+    wasteful, and the layout is a recomputed snapshot — not a trajectory)."""
+
+    def __init__(self) -> None:
+        self.n: int = -1
+        self.layout: str | None = None
+        self._coords: np.ndarray | None = None
+
+    def coords(self, combined: pd.DataFrame) -> np.ndarray | None:
+        from computronium.visualization.atlas import embed, feature_matrix
+
+        n = len(combined)
+        if n == 0:
+            return None
+        if self._coords is None or self.n != n:
+            try:
+                self._coords = embed(feature_matrix(combined))
+            except (ValueError, ImportError) as error:
+                logger.warning("Embedding unavailable at n=%d: %s", n, error)
+                self._coords = None
+                self.layout = None
+                return None
+            self.n = n
+            self.layout = f"layout recomputed at n={n}"
+        return self._coords
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardSnapshot:
+    """One render pass of every panel (UI-layer input; testable headless)."""
+
+    health: dict[str, object]
+    funnel_rows: list[dict[str, object]]
+    pareto_rows: list[dict[str, object]]
+    ticker: list[str]
+    atlas: Figure | None
+    layout_note: str | None
+    errors: list[str] = field(default_factory=list)
+
+
+def render_snapshot(
+    root: Path, log_path: Path | None = None, cache: EmbedCache | None = None
+) -> DashboardSnapshot:
+    """Compute all panel payloads in one pass (no UI, no live loop)."""
+    import pandas as pd
+
+    from computronium.visualization.atlas import (
+        _islands_figure,
+        align_void_columns,
+        load_cells,
+        load_voids,
+    )
+
+    cache = cache if cache is not None else EmbedCache()
+    errors: list[str] = []
+    figure = None
+    layout_note = None
+    try:
+        cells = load_cells(root / "kb.sqlite")
+        voids = align_void_columns(load_voids(root / "structural_voids.jsonl"))
+        combined = (
+            pd.concat([cells, voids], ignore_index=True) if not voids.empty else cells
+        )
+        coords = cache.coords(combined)
+        if coords is not None and not combined.empty:
+            combined["x"], combined["y"] = coords[:, 0], coords[:, 1]
+            figure = _islands_figure(
+                combined.query("~is_void"), combined.query("is_void")
+            )
+            layout_note = cache.layout
+    except Exception as error:  # noqa: BLE001 (dashboard must survive bad artifacts)
+        errors.append(f"atlas: {error}")
+    return DashboardSnapshot(
+        health=health_stats(root),
+        funnel_rows=defect_funnel_rows(root / "runtime_defects.jsonl"),
+        pareto_rows=pareto_strip_rows(root),
+        ticker=log_tail(log_path),
+        atlas=figure,
+        layout_note=layout_note,
+        errors=errors,
+    )
+
+
+def _health_cards(container: Element, health: dict[str, object]) -> None:
+    """Gauge row: open/resolved defects, cells-per-burst, last-burst walltime."""
+    from nicegui import ui
+
+    cards = (
+        ("open defects", str(health["open_defects"])),
+        ("resolved defects", str(health["resolved_defects"])),
+        ("measured cells", str(health["measured_cells"])),
+        ("cells / burst", str(health["cells_per_burst"])),
+    )
+    with container:
+        for label, value in cards:
+            with ui.card().classes("items-center py-2"):
+                ui.label(value).classes("text-lg font-bold")
+                ui.label(label).classes("text-xs text-grey")
+        walltime = health["last_burst_walltime_s"]
+        with ui.card().classes("items-center py-2"):
+            ui.label(
+                f"{walltime:.1f}s" if isinstance(walltime, int | float) else "—"
+            ).classes("text-lg font-bold")
+            ui.label(
+                f"last-burst mean walltime ({health['last_burst'] or 'no burst yet'})"
+            ).classes("text-xs text-grey")
+
+
+def _atlas_panel(container: Element, snapshot: DashboardSnapshot) -> None:
+    """Living-atlas panel with the instrument-honesty caption."""
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        if snapshot.atlas is not None:
+            ui.plotly(snapshot.atlas)
+            ui.label(
+                f"UMAP {snapshot.layout_note}: a recomputed embedding, "
+                "not a trajectory. σ_max(J) is a sampled ‖Jv‖ proxy."
+            ).classes("text-caption text-grey")
+        else:
+            ui.label("atlas pending: not enough cells to embed.").classes("text-grey")
+        for error in snapshot.errors:
+            ui.label(error).classes("text-caption text-red")
+
+
+def _table_panel(
+    container: Element, title: str, rows: list[dict[str, object]], **kwargs: object
+) -> None:
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        ui.label(title).classes("text-bold")
+        if not rows:
+            ui.label("nothing recorded yet.").classes("text-grey")
+        else:
+            ui.table(rows=rows, **kwargs)  # type: ignore[arg-type]
+
+
+def _ticker_panel(container: Element, log_path: Path | None, lines: list[str]) -> None:
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        ui.label(f"ticker — {log_path or 'no burst log'}").classes("text-bold")
+        if lines:
+            ui.label("\n".join(lines)).classes("font-mono text-xs whitespace-pre")
+        else:
+            ui.label("no log lines yet.").classes("text-grey")
+
+
+def build_dashboard(
+    root: Path, log_path: Path | None = None, poll_seconds: float = POLL_SECONDS
+) -> None:
+    """Build the read-only NiceGUI page. Call inside a UI context, then
+    ``ui.run`` (see ``computronium.cli.dashboard``)."""
+    from nicegui import ui
+
+    log_path = resolve_log_path(root, log_path)
+    cache = EmbedCache()
+    state = {"signature": watch_signature(root)}
+
+    ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
+    ui.label(f"root: {root} · poll {poll_seconds:.0f}s · read-only").classes(
+        "text-caption text-grey"
+    )
+
+    health_row = ui.row().classes("w-full flex-wrap")
+    atlas_box = ui.column().classes("w-full")
+    funnel_box = ui.column().classes("w-full")
+    pareto_box = ui.column().classes("w-full")
+    ticker_box = ui.column().classes("w-full")
+
+    def refresh() -> None:
+        snapshot = render_snapshot(root, log_path, cache)
+        health_row.clear()
+        _health_cards(health_row, snapshot.health)
+        _atlas_panel(atlas_box, snapshot)
+        _table_panel(
+            funnel_box,
+            "Defect funnel (bug bounty — open first, then most hits)",
+            snapshot.funnel_rows,
+            pagination=10,
+        )
+        _table_panel(
+            pareto_box,
+            "Pareto strip (top cells with instrument spokes)",
+            snapshot.pareto_rows,
+        )
+        _ticker_panel(ticker_box, log_path, snapshot.ticker)
+
+    def poll() -> None:
+        signature = watch_signature(root)
+        if signature != state["signature"]:
+            state["signature"] = signature
+            refresh()
+
+    refresh()
+    ui.timer(poll_seconds, poll)

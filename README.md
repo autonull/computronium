@@ -416,6 +416,8 @@ All subcommands of the `comp` dispatcher:
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
 | `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, Pareto radar) | `comp gallery --run` |
+| `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs | `comp continuous --budget 5m --root artifacts/broad_map` |
+| `comp dashboard` | Live read-only window over a continuous-discovery root: living atlas, defect funnel, health gauge, Pareto strip, burst-log ticker | `comp dashboard --root artifacts/broad_map --port 8088` |
 
 Module entry points (not installed as scripts):
 
