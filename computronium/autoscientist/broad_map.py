@@ -234,6 +234,7 @@ class StratifiedRandomDriver:
         hidden_dim: int = 64,
         param_budget: int = 0,
         credit_trace: bool = False,
+        limit_batches: int = 0,
         viable: frozenset[str] | None = None,
         defects_path: Path | None = None,
         burst_tag: str | None = None,
@@ -247,6 +248,7 @@ class StratifiedRandomDriver:
         self.hidden_dim = hidden_dim
         self.param_budget = param_budget
         self.credit_trace = credit_trace
+        self.limit_batches = limit_batches
         self.viable = viable
         self.defects_path = defects_path
         self.burst_tag = burst_tag
@@ -344,6 +346,7 @@ class StratifiedRandomDriver:
                         "epochs": self.epochs,
                         "param_budget": self.param_budget,
                         "credit_trace": self.credit_trace,
+                        "limit_batches": self.limit_batches,
                     },
                     justification="broad-map stratified random cell (TODO28)",
                     expected_outcome="measured cell in the atlas",
@@ -512,6 +515,7 @@ def build_sweep(
         hidden_dim=args.hidden_dim,
         param_budget=args.param_budget,
         credit_trace=args.credit_trace,
+        limit_batches=getattr(args, "limit_batches", 0) or 0,
         viable=frozenset(viable),
         defects_path=args.root / "runtime_defects.jsonl",
         burst_tag=next_burst_tag(args.root / "kb.sqlite"),
@@ -703,6 +707,7 @@ class _CellRow:
     accuracy: float
     walltime: float
     param_budget: int
+    nan_loss: bool
     bursts: tuple[str, ...]
     levels: tuple[str, ...]
 
@@ -785,6 +790,7 @@ def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRo
                 param_budget=int(budget_raw)
                 if isinstance(budget_raw, int | float)
                 else 0,
+                nan_loss=bool(entry.metrics.get("nan_loss")),
                 bursts=tuple(
                     t.split(":", 1)[1] for t in tags if t.startswith("burst:")
                 ),
@@ -838,7 +844,10 @@ def promote_candidates(kb_path: Path, voids_path: Path, k: int) -> list[_Candida
             "bp_deficit": 0.0,
         }
         for key, group in by_key.items()
+        if not any(r.nan_loss for r in group)
     ]
+    if not per_cell:
+        return []
     front = pareto_top(pd.DataFrame(per_cell), k=len(per_cell))
     void_keys = _void_keys(voids_path)
     candidates: list[_Candidate] = []
@@ -886,7 +895,9 @@ def _deep_tier_candidates(
     front_bursts: dict[str, set[str]] = {}
     for burst, group in burst_rows.items():
         df = pd.DataFrame([
-            {"key": r.key, "accuracy": r.accuracy, "bp_deficit": 0.0} for r in group
+            {"key": r.key, "accuracy": r.accuracy, "bp_deficit": 0.0}
+            for r in group
+            if not r.nan_loss
         ])
         for key in (str(v) for v in pareto_top(df, k=len(group))["key"]):
             front_bursts.setdefault(key, set()).add(burst)

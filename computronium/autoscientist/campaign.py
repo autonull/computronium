@@ -1085,10 +1085,16 @@ class AutoScientistCampaign:
         max_epochs = (
             int(epochs_raw) if isinstance(epochs_raw, int | float) and epochs_raw else 5
         )
+        limit_raw = proposal.hyperparams.get("limit_batches")
         config = SystemTrainerConfig(
             max_epochs=max_epochs,
             batch_size=64,
             track_energy=True,
+            limit_train_batches=(
+                int(limit_raw)
+                if isinstance(limit_raw, int | float) and limit_raw
+                else None
+            ),
         )
 
         with SystemTrainer(
@@ -1128,6 +1134,15 @@ class AutoScientistCampaign:
             "credit_alignment": credit_alignment,
             "walltime_s": walltime_s,
             "lr": lr,
+            # Silent-divergence flag (TODO29 session 3): the funnel only
+            # sees crashes; NaN loss/accuracy at "completed" status is the
+            # quiet failure mode. Rides the numeric passthrough.
+            "nan_loss": 1.0
+            if not (
+                math.isfinite(float(last.get("val_loss", 0.0)))
+                and math.isfinite(float(last.get("val_acc", 0.0)))
+            )
+            else 0.0,
         }
 
     def _update_knowledge_base(
@@ -1175,6 +1190,7 @@ class AutoScientistCampaign:
                 proposal.model,
                 f"campaign:{self.campaign_id}",
                 *proposal.tags,
+                *(["nan_loss"] if result.get("nan_loss") else []),
             ],
             source="experiment",
             metrics={

@@ -58,6 +58,7 @@ class SystemTrainerConfig:
     seed: int = 42
     deterministic: bool = False
     resumable: bool = False
+    limit_train_batches: int | None = None
     harvest_mode: Literal["ema", "best_snapshot"] | None = None
     harvest_decay: float = 0.99
     harvest_every_n: int = 10

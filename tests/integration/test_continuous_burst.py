@@ -164,6 +164,96 @@ def test_l1_maturation_promotes_front_cells_once(tmp_path: Path) -> None:
     )
 
 
+def test_loop_smoke_exhaustion_and_sigterm(monkeypatch, tmp_path: Path) -> None:
+    """The ``--loop`` branch (§13 session 2): zero coverage let a broken
+    interrupt clause survive. One fake burst ends the loop on exhaustion;
+    a SIGTERM mid-loop takes the graceful-flush path and still exits 0."""
+    import signal
+
+    import computronium.cli.continuous as cli
+
+    calls: list[ContinuousBudget] = []
+
+    def fake_run_burst(campaign, driver, budget, *, max_iterations):  # noqa: ANN001, ARG001
+        calls.append(budget)
+        if len(calls) == 1:
+            return {"stop_reason": "soft"}
+        signal.raise_signal(signal.SIGTERM)
+        return {"stop_reason": "hard"}
+
+    monkeypatch.setattr(cli, "run_burst", fake_run_burst)
+    args = Namespace(
+        root=tmp_path,
+        budget=None,
+        target_cells=None,
+        max_iterations=5,
+        sleep=0,
+    )
+    assert cli._run_forever(args, None, None) == 0
+    assert len(calls) == 2
+
+
+def test_budget_parse_and_target_precedence() -> None:
+    from computronium.cli.continuous import _burst_budget
+
+    spec = _burst_budget(Namespace(budget="90s", target_cells=7))
+    assert spec.soft_seconds == 90.0
+    assert spec.target_cells == 7
+    bare = _burst_budget(Namespace(budget=None, target_cells=None))
+    assert bare.soft_seconds is None and bare.target_cells is None
+
+
+def test_nan_loss_cells_never_promote(tmp_path: Path) -> None:
+    """Session 3 data-quality policy: a NaN/diverged cell is measured but
+    must never reach a Pareto front, promotion, or the deep tier."""
+    from computronium.autoscientist.broad_map import promote_candidates
+    from computronium.knowledge import KnowledgeBase, KnowledgeEntry
+
+    root = tmp_path / "broad_map"
+    kb = KnowledgeBase(root / "kb.sqlite")
+    key = "energy_minimization|prediction|euclidean|feedforward"
+    for burst, acc, nan in (
+        ("burst:2026-09-16-1", 0.95, 0.0),
+        ("burst:2026-09-16-2", 0.97, 1.0),  # diverged on re-measure
+        ("burst:2026-09-16-3", 0.96, 1.0),
+    ):
+        kb.add_entry(
+            KnowledgeEntry(
+                id=f"nan_{key}_{burst}",
+                topic="experiment:mnist",
+                model_family="eqprop",
+                finding="synthetic",
+                details="",
+                confidence=acc,
+                tags=[
+                    "experiment",
+                    "mnist",
+                    "broad_map",
+                    "maturity:l0",
+                    burst,
+                    key,
+                    *(["nan_loss"] if nan else []),
+                ],
+                source="experiment",
+                metrics={
+                    "final_accuracy": acc,
+                    "nan_loss": nan,
+                    "final_loss": float("nan") if nan else 2.3,
+                },
+                hyperparameters={
+                    "geometry": {"topology_type": "feedforward", "depth": 2},
+                    "dynamics": "energy_minimization",
+                    "credit": "prediction",
+                    "update": "euclidean",
+                },
+                extra={},
+            )
+        )
+    assert (
+        promote_candidates(root / "kb.sqlite", root / "structural_voids.jsonl", 5) == []
+    )
+
+
 def _seed_synthetic_kb(root: Path) -> None:
     """Two bursts measuring a stable cell (front in both) and a volatile
     one (never on the front, spread > 0.2) — no training involved."""

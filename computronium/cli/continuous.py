@@ -82,6 +82,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--depth", type=int, default=2)
     parser.add_argument("--param-budget", type=int, default=25000)
     parser.add_argument(
+        "--limit-batches",
+        type=int,
+        default=0,
+        help="cap training batches per epoch (0 = full epoch); shorter cells "
+        "trade per-cell fidelity for coverage — right for L0 mapping",
+    )
+    parser.add_argument(
         "--credit-trace",
         action="store_true",
         help="capture per-cell BP-gradient alignment (adds settle overhead per cell)",
@@ -123,24 +130,37 @@ def _burst_budget(args: argparse.Namespace) -> ContinuousBudget:
     return budget
 
 
-def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: ANN001 (internal, typed by build_sweep)
+def _burst_once(args: argparse.Namespace, campaign, driver) -> str:
+    summary = run_burst(
+        campaign,
+        driver,
+        _burst_budget(args),
+        max_iterations=args.max_iterations,
+    )
+    return str(summary["stop_reason"])
+
+
+def _loop_bursts(args: argparse.Namespace, campaign, driver) -> None:
+    while True:
+        summary = _burst_once(args, campaign, driver)
+        if summary == "exhausted":
+            logger.info("Grid exhausted: continuous loop ends.")
+            return
+        logger.info("Sleeping %.0fs until the next burst", args.sleep)
+        time.sleep(args.sleep)
+
+
+def _install_sigterm() -> None:
     def _terminate(signum: int, frame: object) -> None:
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _terminate)
+
+
+def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: ANN001 (internal, typed by build_sweep)
+    _install_sigterm()
     try:
-        while True:
-            summary = run_burst(
-                campaign,
-                driver,
-                _burst_budget(args),
-                max_iterations=args.max_iterations,
-            )
-            if summary["stop_reason"] == "exhausted":
-                logger.info("Grid exhausted: continuous loop ends.")
-                break
-            logger.info("Sleeping %.0fs until the next burst", args.sleep)
-            time.sleep(args.sleep)
+        _loop_bursts(args, campaign, driver)
     except KeyboardInterrupt, SystemExit:
         # Graceful flush path — never a finally block (PEP 765). The KB is
         # flushed per cell and the last burst checkpointed on stop.
@@ -150,23 +170,33 @@ def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: AN
 
 def _burst(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
+    _install_sigterm()
     if args.log_path is not None:
         args.log_path.parent.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(args.log_path, encoding="utf-8")
         handler.setFormatter(
             logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
         )
-        logging.getLogger("broad_map").addHandler(handler)
-        logging.getLogger("continuous").addHandler(handler)
+        # Root handler: modules log under computronium.* names; named
+        # loggers ("broad_map") would never see them.
+        logging.getLogger().addHandler(handler)
+    try:
+        _run_burst(args)
+    except KeyboardInterrupt, SystemExit:
+        logger.info("Interrupted: state flushed; resume with the same --root.")
+    return 0
+
+
+def _run_burst(args: argparse.Namespace) -> None:
     (args.root / "campaign").mkdir(parents=True, exist_ok=True)
     seed_everything(args.seed, deterministic=False)
     campaign, driver = build_sweep(args)
     if args.loop:
-        return _run_forever(args, campaign, driver)
+        _run_forever(args, campaign, driver)
+        return
     run_burst(campaign, driver, _burst_budget(args), max_iterations=args.max_iterations)
     if args.maturation:
         run_l1_maturation(args, campaign, driver.burst_tag)
-    return 0
 
 
 def _deep_tier(args: argparse.Namespace) -> int:

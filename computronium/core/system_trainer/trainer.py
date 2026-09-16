@@ -155,6 +155,11 @@ class SystemTrainer:
         num_samples = 0
 
         for batch_idx, (x, y) in enumerate(self.train_data):
+            if (
+                self.config.limit_train_batches is not None
+                and batch_idx >= self.config.limit_train_batches
+            ):
+                break
             if self.config.resumable:
                 torch.manual_seed(
                     fold_in(self.config.seed, self.current_epoch, batch_idx)

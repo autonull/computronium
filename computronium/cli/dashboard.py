@@ -25,7 +25,7 @@ def main() -> int:
         "--log-path",
         type=Path,
         default=None,
-        help="ticker source (default: newest logs/continuous*.log under --root)",
+        help="ticker source (default: newest continuous*.log in <root>/logs/ or logs/)",
     )
     parser.add_argument(
         "--poll",
@@ -33,18 +33,28 @@ def main() -> int:
         default=POLL_SECONDS,
         help="artifact polling interval in seconds",
     )
+    parser.add_argument(
+        "--no-open",
+        action="store_true",
+        help="do not open a browser tab (headless/server use)",
+    )
     args = parser.parse_args()
 
     from nicegui import ui
 
     from computronium.visualization.live_atlas import build_dashboard
 
-    build_dashboard(args.root, args.log_path, args.poll)
+    # An explicit page (not NiceGUI's auto-index) — script-mode
+    # re-execution fails under a console-script entry point.
+    @ui.page("/")
+    def _dashboard_page() -> None:
+        build_dashboard(args.root, args.log_path, args.poll)
+
     ui.run(
         title="Computronium — Live Broad Map",
         port=args.port,
         reload=False,
-        show=False,
+        show=not args.no_open,
     )
     return 0
 

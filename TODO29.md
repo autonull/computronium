@@ -186,17 +186,17 @@ uv run comp continuous unquarantine --defect a1b2c3d4e5f6
 ```python
 @dataclass(frozen=True, slots=True)
 class ContinuousBudget:
-    started_at: float                    # time.monotonic() anchor
-    soft_seconds: float | None = None    # stop *starting* new cells past this
-    hard_seconds: float | None = None    # abandon loop between cells past this
+    started_at: float  # time.monotonic() anchor
+    soft_seconds: float | None = None  # stop *starting* new cells past this
+    hard_seconds: float | None = None  # abandon loop between cells past this
     target_cells: int | None = None
     done: int = 0
 
     @classmethod
-    def parse(cls, spec: str) -> ContinuousBudget: ...   # "5m", "90s", "1h"
+    def parse(cls, spec: str) -> ContinuousBudget: ...  # "5m", "90s", "1h"
     def soft_expired(self, now: float) -> bool: ...
     def hard_expired(self, now: float) -> bool: ...
-    def advance(self) -> ContinuousBudget: ...           # done += 1 (dataclass replace)
+    def advance(self) -> ContinuousBudget: ...  # done += 1 (dataclass replace)
 ```
 
 `run_burst(campaign, driver, budget, *, max_iterations)` — extracted from
@@ -427,18 +427,22 @@ lockstep lock is untouched — assert it stays green in the round-close run.
 
 ## 12. Immediate Next Actions (in order)
 
-1. **§8 shakedown** — launch the 500-cell run through `comp continuous`
-   (`nohup … --target-cells 500 --credit-trace --loop --sleep 15`), poll at
-   ≤2 min, fix-and-`unquarantine` defects as they surface. This is the
-   defect funnel's acceptance test.
-2. **Adaptive scheduler revisit (§10)** — after the shakedown, per-family
-   mean `walltime_s` (already logged per burst) gives the cost-compensated
-   scheduler its input data; design on top of `run_burst`'s summary dict.
+1. **§8 production run — READY** — launch the endless 500-cell run (§13
+   session 4 "Ready-state" command: `--target-cells 500 --limit-batches 30
+   --loop --sleep 15`), watch it on `comp dashboard`, fix-and-`unquarantine`
+   as defects surface.
+2. **Adaptive scheduler revisit (§10)** — per-family mean `walltime_s`
+   (already logged per burst, and now cheap to accumulate at
+   `--limit-batches` scale) is the cost-compensated scheduler's input;
+   design on top of `run_burst`'s summary dict.
 3. **Defect ID hardening (§11)** — if the funnel shows collisions on
    generic messages, add the first traceback frame to `defect_id`.
-4. **Optional lockfile (§11)** — only if concurrent bursts on one root
+4. **Faulthandler noise (§13 session 2b)** — `test_demo_ntm_local` (~3 min)
+   trips the 2-min `faulthandler_timeout` on every demo-gate run; silence
+   it per-test before it trains operators to ignore real crash dumps.
+5. **Optional lockfile (§11)** — only if concurrent bursts on one root
    ever bite (`<root>/continuous.lock`, `O_EXCL`).
-5. **Multi-task maturation** — `promote_candidates`/`deep-tier` accept a
+6. **Multi-task maturation** — `promote_candidates`/`deep-tier` accept a
    `--task` filter; per-task Pareto fronts within one KB are the natural
    next step if multi-task sweeps resume.
 
@@ -491,3 +495,133 @@ Tests: `tests/property/test_defect_ledger.py` (7), `tests/property/test_continuo
   dashboard; walltime now rides along.
 - `DashboardSnapshot` decouples panel data from NiceGUI — the whole
   dashboard is testable headless.
+
+### Session 2 hardening (2026-09-16, post-landing verification)
+
+Re-ran the per-phase gates after landing; they exposed four items, all fixed:
+
+- **`--loop` branch had zero test coverage:** the interrupt clause used
+  PEP 758 tuple syntax (`except KeyboardInterrupt, SystemExit:` — legal on
+  Python 3.14, the toolchain target, but not on 3.13-), so a regression
+  there could never be caught. Fixed as an explicit tuple and locked in by
+  `test_loop_smoke_exhaustion_and_sigterm` (exercises exhaustion-stop, the
+  SIGTERM handler, and the graceful-flush path) +
+  `test_budget_parse_and_target_precedence`.
+- **Ruff 0.16 preview-rule inversion:** the preview rules `RUF105`
+  (`noqa-comments`) and `RUF201` (`rule-codes-in-selectors`) now fire on
+  exactly the forms the mid-flight fix migrated *to*. Both added to the
+  `pyproject` ignore list alongside RUF100/RUF103 — the canonical
+  directive/selector migration remains Register C work; pick one canonical
+  form then and delete both ignore rows.
+- **PLW0717 (`too-many-statements-in-try-clause`)** on `continuous` and
+  `live_atlas`: extracted `_loop_bursts`/`_burst_once` (SIGTERM/^C path now
+  guards a single call) and `_atlas_data`/`_load_atlas` in
+  `live_atlas.py` — which also resolved a latent name collision with the
+  NiceGUI container renderer of the same name (pyright
+  `reportRedeclaration`).
+- Verified: the 34 targeted tests (defect ledger, budget, burst, dashboard)
+  green; ruff + pyright clean on all six new/changed modules.
+
+### Session 2b — pre-experiment follow-ups (2026-09-16)
+
+- **`--loop` smoke tests added** (`tests/integration/test_continuous_burst.py`):
+  `test_loop_smoke_exhaustion_and_sigterm` (fake-clock bursts: exhaustion
+  ends the loop; SIGTERM mid-loop takes the graceful-flush path, exit 0) +
+  `test_budget_parse_and_target_precedence`. Targeted suite now 36 green.
+- **CLI surface audit before the shakedown:** `_deep_tier`'s non-dry-run
+  construction path validated against `AutoScientistCampaign`/`CEECLink`
+  contracts (kwargs correct; `output_dir`/`CampaignDatabase`/ledger all
+  self-create parents, so the campaign-before-`mkdir` ordering is safe).
+  `_unquarantine` returns 1 on unknown/already-resolved ids — intended.
+- **Round-close fast gate green:** demo/gallery 29 passed (11:25) +
+  property suite 1214 passed / 12 skipped / 25 xfailed.
+- **Cosmetic (opportunity):** `test_demo_ntm_local` runs ~3 min and
+  trips the suite's 2-min `faulthandler_timeout` — every demo-gate run
+  prints a scary native traceback that is *not* a failure. Raise
+  `faulthandler_timeout` for that test (pytest.ini marker/`timeout`-style
+  opt-out) or trim the probe; otherwise operators will chase ghosts.
+
+### Session 3 — shakedown (2026-09-16, 12-min budget cap)
+
+Launched `comp continuous --budget 12m --credit-trace` against the existing
+TODO28 root; stopped early via SIGTERM. Results and fixes:
+
+- **Working:** resume seeding (36 known cells reloaded, 34→37 measured),
+  voids gate (561 new void rows, 3611 total), CEEC traces, `walltime_s`
+  instrument flowing into the KB (540 s / 324 s / 138 s on the three
+  completed cells), checkpoint files, `unquarantine` CLI (exit 1 on unknown
+  id). Defect funnel stayed empty — zero gate-passing crashes.
+- **Fixed: SIGTERM was loop-only.** Without `--loop` no handler existed —
+  SIGTERM killed the process instantly, skipping the "Interrupted" log and
+  any flush. `_install_sigterm()` now runs in `_burst` for all modes, and
+  the interrupt `except` wraps the whole burst (extracted `_run_burst`).
+  Resume-safety was unaffected (KB coverage seed), but the graceful path is
+  now uniform.
+- **Fixed: file logger was deaf.** Handlers attached to loggers named
+  `"broad_map"`/`"continuous"` while the modules log under
+  `computronium.*` — the `--log-path` file only ever got content via the
+  shell's stderr redirect. Handler now attaches to the root logger.
+- **Cost finding (major):** credit-trace cell walltimes are 138–540 s →
+  a 500-cell `--credit-trace` run is ~19–75 h, not the 2–4 h estimate.
+  The §8 production run should either drop `--credit-trace` (instruments
+  except credit_alignment/settle_horizon still ride the numeric
+  passthrough) or accept a multi-day run. Per-family cost data now
+  accumulates in the KB for the adaptive scheduler.
+- **Budget granularity (spec consequence):** soft expiry finishes the whole
+  current iteration — at `--cells-per-iter 10` × minutes/cell a 12-min
+  budget overshoots by ~40 min. Acceptable for daemon use; if it bites,
+  trim the batch per proposal (cells are independent and KB-flushed).
+- **Data-quality gap:** 2 of 3 cells recorded `final_loss: NaN` at
+  chance-level accuracy (NaN losses already visible mid-training in the
+  trainer log). A NaN-loss policy (defect tag? instrument? rejection?) is
+  un-designed — the funnel only catches crashes, not silent NaN runs.
+  Candidate follow-up: tag `maturity:l0` entries with `nan_loss` in
+  the KB and let the atlas/dashboard surface them.
+
+### Session 4 — NaN policy, shorter cells, dashboard live (2026-09-16)
+
+- **NaN policy implemented.** `_execute_proposal` emits a numeric
+  `nan_loss` flag (non-finite val_loss or val_acc) that rides the KB
+  passthrough into entry metrics + the experiments table, plus a
+  `nan_loss` entry tag. `_CellRow.nan_loss` carries it to every consumer:
+  `promote_candidates` and `_deep_tier_candidates` per-burst fronts exclude
+  diverged cells, the dashboard Pareto strip filters them, and the health
+  gauge gained a "diverged (NaN)" card. Bonus fix the test exposed:
+  `promote_candidates` crashed on an all-diverged KB (empty frame into
+  `pareto_top`) — guarded.
+- **Shorter cells: `--limit-batches N`.** New
+  `SystemTrainerConfig.limit_train_batches` (epoch stops after N batches),
+  wired CLI → driver hyperparams → trainer config; 0 = full epoch.
+  Verified live: **25 cells in 4 min** (`--limit-batches 30`, no
+  credit-trace; ~12 s/cell, per-family mean 3.9–32.7 s) vs 3 cells in
+  19 min with the old settings — ~40× throughput for L0 mapping.
+- **Shakedown 2 (4-min budget):** burst stopped cleanly on hard budget
+  ("25 measured cells, 0 failed runs, 3616 voids, 0 defects"), per-family
+  walltime logged, KB + checkpoint flushed. Dashboard rendered headless
+  against the real root: health (46 rows, 3 diverged), funnel, Pareto
+  strip (NaN-free), islands figure, ticker — no errors.
+- **Ready-state:** the pipeline is production-ready for an endless run.
+  Recommended launch (L0 mapping; add `--credit-trace` only if the
+  alignment spokes are needed and multi-day walltime is acceptable):
+  `nohup uv run comp continuous --target-cells 500 --limit-batches 30
+  --loop --sleep 15 --root artifacts/broad_map
+  --log-path logs/continuous_500.log > logs/continuous_500.log 2>&1 &`
+  Then `uv run comp dashboard --root artifacts/broad_map --port 8088`.
+- **Dashboard made actually usable (session 4 fixes, each found by real
+  HTTP smoke):**
+  - `resolve_log_path` crashed at runtime (`Path` was TYPE_CHECKING-only)
+    and only searched `<root>/logs/` while the daemon writes repo-level
+    `logs/` — now checks both homes, newest wins, so the default ticker
+    is deaf no more.
+  - NiceGUI's auto-index page needs script-mode re-execution, which fails
+    under a console-script entry point (HTTP 500 on every request) — the
+    dashboard now registers an explicit `@ui.page("/")`.
+  - First paint blocked ~40 s on the UMAP fit — the page now paints the
+    cheap panels immediately, computes the atlas off-thread
+    (`run.io_bound`), and swaps it in with a "pending" placeholder.
+    Verified: `GET /` returns 200 in ~4 s with the full chrome.
+  - `--no-open` flag added (browser auto-open by default for desktop use).
+
+  The one-liner anyone can run from the repo root:
+  `uv run comp dashboard` (defaults: `--root artifacts/broad_map
+  --port 8088`, opens a browser).

@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -97,6 +97,7 @@ def health_stats(root: Path) -> dict[str, object]:
         "open_defects": open_defects,
         "resolved_defects": len(last_status) - open_defects,
         "measured_cells": len(rows),
+        "nan_cells": sum(1 for r in rows if r.nan_loss),
         "bursts": len(bursts),
         "cells_per_burst": round(len(rows) / len(bursts), 1) if bursts else 0.0,
         "last_burst": last_burst,
@@ -121,6 +122,8 @@ def pareto_strip_rows(root: Path, k: int = 3) -> list[dict[str, object]]:
     if df.empty:
         return []
     df = apply_bp_deficit(df, ruler_table, None)
+    if "nan_loss" in df.columns:
+        df = df.query("~nan_loss")
     top = pareto_top(df, k)
     rows: list[dict[str, object]] = []
     for _, row in top.iterrows():
@@ -144,19 +147,19 @@ def log_tail(log_path: Path | None, lines: int = TICKER_LINES) -> list[str]:
 
 
 def resolve_log_path(root: Path, log_path: Path | None = None) -> Path | None:
-    """Explicit flag wins; otherwise the newest ``logs/continuous*.log``
-    under the root."""
+    """Explicit flag wins; otherwise the newest ``continuous*.log`` from the
+    daemon's two homes — ``<root>/logs/`` and the repo-level ``logs/``."""
     if log_path is not None:
         return log_path
-    logs_dir = root / "logs"
-    if not logs_dir.is_dir():
-        return None
-    candidates = sorted(
-        logs_dir.glob("continuous*.log"),
-        key=lambda p: p.stat().st_mtime_ns,
-        reverse=True,
-    )
-    return candidates[0] if candidates else None
+    from pathlib import Path
+
+    candidates = [
+        p
+        for logs_dir in (root / "logs", Path("logs"))
+        if logs_dir.is_dir()
+        for p in logs_dir.glob("continuous*.log")
+    ]
+    return max(candidates, key=lambda p: p.stat().st_mtime_ns) if candidates else None
 
 
 class EmbedCache:
@@ -200,10 +203,17 @@ class DashboardSnapshot:
     errors: list[str] = field(default_factory=list)
 
 
-def render_snapshot(
-    root: Path, log_path: Path | None = None, cache: EmbedCache | None = None
-) -> DashboardSnapshot:
-    """Compute all panel payloads in one pass (no UI, no live loop)."""
+def _atlas_data(
+    root: Path, cache: EmbedCache
+) -> tuple[Figure | None, str | None, list[str]]:
+    """Islands figure + layout note, never raising (bad artifacts become notes)."""
+    try:
+        return (*_load_atlas(root, cache), [])
+    except Exception as error:  # noqa: BLE001 (dashboard must survive bad artifacts)
+        return None, None, [f"atlas: {error}"]
+
+
+def _load_atlas(root: Path, cache: EmbedCache) -> tuple[Figure | None, str | None]:
     import pandas as pd
 
     from computronium.visualization.atlas import (
@@ -213,25 +223,35 @@ def render_snapshot(
         load_voids,
     )
 
+    cells = load_cells(root / "kb.sqlite")
+    voids = align_void_columns(load_voids(root / "structural_voids.jsonl"))
+    combined = (
+        pd.concat([cells, voids], ignore_index=True) if not voids.empty else cells
+    )
+    coords = cache.coords(combined)
+    if coords is None or combined.empty:
+        return None, None
+    combined["x"], combined["y"] = coords[:, 0], coords[:, 1]
+    return (
+        _islands_figure(combined.query("~is_void"), combined.query("is_void")),
+        cache.layout,
+    )
+
+
+def render_snapshot(
+    root: Path,
+    log_path: Path | None = None,
+    cache: EmbedCache | None = None,
+    *,
+    with_atlas: bool = True,
+) -> DashboardSnapshot:
+    """Compute all panel payloads in one pass (no UI, no live loop).
+    ``with_atlas=False`` skips the UMAP fit (the slow part) for the fast
+    paint path."""
     cache = cache if cache is not None else EmbedCache()
-    errors: list[str] = []
-    figure = None
-    layout_note = None
-    try:
-        cells = load_cells(root / "kb.sqlite")
-        voids = align_void_columns(load_voids(root / "structural_voids.jsonl"))
-        combined = (
-            pd.concat([cells, voids], ignore_index=True) if not voids.empty else cells
-        )
-        coords = cache.coords(combined)
-        if coords is not None and not combined.empty:
-            combined["x"], combined["y"] = coords[:, 0], coords[:, 1]
-            figure = _islands_figure(
-                combined.query("~is_void"), combined.query("is_void")
-            )
-            layout_note = cache.layout
-    except Exception as error:  # noqa: BLE001 (dashboard must survive bad artifacts)
-        errors.append(f"atlas: {error}")
+    figure, layout_note, errors = (
+        _atlas_data(root, cache) if with_atlas else (None, None, [])
+    )
     return DashboardSnapshot(
         health=health_stats(root),
         funnel_rows=defect_funnel_rows(root / "runtime_defects.jsonl"),
@@ -251,6 +271,7 @@ def _health_cards(container: Element, health: dict[str, object]) -> None:
         ("open defects", str(health["open_defects"])),
         ("resolved defects", str(health["resolved_defects"])),
         ("measured cells", str(health["measured_cells"])),
+        ("diverged (NaN)", str(health["nan_cells"])),
         ("cells / burst", str(health["cells_per_burst"])),
     )
     with container:
@@ -281,7 +302,10 @@ def _atlas_panel(container: Element, snapshot: DashboardSnapshot) -> None:
                 "not a trajectory. σ_max(J) is a sampled ‖Jv‖ proxy."
             ).classes("text-caption text-grey")
         else:
-            ui.label("atlas pending: not enough cells to embed.").classes("text-grey")
+            ui.label(
+                "atlas pending — the layout is computed off-thread and "
+                "appears here (refit only when the cell count changes)."
+            ).classes("text-grey")
         for error in snapshot.errors:
             ui.label(error).classes("text-caption text-red")
 
@@ -317,11 +341,14 @@ def build_dashboard(
 ) -> None:
     """Build the read-only NiceGUI page. Call inside a UI context, then
     ``ui.run`` (see ``computronium.cli.dashboard``)."""
-    from nicegui import ui
+    from nicegui import run, ui
 
     log_path = resolve_log_path(root, log_path)
     cache = EmbedCache()
-    state = {"signature": watch_signature(root)}
+    state: dict[str, object] = {
+        "signature": watch_signature(root),
+        "atlas_busy": False,
+    }
 
     ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
     ui.label(f"root: {root} · poll {poll_seconds:.0f}s · read-only").classes(
@@ -334,8 +361,7 @@ def build_dashboard(
     pareto_box = ui.column().classes("w-full")
     ticker_box = ui.column().classes("w-full")
 
-    def refresh() -> None:
-        snapshot = render_snapshot(root, log_path, cache)
+    def _render_panels(snapshot: DashboardSnapshot) -> None:
         health_row.clear()
         _health_cards(health_row, snapshot.health)
         _atlas_panel(atlas_box, snapshot)
@@ -352,11 +378,42 @@ def build_dashboard(
         )
         _ticker_panel(ticker_box, log_path, snapshot.ticker)
 
-    def poll() -> None:
+    def refresh_cheap() -> None:
+        """Fast paint: everything except the UMAP fit."""
+        _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
+
+    async def load_atlas() -> None:
+        """Off-thread UMAP refit; the panel swaps in when it lands."""
+        if state["atlas_busy"]:
+            return
+        state["atlas_busy"] = True
+        try:
+            result = await run.io_bound(_atlas_data, root, cache)
+            figure, note, errors = cast(
+                "tuple[Figure | None, str | None, list[str]]", result
+            )
+            _atlas_panel(
+                atlas_box,
+                DashboardSnapshot(
+                    health={},
+                    funnel_rows=[],
+                    pareto_rows=[],
+                    ticker=[],
+                    atlas=figure,
+                    layout_note=note,
+                    errors=errors,
+                ),
+            )
+        finally:
+            state["atlas_busy"] = False
+
+    async def poll() -> None:
         signature = watch_signature(root)
         if signature != state["signature"]:
             state["signature"] = signature
-            refresh()
+            await run.io_bound(refresh_cheap)
+            await load_atlas()
 
-    refresh()
+    refresh_cheap()
+    ui.timer(0.5, load_atlas, once=True)
     ui.timer(poll_seconds, poll)
