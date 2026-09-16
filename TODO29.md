@@ -625,3 +625,19 @@ TODO28 root; stopped early via SIGTERM. Results and fixes:
   The one-liner anyone can run from the repo root:
   `uv run comp dashboard` (defaults: `--root artifacts/broad_map
   --port 8088`, opens a browser).
+
+### Pre-launch audit (2026-09-16, all green — committed b4948062)
+
+Every production path exercised **live** (not monkeypatched) before handoff:
+
+- **Real `--loop` run** (`--target-cells 6 --limit-batches 30 --loop
+  --sleep 10`): burst 1 measured 6/6 → target stop → per-family walltime
+  log → slept 10 s → burst 2 started and was measuring new cells.
+- **SIGTERM mid-burst, loop mode:** graceful "Interrupted: state flushed"
+  log line, fresh checkpoint (`iter0013`), clean exit 0 — twice.
+- **Resume:** re-seed reported 56 known cells; the restart proposed only
+  novel cells (2 in 14 s) — zero re-measurement.
+- **Quarantine round-trip on a copied root:** injected open defect →
+  driver quarantined the cell and never proposed it → `comp continuous
+  unquarantine` → cell re-eligible. Defect id stable across the cycle.
+- **KB state:** 3 diverged cells flagged, matching the dashboard gauge.
