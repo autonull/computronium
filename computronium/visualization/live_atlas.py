@@ -15,7 +15,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -184,6 +184,219 @@ def defect_funnel_rows(defects_path: Path) -> list[dict[str, object]]:
     return rows
 
 
+def _measured_cells(root: Path) -> list[Any]:
+    """Private-but-shared `_CellRow` rows from the KB (broad_map owns the
+    schema; the dashboard only reads)."""
+    from computronium.autoscientist.broad_map import _load_measured_cells
+
+    return _load_measured_cells(root / "kb.sqlite")
+
+
+def coverage_by_axis(root: Path) -> list[dict[str, object]]:
+    """§4.1: measured-cell count per primitive on each derivable axis —
+    instantly reveals under-sampled primitives."""
+    from collections import Counter
+
+    counts: dict[str, Counter[str]] = {
+        axis: Counter() for axis in ("dynamics", "credit", "update", "topology")
+    }
+    cells = _measured_cells(root)
+    for row in cells:
+        for axis in counts:
+            counts[axis][str(getattr(row, axis))] += 1
+    rows: list[dict[str, object]] = []
+    for axis, counter in counts.items():
+        for primitive, n in counter.most_common():
+            rows.append({"axis": axis, "primitive": primitive, "measured": n})
+    return rows
+
+
+def stratum_coverage(
+    root: Path, thresholds: tuple[int, ...] = (1, 3, 5)
+) -> list[dict[str, object]]:
+    """§4.1: how many (dynamics, credit, update) triples have ≥N cells."""
+    from collections import Counter
+
+    triples: Counter[tuple[str, str, str]] = Counter()
+    for row in _measured_cells(root):
+        triple = (str(row.dynamics), str(row.credit), str(row.update))  # type: ignore[attr-defined]
+        triples[triple] += 1
+    rows = [{"threshold": "≥1", "triples": len(triples)}]
+    for t in thresholds[1:]:
+        rows.append({
+            "threshold": f"≥{t}",
+            "triples": sum(1 for n in triples.values() if n >= t),
+        })
+    return rows
+
+
+def graveyard_rows(root: Path) -> list[dict[str, object]]:
+    """§4.3: NaN-diverged cells grouped per axis primitive to expose
+    patterns (e.g. '80% of diverged cells use PhotonicSubstrate')."""
+    from collections import Counter
+
+    cells = _measured_cells(root)
+    diverged = [row for row in cells if row.nan_loss]  # type: ignore[attr-defined]
+    if not diverged:
+        return []
+    rows: list[dict[str, object]] = []
+    for axis in ("dynamics", "credit", "update", "topology"):
+        total: Counter[str] = Counter(
+            str(getattr(row, axis))
+            for row in cells  # type: ignore[attr-defined]
+        )
+        bad: Counter[str] = Counter(
+            str(getattr(row, axis))
+            for row in diverged  # type: ignore[attr-defined]
+        )
+        for primitive, n in bad.most_common():
+            rows.append({
+                "axis": axis,
+                "primitive": primitive,
+                "diverged": n,
+                "measured": total[primitive],
+                "share": f"{100.0 * n / max(total[primitive], 1):.0f}%",
+            })
+    return rows
+
+
+def void_summary_rows(root: Path) -> list[dict[str, object]]:
+    """§4.3: structural voids by rejection category — boundaries, not
+    failures."""
+    import json
+
+    by_category: dict[str, list[str]] = {}
+    path = root / "structural_voids.jsonl"
+    if not path.exists():
+        return []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        by_category.setdefault(str(record.get("category", "unknown")), []).append(
+            str(record.get("dynamics", "?"))
+            + " × "
+            + str(record.get("credit", "?"))
+            + " × "
+            + str(record.get("update", "?"))
+        )
+    return [
+        {
+            "category": category,
+            "count": len(group),
+            "example": group[0][:MESSAGE_HEAD_CHARS],
+        }
+        for category, group in sorted(by_category.items(), key=lambda kv: -len(kv[1]))
+    ]
+
+
+def diversity_stats(root: Path, recent_bursts: int = 3) -> dict[str, float]:
+    """§4.4: budget-waste detectors over the last N bursts. The driver is
+    coverage-seeded, so these catch re-measuring, not strategy collapse."""
+    cells = _measured_cells(root)
+    bursts = sorted({b for row in cells for b in row.bursts})  # type: ignore[attr-defined]
+    if not bursts:
+        return {
+            "novelty_rate": 1.0,
+            "stratum_repeat_rate": 0.0,
+            "quarantine_pressure": 0.0,
+        }
+    window = set(bursts[-recent_bursts:])
+    first_seen: dict[tuple[str, str, str], str] = {}
+    recent_triples: list[tuple[str, str, str]] = []
+    for row in cells:  # type: ignore[attr-defined]
+        triple = (str(row.dynamics), str(row.credit), str(row.update))
+        first_seen.setdefault(triple, min(row.bursts))
+        if window & set(row.bursts):
+            recent_triples.append(triple)
+    repeats = sum(1 for t in recent_triples if first_seen[t] not in window)
+    repeat_rate = repeats / max(len(recent_triples), 1)
+    from computronium.autoscientist.defects import read_defects
+
+    defect_cells = {
+        record.cell for record in read_defects(root / "runtime_defects.jsonl")
+    }
+    pressure = len(defect_cells) / max(len(defect_cells) + len(cells), 1)
+    return {
+        "novelty_rate": 1.0 - repeat_rate,
+        "stratum_repeat_rate": repeat_rate,
+        "quarantine_pressure": pressure,
+    }
+
+
+type AlertOp = Literal["<", ">"]
+DIVERSITY_ALERTS: tuple[tuple[str, AlertOp, float, str], ...] = (
+    ("novelty_rate", "<", 0.10, "Mostly re-measuring known space."),
+    ("stratum_repeat_rate", ">", 0.80, "Exploration declining."),
+    ("quarantine_pressure", ">", 0.20, "Defect-driven starvation risk."),
+)
+
+
+def diversity_alerts(stats: dict[str, float]) -> list[str]:
+    """§4.4 — alerts only; the dashboard never intervenes."""
+    alerts: list[str] = []
+    for metric, op, threshold, message in DIVERSITY_ALERTS:
+        value = stats.get(metric, 0.0)
+        if (op == "<" and value < threshold) or (op == ">" and value > threshold):
+            alerts.append(f"⚠️ {message} ({metric}={value:.2f})")
+    return alerts
+
+
+def front_history_rows(
+    root: Path, sample_points: int = 5, k: int = 3
+) -> list[dict[str, object]]:
+    """§4.2: the Pareto front (accuracy↑, walltime↓) at sampled burst
+    cutoffs; `new_front` marks cells that expanded the front (★)."""
+    cells = _measured_cells(root)
+    bursts = sorted({b for row in cells for b in row.bursts})  # type: ignore[attr-defined]
+    if not bursts:
+        return []
+    cutpoints = sorted({
+        bursts[
+            min(
+                round(i * (len(bursts) - 1) / max(sample_points - 1, 1)),
+                len(bursts) - 1,
+            )
+        ]
+        for i in range(sample_points)
+    })
+    rows: list[dict[str, object]] = []
+    previous: set[str] = set()
+    for cutoff in cutpoints:
+        cumulative = [
+            row
+            for row in cells
+            if min(row.bursts) <= cutoff  # type: ignore[attr-defined]
+        ]
+        dominated = [
+            any(
+                other.accuracy >= row.accuracy  # type: ignore[attr-defined]
+                and other.walltime <= row.walltime  # type: ignore[attr-defined]
+                and (
+                    other.accuracy > row.accuracy  # type: ignore[attr-defined]
+                    or other.walltime < row.walltime  # type: ignore[attr-defined]
+                )
+                for other in cumulative
+            )
+            for row in cumulative
+        ]
+        front = sorted(
+            (row for row, dom in zip(cumulative, dominated) if not dom),
+            key=lambda row: -row.accuracy,  # type: ignore[attr-defined]
+        )[:k]
+        for row in front:
+            key = row.key  # type: ignore[attr-defined]
+            rows.append({
+                "burst": cutoff,
+                "cell": key,
+                "accuracy": round(row.accuracy, 3),  # type: ignore[attr-defined]
+                "walltime_s": round(row.walltime, 1),  # type: ignore[attr-defined]
+                "new_front": "★" if key not in previous else "",
+            })
+        previous = {row.key for row in front}  # type: ignore[attr-defined]
+    return rows
+
+
 def health_stats(root: Path) -> dict[str, object]:
     """Open/resolved defects, cells-per-burst rate, last-burst mean walltime."""
     from computronium.autoscientist.broad_map import _load_measured_cells
@@ -311,6 +524,13 @@ class DashboardSnapshot:
     atlas: Figure | None
     layout_note: str | None
     errors: list[str] = field(default_factory=list)
+    coverage_rows: list[dict[str, object]] = field(default_factory=list)
+    strata_rows: list[dict[str, object]] = field(default_factory=list)
+    front_history: list[dict[str, object]] = field(default_factory=list)
+    graveyard: list[dict[str, object]] = field(default_factory=list)
+    voids_summary: list[dict[str, object]] = field(default_factory=list)
+    diversity: dict[str, float] = field(default_factory=dict)
+    alerts: list[str] = field(default_factory=list)
 
 
 def _atlas_data(
@@ -362,6 +582,7 @@ def render_snapshot(
     figure, layout_note, errors = (
         _atlas_data(root, cache) if with_atlas else (None, None, [])
     )
+    diversity = diversity_stats(root)
     return DashboardSnapshot(
         health=health_stats(root),
         funnel_rows=defect_funnel_rows(root / "runtime_defects.jsonl"),
@@ -370,6 +591,13 @@ def render_snapshot(
         atlas=figure,
         layout_note=layout_note,
         errors=errors,
+        coverage_rows=coverage_by_axis(root),
+        strata_rows=stratum_coverage(root),
+        front_history=front_history_rows(root),
+        graveyard=graveyard_rows(root),
+        voids_summary=void_summary_rows(root),
+        diversity=diversity,
+        alerts=diversity_alerts(diversity),
     )
 
 
@@ -478,6 +706,45 @@ def _lifecycle_bar(
             )
 
 
+def _landscape_boxes() -> tuple[Element, ...]:
+    """§4/§5 landscape panel containers, in render order."""
+    from nicegui import ui
+
+    return tuple(ui.column().classes("w-full") for _ in range(6))
+
+
+def _render_landscape(boxes: tuple[Element, ...], snapshot: DashboardSnapshot) -> None:
+    """§4.1/§4.2/§4.3/§4.4 additive panels on shipped data."""
+    front_box, graveyard_box, voids_box, coverage_box, strata_box, diversity_box = boxes
+    _table_panel(
+        front_box,
+        "Pareto front history (★ = front expansion at that burst)",
+        snapshot.front_history,
+    )
+    _table_panel(
+        graveyard_box,
+        "Graveyard — NaN-diverged cells grouped per axis primitive",
+        snapshot.graveyard,
+    )
+    _table_panel(
+        voids_box,
+        "Structural voids by category (ontology boundaries, not failures)",
+        snapshot.voids_summary,
+    )
+    _table_panel(
+        coverage_box,
+        "Coverage by axis (measured cells per primitive)",
+        snapshot.coverage_rows,
+        pagination=10,
+    )
+    _table_panel(
+        strata_box,
+        "Stratum coverage (dynamics×credit×update triples)",
+        snapshot.strata_rows,
+    )
+    _diversity_panel(diversity_box, snapshot.diversity, snapshot.alerts)
+
+
 def _panel_scaffold() -> tuple[Element, ...]:
     """Page row/column layout containers, in render order."""
     from nicegui import ui
@@ -489,6 +756,25 @@ def _panel_scaffold() -> tuple[Element, ...]:
     pareto_box = ui.column().classes("w-full")
     ticker_box = ui.column().classes("w-full")
     return lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box
+
+
+def _diversity_panel(
+    container: Element, stats: dict[str, float], alerts: list[str]
+) -> None:
+    """§4.4 monitor — alerts only, never intervention."""
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        ui.label("Diversity monitor").classes("text-bold")
+        ui.label(
+            " · ".join(
+                f"{metric.replace('_', ' ')} = {stats.get(metric, 0.0):.2f}"
+                for metric, _, _, _ in DIVERSITY_ALERTS
+            )
+        ).classes("font-mono text-xs")
+        for alert in alerts:
+            ui.label(alert).classes("text-caption text-orange")
 
 
 def _poll_only_bar(container: Element) -> None:
@@ -529,6 +815,7 @@ def build_dashboard(
     lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box = (
         _panel_scaffold()
     )
+    landscape = _landscape_boxes()
 
     send_action = client.control if client is not None else (lambda _action: None)
 
@@ -548,6 +835,7 @@ def build_dashboard(
             snapshot.pareto_rows,
         )
         _ticker_panel(ticker_box, log_path, snapshot.ticker)
+        _render_landscape(landscape, snapshot)
 
     def _refresh_lifecycle() -> None:
         """Badge + buttons from one daemon probe (or the poll-only stub)."""

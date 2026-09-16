@@ -161,3 +161,48 @@ def test_build_dashboard_headless(tmp_path: Path) -> None:
     build_dashboard(root, root / "logs" / "continuous_500.log", poll_seconds=2.0)
     assert defect_funnel_rows(root / "runtime_defects.jsonl")
     assert health_stats(root)["measured_cells"] == 4
+
+
+def test_landscape_panels_headless(tmp_path: Path) -> None:
+    """TODO30 8.5: coverage, strata, front history, graveyard, voids and
+    diversity payloads derive from the same fixture, no UI."""
+    root = tmp_path / "root"
+    _seed_fixture(root)
+    snapshot = render_snapshot(root, root / "logs" / "continuous_500.log")
+
+    assert snapshot.coverage_rows, "coverage-by-axis rows derived"
+    axes = {row["axis"] for row in snapshot.coverage_rows}
+    assert axes == {"dynamics", "credit", "update", "topology"}
+    assert sum(int(row["measured"]) for row in snapshot.coverage_rows) >= 16
+
+    assert snapshot.strata_rows[0]["triples"] >= 1  # ≥1 triple measured
+    assert snapshot.front_history, "front history over 2 bursts"
+    assert any(row["new_front"] == "★" for row in snapshot.front_history)
+    assert snapshot.voids_summary[0]["category"] == "geometry_constraint"
+    assert snapshot.graveyard == []  # fixture has no NaN cells
+
+    # default diversity stats with healthy data: no alerts
+    assert snapshot.diversity["novelty_rate"] >= 0.0
+    assert snapshot.alerts == []
+
+
+def test_diversity_alerts_thresholds() -> None:
+    from computronium.visualization.live_atlas import diversity_alerts
+
+    assert diversity_alerts({
+        "novelty_rate": 0.05,
+        "stratum_repeat_rate": 0.9,
+        "quarantine_pressure": 0.3,
+    }) == [
+        "⚠️ Mostly re-measuring known space. (novelty_rate=0.05)",
+        "⚠️ Exploration declining. (stratum_repeat_rate=0.90)",
+        "⚠️ Defect-driven starvation risk. (quarantine_pressure=0.30)",
+    ]
+    assert (
+        diversity_alerts({
+            "novelty_rate": 1.0,
+            "stratum_repeat_rate": 0.0,
+            "quarantine_pressure": 0.0,
+        })
+        == []
+    )

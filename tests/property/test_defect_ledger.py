@@ -231,3 +231,25 @@ def test_failure_burst_emits_defect_closes_ledger_and_continues(
         ).fetchone()[0]
     assert statuses == {"failed", "completed"}
     assert missing == 1
+
+
+def test_proposal_rationale_names_stratum_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TODO30 §3.1: each proposal carries a per-cell reason string that
+    reports the stratum count *before* the proposal (least-sampled first)."""
+    monkeypatch.setattr(bm, "GRID_DYNAMICS", ("energy_minimization", "instantaneous"))
+    monkeypatch.setattr(bm, "GRID_CREDITS", ("prediction",))
+    monkeypatch.setattr(bm, "GRID_UPDATES", ("euclidean",))
+    monkeypatch.setattr(bm, "GRID_TOPOLOGIES", ("feedforward",))
+    driver = bm.StratifiedRandomDriver(
+        tmp_path / "kb.sqlite", task="digits", cells=4, epochs=1, seed=0
+    )
+    proposals = driver.propose_batch(4)
+    seen: dict[str, int] = {}
+    for proposal in proposals:
+        assert str(proposal.dynamics) in proposal.justification
+        assert proposal.justification.startswith("Balancing under-sampled triple")
+        count = int(proposal.justification.split("stratum count ")[1].split(" ")[0])
+        assert count == seen.get(str(proposal.dynamics), 0)
+        seen[str(proposal.dynamics)] = count + 1

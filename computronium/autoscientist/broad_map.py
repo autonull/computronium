@@ -322,6 +322,7 @@ class StratifiedRandomDriver:
             ):
                 continue
             self.seen.add(key)
+            stratum_count = self.balance[dynamics, credit, update]
             self.balance[dynamics, credit, update] += 1
             maturity_tags = ["maturity:l0"]
             if self.burst_tag is not None:
@@ -349,7 +350,12 @@ class StratifiedRandomDriver:
                         "credit_trace": self.credit_trace,
                         "limit_batches": self.limit_batches,
                     },
-                    justification="broad-map stratified random cell (TODO28)",
+                    justification=(
+                        f"Balancing under-sampled triple "
+                        f"{dynamics} × {credit} × {update} — stratum "
+                        f"count {stratum_count} before this proposal; "
+                        f"topology {topology} drawn uniformly (TODO30 §3.1)"
+                    ),
                     expected_outcome="measured cell in the atlas",
                     priority=0.5,
                     tags=["autoscientist", "broad_map", *maturity_tags, key],

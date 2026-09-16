@@ -35,6 +35,20 @@
 > detail); stale heartbeat → CONNECTION LOST; no file → OFFLINE. Tests:
 > `tests/unit/test_live_atlas_liveness.py` (badge matrix, button table,
 > unreachable-degradation, and a live-uvicorn REST round-trip).
+> **8.4** landed: `StratifiedRandomDriver.propose_batch` now fills
+> `justification` with the per-cell reason ("Balancing under-sampled triple
+> D × C × U — stratum count N before this proposal; topology T drawn
+> uniformly"). **8.5** landed: headless data functions in `live_atlas.py` —
+> `coverage_by_axis`, `stratum_coverage`, `front_history_rows` (accuracy↑ /
+> walltime↓ front at sampled burst cutoffs, ★ = front expansion shared with
+> the §6.1 derivation), `graveyard_rows` (NaN cells grouped per axis
+> primitive with divergence share), `void_summary_rows` (by rejection
+> category), `diversity_stats` + `diversity_alerts` (§4.4 thresholds:
+> novelty <10%, stratum repeat >80%, quarantine >20%) — all rendered as
+> additive panels in `build_dashboard` via `DashboardSnapshot` (new fields
+> default-empty, so the atlas-swap path is untouched). Tests:
+> `tests/integration/test_dashboard_smoke.py::test_landscape_panels_headless`
+> + `test_diversity_alerts_thresholds`.
 >
 > **Design Principle:** The AutoScientist is autonomous. The dashboard is a
 > telemetry window, not a control surface for the science. The only human
@@ -632,8 +646,9 @@ crash; criterion 1–2 do not require the WS to be up).
    guidance: no `--credit-trace`, `--limit-batches 30`). Watch it on the
    dashboard. Verify: no terminal needed for the full run. Collect
    defect-ID collision evidence (§8.11) during the run.
-5. **Implement the Graveyard, Coverage, and Diversity Monitor** panels from
-   the shakedown data (8.4–8.5).
+5. ~~**Implement the Graveyard, Coverage, and Diversity Monitor** panels~~
+   **DONE** (8.4–8.5, from shipped KB/voids/defects data — the shakedown
+   will populate them with real 500-cell volume).
 6. **Wire breakthrough and cascade alerts** (8.7).
 7. **Generate the first campaign summary report** from the completed
    500-cell run (8.8).
@@ -652,6 +667,13 @@ crash; criterion 1–2 do not require the WS to be up).
 - **Telemetry richness**: the hook currently forwards `train_step` metrics
   only; settle-phase energy traces (§3.1 settling trace) need a second
   emission point in the dynamics settle path or an epoch-level event.
+- **Active Cell Inspector (§3.1) UI**: the data path exists (telemetry WS +
+  proposal `justification`); the panel itself (coordinate card, live loss
+  curve, progress bar, resource gauges via psutil) is the remaining 8.5+
+  work and the first consumer of the WS streams.
+- **Front-history honesty**: `front_history_rows` uses (accuracy↑,
+  walltime↓); when a ruler table exists, switch to (accuracy↑, deficit↓)
+  per §4.2 and label which objective pair is shown.
 - **Graceful-stop watchdog**: `ContinuousDaemon.stop()` from SIGTERM works,
   but a hard kill leaves the lockfile behind — document stale-lock recovery
   (already supported: delete `<root>/continuous.lock`) or add PID liveness
