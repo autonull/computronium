@@ -633,6 +633,7 @@ Implemented algorithms are generally literature-derived baselines or variants; t
 | `create_pepita_mlp` | Digital × Feedforward × Instantaneous × Null × PepitaCredit × Euclidean | `pepita_mnist.yaml` | Published PEPITA (arXiv 2201.11665): one fixed random B, error-modulated second forward pass, autograd update — distinct from Forward-Forward goodness (`create_lemma_mlp` composes the LEMMA rule) | Dellaferrera & Kreiman (2022) |
 | `create_tp_mlp` | Digital × Feedforward × Instantaneous × Null × TargetInversion × Euclidean | `tp_mnist.yaml` | Target Propagation: learns inverse mappings layer-wise, target-based credit assignment | Bengio (2014); Lee et al. (2015) |
 | `create_pc_mlp` | Digital × Feedforward × PredictiveSettling × Null × ThermodynamicContrast × Euclidean | `pc_mnist.yaml` | Predictive Coding: hierarchical prediction error minimization, convergent dynamics | Rao & Ballard (1999); Whittington & Bogacz (2017) |
+| `create_pc_alm_mlp` | Digital × Feedforward × PCALM × Null × PCALMCredit × Euclidean | `pc_alm_mnist.yaml` | **PC-ALM**: Augmented Lagrangian Predictive Coding; layer-local primal–dual dynamics replacing global backprop | Seely & Gould (2026) |
 | `create_hebbian_mlp` | Digital × Feedforward × Instantaneous × Null × TemporalTrace × Euclidean | `hebbian_mnist.yaml` | Hebbian/STDP: local correlation-based plasticity | Hebb (1949); Bi & Poo (1998) |
 | `create_snn_mlp` | Digital × Feedforward × SpikeIntegration × Null × TemporalTrace × Euclidean | `snn_mnist.yaml` | Spiking Neural Network: LIF neurons, spike-timing-dependent plasticity | Maass (1997); Gerstner et al. (2014) |
 | `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments | Framework implementation |
@@ -651,6 +652,7 @@ from computronium import (
     create_pepita_mlp,
     create_tp_mlp,
     create_pc_mlp,
+    create_pc_alm_mlp,
     create_hebbian_mlp,
     create_snn_mlp,
     create_tile_mlp,
@@ -699,6 +701,9 @@ system = create_tp_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
 
 # Predictive Coding
 system = create_pc_mlp(input_dim, (256, 256), output_dim, lr=0.001, device=device)
+
+# PC-ALM (Augmented Lagrangian Predictive Coding; local primal–dual dynamics)
+system = create_pc_alm_mlp(input_dim, (256, 256), output_dim, lr=0.001, device=device)
 
 # Hebbian
 system = create_hebbian_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
