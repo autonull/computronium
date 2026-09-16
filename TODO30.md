@@ -49,6 +49,18 @@
 > default-empty, so the atlas-swap path is untouched). Tests:
 > `tests/integration/test_dashboard_smoke.py::test_landscape_panels_headless`
 > + `test_diversity_alerts_thresholds`.
+> **8.7** landed: `computronium/autoscientist/alerts.py` (strict) —
+> `breakthrough_alert` (≥2% accuracy margin over the KB best),
+> `cascade_alert` (>30% of a burst's executed cells failed; suggests
+> halting, never auto-halts), `completion_alert` (on
+> `stop_reason == "target"`, human-readable elapsed time), and a
+> best-effort `WebhookDispatcher` (Slack/Discord-style JSON, never
+> raises). The daemon checks alerts after every burst (§6: daemon-side so
+> they fire with no browser attached), publishes `{kind: "alert",
+> alert_kind, title, body}` on `/ws/events` for dashboard toasts, and
+> dispatches webhooks when `comp daemon --alert-webhook URL` is set.
+> Tests: `tests/property/test_alerts.py` (threshold matrices, webhook
+> post-capture + error swallowing).
 >
 > **Design Principle:** The AutoScientist is autonomous. The dashboard is a
 > telemetry window, not a control surface for the science. The only human
@@ -649,7 +661,7 @@ crash; criterion 1–2 do not require the WS to be up).
 5. ~~**Implement the Graveyard, Coverage, and Diversity Monitor** panels~~
    **DONE** (8.4–8.5, from shipped KB/voids/defects data — the shakedown
    will populate them with real 500-cell volume).
-6. **Wire breakthrough and cascade alerts** (8.7).
+6. ~~**Wire breakthrough and cascade alerts**~~ **DONE** (8.7).
 7. **Generate the first campaign summary report** from the completed
    500-cell run (8.8).
 8. **Design the adaptive scheduler** from the accumulated per-family
@@ -671,6 +683,12 @@ crash; criterion 1–2 do not require the WS to be up).
   proposal `justification`); the panel itself (coordinate card, live loss
   curve, progress bar, resource gauges via psutil) is the remaining 8.5+
   work and the first consumer of the WS streams.
+- **Alert hardening from shakedown data**: breakthrough detection reads
+  the KB best accuracy per burst (per-cell granularity, not per
+  iteration); if the 500-cell run shows missed or noisy breakthroughs,
+  move the check to a per-iteration callback. Cascade thresholds are
+  derived from `failed/executed` — divergence (NaN) counts ride the KB
+  tags and may need folding in after the run.
 - **Front-history honesty**: `front_history_rows` uses (accuracy↑,
   walltime↓); when a ruler table exists, switch to (accuracy↑, deficit↓)
   per §4.2 and label which objective pair is shown.

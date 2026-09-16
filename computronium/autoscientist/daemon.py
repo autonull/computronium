@@ -28,6 +28,13 @@ from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import FastAPI, HTTPException
 
+from computronium.autoscientist.alerts import (
+    Alert,
+    WebhookDispatcher,
+    breakthrough_alert,
+    cascade_alert,
+    completion_alert,
+)
 from computronium.autoscientist.broad_map import (
     BroadMappingCampaign,
     BurstDriver,
@@ -171,6 +178,8 @@ class ContinuousDaemon:
         self._worker: threading.Thread | None = None
         self._heartbeat_thread: threading.Thread | None = None
         self._campaign: BroadMappingCampaign | None = None
+        self._dispatcher = WebhookDispatcher(getattr(args, "alert_webhook", None))
+        self._best_accuracy: float | None = None
 
     # --- lifecycle commands (idempotent; wake every wait path) ---
 
@@ -295,6 +304,10 @@ class ContinuousDaemon:
             self._cells_done = int(cast("int", summary["done"]))
             reason = str(summary["stop_reason"])
             self.events.publish({"kind": "burst_finished", "stop_reason": reason})
+            try:
+                self._check_alerts(summary, time.monotonic() - self._started_at)
+            except Exception:  # noqa: BLE001 (alerts never kill the loop, §12.6)
+                logger.exception("alert check failed")
             if reason == "paused" and not self._hold_paused():
                 continue
             if reason == "target":
@@ -312,6 +325,45 @@ class ContinuousDaemon:
         self._set_state(DaemonState.STOPPED)
         self._release_lockfile()
         self.events.publish({"kind": "daemon_stopped"})
+
+    def _check_alerts(self, summary: dict[str, object], elapsed_s: float) -> None:
+        """§6: breakthrough / cascade / completion — daemon-side so they
+        fire with no browser attached; toasts replay from the event log."""
+        alerts: list[Alert] = []
+        best = self._best_accuracy_from_kb()
+        if best is not None and best != self._best_accuracy:
+            alert = breakthrough_alert(
+                self._best_accuracy, best, f"front best {best:.3f}"
+            )
+            if alert is not None:
+                alerts.append(alert)
+            self._best_accuracy = best
+        for alert in (cascade_alert(summary), completion_alert(summary, elapsed_s)):
+            if alert is not None:
+                alerts.append(alert)
+        for alert in alerts:
+            self.events.publish({
+                "kind": "alert",
+                "alert_kind": alert.kind,
+                "title": alert.title,
+                "body": alert.body,
+            })
+            self._dispatcher.dispatch(alert)
+
+    def _best_accuracy_from_kb(self) -> float | None:
+        campaign = self._campaign
+        kb = getattr(campaign, "knowledge_base", None) if campaign else None
+        if kb is None:
+            return None
+        try:
+            accuracies = [
+                float(entry.metrics.get("final_accuracy", 0.0))
+                for entry in kb.query()
+                if str(entry.topic).startswith("experiment:")
+            ]
+        except Exception:  # noqa: BLE001 (telemetry must never kill the loop)
+            return None
+        return max(accuracies) if accuracies else None
 
     def start_worker(self) -> None:
         if self._worker is not None:

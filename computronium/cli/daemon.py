@@ -27,6 +27,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="comp daemon", description=__doc__)
     _add_common_flags(parser)
     parser.add_argument(
+        "--alert-webhook",
+        type=str,
+        default=None,
+        help="optional webhook URL (Slack/Discord-style) for breakthrough, "
+        "cascade and completion alerts (fired daemon-side)",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=8940,
