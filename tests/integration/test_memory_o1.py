@@ -3,7 +3,7 @@ import numpy as np
 from computronium.acceleration.kernels import EqPropKernel
 
 
-def test_eqprop_kernel_memory_o1():  # noqa: PLR0914
+def test_eqprop_kernel_memory_o1():  # ruff: ignore[too-many-locals]
     """
     Verify that EqPropKernel does not store the full trajectory by default,
     confirming O(1) memory usage with respect to time steps.

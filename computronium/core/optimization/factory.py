@@ -57,7 +57,7 @@ StrategyRegistry: dict[str, StrategyFactory] = {
 }
 
 
-def make_strategy_optimizer(  # noqa: PLR0913
+def make_strategy_optimizer(  # ruff: ignore[too-many-arguments]
     *,
     model: nn.Module,
     gradient: str,

@@ -56,7 +56,7 @@ PROMOTED_RECIPE = MetaRecipe(
 
 def _seed_task_order(seed: int) -> tuple[str, ...]:
     order = list(TASKS)
-    random.Random(seed).shuffle(order)  # noqa: S311
+    random.Random(seed).shuffle(order)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
     return tuple(order)
 
 

@@ -122,7 +122,7 @@ def _run(
 ) -> float:
     torch.manual_seed(seed)
     if geometry_fn is None:
-        geometry_fn = lambda: FeedforwardGeometry(  # noqa: E731 — small probe default
+        geometry_fn = lambda: FeedforwardGeometry(  # ruff: ignore[lambda-assignment] — small probe default
             GeometryConfig.feedforward(
                 input_dim=784, output_dim=10, hidden_dims=(64, 64)
             )

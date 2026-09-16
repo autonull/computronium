@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 from pathlib import Path
 
@@ -28,7 +28,7 @@ DEMO_TESTS = ("tests/integration", "-k", "demo")
 
 def _run_demo_suite() -> int:
     cmd = [sys.executable, "-m", "pytest", *DEMO_TESTS, "-q"]
-    return subprocess.run(cmd, check=False).returncode  # noqa: S603
+    return subprocess.run(cmd, check=False).returncode  # ruff: ignore[subprocess-without-shell-equals-true]
 
 
 def _run_broad_demo(epochs: int, sample_size: int) -> int:
@@ -44,7 +44,7 @@ def _run_broad_demo(epochs: int, sample_size: int) -> int:
         "--root",
         str(root),
     ]
-    if subprocess.run(sweep, check=False).returncode != 0:  # noqa: S603
+    if subprocess.run(sweep, check=False).returncode != 0:  # ruff: ignore[subprocess-without-shell-equals-true]
         print("broad-demo: sweep failed", file=sys.stderr)
         return 1
     atlas = [
@@ -53,7 +53,7 @@ def _run_broad_demo(epochs: int, sample_size: int) -> int:
         "--root",
         str(root),
     ]
-    if subprocess.run(atlas, check=False).returncode != 0:  # noqa: S603
+    if subprocess.run(atlas, check=False).returncode != 0:  # ruff: ignore[subprocess-without-shell-equals-true]
         print("broad-demo: atlas render failed", file=sys.stderr)
         return 1
     print(f"broad-demo: atlas written to {root / 'atlas.html'}")

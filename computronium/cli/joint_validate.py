@@ -116,7 +116,7 @@ def _list_axis_options():
     )
 
 
-def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  # noqa: C901, PLR0912, PLR0914, PLR0915
+def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     """Validate a single 6-D coordinate."""
     import torch
 
@@ -170,7 +170,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             "ternary": lambda: (DigitalSubstrate(), SubstrateConfig.ternary()),
         }
         if coord["substrate"] not in substrate_map:
-            raise ValueError(f"Unknown substrate: {coord['substrate']}")  # noqa: TRY301
+            raise ValueError(f"Unknown substrate: {coord['substrate']}")  # ruff: ignore[raise-within-try]
         substrate, substrate_config = substrate_map[coord["substrate"]]()
 
         # Build geometry
@@ -214,7 +214,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             ),
         }
         if coord["geometry"] not in geometry_map:
-            raise ValueError(f"Unknown geometry: {coord['geometry']}")  # noqa: TRY301
+            raise ValueError(f"Unknown geometry: {coord['geometry']}")  # ruff: ignore[raise-within-try]
         geometry, geometry_config = geometry_map[coord["geometry"]]()
 
         # Build dynamics
@@ -247,7 +247,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             ),
         }
         if coord["dynamics"] not in dynamics_map:
-            raise ValueError(f"Unknown dynamics: {coord['dynamics']}")  # noqa: TRY301
+            raise ValueError(f"Unknown dynamics: {coord['dynamics']}")  # ruff: ignore[raise-within-try]
         _dynamics, dynamics_config = dynamics_map[coord["dynamics"]]()
 
         # Build credit
@@ -280,7 +280,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             ),
         }
         if coord["credit"] not in credit_map:
-            raise ValueError(f"Unknown credit: {coord['credit']}")  # noqa: TRY301
+            raise ValueError(f"Unknown credit: {coord['credit']}")  # ruff: ignore[raise-within-try]
         _credit, credit_config = credit_map[coord["credit"]]()
 
         # Build update
@@ -313,19 +313,19 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             ),
         }
         if coord["update"] not in update_map:
-            raise ValueError(f"Unknown update: {coord['update']}")  # noqa: TRY301
+            raise ValueError(f"Unknown update: {coord['update']}")  # ruff: ignore[raise-within-try]
         _update, update_config = update_map[coord["update"]]()
 
         # Build plasticity config
         plasticity_map = {
-            "null": lambda: PlasticityConfig.null(),  # noqa: PLW0108
+            "null": lambda: PlasticityConfig.null(),  # ruff: ignore[unnecessary-lambda]
             "routing": lambda: PlasticityConfig.routing(gate_dim=32),
             "fast_weights": lambda: PlasticityConfig.fast_weights(fast_weight_dim=64),
-            "substrate_coupled": lambda: PlasticityConfig.substrate_coupled(),  # noqa: PLW0108
+            "substrate_coupled": lambda: PlasticityConfig.substrate_coupled(),  # ruff: ignore[unnecessary-lambda]
             "rule_state": lambda: PlasticityConfig.rule_state(num_operators=8),
         }
         if coord["plasticity"] not in plasticity_map:
-            raise ValueError(f"Unknown plasticity: {coord['plasticity']}")  # noqa: TRY301
+            raise ValueError(f"Unknown plasticity: {coord['plasticity']}")  # ruff: ignore[raise-within-try]
         plasticity_config = plasticity_map[coord["plasticity"]]()
 
         # Create SystemConfig and validate
@@ -391,7 +391,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
                 activity=dummy_activity, plastic={}, substrate=dummy_substrate
             )
             psi = plasticity.step({}, z, context)
-            assert psi == {}  # noqa: S101
+            assert psi == {}  # ruff: ignore[assert]
             print("  ✓ J1: NullPlasticity zero-extension passed")
 
         # J2: Theta immutability
@@ -402,11 +402,11 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
         )
         # Simulate step
-        z2 = CompositeState(  # noqa: F841
+        z2 = CompositeState(  # ruff: ignore[unused-variable]
             activity=dummy_activity, plastic=dummy_plastic, substrate=dummy_substrate
         )
         for name, param in context.theta.items():
-            assert torch.allclose(param, theta_initial[name])  # noqa: S101
+            assert torch.allclose(param, theta_initial[name])  # ruff: ignore[assert]
         print("  ✓ J2: Theta immutability passed")
 
         # J3: Fast plastic only via plasticity
@@ -429,7 +429,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
                 context,
                 ConsolidationConfig(promote_all=True, promotion_scale=0.1),
             )
-            assert len(new_context.theta) >= len(context.theta)  # noqa: S101
+            assert len(new_context.theta) >= len(context.theta)  # ruff: ignore[assert]
             print("  ✓ J5: Episode boundary consolidation passed")
 
         # J6: Adapter projections
@@ -444,12 +444,12 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         for i in range(3):
             recorder.record(z)
         traj = recorder.get_trajectory()
-        assert len(traj.activity) == 3  # noqa: S101
-        assert len(traj.plastic) == 3  # noqa: S101
-        assert len(traj.substrate) == 3  # noqa: S101
+        assert len(traj.activity) == 3  # ruff: ignore[assert]
+        assert len(traj.plastic) == 3  # ruff: ignore[assert]
+        assert len(traj.substrate) == 3  # ruff: ignore[assert]
         print("  ✓ J7: Full joint trajectory recording passed")
 
-        return True  # noqa: TRY300
+        return True  # ruff: ignore[try-consider-else]
 
     except Exception as e:
         print(f"  ✗ Validation failed: {e}")
@@ -476,12 +476,12 @@ def _run_composability_tests(num_samples: int, seed: int) -> bool:
 
     for i in range(num_samples):
         coord = {
-            "substrate": random.choice(SUBSTRATES),  # noqa: S311
-            "geometry": random.choice(GEOMETRIES),  # noqa: S311
-            "dynamics": random.choice(DYNAMICS),  # noqa: S311
-            "plasticity": random.choice(PLASTICITY),  # noqa: S311
-            "credit": random.choice(CREDITS),  # noqa: S311
-            "update": random.choice(UPDATES),  # noqa: S311
+            "substrate": random.choice(SUBSTRATES),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            "geometry": random.choice(GEOMETRIES),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            "dynamics": random.choice(DYNAMICS),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            "plasticity": random.choice(PLASTICITY),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            "credit": random.choice(CREDITS),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            "update": random.choice(UPDATES),  # ruff: ignore[suspicious-non-cryptographic-random-usage]
         }
 
         # Only test compatible combinations

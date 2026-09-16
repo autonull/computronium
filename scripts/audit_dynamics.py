@@ -181,7 +181,7 @@ def test_instantaneous_vs_autograd() -> dict[str, Any]:
     }
 
 
-def test_predictive_settling_error_decreases() -> dict[str, Any]:  # noqa: PLR0914
+def test_predictive_settling_error_decreases() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test PredictiveSettlingDynamics prediction error decreases over steps."""
     print("\n" + "=" * 60)
     print("Test: PredictiveSettlingDynamics Error Decrease")
@@ -318,7 +318,7 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     return issues
 
 
-def test_inplace_op_audit() -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0914, PLR0915
+def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     """Scan RecurrentGeometry and all dynamics for in-place ops that break autograd."""
     print("\n" + "=" * 60)
     print("Test: In-Place Operation Audit")
@@ -558,7 +558,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0914, 
             if isinstance(free_state.activations, list)
             else free_state.activations.sum()
         )
-        grad = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)  # noqa: F841
+        grad = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)  # ruff: ignore[unused-variable]
         print("  Functional autograd test: PASS")
     except RuntimeError as e:
         if "in-place" in str(e).lower() or "leaf" in str(e).lower():
@@ -582,7 +582,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0914, 
     }
 
 
-def test_device_consistency() -> dict[str, Any]:  # noqa: C901, PLR0915
+def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-statements]
     """Test CPU vs CUDA consistency for all dynamics types.
 
     Creates models and data on CPU first, then moves to CUDA to ensure

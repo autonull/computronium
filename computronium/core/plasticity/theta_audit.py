@@ -85,7 +85,7 @@ class ThetaInvarianceAudit:
             if self._selector(name, p)
         }
 
-    def __enter__(self) -> ThetaInvarianceAudit:  # noqa: PYI034
+    def __enter__(self) -> ThetaInvarianceAudit:  # ruff: ignore[non-self-return-type]
         selected = self._selected()
         # Frozen check reads live parameters (clones always report False)
         frozen = all(not p.requires_grad for p in selected.values())

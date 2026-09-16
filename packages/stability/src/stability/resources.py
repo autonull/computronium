@@ -202,7 +202,7 @@ class ResourceUsage:
         )
 
     @classmethod
-    def measure(  # noqa: C901
+    def measure(  # ruff: ignore[complex-structure]
         cls,
         model: nn.Module,
         input_tensor: torch.Tensor,

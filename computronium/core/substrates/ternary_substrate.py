@@ -218,10 +218,10 @@ class TernarySubstrate(DigitalSubstrate):
                 latent_w = self._latent_weights[name]
                 # Apply weight decay
                 if self.weight_decay > 0:
-                    latent_w = latent_w * (1 - self.weight_decay)  # noqa: PLR6104
+                    latent_w = latent_w * (1 - self.weight_decay)  # ruff: ignore[non-augmented-assignment]
                 # Apply pseudo-gradient (SGD step)
                 step_size = getattr(self.config, "step_size", 0.01)
-                latent_w = latent_w - step_size * pseudo_grad  # noqa: PLR6104
+                latent_w = latent_w - step_size * pseudo_grad  # ruff: ignore[non-augmented-assignment]
                 self._latent_weights[name] = latent_w
                 # Return quantized weights for next forward pass
                 return self.quantize_weights(latent_w)

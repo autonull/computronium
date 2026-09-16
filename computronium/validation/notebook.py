@@ -23,7 +23,7 @@ __all__ = [
 class TrackStatus(StrEnum):
     """Status of a verification track."""
 
-    PASS = "pass"  # noqa: S105
+    PASS = "pass"  # ruff: ignore[hardcoded-password-string]
     FAIL = "fail"
     PARTIAL = "partial"
     STUB = "stub"

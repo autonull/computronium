@@ -69,7 +69,7 @@ _AGGREGATORS = {
 class Verdict(StrEnum):
     """A model's result after a stage."""
 
-    PASS = "PASS"  # noqa: S105
+    PASS = "PASS"  # ruff: ignore[hardcoded-password-string]
     REJECT = "REJECT"
 
 

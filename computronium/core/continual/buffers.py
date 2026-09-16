@@ -28,8 +28,8 @@ class ReplayBuffer:
         x_cpu = x.detach().cpu()
         y_cpu = y.detach().cpu()
 
-        for i in range(batch_size):  # noqa: PLR1702
-            if len(self.buffer) >= self.capacity:  # noqa: SIM102
+        for i in range(batch_size):  # ruff: ignore[too-many-nested-blocks]
+            if len(self.buffer) >= self.capacity:  # ruff: ignore[collapsible-if]
                 # Evict from the task with most samples
                 if self.task_counts:
                     evict_task = max(

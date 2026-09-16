@@ -242,7 +242,7 @@ class CampaignStack:
 
     # -- orchestration -----------------------------------------------------
 
-    def run_campaign(  # noqa: PLR0913
+    def run_campaign(  # ruff: ignore[too-many-arguments]
         self,
         *,
         iterations: int = 1,
@@ -367,7 +367,7 @@ class CampaignStack:
         for iteration in range(start_iteration + 1, start_iteration + iterations + 1):
             # Coordinate stream is derived from (seed, campaign, iteration):
             # resume replays identical proposals without persistent sampler state.
-            rng = random.Random(  # noqa: S311
+            rng = random.Random(  # ruff: ignore[suspicious-non-cryptographic-random-usage]
                 f"{self.seed}:{campaign_id}:{iteration}"
             )
             self._event(f"Iteration {iteration}: {experiments_per_iter} proposals")

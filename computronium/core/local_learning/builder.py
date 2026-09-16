@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.local_learning.activity import (
@@ -115,7 +115,7 @@ class TileAlgorithmConfig(LocalLearningConfigProtocol):
     spectral_norm_power_iterations: int = 5
 
 
-class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # noqa: PLR0904
+class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ignore[too-many-public-methods]
     """Generic tile-based local learning model.
 
     Builds a layered :class:`~computronium.core.tile.TileGraph` with per-edge
@@ -436,7 +436,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # noqa: PL
                     if nudged and tid in self.graph.output_tile_ids:
                         continue  # output stays clamped
                     pred = self._predict_tile(tid)
-                    assert tile.activity is not None and pred is not None  # noqa: S101
+                    assert tile.activity is not None and pred is not None  # ruff: ignore[assert]
                     tile.prediction = pred
                     tile.error = tile.activity - pred
                     feedback = self._feedback(tile, self.graph, self._weight_lookup)
@@ -469,7 +469,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # noqa: PL
 
     def _clone_activity(self, tid: int) -> Tensor:
         act = self.graph.tiles[tid].activity
-        assert act is not None  # _settle guarantees activities are set  # noqa: S101
+        assert act is not None  # _settle guarantees activities are set  # ruff: ignore[assert]
         return act.clone()
 
     def contrastive_update(
@@ -983,7 +983,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # noqa: PL
     # ──────────────────────────────────────────────
 
     @classmethod
-    def _build_config(  # factory param bundle  # noqa: PLR0913
+    def _build_config(  # factory param bundle  # ruff: ignore[too-many-arguments]
         cls,
         *,
         algorithm: str,

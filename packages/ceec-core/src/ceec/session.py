@@ -73,7 +73,7 @@ class Session:
 
     # -- construction ------------------------------------------------------
 
-    def experiment(  # noqa: PLR0913  mirrors the Experiment field surface
+    def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment field surface
         self,
         *,
         question: str,

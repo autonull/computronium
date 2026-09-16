@@ -80,7 +80,7 @@ class PowerLawFit:
 # =============================================================================
 
 
-def fit_power_law(  # noqa: C901, PLR0914, PLR0915
+def fit_power_law(  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     x: np.ndarray,
     y: np.ndarray,
     n_bootstrap: int = 1000,

@@ -102,7 +102,7 @@ class DHTNode:
             result = future.result(timeout=10)
             if result:
                 return json.loads(result)
-            return None  # noqa: TRY300
+            return None  # ruff: ignore[try-consider-else]
         except Exception as e:  # broad: async/network best-effort
             logger.debug("DHT Get Error (%s): %s", key, e)
             return None
@@ -157,7 +157,7 @@ class DHTNode:
             # reading buckets is generally okay-ish.
             # or we should schedule it on the loop.
 
-            async def _get_peers():  # noqa: RUF029
+            async def _get_peers():  # ruff: ignore[unused-async]
                 # kademlia.protocol.RoutingTable
                 # Accessing buckets
                 p_list = []

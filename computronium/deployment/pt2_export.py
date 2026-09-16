@@ -34,7 +34,7 @@ def export_to_pt2(
     """
     model.eval()
 
-    if isinstance(input_sample, torch.Tensor):  # noqa: SIM108
+    if isinstance(input_sample, torch.Tensor):  # ruff: ignore[if-else-block-instead-of-if-exp]
         args = (input_sample,)
     else:
         args = input_sample

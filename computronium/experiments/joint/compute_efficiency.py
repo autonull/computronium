@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
@@ -122,7 +122,7 @@ class ComputeEfficiencyModel(nn.Module):
                     gate_logits, is_training
                 )
             else:
-                # Default: softmax  # noqa: ERA001
+                # Default: softmax  # ruff: ignore[commented-out-code]
                 active_routes = (
                     F.softmax(gate_logits, dim=-1)
                     if is_training
@@ -142,7 +142,7 @@ class ComputeEfficiencyModel(nn.Module):
             return self.net(x)
 
 
-def evaluate_compute_efficiency(  # noqa: C901, PLR0912, PLR0914, PLR0915
+def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     coordinate: str,
     epochs: int = 20,
     batch_size: int = 64,

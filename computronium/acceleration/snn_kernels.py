@@ -56,7 +56,7 @@ class SNNKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # noqa: PLR6201
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
             else "cpu"
         )
         self._dtype = config.dtype
@@ -73,7 +73,7 @@ class SNNKernelBackend:
     def set_model_ref(self, layers: list[torch.nn.Linear]) -> None:
         self._layers = layers
 
-    def simulate(  # noqa: PLR0914
+    def simulate(  # ruff: ignore[too-many-locals]
         self,
         x: Tensor,
         y: Tensor | None = None,
@@ -245,7 +245,7 @@ class SNNKernelBackend:
         if modulator is not None:
             # Modulator per post-synaptic neuron, broadcast to pre
             mod_expanded = modulator.mean(dim=0).unsqueeze(1)  # [N_post, 1]
-            delta = delta * mod_expanded  # noqa: PLR6104
+            delta = delta * mod_expanded  # ruff: ignore[non-augmented-assignment]
 
         return {f"layers.{layer_idx}.weight": delta}
 
@@ -332,7 +332,7 @@ try:  # noqa: too-many-statements-in-try-clause
     import triton.language as tl
 
     @triton.jit
-    def _lif_step_kernel(  # noqa: PLR0913, PLR0917
+    def _lif_step_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         v_ptr,
         i_syn_ptr,
         spikes_ptr,
@@ -379,7 +379,7 @@ try:  # noqa: too-many-statements-in-try-clause
         v_new = tl.where(spikes > 0, 0.0, v_new)
 
         # Add spikes to synaptic current
-        i_syn_new = i_syn_new + spikes  # noqa: PLR6104
+        i_syn_new = i_syn_new + spikes  # ruff: ignore[non-augmented-assignment]
 
         tl.store(
             v_ptr + offs_b[:, None] * N + offs_n[None, :],
@@ -398,7 +398,7 @@ try:  # noqa: too-many-statements-in-try-clause
         )
 
     @triton.jit
-    def _stdp_update_kernel(  # noqa: PLR0913, PLR0917
+    def _stdp_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_spikes_ptr,
         post_spikes_ptr,
         delta_ptr,
@@ -462,7 +462,7 @@ try:  # noqa: too-many-statements-in-try-clause
         )
 
     @triton.jit
-    def _contrastive_stdp_kernel(  # noqa: PLR0913, PLR0914, PLR0917
+    def _contrastive_stdp_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,

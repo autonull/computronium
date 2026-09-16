@@ -56,7 +56,7 @@ def create_task_a1(
     return x, y
 
 
-def evaluate_migration(  # noqa: C901, PLR0912, PLR0914, PLR0915
+def evaluate_migration(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     coordinate: str,
     epochs_a0: int = 30,
     epochs_a1: int = 30,
@@ -152,7 +152,7 @@ def evaluate_migration(  # noqa: C901, PLR0912, PLR0914, PLR0915
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
     # Record θ before Task A0
-    theta_before_a0 = {  # noqa: F841
+    theta_before_a0 = {  # ruff: ignore[unused-variable]
         name: param.data.clone()
         for name, param in model.named_parameters()
         if param.requires_grad
@@ -235,7 +235,7 @@ def evaluate_migration(  # noqa: C901, PLR0912, PLR0914, PLR0915
         if name in theta_after_a1:
             diff = (theta_after_a1[name] - theta_after_a0[name]).norm().item()
             theta_change += diff**2
-    theta_change = theta_change**0.5  # noqa: PLR6104
+    theta_change = theta_change**0.5  # ruff: ignore[non-augmented-assignment]
 
     # Check catastrophic forgetting: recover Task A0 after Task A1
     model.eval()

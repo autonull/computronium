@@ -52,9 +52,7 @@ def _viable_cells() -> list[tuple[str, str, str]]:
     cells: list[tuple[str, str, str]] = []
     from computronium.autoscientist.compose import build_geometry_config
 
-    geometry = build_geometry_config(
-        _GEOMETRY, input_dim=64, output_dim=10
-    )
+    geometry = build_geometry_config(_GEOMETRY, input_dim=64, output_dim=10)
     for dynamics in _DYNAMICS:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         for credit in GRID_CREDITS:
@@ -111,4 +109,4 @@ def test_cell_survives_cpu_to_cuda_transition(cell: tuple[str, str, str]) -> Non
     # 2026-09-15 pilot before this gate existed.
     metrics = system.train_step(x, y)
     loss = metrics["loss"]
-    assert loss == loss  # noqa: PLR0124 — NaN means silent numeric break
+    assert loss == loss  # ruff: ignore[comparison-with-itself] — NaN means silent numeric break

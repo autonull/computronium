@@ -127,7 +127,7 @@ class SparseSubstrate(DigitalSubstrate):
         mask.scatter_(-1, topk_indices, 1.0)
         return mask.view(*batch, out_features, -1)[..., : weight.shape[-1]]
 
-    def _create_block_mask(self, weight: Tensor, device: torch.device) -> Tensor:  # noqa: PLR0914
+    def _create_block_mask(self, weight: Tensor, device: torch.device) -> Tensor:  # ruff: ignore[too-many-locals]
         """Create block sparsity mask."""
         block_h, block_w = self.block_size
         *batch, out_features, in_features = weight.shape

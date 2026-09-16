@@ -726,7 +726,7 @@ def _adaptation_objective(
     return loss - adapt_entropy_beta * entropy
 
 
-def _run_adaptation(  # noqa: PLR0913
+def _run_adaptation(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -1111,7 +1111,7 @@ def _finetune_forgetting_baseline(
     }
 
 
-def _run_baselines(  # noqa: PLR0913
+def _run_baselines(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks,
@@ -1414,7 +1414,7 @@ def _psi_gate(
     }
 
 
-def _run_psi_gate_arm(  # noqa: PLR0913
+def _run_psi_gate_arm(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks: list,
@@ -1504,7 +1504,7 @@ def _restore_psi_system(model: Z3Model, snapshot: dict[str, Tensor]) -> None:
     model.load_state_dict({**model.state_dict(), **snapshot})
 
 
-def _run_retention_arm(  # noqa: PLR0914
+def _run_retention_arm(  # ruff: ignore[too-many-locals]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks: list,
@@ -1649,7 +1649,7 @@ def _run_retention_arm(  # noqa: PLR0914
     return {"retention": retention, "retention_gate": gate}
 
 
-def evaluate_z3(  # noqa: PLR0913
+def evaluate_z3(  # ruff: ignore[too-many-arguments]
     coordinate: str,
     meta_train_epochs: int = 50,
     eval_epochs_per_task: int = 20,
@@ -1751,7 +1751,7 @@ def evaluate_z3(  # noqa: PLR0913
         # operators — flat-at-chance curves are exploration failures, not
         # optimization ones (2026-08-26 pilot rerun autopsy).
         model.temperature = recipe.adapt_temp
-    assert model.verify_theta_frozen(), "θ not frozen!"  # noqa: S101
+    assert model.verify_theta_frozen(), "θ not frozen!"  # ruff: ignore[assert]
     # Protocol state the frozen-ψ control arm must replicate exactly.
     entry_temperature = model.temperature
 
@@ -1868,7 +1868,7 @@ def _git_commit() -> str:
     return capture_environment()["git_commit"]
 
 
-def run_z3_suite(  # noqa: PLR0913, PLR0917
+def run_z3_suite(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     coordinates: list[str],
     output_dir: Path,
     meta_train_epochs: int = 50,

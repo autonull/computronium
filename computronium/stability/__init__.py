@@ -10,8 +10,8 @@ demo-suite coordinate builder); everything generic comes from the package.
 from __future__ import annotations
 
 import stability as _stability
-from stability import *  # noqa: F403
-from stability import (  # noqa: F401  # adapter re-exports
+from stability import *  # ruff: ignore[undefined-local-with-import-star]
+from stability import (  # ruff: ignore[unused-import]  # adapter re-exports
     OVERHEAD_BUDGET,
     PR5Calibration,
     calibrate_ginibre_harvest,
@@ -63,7 +63,7 @@ from computronium.stability.calibration import (
 
 __version__ = _stability.__version__
 
-__all__ = [  # noqa: PLE0604
+__all__ = [  # ruff: ignore[invalid-all-object]
     *_stability.__all__,
     "DEMO_GOOD_COORDINATES",
     "DISAGREEMENT_COORDINATES",

@@ -181,7 +181,7 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
         )
 
 
-def find_ideal_backprop(  # noqa: PLR0913
+def find_ideal_backprop(  # ruff: ignore[too-many-arguments]
     driver: FrontierDriver,
     *,
     task: str = _DEFAULT_TASK,

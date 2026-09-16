@@ -13,8 +13,8 @@ from computronium.knowledge import KnowledgeBase, KnowledgeEntry, create_knowled
 def tmp_db_path():
     """Create a temporary database path."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = os.path.join(tmpdir, "test_kb.db")  # noqa: PTH118
-        yield db_path  # noqa: RUF070
+        db_path = os.path.join(tmpdir, "test_kb.db")  # ruff: ignore[os-path-join]
+        yield db_path  # ruff: ignore[unnecessary-assign-before-yield]
 
 
 def test_knowledge_base_creation(tmp_db_path):
@@ -232,7 +232,7 @@ def test_export_json(tmp_db_path):
     kb.add_entry(entry)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        json_path = os.path.join(tmpdir, "export.json")  # noqa: PTH118
+        json_path = os.path.join(tmpdir, "export.json")  # ruff: ignore[os-path-join]
         kb.export_json(json_path)
         assert pathlib.Path(json_path).exists()
 
@@ -337,7 +337,7 @@ def test_register_and_get_surrogate(tmp_db_path):
         target_metric="val_accuracy",
         features=["lr", "batch_size"],
         performance={"r2": 0.85, "n_samples": 50},
-        model_path="/tmp/test_model.pkl",  # noqa: S108
+        model_path="/tmp/test_model.pkl",  # ruff: ignore[hardcoded-temp-file]
     )
     assert sid is not None
     assert len(sid) == 8

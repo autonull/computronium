@@ -317,7 +317,7 @@ def build_model_config(
     )
 
 
-def model_kwargs(  # noqa: C901, PLR0912
+def model_kwargs(  # ruff: ignore[complex-structure, too-many-branches]
     model_cls: object,
     config: dict[str, object],
     *,
@@ -534,7 +534,7 @@ def phantom_knobs(
     # Depth supervision runs for every model: a sampled ``num_layers`` must
     # grow the constructed architecture, whether the model consumes ``config``
     # (knob → ``ModelConfig.hidden_dims``) or not (knob → structural args).
-    knobs = set(  # noqa: C401
+    knobs = set(  # ruff: ignore[unnecessary-generator-set]
         key
         for key in KNOBS
         if key != "learning_rate"

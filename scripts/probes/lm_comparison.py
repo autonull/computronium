@@ -312,7 +312,7 @@ def _eval(system, val: list[tuple[torch.Tensor, torch.Tensor]], geom: str) -> di
     return {"val_loss": round(avg, 4), "val_ppl": round(math.exp(min(avg, 20)), 2)}
 
 
-def run_arm(  # noqa: PLR0913 — one arg per protocol axis (geom/credit/update/budget)
+def run_arm(  # ruff: ignore[too-many-arguments] — one arg per protocol axis (geom/credit/update/budget)
     geom: str,
     credit: str,
     update: str,

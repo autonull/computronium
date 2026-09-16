@@ -85,7 +85,7 @@ import itertools
 import time
 
 import torch
-import torch.nn.functional as F  # noqa: N812 — torch's own convention
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase] — torch's own convention
 from torch import Tensor, nn
 
 from computronium import create_task
@@ -173,7 +173,7 @@ def _peak_saved_bytes(fn) -> tuple[object, int]:
     return out, sum(saved)
 
 
-def main() -> None:  # noqa: C901 — throwaway probe, keep linear
+def main() -> None:  # ruff: ignore[complex-structure] — throwaway probe, keep linear
     t0 = time.perf_counter()
     torch.manual_seed(0)  # seed BEFORE the loader draw (D8 trap) — the
     # quick-mode shuffle is global-RNG-driven; unseeded draws gave a

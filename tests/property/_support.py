@@ -159,7 +159,7 @@ def perturb_nonlocal(state: SystemState, layer: int, eps: float) -> SystemState:
     return new_state
 
 
-def _round_trip_configs(system: System) -> System:  # noqa: PLR0914
+def _round_trip_configs(system: System) -> System:  # ruff: ignore[too-many-locals]
     """Serialize system configs to JSON and reconstruct.
 
     For now, this is a placeholder that re-creates from configs.
@@ -195,11 +195,11 @@ def _round_trip_configs(system: System) -> System:  # noqa: PLR0914
     # Map substrate type to class
     substrate_map = {
         "digital": DigitalSubstrate,
-        "analog": lambda c: DigitalSubstrate(c),  # noqa: PLW0108
-        "memristor": lambda c: DigitalSubstrate(c),  # noqa: PLW0108
-        "optical": lambda c: DigitalSubstrate(c),  # noqa: PLW0108
-        "neuromorphic": lambda c: DigitalSubstrate(c),  # noqa: PLW0108
-        "quantum": lambda c: DigitalSubstrate(c),  # noqa: PLW0108
+        "analog": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "memristor": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "optical": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "neuromorphic": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "quantum": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
     }
     substrate_cls = substrate_map.get(substrate_cfg.device, DigitalSubstrate)
     substrate = substrate_cls(substrate_cfg)

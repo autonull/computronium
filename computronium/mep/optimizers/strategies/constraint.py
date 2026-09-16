@@ -85,7 +85,7 @@ class SettlingSpectralPenalty:
 
             if sigma > self.gamma:
                 diff = sigma - self.gamma
-                penalty = penalty + self.lambda_penalty * (diff**2)  # noqa: PLR6104
+                penalty = penalty + self.lambda_penalty * (diff**2)  # ruff: ignore[non-augmented-assignment]
 
         return penalty
 

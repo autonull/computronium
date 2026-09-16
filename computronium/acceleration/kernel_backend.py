@@ -85,7 +85,7 @@ class KernelConfig:
     # FA: dropout_prob, feedback_mode
     # Hebbian: use_oja, learning_rate
     # FF: threshold, num_layers
-    # PEPITA: feedback_matrix_scale  # noqa: ERA001
+    # PEPITA: feedback_matrix_scale  # ruff: ignore[commented-out-code]
     # TP: target_lr, inverse_net_lr
     # PC: infer_steps, eta_infer
     # SNN: num_steps, spike_grad, tau_mem, tau_syn
@@ -99,7 +99,7 @@ class KernelConfig:
         if self.algorithm == AlgorithmFamily.EQPROP and self.settle_steps == 0:
             object.__setattr__(self, "settle_steps", 30)
         if (
-            self.algorithm in (AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY)  # noqa: PLR6201
+            self.algorithm in (AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY)  # ruff: ignore[literal-membership]
             and self.settle_steps == 0
         ):
             object.__setattr__(self, "settle_steps", 30)
@@ -132,17 +132,17 @@ class KernelBackend(Protocol):
 class KernelRegistry:
     """Global registry for kernel backends with auto-selection and auto-tuning logic."""
 
-    _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}  # noqa: RUF012
-    _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}  # noqa: RUF012
+    _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}  # ruff: ignore[mutable-class-default]
+    _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}  # ruff: ignore[mutable-class-default]
     # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
     _autotune_cache: dict[
         tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
-    ] = {}  # noqa: RUF012
+    ] = {}  # ruff: ignore[mutable-class-default]
     # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
     _benchmark_cache: dict[
         tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
         list[tuple[HardwareTarget, float]],
-    ] = {}  # noqa: RUF012
+    ] = {}  # ruff: ignore[mutable-class-default]
 
     @classmethod
     def register(
@@ -290,7 +290,7 @@ class KernelRegistry:
 
                 if time_ms > 0 and not np.isinf(time_ms):
                     results.append((hw, time_ms))
-            except Exception:  # noqa: S112
+            except Exception:  # ruff: ignore[try-except-continue]
                 # Backend failed, skip
                 continue
 
@@ -334,7 +334,7 @@ class KernelRegistry:
                     extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
                 backend.initialize(config)
-            except Exception:  # noqa: S110
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
         # Get the operation method
@@ -405,7 +405,7 @@ class KernelRegistry:
         cls._instances.clear()
 
 
-def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:  # noqa: C901, PLR0911
+def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:  # ruff: ignore[complex-structure, too-many-return-statements]
     """Infer algorithm family from model registry name."""
     name = model_name.lower()
     if "eqprop" in name or "looped" in name:

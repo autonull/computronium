@@ -113,7 +113,7 @@ async def _connect_with_backoff(
     for attempt in range(max_retries):
         try:
             await client.connect()
-            return True  # noqa: TRY300
+            return True  # ruff: ignore[try-consider-else]
         except Exception:
             if attempt == max_retries - 1:
                 raise
@@ -122,7 +122,7 @@ async def _connect_with_backoff(
     return False
 
 
-async def _run_single_process_step(  # noqa: RUF029
+async def _run_single_process_step(  # ruff: ignore[unused-async]
     system: System,
     x: torch.Tensor,
     y: torch.Tensor,
@@ -145,7 +145,7 @@ async def _run_single_process_step(  # noqa: RUF029
         state, system.geometry, system.substrate, target=y
     )
     nudged_state.energy = system.dynamics.compute_energy(nudged_state, system.geometry)
-    nudged_state.loss = task_loss(nudged_state, y)  # noqa: F821
+    nudged_state.loss = task_loss(nudged_state, y)  # ruff: ignore[undefined-name]
 
     # Credit assignment
     from computronium.core.pipeline import phase_states
@@ -559,7 +559,7 @@ class TestGRPCSeamSubprocessScript:
 @pytest.mark.parametrize("num_layers", [2, 3, 4])
 @pytest.mark.parametrize("tiles_per_layer", [1, 2])
 @pytest.mark.asyncio
-async def test_various_geometries(  # noqa: RUF029
+async def test_various_geometries(  # ruff: ignore[unused-async]
     num_layers: int, tiles_per_layer: int, device: torch.device
 ) -> None:
     """Test gRPC seam with various tile mesh configurations (CPU only due to TileGeometry CUDA assert)."""

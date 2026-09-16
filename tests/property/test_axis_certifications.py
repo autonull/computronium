@@ -366,7 +366,7 @@ class TestCAxisLocalGoodnessCredit:
     """C-Axis: LocalGoodnessCredit (FF/PEPITA) surrogate alignment."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
-    def test_local_goodness_surrogate_alignment(self, seed: int) -> None:  # noqa: PLR0914
+    def test_local_goodness_surrogate_alignment(self, seed: int) -> None:  # ruff: ignore[too-many-locals]
         """Layer-local surrogate FD gradient cosine >= 0.90.
 
         The FD objective re-runs the phase settling per perturbation
@@ -432,7 +432,7 @@ class TestCAxisTargetInversionCredit:
     """C-Axis: TargetInversionCredit global surrogate alignment."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
-    def test_target_inversion_surrogate_alignment(self, seed: int) -> None:  # noqa: PLR0914
+    def test_target_inversion_surrogate_alignment(self, seed: int) -> None:  # ruff: ignore[too-many-locals]
         """Global surrogate alignment: FD gradient cosine >= 0.90.
 
         Pipeline-mediated FD (re-settling per perturbation, shared grad
@@ -617,7 +617,7 @@ class TestUAxisSpectralConstrainedUpdate:
             enable_deterministic_cuda()
 
         with seeded(seed):
-            update = SpectralConstrainedUpdate(  # noqa: F841
+            update = SpectralConstrainedUpdate(  # ruff: ignore[unused-variable]
                 ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
             )
             # Create a random gradient
@@ -654,7 +654,7 @@ class TestUAxisMeanNormUpdate:
         # Diagonal Fisher: F = diag(g^2) + damping
         damping = update.config.fisher_damping
         fisher = grad**2 + damping
-        # Whitening: g / sqrt(F)  # noqa: ERA001
+        # Whitening: g / sqrt(F)  # ruff: ignore[commented-out-code]
         nat_grad = grad / fisher.sqrt()
 
         # Direction should be preserved (sign matches)
@@ -717,7 +717,7 @@ class TestUAxisElasticConsolidationUpdate:
 
         # Unprotected params should move more freely (no strong EWC pull)
         unprotected_movement = (new_params["w"] - params["w"]) * unprotected_mask
-        unprotected_mag = unprotected_movement.abs().mean().item()  # noqa: F841
+        unprotected_mag = unprotected_movement.abs().mean().item()  # ruff: ignore[unused-variable]
         protected_mag = protected_movement.abs().mean().item()
 
         # Protected movement should be dominated by EWC pull toward old_params

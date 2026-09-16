@@ -41,7 +41,7 @@ def _parse_coordinate(coord_str: str) -> dict:
     }
 
 
-def _create_joint_system_from_coordinate(  # noqa: C901, PLR0912
+def _create_joint_system_from_coordinate(  # ruff: ignore[complex-structure, too-many-branches]
     coord: dict, input_dim: int, output_dim: int, hidden_dim: int, device: str
 ):
     """Create a JointSystem from a parsed 6-D coordinate."""
@@ -141,7 +141,7 @@ def _create_joint_system_from_coordinate(  # noqa: C901, PLR0912
     return compose_joint_system(substrate, geometry, dynamics, p, credit, update)
 
 
-def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # noqa: C901, PLR0912, PLR0915
+def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     """Run joint state inspection and return trajectory data."""
     from computronium.state import CompositeState
 
@@ -261,7 +261,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # noq
             if hasattr(system, "plasticity") and system.plasticity is not None:
                 from computronium.core.pipeline import phase_states
 
-                pseudo_grads = system.credit.compute_pseudo_gradient(  # noqa: F841
+                pseudo_grads = system.credit.compute_pseudo_gradient(  # ruff: ignore[unused-variable]
                     phase_states(free=free_state, nudged=nudged_state),
                     nudged_state.loss,
                     system.geometry,
@@ -278,7 +278,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # noq
     return trajectory
 
 
-def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # noqa: C901, PLR0912
+def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # ruff: ignore[complex-structure, too-many-branches]
     """Generate an interactive Plotly HTML report from trajectory data."""
     try:
         import plotly.graph_objects as go
@@ -324,7 +324,7 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # 
 
     # Activity norms
     if trajectory["activity"]:
-        for layer_name in trajectory["activity"][0].keys():  # noqa: SIM118
+        for layer_name in trajectory["activity"][0].keys():  # ruff: ignore[in-dict-keys]
             norms = []
             for t in trajectory["activity"]:
                 tensor = t.get(layer_name)
@@ -345,7 +345,7 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # 
 
     # Plastic state
     if trajectory["plastic"] and trajectory["plastic"][0]:
-        for var_name in trajectory["plastic"][0].keys():  # noqa: SIM118
+        for var_name in trajectory["plastic"][0].keys():  # ruff: ignore[in-dict-keys]
             norms = []
             for t in trajectory["plastic"]:
                 tensor = t.get(var_name)
@@ -363,7 +363,7 @@ def _generate_html_report(trajectory: dict, coord: dict, output_path: Path):  # 
 
     # Substrate state
     if trajectory["substrate"] and trajectory["substrate"][0]:
-        for var_name in trajectory["substrate"][0].keys():  # noqa: SIM118
+        for var_name in trajectory["substrate"][0].keys():  # ruff: ignore[in-dict-keys]
             norms = []
             for t in trajectory["substrate"]:
                 tensor = t.get(var_name)

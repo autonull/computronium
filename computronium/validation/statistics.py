@@ -73,7 +73,7 @@ def bootstrap_percentile_ci(
     return float(lo), float(hi)
 
 
-def bootstrap_bca_ci(  # noqa: PLR0914
+def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]
     data: Sequence[float],
     stat: Statistic = np.mean,
     *,

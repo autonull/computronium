@@ -23,7 +23,7 @@ class TritonEqPropOps:
 
     # Cache of converted torch weight tensors keyed by source cupy array id
     # (see ``step_layered_cupy_torch``). Cleared when weights change.
-    _torch_cache: dict[int, object] = {}  # noqa: RUF012
+    _torch_cache: dict[int, object] = {}  # ruff: ignore[mutable-class-default]
 
     @classmethod
     def is_available(cls) -> bool:
@@ -116,7 +116,7 @@ class TritonEqPropOps:
         return cls.step_linear(h, h_target, alpha)
 
     @classmethod
-    def step_layered_cupy_torch(  # mirrors the cupy forward-step signature  # noqa: PLR0913, PLR0917
+    def step_layered_cupy_torch(  # mirrors the cupy forward-step signature  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         cls, h, x_emb, w1, b1, w2, b2, gamma, out=None, hnorm_out=None, ffnhid_out=None
     ) -> tuple[object, object, object] | None:
         """Torch-native layered MLP-block forward step on CuPy arrays.
@@ -190,7 +190,7 @@ class TritonEqPropOps:
             from triton.language.extra import libdevice
 
             @triton.jit
-            def _layered_step_kernel(  # noqa: PLR0913, PLR0914, PLR0917
+            def _layered_step_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
                 h_ptr,
                 x_emb_ptr,
                 w1_ptr,
@@ -233,7 +233,7 @@ class TritonEqPropOps:
                     mask=mask_m[:, None],
                 )
 
-                # ffn_hidden = tanh(h_norm @ W1^T + b1); W1 is (H, K)  # noqa: ERA001
+                # ffn_hidden = tanh(h_norm @ W1^T + b1); W1 is (H, K)  # ruff: ignore[commented-out-code]
                 offs_h = tl.arange(0, H)
                 w1 = tl.load(w1_ptr + offs_h[:, None] * K + offs_k[None, :])
                 b1 = tl.load(b1_ptr + offs_h)
@@ -245,13 +245,13 @@ class TritonEqPropOps:
                     mask=mask_m[:, None],
                 )
 
-                # ffn_out = ffn @ W2^T + b2; W2 is (K, H)  # noqa: ERA001
+                # ffn_out = ffn @ W2^T + b2; W2 is (K, H)  # ruff: ignore[commented-out-code]
                 w2 = tl.load(w2_ptr + offs_k[:, None] * H + offs_h[None, :])
                 b2 = tl.load(b2_ptr + offs_k)
                 ffn_out = tl.dot(ffn, tl.trans(w2))  # (BLOCK_M, K)
-                ffn_out = ffn_out + b2[None, :]  # noqa: PLR6104
+                ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
-                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)  # noqa: ERA001
+                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)  # ruff: ignore[commented-out-code]
                 h_next = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)
                 tl.store(
                     out_ptr + offs_m[:, None] * K + offs_k[None, :],
@@ -262,7 +262,7 @@ class TritonEqPropOps:
             cls._layered_kernel = _layered_step_kernel
 
     @classmethod
-    def step_layered_cupy(  # noqa: PLR0913, PLR0914, PLR0917
+    def step_layered_cupy(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
         cls,
         h,
         x_emb,
@@ -342,7 +342,7 @@ class TritonEqPropOps:
 # ============================================================
 
 
-class MEP_TritonOps:  # noqa: N801
+class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     """MEP operations with Triton acceleration.
 
     Provides fused kernels for Muon orthogonalization, Dion low-rank update,
@@ -464,7 +464,7 @@ class MEP_TritonOps:  # noqa: N801
 
         out = base.clone()
         norm = out.norm().clamp(min=1e-4, max=1e4)
-        out = out / norm  # noqa: PLR6104
+        out = out / norm  # ruff: ignore[non-augmented-assignment]
 
         if HAS_TRITON and out.is_cuda and M >= 16 and N >= 16:
             try:  # noqa: too-many-statements-in-try-clause
@@ -475,7 +475,7 @@ class MEP_TritonOps:  # noqa: N801
                 update_kernel = cls._muon_update_kernel
                 if gram_kernel and update_kernel:
                     A = torch.empty(N, N, device=out.device, dtype=torch.float32)
-                    O = torch.empty_like(out)  # noqa: E741
+                    O = torch.empty_like(out)  # ruff: ignore[ambiguous-variable-name]
                     grid_g = (triton.cdiv(N, 32), triton.cdiv(N, 32))
                     grid_u = (triton.cdiv(M, 32), triton.cdiv(N, 32))
                     for _ in range(ns_steps):
@@ -488,7 +488,7 @@ class MEP_TritonOps:  # noqa: N801
 
         for _ in range(ns_steps):
             WT_W = out.T @ out
-            out = out @ (  # noqa: PLR6104
+            out = out @ (  # ruff: ignore[non-augmented-assignment]
                 1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
             )
 
@@ -590,7 +590,7 @@ class MEP_TritonOps:  # noqa: N801
                 from triton.language.extra import libdevice
 
                 @triton.jit
-                def _ep_settle_kernel(  # noqa: PLR0913, PLR0914, PLR0917
+                def _ep_settle_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
                     h_ptr,
                     x_emb_ptr,
                     W1_ptr,
@@ -640,7 +640,7 @@ class MEP_TritonOps:  # noqa: N801
                         ffn = tl.dot(h_norm, tl.trans(W1))
                         ffn = libdevice.tanh(ffn + b1[None, :])
                         ffn_out = tl.dot(ffn, tl.trans(W2))
-                        ffn_out = ffn_out + b2[None, :]  # noqa: PLR6104
+                        ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
                         # Residual update
                         h = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)

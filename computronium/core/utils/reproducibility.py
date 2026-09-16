@@ -100,17 +100,17 @@ class ReproducibilityTracker:
         git_commit = None
         git_branch = None
         try:
-            import subprocess  # noqa: S404
+            import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
             git_commit = (
                 subprocess
-                .check_output(["git", "rev-parse", "HEAD"])  # noqa: S607
+                .check_output(["git", "rev-parse", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
                 .decode("ascii")
                 .strip()
             )
             git_branch = (
                 subprocess
-                .check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])  # noqa: S607
+                .check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
                 .decode("ascii")
                 .strip()
             )
@@ -147,7 +147,7 @@ class ReproducibilityTracker:
         """Generate unique experiment ID."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         hash_input = f"{timestamp}_{self.seed}_{os.getpid()}"
-        hash_id = hashlib.md5(hash_input.encode()).hexdigest()[:8]  # noqa: S324
+        hash_id = hashlib.md5(hash_input.encode()).hexdigest()[:8]  # ruff: ignore[hashlib-insecure-hash-function]
         return f"exp_{timestamp}_{hash_id}"
 
     def log_config(self, config: object, name: str = "config") -> None:
@@ -318,7 +318,7 @@ class ReproducibleConfig(BaseConfig):
     def get_hash(self) -> str:
         """Get hash of configuration for versioning."""
         config_str = json.dumps(self.to_dict(), sort_keys=True)
-        return hashlib.md5(config_str.encode()).hexdigest()[:12]  # noqa: S324
+        return hashlib.md5(config_str.encode()).hexdigest()[:12]  # ruff: ignore[hashlib-insecure-hash-function]
 
 
 # =============================================================================

@@ -32,7 +32,7 @@ from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.ontology import EnergyMinimizationDynamics
 from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
-PASS: str = "pass"  # noqa: S105
+PASS: str = "pass"  # ruff: ignore[hardcoded-password-string]
 FAIL: str = "fail"
 
 

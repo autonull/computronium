@@ -326,7 +326,7 @@ def validate_combination(selection: dict[str, str]) -> list[str]:
     errors = []
     for rule in VALIDATION_RULES:
         if all(selection.get(k) == v for k, v in rule["if"].items()):
-            then_key = list(rule["then"].keys())[0]  # noqa: RUF015
+            then_key = list(rule["then"].keys())[0]  # ruff: ignore[unnecessary-iterable-allocation-for-first-element]
             then_values = rule["then"][then_key]
             if selection.get(then_key) not in then_values:
                 errors.append(rule["message"])
@@ -338,7 +338,7 @@ def validate_combination(selection: dict[str, str]) -> list[str]:
 # ----------------------------------------------------------------------
 
 
-def generate_python_code(selection: dict[str, str]) -> str:  # noqa: C901, PLR0912, PLR0915
+def generate_python_code(selection: dict[str, str]) -> str:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     """Generate Python code for the selected 6-D coordinate."""
     coord_str = "/".join([
         selection["substrate"],
@@ -350,7 +350,7 @@ def generate_python_code(selection: dict[str, str]) -> str:  # noqa: C901, PLR09
     ])
 
     # Map credit names
-    credit_map = {  # noqa: F841
+    credit_map = {  # ruff: ignore[unused-variable]
         "backprop": "BackpropCredit",
         "thermo": "ThermodynamicContrast",
         "random_projections": "RandomProjectionsCredit",
@@ -359,7 +359,7 @@ def generate_python_code(selection: dict[str, str]) -> str:  # noqa: C901, PLR09
     }
 
     # Map update names
-    update_map = {  # noqa: F841
+    update_map = {  # ruff: ignore[unused-variable]
         "euclidean": "EuclideanUpdate",
         "riemannian_orthogonal": "RiemannianOrthogonalUpdate",
         "spectral_constrained": "SpectralConstrainedUpdate",
@@ -368,7 +368,7 @@ def generate_python_code(selection: dict[str, str]) -> str:  # noqa: C901, PLR09
     }
 
     # Map plasticity
-    plasticity_map = {  # noqa: F841
+    plasticity_map = {  # ruff: ignore[unused-variable]
         "null": "NullPlasticity",
         "routing": "RoutingPlasticity",
         "fast_weights": "FastWeightPlasticity",
@@ -546,7 +546,7 @@ class OntologyExplorer:
             ui.label("🧬 6-D Ontology Explorer").classes("text-h4 q-px-md")
             ui.label("S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U").classes("text-caption q-px-md")
 
-        with ui.row().classes("w-full h-[calc(100vh-60px)] no-wrap"):  # noqa: PLR1702
+        with ui.row().classes("w-full h-[calc(100vh-60px)] no-wrap"):  # ruff: ignore[too-many-nested-blocks]
             # Left panel: Dimension selectors
             with (
                 ui
@@ -660,7 +660,7 @@ class OntologyExplorer:
     def render_selection(self):
         """Update UI based on current selection."""
         # Update button styles
-        for dim_key, card in self.dimension_cards.items():  # noqa: PLR1702
+        for dim_key, card in self.dimension_cards.items():  # ruff: ignore[too-many-nested-blocks]
             for child in card.default_slot.children:
                 if hasattr(child, "default_slot"):
                     for btn in child.default_slot.children:
@@ -732,11 +732,11 @@ class OntologyExplorer:
         self.output_log.push("Starting quick test...")
         try:  # noqa: too-many-statements-in-try-clause
             # Use the lab inspect-state command as a test
-            import subprocess  # noqa: S404
+            import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
             coord_str = "/".join([self.selection[k] for k in ONTOLOGY])
-            result = subprocess.run(  # noqa: PLW1510, S603
-                [  # noqa: S607
+            result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
+                [  # ruff: ignore[start-process-with-partial-path]
                     "uv",
                     "run",
                     "biopl",
@@ -768,8 +768,8 @@ class OntologyExplorer:
 
 def main():
     """Main entry point."""
-    explorer = OntologyExplorer()  # noqa: F841
-    ui.run(host="0.0.0.0", port=8080, title="6-D Ontology Explorer", reload=False)  # noqa: S104
+    explorer = OntologyExplorer()  # ruff: ignore[unused-variable]
+    ui.run(host="0.0.0.0", port=8080, title="6-D Ontology Explorer", reload=False)  # ruff: ignore[hardcoded-bind-all-interfaces]
 
 
 if __name__ == "__main__":

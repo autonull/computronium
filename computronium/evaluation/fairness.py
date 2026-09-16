@@ -41,7 +41,7 @@ class FairnessContract:
             raise ValueError("gpu_hours_per_rule must be positive")
         if self.seeds < 1:
             raise ValueError("seeds must be >= 1")
-        if self.early_stopping not in ("best_val", "last"):  # noqa: PLR6201
+        if self.early_stopping not in ("best_val", "last"):  # ruff: ignore[literal-membership]
             raise ValueError("early_stopping must be 'best_val' or 'last'")
         splits = self.data_splits
         if abs(sum(splits.values()) - 1.0) > 1e-6:

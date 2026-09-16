@@ -49,7 +49,7 @@ class TestDHT(unittest.TestCase):
     def setUp(self):
         # Only run if kademlia is installed
         try:
-            import kademlia  # noqa: F401
+            import kademlia  # ruff: ignore[unused-import]
         except ImportError:
             self.skipTest("kademlia not installed")
 
@@ -112,8 +112,8 @@ class TestDHT(unittest.TestCase):
 
             # Verify it is still 0.95
             # Note: The 'publish_best_model' logic:
-            # current = self.get(key)  # noqa: ERA001
-            # if current and current >= score: return  # noqa: ERA001
+            # current = self.get(key)  # ruff: ignore[commented-out-code]
+            # if current and current >= score: return  # ruff: ignore[commented-out-code]
 
             best_after = node2.get_best_model("test_task")
             self.assertEqual(best_after["score"], 0.95)

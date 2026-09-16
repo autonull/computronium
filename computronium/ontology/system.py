@@ -254,7 +254,7 @@ class SystemConfig:
         Raises:
             ValueError: If configuration violates hard compatibility constraints.
         """
-        # Recurrent geometry requires energy-based or instantaneous dynamics.
+        # Recurrent geometry requires energy-based, PC-family, or instantaneous dynamics.
         # Measured evidence (TODO28 broad map): predictive_settling ×
         # recurrent (max 0.867) and error_predictive_coding × recurrent
         # (max 0.647) train; instantaneous settles by a single forward
@@ -266,11 +266,12 @@ class SystemConfig:
                 "energy_minimization",
                 "predictive_settling",
                 "error_predictive_coding",
+                "pc_alm",
                 "instantaneous",
             }:
                 raise ValueError(
                     f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
-                    f"requires energy-based or instantaneous dynamics, "
+                    f"requires energy-based, PC-family, or instantaneous dynamics, "
                     f"got {self.dynamics.dynamics_type!r}"
                 )
 
@@ -354,10 +355,11 @@ class SystemConfig:
         if self.geometry.topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership, collapsible-if]
             if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
                 "energy_minimization",
+                "pc_alm",
                 "instantaneous",
             ):
                 raise ValueError(
-                    f"Tile mesh geometry requires energy_minimization or instantaneous dynamics, "
+                    f"Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics, "
                     f"got {self.dynamics.dynamics_type!r}"
                 )
 

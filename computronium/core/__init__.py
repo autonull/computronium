@@ -2,7 +2,7 @@
 
 # Lazy package init: heavy symbols (CoreTrainer) import the zoo on first access.
 
-_LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
+_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "BioModel": ("computronium.core.model", "BioModel"),
     "LayerRole": ("computronium.config.unified", "LayerRole"),
     "ModelConfig": ("computronium.config.unified", "ModelConfig"),
@@ -100,7 +100,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     "consolidate": ("computronium.core.joint", "consolidate"),
 }
 
-__all__ = sorted(_LAZY)  # noqa: PLE0605
+__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]
 
 
 def __getattr__(name: str) -> object:

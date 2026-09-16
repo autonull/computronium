@@ -35,7 +35,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
-    "DEFAULT_KB",  # noqa: F822
+    "DEFAULT_KB",  # ruff: ignore[undefined-export]
     "KNOWLEDGE_BASE_SEED",
     "CausalAnalyzer",
     "CausalConfig",

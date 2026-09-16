@@ -135,7 +135,7 @@ def _run_seed(
     return results, fit_mses, sigmas
 
 
-def main() -> int:  # noqa: C901 - probe harness
+def main() -> int:  # ruff: ignore[complex-structure] - probe harness
     t0 = time.time()
     results: dict[tuple[str, int], list[float]] = {}
     fit_mses: dict[str, list[float]] = {}

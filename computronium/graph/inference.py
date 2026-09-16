@@ -18,7 +18,7 @@ Uses gradient-based activity updates for non-feedforward topologies.
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.local_learning.settling import _inf_norm_converged
 
@@ -76,7 +76,7 @@ class InferenceSGD:
                     for src_node, target_slot in preds:
                         val = activities[src_node.name]
                         if target_slot.name in slot_inputs:
-                            slot_inputs[target_slot.name] = (  # noqa: PLR6104
+                            slot_inputs[target_slot.name] = (  # ruff: ignore[non-augmented-assignment]
                                 slot_inputs[target_slot.name] + val
                             )
                         else:
@@ -95,7 +95,7 @@ class InferenceSGD:
                 activities[node.name] = node.forward(**si)
         return activities
 
-    def settle(  # noqa: C901, PLR0912
+    def settle(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         structure: GraphStructure,
         params: dict[str, dict[str, torch.Tensor]],
@@ -143,10 +143,10 @@ class InferenceSGD:
                         fwd_args = dict(params.get(src_node.name, {}))
                         fwd_args["input"] = activities[src_node.name]
                         pred = src_node.forward(**fwd_args)
-                        if total_pred is None:  # noqa: SIM108
+                        if total_pred is None:  # ruff: ignore[if-else-block-instead-of-if-exp]
                             total_pred = pred
                         else:
-                            total_pred = total_pred + pred  # noqa: PLR6104
+                            total_pred = total_pred + pred  # ruff: ignore[non-augmented-assignment]
                     if total_pred is not None:
                         error = activities[node.name] - total_pred
                         new_activities[node.name] = activities[node.name] - eta * error

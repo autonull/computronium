@@ -208,7 +208,7 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     logger.info("Seeds per config: %d", config.seeds)
 
     exp_count = 0
-    for task in config.tasks:  # noqa: PLR1702
+    for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
         for algorithm in config.algorithms:
             model_name = _get_model_for_task(algorithm, task)
 

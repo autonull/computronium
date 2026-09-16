@@ -50,7 +50,7 @@ class _ComputroniumLinearFn(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(  # noqa: PLR0913, PLR0917
+    def forward(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         ctx,
         x: Tensor,
         weight: Tensor,

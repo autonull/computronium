@@ -81,13 +81,13 @@ class StoreBase:
 
         if explicit is not None:
             return explicit
-        sql = f"SELECT COUNT(*) AS n FROM {table}"  # noqa: S608  internal prefix map
+        sql = f"SELECT COUNT(*) AS n FROM {table}"  # ruff: ignore[hardcoded-sql-expression]  internal prefix map
         row = self._conn.execute(sql).fetchone()
         return f"{prefix_for(kind)}-{row['n'] + 1:06d}"
 
     def _fetch(self, table: str, id_: str) -> sqlite3.Row:
         row = self._conn.execute(
-            f"SELECT * FROM {table} WHERE id = ?",  # noqa: S608  internal
+            f"SELECT * FROM {table} WHERE id = ?",  # ruff: ignore[hardcoded-sql-expression]  internal
             (id_,),
         ).fetchone()
         if row is None:
@@ -100,7 +100,7 @@ class StoreBase:
         if id_ is None:
             raise StoreError(f"missing required reference into {table}")
         row = self._conn.execute(
-            f"SELECT 1 FROM {table} WHERE id = ?",  # noqa: S608  internal
+            f"SELECT 1 FROM {table} WHERE id = ?",  # ruff: ignore[hardcoded-sql-expression]  internal
             (id_,),
         ).fetchone()
         if row is None:
@@ -109,7 +109,7 @@ class StoreBase:
     def _has_links(self, belief_id: str, *link_tables: tuple[str, str]) -> bool:
         for table, col in link_tables:
             row = self._conn.execute(
-                f"SELECT 1 FROM {table} WHERE belief_id = ? LIMIT 1",  # noqa: S608
+                f"SELECT 1 FROM {table} WHERE belief_id = ? LIMIT 1",  # ruff: ignore[hardcoded-sql-expression]
                 (belief_id,),
             ).fetchone()
             if row is not None:
@@ -127,5 +127,5 @@ class StoreBase:
     ) -> None:
         if not right_ids:
             return
-        sql = f"INSERT OR IGNORE INTO {table} ({left_col}, {right_col}) VALUES (?, ?)"  # noqa: S608  internal
+        sql = f"INSERT OR IGNORE INTO {table} ({left_col}, {right_col}) VALUES (?, ?)"  # ruff: ignore[hardcoded-sql-expression]  internal
         conn.executemany(sql, [(left_id, rid) for rid in right_ids])

@@ -112,7 +112,7 @@ def _ff_augment(x: Tensor, y: Tensor, good: bool) -> Tensor:
     return torch.cat([x, onehot], dim=-1)
 
 
-def _run(  # noqa: C901
+def _run(  # ruff: ignore[complex-structure]
     family: str, depth: int, train, test, lr: float | None = None, raw: bool = False
 ) -> dict[str, float]:
     torch.manual_seed(0)

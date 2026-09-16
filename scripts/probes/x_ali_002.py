@@ -74,7 +74,7 @@ def run_arm(seed: int, adaptive: bool) -> dict[str, object]:  # noqa: PLR0914  p
     credit_cfg = CreditAssignmentConfig.random_projections(
         feedback_scale=FEEDBACK_SCALE
     )
-    euclid = lambda lr: ParameterUpdateConfig.euclidean(step_size=lr, momentum=0.0)  # noqa: E731
+    euclid = lambda lr: ParameterUpdateConfig.euclidean(step_size=lr, momentum=0.0)  # ruff: ignore[lambda-assignment]
 
     torch.manual_seed(seed + 777)
     xs = torch.randn(8, _INPUT_DIM)

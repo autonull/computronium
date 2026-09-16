@@ -6,4 +6,4 @@ package (uv workspace member ``packages/ceec-core``).
 
 from __future__ import annotations
 
-from ceec.migrate import *  # noqa: F403
+from ceec.migrate import *  # ruff: ignore[undefined-local-with-import-star]

@@ -47,8 +47,8 @@ class ComplexSubstrate(DigitalSubstrate):
 
     def _check_triton_available(self) -> bool:
         try:
-            import triton  # noqa: F401
-            import triton.language as tl  # noqa: F401
+            import triton  # ruff: ignore[unused-import]
+            import triton.language as tl  # ruff: ignore[unused-import]
 
             return torch.cuda.is_available()
         except ImportError:
@@ -139,8 +139,8 @@ class ComplexSubstrate(DigitalSubstrate):
         out_i = x_r @ (-w_i).transpose(-2, -1) + x_i @ w_r.transpose(-2, -1)
         if bias is not None:
             b = self.to_real(bias)
-            out_r = out_r + b[..., ::2]  # noqa: PLR6104
-            out_i = out_i + b[..., 1::2]  # noqa: PLR6104
+            out_r = out_r + b[..., ::2]  # ruff: ignore[non-augmented-assignment]
+            out_i = out_i + b[..., 1::2]  # ruff: ignore[non-augmented-assignment]
         return torch.stack([out_r, out_i], dim=-1).flatten(-2)
 
     # =========================================================================
@@ -215,7 +215,7 @@ try:  # noqa: too-many-statements-in-try-clause
         tl.store(out_imag_ptr + offs, out_i, mask=mask)
 
     @triton.jit
-    def _complex_matmul_kernel(  # noqa: PLR0913, PLR0917
+    def _complex_matmul_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         a_real_ptr,
         a_imag_ptr,
         b_real_ptr,

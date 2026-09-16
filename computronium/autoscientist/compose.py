@@ -123,7 +123,7 @@ def _allowed_keys(topology: str) -> frozenset[str]:
     return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
 
 
-def build_geometry_config(  # noqa: C901, PLR0911, PLR0912
+def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
     geometry: dict[str, object],
     *,
     input_dim: int,

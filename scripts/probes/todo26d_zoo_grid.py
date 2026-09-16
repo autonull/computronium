@@ -80,7 +80,7 @@ from computronium import (
     compose_system,
 )
 from computronium.experiments.joint.tasks import create_switching_task
-from computronium.ontology.geometry import InitScheme  # noqa: TC001
+from computronium.ontology.geometry import InitScheme  # ruff: ignore[typing-only-first-party-import]
 
 INPUT_DIM = 16
 WIDTH = 32

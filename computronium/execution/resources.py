@@ -83,7 +83,7 @@ class ResourceMonitor:
             return True
 
         # Disk Check (cwd)
-        if self._check_disk_overload():  # noqa: SIM103
+        if self._check_disk_overload():  # ruff: ignore[needless-bool]
             return True
 
         return False

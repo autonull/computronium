@@ -237,13 +237,13 @@ def run_experiment(
 
 def _code_commit() -> str | None:
     import os
-    import subprocess  # noqa: S404  git provenance stamp is intentional
+    import subprocess  # ruff: ignore[suspicious-subprocess-import]  git provenance stamp is intentional
 
     if os.environ.get("CEEC_CODE_COMMIT"):
         return os.environ["CEEC_CODE_COMMIT"]
     try:
         return subprocess.run(  # noqa: S607  pinned read-only git probe
-            [  # noqa: S607  pinned read-only git probe
+            [  # ruff: ignore[start-process-with-partial-path]  pinned read-only git probe
                 "git",
                 "rev-parse",
                 "--short",

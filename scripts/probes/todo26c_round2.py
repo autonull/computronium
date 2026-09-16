@@ -97,7 +97,7 @@ from computronium.core.plasticity.temporal_psi import (
 )
 from computronium.experiments.joint.tasks import create_switching_task
 from computronium.ontology.credit import CreditNormMode, Phase
-from computronium.ontology.geometry import InitScheme  # noqa: TC001
+from computronium.ontology.geometry import InitScheme  # ruff: ignore[typing-only-first-party-import]
 from computronium.state import CompositeState
 
 INPUT_DIM = 16

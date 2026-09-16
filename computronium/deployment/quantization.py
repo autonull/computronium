@@ -11,7 +11,7 @@ Provides:
 import copy
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 from torch.quantization import (
     convert,

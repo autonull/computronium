@@ -125,7 +125,7 @@ def _extract_class_info(cls: type) -> dict:
         "docstring": inspect.getdoc(cls) or "",
         "is_dataclass": hasattr(cls, "__dataclass_fields__"),
         "is_protocol": hasattr(cls, "__protocol_attrs__"),
-        "bases": [b.__name__ for b in cls.__bases__ if b != object],  # noqa: E721
+        "bases": [b.__name__ for b in cls.__bases__ if b != object],  # ruff: ignore[type-comparison]
         "methods": {},
         "fields": [],
     }
@@ -171,7 +171,7 @@ def _extract_protocol_info(proto: type) -> dict:
     return info
 
 
-def _scan_module(module_name: str) -> dict:  # noqa: C901
+def _scan_module(module_name: str) -> dict:  # ruff: ignore[complex-structure]
     """Scan a module for public API elements."""
     try:
         module = __import__(module_name, fromlist=["*"])

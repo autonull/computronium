@@ -144,7 +144,7 @@ class Verifier:
                 "timestamp": datetime.now().isoformat(),
             })
 
-    def evaluate_robustness(self, track_fn, n_seeds: int = 3) -> dict:  # noqa: PLR0914
+    def evaluate_robustness(self, track_fn, n_seeds: int = 3) -> dict:  # ruff: ignore[too-many-locals]
         """Run a track logic multiple times with different seeds."""
         scores = []
         metrics_list = []
@@ -223,7 +223,7 @@ class Verifier:
             "all_scores": scores,
         }
 
-    def _record_track_to_kb(self, track_id: int, result) -> None:  # noqa: PLR0914
+    def _record_track_to_kb(self, track_id: int, result) -> None:  # ruff: ignore[too-many-locals]
         """Record a track result to the knowledge layer via direct KB/FailureTracker."""
         from computronium.core._paths import db_path
         from computronium.execution._state import FailureTracker
@@ -285,11 +285,11 @@ class Verifier:
                 wall = sanitized_metrics.get(
                     "wall_time_s", sanitized_metrics.get("track_time_seconds", 0.0)
                 )
-                finding = (  # noqa: F841
+                finding = (  # ruff: ignore[unused-variable]
                     f"rule {model} on {task}: final_acc={acc:.4f} "
                     f"flops={flops:.3e} mem={mem:.1f}MB time={wall:.2f}s"
                 )
-                tags = ["experiment", model, task, "validation_track"]  # noqa: F841
+                tags = ["experiment", model, task, "validation_track"]  # ruff: ignore[unused-variable]
                 kb.add_experiment(
                     name=f"{model}/{task}",
                     model_family=model,
@@ -334,7 +334,7 @@ class Verifier:
             # Best-effort: don't break verification if KB recording fails
             logger.warning("Failed to record track %s to KB: %s", track_id, e)
 
-    def run_tracks(  # noqa: C901, PLR0912, PLR0914, PLR0915
+    def run_tracks(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
         self, track_ids: list[int] | None = None, parallel: bool = False
     ) -> dict:
         """Run specified tracks (or all if None)."""
@@ -347,7 +347,7 @@ class Verifier:
         # Auto-run Track 0 (Framework Validation) in intermediate/full modes
         if (self.intermediate_mode or (not self.quick_mode)) and 0 not in track_ids:
             logger.info("Running Track 0 (Framework Validation) automatically...")
-            track_ids = [0] + track_ids  # noqa: RUF005
+            track_ids = [0] + track_ids  # ruff: ignore[collection-literal-concatenation]
 
         results = {}
         start_time = time.time()
@@ -360,7 +360,7 @@ class Verifier:
             try:
                 # Pass self (Verifier) to the track method
                 result = method(self)
-                return tid, result, None  # noqa: TRY300
+                return tid, result, None  # ruff: ignore[try-consider-else]
             except (RuntimeError, ValueError, TypeError, KeyError) as e:
                 import traceback
 
@@ -414,7 +414,7 @@ class Verifier:
                             result.score,
                         )
 
-                    completed += 1  # noqa: SIM113
+                    completed += 1  # ruff: ignore[enumerate-for-loop]
                     elapsed = time.time() - start_time
                     logger.info(
                         "   Progress: %s/%s | Elapsed: %.0fs",

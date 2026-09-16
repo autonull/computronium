@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.pipeline import phase_states
@@ -223,7 +223,7 @@ def check_family(
     return rule_cos, metric.threshold
 
 
-def check_surrogate_equivalence(  # noqa: PLR0914
+def check_surrogate_equivalence(  # ruff: ignore[too-many-locals]
     name: str,
     credit,
     free_state,
@@ -259,7 +259,7 @@ def check_surrogate_equivalence(  # noqa: PLR0914
 
     # Get surrogate objective from the credit rule
     try:
-        surrogate_loss = credit.surrogate_objective(free_state, nudged_state, geometry)  # noqa: F841
+        surrogate_loss = credit.surrogate_objective(free_state, nudged_state, geometry)  # ruff: ignore[unused-variable]
     except NotImplementedError:
         # Credit rule doesn't define surrogate objective
         return (0.0, 0.0)
@@ -272,7 +272,7 @@ def check_surrogate_equivalence(  # noqa: PLR0914
         return (0.0, 0.0)
 
     surrogate_cosines = []
-    true_gradient_cosines = []  # noqa: F841
+    true_gradient_cosines = []  # ruff: ignore[unused-variable]
 
     # For each layer with a weight matrix and pseudo-gradient
     for layer_idx, weight_name in enumerate(weight_names):
@@ -329,7 +329,7 @@ def check_surrogate_equivalence(  # noqa: PLR0914
             threshold=threshold,
             timestamp=__import__("datetime").datetime.now().isoformat(),
         )
-    except Exception:  # noqa: S110
+    except Exception:  # ruff: ignore[try-except-pass]
         pass  # KB is optional
 
     return (mean_surrogate_cos, mean_surrogate_cos)

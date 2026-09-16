@@ -58,7 +58,7 @@ def _probability(
     return models.Probability(low=low, high=high, point=point, method="session_prior")
 
 
-def experiment(  # noqa: PLR0913  mirrors the Experiment field surface
+def experiment(  # ruff: ignore[too-many-arguments]  mirrors the Experiment field surface
     *,
     id_: str,
     question: str,
@@ -110,7 +110,7 @@ def experiment(  # noqa: PLR0913  mirrors the Experiment field surface
     )
 
 
-def quality_flags(  # noqa: PLR0913  one parameter per §18/§19 gate flag
+def quality_flags(  # ruff: ignore[too-many-arguments]  one parameter per §18/§19 gate flag
     *,
     seeds: int = 0,
     matched_control: bool = False,
@@ -209,4 +209,4 @@ def gate_evidence(
 
 
 # chance_verdict lives in ceec.stats (TODO26 §2.5); re-exported here.
-from ceec.stats import ChanceVerdict, chance_verdict  # noqa: E402
+from ceec.stats import ChanceVerdict, chance_verdict  # ruff: ignore[module-import-not-at-top-of-file]

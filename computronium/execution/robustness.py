@@ -184,7 +184,7 @@ class RobustnessEvaluator:
                     self._generate_saliency_maps(model, task)
 
             metrics["robustness_score"] = float(np.mean(scores)) if scores else 0.0
-            return metrics  # noqa: TRY300
+            return metrics  # ruff: ignore[try-consider-else]
 
         except Exception as e:  # broad: best-effort
             logger.error("Robustness evaluation failed: %s", e, exc_info=True)
@@ -307,7 +307,7 @@ class RobustnessEvaluator:
 
         # Score: 1.0 if OOD confidence is 0.0 (ideal 1/N, but close enough)
         # We want MSP_ood to be low.
-        # Score = max(0, MSP_in - MSP_ood)  # noqa: ERA001
+        # Score = max(0, MSP_in - MSP_ood)  # ruff: ignore[commented-out-code]
         return max(0.0, msp_in - msp_ood)
 
     def _test_adversarial_attack(
@@ -396,12 +396,12 @@ class RobustnessEvaluator:
                     return 0.5
 
                 with torch.no_grad():
-                    h_adv = h_adv + epsilon * h_adv.grad.sign()  # noqa: PLR6104
+                    h_adv = h_adv + epsilon * h_adv.grad.sign()  # ruff: ignore[non-augmented-assignment]
                     h_adv = torch.clamp(h_adv, -1.0, 1.0)
 
             elif attack_type == "pgd":
                 # Random start
-                h_adv = h_adv + torch.empty_like(h_adv).uniform_(-epsilon, epsilon)  # noqa: PLR6104
+                h_adv = h_adv + torch.empty_like(h_adv).uniform_(-epsilon, epsilon)  # ruff: ignore[non-augmented-assignment]
                 h_adv = torch.clamp(h_adv, -1.0, 1.0)
 
                 for _ in range(steps):
@@ -417,7 +417,7 @@ class RobustnessEvaluator:
                         break
 
                     with torch.no_grad():
-                        h_adv = h_adv + alpha * h_adv.grad.sign()  # noqa: PLR6104
+                        h_adv = h_adv + alpha * h_adv.grad.sign()  # ruff: ignore[non-augmented-assignment]
                         # Project
                         delta = torch.clamp(h_adv - h_clean, -epsilon, epsilon)
                         h_adv = torch.clamp(h_clean + delta, -1.0, 1.0)

@@ -6,7 +6,7 @@ kept strictly separate from goal utility; both flow through revisions.
 
 from __future__ import annotations
 
-from collections.abc import Mapping  # noqa: TC003  runtime-resolved by pydantic
+from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import]  runtime-resolved by pydantic
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator

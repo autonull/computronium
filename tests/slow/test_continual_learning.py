@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch.utils.data import DataLoader, TensorDataset
 
 from computronium.core.continual import (
@@ -515,7 +515,7 @@ class TestCLMetrics:
             fast_weight_model, task_loaders, 4, accuracy_matrix
         )
 
-        # BWT = mean(acc_after_all - acc_after_own_task)  # noqa: ERA001
+        # BWT = mean(acc_after_all - acc_after_own_task)  # ruff: ignore[commented-out-code]
         # Task 0: 0.93 - 0.8 = 0.13
         # Task 1: 0.9 - 0.8 = 0.1
         # Task 2: 0.88 - 0.8 = 0.08
@@ -770,16 +770,16 @@ def _train_single_task(arm_factory, task_id: int, device, epochs: int = 2) -> fl
     model.train()
     for _ in range(epochs):
         for x, y in loader:
-            x = x.view(x.shape[0], -1).to(device)  # noqa: PLW2901
-            y = y.to(device)  # noqa: PLW2901
+            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(device)  # ruff: ignore[redefined-loop-name]
             model.train_step(x, y, task_id=task_id)
 
     model.eval()
     correct = total = 0
     with torch.no_grad():
         for x, y in test_loader:
-            x = x.view(x.shape[0], -1).to(device)  # noqa: PLW2901
-            y = y.to(device)  # noqa: PLW2901
+            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(device)  # ruff: ignore[redefined-loop-name]
             logits = model(x, task_id=task_id)
             task_logits = logits[:, task_id * 2 : task_id * 2 + 2]
             correct += (task_logits.argmax(dim=1) == y).sum().item()

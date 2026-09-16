@@ -73,7 +73,7 @@ def test_substrate_mutation_admitted() -> None:
     seen_substrate = False
     genome = CoordinateGenome.seed("backprop_mlp", spec)
     for trial in range(60):
-        mutant = operator.mutate(genome.genome(), random.Random(trial))  # noqa: S311 - deterministic test seeds
+        mutant = operator.mutate(genome.genome(), random.Random(trial))  # ruff: ignore[suspicious-non-cryptographic-random-usage] - deterministic test seeds
         mutations = mutant["mutations"]
         assert isinstance(mutations, list)
         if any(str(m).startswith("substrate_swap") for m in mutations):

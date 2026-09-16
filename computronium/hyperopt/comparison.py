@@ -90,7 +90,7 @@ class ComparisonStudy:
             return float("inf")
 
         # For metrics where lower is better (perplexity, loss)
-        if self.primary_metric in [ComparisonMetric.PERPLEXITY, ComparisonMetric.LOSS]:  # noqa: PLR6201
+        if self.primary_metric in [ComparisonMetric.PERPLEXITY, ComparisonMetric.LOSS]:  # ruff: ignore[literal-membership]
             return (
                 (family_ranking.best_value - baseline_ranking.best_value)
                 / baseline_ranking.best_value

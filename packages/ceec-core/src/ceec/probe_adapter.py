@@ -132,7 +132,7 @@ class IngestVerdict:
     violations: Sequence[audit.Finding]
 
 
-def ingest_verdict(  # noqa: PLR0913
+def ingest_verdict(  # ruff: ignore[too-many-arguments]
     store: CEECStore,
     *,
     probe_name: str,

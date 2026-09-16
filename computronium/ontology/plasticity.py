@@ -21,7 +21,7 @@ from computronium.state import (
     TransitionFn,
 )
 
-__all__ = [  # noqa: RUF022
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Core primitives from state
     "NullPlasticity",
     "PlasticityConfig",

@@ -44,7 +44,7 @@ def _create_test_context(plasticity_config: PlasticityConfig = None):
         GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
         hidden_dim=20,
     )
-    dynamics = EnergyMinimizationDynamics(  # noqa: F841
+    dynamics = EnergyMinimizationDynamics(  # ruff: ignore[unused-variable]
         StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
     )
 
@@ -95,7 +95,7 @@ def _create_test_context(plasticity_config: PlasticityConfig = None):
 def test_null_plasticity_axis_certification():
     """NullPlasticity should pass axis certification (Zero-Extension Theorem)."""
     plasticity = NullPlasticity()
-    config = PlasticityConfig.null()  # noqa: F841
+    config = PlasticityConfig.null()  # ruff: ignore[unused-variable]
 
     # Basic properties
     assert plasticity.config.plasticity_type == "null"
@@ -182,7 +182,7 @@ class RoutingPlasticity:
         if "x" in z.activity:
             x = z.activity["x"]
             # Gate logits evolve based on input
-            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(  # noqa: PLR6104
+            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(  # ruff: ignore[non-augmented-assignment]
                 dim=1, keepdim=True
             ).expand(-1, 32)
             # Active routes = sigmoid(gate_logits) > 0.5
@@ -423,7 +423,7 @@ class RuleStatePlasticity:
         # Operator logits evolve based on input
         if "x" in z.activity:
             x = z.activity["x"]
-            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(  # noqa: PLR6104
+            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(  # ruff: ignore[non-augmented-assignment]
                 dim=1, keepdim=True
             ).expand(-1, 8)
         return new_psi

@@ -47,7 +47,7 @@ class ActivityUpdateFn(Protocol):
 class WeightUpdateFn(Protocol):
     """Per-edge weight/bias deltas from free and nudged activity statistics."""
 
-    def __call__(  # noqa: PLR0913
+    def __call__(  # ruff: ignore[too-many-arguments]
         self,
         *,
         src_neurons: int,

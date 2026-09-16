@@ -71,7 +71,7 @@ def run_pl_trial(
                 "nudged_fit_accuracy": val_acc,
                 "loss": val_loss,
             }
-        return {"nudged_fit_accuracy": 0.0, "loss": 0.0}  # noqa: TRY300
+        return {"nudged_fit_accuracy": 0.0, "loss": 0.0}  # ruff: ignore[try-consider-else]
     except Exception as e:  # broad: best-effort
         logger.error("PL trial failed: %s", e, exc_info=True)
         return None
@@ -127,7 +127,7 @@ def run_pl_trial_with_wandb(
                 "nudged_fit_accuracy": val_acc,
                 "loss": val_loss,
             }
-        return {"nudged_fit_accuracy": 0.0, "loss": 0.0}  # noqa: TRY300
+        return {"nudged_fit_accuracy": 0.0, "loss": 0.0}  # ruff: ignore[try-consider-else]
     except Exception as e:  # broad: best-effort
         logger.error("PL+W&B trial failed: %s", e, exc_info=True)
         return None

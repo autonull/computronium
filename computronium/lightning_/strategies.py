@@ -43,7 +43,7 @@ class BioPrecisionMixin:
         return requested
 
 
-def build_trainer(  # noqa: PLR0913, PLR0917
+def build_trainer(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     optimizer_name: str,
     precision: str | None = None,
     max_epochs: int = 10,

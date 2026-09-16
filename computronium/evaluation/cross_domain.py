@@ -126,7 +126,7 @@ class CrossDomainBenchmarkSuite:
         try:
             task = task_cls(name=name, **kwargs)
             task.setup()
-            return task  # noqa: TRY300
+            return task  # ruff: ignore[try-consider-else]
         except (ValueError, TypeError, KeyError) as e:
             logger.warning("Failed to create task %s/%s: %s", domain, name, e)
             return None

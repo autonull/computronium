@@ -49,7 +49,7 @@ def seed_everything(
             unavailable — a silent CPU fallback would silently defeat the
             bitwise-identical guarantee the caller is relying on.
     """
-    want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")  # noqa: PLR6201
+    want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")  # ruff: ignore[literal-membership]
     if want_cuda and not torch.cuda.is_available():
         raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
 
@@ -79,11 +79,11 @@ def capture_environment() -> dict[str, str]:
     """
     git_commit = "unknown"
     try:
-        import subprocess  # noqa: S404
+        import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
         git_commit = (
             subprocess
-            .check_output(["git", "rev-parse", "HEAD"])  # noqa: S607
+            .check_output(["git", "rev-parse", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
             .decode("ascii")
             .strip()
         )
@@ -135,7 +135,7 @@ def export_to_onnx(
     # Handle compiled models
     model = _get_model_for_processing(model)
 
-    parent = os.path.dirname(output_path)  # noqa: PTH120
+    parent = os.path.dirname(output_path)  # ruff: ignore[os-path-dirname]
     if parent:
         pathlib.Path(parent).mkdir(exist_ok=True, parents=True)
 

@@ -67,7 +67,7 @@ class RecordsMixin(QueryMixin):
             )
         return artifact
 
-    def record_evidence(  # noqa: PLR0913  mirrors evidence fields
+    def record_evidence(  # ruff: ignore[too-many-arguments]  mirrors evidence fields
         self,
         kind: str,
         scope: models.Scope,
@@ -141,7 +141,7 @@ class RecordsMixin(QueryMixin):
         )
         self._conn.commit()
 
-    def record_derived(  # noqa: PLR0913  mirrors derived fields
+    def record_derived(  # ruff: ignore[too-many-arguments]  mirrors derived fields
         self,
         type_: str,
         operator: str,
@@ -480,7 +480,7 @@ class RecordsMixin(QueryMixin):
         }.get(status)
         with self._tx() as conn:
             if ts_col:
-                sql = f"UPDATE experiments SET status = ?, {ts_col} = ? WHERE id = ?"  # noqa: S608  ts_col internal
+                sql = f"UPDATE experiments SET status = ?, {ts_col} = ? WHERE id = ?"  # ruff: ignore[hardcoded-sql-expression]  ts_col internal
                 conn.execute(sql, (status, now(), id_))
             else:
                 conn.execute(

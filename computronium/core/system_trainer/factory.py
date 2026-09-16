@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     )
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # noqa: PLR0911
+def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     from computronium.ontology import (
         BackpropCredit,
@@ -118,7 +118,7 @@ def _restore_geometry_params(
         })
 
 
-def compose_system[  # noqa: C901
+def compose_system[  # ruff: ignore[complex-structure]
     TS: Substrate,
     TG: Geometry,
     TD: StateDynamics,

@@ -101,7 +101,7 @@ def lif_step(
     v_new = torch.where(spikes.bool(), torch.zeros_like(v_new), v_new)
 
     # Add spikes to synaptic current
-    i_syn_new = i_syn_new + spikes  # noqa: PLR6104
+    i_syn_new = i_syn_new + spikes  # ruff: ignore[non-augmented-assignment]
 
     return v_new, i_syn_new, spikes
 
@@ -160,7 +160,7 @@ def conductance_matmul(
 
     # IR drop simulation
     if ir_drop_factor > 0:
-        current = current * (1 - ir_drop_factor)  # noqa: PLR6104
+        current = current * (1 - ir_drop_factor)  # ruff: ignore[non-augmented-assignment]
 
     return current
 

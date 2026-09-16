@@ -69,7 +69,7 @@ def main() -> None:
         "verify": run_verify,
         "pareto": run_pareto,
         "portfolio": run_portfolio,
-        "benchmark": lambda args: run_benchmark_cli(),  # noqa: ARG005
+        "benchmark": lambda args: run_benchmark_cli(),  # ruff: ignore[unused-lambda-argument]
     }
 
     if args.command in command_map:

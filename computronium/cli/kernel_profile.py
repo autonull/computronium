@@ -74,7 +74,7 @@ class ProfileResult:
     peak_memory_mb: float
 
 
-def _create_joint_system(  # noqa: C901, PLR0912
+def _create_joint_system(  # ruff: ignore[complex-structure, too-many-branches]
     coordinate: str, input_dim: int, output_dim: int, hidden_dim: int, device: str
 ):
     """Create a JointSystem from coordinate string."""
@@ -121,7 +121,7 @@ def _create_joint_system(  # noqa: C901, PLR0912
         raise ValueError(f"Unknown geometry: {geometry_type}")
 
     # Dynamics (support shorthands)
-    if dynamics_type in ("energy_minimization", "energy_min"):  # noqa: PLR6201
+    if dynamics_type in ("energy_minimization", "energy_min"):  # ruff: ignore[literal-membership]
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(
                 max_steps=10, beta=0.5, step_size=0.1
@@ -215,7 +215,7 @@ def _profile_kernel(
     return mean_latency, peak_mem
 
 
-def _profile_coordinate(  # noqa: C901, PLR0915
+def _profile_coordinate(  # ruff: ignore[complex-structure, too-many-statements]
     coordinate: str,
     batch_sizes: list[int],
     device: str,

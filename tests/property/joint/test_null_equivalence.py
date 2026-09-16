@@ -47,7 +47,7 @@ def _create_5d_system() -> tuple:
     return system, substrate, geometry, dynamics, credit, update
 
 
-def test_null_plasticity_equivalence():  # noqa: PLR0914
+def test_null_plasticity_equivalence():  # ruff: ignore[too-many-locals]
     """Zero-Extension Theorem (Level 4 sampled): Joint(Null) ≡ 5-D dynamics within numerical tolerance.
 
     The joint system with M=NullPlasticity must produce identical behavior
@@ -149,7 +149,7 @@ def test_null_plasticity_preserves_5d_invariants():
 def test_null_plasticity_axis_certification():
     """NullPlasticity passes axis certification tests."""
     plasticity = NullPlasticity()
-    config = PlasticityConfig.null()  # noqa: F841
+    config = PlasticityConfig.null()  # ruff: ignore[unused-variable]
 
     assert plasticity.config.plasticity_type == "null"
     assert plasticity.initial_psi(None) == {}

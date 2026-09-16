@@ -454,7 +454,7 @@ class DistributedSystemTrainer:
             return await self._tile_mesh_forward(x, substrate)
         return self.system.geometry.forward(x, substrate)
 
-    async def _tile_mesh_forward(self, x: Tensor, substrate: Substrate) -> Tensor:  # noqa: C901, PLR0912
+    async def _tile_mesh_forward(self, x: Tensor, substrate: Substrate) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches]
         """Forward pass through tile mesh with cross-node routing."""
         geometry = self.system.geometry
         op = substrate.get_forward_operator()
@@ -556,7 +556,7 @@ class DistributedSystemTrainer:
             return await self._tile_mesh_settle(state, geometry, substrate, target)
         return self.system.dynamics.settle(state, geometry, substrate, target)
 
-    async def _tile_mesh_settle(  # noqa: C901, PLR0912
+    async def _tile_mesh_settle(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         state: SystemState,
         geometry: TileGeometry,
@@ -565,7 +565,7 @@ class DistributedSystemTrainer:
     ) -> SystemState:
         """Tile mesh settling with cross-node synchronization."""
         # Run settling iterations
-        for step in range(self.system.dynamics.config.max_steps):  # noqa: PLR1702
+        for step in range(self.system.dynamics.config.max_steps):  # ruff: ignore[too-many-nested-blocks]
             # Local settle step
             for layer_tiles in geometry._graph.layer_ids[1:]:
                 for tid in layer_tiles:

@@ -19,13 +19,13 @@ Example
 ...     batch_size=32,
 ... )
 >>> print(f"EquiTile advantage: {results['equitile_speedup']:.2f}x")
-"""  # noqa: N999
+"""  # ruff: ignore[invalid-module-name]
 
 import time
 from dataclasses import dataclass
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.logging import get_logger
@@ -239,8 +239,8 @@ class Block(nn.Module):
         mask: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass."""
-        x = x + self.attn(self.ln_1(x), mask)  # noqa: PLR6104
-        x = x + self.mlp(self.ln_2(x))  # noqa: PLR6104
+        x = x + self.attn(self.ln_1(x), mask)  # ruff: ignore[non-augmented-assignment]
+        x = x + self.mlp(self.ln_2(x))  # ruff: ignore[non-augmented-assignment]
         return x
 
 
@@ -249,7 +249,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config: NanoGPTConfig) -> None:
         super().__init__()
-        assert config.n_embd % config.n_head == 0  # noqa: S101
+        assert config.n_embd % config.n_head == 0  # ruff: ignore[assert]
 
         # QKV projections
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -336,7 +336,7 @@ class BenchmarkResult:
     training_time_sec: float
 
 
-def benchmark_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
+def benchmark_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     model: nn.Module,
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
@@ -406,13 +406,13 @@ def benchmark_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
 
     scaler = GradScaler() if device == "cuda" else None
 
-    for epoch in range(epochs):  # noqa: PLR1702
+    for epoch in range(epochs):  # ruff: ignore[too-many-nested-blocks]
         epoch_loss = 0.0
         n_batches = 0
 
         for batch_idx, (input_ids, targets) in enumerate(train_loader):
-            input_ids = input_ids.to(device)  # noqa: PLW2901
-            targets = targets.to(device)  # noqa: PLW2901
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             # Forward pass
             if scaler:
@@ -475,8 +475,8 @@ def benchmark_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
 
     with torch.no_grad():
         for input_ids, targets in val_loader:
-            input_ids = input_ids.to(device)  # noqa: PLW2901
-            targets = targets.to(device)  # noqa: PLW2901
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             if hasattr(model, "forward") and model.__class__.__name__ == "NanoGPTModel":
                 logits, loss = model(input_ids, targets)
@@ -522,7 +522,7 @@ def benchmark_model(  # noqa: C901, PLR0912, PLR0914, PLR0915
     )
 
 
-def compare_nanoGPT(  # noqa: N802
+def compare_nanoGPT(  # ruff: ignore[invalid-function-name]
     task: str = "shakespeare",
     epochs: int = 5,
     batch_size: int = 32,

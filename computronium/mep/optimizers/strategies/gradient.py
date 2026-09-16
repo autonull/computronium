@@ -11,7 +11,7 @@ input/energy context.
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.optimization.strategies.base import GradientStrategy
@@ -156,7 +156,7 @@ class EPGradient(GradientStrategy):
         # Ensure we run in full precision for the contrastive gradient step
         device_type = x.device.type
         # Only disable if valid device for autocast
-        if device_type in ["cuda", "cpu", "xpu", "hpu"]:  # noqa: PLR6201
+        if device_type in ["cuda", "cpu", "xpu", "hpu"]:  # ruff: ignore[literal-membership]
             amp_context = torch.amp.autocast(device_type=device_type, enabled=False)
         else:
             from contextlib import nullcontext
@@ -285,7 +285,7 @@ class LocalEPGradient:
             model, x, target, states_free, states_nudged, structure
         )
 
-    def _apply_local_contrast(  # noqa: PLR0914
+    def _apply_local_contrast(  # ruff: ignore[too-many-locals]
         self,
         model: nn.Module,
         x: torch.Tensor,
@@ -359,7 +359,7 @@ class LocalEPGradient:
                 inter_layer_params, states_nudged[-1], target, structure, x.dtype
             )
 
-    def _update_trailing_params(  # noqa: C901
+    def _update_trailing_params(  # ruff: ignore[complex-structure]
         self,
         params: list[nn.Parameter],
         last_state: torch.Tensor,
@@ -374,7 +374,7 @@ class LocalEPGradient:
         # Find the point after the last "layer" or "attention"
         start_idx = 0
         for i in range(len(structure) - 1, -1, -1):
-            if structure[i]["type"] in ("layer", "attention"):  # noqa: PLR6201
+            if structure[i]["type"] in ("layer", "attention"):  # ruff: ignore[literal-membership]
                 start_idx = i + 1
                 break
 
@@ -403,7 +403,7 @@ class LocalEPGradient:
                 )
             else:
                 # MSE - handle potential shape mismatch
-                if output.shape != target_vec.shape:  # noqa: SIM102
+                if output.shape != target_vec.shape:  # ruff: ignore[collapsible-if]
                     if output.numel() == target_vec.numel():
                         target_vec = target_vec.view_as(output)
 
@@ -450,7 +450,7 @@ class LocalEPGradient:
                 io_list.append({"module": module, "input": prev, "output": state})
                 prev = state
                 state_idx += 1
-            elif item["type"] in ("act", "norm", "pool", "flatten", "dropout"):  # noqa: PLR6201
+            elif item["type"] in ("act", "norm", "pool", "flatten", "dropout"):  # ruff: ignore[literal-membership]
                 prev = item["module"](prev)
             elif item["type"] == "attention":
                 if state_idx >= len(states):
@@ -546,9 +546,9 @@ class NaturalGradient:
 
                 # Compute Fisher proxy
                 # We assume whitening along the input dimension (In, In) covariance
-                # F = g.T @ g  (In, In)  # noqa: ERA001
+                # F = g.T @ g  (In, In)  # ruff: ignore[commented-out-code]
 
-                if self.use_diagonal:  # noqa: SIM108
+                if self.use_diagonal:  # ruff: ignore[if-else-block-instead-of-if-exp]
                     fisher = torch.sum(g**2, dim=0)  # (In,)
                 else:
                     fisher = g.T @ g  # (In, In)

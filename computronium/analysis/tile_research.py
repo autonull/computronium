@@ -266,7 +266,7 @@ class ExperimentTracker:
             metric_keys.update(
                 k
                 for k in m
-                if k not in ("timestamp", "step", "epoch")  # noqa: PLR6201
+                if k not in ("timestamp", "step", "epoch")  # ruff: ignore[literal-membership]
             )
 
         # Compute stats for each metric
@@ -580,7 +580,7 @@ class VisualizationHelper:
             if layer not in layers:
                 layers[layer] = []
 
-            if tile.error is not None:  # noqa: SIM108
+            if tile.error is not None:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 error_norm = tile.error.norm(p=2).item()
             else:
                 error_norm = 0.0

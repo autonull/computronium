@@ -336,7 +336,7 @@ def build_tile_head(
     # TaskHandler expects Literal["classification", "regression", "binary", "multilabel"]
     task_type = (
         config.task_type
-        if config.task_type in ("classification", "regression", "binary", "multilabel")  # noqa: PLR6201
+        if config.task_type in ("classification", "regression", "binary", "multilabel")  # ruff: ignore[literal-membership]
         else "classification"
     )
     head_config = TileAlgorithmConfig(

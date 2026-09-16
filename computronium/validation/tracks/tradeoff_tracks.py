@@ -62,7 +62,7 @@ def get_memory_usage():
     return process.memory_info().rss / 1024 / 1024
 
 
-def train_and_measure(model, train_loader, test_loader, epochs, device, name):  # noqa: PLR0914
+def train_and_measure(model, train_loader, test_loader, epochs, device, name):  # ruff: ignore[too-many-locals]
     """Train a composed System and measure everything.
 
     Each step runs the full 5-axis pipeline via ``model.train_step`` — the
@@ -93,8 +93,8 @@ def train_and_measure(model, train_loader, test_loader, epochs, device, name):  
 
         for x_batch, y_batch in train_loader:
             # Flatten MNIST images
-            x_batch = x_batch.view(x_batch.size(0), -1)  # noqa: PLW2901
-            x_batch, y_batch = x_batch.to(device), y_batch.to(device)  # noqa: PLW2901
+            x_batch = x_batch.view(x_batch.size(0), -1)  # ruff: ignore[redefined-loop-name]
+            x_batch, y_batch = x_batch.to(device), y_batch.to(device)  # ruff: ignore[redefined-loop-name]
 
             metrics = model.train_step(x_batch, y_batch)
 
@@ -114,8 +114,8 @@ def train_and_measure(model, train_loader, test_loader, epochs, device, name):  
         with torch.no_grad():
             for x_batch, y_batch in test_loader:
                 # Flatten MNIST images
-                x_batch = x_batch.view(x_batch.size(0), -1)  # noqa: PLW2901
-                x_batch, y_batch = x_batch.to(device), y_batch.to(device)  # noqa: PLW2901
+                x_batch = x_batch.view(x_batch.size(0), -1)  # ruff: ignore[redefined-loop-name]
+                x_batch, y_batch = x_batch.to(device), y_batch.to(device)  # ruff: ignore[redefined-loop-name]
                 out = model(x_batch)
                 pred = out.argmax(dim=1)
                 test_correct += (pred == y_batch).sum().item()
@@ -172,7 +172,7 @@ def train_and_measure(model, train_loader, test_loader, epochs, device, name):  
     }
 
 
-def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:  # noqa: PLR0914, PLR0915
+def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:  # ruff: ignore[too-many-locals, too-many-statements]
     """
     Track 57: Honest Trade-off Analysis
 

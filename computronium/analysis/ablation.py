@@ -450,7 +450,7 @@ class AblationStudy:
             raise ValueError("No results to analyze. Call run() first.")
 
         variances = []
-        for col in self.dimensions.keys():  # noqa: SIM118
+        for col in self.dimensions.keys():  # ruff: ignore[in-dict-keys]
             if col in df.columns:
                 mean_per_val = df.groupby(col)["val_accuracy"].mean()
                 if not mean_per_val.empty:
@@ -460,7 +460,7 @@ class AblationStudy:
         variances.sort(key=lambda x: x[1] if pd.notna(x[1]) else 0.0, reverse=True)
         return [col for col, var in variances]
 
-    def generate_report(  # noqa: C901
+    def generate_report(  # ruff: ignore[complex-structure]
         self,
         output_dir: str | Path = "results/ablation",
         include_plots: bool = True,
@@ -554,13 +554,13 @@ class AblationStudy:
                 report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
 
         # Generate formatted report
-        if format in ("html", "all"):  # noqa: PLR6201
+        if format in ("html", "all"):  # ruff: ignore[literal-membership]
             html_path = self._generate_html_report(
                 output_dir, summary, df, loo_results, sobol
             )
             report_paths["html"] = html_path
 
-        if format in ("markdown", "all"):  # noqa: PLR6201
+        if format in ("markdown", "all"):  # ruff: ignore[literal-membership]
             md_path = self._generate_markdown_report(
                 output_dir, summary, loo_results, sobol
             )
@@ -808,7 +808,7 @@ def create_ablation_report(
     study.run(parallel_workers=parallel_workers)
 
     if run_sobol:
-        try:  # noqa: SIM105
+        try:  # ruff: ignore[suppressible-exception]
             study.compute_sobol_indices(
                 n_samples=500, parallel_workers=parallel_workers
             )

@@ -144,7 +144,7 @@ class CoreTrainerDriver:
     on a bulk overnight run spawns no DataLoader worker processes per probe.
     """
 
-    def __init__(  # driver constructor captures all campaign compute settings at once  # noqa: PLR0913
+    def __init__(  # driver constructor captures all campaign compute settings at once  # ruff: ignore[too-many-arguments]
         self,
         *,
         num_workers: int = 0,
@@ -173,7 +173,7 @@ class CoreTrainerDriver:
         self._dataset_cache = dataset_cache or DatasetCache()
         self._model_cache = model_cache or ModelCache()
 
-    def train(  # noqa: PLR0914
+    def train(  # ruff: ignore[too-many-locals]
         self,
         *,
         model: str,

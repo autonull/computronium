@@ -5,7 +5,7 @@ without the deprecated zoo package.
 """
 
 from torch.optim import (
-    SGD as TorchSGD,  # noqa: N811
+    SGD as TorchSGD,  # ruff: ignore[constant-imported-as-non-constant]
 )
 from torch.optim import Adam as TorchAdam
 from torch.optim import AdamW as TorchAdamW

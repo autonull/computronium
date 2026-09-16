@@ -77,20 +77,20 @@ class PromotionGate:
         rew = metrics.get("reward")
 
         # Check Accuracy
-        if "accuracy" in thresholds:  # noqa: SIM102
+        if "accuracy" in thresholds:  # ruff: ignore[collapsible-if]
             if acc is None or acc < thresholds["accuracy"]:
                 return False
 
         # Check Reward
-        if "reward" in thresholds:  # noqa: SIM102
+        if "reward" in thresholds:  # ruff: ignore[collapsible-if]
             if rew is None or rew < thresholds["reward"]:
                 return False
 
         # Check Efficiency (if available)
-        if (  # noqa: SIM103
+        if (  # ruff: ignore[needless-bool]
             "time" in metrics
             and metrics["time"] > 0
-            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)  # noqa: PLR6201
+            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)  # ruff: ignore[literal-membership]
         ):  # > 10 mins for MNIST is bad
             return False
 
@@ -367,7 +367,7 @@ class CurriculumManager:
         TRACKS (Dict[str, List[str]]): Mapping of track names to ordered task lists.
     """
 
-    TRACKS: dict[str, list[str]] = {  # noqa: RUF012
+    TRACKS: dict[str, list[str]] = {  # ruff: ignore[mutable-class-default]
         "vision": [
             "digits",
             "usps",

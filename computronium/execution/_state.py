@@ -169,24 +169,24 @@ class FailureTracker:
                 SELECT failure_type, COUNT(*) as count
                 FROM failures {where_clause}
                 GROUP BY failure_type ORDER BY count DESC
-            """)  # noqa: S608
+            """)  # ruff: ignore[hardcoded-sql-expression]
             by_type = dict(cursor.fetchall())
 
             cursor.execute(f"""
                 SELECT model_name, COUNT(*) as count
                 FROM failures {where_clause}
                 GROUP BY model_name ORDER BY count DESC LIMIT 10
-            """)  # noqa: S608
+            """)  # ruff: ignore[hardcoded-sql-expression]
             by_model = dict(cursor.fetchall())
 
             cursor.execute(f"""
                 SELECT task_name, COUNT(*) as count
                 FROM failures {where_clause}
                 GROUP BY task_name ORDER BY count DESC
-            """)  # noqa: S608
+            """)  # ruff: ignore[hardcoded-sql-expression]
             by_task = dict(cursor.fetchall())
 
-            cursor.execute(f"SELECT COUNT(*) FROM failures {where_clause}")  # noqa: S608
+            cursor.execute(f"SELECT COUNT(*) FROM failures {where_clause}")  # ruff: ignore[hardcoded-sql-expression]
             total_failures = cursor.fetchone()[0]
 
             return {
@@ -423,7 +423,7 @@ class ExperimentState:
     def get_failure_analysis(self) -> dict[str, object]:
         return self.failure_tracker.analyze_failure_patterns()
 
-    def get_progress(self) -> dict[str, dict[str, dict[str, object]]]:  # noqa: C901
+    def get_progress(self) -> dict[str, dict[str, dict[str, object]]]:  # ruff: ignore[complex-structure]
         trials = self.storage.get_all_trials()
         progress: dict[str, dict[str, dict[str, object]]] = {}
 
@@ -492,7 +492,7 @@ class ExperimentState:
                         recent_tasks.append(config["task"])
                 except ValueError, TypeError:
                     logger.warning("Failed to deserialize recent task entry")
-            return recent_tasks  # noqa: TRY300
+            return recent_tasks  # ruff: ignore[try-consider-else]
         except sqlite3.Error, OSError, ValueError:
             logger.exception("Error fetching recent tasks")
             return []

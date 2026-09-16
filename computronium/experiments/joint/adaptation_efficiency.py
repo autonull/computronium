@@ -116,7 +116,7 @@ class PlasticityModulatedModel(nn.Module):
                         dim=1,
                     )
                 )
-                h = h * gate  # noqa: PLR6104
+                h = h * gate  # ruff: ignore[non-augmented-assignment]
             elif hasattr(self.plasticity, "fast_weight_dim"):
                 # Fast weights: additive modulation
                 fast_weights = self.psi.get(
@@ -126,7 +126,7 @@ class PlasticityModulatedModel(nn.Module):
                     ),
                 )
                 modulation = self.fast_weight_proj(fast_weights)
-                h = h + modulation  # noqa: PLR6104
+                h = h + modulation  # ruff: ignore[non-augmented-assignment]
             elif hasattr(self.plasticity, "num_operators"):
                 # Rule state: operator application
                 operator_logits = self.psi.get(
@@ -143,12 +143,12 @@ class PlasticityModulatedModel(nn.Module):
                 combined_op = active_operator @ op_emb  # [batch, op_dim]
                 if combined_op.shape[1] == self.plasticity.operator_dim:
                     modulation = self.operator_proj(combined_op)
-                    h = h + modulation  # noqa: PLR6104
+                    h = h + modulation  # ruff: ignore[non-augmented-assignment]
 
         return self.fc2(h)
 
 
-def evaluate_adaptation(  # noqa: C901, PLR0914, PLR0915
+def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     coordinate: str,
     epochs_per_phase: int = 200,
     batch_size: int = 64,

@@ -50,7 +50,7 @@ def register_objective(name: str, *, pareto_field: str, maximize: bool) -> None:
     KNOWN_OBJECTIVES.add(name)
 
 
-class ExplorationBudgetExhausted(RuntimeError):  # noqa: N818 — CEEC gate name is pre-registered
+class ExplorationBudgetExhausted(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] — CEEC gate name is pre-registered
     """CEEC gate: exploratory campaigns for this spec exceeded its budget."""
 
 

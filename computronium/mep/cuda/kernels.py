@@ -86,7 +86,7 @@ def dion_update_cuda(
             - new_error_buffer: Updated error buffer (or None if not provided)
     """
     # Add error feedback if available
-    if error_buffer is not None:  # noqa: SIM108
+    if error_buffer is not None:  # ruff: ignore[if-else-block-instead-of-if-exp]
         G_effective = G + error_beta * error_buffer
     else:
         G_effective = G
@@ -145,7 +145,7 @@ def newton_schulz_cuda(
     # This matches the CPU implementation exactly
     X = G.clone()
     norm = X.norm().clamp(min=1e-4, max=1e4)
-    X = X / norm  # noqa: PLR6104
+    X = X / norm  # ruff: ignore[non-augmented-assignment]
 
     # Newton-Schulz iteration: X = 0.5 * X * (3I - X^T X)
     identity = torch.eye(c, device=G.device, dtype=G.dtype)
@@ -194,20 +194,20 @@ def spectral_norm_power_iteration_cuda(
     # Initialize singular vectors if not provided
     if u is None:
         u = torch.randn(h, device=W.device, dtype=W.dtype)
-        u = u / (u.norm() + epsilon)  # noqa: PLR6104
+        u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
     if v is None:
         v = torch.randn(w, device=W.device, dtype=W.dtype)
-        v = v / (v.norm() + epsilon)  # noqa: PLR6104
+        v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
 
     # Power iteration
     for _ in range(niter):
         # v = W^T u
         v = torch.mv(W.T, u)
-        v = v / (v.norm() + epsilon)  # noqa: PLR6104
+        v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
 
         # u = W v
         u = torch.mv(W, v)
-        u = u / (u.norm() + epsilon)  # noqa: PLR6104
+        u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
 
     # Compute spectral norm
     sigma = torch.dot(u, torch.mv(W, v)).abs()

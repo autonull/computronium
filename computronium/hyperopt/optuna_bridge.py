@@ -80,7 +80,7 @@ def scalarize_objectives(
     return score
 
 
-def create_optuna_space(  # noqa: C901, PLR0912, PLR0915
+def create_optuna_space(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     trial: optuna.Trial,
     model_name: str,
     constraints: dict[str, object] | None = None,
@@ -150,7 +150,7 @@ def create_optuna_space(  # noqa: C901, PLR0912, PLR0915
                 and all(isinstance(v, (int, float)) for v in override)
                 and not has_choices
             )
-            if is_range and spec.param_type in ("continuous", "discrete"):  # noqa: PLR6201
+            if is_range and spec.param_type in ("continuous", "discrete"):  # ruff: ignore[literal-membership]
                 # Explicit [min, max] range for params sampled as a range
                 min_v, max_v = override
                 spec.range_min = min_v
@@ -158,7 +158,7 @@ def create_optuna_space(  # noqa: C901, PLR0912, PLR0915
             elif override_is_list:
                 # Full choices list (authoritative for both categorical and
                 # discrete-with-choices params like hidden_dim)
-                spec.choices = [c for c in override]  # noqa: C416
+                spec.choices = [c for c in override]  # ruff: ignore[unnecessary-comprehension]
                 if has_choices and spec.param_type == "categorical":
                     spec.default = spec.choices[0]
             space[param_name] = spec
@@ -197,7 +197,7 @@ def create_optuna_space(  # noqa: C901, PLR0912, PLR0915
                         c for c in spec.choices if c <= constraints["max_layers"]
                     ]
 
-            elif param_name == "steps" and "max_steps" in constraints:  # noqa: SIM102
+            elif param_name == "steps" and "max_steps" in constraints:  # ruff: ignore[collapsible-if]
                 if spec.range_max is not None:
                     max_val = min(max_val, constraints["max_steps"])
 

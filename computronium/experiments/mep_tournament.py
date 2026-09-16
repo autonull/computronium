@@ -75,7 +75,7 @@ class MEPConfig:
             "feedback_type": self.feedback,
         })
         # Task-specific dims
-        if self.task in ("mnist", "fashion_mnist"):  # noqa: PLR6201
+        if self.task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
             kwargs["input_dim"] = 784
             kwargs["output_dim"] = 10
         else:
@@ -281,7 +281,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
                         "p_value": float(p_val),
                         "significant": p_val < 0.05,
                     }
-            except Exception:  # noqa: S110
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
         importance[task] = task_importance
@@ -367,7 +367,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    if args.factors:  # noqa: SIM108
+    if args.factors:  # ruff: ignore[if-else-block-instead-of-if-exp]
         factors = json.loads(args.factors)
     else:
         factors = MEP_FACTORS

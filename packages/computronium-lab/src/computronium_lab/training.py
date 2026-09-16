@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 DEFAULT_TAU = 1.029
 
 
-class StabilityGuardKill(RuntimeError):  # noqa: N818 - CEEC gate name is pre-registered
+class StabilityGuardKill(RuntimeError):  # ruff: ignore[error-suffix-on-exception-name] - CEEC gate name is pre-registered
     """CEEC-gated stop: the stability guard flagged divergence mid-training."""
 
 

@@ -18,7 +18,7 @@ __all__ = [
 ]
 
 
-def generate_experiment_report(  # noqa: C901, PLR0912, PLR0914, PLR0915
+def generate_experiment_report(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     db_path: str, tier: str, output_path: str = "experiment_report.md"
 ) -> str:
     """
@@ -80,7 +80,7 @@ def generate_experiment_report(  # noqa: C901, PLR0912, PLR0914, PLR0915
         bp_accs = matrix.get("Backprop Baseline", {}).get(task, [])
         if not bp_accs:
             # Fallback alias search
-            for m in matrix.keys():  # noqa: SIM118
+            for m in matrix.keys():  # ruff: ignore[in-dict-keys]
                 if "backprop" in m.lower():
                     bp_accs = matrix[m].get(task, [])
                     break
@@ -120,7 +120,7 @@ def generate_experiment_report(  # noqa: C901, PLR0912, PLR0914, PLR0915
     lines.append("\n## 2. Performance Matrix (Accuracy)")
 
     # Header
-    sorted_tasks = sorted(list(tasks_seen))  # noqa: C414
+    sorted_tasks = sorted(list(tasks_seen))  # ruff: ignore[unnecessary-double-cast-or-process]
     lines.append(
         "| Model | " + " | ".join([t.upper() for t in sorted_tasks]) + " | Mean |"
     )

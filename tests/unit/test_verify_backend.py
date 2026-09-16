@@ -2,7 +2,7 @@ import os
 import pathlib
 
 
-def verify_backend():  # noqa: C901, PLR0912, PLR0915
+def verify_backend():  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     print("=" * 60)
     print("Backend Verification")
     print("=" * 60)

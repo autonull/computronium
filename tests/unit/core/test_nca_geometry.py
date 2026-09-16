@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
 from computronium import (
@@ -146,7 +146,9 @@ class TestNcaCreditUpdateComposition:
             credit=_credit(),
             update=ParameterUpdateConfig.euclidean(),
         )
-        with pytest.raises(ValueError, match="state-shape contract|NCA geometry requires instantaneous"):
+        with pytest.raises(
+            ValueError, match="state-shape contract|NCA geometry requires instantaneous"
+        ):
             config.validate()
 
 

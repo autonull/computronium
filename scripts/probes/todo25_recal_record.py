@@ -164,7 +164,7 @@ def _run(store: CEECStore) -> int:
 
     try:
         existing = store.get_experiment(ROUND3_ID)
-    except StoreError:  # ruff: ignore[S110]  idempotent re-run: an absent experiment is the first-run path
+    except StoreError:  # ruff: ignore[try-except-pass]  idempotent re-run: an absent experiment is the first-run path
         pass
     else:
         print(

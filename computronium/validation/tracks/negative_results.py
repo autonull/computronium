@@ -73,7 +73,7 @@ class PureLinearChain(nn.Module):
         return h
 
 
-def track_55_negative_linear_chain(verifier) -> TrackResult:  # noqa: PLR0914
+def track_55_negative_linear_chain(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """
     Track 55: Pure Linear Chain Failure (Negative Result)
 

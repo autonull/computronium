@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     )
 
 
-def _credit_from_config(config: CreditAssignmentConfig):  # noqa: PLR0911
+def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     from computronium.ontology import (
         BackpropCredit,
@@ -89,7 +89,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # noqa: PLR0911
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
-def compose_joint_system[  # noqa: C901
+def compose_joint_system[  # ruff: ignore[complex-structure]
     TS: Substrate,
     TG: Geometry,
     TD: StateDynamics,
@@ -233,7 +233,7 @@ def compose_joint_system[  # noqa: C901
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-        def _make_context(self) -> SystemContext:  # noqa: F821
+        def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
             """Create SystemContext from this joint system."""
             from computronium.core.joint.transition import PlasticityConfig
             from computronium.state import StateRegistry, StateVariable, SystemContext
@@ -291,7 +291,7 @@ def compose_joint_system[  # noqa: C901
             )
 
         @property
-        def context(self) -> SystemContext:  # noqa: F821
+        def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
             """SystemContext bound to the current θ and component configs."""
             return self._make_context()
 
@@ -370,11 +370,11 @@ def compose_joint_system[  # noqa: C901
                 return self
 
             @property
-            def context(self) -> SystemContext:  # noqa: F821
+            def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
                 """SystemContext bound to the current θ and component configs."""
                 return self._make_context()
 
-            def _make_context(self) -> SystemContext:  # noqa: F821
+            def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
                 from computronium.core.joint.transition import PlasticityConfig
                 from computronium.state import (
                     StateRegistry,
@@ -465,7 +465,7 @@ def _joint_from_spec(spec: dict) -> JointSystem:
     return joint
 
 
-def compose_joint_system_from_configs(  # noqa: C901
+def compose_joint_system_from_configs(  # ruff: ignore[complex-structure]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -474,6 +474,7 @@ def compose_joint_system_from_configs(  # noqa: C901
     update: ParameterUpdateConfig,
     *,
     device: str | torch.device | None = None,
+    validate: bool = False,
 ) -> JointSystem[
     Substrate,
     Geometry,
@@ -487,6 +488,9 @@ def compose_joint_system_from_configs(  # noqa: C901
     Args:
         device: Optional target device; parameters are placed on it at
             construction (``None`` keeps components where they were built).
+        validate: If True, run cross-axis validation via ``SystemConfig.validate()``
+            before composing the system. Default False for backward compatibility
+            with existing code that bypasses validation.
 
     This is the inverse of extract_config(), enabling the round-trip:
     JointSystem --extract_config--> configs --compose_joint_system_from_configs--> JointSystem
@@ -502,6 +506,20 @@ def compose_joint_system_from_configs(  # noqa: C901
     Returns:
         A composed JointSystem with default implementations for each layer.
     """
+    # Optional cross-axis validation
+    if validate:
+        from computronium.ontology.system import SystemConfig
+
+        sys_config = SystemConfig(
+            substrate=substrate,
+            geometry=geometry,
+            dynamics=dynamics,
+            credit=credit,
+            update=update,
+            plasticity=plasticity,
+        )
+        sys_config.validate()
+
     # Instantiate substrate from config (class named by the explicit type tag)
     substrate_instance = substrate_from_config(substrate)
 

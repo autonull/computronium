@@ -82,7 +82,7 @@ class SequenceTrainingResult:
     walltime_s: float = 0.0
 
 
-def train_sequence(  # noqa: PLR0913 - flat sequence-run knobs
+def train_sequence(  # ruff: ignore[too-many-arguments] - flat sequence-run knobs
     system: object,
     task: str,
     *,

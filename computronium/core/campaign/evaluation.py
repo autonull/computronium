@@ -501,7 +501,7 @@ def _teacher_key(
     return (campaign_id, coordinate, seed) + ((segment,) if segment else ())
 
 
-def evaluate_episode(  # noqa: PLR0913
+def evaluate_episode(  # ruff: ignore[too-many-arguments]
     joint: JointSystem,
     *,
     coordinate: str,
@@ -627,7 +627,7 @@ def evaluate_episode(  # noqa: PLR0913
     return record, metrics
 
 
-def probe_episode(  # noqa: PLR0913
+def probe_episode(  # ruff: ignore[too-many-arguments]
     joint: JointSystem,
     *,
     coordinate: str,

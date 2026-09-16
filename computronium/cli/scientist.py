@@ -200,7 +200,7 @@ def _generate_coordinates(
 
 def _run_experiment(coordinate: str, objective: str, device: str) -> dict:
     """Run a single experiment and return results."""
-    import subprocess  # noqa: S404
+    import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
     # Use the benchmark adaptation_efficiency as the experiment
     cmd = [
@@ -222,7 +222,7 @@ def _run_experiment(coordinate: str, objective: str, device: str) -> dict:
     ]
 
     try:  # noqa: too-many-statements-in-try-clause
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # noqa: PLW1510, S603
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
         if result.returncode != 0:
             return {
                 "coordinate": coordinate,
@@ -247,7 +247,7 @@ def _run_experiment(coordinate: str, objective: str, device: str) -> dict:
                     "rho_jacobian": 0.0,  # Would need to extract from seeds
                     "objective_value": r.get("mean_accuracy", 0),
                 }
-        return {  # noqa: TRY300
+        return {  # ruff: ignore[try-consider-else]
             "coordinate": coordinate,
             "success": True,
             "objective_value": 0.0,
@@ -615,7 +615,7 @@ def _hypothesis(args) -> int:
     return 1
 
 
-def main(argv: Sequence[str] | None = None) -> int:  # noqa: PLR0911
+def main(argv: Sequence[str] | None = None) -> int:  # ruff: ignore[too-many-return-statements]
     """Console-script entry point for ``comp scientist``."""
     args = _build_parser().parse_args(argv)
 

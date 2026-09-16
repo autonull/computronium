@@ -51,7 +51,7 @@ from .strategies import (
     UpdateStrategy,
 )
 
-__all__ = [  # noqa: RUF022
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Core optimizer
     # Strategy interfaces
     "GradientStrategy",

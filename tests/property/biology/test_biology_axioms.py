@@ -80,7 +80,7 @@ class TestEPGradientEquivalence:
         reason="GATE-0: pre-existing EqProp gradient drift — "
         "max EP-BPTT cosine < 0.5. Locked until LOOP/RULE parity work lands."
     )
-    def test_ep_gradient_matches_bptt(self, synthetic_mlp_task, data):  # noqa: PLR0914
+    def test_ep_gradient_matches_bptt(self, synthetic_mlp_task, data):  # ruff: ignore[too-many-locals]
         """EP gradient should align with BPTT gradient at finite β."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -99,7 +99,7 @@ class TestEPGradientEquivalence:
 
         # --- EP gradient (contrastive method) ---
         model.train()
-        result = model.train_step(xb, yb)  # noqa: F841
+        result = model.train_step(xb, yb)  # ruff: ignore[unused-variable]
         ep_grads = [
             p.grad.clone() if p.grad is not None else torch.zeros_like(p)
             for p in model.parameters()
@@ -126,7 +126,7 @@ class TestEPGradientEquivalence:
         )
 
     @pytest.mark.xfail(reason="GATE-0: pre-existing EqProp gradient drift")
-    def test_deq_gradients_match_bptt_wired_up(self, synthetic_mlp_task):  # noqa: PLR0914
+    def test_deq_gradients_match_bptt_wired_up(self, synthetic_mlp_task):  # ruff: ignore[too-many-locals]
         """Wire up the disabled test_deq.py::test_gradients_match_bptt."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -179,7 +179,7 @@ class TestLyapunovEnergyDescent:
         model = _create_tile_ep_model(input_dim, hidden_dim, output_dim)
         model.eval()
 
-        xb, yb = x[:8], y[:8]  # noqa: F841
+        xb, yb = x[:8], y[:8]  # ruff: ignore[unused-variable]
 
         # Use settle_universal to get trajectory
         with torch.no_grad():
@@ -218,7 +218,7 @@ class TestFixedPointReliability:
 
     @settings(max_examples=5, deadline=None)
     @given(st.data())
-    def test_fixed_point_uniqueness_tile_ep(self, synthetic_mlp_task, data):  # noqa: PLR0914
+    def test_fixed_point_uniqueness_tile_ep(self, synthetic_mlp_task, data):  # ruff: ignore[too-many-locals]
         """Run relax from multiple initializations, assert convergence."""
         x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -368,7 +368,7 @@ class TestAdaptiveFAAlignment:
     @pytest.mark.xfail(
         reason="AdaptiveFA feedback LR too small to show alignment in 50 steps"
     )
-    def test_feedback_alignment_improves(self, synthetic_mlp_task):  # noqa: C901, PLR0914
+    def test_feedback_alignment_improves(self, synthetic_mlp_task):  # ruff: ignore[complex-structure, too-many-locals]
         """After K=50 steps, cos(B, W.T) should increase from initial random value."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 

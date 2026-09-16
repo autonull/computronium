@@ -69,7 +69,7 @@ def _contrast_row(  # noqa: PLR0914 — measurement axis assembly
     return rows
 
 
-def _tf_goodness(  # noqa: PLR0913, PLR0917 — mirrors _tf_layer_grad's signature
+def _tf_goodness(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] — mirrors _tf_layer_grad's signature
     credit, geometry, w, a_pos, a_neg, i, y_flat, y_neg, b, t
 ):
     """G+/G- streams exactly as ``LocalContrastiveCredit._tf_layer_grad``."""

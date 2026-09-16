@@ -273,7 +273,7 @@ def _write_crosstab(f, df: pd.DataFrame) -> None:
     """Write failures-by-model-and-type as a markdown table."""
     f.write("## Failures by Model and Type\n\n")
     cross_tab = pd.crosstab(df["model"], df["type"])
-    cols = ["Model"] + list(cross_tab.columns)  # noqa: RUF005
+    cols = ["Model"] + list(cross_tab.columns)  # ruff: ignore[collection-literal-concatenation]
     f.write("| " + " | ".join(cols) + " |\n")
     f.write("|" + "|".join(["---"] * len(cols)) + "|\n")
     for index, row in cross_tab.iterrows():

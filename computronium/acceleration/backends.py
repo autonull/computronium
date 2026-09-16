@@ -40,7 +40,7 @@ __all__ = [
 ]
 
 
-class BackendType(str, Enum):  # noqa: UP042
+class BackendType(str, Enum):  # ruff: ignore[replace-str-enum]
     """Compute backend types in priority order."""
 
     TRITON = "triton"
@@ -127,17 +127,17 @@ class KernelProfiler:
                 _ = operation(*inputs)
 
             # Synchronize for accurate timing
-            if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
+            if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
                 torch.cuda.synchronize()
 
             # Benchmark
             times = []
             for _ in range(self.benchmark_runs):
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
+                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
                     torch.cuda.synchronize()
                 start = time.perf_counter()
                 _ = operation(*inputs)
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # noqa: PLR6201
+                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
                     torch.cuda.synchronize()
                 elapsed = time.perf_counter() - start
                 times.append(elapsed * 1000)  # ms
@@ -170,7 +170,7 @@ class KernelProfiler:
 
     def _prepare_inputs(self, shape: tuple[int, ...], backend: BackendType):
         """Prepare inputs for benchmarking based on backend."""
-        if backend in (BackendType.CUPY,):  # noqa: PLR6201
+        if backend in (BackendType.CUPY,):  # ruff: ignore[literal-membership]
             import cupy as cp
 
             return [cp.random.randn(*shape).astype(cp.float32) for _ in range(2)]
@@ -272,7 +272,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except Exception:  # noqa: S112
+                    except Exception:  # ruff: ignore[try-except-continue]
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 
@@ -358,7 +358,7 @@ def check_cupy_available() -> tuple[bool, str]:
         import cupy as cp
 
         _ = cp.zeros(10)
-        return True, "CuPy available with CUDA"  # noqa: TRY300
+        return True, "CuPy available with CUDA"  # ruff: ignore[try-consider-else]
     except ImportError:
         return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
     except Exception as e:
@@ -419,7 +419,7 @@ def profile_kernel(
     shapes: list[tuple[int, ...]],
 ) -> dict[str, list[BackendBenchmark]]:
     """Profile a kernel operation across backends and shapes."""
-    profiler = KernelProfiler()  # noqa: F841
+    profiler = KernelProfiler()  # ruff: ignore[unused-variable]
     # This is a placeholder - actual implementation would need
     # to extract the operation from the registered backend
     return {}

@@ -246,7 +246,7 @@ class QueryMixin(StoreBase):
             clause.append("experiment_id = ?")
             params.append(experiment_id)
         where = f"WHERE {' AND '.join(clause)}" if clause else ""
-        sql = f"SELECT * FROM gate_outcomes {where} ORDER BY created_at, id"  # noqa: S608  clause internal
+        sql = f"SELECT * FROM gate_outcomes {where} ORDER BY created_at, id"  # ruff: ignore[hardcoded-sql-expression]  clause internal
         rows = self._conn.execute(sql, params).fetchall()
         return [
             models.GateOutcome(

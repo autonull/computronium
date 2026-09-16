@@ -181,7 +181,7 @@ def _measured_contraction(rig: _TrialRig, delay: int) -> float:
     return float(delta.norm() ** (1.0 / max(delay, 1)))
 
 
-def run_memory_trial(  # noqa: PLR0913 — swept axes are the parameterization
+def run_memory_trial(  # ruff: ignore[too-many-arguments] — swept axes are the parameterization
     *,
     seed: int,
     contraction: float,

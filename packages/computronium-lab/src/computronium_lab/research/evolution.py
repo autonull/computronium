@@ -642,7 +642,7 @@ def run_evolution(lab: Lab, plan: EvolutionPlan) -> EvolutionReport:
             else None
         ),
         archive=archive,
-        rng=random.Random(evolution.seed),  # noqa: S311 - seeded deterministic evolution
+        rng=random.Random(evolution.seed),  # ruff: ignore[suspicious-non-cryptographic-random-usage] - seeded deterministic evolution
         objectives=_objectives(evolution),
         surrogate=SurrogateFitness(plan.spec),
         fitness=CampaignFitness(plan.spec),

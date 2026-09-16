@@ -293,7 +293,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         input_dim: int,
         hidden_dim: int,
@@ -412,7 +412,7 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(  # noqa: PLR0911
+    def forward_step(  # ruff: ignore[too-many-return-statements]
         self,
         h: np.ndarray,
         x_emb: np.ndarray,
@@ -581,7 +581,7 @@ class EqPropKernel:
     def _check_convergence(self, h: np.ndarray, h_prev: np.ndarray, step: int) -> bool:
         """Check if the equilibrium has converged."""
         # OPTIMIZATION: Use max norm (simpler, faster)
-        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))  # noqa: ERA001
+        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))  # ruff: ignore[commented-out-code]
         diff = self.xp.abs(h - h_prev).max()
         threshold = self._get_convergence_threshold(step)
         return diff < threshold
@@ -920,7 +920,7 @@ class EqPropKernelBPTT:
             dtanh = dh * tanh_deriv(pre_act, xp)  # [batch, hidden]
 
             # Accumulate gradients
-            if t > 0:  # noqa: SIM108
+            if t > 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 h_prev = trajectory[t - 1][1]
             else:
                 h_prev = xp.zeros_like(h)

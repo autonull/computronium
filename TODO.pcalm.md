@@ -602,21 +602,72 @@ All Phase 0, 1, and 2 tasks completed successfully:
   - `test_pcalm_triton_fused_update_cpu_fallback_exact` (CPU bitwise fallback)
 - All wiring lock tests pass (`test_dynamics_wiring_lock.py`)
 
-### New Improvement Opportunities Discovered
+### Phase 4 Completed (2026-09-16)
+- Implemented adaptive relaxation (constraint-norm early stop) — already in Phase 1
+- Implemented `prospective_leak` hybrid mode — already in Phase 1
+- Added `track_free_energy_per_iter` for `L_ρ` tracking — already in Phase 1
+
+### Phase 5 Completed (2026-09-15) — already documented above
+
+### Additional Work Completed (2026-09-16)
+**Validation Test Suite (Addresses Improvement #7):**
+- Created `tests/integration/test_pc_alm_validation.py` with 28 tests covering:
+  - Gradient equivalence vs BP (cosine similarity checks)
+  - Depth scaling (depths 10, 20, 50, 100) with InnocentiInit — no explosion
+  - Prospective hybrid sweep (α ∈ [0.0, 0.1, 0.3, 0.5, 0.8, 1.0])
+  - Adaptive budget (early stopping vs fixed T)
+  - Dual variable handling (initialization, persistence, state metrics)
+  - Energy tracking (Lyapunov decrease)
+  - Configuration validation (layered geometry requirements, beta matching, credit type)
+  - Compiled path (torch.compile parity, recurrent fallback)
+- All 28 tests pass
+
+**Depth Benchmark Probe Script (Addresses Improvement #2):**
+- Created `scripts/probes/pc_alm_depth_sweep.py` for systematic depth scaling experiments
+- Configurable depths, hidden dims, epochs, batch size, max steps, rho, prospective_leak
+- JSON output with per-epoch metrics and walltime
+- Tested at depths 10, 20 — runs successfully
+
+**Dual Variable Warm-start (Addresses Improvement #3):**
+- Added `warm_start_duals` config option (default True) to `StateDynamicsConfig.pc_alm()`
+- PCALMDynamics reuses `self._dual_vars` from previous train step's nudged phase
+- Configurable warm-start behavior for ablation studies
+
+**ρ Scheduling (Addresses Improvement #4):**
+- Added `rho_schedule` config: `"constant"` (default), `"linear"`, `"cosine"`
+- Added `rho_final` config for target value
+- Added `set_rho_override()`, `increment_train_step()`, `set_max_train_steps()` methods on PCALMDynamics
+- Runtime scheduling support for tightening constraints over training
+
+**Gradient Checkpointing (Addresses Improvement #5):**
+- Added `gradient_checkpointing` config support for PC-ALM
+- Checkpoints every `max_steps // 4` steps in eager relaxation loop
+- Trades compute for memory on very deep networks
+
+**CreditAssignment Config Validation (Addresses Improvement #8):**
+- Added `validate: bool = False` parameter to `compose_joint_system_from_configs()`
+- When True, constructs `SystemConfig` and calls `validate()` before composing
+- Catches cross-axis incompatibilities at composition time
+
+**Nudged-Phase Dual Variable Persistence (Addresses Improvement #9):**
+- PCALMDynamics now writes dual variables to dedicated `state.dual_vars` field (nudged phase)
+- Free-phase duals written to `state.metrics["dual_vars_free"]`
+- Nudged-phase duals written to `state.dual_vars`, `state.metrics["dual_vars"]`, and `state.metrics["dual_vars_nudged"]`
+- PCALMCredit reads from `state.dual_vars` with fallback to metrics for backward compatibility
+- Clear data flow: nudged phase duals → credit assignment
+
+**SystemConfig Validation Updates:**
+- Added `"pc_alm"` to allowed dynamics for recurrent geometry
+- Added `"pc_alm"` to allowed dynamics for tile_mesh geometry
+- Both changes align with plan's "PC-ALM requires layered geometry (feedforward, recurrent, tile_mesh)"
+
+### Remaining Improvement Opportunities
 1. **KernelRegistry Family Registration**: Legacy kernel backend (`KernelRegistry` in `acceleration/kernel_backend.py`) used by model adapters is a separate surface. Adding `AlgorithmFamily.PCALM` registration there is deferred — the ontology fast path (torch.compile) is the primary acceleration path for PC-ALM.
-2. **Depth-100/500/1000 Benchmarks**: Phase 3 planned benchmark at depth 100/500/1000 remains as probe scripts (`scripts/probes/pc_alm_depth_sweep.py`), not CI tests.
-3. **Dual Variable Warm-start**: Currently dual variables reset to zero each train step. Warm-starting from previous step's `λ` could accelerate convergence.
-4. **ρ Scheduling**: Fixed `rho` may benefit from scheduling (increase over training to tighten constraints).
-5. **Gradient Checkpointing**: For very deep networks, add gradient checkpointing support during primal–dual loop.
-6. **Prospective Leak Theory**: `prospective_leak` (α) interpolates between PC-ALM (α=0) and prospective configuration (α→1). Convergence guarantees for α>0 need analysis.
-7. **Validation Test Suite**: Need dedicated integration tests:
-   - `test_pc_alm_gradient_equivalence` (cosine vs BP ≥ 0.8)
-   - `test_pc_alm_depth_scaling` (depth 100, 500, 1000)
-   - `test_pc_alm_prospective_hybrid` (sweep α ∈ [0,1])
-   - `test_pc_alm_adaptive_budget` (convergence steps vs fixed T)
-8. **CreditAssignment Config Validation**: The `compose_joint_system` factory bypasses `SystemConfig.validate()` — consider adding optional validation flag for factory path.
-9. **Nudged-Phase Dual Variable Persistence**: Dual variables from nudged phase are used for credit but free-phase duals are stored in state metrics — consider unifying the data flow.
-10. **Batch Size Scaling**: Demo achieves 26% at batch=32, 600 batches, 1 epoch. Scaling to full MNIST (938 batches) and multi-epoch needs hyperparameter re-tuning.
+2. **Prospective Leak Theory**: `prospective_leak` (α) interpolates between PC-ALM (α=0) and prospective configuration (α→1). Convergence guarantees for α>0 need analysis.
+3. **Batch Size Scaling**: Demo achieves 26% at batch=32, 600 batches, 1 epoch. Scaling to full MNIST (938 batches) and multi-epoch needs hyperparameter re-tuning.
+4. **SpikingPCALMDynamics + SpikingPCALMCredit** (Phase 6)
+5. **TransformerPCALMDynamics** for attention blocks (Phase 6)
+6. **Async distributed prototype** using p2p layer (Phase 6)
 
 ---
 

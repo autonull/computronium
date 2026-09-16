@@ -22,6 +22,7 @@ Walltime: < 1 min (CPU, tiny systems).
 from __future__ import annotations
 
 import json
+import pathlib
 
 import torch
 
@@ -70,7 +71,7 @@ def main() -> None:
         }
         print(f"{dynamics}|{credit}: bp_cosine={cos}")
 
-    with open("artifacts/credit_channel_audit.json", "w") as fh:
+    with pathlib.Path("artifacts/credit_channel_audit.json").open("w") as fh:
         json.dump(report, fh, indent=2)
     print("written: artifacts/credit_channel_audit.json")
 

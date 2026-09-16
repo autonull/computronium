@@ -77,7 +77,7 @@ def create_damage_scenarios(
     return original_state
 
 
-def evaluate_recovery(  # noqa: C901, PLR0915
+def evaluate_recovery(  # ruff: ignore[complex-structure, too-many-statements]
     model: torch.nn.Module,
     original_state: dict,
     damage_type: str,
@@ -103,7 +103,7 @@ def evaluate_recovery(  # noqa: C901, PLR0915
     total = 0
     with torch.no_grad():
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device)  # noqa: PLW2901
+            x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -140,7 +140,7 @@ def evaluate_recovery(  # noqa: C901, PLR0915
             epoch_total = 0
 
             for x, y in train_loader:
-                x, y = x.to(device), y.to(device)  # noqa: PLW2901
+                x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
                 psi = step_psi(
                     model.plasticity,
                     model.psi,
@@ -201,7 +201,7 @@ def evaluate_recovery(  # noqa: C901, PLR0915
     return out
 
 
-def evaluate_structural_robustness(  # noqa: C901, PLR0913, PLR0914, PLR0915, PLR0917
+def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
     coordinate: str,
     epochs: int = 10,
     batch_size: int = 64,

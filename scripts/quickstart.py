@@ -60,7 +60,7 @@ def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
         def __iter__(self):
             for x, y in self.loader:
                 if x.dim() > 2:
-                    x = x.view(x.size(0), -1)  # noqa: PLW2901
+                    x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
                 yield x, y
 
         def __len__(self) -> int:
@@ -73,12 +73,12 @@ def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
     return train_loader, val_loader, task
 
 
-def main():  # noqa: PLR0914, PLR0915
+def main():  # ruff: ignore[too-many-locals, too-many-statements]
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    global _current_trainer  # noqa: PLW0603
+    global _current_trainer  # ruff: ignore[global-statement]
 
     print("=" * 60)
     print("Bioplausible Quickstart: Forward-Forward vs Backprop on MNIST")

@@ -185,7 +185,7 @@ def test_parameter_update_application() -> AuditTest:
     """Test 3: ParameterUpdate application modifies params in-place."""
     device = torch.device("cpu")
     continual = make_joint_system(device, "null")  # Null plasticity for simplicity
-    context = continual.context  # noqa: F841
+    context = continual.context  # ruff: ignore[unused-variable]
     update = continual.update
     geometry = continual.geometry
 
@@ -281,7 +281,7 @@ def test_device_propagation() -> AuditTest:
     return AuditTest(test="device_propagation", passed=passed, details=all_checks)
 
 
-def test_state_registry_integrity() -> AuditTest:  # noqa: PLR0914
+def test_state_registry_integrity() -> AuditTest:  # ruff: ignore[too-many-locals]
     """Test 5: StateRegistry integrity - flags match component configs."""
     device = torch.device("cpu")
     continual = make_joint_system(device, "fast_weights")

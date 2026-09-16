@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def load_trials(db_path: str) -> list[dict[str, object]]:  # noqa: C901, PLR0912, PLR0915
+def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     """
     Load all trials from Optuna SQLite database.
     """
@@ -149,7 +149,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:  # noqa: C901, PLR0912
             """,
                 (trial_id,),
             )
-            row = cursor.fetchone()  # noqa: PLW2901
+            row = cursor.fetchone()  # ruff: ignore[redefined-loop-name]
             if row:
                 if row["param_count"]:
                     trial["param_count"] = row["param_count"]

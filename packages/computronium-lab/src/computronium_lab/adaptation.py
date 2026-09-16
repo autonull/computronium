@@ -396,11 +396,11 @@ def _sequence_episode(  # noqa: PLR0913, PLR0917  flat pipeline tuple, psi_step 
             psi=psi,
             context=object(),  # ψ primitives never read the context
         )
-    assert metrics is not None  # noqa: S101  loop runs at least once
+    assert metrics is not None  # ruff: ignore[assert]  loop runs at least once
     return metrics
 
 
-def adapt(  # noqa: PLR0914
+def adapt(  # ruff: ignore[too-many-locals]
     system: object,
     task_data: object,
     mode: AdaptationMode | str = PSI_ONLY,
@@ -614,7 +614,7 @@ def select_z3_operator(x: Tensor, y: Tensor) -> Z3Selection:
     for index, name, op in _Z3_LIBRARY:
         try:
             out = op(x)  # type: ignore[operator]
-        except Exception:  # ruff: ignore[BLE001] - shape-invalid ops simply lose
+        except Exception:  # ruff: ignore[blind-except] - shape-invalid ops simply lose
             scores[name] = 0.0
             continue
         if out.shape == y.shape:

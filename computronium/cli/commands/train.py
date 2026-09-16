@@ -33,7 +33,7 @@ class _FlattenLoader:
     def __iter__(self) -> Iterator[tuple[Tensor, Tensor]]:
         for x, y in self.loader:
             if x.dim() > 2:
-                x = x.view(x.size(0), -1)  # noqa: PLW2901
+                x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
             yield x, y
 
     def __len__(self) -> int:
@@ -53,7 +53,7 @@ def _section_config[T: DataclassInstance](
     tag = section.get("type")
     if not isinstance(tag, str):
         msg = f"preset section missing string 'type' tag: {dict(section)!r}"
-        raise ValueError(msg)  # noqa: TRY004
+        raise ValueError(msg)  # ruff: ignore[type-check-without-type-error]
     factory = getattr(cls, tag)
     params = signature(factory).parameters
     var_kw = any(p.kind is Parameter.VAR_KEYWORD for p in params.values())

@@ -165,7 +165,7 @@ class SettlingMonitor:
 
         if b > 0:
             # Time to reach tolerance: tolerance = a * exp(-b * t)
-            # t = (log(a) - log(tolerance)) / b  # noqa: ERA001
+            # t = (log(a) - log(tolerance)) / b  # ruff: ignore[commented-out-code]
             a = torch.exp(coeffs[0]).item()
             if a > self.tolerance:
                 estimated = int(
@@ -180,7 +180,7 @@ class SettlingMonitor:
         return self.max_steps
 
 
-def measure_settling_time_full_state(  # noqa: C901
+def measure_settling_time_full_state(  # ruff: ignore[complex-structure]
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,

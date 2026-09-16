@@ -34,7 +34,7 @@ _TILE_ALGORITHM_REGISTRY: dict[str, TileAlgorithmMetadata] = {}
 _TILE_ALGORITHM_FACTORIES: dict[str, Callable] = {}
 
 
-def tile_algorithm(  # noqa: PLR0913
+def tile_algorithm(  # ruff: ignore[too-many-arguments]
     name: str,
     *,
     algorithm: str,

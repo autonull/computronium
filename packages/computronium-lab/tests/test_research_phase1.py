@@ -76,8 +76,8 @@ def test_genome_instantiate_fresh() -> None:
 def test_mutation_deterministic() -> None:
     operator = SafeMutationOperator()
     payload = _seed_genome().genome()
-    first = operator.mutate(payload, random.Random(7))  # noqa: S311 - deterministic test seeds
-    second = operator.mutate(payload, random.Random(7))  # noqa: S311 - deterministic test seeds
+    first = operator.mutate(payload, random.Random(7))  # ruff: ignore[suspicious-non-cryptographic-random-usage] - deterministic test seeds
+    second = operator.mutate(payload, random.Random(7))  # ruff: ignore[suspicious-non-cryptographic-random-usage] - deterministic test seeds
     assert first == second
     lineage = first["lineage"]
     assert isinstance(lineage, list)
@@ -93,7 +93,7 @@ def test_mutation_stays_on_catalog() -> None:
     operator = SafeMutationOperator()
     payload = _seed_genome().genome()
     for seed in range(20):
-        mutant = operator.mutate(payload, random.Random(seed))  # noqa: S311 - deterministic test seeds
+        mutant = operator.mutate(payload, random.Random(seed))  # ruff: ignore[suspicious-non-cryptographic-random-usage] - deterministic test seeds
         assert mutant["mechanism"] in names
 
 

@@ -42,9 +42,9 @@ class KnowledgeEntry:
             if k in ann:
                 expected = ann[k]
                 # Handle type conversions for common types
-                if expected == str and v is not None:  # noqa: E721
+                if expected == str and v is not None:  # ruff: ignore[type-comparison]
                     kwargs[k] = str(v)
-                elif expected == float and v is not None:  # noqa: E721
+                elif expected == float and v is not None:  # ruff: ignore[type-comparison]
                     kwargs[k] = float(v)
                 elif expected == list[str] and isinstance(v, list):
                     kwargs[k] = [str(x) for x in v]

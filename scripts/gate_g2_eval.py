@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import platform
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -55,7 +55,7 @@ class _G2Config:
 def _git_sha() -> str:
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
+            ["git", "rev-parse", "--short", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
             capture_output=True,
             text=True,
             check=False,
@@ -159,7 +159,7 @@ def _evaluate(
     }
 
 
-def evaluate_g2(cfg: _G2Config, output_dir: Path) -> dict:  # noqa: PLR0914
+def evaluate_g2(cfg: _G2Config, output_dir: Path) -> dict:  # ruff: ignore[too-many-locals]
     """Run one G2 evaluation and write results."""
     torch.manual_seed(cfg.seed)
 
@@ -227,7 +227,7 @@ def evaluate_g2(cfg: _G2Config, output_dir: Path) -> dict:  # noqa: PLR0914
     return summary
 
 
-def main() -> None:  # noqa: PLR0914
+def main() -> None:  # ruff: ignore[too-many-locals]
     """Run G2 evaluation per pre-registered protocol."""
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

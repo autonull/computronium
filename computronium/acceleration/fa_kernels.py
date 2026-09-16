@@ -50,7 +50,7 @@ class FAKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # noqa: PLR6201
+        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 
@@ -423,7 +423,7 @@ try:  # noqa: too-many-statements-in-try-clause
             )
             acc += tl.dot(tl.trans(post), pre)
 
-        acc = acc / B  # noqa: PLR6104
+        acc = acc / B  # ruff: ignore[non-augmented-assignment]
         tl.store(
             grad_ptr + offs_out[:, None] * D_in + offs_in[None, :],
             acc,

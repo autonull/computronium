@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from torch import nn
 from torch.nn import (
-    functional as F,  # noqa: N812
+    functional as F,  # ruff: ignore[lowercase-imported-as-non-lowercase]
 )
 
 from computronium.core.checkpoint import (
@@ -91,7 +91,7 @@ class ModelExporter:
     def __init__(self, device: str = "cpu"):
         self.device = device
 
-    def export(  # noqa: C901, PLR0912, PLR0913, PLR0917
+    def export(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments, too-many-positional-arguments]
         self,
         model: nn.Module,
         model_name: str,
@@ -533,7 +533,7 @@ class ModelLoader:
             import onnxruntime as ort
 
             session = ort.InferenceSession(onnx_path)
-            return session  # noqa: TRY300
+            return session  # ruff: ignore[try-consider-else]
         except ImportError:
             raise ImportError("onnxruntime required: pip install onnxruntime")
 
@@ -889,10 +889,10 @@ class InferenceServer:
             return
 
         try:  # noqa: too-many-statements-in-try-clause
-            import torch_tensorrt  # type: ignore  # noqa: PGH003
+            import torch_tensorrt  # type: ignore  # ruff: ignore[blanket-type-ignore]
 
             self.model.eval()
-            example_input = torch.randn(  # noqa: F841
+            example_input = torch.randn(  # ruff: ignore[unused-variable]
                 self.tensorrt_config.max_batch_size,
                 *self.input_shape[1:],
                 device=self.device,
@@ -1059,7 +1059,7 @@ class InferenceServer:
         self._running = False
         if self._batch_task:
             self._batch_task.cancel()
-            try:  # noqa: SIM105
+            try:  # ruff: ignore[suppressible-exception]
                 await self._batch_task
             except asyncio.CancelledError:
                 pass
@@ -1101,7 +1101,7 @@ class _AppState:
         self,
         model: object,
         config: dict[str, object] | None = None,
-        host: str = "0.0.0.0",  # noqa: S104
+        host: str = "0.0.0.0",  # ruff: ignore[hardcoded-bind-all-interfaces]
         port: int = 8000,
         max_batch_size: int = 32,
         batch_timeout_ms: int = 10,
@@ -1200,7 +1200,7 @@ def get_app() -> FastAPI:
 def serve_model(
     model: object,
     config: dict[str, object] | None = None,
-    host: str = "0.0.0.0",  # noqa: S104
+    host: str = "0.0.0.0",  # ruff: ignore[hardcoded-bind-all-interfaces]
     port: int = 8000,
     max_batch_size: int = 32,
     batch_timeout_ms: int = 10,

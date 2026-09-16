@@ -27,7 +27,7 @@ import json
 import logging
 import math
 import platform
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -48,7 +48,7 @@ def _git_sha() -> str:
     """Current git HEAD short hash, or ``"unknown"`` outside a git repo."""
     try:
         out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],  # noqa: S607
+            ["git", "rev-parse", "--short", "HEAD"],  # ruff: ignore[start-process-with-partial-path]
             capture_output=True,
             text=True,
             check=False,
@@ -280,7 +280,7 @@ def _summarize(runs: list[dict[str, object]], key: str) -> dict[str, float]:
     return {"mean": mean, "std": std, "n": len(vals)}
 
 
-def _probe_runs(  # noqa: PLR0913
+def _probe_runs(  # ruff: ignore[too-many-arguments]
     driver: CoreTrainerDriver,
     *,
     model: str,
@@ -399,7 +399,7 @@ def _probe_runs(  # noqa: PLR0913
     return runs, n_total, n_ok
 
 
-def broad_sweep(  # noqa: PLR0913, PLR0914
+def broad_sweep(  # ruff: ignore[too-many-arguments, too-many-locals]
     *,
     families: list[str],
     probes_per_rule: int,

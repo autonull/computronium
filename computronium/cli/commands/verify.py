@@ -48,7 +48,7 @@ def run_verify(args: argparse.Namespace) -> None:
     from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
 
     if getattr(args, "db", None):
-        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # noqa: RUF052
+        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # ruff: ignore[used-dummy-variable]
 
     study = optuna.load_study(study_name=args.study, storage=_STORAGE_URL)
 

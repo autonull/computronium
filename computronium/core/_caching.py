@@ -34,7 +34,7 @@ def _stable_hash(obj: object) -> str:
     return hashlib.sha256(_canonical(obj).encode()).hexdigest()[:16]
 
 
-def _canonical(obj: object) -> str:  # noqa: PLR0911
+def _canonical(obj: object) -> str:  # ruff: ignore[too-many-return-statements]
     """Return an order-independent string form of ``obj`` for hashing."""
     if isinstance(obj, dict):
         return (

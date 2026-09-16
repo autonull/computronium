@@ -127,13 +127,13 @@ class CausalAnalyzer:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                "SELECT * FROM experiments"  # noqa: S608
+                "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"
             )
-            cursor = conn.execute(sql, params + [limit])  # noqa: RUF005
+            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
             return [dict(row) for row in cursor]
 
-    def meta_fit_scaling_laws(  # noqa: C901, PLR0914
+    def meta_fit_scaling_laws(  # ruff: ignore[complex-structure, too-many-locals]
         self,
         model_families: list[str] | None = None,
         tasks: list[str] | None = None,
@@ -240,13 +240,13 @@ class CausalAnalyzer:
                     continue
 
             logger.info("Meta-fit scaling laws for %d model families", len(results))
-            return results  # noqa: TRY300
+            return results  # ruff: ignore[try-consider-else]
 
         except Exception as e:
             logger.exception("Scaling law meta-fit failed")
             raise KnowledgeBaseError("Scaling law meta-fit failed") from e
 
-    def compute_algorithm_fingerprints(  # noqa: C901, PLR0912
+    def compute_algorithm_fingerprints(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         model_families: list[str] | None = None,
     ) -> dict[str, dict[str, float]]:
@@ -320,13 +320,13 @@ class CausalAnalyzer:
                 fingerprints[model] = sensitivity
 
             logger.info("Computed fingerprints for %d algorithms", len(fingerprints))
-            return fingerprints  # noqa: TRY300
+            return fingerprints  # ruff: ignore[try-consider-else]
 
         except Exception as e:
             logger.exception("Algorithm fingerprint computation failed")
             raise KnowledgeBaseError("Algorithm fingerprint computation failed") from e
 
-    def map_failure_manifold(  # noqa: C901, PLR0912, PLR0914, PLR0915
+    def map_failure_manifold(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
         self,
         min_samples: int = 5,
     ) -> dict[str, dict[str, object]]:
@@ -446,7 +446,7 @@ class CausalAnalyzer:
             logger.info(
                 "Mapped failure manifold with %d clusters", len(failure_manifold)
             )
-            return failure_manifold  # noqa: TRY300
+            return failure_manifold  # ruff: ignore[try-consider-else]
 
         except Exception as e:
             logger.exception("Failure manifold mapping failed")
@@ -520,7 +520,7 @@ class CausalAnalyzer:
             logger.info(
                 "Generated algorithm phylogeny with %d clusters", tree["n_clusters"]
             )
-            return tree  # noqa: TRY300
+            return tree  # ruff: ignore[try-consider-else]
 
         except Exception as e:
             logger.exception("Algorithm phylogeny generation failed")

@@ -17,7 +17,7 @@ from psi_peft.metrics import SyntheticTask, accuracy, theta_sha
 FEATURE_DIM, NUM_CLASSES, BATCH, EPISODES = 32, 4, 64, 20
 
 
-def main() -> int:  # noqa: PLR0914 single linear demo flow; splitting hides the phase table
+def main() -> int:  # ruff: ignore[too-many-locals] single linear demo flow; splitting hides the phase table
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
@@ -58,7 +58,7 @@ def main() -> int:  # noqa: PLR0914 single linear demo flow; splitting hides the
         results.append((name, acc, walltime))
         print(f"  {name:16s} acc={acc:.3f}  adapt={walltime * 1e3:.1f} ms")
 
-    assert theta_sha(backbone) == frozen_sha, "θ was modified"  # noqa: S101 hard demo gate
+    assert theta_sha(backbone) == frozen_sha, "θ was modified"  # ruff: ignore[assert] hard demo gate
     acquired, returned = results[0][1], results[2][1]
     print("θ invariance: bitwise OK")
     print(f"re-acquisition: {returned:.3f} vs acquired {acquired:.3f}")

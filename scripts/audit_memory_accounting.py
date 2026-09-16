@@ -114,7 +114,7 @@ def test_gradient_checkpointing_peak() -> dict[str, Any]:
 
     # Create a model for 2MB envelope (small)
     envelope = ENVELOPES[0]  # 2MB
-    arm = ArmConfig("Backprop", "backprop", use_optimizer_state=True, local_rule=False)  # noqa: F841
+    arm = ArmConfig("Backprop", "backprop", use_optimizer_state=True, local_rule=False)  # ruff: ignore[unused-variable]
 
     from computronium.core.presets import create_backprop_mlp
 
@@ -243,7 +243,7 @@ def test_plastic_state_bytes() -> dict[str, Any]:
     }
 
 
-def test_replay_buffer_bytes() -> dict[str, Any]:  # noqa: PLR0914
+def test_replay_buffer_bytes() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test ReplayBuffer.memory_bytes() matches capacity × (input_dim * 4 + label_bytes)."""
     print("\n" + "=" * 60)
     print("Test: Replay Buffer Bytes Calculation")
@@ -318,7 +318,7 @@ def test_replay_buffer_bytes() -> dict[str, Any]:  # noqa: PLR0914
     }
 
 
-def test_envelope_enforcement() -> dict[str, Any]:  # noqa: PLR0914
+def test_envelope_enforcement() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test MemoryWall benchmark marks DNF when exceeding ceiling."""
     print("\n" + "=" * 60)
     print("Test: Envelope Enforcement (DNF Tracking)")

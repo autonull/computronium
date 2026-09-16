@@ -66,7 +66,7 @@ def _bootstrap_ci(
     # Simple percentile bootstrap with 10000 resamples
     import random
 
-    rng = random.Random(42)  # noqa: S311
+    rng = random.Random(42)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
     boot_means = []
     for _ in range(10000):
         sample = [rng.choice(values) for _ in range(n)]
@@ -167,7 +167,7 @@ def _write_comparison_report(
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main():  # noqa: C901, PLR0912, PLR0914, PLR0915
+def main():  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     output_base = Path("runs/contrastive_profile/b2_autopsy")
     report_dir = Path("runs/contrastive_profile/b2_autopsy/reports")
     report_dir.mkdir(parents=True, exist_ok=True)

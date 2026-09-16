@@ -62,7 +62,7 @@ def test_settle_single_state_trajectory_length(steps):
         h_0, forward_step, x, steps, return_trajectory=True
     )
     if trajectory is not None:
-        expected_len = min(steps + 1, steps + 1)  # no convergence  # noqa: F841
+        expected_len = min(steps + 1, steps + 1)  # no convergence  # ruff: ignore[unused-variable]
         assert len(trajectory) == steps + 1 or len(trajectory) <= steps + 1
         assert trajectory[0].shape == h_0.shape
     assert h_star.shape == h_0.shape

@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-from computronium.analysis import lookup_recipe_card  # noqa: E402
+from computronium.analysis import lookup_recipe_card  # ruff: ignore[module-import-not-at-top-of-file]
 
 CSV = ROOT / "data" / "icu_measurements.csv"
 OUT = ROOT / "docs" / "reports" / "icu_law.html"

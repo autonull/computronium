@@ -18,7 +18,7 @@ import sys
 from typing import Any
 
 import torch
-import torch.nn.functional as F  # noqa: N812
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.continual.arms import (
     create_ewc_arm,
@@ -54,7 +54,7 @@ def test_task_masking() -> dict[str, Any]:
         [0, 1, 0, 1], device=device
     )  # Task 1 labels (classes 2,3 -> local 0,1)
 
-    all_passed = True  # noqa: F841
+    all_passed = True  # ruff: ignore[unused-variable]
 
     # Test task 0: only logits[:, 0:2] should have gradient
     model.set_task(0)
@@ -78,8 +78,8 @@ def test_task_masking() -> dict[str, Any]:
     loss1.backward()
 
     # Verify the forward pass produces 10-class logits
-    assert logits0.shape == (4, 10), f"Expected (4, 10), got {logits0.shape}"  # noqa: S101
-    assert logits1.shape == (4, 10), f"Expected (4, 10), got {logits1.shape}"  # noqa: S101
+    assert logits0.shape == (4, 10), f"Expected (4, 10), got {logits0.shape}"  # ruff: ignore[assert]
+    assert logits1.shape == (4, 10), f"Expected (4, 10), got {logits1.shape}"  # ruff: ignore[assert]
 
     # Verify masked loss computes correctly
     # Task 0 loss uses logits[:, 0:2], Task 1 loss uses logits[:, 2:4]
@@ -104,7 +104,7 @@ def test_task_masking() -> dict[str, Any]:
     }
 
 
-def test_replay_buffer() -> dict[str, Any]:  # noqa: PLR0914
+def test_replay_buffer() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test replay buffer: capacity respected; balanced eviction; sampling returns correct shapes."""
     print("\n" + "=" * 60)
     print("Test: Replay Buffer Capacity, Eviction, Sampling")
@@ -227,7 +227,7 @@ def test_replay_training() -> dict[str, Any]:
     for t in [0, 1]:
         model.set_task(t)
         m = model.train_step(rx[:2], ry[:2], task_id=t)
-        assert "loss" in m  # noqa: S101
+        assert "loss" in m  # ruff: ignore[assert]
 
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
 
@@ -239,7 +239,7 @@ def test_replay_training() -> dict[str, Any]:
     }
 
 
-def test_lwf_distillation() -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0914, PLR0915
+def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     """Test LwF distillation: prev_model frozen; distillation loss added; affects θ."""
     print("\n" + "=" * 60)
     print("Test: LwF Distillation")
@@ -312,12 +312,12 @@ def test_lwf_distillation() -> dict[str, Any]:  # noqa: C901, PLR0912, PLR0914, 
 
     # Train with distillation
     for _ in range(3):
-        metrics = _lwf_train_step(model, x, y, task_id=1, lwf_loss_fn=lwf_loss)  # noqa: F841
+        metrics = _lwf_train_step(model, x, y, task_id=1, lwf_loss_fn=lwf_loss)  # ruff: ignore[unused-variable]
 
     # Check params changed
     params_changed = False
     for n, p in model.named_parameters():
-        if p.requires_grad and n in initial_params:  # noqa: SIM102
+        if p.requires_grad and n in initial_params:  # ruff: ignore[collapsible-if]
             if not torch.allclose(p, initial_params[n]):
                 params_changed = True
                 break
@@ -391,7 +391,7 @@ def test_si_importance() -> dict[str, Any]:
     # Test task 1: importance should affect regularization
     si.start_task()  # Start task 1
     for _ in range(3):
-        metrics = _si_train_step(model, x, y, task_id=1, si_tracker=si)  # noqa: F841
+        metrics = _si_train_step(model, x, y, task_id=1, si_tracker=si)  # ruff: ignore[unused-variable]
     si.update_importance()
 
     reg_loss2 = si.regularization_loss()
@@ -408,7 +408,7 @@ def test_si_importance() -> dict[str, Any]:
     }
 
 
-def test_ewc_consolidation() -> dict[str, Any]:  # noqa: PLR0912
+def test_ewc_consolidation() -> dict[str, Any]:  # ruff: ignore[too-many-branches]
     """Test EWC consolidation: Fisher computed at task boundary; penalty applied in subsequent tasks."""
     print("\n" + "=" * 60)
     print("Test: EWC Consolidation")
@@ -474,7 +474,7 @@ def test_ewc_consolidation() -> dict[str, Any]:  # noqa: PLR0912
     # Check params moved (they should, but with penalty)
     params_changed = False
     for n, p in model.geometry.named_parameters():
-        if p.requires_grad and n in initial_params:  # noqa: SIM102
+        if p.requires_grad and n in initial_params:  # ruff: ignore[collapsible-if]
             if not torch.allclose(p, initial_params[n]):
                 params_changed = True
                 break

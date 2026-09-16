@@ -36,7 +36,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
-    from computronium.state import (  # noqa: TC004
+    from computronium.state import (  # ruff: ignore[runtime-import-in-type-checking-block]
         CompositeState,
         SystemContext,
     )
