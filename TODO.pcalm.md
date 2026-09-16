@@ -441,10 +441,10 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 - [x] Integration test: full train step with `PCALMDynamics` + `PCALMCredit`
 
 ### Phase 3: Fused Kernel (Week 4–5)
-- [ ] Implement `pcalm_kernels.py` with Triton fused primal–dual loop
-- [ ] Register in `KernelRegistry` for `AlgorithmFamily.PC` (new family) or extend `PC`
-- [ ] Add `compiled=True` fast path in `PCALMDynamics.settle`
-- [ ] Benchmark: kernel vs eager at depth 100, 500, 1000
+- [x] Implement `pcalm_kernels.py` with Triton fused primal–dual loop
+- [ ] Register in `KernelRegistry` for `AlgorithmFamily.PCALM` (new family) — deferred (legacy adapter surface)
+- [x] Add `compiled=True` fast path in `PCALMDynamics.settle` (torch.compile whole-loop, guarded parity lock)
+- [ ] Benchmark: kernel vs eager at depth 100, 500, 1000 — remaining (probes)
 
 ### Phase 4: Adaptive & Hybrid Features (Week 5)
 - [x] Implement adaptive relaxation (constraint-norm early stop)
@@ -486,9 +486,9 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 ## 10. Files to Create / Modify
 
 ### New Files
-1. `computronium/acceleration/pcalm_kernels.py` — Fused Triton kernel
-2. `tests/integration/test_pc_alm_*.py` — Integration test suite
-3. `scripts/probes/pc_alm_depth_sweep.py` — Depth scaling probe
+1. `computronium/acceleration/pcalm_kernels.py` — Fused Triton kernel ✅
+2. `tests/integration/test_pc_alm_*.py` — Integration test suite (parity locks added to `test_compiled_settle.py` ✅)
+3. `scripts/probes/pc_alm_depth_sweep.py` — Depth scaling probe (remaining)
 
 ### Modified Files
 1. `computronium/ontology/dynamics/_dynamics.py` — `PCALMDynamics` class, `StateDynamicsConfig.pc_alm()`
@@ -572,22 +572,30 @@ All Phase 0, 1, and 2 tasks completed successfully:
 - SystemConfig validation correctly accepts/rejects PC-ALM coordinates
 
 ### Remaining Work
-- Phase 3: Fused Triton kernel (`pcalm_kernels.py`)
 - Phase 5: Hyperopt search space and gallery demo
 - Phase 6: Spiking/Transformer/Async variants
 
+### Phase 3 Completed (2026-09-15)
+- Created `computronium/acceleration/pcalm_kernels.py` with:
+  - `pcalm_settle_loop` / `_compiled_pcalm_settle = torch.compile(...)` — whole T-step primal–dual relaxation as one graph (repo R11.2.25 pattern)
+  - `fused_dual_primal_update` — device-agnostic Triton fused elementwise kernel (CUDA via stock Triton, CPU via triton-cpu `set_active_to_cpu()` / `TRITON_DEFAULT_BACKEND=cpu`); eager fallback exact parity
+- Added guarded `compiled=True` fast path in `PCALMDynamics.settle` with parity lock
+- Parity lock tests appended to `tests/integration/test_compiled_settle.py`:
+  - `test_compiled_pcalm_settle_matches_eager` (free + nudged phases, dual vars)
+  - `test_compiled_pcalm_config_falls_back_cleanly` (recurrent geometry)
+  - `test_compiled_pcalm_config_round_trip`
+  - `test_pcalm_triton_fused_update_matches_eager` (CUDA Triton vs eager ~1e-7 fp32 parity)
+  - `test_pcalm_triton_fused_update_cpu_fallback_exact` (CPU bitwise fallback)
+- All wiring lock tests pass (`test_dynamics_wiring_lock.py`)
+
 ### New Improvement Opportunities Discovered
-1. **Kernel Fusion**: The current eager implementation computes Jacobian-transpose products per-layer per-step. A fused Triton kernel keeping `h`, `λ` in SRAM for the entire `T`-step relaxation would give ~100× less HBM traffic at depth 1000.
-
-2. **Dual Variable Warm-start**: Currently dual variables are reset to zero each train step. Warm-starting from previous step's `λ` could accelerate convergence (persistent dual state across mini-batches).
-
-3. **ρ Scheduling**: The fixed `rho` parameter may benefit from scheduling (increase over training to tighten constraints).
-
-4. **Gradient Checkpointing**: For very deep networks, add gradient checkpointing support to trade compute for memory during the primal–dual loop.
-
-5. **Prospective Leak Theory**: The `prospective_leak` parameter interpolates between PC-ALM (α=0) and prospective configuration (α→1). More theoretical analysis needed on convergence guarantees for α>0.
-
-6. **Validation Test Suite**: Need to add dedicated integration tests:
+1. **KernelRegistry Family Registration**: Legacy kernel backend (`KernelRegistry` in `acceleration/kernel_backend.py`) used by model adapters is a separate surface. Adding `AlgorithmFamily.PCALM` registration there is deferred — the ontology fast path (torch.compile) is the primary acceleration path for PC-ALM.
+2. **Depth-100/500/1000 Benchmarks**: Phase 3 planned benchmark at depth 100/500/1000 remains as probe scripts (`scripts/probes/pc_alm_depth_sweep.py`), not CI tests.
+3. **Dual Variable Warm-start**: Currently dual variables reset to zero each train step. Warm-starting from previous step's `λ` could accelerate convergence.
+4. **ρ Scheduling**: Fixed `rho` may benefit from scheduling (increase over training to tighten constraints).
+5. **Gradient Checkpointing**: For very deep networks, add gradient checkpointing support during primal–dual loop.
+6. **Prospective Leak Theory**: `prospective_leak` (α) interpolates between PC-ALM (α=0) and prospective configuration (α→1). Convergence guarantees for α>0 need analysis.
+7. **Validation Test Suite**: Need dedicated integration tests:
    - `test_pc_alm_gradient_equivalence` (cosine vs BP ≥ 0.8)
    - `test_pc_alm_depth_scaling` (depth 100, 500, 1000)
    - `test_pc_alm_prospective_hybrid` (sweep α ∈ [0,1])

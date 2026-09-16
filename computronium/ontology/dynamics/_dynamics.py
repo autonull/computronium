@@ -1562,13 +1562,70 @@ class PCALMDynamics(_SettleTelemetry):
                 self._compute_augmented_lagrangian(acts, dual_vars, layered, op).item()
             )
 
-        # Prospective leak coefficient
-        alpha = self.config.prospective_leak
-        rho = self.config.rho
-        step_size = self.config.step_size
-
         # Primal–dual relaxation loop
         self._note_settle_start()
+        use_compiled = (
+            self.config.compiled
+            and layered.recurrent_weight is None
+            and not layered.residual
+            and not self.config.track_free_energy_per_iter
+            and type(substrate).__name__ == "DigitalSubstrate"
+            and len(acts) == len(layered.weights) + 1
+        )
+        if use_compiled:
+            from computronium.acceleration.pcalm_kernels import _compiled_pcalm_settle
+
+            beta = self.config.beta if target is not None else 0.0
+            acts, dual_vars = _compiled_pcalm_settle(
+                list(acts),
+                list(dual_vars),
+                layered.weights,
+                layered.biases,
+                layered.activations,
+                self.config.step_size,
+                self.config.rho,
+                self.config.prospective_leak,
+                beta,
+                target,
+                self.config.max_steps,
+            )
+            self._settle_steps_used = self.config.max_steps
+        else:
+            acts = self._eager_relaxation(acts, dual_vars, layered, op, target)
+
+        # Store dual variables for credit assignment
+        self._dual_vars = dual_vars
+
+        # Write dual_vars to state metrics for PCALMCredit to read
+        dual_vars_for_state = [lam.detach() for lam in dual_vars]
+
+        if target is None:
+            state.free_state = acts
+        else:
+            state.nudged_state = acts
+        state.activations = acts
+
+        # Also write to metrics for backward compatibility
+        if not hasattr(state, "metrics") or state.metrics is None:
+            state.metrics = {}
+        state.metrics["dual_vars"] = dual_vars_for_state
+
+        return state
+
+    def _eager_relaxation(
+        self,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        layered: LayeredParams,
+        op: object,
+        target: Tensor | None,
+    ) -> list[Tensor]:
+        """Eager primal-dual loop: per-iteration energy tracking + early exit."""
+        num_layers = len(layered.weights)
+        rho = self.config.rho
+        alpha = self.config.prospective_leak
+        step_size = self.config.step_size
+
         for step in range(self.config.max_steps):
             # Compute constraint violations c_l = h_l - f_θ_l(h_{l-1})
             constraints = []
@@ -1652,28 +1709,10 @@ class PCALMDynamics(_SettleTelemetry):
                 if constraint_norm < self.config.convergence_threshold:
                     acts = new_acts
                     self._settle_steps_used = step + 1
-                    break
+                    return acts
 
             acts = new_acts
-
-        # Store dual variables for credit assignment
-        self._dual_vars = dual_vars
-
-        # Write dual_vars to state metrics for PCALMCredit to read
-        dual_vars_for_state = [lam.detach() for lam in dual_vars]
-
-        if target is None:
-            state.free_state = acts
-        else:
-            state.nudged_state = acts
-        state.activations = acts
-
-        # Also write to metrics for backward compatibility
-        if not hasattr(state, "metrics") or state.metrics is None:
-            state.metrics = {}
-        state.metrics["dual_vars"] = dual_vars_for_state
-
-        return state
+        return acts
 
     def _compute_augmented_lagrangian(
         self,
