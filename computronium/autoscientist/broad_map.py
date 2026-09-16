@@ -32,7 +32,7 @@ import re
 import time
 import traceback
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from computronium.autoscientist.bridge import ExperimentProposal
 from computronium.autoscientist.campaign import AutoScientistCampaign
@@ -54,6 +54,7 @@ from computronium.utils import seed_everything
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Callable
     from pathlib import Path
 
     from computronium.knowledge import KnowledgeBase
@@ -534,13 +535,40 @@ def build_sweep(
     return campaign, driver
 
 
+class BurstDriver(Protocol):
+    """Minimal driver surface ``run_burst`` depends on (the daemon wraps the
+    concrete ``StratifiedRandomDriver`` to observe the propose phase)."""
+
+    cells: int
+
+    def propose_batch(
+        self, n_proposals: int, recent_results: list[dict[str, object]] | None = None
+    ) -> list[ExperimentProposal]: ...
+
+    def has_novel(self) -> bool: ...
+
+
 _BURST_STOP_REASONS: dict[str, str] = {
     "target": "target cell count reached",
     "soft": "soft budget expired (current cell finished, no new starts)",
     "hard": "hard budget expired",
     "exhausted": "no novel cells left (grid exhausted or all quarantined)",
     "max_iterations": "max iterations reached",
+    "paused": "pause requested (in-flight batch finished)",
+    "stopped": "graceful stop requested",
 }
+
+
+def budget_from_args(args: argparse.Namespace) -> ContinuousBudget:
+    """Burst budget from the shared CLI flags (``--budget``/``--target-cells``)."""
+    budget = (
+        ContinuousBudget.parse(args.budget)
+        if args.budget
+        else ContinuousBudget(started_at=time.monotonic())
+    )
+    if args.target_cells is not None:
+        budget = replace(budget, target_cells=args.target_cells)
+    return budget
 
 
 def _absorb_results(
@@ -568,12 +596,28 @@ def _absorb_results(
     return completed, failed
 
 
+def _burst_stop(
+    budget: ContinuousBudget,
+    gate: Callable[[], str | None] | None,
+    now: float,
+) -> str | None:
+    """Boundary checks in priority order: budget, then lifecycle gate."""
+    if budget.target_reached():
+        return "target"
+    if budget.hard_expired(now):
+        return "hard"
+    if budget.soft_expired(now):
+        return "soft"
+    return gate() if gate is not None else None
+
+
 def run_burst(
     campaign: BroadMappingCampaign,
-    driver: StratifiedRandomDriver,
+    driver: BurstDriver,
     budget: ContinuousBudget,
     *,
     max_iterations: int,
+    gate: Callable[[], str | None] | None = None,
 ) -> dict[str, object]:
     """One budgeted burst (TODO29 Phase 3): sweep loop extracted from
     ``broad_mapping_sweep.main``.
@@ -594,15 +638,8 @@ def run_burst(
     walltime_by_family: dict[str, list[float]] = {}
     stop_reason = "max_iterations"
     for iteration in range(1, max_iterations + 1):
-        now = time.monotonic()
-        if budget.target_reached():
-            stop_reason = "target"
-            break
-        if budget.hard_expired(now):
-            stop_reason = "hard"
-            break
-        if budget.soft_expired(now):
-            stop_reason = "soft"
+        if (reason := _burst_stop(budget, gate, time.monotonic())) is not None:
+            stop_reason = reason
             break
         started = time.time()
         # Trim the batch at the target boundary: --target-cells is a hard

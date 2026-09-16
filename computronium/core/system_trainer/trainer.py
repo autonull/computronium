@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable, Mapping
 from dataclasses import field
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
     )
     from computronium.ontology import System
 
+type StepCallback = Callable[[Mapping[str, float]], None]
+
 logger = get_logger()
 
 
@@ -46,6 +49,9 @@ class SystemTrainer:
     config: SystemTrainerConfig
     train_data: _DataProvider
     val_data: _DataProvider | None = None
+    # Optional per-batch telemetry sink (TODO30 8.2). Default no-op: a bare
+    # `None` check on the hot path, never blocks or errors training.
+    step_callback: StepCallback | None = None
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -185,6 +191,9 @@ class SystemTrainer:
             num_samples += batch
             self.global_step += 1
             self._harvest_step()
+
+            if self.step_callback is not None:
+                self.step_callback(metrics)
 
             if self.global_step % self.config.log_every_n_steps == 0:
                 logger.info(

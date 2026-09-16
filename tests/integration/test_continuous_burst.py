@@ -194,12 +194,12 @@ def test_loop_smoke_exhaustion_and_sigterm(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_budget_parse_and_target_precedence() -> None:
-    from computronium.cli.continuous import _burst_budget
+    from computronium.autoscientist.broad_map import budget_from_args
 
-    spec = _burst_budget(Namespace(budget="90s", target_cells=7))
+    spec = budget_from_args(Namespace(budget="90s", target_cells=7))
     assert spec.soft_seconds == 90.0
     assert spec.target_cells == 7
-    bare = _burst_budget(Namespace(budget=None, target_cells=None))
+    bare = budget_from_args(Namespace(budget=None, target_cells=None))
     assert bare.soft_seconds is None and bare.target_cells is None
 
 

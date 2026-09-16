@@ -7,6 +7,26 @@
 > findings) and corrects the rev-1 plan against the codebase as it actually
 > stands.
 >
+> **PROGRESS (2026-09-16).** Landed: **8.1** `ContinuousDaemon`
+> (`computronium/autoscientist/daemon.py`) — full §1.2 state machine
+> (IDLE/PROPOSING/TRAINING/SLEEPING/PAUSED/STOPPED), heartbeat.json writer
+> (~2 s + on every transition), exclusive `<root>/continuous.lock`
+> (O_EXCL; second daemon exits non-zero — TODO29 §12.5 absorbed),
+> FastAPI surface for `/control/*` + `/state` + `/ws/telemetry` +
+> `/ws/events`, drop-oldest `TelemetryBridge` (thread→asyncio,
+> best-effort per §12.6), boundary-based pause/stop via a new
+> `run_burst(gate=...)` hook, PROPOSING/TRAINING phase observation via
+> `PhaseTrackingDriver` (driver wrapper; `run_burst` now takes a
+> `BurstDriver` protocol). **8.2** landed: optional default-no-op
+> `step_callback` on `SystemTrainer` (one `None` check on the hot path),
+> forwarded by `AutoScientistCampaign.step_callback`; verified
+> loss-identical with/without callback. **8.9** landed: `comp daemon`
+> (shared flags via `_add_common_flags`, adds `--port`, default 8940);
+> `comp continuous` stays as the legacy alias; budget construction
+> consolidated into `broad_map.budget_from_args`. Tests:
+> `tests/property/test_daemon_state.py` (lifecycle, boundary pause/stop,
+> lockfile, heartbeat, REST controls, bridge drop-oldest, hook isolation).
+>
 > **Design Principle:** The AutoScientist is autonomous. The dashboard is a
 > telemetry window, not a control surface for the science. The only human
 > controls are operational lifecycle: **Run, Pause, Stop**. Everything else
@@ -588,13 +608,17 @@ crash; criterion 1–2 do not require the WS to be up).
 
 ## 13. Immediate Next Actions (in order)
 
-1. **Extract `ContinuousDaemon`** from `run_burst` with the state machine,
-   heartbeat writer, root lockfile, and FastAPI/WS server (8.1, includes
-   TODO29 lockfile + batch-trimming absorption).
-2. **Add the trainer telemetry hook** — optional, default-no-op, verified
-   behavior-identical without a callback (8.2).
+1. ~~**Extract `ContinuousDaemon`**~~ **DONE** (8.1 + lockfile + batch-trimming note: target-boundary batch trimming already shipped in `run_burst`; the daemon adds the boundary gate).
+2. ~~**Add the trainer telemetry hook**~~ **DONE** (8.2, `step_callback`, behavior-identical verified).
 3. **Build the Lifecycle Control Bar and Liveness Badge** in `live_atlas.py`
-   (8.3), including polling-only degradation.
+   (8.3), including polling-only degradation. The daemon REST/WS surface it
+   needs is live: `GET /state` returns the heartbeat payload + uptime +
+   `last_summary`; `POST /control/{start,pause,resume,stop,skip_sleep}`;
+   `WS /ws/telemetry` streams `{metric: float}` dicts per training batch
+   (drop-oldest); `WS /ws/events` streams `{kind, ...}` lifecycle events
+   (`daemon_started`, `state`, `burst_finished`, `campaign_complete`,
+   `daemon_stopped`). `heartbeat.json` is written under the campaign root
+   with `{pid, state, burst, cell_index, started_at, updated_at, log_path}`.
 4. **Run the 500-cell shakedown through the new daemon** (per §8.11 launch
    guidance: no `--credit-trace`, `--limit-batches 30`). Watch it on the
    dashboard. Verify: no terminal needed for the full run. Collect
@@ -606,3 +630,23 @@ crash; criterion 1–2 do not require the WS to be up).
    500-cell run (8.8).
 8. **Design the adaptive scheduler** from the accumulated per-family
    walltime data (8.10, post-campaign).
+
+### 13.1 Improvement opportunities (from the 8.1/8.2 landing)
+
+- **Per-iteration cell progress**: the heartbeat's `cell_index` only updates
+  per burst (run_burst reports completion at iteration granularity). For the
+  §2.2 "Cell 12/50" badge, either a light per-iteration callback on
+  `run_burst` or a daemon-parsed ledger tail.
+- **Event payload enrichment**: `burst_finished` should carry the full
+  `run_burst` summary dict (means by family, completed/failed counts) so the
+  §5 cost panels can be fed straight from `/ws/events` without KB queries.
+- **Telemetry richness**: the hook currently forwards `train_step` metrics
+  only; settle-phase energy traces (§3.1 settling trace) need a second
+  emission point in the dynamics settle path or an epoch-level event.
+- **Graceful-stop watchdog**: `ContinuousDaemon.stop()` from SIGTERM works,
+  but a hard kill leaves the lockfile behind — document stale-lock recovery
+  (already supported: delete `<root>/continuous.lock`) or add PID liveness
+  check before refusing to start.
+- **Dashboard readiness for 8.3**: `GET /state` intentionally returns the
+  heartbeat payload verbatim; the UI can treat `updated_at` staleness
+  (>10 s) as CONNECTION LOST per §2.2 without extra daemon work.

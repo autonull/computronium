@@ -21,12 +21,12 @@ import argparse
 import logging
 import signal
 import time
-from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from computronium.autoscientist.broad_map import (
     BroadMappingCampaign,
-    ContinuousBudget,
+    budget_from_args,
     build_sweep,
     driver_seeded_kb,
     run_burst,
@@ -36,13 +36,16 @@ from computronium.autoscientist.broad_map import (
 from computronium.autoscientist.defects import resolve_defect
 from computronium.utils import seed_everything
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = logging.getLogger("continuous")
 
 _DEFECTS_NAME = "runtime_defects.jsonl"
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="comp continuous", description=__doc__)
+def _add_common_flags(parser: argparse.ArgumentParser) -> None:
+    """Flags shared by ``comp continuous`` and ``comp daemon``."""
     parser.add_argument(
         "--budget",
         type=str,
@@ -93,6 +96,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="capture per-cell BP-gradient alignment (adds settle overhead per cell)",
     )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="comp continuous", description=__doc__)
+    _add_common_flags(parser)
     sub = parser.add_subparsers(dest="command")
     unquarantine = sub.add_parser(
         "unquarantine", help="release cells quarantined by a resolved defect"
@@ -119,22 +127,11 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _burst_budget(args: argparse.Namespace) -> ContinuousBudget:
-    budget = (
-        ContinuousBudget.parse(args.budget)
-        if args.budget
-        else ContinuousBudget(started_at=time.monotonic())
-    )
-    if args.target_cells is not None:
-        budget = replace(budget, target_cells=args.target_cells)
-    return budget
-
-
 def _burst_once(args: argparse.Namespace, campaign, driver) -> str:
     summary = run_burst(
         campaign,
         driver,
-        _burst_budget(args),
+        budget_from_args(args),
         max_iterations=args.max_iterations,
     )
     return str(summary["stop_reason"])
@@ -150,8 +147,11 @@ def _loop_bursts(args: argparse.Namespace, campaign, driver) -> None:
         time.sleep(args.sleep)
 
 
-def _install_sigterm() -> None:
+def _install_sigterm(handler: Callable[[], object] | None = None) -> None:
     def _terminate(signum: int, frame: object) -> None:
+        if handler is not None:
+            handler()
+            return
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _terminate)
@@ -168,18 +168,22 @@ def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: AN
     return 0
 
 
+def _tee_log(log_path: Path) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+    )
+    # Root handler: modules log under computronium.* names; named
+    # loggers ("broad_map") would never see them.
+    logging.getLogger().addHandler(handler)
+
+
 def _burst(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
     _install_sigterm()
     if args.log_path is not None:
-        args.log_path.parent.mkdir(parents=True, exist_ok=True)
-        handler = logging.FileHandler(args.log_path, encoding="utf-8")
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
-        )
-        # Root handler: modules log under computronium.* names; named
-        # loggers ("broad_map") would never see them.
-        logging.getLogger().addHandler(handler)
+        _tee_log(args.log_path)
     try:
         _run_burst(args)
     except KeyboardInterrupt, SystemExit:
@@ -194,7 +198,9 @@ def _run_burst(args: argparse.Namespace) -> None:
     if args.loop:
         _run_forever(args, campaign, driver)
         return
-    run_burst(campaign, driver, _burst_budget(args), max_iterations=args.max_iterations)
+    run_burst(
+        campaign, driver, budget_from_args(args), max_iterations=args.max_iterations
+    )
     if args.maturation:
         run_l1_maturation(args, campaign, driver.burst_tag)
 

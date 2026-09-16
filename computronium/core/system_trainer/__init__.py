@@ -71,10 +71,11 @@ from computronium.core.system_trainer.spec import (
 from computronium.core.system_trainer.spec import (
     compose_system_from_configs as _compose_system_from_configs_spec,
 )
-from computronium.core.system_trainer.trainer import SystemTrainer
+from computronium.core.system_trainer.trainer import StepCallback, SystemTrainer
 
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "SystemTrainer",
+    "StepCallback",
     "SystemTrainerConfig",
     "TrainerSnapshot",
     "fold_in",

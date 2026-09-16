@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, cast
 import yaml
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from typing import Protocol
 
     from ceec.models import Experiment
@@ -579,6 +580,10 @@ class AutoScientistCampaign:
         self._iteration = 0
         self._campaign_state: CampaignState | None = None
         self._config: dict[str, object] = {}
+        # Optional per-batch telemetry sink forwarded to every SystemTrainer
+        # this campaign builds (TODO30 8.2). Side-channel only — never a
+        # second record path; the KB stays the sole record of truth.
+        self.step_callback: Callable[[Mapping[str, float]], None] | None = None
 
         # Resume or initialize
         if resume:
@@ -1102,6 +1107,7 @@ class AutoScientistCampaign:
             config,
             task.get_dataloader("train"),  # type: ignore[attr-defined]
             task.get_dataloader("val"),  # type: ignore[attr-defined]
+            step_callback=self.step_callback,
         ) as trainer:
             fit_started = time.monotonic()
             history = trainer.fit()
