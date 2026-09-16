@@ -416,8 +416,25 @@ All subcommands of the `comp` dispatcher:
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
 | `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, Pareto radar) | `comp gallery --run` |
-| `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs | `comp continuous --budget 5m --root artifacts/broad_map` |
+| `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs | `comp continuous --budget 5m --limit-batches 30 --root artifacts/broad_map` |
 | `comp dashboard` | Live read-only window over a continuous-discovery root: living atlas, defect funnel, health gauge, Pareto strip, burst-log ticker | `comp dashboard --root artifacts/broad_map --port 8088` |
+
+### Continuous Discovery (TODO29)
+
+`comp continuous` turns the one-shot broad-mapping sweep into a time-budgeted,
+resume-safe loop that harvests failures as data:
+
+- **Budgeted bursts** — `--budget 12m` / `--target-cells N` / `--loop --sleep 15`; every cell is KB-flushed on completion, so an interrupted run resumes with nothing re-measured.
+- **Shorter cells** — `--limit-batches N` caps batches per epoch (~40× more cells/hour at L0 mapping fidelity; 0 = full epoch).
+- **Defect funnel** — gate-passing crashes land in `runtime_defects.jsonl` and their cells are quarantined until `comp continuous unquarantine --defect <id>`; gate rejections remain structural voids (ontology boundaries, not bugs).
+- **Divergence flags** — NaN-loss results are tagged `nan_loss` and excluded from Pareto fronts, promotion, and the deep tier.
+- **Maturation** — burst cells are `maturity:l0`; `--maturation N` re-runs front cells at epochs=3 (`l1`), and `deep-tier` re-runs front-stable cells per seed as claim-grade CEEC experiments (`l2`).
+- **Live dashboard** — `comp dashboard` (defaults to `artifacts/broad_map`, port 8088, opens a browser): islands/voids atlas, defect funnel, health gauge with divergence count, Pareto strip, burst-log ticker.
+
+```bash
+uv run comp continuous --target-cells 500 --limit-batches 30 --loop --sleep 15
+uv run comp dashboard
+```
 
 Module entry points (not installed as scripts):
 
