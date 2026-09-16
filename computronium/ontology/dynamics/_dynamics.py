@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
 if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
@@ -87,6 +87,14 @@ def _get_state_free_state(state: object) -> list[Tensor] | Tensor | None:
     return getattr(state, "free_state", None)
 
 
+def _get_state_dual_vars(state: object) -> list[Tensor] | None:
+    """Get dual_vars from either SystemState or CompositeState."""
+    if _is_composite_state(state):
+        activity = cast("CompositeState", state).activity
+        return activity.get("dual_vars")
+    return getattr(state, "dual_vars", None)
+
+
 def _get_state_activity(state: object) -> dict[str, ActivityValue] | None:
     """Get the activity dict from a CompositeState-shaped state, else None."""
     if _is_composite_state(state):
@@ -134,6 +142,7 @@ def _create_output_state(
     activations: list[Tensor] | Tensor | None = None,
     spike_counts: list[Tensor] | None = None,
     spike_rasters: list[list[Tensor]] | None = None,
+    dual_vars: list[Tensor] | None = None,
 ) -> CompositeState:
     """Create a new state of the same type with updated fields.
 
@@ -164,6 +173,8 @@ def _create_output_state(
             activity["spike_counts"] = spike_counts
         if spike_rasters is not None:
             activity["spike_rasters"] = spike_rasters
+        if dual_vars is not None:
+            activity["dual_vars"] = dual_vars
         result: dict[str, ActivityValue] = activity
         return CompositeState(
             activity=result,
@@ -198,6 +209,9 @@ def _create_output_state(
                 spike_rasters=spike_rasters
                 if spike_rasters is not None
                 else getattr(state, "spike_rasters", None),
+                dual_vars=dual_vars
+                if dual_vars is not None
+                else getattr(state, "dual_vars", None),
             ),
         )
 
@@ -214,7 +228,7 @@ class StateDynamicsConfig:
     Attributes:
         dynamics_type: "energy_minimization", "predictive_settling",
             "error_predictive_coding", "spike_integration", "instantaneous",
-            "diffusion", "lazy"
+            "diffusion", "lazy", "pc_alm"
         max_steps: Maximum settling iterations
         convergence_threshold: Early stopping threshold
         convergence_start: Step to start checking convergence
@@ -240,6 +254,15 @@ class StateDynamicsConfig:
             logits); non-finite layers pass through untouched. Realized on
             instantaneous and error_predictive_coding settles; other
             dynamics ignore it until their own audited pull.
+        rho: Augmented Lagrangian penalty parameter for PC-ALM dynamics.
+            Controls the weight of the quadratic penalty term in the
+            augmented Lagrangian. Higher values enforce constraints more
+            strictly but may slow convergence.
+        prospective_leak: Leaky integration coefficient for the dual
+            variables in PC-ALM. 0.0 = pure PC-ALM (integral-only PI
+            controller). Values > 0 interpolate toward prospective
+            configuration (proportional component), recovering gradient
+            alignment properties. Range: [0.0, 1.0].
     """
 
     dynamics_type: str
@@ -254,6 +277,8 @@ class StateDynamicsConfig:
     gradient_checkpointing: bool = False
     compiled: bool = False
     gain_control: GainControlMode = "none"
+    rho: float = 1.0
+    prospective_leak: float = 0.0
 
     @classmethod
     def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
@@ -448,6 +473,66 @@ class StateDynamicsConfig:
             momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
             gain_control=gain_control,
+        )
+
+    @classmethod
+    def pc_alm(
+        cls,
+        *,
+        max_steps: int = 30,
+        convergence_threshold: float = 1e-4,
+        convergence_start: int = 5,
+        step_size: float = 0.1,
+        beta: float = 0.5,
+        rho: float = 1.0,
+        prospective_leak: float = 0.0,
+        momentum: float = 0.0,
+        track_free_energy_per_iter: bool = False,
+        compiled: bool = False,
+    ) -> StateDynamicsConfig:
+        """Augmented Lagrangian Predictive Coding (PC-ALM; Seely & Gould 2026, arXiv:2605.31022).
+
+        Layer-local primal–dual dynamics replacing global backprop. Each layer
+        maintains primal states (activations) and dual states (Lagrange
+        multipliers / PI controller state). The augmented Lagrangian:
+
+            L_ρ = Σₗ ½‖hₗ − f_θₗ(hₗ₋₁)‖² + Σₗ ⟨λₗ, hₗ − f_θₗ(hₗ₋₁)⟩
+                  + (ρ/2) Σₗ ‖hₗ − f_θₗ(hₗ₋₁)‖²
+
+        Dynamics (discretized):
+            cₗ = hₗ − f_θₗ(hₗ₋₁)         # constraint violation
+            λₗ ← λₗ + step_size · cₗ       # dual update (PI controller)
+            hₗ ← hₗ − step_size · (cₗ + λₗ + ρ·cₗ − Jₗ₊₁ᵀ·(cₗ₊₁ + λₗ₊₁ + ρ·cₗ₊₁))
+
+        Weight update (local Hebbian):
+            ΔWₗ ∝ −λₗ hₗ₋₁ᵀ
+
+        Args:
+            max_steps: Maximum primal–dual iterations (inference budget T)
+            convergence_threshold: Early stopping on max constraint violation
+            convergence_start: Step to begin convergence checking
+            step_size: Primal/dual learning rate (ηₕ = η_λ)
+            beta: Nudge strength for nudged phase (output layer)
+            rho: Augmented Lagrangian penalty parameter (ρ ≥ 0)
+            prospective_leak: Leaky dual integration coefficient α ∈ [0,1].
+                0.0 = pure PC-ALM (integral-only). >0 recovers prospective
+                configuration properties (proportional component).
+            momentum: Heavy-ball momentum for primal updates
+            track_free_energy_per_iter: Record L_ρ per iteration
+            compiled: Use torch.compile for the settle loop
+        """
+        return cls(
+            dynamics_type="pc_alm",
+            max_steps=max_steps,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+            step_size=step_size,
+            beta=beta,
+            momentum=momentum,
+            track_free_energy_per_iter=track_free_energy_per_iter,
+            compiled=compiled,
+            rho=rho,
+            prospective_leak=prospective_leak,
         )
 
 
@@ -1394,6 +1479,280 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         for e in self._last_errors:
             energy = energy + 0.5 * e.pow(2).sum()
         return energy
+
+
+class PCALMDynamics(_SettleTelemetry):
+    """Augmented Lagrangian Predictive Coding (PC-ALM; Seely & Gould 2026,
+    arXiv:2605.31022).
+
+    Layer-local primal–dual dynamics replacing global backprop. Each layer
+    maintains:
+    - Primal states `h_l` (activations)
+    - Dual states `λ_l` (Lagrange multipliers / PI controller state)
+
+    The augmented Lagrangian for layer `l`:
+        L_ρ = Σₗ [ ½‖hₗ − f_θₗ(hₗ₋₁)‖² ]
+              + Σₗ ⟨λₗ, hₗ − f_θₗ(hₗ₋₁)⟩
+              + (ρ/2) Σₗ ‖hₗ − f_θₗ(hₗ₋₁)‖²
+
+    Dynamics (discretized continuous time):
+        cₗ = hₗ − f_θₗ(hₗ₋₁)                  # constraint violation
+        λₗ ← λₗ + step_size · cₗ                # dual update (PI controller)
+        hₗ ← hₗ − step_size · [cₗ + λₗ + ρ·cₗ
+              − Jₗ₊₁ᵀ·(cₗ₊₁ + λₗ₊₁ + ρ·cₗ₊₁)]  # primal update
+
+    Weight update (local Hebbian, computed by PCALMCredit):
+        ΔWₗ ∝ −λₗ hₗ₋₁ᵀ
+
+    The `prospective_leak` parameter interpolates between pure PC-ALM
+    (α=0, integral-only PI controller) and prospective configuration
+    (α→1, proportional component). With α>0:
+        λₗ ← λₗ + step_size · (cₗ + α·λₗ)
+    """
+
+    def __init__(self, config: StateDynamicsConfig | None = None):
+        self.config = config or StateDynamicsConfig.pc_alm()
+        self._dual_vars: list[Tensor] | None = None
+        self._free_energy_history: list[float] | None = None
+
+    def settle(
+        self,
+        state: CompositeState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
+    ) -> CompositeState:
+        x = _get_state_x(state)
+        if x is None:
+            raise ValueError("State must contain input 'x'")
+
+        # Initialize free energy history if tracking enabled
+        if self.config.track_free_energy_per_iter:
+            self._free_energy_history = []
+        else:
+            self._free_energy_history = None
+
+        # Extract layered parameters
+        layered = extract_layered_params(geometry)
+        if layered is None or not layered.weights:
+            raise TypeError("PC-ALM dynamics requires a layer-structured geometry")
+
+        op = substrate.get_forward_operator()
+
+        # Initialize layer states from a feedforward pass
+        init_acts = geometry.forward_with_intermediates(x, substrate)
+        if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
+            acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
+        else:
+            raise TypeError("PC-ALM requires valid feedforward intermediates")
+
+        # Number of layers (excluding input)
+        num_layers = len(acts) - 1
+        batch_size = acts[0].shape[0]
+
+        # Initialize dual variables λ to zero (or warm-start from previous step)
+        if self._dual_vars is not None and len(self._dual_vars) == num_layers:
+            dual_vars = self._dual_vars
+        else:
+            dual_vars = [torch.zeros_like(acts[i + 1]) for i in range(num_layers)]
+
+        # Track initial augmented Lagrangian
+        if self._free_energy_history is not None:
+            self._free_energy_history.append(
+                self._compute_augmented_lagrangian(acts, dual_vars, layered, op).item()
+            )
+
+        # Prospective leak coefficient
+        alpha = self.config.prospective_leak
+        rho = self.config.rho
+        step_size = self.config.step_size
+
+        # Primal–dual relaxation loop
+        self._note_settle_start()
+        for step in range(self.config.max_steps):
+            # Compute constraint violations c_l = h_l - f_θ_l(h_{l-1})
+            constraints = []
+            for i in range(num_layers):
+                # f_θ_l(h_{l-1}) = activation(W_l @ h_{l-1} + b_l)
+                pre = acts[i]
+                weight = layered.weights[i]
+                bias = layered.biases[i]
+                activation = (
+                    layered.activations[i]
+                    if i < len(layered.activations)
+                    else nn.Identity()
+                )
+
+                predicted = op(pre, weight)
+                if bias is not None:
+                    predicted = predicted + bias
+                predicted = activation(predicted)
+
+                if layered.residual and i > 0 and acts[i].shape == predicted.shape:
+                    predicted = predicted + acts[i]
+
+                c = acts[i + 1] - predicted
+                constraints.append(c)
+
+            # Dual update: λ_l ← λ_l + step_size * (c_l + alpha * λ_l)
+            # alpha=0 -> pure integral (PC-ALM); alpha>0 -> leaky integral (prospective config)
+            for i in range(num_layers):
+                dual_vars[i] = dual_vars[i] + step_size * (
+                    constraints[i] + alpha * dual_vars[i]
+                )
+
+            # Primal update: h_l ← h_l - step_size * (c_l + λ_l + ρ*c_l - J_{l+1}^T * (c_{l+1} + λ_{l+1} + ρ*c_{l+1}))
+            new_acts = [acts[0]]  # input layer clamped
+            for i in range(num_layers):
+                # Bottom-up: c_{i+1} + λ_{i+1} + ρ*c_{i+1}
+                primal_grad = constraints[i] + dual_vars[i] + rho * constraints[i]
+
+                # Top-down coupling: J_{i+2}^T * (c_{i+2} + λ_{i+2} + ρ*c_{i+2})
+                # Only for hidden layers (not output layer)
+                if i < num_layers - 1:
+                    # Error signal from layer i+2: v = c_{i+2} + λ_{i+2} + ρ*c_{i+2}
+                    v = constraints[i + 1] + dual_vars[i + 1] + rho * constraints[i + 1]
+                    # Jacobian J_{i+2} = diag(act'(z_{i+2})) @ W_{i+2}
+                    # where z_{i+2} = h_{i+1} @ W_{i+2}^T + b_{i+2}
+                    # h_{i+1} = acts[i+1], W_{i+2} = layered.weights[i+1]
+                    pre = acts[i + 1]
+                    weight = layered.weights[i + 1]
+                    bias = layered.biases[i + 1]
+                    z = op(pre, weight)
+                    if bias is not None:
+                        z = z + bias
+                    act_derivative = (z > 0).to(v.dtype)  # ReLU derivative
+                    # J_{i+2}^T @ v = W_{i+2}^T @ (act'(z_{i+2}) * v)
+                    top_down = op(v * act_derivative, weight.T)
+                else:
+                    # Output layer: no top-down coupling
+                    top_down = torch.zeros_like(acts[i + 1])
+
+                total_grad = primal_grad - top_down
+                h_new = acts[i + 1] - step_size * total_grad
+                new_acts.append(h_new)
+
+            # Nudge output layer in nudged phase
+            if target is not None:
+                beta = self.config.beta
+                target_one_hot = _one_hot(target, new_acts[-1])
+                new_acts[-1] = new_acts[-1] + beta * (target_one_hot - new_acts[-1])
+
+            # Track augmented Lagrangian per iteration
+            if self._free_energy_history is not None:
+                self._free_energy_history.append(
+                    self._compute_augmented_lagrangian(
+                        new_acts, dual_vars, layered, op
+                    ).item()
+                )
+
+            # Check convergence on constraint violation norm
+            if step >= self.config.convergence_start:
+                constraint_norm = max(c.abs().max().item() for c in constraints)
+                if constraint_norm < self.config.convergence_threshold:
+                    acts = new_acts
+                    self._settle_steps_used = step + 1
+                    break
+
+            acts = new_acts
+
+        # Store dual variables for credit assignment
+        self._dual_vars = dual_vars
+
+        # Write dual_vars to state metrics for PCALMCredit to read
+        dual_vars_for_state = [lam.detach() for lam in dual_vars]
+
+        if target is None:
+            state.free_state = acts
+        else:
+            state.nudged_state = acts
+        state.activations = acts
+
+        # Also write to metrics for backward compatibility
+        if not hasattr(state, "metrics") or state.metrics is None:
+            state.metrics = {}
+        state.metrics["dual_vars"] = dual_vars_for_state
+
+        return state
+
+    def _compute_augmented_lagrangian(
+        self,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        layered: LayeredParams,
+        op: object,
+    ) -> Tensor:
+        """Compute the augmented Lagrangian L_ρ at the current state."""
+        num_layers = len(acts) - 1
+        batch_size = acts[0].shape[0]
+        rho = self.config.rho
+
+        total = torch.zeros((), device=acts[0].device, dtype=acts[0].dtype)
+
+        for i in range(num_layers):
+            pre = acts[i]
+            weight = layered.weights[i]
+            bias = layered.biases[i]
+            activation = (
+                layered.activations[i]
+                if i < len(layered.activations)
+                else nn.Identity()
+            )
+
+            predicted = op(pre, weight)
+            if bias is not None:
+                predicted = predicted + bias
+            predicted = activation(predicted)
+
+            if layered.residual and i > 0 and acts[i].shape == predicted.shape:
+                predicted = predicted + acts[i]
+
+            c = acts[i + 1] - predicted
+
+            # ½‖c‖² + ⟨λ, c⟩ + (ρ/2)‖c‖² = ½(1+ρ)‖c‖² + ⟨λ, c⟩
+            constraint_norm_sq = (c**2).sum()
+            dual_term = (dual_vars[i] * c).sum()
+
+            total = total + 0.5 * (1 + rho) * constraint_norm_sq + dual_term
+
+        return total / batch_size
+
+    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+        """Compute the augmented Lagrangian energy at the settled state."""
+        acts = state.free_state if state.free_state is not None else state.activations
+        if acts is None:
+            return torch.tensor(0.0)
+        if isinstance(acts, Tensor):
+            acts = [acts]
+
+        layered = extract_layered_params(geometry)
+        if layered is None:
+            return torch.tensor(0.0)
+
+        op = (
+            geometry.substrate.get_forward_operator()
+            if hasattr(geometry, "substrate")
+            else None
+        )
+        if op is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            op = DigitalSubstrate().get_forward_operator()
+
+        # Need dual_vars from state metrics or internal buffer
+        dual_vars = state.metrics.get("dual_vars") if state.metrics else None
+        if dual_vars is None and self._dual_vars is not None:
+            dual_vars = self._dual_vars
+
+        if dual_vars is None:
+            # Fallback: zero duals
+            dual_vars = [torch.zeros_like(acts[i + 1]) for i in range(len(acts) - 1)]
+
+        return self._compute_augmented_lagrangian(acts, dual_vars, layered, op)
+
+    def get_free_energy_history(self) -> list[float] | None:
+        """Return the augmented Lagrangian history tracked during settling."""
+        return self._free_energy_history
 
 
 class SpikeIntegrationDynamics(_SettleTelemetry):

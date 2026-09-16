@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 _DEFAULT_INIT_SCALE = 0.1
 
-type InitScheme = Literal["default", "mupc"]
+type InitScheme = Literal["default", "mupc", "innocenti"]
 
 
 def _linear_stack(
@@ -51,6 +51,12 @@ def _linear_stack(
     init (Ernoult et al., arXiv:2505.13124): weights ~ N(0, 1), hidden
     layers scaled 1/√(N·L), output layer scaled 1/N (N = uniform width,
     L = hidden-layer count). ``init_scale`` is not applied in this scheme.
+
+    ``init_scheme="innocenti"`` applies the residual initialization from
+    Innocenti et al. (2026, arXiv:2605.31022 §6) for 1000-layer stability:
+    residual-block weights ~ N(0, 1/√(N·L)), input/output projections
+    scaled by 1/N, where N = uniform hidden width, L = hidden-layer count.
+    Requires ``residual=True`` in GeometryConfig.
     """
     layers: list[nn.Module] = []
     width = dims[1] if len(dims) > 1 else (dims[0] if dims else 0)
@@ -66,6 +72,17 @@ def _linear_stack(
                     else (1.0 / (width * num_hidden) ** 0.5)
                 )
                 layer.weight.data.mul_(scale)
+            case "innocenti" if num_hidden > 0:
+                nn.init.normal_(layer.weight)
+                if i == 0:
+                    # Input projection: 1/N
+                    layer.weight.data.mul_(1.0 / width)
+                elif i == len(dims) - 2:
+                    # Output projection: 1/N
+                    layer.weight.data.mul_(1.0 / width)
+                else:
+                    # Residual hidden blocks: 1/√(N·L)
+                    layer.weight.data.mul_(1.0 / (width * num_hidden) ** 0.5)
             case _:
                 if init_scale != _DEFAULT_INIT_SCALE:
                     layer.weight.data.mul_(init_scale / _DEFAULT_INIT_SCALE)
@@ -97,12 +114,15 @@ class GeometryConfig:
         init_scale: Multiplicative scale on weight initialization (weights and
             recurrent matrices; recurrent matrices additionally carry a 0.1
             sub-scale for EqProp's small-recurrent convention)
-        init_scheme: "default" (fan-in × init_scale) or "mupc" (μPC
+        init_scheme: "default" (fan-in × init_scale), "mupc" (μPC
             depth-scaled init, arXiv:2505.13124 — N(0,1) weights, hidden
             1/√(N·L), output 1/N; supersedes init_scale for the
             feedforward stack only — recurrent weight matrices keep the
             EqProp small-recurrent convention (init_scale × 0.1) under
-            both schemes, whose stability depends on the 0.1 sub-scale)
+            both schemes, whose stability depends on the 0.1 sub-scale), or
+            "innocenti" (residual init for 1000-layer stability, Innocenti
+            et al. 2026 — N(0,1) weights, input/output 1/N, residual hidden
+            1/√(N·L); requires residual=True)
         residual: Skip connections between equal-width hidden layers
             (a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)); the paper regime for
             μPC init (Table 1 is specified and tested on residual nets,
@@ -2667,7 +2687,9 @@ class NtmGeometry(nn.Module):
         device = self._beta.device
         if slots <= width:
             base = torch.zeros(slots, width, device=device)
-            base[torch.arange(slots, device=device), torch.arange(slots, device=device)] = 0.5
+            base[
+                torch.arange(slots, device=device), torch.arange(slots, device=device)
+            ] = 0.5
         else:
             g = torch.Generator().manual_seed(0)
             base = torch.randn(slots, width, generator=g).to(device)
@@ -2815,7 +2837,10 @@ class NtmGeometry(nn.Module):
                     read
                     if read is not None
                     else torch.zeros(
-                        x.shape[0], self.config.mem_width, device=x.device, dtype=x.dtype
+                        x.shape[0],
+                        self.config.mem_width,
+                        device=x.device,
+                        dtype=x.dtype,
                     ),
                 ],
                 dim=-1,

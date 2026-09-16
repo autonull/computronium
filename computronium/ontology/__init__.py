@@ -26,6 +26,7 @@ from computronium.ontology.credit import (
     LemmaCredit,
     LocalContrastiveCredit,
     LocalGoodnessCredit,
+    PCALMCredit,
     PepitaCredit,
     Phase,
     RandomProjectionsCredit,
@@ -46,6 +47,7 @@ from computronium.ontology.dynamics import (
     ErrorPredictiveCodingDynamics,
     InstantaneousDynamics,
     LazyStateDynamics,
+    PCALMDynamics,
     PredictiveSettlingDynamics,
     SpikeIntegrationDynamics,
     StateDynamics,
@@ -139,7 +141,7 @@ from computronium.state import (
     SystemContext,
 )
 
-__all__ = [  # noqa: RUF022
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Substrate
     "SubstrateType",
     "SubstrateConfig",
@@ -187,6 +189,7 @@ __all__ = [  # noqa: RUF022
     "InstantaneousDynamics",
     "DiffusionDynamics",
     "LazyStateDynamics",
+    "PCALMDynamics",
     # CreditAssignment
     "CreditAssignmentConfig",
     "CreditAssignment",
@@ -197,6 +200,7 @@ __all__ = [  # noqa: RUF022
     "LemmaCredit",
     "LocalGoodnessCredit",
     "PepitaCredit",
+    "PCALMCredit",
     "TemporalTraceCredit",
     "TargetInversionCredit",
     "HomeostaticCredit",
@@ -217,7 +221,7 @@ __all__ = [  # noqa: RUF022
     "SpectralConstrainedUpdate",
     "MeanNormUpdate",
     "ElasticConsolidationUpdate",
-    # Plasticity (P-axis)  # noqa: ERA001
+    # Plasticity (P-axis)  # ruff: ignore[commented-out-code]
     "PlasticityPrimitive",
     "PlasticityConfig",
     "TransitionFn",

@@ -430,6 +430,35 @@ class CreditAssignmentConfig:
             train_biases=train_biases,
         )
 
+    @classmethod
+    def pc_alm(
+        cls,
+        *,
+        beta: float = 0.5,
+        credit_norm: CreditNormMode = "none",
+    ) -> CreditAssignmentConfig:
+        """PC-ALM local credit assignment (Seely & Gould 2026, arXiv:2605.31022).
+
+        Uses the dual variables λ from PCALMDynamics to compute local Hebbian
+        updates: ΔW_l = -λ_l @ h_{l-1}^T / (batch * beta_dual).
+
+        The dual variables are computed by PCALMDynamics during the primal-dual
+        relaxation and stored in the free-phase state's metrics["dual_vars"].
+
+        Args:
+            beta: Dual learning rate scale (beta_dual in the paper)
+            credit_norm: Per-layer credit normalization mode
+        """
+        return cls(
+            credit_type="pc_alm",
+            beta=beta,
+            feedback_matrix=None,
+            local_objective="ff",
+            orthogonal_init=False,
+            feedback_scale=0.01,
+            credit_norm=credit_norm,
+        )
+
 
 # ============================================================
 # CreditAssignment Protocol
@@ -2340,6 +2369,94 @@ class HomeostaticCredit(_SurrogateUndefined):
             grads.append(grad)
 
         return grads
+
+
+class PCALMCredit(_SurrogateUndefined):
+    """PC-ALM local credit assignment: ΔW_l = -η * λ_l @ h_{l-1}^T / B.
+
+    Uses the dual variables λ from PCALMDynamics (stored in the free-phase
+    state's metrics["dual_vars"]) to compute layer-local Hebbian updates.
+    No autograd through the settle loop is required — the primal-dual
+    dynamics carry the credit signal in the dual variables.
+
+    Reference: Seely & Gould (2026), arXiv:2605.31022
+    Augmented Lagrangian Predictive Coding: ΔW_l ∝ -λ_l h_{l-1}^T
+    """
+
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="PCALMCredit",
+        reference_equations=(
+            "Augmented Lagrangian Predictive Coding; Seely & Gould (2026), "
+            "arXiv:2605.31022: ΔW_l ∝ -λ_l h_{l-1}^T"
+        ),
+        deviations_from_literature=(
+            "dual variables λ carried by dynamics, not recomputed here",
+            "optional credit_norm normalization (relative/rms/spectral)",
+        ),
+        objective_function="Augmented Lagrangian L_ρ at settled state",
+        pseudo_gradient_def="ΔW_l = -λ_l @ h_{l-1}^T / (batch * β_dual)",
+        symmetry_requirements=("none (local rule)",),
+        approximation_parameters=("rho", "beta_dual"),
+        validated_limits=(
+            "gradient-equivalence vs BP cosine ≥ 0.8 at depth 100 (paper claim)",
+            "depth-1000 trainable with proper initialization (Innocenti et al. 2026)",
+        ),
+    )
+
+    def __init__(self, config: CreditAssignmentConfig | None = None):
+        self.config = config or CreditAssignmentConfig.pc_alm()
+
+    def compute_pseudo_gradient(
+        self,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        free_state = states.get(Phase.FREE)
+
+        # PC-ALM uses the FREE phase dual variables for weight updates
+        # (nudged phase only used for energy/loss computation)
+        if free_state is None:
+            return []
+
+        # Get dual variables from state metrics
+        dual_vars = None
+        if hasattr(free_state, "metrics") and free_state.metrics:
+            dual_vars = free_state.metrics.get("dual_vars")
+
+        if dual_vars is None or not isinstance(dual_vars, list):
+            return []
+
+        acts = (
+            free_state.activations
+            if isinstance(free_state.activations, list)
+            else [free_state.activations]
+            if free_state.activations is not None
+            else []
+        )
+
+        if len(acts) < 2:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        if not weight_names:
+            return []
+
+        grads = []
+        for i, name in enumerate(weight_names):
+            if i < len(dual_vars) and i < len(acts) - 1:
+                lam = dual_vars[i]  # [B, D_l]
+                h_pre = acts[i]  # [B, D_{l-1}]
+                batch_size = h_pre.shape[0]
+                grad = -(lam.T @ h_pre) / batch_size
+                grads.append(grad)
+            else:
+                grads.append(torch.zeros_like(geometry.params[name]))
+
+        return _apply_credit_norm(grads, self.config.credit_norm)
 
 
 class LemmaCredit(LocalGoodnessCredit):

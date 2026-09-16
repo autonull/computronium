@@ -182,6 +182,7 @@ if TYPE_CHECKING:
         LemmaCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
@@ -201,6 +202,7 @@ if TYPE_CHECKING:
         ErrorPredictiveCodingDynamics,
         InstantaneousDynamics,
         LazyStateDynamics,
+        PCALMDynamics,
         PredictiveSettlingDynamics,
         SpikeIntegrationDynamics,
         StateDynamicsConfig,
@@ -264,7 +266,7 @@ if TYPE_CHECKING:
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
-_LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
+_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     # 6-D Joint Architecture (facade exports only)
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
@@ -273,6 +275,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     # Core 5-D Ontology (new decomposed modules)
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
     "BackpropCredit": ("computronium.ontology.credit", "BackpropCredit"),
+    "PCALMCredit": ("computronium.ontology.credit", "PCALMCredit"),
     "CreditAssignmentConfig": (
         "computronium.ontology.credit",
         "CreditAssignmentConfig",
@@ -281,6 +284,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     "DiffusionDynamics": (
         "computronium.ontology.dynamics",
         "DiffusionDynamics",
+    ),
+    "PCALMDynamics": (
+        "computronium.ontology.dynamics",
+        "PCALMDynamics",
     ),
     "LazyStateDynamics": (
         "computronium.ontology.dynamics",
@@ -619,6 +626,8 @@ __all__ = [
     "NullPlasticity",
     "OpticalSubstrate",
     "OrthoAdamUpdate",
+    "PCALMCredit",
+    "PCALMDynamics",
     "ParameterUpdateConfig",
     "PepitaCredit",
     "PlasticityConfig",

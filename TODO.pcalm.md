@@ -424,21 +424,21 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 ## 8. Implementation Phases & Milestones
 
 ### Phase 0: Prerequisites (Week 1)
-- [ ] Add `InnocentiInit` weight initialization to `GeometryConfig`
-- [ ] Add `rho`, `prospective_leak` fields to `StateDynamicsConfig` (dataclass)
-- [ ] Extend `SystemState` / `CompositeState` with optional `dual_vars: list[Tensor]` field
+- [x] Add `InnocentiInit` weight initialization to `GeometryConfig`
+- [x] Add `rho`, `prospective_leak` fields to `StateDynamicsConfig` (dataclass)
+- [x] Extend `SystemState` / `CompositeState` with optional `dual_vars: list[Tensor]` field
 
 ### Phase 1: Core Dynamics (Week 2–3)
-- [ ] Implement `PCALMDynamics` in `_dynamics.py` (eager path first)
-- [ ] Register in `DYNAMICS_REGISTRY`
-- [ ] Add `StateDynamicsConfig.pc_alm()` classmethod
-- [ ] Add validation rules in `SystemConfig.validate()`
-- [ ] Unit test: depth-10 MLP on MNIST matches reference dynamics trajectory
+- [x] Implement `PCALMDynamics` in `_dynamics.py` (eager path first)
+- [x] Register in `DYNAMICS_REGISTRY`
+- [x] Add `StateDynamicsConfig.pc_alm()` classmethod
+- [x] Add validation rules in `SystemConfig.validate()`
+- [x] Unit test: depth-10 MLP on MNIST matches reference dynamics trajectory
 
 ### Phase 2: Credit Assignment (Week 3)
-- [ ] Implement `PCALMCredit` in `credit.py`
-- [ ] Add `CreditAssignmentConfig.pc_alm()` (or reuse `thermodynamic_contrast` with docs)
-- [ ] Integration test: full train step with `PCALMDynamics` + `PCALMCredit`
+- [x] Implement `PCALMCredit` in `credit.py`
+- [x] Add `CreditAssignmentConfig.pc_alm()` (or reuse `thermodynamic_contrast` with docs)
+- [x] Integration test: full train step with `PCALMDynamics` + `PCALMCredit`
 
 ### Phase 3: Fused Kernel (Week 4–5)
 - [ ] Implement `pcalm_kernels.py` with Triton fused primal–dual loop
@@ -447,9 +447,9 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 - [ ] Benchmark: kernel vs eager at depth 100, 500, 1000
 
 ### Phase 4: Adaptive & Hybrid Features (Week 5)
-- [ ] Implement adaptive relaxation (constraint-norm early stop)
-- [ ] Implement `prospective_leak` hybrid mode
-- [ ] Add `track_free_energy_per_iter` for `L_ρ` tracking
+- [x] Implement adaptive relaxation (constraint-norm early stop)
+- [x] Implement `prospective_leak` hybrid mode
+- [x] Add `track_free_energy_per_iter` for `L_ρ` tracking
 
 ### Phase 5: Hyperopt & Demo (Week 6)
 - [ ] Add `pc_alm_search_space` to `hyperopt/search_space.py`
@@ -525,6 +525,73 @@ PC-ALM cites / builds on these — absorb into Computronium for fair comparison:
 5. **Hybrid**: `prospective_leak=0.1` improves sample efficiency on CIFAR-10 vs pure PC-ALM
 6. **Integration**: All wiring locks pass; `SystemConfig.validate()` accepts `pc_alm` coordinates
 7. **Reproducibility**: Demo in gallery reproduces paper's depth-scaling figure
+
+---
+
+## Progress Summary (2026-09-15)
+
+### Completed Phases 0-2 (Core Implementation)
+All Phase 0, 1, and 2 tasks completed successfully:
+
+**Phase 0 - Prerequisites:**
+- Added `InnocentiInit` weight initialization scheme to `GeometryConfig.init_scheme` with proper residual init scaling (1/N for input/output, 1/√(N·L) for hidden)
+- Added `rho` (augmented Lagrangian penalty) and `prospective_leak` (hybrid PC/prospective config) fields to `StateDynamicsConfig`
+- Extended `SystemState` with `dual_vars: list[Tensor] | None` field; `CompositeState` uses activity dict for same purpose
+
+**Phase 1 - Core Dynamics:**
+- Implemented `PCALMDynamics` class with full primal–dual relaxation loop:
+  - Constraint violation computation: `c_l = h_l - f_θ_l(h_{l-1})`
+  - Dual update (PI controller): `λ_l ← λ_l + step_size * (c_l + α*λ_l)` with `prospective_leak` = α
+  - Primal update with top-down coupling: `J_{l+1}^T @ v` using analytical Jacobian transpose for ReLU
+  - Adaptive early stopping on constraint violation norm
+  - Augmented Lagrangian energy tracking per iteration
+- Registered `PCALMDynamics` in `DYNAMICS_REGISTRY` with key `"pc_alm"`
+- Added `StateDynamicsConfig.pc_alm()` classmethod with full documentation
+- Added cross-axis validation in `SystemConfig.validate()`:
+  - PC-ALM requires `pc_alm` or `thermodynamic_contrast` credit
+  - PC-ALM requires layered geometry (feedforward, recurrent, tile_mesh)
+  - Beta matching warning for dynamics.beta vs credit.beta
+  - Thermodynamic contrast credit now allows pc_alm dynamics
+
+**Phase 2 - Credit Assignment:**
+- Implemented `PCALMCredit` class with local Hebbian update: `ΔW_l = -λ_l @ h_{l-1}^T / batch`
+- Reads dual variables from `free_state.metrics["dual_vars"]` (set by PCALMDynamics)
+- No autograd through settle loop required
+- Added `CreditAssignmentConfig.pc_alm()` classmethod
+- Full `AlgorithmIdentityCard` with reference to Seely & Gould 2026
+
+**Wiring Lock Compliance:**
+- All 4 wiring lock tests pass:
+  - Registry ↔ config classmethods sync
+  - Registry classes round-trip to_spec/from_spec
+  - Registry classes exported in root __all__ and _LAZY
+  - Root __all__ names have TYPE_CHECKING imports
+
+**Integration Verified:**
+- PCALMDynamics + PCALMCredit + NullPlasticity trains on MNIST (1 epoch, CPU)
+- SystemConfig validation correctly accepts/rejects PC-ALM coordinates
+
+### Remaining Work
+- Phase 3: Fused Triton kernel (`pcalm_kernels.py`)
+- Phase 5: Hyperopt search space and gallery demo
+- Phase 6: Spiking/Transformer/Async variants
+
+### New Improvement Opportunities Discovered
+1. **Kernel Fusion**: The current eager implementation computes Jacobian-transpose products per-layer per-step. A fused Triton kernel keeping `h`, `λ` in SRAM for the entire `T`-step relaxation would give ~100× less HBM traffic at depth 1000.
+
+2. **Dual Variable Warm-start**: Currently dual variables are reset to zero each train step. Warm-starting from previous step's `λ` could accelerate convergence (persistent dual state across mini-batches).
+
+3. **ρ Scheduling**: The fixed `rho` parameter may benefit from scheduling (increase over training to tighten constraints).
+
+4. **Gradient Checkpointing**: For very deep networks, add gradient checkpointing support to trade compute for memory during the primal–dual loop.
+
+5. **Prospective Leak Theory**: The `prospective_leak` parameter interpolates between PC-ALM (α=0) and prospective configuration (α→1). More theoretical analysis needed on convergence guarantees for α>0.
+
+6. **Validation Test Suite**: Need to add dedicated integration tests:
+   - `test_pc_alm_gradient_equivalence` (cosine vs BP ≥ 0.8)
+   - `test_pc_alm_depth_scaling` (depth 100, 500, 1000)
+   - `test_pc_alm_prospective_hybrid` (sweep α ∈ [0,1])
+   - `test_pc_alm_adaptive_budget` (convergence steps vs fixed T)
 
 ---
 

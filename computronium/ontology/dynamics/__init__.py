@@ -8,6 +8,7 @@ from computronium.ontology.dynamics._dynamics import (
     ErrorPredictiveCodingDynamics,
     InstantaneousDynamics,
     LazyStateDynamics,
+    PCALMDynamics,
     PredictiveSettlingDynamics,
     SpikeIntegrationDynamics,
     StateDynamics,
@@ -22,6 +23,7 @@ DYNAMICS_REGISTRY: Final[dict[str, type[StateDynamics]]] = {
     "instantaneous": InstantaneousDynamics,
     "diffusion": DiffusionDynamics,
     "lazy": LazyStateDynamics,
+    "pc_alm": PCALMDynamics,
 }
 
 
@@ -47,6 +49,7 @@ __all__ = [
     "ErrorPredictiveCodingDynamics",
     "InstantaneousDynamics",
     "LazyStateDynamics",
+    "PCALMDynamics",
     "PredictiveSettlingDynamics",
     "SpikeIntegrationDynamics",
     "StateDynamics",
