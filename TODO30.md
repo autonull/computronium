@@ -61,6 +61,13 @@
 > dispatches webhooks when `comp daemon --alert-webhook URL` is set.
 > Tests: `tests/property/test_alerts.py` (threshold matrices, webhook
 > post-capture + error swallowing).
+> **§3.1 Active Cell Inspector** landed: the daemon tracks the in-flight
+> coordinate (`PhaseTrackingDriver` → `_current_cell`, exposed in
+> `/state` and `heartbeat.json`); the dashboard renders the inspector
+> (coordinate card + progress + live echart loss curve) fed by the
+> `/ws/telemetry` rolling window, degrading to an "artifact-polling"
+> note when the daemon is offline. Settle-phase traces and resource
+> gauges remain open (see §13.1).
 > **8.6** landed: `cost_stats` (measured/target from the heartbeat — the
 > daemon now publishes `target_cells` + `loop` in `heartbeat.json` — mean
 > walltime/cell, projected remaining, coverage %, defect count) and
@@ -689,13 +696,18 @@ crash; criterion 1–2 do not require the WS to be up).
 - **Event payload enrichment**: `burst_finished` should carry the full
   `run_burst` summary dict (means by family, completed/failed counts) so the
   §5 cost panels can be fed straight from `/ws/events` without KB queries.
-- **Telemetry richness**: the hook currently forwards `train_step` metrics
-  only; settle-phase energy traces (§3.1 settling trace) need a second
-  emission point in the dynamics settle path or an epoch-level event.
-- **Active Cell Inspector (§3.1) UI**: the data path exists (telemetry WS +
-  proposal `justification`); the panel itself (coordinate card, live loss
-  curve, progress bar, resource gauges via psutil) is the remaining 8.5+
-  work and the first consumer of the WS streams.
+- **Telemetry richness**: the hook forwards `train_step` metrics (the
+  inspector's loss curve consumes them); settle-phase energy traces
+  (§3.1 settling trace) still need a second emission point in the
+  dynamics settle path or an epoch-level event.
+- **Resource gauges (§3.1)**: psutil CPU/RAM/VRAM of the daemon PID is not
+  yet collected — add to the heartbeat payload (psutil already a
+  dependency) and a gauge row in the inspector.
+- **§3.2 event-stream UI**: `/ws/events` streams are produced (including
+  `kind: "alert"` and `kind: "report"`) but the dashboard does not yet
+  render a toast/event panel — the log ticker remains the fallback view.
+- **§3.3 outcome badges**: per-cell LEARNED/MARGINAL/DIVERGED/DEFECT/VOID
+  badges are not derived yet; the data exists in KB tags + defects.
 - **Alert hardening from shakedown data**: breakthrough detection reads
   the KB best accuracy per burst (per-cell granularity, not per
   iteration); if the 500-cell run shows missed or noisy breakthroughs,

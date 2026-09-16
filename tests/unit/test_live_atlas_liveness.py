@@ -172,3 +172,44 @@ def test_daemon_client_round_trips_live_daemon(tmp_path: Path) -> None:
         deadline = time.monotonic() + 10
         while daemon.state is not DaemonState.STOPPED and time.monotonic() < deadline:
             time.sleep(0.05)
+
+
+def test_telemetry_drain_extracts_loss() -> None:
+    """§3.1: the WS consumer appends only numeric train_loss records."""
+    import asyncio
+    import json as _json
+    from collections import deque
+
+    from computronium.visualization.live_atlas import _drain
+
+    class _FakeWS:
+        def __init__(self, messages: list[str]) -> None:
+            self._messages = iter(messages)
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self) -> str:
+            try:
+                return next(self._messages)
+            except StopIteration as e:
+                raise StopAsyncIteration from e
+
+    async def _run() -> deque[float]:
+        history: deque[float] = deque(maxlen=10)
+        calls: list[int] = []
+        await _drain(
+            _FakeWS([
+                _json.dumps({"loss": 1.5}),
+                _json.dumps({"loss": "nan"}),  # non-numeric dropped
+                _json.dumps({"other": 1.0}),
+                _json.dumps({"loss": 0.8}),
+            ]),
+            history,
+            lambda: calls.append(1),
+        )
+        assert len(calls) == 2
+        return history
+
+    history = asyncio.run(_run())
+    assert list(history) == [1.5, 0.8]

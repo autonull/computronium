@@ -124,9 +124,15 @@ class PhaseTrackingDriver:
 
     cells: int
 
-    def __init__(self, inner: BurstDriver, on_phase: Callable[[DaemonState], None]):
+    def __init__(
+        self,
+        inner: BurstDriver,
+        on_phase: Callable[[DaemonState], None],
+        on_proposals: Callable[[list[Any]], None] | None = None,
+    ):
         self._inner = inner
         self._on_phase = on_phase
+        self._on_proposals = on_proposals
         self.cells = inner.cells
 
     def has_novel(self) -> bool:
@@ -137,7 +143,10 @@ class PhaseTrackingDriver:
     ) -> list[Any]:
         self._on_phase(DaemonState.PROPOSING)
         try:
-            return self._inner.propose_batch(n_proposals, recent_results)
+            proposals = self._inner.propose_batch(n_proposals, recent_results)
+            if self._on_proposals is not None:
+                self._on_proposals(proposals)
+            return proposals
         finally:
             self._on_phase(DaemonState.TRAINING)
 
@@ -171,6 +180,7 @@ class ContinuousDaemon:
         self._started_at = time.time()
         self._burst: str | None = None
         self._cells_done = 0
+        self._current_cell: str | None = None
         self._last_summary: dict[str, object] | None = None
         self._start = threading.Event()
         self._pause = threading.Event()
@@ -243,6 +253,7 @@ class ContinuousDaemon:
             "started_at": self._started_at,
             "updated_at": time.time(),
             "log_path": str(log_path) if log_path is not None else None,
+            "current_cell": self._current_cell,
             "target_cells": getattr(self.args, "target_cells", None),
             "loop": bool(getattr(self.args, "loop", False)),
         }
@@ -298,7 +309,9 @@ class ContinuousDaemon:
             self._set_state(DaemonState.TRAINING)
             summary = run_burst(
                 campaign,
-                PhaseTrackingDriver(driver, self._set_state),
+                PhaseTrackingDriver(
+                    driver, self._set_state, on_proposals=self._set_current_cell
+                ),
                 budget,
                 max_iterations=args.max_iterations,
                 gate=self._gate,
@@ -332,6 +345,19 @@ class ContinuousDaemon:
         self._set_state(DaemonState.STOPPED)
         self._release_lockfile()
         self.events.publish({"kind": "daemon_stopped"})
+
+    def _set_current_cell(self, proposals: list[Any]) -> None:
+        """§3.1 coordinate card: the first proposal of the in-flight batch."""
+        for proposal in proposals:
+            axes = [
+                str(getattr(proposal, field, None))
+                for field in ("dynamics", "credit", "update")
+            ]
+            topology = str(
+                (getattr(proposal, "geometry", None) or {}).get("topology_type", "")
+            )
+            self._current_cell = " × ".join([*axes, topology])
+            return
 
     def _check_alerts(self, summary: dict[str, object], elapsed_s: float) -> None:
         """§6: breakthrough / cascade / completion — daemon-side so they

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
     import numpy as np
@@ -875,12 +876,21 @@ def _panel_scaffold() -> tuple[Element, ...]:
     from nicegui import ui
 
     lifecycle_row = ui.row().classes("w-full items-center flex-wrap")
+    active_box = ui.column().classes("w-full")
     health_row = ui.row().classes("w-full flex-wrap")
     atlas_box = ui.column().classes("w-full")
     funnel_box = ui.column().classes("w-full")
     pareto_box = ui.column().classes("w-full")
     ticker_box = ui.column().classes("w-full")
-    return lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box
+    return (
+        lifecycle_row,
+        active_box,
+        health_row,
+        atlas_box,
+        funnel_box,
+        pareto_box,
+        ticker_box,
+    )
 
 
 def _diversity_panel(
@@ -902,84 +912,69 @@ def _diversity_panel(
             ui.label(alert).classes("text-caption text-orange")
 
 
-def _poll_only_bar(container: Element) -> None:
-    """§2.1 stub when no daemon URL was configured: badge only, no buttons."""
-    _lifecycle_bar(
-        container,
-        Liveness("● POLL-ONLY", "grey", "no --daemon-url: artifact polling only"),
-        (),
-    )
-
-
-def build_dashboard(
-    root: Path,
-    log_path: Path | None = None,
-    poll_seconds: float = POLL_SECONDS,
-    daemon_url: str | None = None,
+def _active_cell_panel(
+    container: Element,
+    daemon_state: dict[str, object] | None,
+    loss_history: list[float],
 ) -> None:
-    """Build the read-only NiceGUI page. Call inside a UI context, then
-    ``ui.run`` (see ``computronium.cli.dashboard``). ``daemon_url`` opts in
-    to the lifecycle bar + live badge; without it the dashboard is
-    polling-only (TODO30 §0 hybrid transport)."""
-    from nicegui import run, ui
+    """§3.1 inspector: coordinate card, progress, live loss curve. The
+    telemetry stream is best-effort — the panel renders what arrived."""
+    from nicegui import ui
 
-    log_path = resolve_log_path(root, log_path)
-    cache = EmbedCache()
-    client = DaemonClient(daemon_url) if daemon_url else None
-    state: dict[str, object] = {
-        "signature": watch_signature(root),
-        "atlas_busy": False,
-        "daemon_state": None,
-    }
+    container.clear()
+    with container:
+        ui.label("Active cell inspector").classes("text-bold")
+        if daemon_state is None:
+            ui.label(
+                "daemon offline — landscape below still renders from artifacts"
+            ).classes("text-grey")
+        else:
+            ui.label(
+                f"{daemon_state.get('current_cell') or '—'} · burst "
+                f"{daemon_state.get('burst') or '—'} · cells done "
+                f"{daemon_state.get('cell_index')}/{daemon_state.get('target_cells') or '∞'}"
+            ).classes("font-mono text-xs")
+            if loss_history:
+                ui.echart({
+                    "xAxis": {"type": "category", "show": False},
+                    "yAxis": {"type": "value", "scale": True},
+                    "series": [
+                        {
+                            "type": "line",
+                            "showSymbol": False,
+                            "data": [{"value": v} for v in loss_history],
+                        }
+                    ],
+                    "grid": {"top": 8, "bottom": 8, "left": 40, "right": 8},
+                    "height": 160,
+                })
+            else:
+                ui.label("no telemetry batches yet").classes("text-caption text-grey")
 
-    ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
-    ui.label(f"root: {root} · poll {poll_seconds:.0f}s · read-only").classes(
-        "text-caption text-grey"
-    )
 
-    lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box = (
-        _panel_scaffold()
-    )
-    landscape = _landscape_boxes()
+async def _drain(
+    ws: Any, loss_history: deque[float], refresh: Callable[[], None]
+) -> None:
+    import json as _json
 
-    send_action = client.control if client is not None else (lambda _action: None)
+    async for message in ws:
+        record = _json.loads(message)
+        loss = record.get("train_loss", record.get("loss"))
+        if isinstance(loss, int | float):
+            loss_history.append(float(loss))
+            refresh()
 
-    def _render_panels(snapshot: DashboardSnapshot) -> None:
-        health_row.clear()
-        _health_cards(health_row, snapshot.health)
-        _atlas_panel(atlas_box, snapshot)
-        _table_panel(
-            funnel_box,
-            "Defect funnel (bug bounty — open first, then most hits)",
-            snapshot.funnel_rows,
-            pagination=10,
-        )
-        _table_panel(
-            pareto_box,
-            "Pareto strip (top cells with instrument spokes)",
-            snapshot.pareto_rows,
-        )
-        _ticker_panel(ticker_box, log_path, snapshot.ticker)
-        _render_landscape(landscape, snapshot)
 
-    def _refresh_lifecycle() -> None:
-        """Badge + buttons from one daemon probe (or the poll-only stub)."""
-        if client is None:
-            _poll_only_bar(lifecycle_row)
-            return
-        daemon_state = client.get_state()
-        state["daemon_state"] = str(daemon_state.get("state")) if daemon_state else None
-        _lifecycle_bar(
-            lifecycle_row,
-            liveness(root, daemon_state is not None),
-            lifecycle_buttons(state["daemon_state"]),  # type: ignore[arg-type]
-            on_action=send_action,
-        )
+def _make_atlas_loop(
+    root: Path,
+    cache: EmbedCache,
+    state: dict[str, object],
+    atlas_box: Element,
+    refresh_cheap: Callable[[], None],
+) -> tuple[Callable[[], Any], Callable[[], Any]]:
+    from nicegui import run
 
-    def refresh_cheap() -> None:
-        """Fast paint: everything except the UMAP fit."""
-        _refresh_lifecycle()
-        _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
+    """Off-thread UMAP refit + artifact-signature poll loop."""
 
     async def load_atlas() -> None:
         """Off-thread UMAP refit; the panel swaps in when it lands."""
@@ -1013,6 +1008,137 @@ def build_dashboard(
             await run.io_bound(refresh_cheap)
             await load_atlas()
 
+    return load_atlas, poll
+
+
+def _make_telemetry_consumer(
+    client: DaemonClient | None,
+    daemon_url: str | None,
+    state: dict[str, object],
+    loss_history: deque[float],
+    refresh: Callable[[], None],
+) -> Callable[[], Any]:
+    """§3.1: drain /ws/telemetry into the loss curve (daemon-side
+    drop-oldest; a bounded rolling window here). Any failure just skips a
+    tick — telemetry is best-effort (§12.6)."""
+
+    async def consume() -> None:
+        import websockets
+
+        if client is None or state["telemetry_busy"]:
+            return
+        ws_url = f"{(daemon_url or '').replace('http://', 'ws://', 1)}/ws/telemetry"
+        state["telemetry_busy"] = True
+        try:
+            async with websockets.connect(ws_url) as ws:
+                await _drain(ws, loss_history, refresh)
+        except OSError:
+            pass
+        finally:
+            state["telemetry_busy"] = False
+
+    return consume
+
+
+def _poll_only_bar(container: Element) -> None:
+    """§2.1 stub when no daemon URL was configured: badge only, no buttons."""
+    _lifecycle_bar(
+        container,
+        Liveness("● POLL-ONLY", "grey", "no --daemon-url: artifact polling only"),
+        (),
+    )
+
+
+def build_dashboard(
+    root: Path,
+    log_path: Path | None = None,
+    poll_seconds: float = POLL_SECONDS,
+    daemon_url: str | None = None,
+) -> None:
+    """Build the read-only NiceGUI page. Call inside a UI context, then
+    ``ui.run`` (see ``computronium.cli.dashboard``). ``daemon_url`` opts in
+    to the lifecycle bar + live badge; without it the dashboard is
+    polling-only (TODO30 §0 hybrid transport)."""
+    from nicegui import ui
+
+    log_path = resolve_log_path(root, log_path)
+    cache = EmbedCache()
+    client = DaemonClient(daemon_url) if daemon_url else None
+    state: dict[str, object] = {
+        "signature": watch_signature(root),
+        "atlas_busy": False,
+        "daemon_state": None,
+        "telemetry_busy": False,
+    }
+
+    ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
+    ui.label(f"root: {root} · poll {poll_seconds:.0f}s · read-only").classes(
+        "text-caption text-grey"
+    )
+
+    (
+        lifecycle_row,
+        active_box,
+        health_row,
+        atlas_box,
+        funnel_box,
+        pareto_box,
+        ticker_box,
+    ) = _panel_scaffold()
+    landscape = _landscape_boxes()
+
+    loss_history: deque[float] = deque(maxlen=60)
+
+    def _render_panels(snapshot: DashboardSnapshot) -> None:
+        health_row.clear()
+        _health_cards(health_row, snapshot.health)
+        _atlas_panel(atlas_box, snapshot)
+        _table_panel(
+            funnel_box,
+            "Defect funnel (bug bounty — open first, then most hits)",
+            snapshot.funnel_rows,
+            pagination=10,
+        )
+        _table_panel(
+            pareto_box,
+            "Pareto strip (top cells with instrument spokes)",
+            snapshot.pareto_rows,
+        )
+        _ticker_panel(ticker_box, log_path, snapshot.ticker)
+        _render_landscape(landscape, snapshot)
+
+    def refresh_lifecycle() -> None:
+        """Badge + buttons + inspector from one daemon probe."""
+        if client is None:
+            _poll_only_bar(lifecycle_row)
+            _active_cell_panel(active_box, None, [])
+            return
+        daemon_state = client.get_state()
+        state["daemon_state"] = str(daemon_state.get("state")) if daemon_state else None
+        _lifecycle_bar(
+            lifecycle_row,
+            liveness(root, daemon_state is not None),
+            lifecycle_buttons(state["daemon_state"]),  # type: ignore[arg-type]
+            on_action=client.control if client is not None else (lambda _a: None),
+        )
+        _active_cell_panel(active_box, daemon_state, list(loss_history))
+
+    def refresh_cheap() -> None:
+        """Fast paint: everything except the UMAP fit."""
+        refresh_lifecycle()
+        _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
+
+    load_atlas, poll = _make_atlas_loop(root, cache, state, atlas_box, refresh_cheap)
+
     refresh_cheap()
+    if client is not None:
+        ui.timer(
+            poll_seconds,
+            _make_telemetry_consumer(
+                client, daemon_url, state, loss_history, refresh_lifecycle
+            ),
+        )
     ui.timer(0.5, load_atlas, once=True)
     ui.timer(poll_seconds, poll)
+    # statement count is at the lint ceiling; any new panel goes through
+    # _render_landscape, not this body
