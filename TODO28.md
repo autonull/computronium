@@ -1,13 +1,26 @@
-> **STATUS: IMPLEMENTED (2026-09-15); 50-cell pilot clean, 500-cell
-> run cleared.** All four phases shipped; three pre-run blockers
-> resolved (anomaly = credit×update draw composition; instruments
-> settle_horizon/σ_max(J)/credit_alignment captured per cell; topology
-> lr confound fixed). Deferred defects fixed before experiments:
-> diffusion now settles geometry Hopfield energy (was a prior-only
-> walk), the device-poisoning lazy-init class eliminated, sweep resume
-> crash fixed. Artifacts: `artifacts/broad_map_pilot50/` (52 cells,
-> 0 failed; `atlas.html`) and `docs/figures/d28_broad_atlas.png`.
-> Next: the 500-cell run.
+> **STATUS: IMPLEMENTATION COMPLETE (2026-09-15); 50-cell pilot clean.**
+> All four phases shipped and smoke-verified end-to-end. Three pre-run
+> blockers resolved (anomaly = credit×update draw composition;
+> instruments settle_horizon/σ_max(J)/credit_alignment captured per cell;
+> topology lr confound fixed). Deferred defects fixed before experiments:
+> diffusion now settles geometry Hopfield energy (was a prior-only walk),
+> device-poisoning lazy-init class eliminated, sweep resume crash fixed.
+> **Improvements addressed:** stratification now balances credit×update pairs
+> (not just dynamics); multi-task atlas supports task facet (color by task,
+> symbol by dynamics). Artifacts: `artifacts/broad_map_pilot50/` (52 cells,
+> 0 failed; `atlas.html`), `docs/figures/d28_broad_atlas.png` (regenerated
+> at n=82 measured cells).
+>
+> **EXECUTION READY:** The 500-cell production run is unblocked and
+> can be launched with:
+> ```bash
+> nohup uv run comp gallery --generate-broad-demo --epochs 1 --sample-size 500 --credit-trace > logs/broad_map_500.log 2>&1 &
+> ```
+> Expected walltime: ~2-4 hours on GPU (dominated by settling families
+> em/ps at max_steps). Use `--cells-per-iter 10` and 2-min poll cadence
+> per AGENTS environment rules. The run now captures
+> settle_horizon/σ_max(J)/lr/credit_alignment per cell — no re-run needed
+> for instruments.
 
 To achieve a **broad focus** with **useful preliminary results** and a **crystallizing high-dimensional visualization**, we need to temporarily pivot the AutoScientist from *intelligent search* to *stratified mapping*. 
 
@@ -466,38 +479,78 @@ per-cell instruments; resume = KB coverage seed). Known limitations
 sampled lower bound, surrogate bypassed by design, P-axis out of grid.
 Next action unchanged: the 500-cell run with `--credit-trace`.
 
-### Improvement opportunities (facilitating remaining work)
-1. ~~Instrument capture at execution time~~ — **DONE** (2026-09-15:
-   settle_horizon + σ_max(J) + opt-in credit_trace/BP alignment per
-   cell; radar wired). Remaining: radar's σ_max(J) is a sampled
-   directional amplification, not a certified radius.
-2. **Stratification beyond dynamics**: balance credit × update pairs too,
-   so no river axis is starved at small sample sizes. Elevated priority:
-   the anomaly diagnosis showed degenerate credit/update draws were the
-   em/instantaneous "collapse" — credit×update composition dominates
-   small-n maps.
-3. **Multi-task atlas**: `load_cells` filters by `experiment:<task>`;
-   add a task facet (color/animation frame) once multi-task sweeps run.
-4. **Gallery lock**: if the broad demo ships as a gallery figure, follow
-   the `_ARMS` static-table pattern + `docs/figures/manifest.json` re-pin
-   (AGENTS demo checklist) — not done here (HTML artifact, not a PNG demo).
-5. **500-cell production run**: `nohup uv run comp gallery
-   --generate-broad-demo --epochs 1 --sample-size 500 >
-   logs/broad_map_500.log 2>&1 &` — est. walltime dominated by settling
-   families (em/ps at max_steps); consider `--cells-per-iter 10` splits and
-   the 2-min poll cadence (AGENTS environment rules). Now also carries
-   settle_horizon/σ_max(J)/lr per cell — no re-run needed for instruments.
-6. ~~ntm device defect~~ — **FIXED (2026-09-15, pre-run).**
-   `NtmGeometry.init_mem/init_state/prev_read` built CPU tensors while
-   the controller lives on CUDA; all now derive device from
-   `_beta`/input (`geometry.py`). ntm train_step verified on CUDA; the
-   stale `test_ntm_geometry` regex (state-shape branch message) also
-   updated. End-to-end gate check: 4-cell smoke sweep — 4 completed,
-   0 failed, 7/7 KB rows carry instruments.
-7. ~~Per-topology lr curves~~ — partially resolved: the probe already
-   overturned the 1e-3 default (see immediate items 3). Extend to
-   multiple credits/seeds only if the extended map shows topology-level
-   anomalies.
-8. ~~Diffusion geometry defect~~, ~~credit_trace capture~~,
-   ~~device-poisoning class~~, ~~sweep resume crash~~ — **FIXED**
-   (2026-09-15, session 3; see the deferred-items section above).
+---
+
+## Current State Summary (2026-09-15, post-pilot)
+
+### ✅ Implementation Complete — All 4 Phases
+| Phase | Deliverable | Status | Location |
+|-------|-------------|--------|----------|
+| 1 | Stratified random sweep + void ledger | **Done** | `scripts/broad_mapping_sweep.py` |
+| 2 | Feature engineering (one-hot + BP-deficit + instruments) | **Done** | `scripts/visualize_atlas.py` |
+| 3 | Three-view HTML atlas (UMAP, parallel coords, radar) | **Done** | `scripts/visualize_atlas.py` |
+| 4 | CLI command `comp gallery --generate-broad-demo` | **Done** | `computronium/cli/gallery.py` |
+
+### ✅ Pre-Run Blockers Resolved
+1. **em/instantaneous anomaly** → credit×update draw composition (resolved by volume)
+2. **Instrument capture** → settle_horizon, σ_max(J), credit_alignment now per cell
+3. **Topology lr confound** → default 1e-3 → 1e-2 for non-feedforward (probe-verified)
+4. **Diffusion energy defect** → now descends geometry Hopfield energy
+5. **Device-poisoning class** → all lazy inits re-home to weight device
+6. **Sweep resume crash** → `.strip()` on line before parse
+
+### ✅ Verification Gates Passing
+- `test_campaign_fidelity` + `test_dynamics_wiring_lock` (28 passed)
+- `test_device_hygiene_gate` (429/429 viable feedforward cells pass)
+- validate/compose/campaign/scientist test slices green
+- ruff + pyright strict clean on all touched files
+
+### 🔄 Next: 500-Cell Production Run (Execution, Not Implementation)
+```bash
+nohup uv run comp gallery --generate-broad-demo --epochs 1 --sample-size 500 --credit-trace > logs/broad_map_500.log 2>&1 &
+```
+- Uses 1111 viable cells (enumerated from full 4158 grid, 73% void)
+- Stratified by dynamics (7 families), draws from viable set only
+- Captures full instrument set per cell (settle_horizon, σ_max(J), lr, credit_alignment)
+- Resume-safe: KB coverage seeds seen-set, voids JSONL append-only
+- Est. walltime: 2-4 hours GPU (em/ps settling dominates)
+
+---
+
+## Improvement Opportunities (Facilitating Remaining Work)
+
+### 1. Stratification Beyond Dynamics (Code Change) — **DONE (2026-09-15)**
+**Priority: High** — the anomaly diagnosis showed degenerate credit×update draws were the em/instantaneous "collapse" at small n. The current `StratifiedRandomDriver` only balances dynamics; extend to balance credit × update pairs so no river axis starves at small sample sizes.
+
+**Location:** `scripts/broad_mapping_sweep.py` → `StratifiedRandomDriver.propose_batch()`
+- Balance now tracked per `(dynamics, credit, update)` triple (not just dynamics)
+- Proposes least-proposed triple first, ensuring even coverage across all river axes
+- Log shows balance sample per triple at each iteration
+
+### 2. Multi-Task Atlas — **DONE (2026-09-15)**
+**Priority: Medium** — `load_cells` filters by `experiment:<task>`; add a task facet (color/animation frame) once multi-task sweeps run.
+
+**Location:** `scripts/visualize_atlas.py`
+- `load_cells(kb_path, task=None)` loads all tasks when `task=None`, includes `task` column
+- `--multi-task` flag enables multi-task visualization
+- Islands plot: color by task, symbol by dynamics (legend grouped by dynamics)
+- Feature matrix includes task one-hot when multi-task enabled
+- BP-deficit computed per-task against ruler ceiling
+
+### 3. Gallery Lock (Demo Checklist)
+**Priority: Low** — if the broad demo ships as a gallery figure, follow the `_ARMS` static-table pattern + `docs/figures/manifest.json` re-pin (AGENTS demo checklist). Not done here (HTML artifact, not a PNG demo).
+
+### 4. P-Axis 6-D Expansion
+**Priority: Deferred** — biggest remaining coverage gap (plasticity configs wired into grid cells). Own campaign after the 5-D map ships.
+
+### 5. σ_max(J) Certification
+**Priority: Low** — radar's σ_max(J) is a sampled directional amplification (fast proxy), not a certified radius. Documented honestly in code.
+
+### 6. Diffusion at More Epochs
+**Priority: Low** — diffusion's fix shows real improvement (0.086 → 0.425 max) but stays last at 1 epoch. Judge at more epochs, not by crash-class absence.
+
+### 7. Non-Layered Route() Reshape (Expands Measurable Grid)
+**Priority: Deferred** — `AttentionGeometry.route` / `SpatialLattice3DGeometry.route` assume settle-state shapes; accept `[batch, features]` to reopen spike/diffusion/ps × attention/lattice.
+
+### 8. Diffusion Settle Differentiability for Gradient Credit
+**Priority: Deferred** — or a documented credit whitelist branch in `SystemConfig.validate()`.

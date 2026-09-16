@@ -13,6 +13,7 @@ views into one HTML file:
 Usage::
 
     uv run python scripts/visualize_atlas.py --root artifacts/broad_map
+    uv run python scripts/visualize_atlas.py --root artifacts/broad_map --multi-task
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ class AtlasRow(TypedDict):
     credit: str
     update: str
     topology: str
+    task: str
     accuracy: float
     train_accuracy: float
     loss: float
@@ -55,15 +57,22 @@ def _axis_values(df: pd.DataFrame, axis: str) -> tuple[str, ...]:
     return tuple(sorted(df[axis].dropna().unique()))
 
 
-def load_cells(kb_path: Path, task: str) -> pd.DataFrame:
-    """Measured cells from the KB's experiment entries."""
+def load_cells(kb_path: Path, task: str | None = None) -> pd.DataFrame:
+    """Measured cells from the KB's experiment entries.
+
+    If task is None, load all tasks and include a 'task' column.
+    """
     from computronium.knowledge import KnowledgeBase
 
     kb = KnowledgeBase(kb_path)
     rows: list[AtlasRow] = []
     for entry in kb.query():
         hp = entry.hyperparameters
-        if str(entry.topic) != f"experiment:{task}":
+        topic = str(entry.topic)
+        if not topic.startswith("experiment:"):
+            continue
+        entry_task = topic.split(":", 1)[1]
+        if task is not None and entry_task != task:
             continue
         if not (hp.get("dynamics") and hp.get("credit") and hp.get("update")):
             continue
@@ -76,6 +85,7 @@ def load_cells(kb_path: Path, task: str) -> pd.DataFrame:
             "credit": str(hp["credit"]),
             "update": str(hp["update"]),
             "topology": str(geometry.get("topology_type", "feedforward")),
+            "task": entry_task,
             "accuracy": float(metrics.get("final_accuracy", 0.0)),
             "train_accuracy": float(metrics.get("train_accuracy", 0.0)),
             "loss": float(metrics.get("final_loss", 0.0)),
@@ -106,26 +116,43 @@ def load_voids(voids_path: Path) -> pd.DataFrame:
     return df
 
 
-def apply_bp_deficit(df: pd.DataFrame, ruler_table: Path, task: str) -> pd.DataFrame:
+def apply_bp_deficit(
+    df: pd.DataFrame, ruler_table: Path, task: str | None = None
+) -> pd.DataFrame:
     """BP-deficit = ruler ceiling - measured accuracy (clipped at 0)."""
     if df.empty:
         return df
-    ceiling = 1.0
-    if ruler_table.exists():
-        rows = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
-        ceiling = next(
-            (float(r["bp_val_accuracy"]) for r in rows if r["task"] == task), ceiling
-        )
     df = df.copy()
-    df["bp_deficit"] = (ceiling - df["accuracy"]).clip(lower=0.0)
+    if task is None:
+        # Multi-task: apply per-task ceiling
+        if ruler_table.exists():
+            rulers = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
+            ceilings = {r["task"]: float(r["bp_val_accuracy"]) for r in rulers}
+            for t, ceiling in ceilings.items():
+                mask = df["task"] == t
+                df.loc[mask, "bp_deficit"] = (ceiling - df.loc[mask, "accuracy"]).clip(
+                    lower=0.0
+                )
+    else:
+        ceiling = 1.0
+        if ruler_table.exists():
+            rows = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
+            ceiling = next(
+                (float(r["bp_val_accuracy"]) for r in rows if r["task"] == task),
+                ceiling,
+            )
+        df["bp_deficit"] = (ceiling - df["accuracy"]).clip(lower=0.0)
     return df
 
 
-def feature_matrix(df: pd.DataFrame) -> np.ndarray:
+def feature_matrix(df: pd.DataFrame, multi_task: bool = False) -> np.ndarray:
     """One-hot ontology axes concatenated with continuous physics metrics."""
+    axes = list(AXIS_NAMES)
+    if multi_task and "task" in df.columns:
+        axes.append("task")
     parts = [
         pd.get_dummies(df[axis], prefix=axis).astype(float).reset_index(drop=True)
-        for axis in AXIS_NAMES
+        for axis in axes
     ]
     parts.append(df[["accuracy", "bp_deficit"]].reset_index(drop=True))  # type: ignore[arg-type]
     return np.asarray(pd.concat(parts, axis=1), dtype=np.float64)
@@ -165,7 +192,9 @@ def pareto_top(df: pd.DataFrame, k: int = 3) -> pd.DataFrame:
     return front.head(k)
 
 
-def _islands_figure(live: pd.DataFrame, ghost: pd.DataFrame) -> go_Figure:
+def _islands_figure(
+    live: pd.DataFrame, ghost: pd.DataFrame, multi_task: bool = False
+) -> go_Figure:
     """Islands & voids: embedding scatter colored by BP-deficit."""
     import plotly.graph_objects as go
 
@@ -192,35 +221,88 @@ def _islands_figure(live: pd.DataFrame, ghost: pd.DataFrame) -> go_Figure:
         "star",
         "hexagram",
     )
-    for i, dyn in enumerate(families):
-        sub = live[live["dynamics"] == dyn]
-        fig.add_trace(
-            go.Scatter(
-                x=sub["x"],
-                y=sub["y"],
-                mode="markers",
-                name=dyn,
-                marker={
-                    "symbol": symbols[i % len(symbols)],
-                    "size": 8,
-                    "color": sub["bp_deficit"],
-                    "cmin": 0.0,
-                    "cmax": 1.0,
-                    "colorscale": "RdYlBu",
-                    "colorbar": {"title": "BP-deficit"} if i == 0 else None,
-                },
-                text=sub["credit"] + " × " + sub["update"] + " × " + sub["topology"],
-                hovertemplate="%{text}<br>acc %{customdata:.3f}<extra>"
-                + dyn
-                + "</extra>",
-                customdata=sub["accuracy"],
-            )
+    if multi_task and "task" in live.columns:
+        # Color by task, symbol by dynamics
+        tasks = sorted(live["task"].unique())
+        task_colors = {
+            "mnist": "#1f77b4",
+            "digits": "#ff7f0e",
+            "fashion_mnist": "#2ca02c",
+            "cifar10": "#d62728",
+            "cifar100": "#9467bd",
+        }
+        for i, dyn in enumerate(families):
+            for j, tsk in enumerate(tasks):
+                sub = live[(live["dynamics"] == dyn) & (live["task"] == tsk)]
+                if sub.empty:
+                    continue
+                fig.add_trace(
+                    go.Scatter(
+                        x=sub["x"],
+                        y=sub["y"],
+                        mode="markers",
+                        name=f"{dyn} | {tsk}",
+                        marker={
+                            "symbol": symbols[i % len(symbols)],
+                            "size": 8,
+                            "color": task_colors.get(tsk, f"hsl({j * 60}, 70%, 50%)"),
+                            "opacity": 0.8,
+                        },
+                        text=sub["credit"]
+                        + " × "
+                        + sub["update"]
+                        + " × "
+                        + sub["topology"],
+                        hovertemplate="%{text}<br>acc %{customdata:.3f}<extra>"
+                        + dyn
+                        + " | "
+                        + tsk
+                        + "</extra>",
+                        customdata=sub["accuracy"],
+                        legendgroup=dyn,
+                        legendgrouptitle_text=dyn,
+                    )
+                )
+        fig.update_layout(
+            title=f"Islands & Voids — Multi-Task ({len(live)} cells, {len(ghost)} voids)",
+            xaxis_title="embedding-1",
+            yaxis_title="embedding-2",
         )
-    fig.update_layout(
-        title=f"Islands & Voids ({len(live)} cells, {len(ghost)} voids)",
-        xaxis_title="embedding-1",
-        yaxis_title="embedding-2",
-    )
+    else:
+        # Original: color by BP-deficit, symbol by dynamics
+        for i, dyn in enumerate(families):
+            sub = live[live["dynamics"] == dyn]
+            fig.add_trace(
+                go.Scatter(
+                    x=sub["x"],
+                    y=sub["y"],
+                    mode="markers",
+                    name=dyn,
+                    marker={
+                        "symbol": symbols[i % len(symbols)],
+                        "size": 8,
+                        "color": sub["bp_deficit"],
+                        "cmin": 0.0,
+                        "cmax": 1.0,
+                        "colorscale": "RdYlBu",
+                        "colorbar": {"title": "BP-deficit"} if i == 0 else None,
+                    },
+                    text=sub["credit"]
+                    + " × "
+                    + sub["update"]
+                    + " × "
+                    + sub["topology"],
+                    hovertemplate="%{text}<br>acc %{customdata:.3f}<extra>"
+                    + dyn
+                    + "</extra>",
+                    customdata=sub["accuracy"],
+                )
+            )
+        fig.update_layout(
+            title=f"Islands & Voids ({len(live)} cells, {len(ghost)} voids)",
+            xaxis_title="embedding-1",
+            yaxis_title="embedding-2",
+        )
     return fig
 
 
@@ -274,8 +356,8 @@ def _radar_figure(measured: pd.DataFrame) -> go_Figure:
     top = pareto_top(measured)
 
     def norm(col: str) -> list[float]:
-        vals = top[col].astype(float)
-        span = vals.max() - vals.min()
+        vals = top[col].astype(float).to_numpy()
+        span = float(vals.max() - vals.min())
         if span <= 0:
             return [0.5] * len(vals)
         return ((vals - vals.min()) / span).tolist()
@@ -287,15 +369,15 @@ def _radar_figure(measured: pd.DataFrame) -> go_Figure:
             ("settle_horizon", "settle_horizon"),
             ("σ_max(J)", "spectral_radius"),
         )
-        if float(top[col].astype(float).abs().sum()) > 0
+        if float(top[col].astype(float).abs().sum()) > 0  # type: ignore[arg-type]
     ]
     for i, (_, row) in enumerate(top.iterrows()):
         label = f"{row['dynamics'][:12]}|{row['credit'][:12]}|{row['update'][:10]}"
-        values = [float(row[c]) for c in metric_cols]
+        values = [float(row[c]) for c in metric_cols]  # type: ignore[arg-type]
         theta = [*metric_cols]
-        values.append(1.0 - float(row["bp_deficit"]))
+        values.append(1.0 - float(row["bp_deficit"]))  # type: ignore[arg-type]
         theta.append("1−bp_deficit")
-        values.append(1.0 / (1.0 + float(row["loss"])))
+        values.append(1.0 / (1.0 + float(row["loss"])))  # type: ignore[arg-type]
         theta.append("1/(1+loss)")
         for name, normed in axes:
             values.append(normed[i])
@@ -312,18 +394,23 @@ def _radar_figure(measured: pd.DataFrame) -> go_Figure:
     return fig
 
 
-def render_atlas(df: pd.DataFrame, voids: pd.DataFrame, out: Path, task: str) -> None:
+def render_atlas(
+    df: pd.DataFrame,
+    voids: pd.DataFrame,
+    out: Path,
+    task: str | None,
+    multi_task: bool = False,
+) -> None:
     import plotly.io as pio
 
     measured = df.query("~is_void") if "is_void" in df else df
     all_cells = df.copy()
-    coords = embed(feature_matrix(all_cells))
+    coords = embed(feature_matrix(all_cells, multi_task=multi_task))
     all_cells["x"], all_cells["y"] = coords[:, 0], coords[:, 1]
     live = all_cells.query("~is_void")
     ghost = all_cells.query("is_void")
 
-    fig_map = _islands_figure(live, ghost)
-    fig_map.update_layout(title=f"Islands & Voids — {task}")
+    fig_map = _islands_figure(live, ghost, multi_task=multi_task)
     fig_river = _river_figure(measured)
     fig_radar = _radar_figure(measured.reset_index(drop=True))
 
@@ -402,12 +489,21 @@ def main() -> None:
         default=None,
         help="also render a static islands-&-voids PNG to this path",
     )
+    parser.add_argument(
+        "--multi-task",
+        action="store_true",
+        help="load all tasks and color islands by task (symbol by dynamics)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    cells = load_cells(args.root / "kb.sqlite", args.task)
+    cells = load_cells(
+        args.root / "kb.sqlite", args.task if not args.multi_task else None
+    )
     voids = load_voids(args.root / "structural_voids.jsonl")
-    cells = apply_bp_deficit(cells, args.ruler_table, args.task)
+    cells = apply_bp_deficit(
+        cells, args.ruler_table, args.task if not args.multi_task else None
+    )
     if not voids.empty:
         voids["accuracy"] = 0.0
         voids["train_accuracy"] = 0.0
@@ -422,9 +518,17 @@ def main() -> None:
             "No data found under %s — run broad_mapping_sweep.py first", args.root
         )
         return
-    render_atlas(combined, voids, args.root / "atlas.html", args.task)
+    render_atlas(
+        combined,
+        voids,
+        args.root / "atlas.html",
+        args.task if not args.multi_task else None,
+        multi_task=args.multi_task,
+    )
     if args.png:
-        _atlas_png(combined, args.png, args.task)
+        _atlas_png(
+            combined, args.png, args.task if not args.multi_task else "multi-task"
+        )
 
 
 if __name__ == "__main__":

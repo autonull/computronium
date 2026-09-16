@@ -145,6 +145,9 @@ class StratifiedRandomDriver:
     Fulfills the campaign's ``propose_batch`` contract. Novelty is the
     in-process cell-key set seeded from the KB coverage matrix, so a resumed
     run does not re-measure cells the G1 sweep already covered.
+
+    Improvement: balances (dynamics, credit, update) triples so no river axis
+    starves at small sample sizes (TODO28 improvement opportunity 1).
     """
 
     def __init__(  # ruff: ignore[too-many-arguments] (driver mirrors sweep axes)
@@ -173,7 +176,12 @@ class StratifiedRandomDriver:
         self.viable = viable
         self.seen: set[str] = set()
         self._reload_covered(kb_path)
-        self.balance: dict[str, int] = dict.fromkeys(GRID_DYNAMICS, 0)
+        # Balance tracked per (dynamics, credit, update) triple
+        self.balance: dict[tuple[str, str, str], int] = {}
+        for d in GRID_DYNAMICS:
+            for c in GRID_CREDITS:
+                for u in GRID_UPDATES:
+                    self.balance[d, c, u] = 0
 
     def _reload_covered(self, kb_path: Path) -> None:
         """Seed the seen-set from the KB coverage matrix (structural voids
@@ -212,23 +220,21 @@ class StratifiedRandomDriver:
         attempts = 0
         while len(proposals) < min(n_proposals, self.cells) and attempts < 200:
             attempts += 1
-            # Stratification: the least-proposed dynamics family is next.
-            dynamics = min(
-                self.balance, key=lambda d: (self.balance[d], self.rng.random())
+            # Stratification: the least-proposed (dynamics, credit, update) triple is next.
+            (dynamics, credit, update) = min(
+                self.balance, key=lambda k: (self.balance[k], self.rng.random())
             )
-            credit = self.rng.choice(GRID_CREDITS)
-            update = self.rng.choice(GRID_UPDATES)
             topology = self.rng.choice(GRID_TOPOLOGIES)
             key = cell_key(dynamics, credit, update, topology)
             if key in self.seen or (self.viable is not None and key not in self.viable):
                 continue
             self.seen.add(key)
-            self.balance[dynamics] += 1
+            self.balance[dynamics, credit, update] += 1
             proposals.append(
                 ExperimentProposal(
                     hypothesis=(
                         f"Broad-map cell {key}: uniform random draw, "
-                        "stratified by dynamics"
+                        "stratified by dynamics×credit×update"
                     ),
                     model="eqprop",
                     task=self.task,
@@ -253,10 +259,10 @@ class StratifiedRandomDriver:
                 )
             )
         logger.info(
-            "Broad-map driver: %d novel cells (%d attempts, balance %s)",
+            "Broad-map driver: %d novel cells (%d attempts, balance sample %s)",
             len(proposals),
             attempts,
-            self.balance,
+            dict(list(self.balance.items())[:5]),
         )
         return proposals
 
