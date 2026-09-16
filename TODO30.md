@@ -61,6 +61,19 @@
 > dispatches webhooks when `comp daemon --alert-webhook URL` is set.
 > Tests: `tests/property/test_alerts.py` (threshold matrices, webhook
 > post-capture + error swallowing).
+> **8.6** landed: `cost_stats` (measured/target from the heartbeat — the
+> daemon now publishes `target_cells` + `loop` in `heartbeat.json` — mean
+> walltime/cell, projected remaining, coverage %, defect count) and
+> `cost_breakdown_rows` (per-primitive mean walltime on the dynamics and
+> credit axes) in `live_atlas.py`; rendered as the §5.1 projection bar +
+> §5.2 table in the dashboard.
+> **8.8** landed: `maturation_rows` (§7.2 l0/l1/l2 rollup + dashboard
+> panel) and `computronium/autoscientist/report.py::generate_report`
+> (§7.3 Markdown: totals, front history with ★ markers, maturation
+> rollup, graveyard + voids, cost breakdown, l2-governance note). The
+> daemon generates the report automatically on campaign completion
+> (`stop_reason == "target"`) and publishes `{kind: "report", path}` on
+> `/ws/events`. Tests: dashboard-smoke maturation + report sections.
 >
 > **Design Principle:** The AutoScientist is autonomous. The dashboard is a
 > telemetry window, not a control surface for the science. The only human
@@ -662,12 +675,12 @@ crash; criterion 1–2 do not require the WS to be up).
    **DONE** (8.4–8.5, from shipped KB/voids/defects data — the shakedown
    will populate them with real 500-cell volume).
 6. ~~**Wire breakthrough and cascade alerts**~~ **DONE** (8.7).
-7. **Generate the first campaign summary report** from the completed
-   500-cell run (8.8).
+7. ~~**Generate the first campaign summary report**~~ **DONE** (8.8 — the
+   builder ships; the *first real report* awaits the 500-cell run).
 8. **Design the adaptive scheduler** from the accumulated per-family
    walltime data (8.10, post-campaign).
 
-### 13.1 Improvement opportunities (from the 8.1/8.2 landing)
+### 13.1 Improvement opportunities (from the 8.1–8.8 landing)
 
 - **Per-iteration cell progress**: the heartbeat's `cell_index` only updates
   per burst (run_burst reports completion at iteration granularity). For the
@@ -696,6 +709,9 @@ crash; criterion 1–2 do not require the WS to be up).
   but a hard kill leaves the lockfile behind — document stale-lock recovery
   (already supported: delete `<root>/continuous.lock`) or add PID liveness
   check before refusing to start.
+- **Campaign-config provenance in the report**: the heartbeat now carries
+  `target_cells`/`loop`; also publish task, epochs, limit-batches and seed
+  so §7.3's "campaign configuration" section is complete without the CLI.
 - **Dashboard readiness for 8.3**: `GET /state` intentionally returns the
   heartbeat payload verbatim; the UI can treat `updated_at` staleness
   (>10 s) as CONNECTION LOST per §2.2 without extra daemon work.

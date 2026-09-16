@@ -4,11 +4,14 @@ fixture campaign root + artifact-signature change detection."""
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+
+import pytest
 
 from computronium.visualization.live_atlas import (
     EmbedCache,
     build_dashboard,
+    cost_stats,
     defect_funnel_rows,
     health_stats,
     log_tail,
@@ -173,9 +176,10 @@ def test_landscape_panels_headless(tmp_path: Path) -> None:
     assert snapshot.coverage_rows, "coverage-by-axis rows derived"
     axes = {row["axis"] for row in snapshot.coverage_rows}
     assert axes == {"dynamics", "credit", "update", "topology"}
-    assert sum(int(row["measured"]) for row in snapshot.coverage_rows) >= 16
+    measured = sum(int(cast("int", row["measured"])) for row in snapshot.coverage_rows)
+    assert measured >= 16
 
-    assert snapshot.strata_rows[0]["triples"] >= 1  # ≥1 triple measured
+    assert int(cast("int", snapshot.strata_rows[0]["triples"])) >= 1  # ≥1 triple
     assert snapshot.front_history, "front history over 2 bursts"
     assert any(row["new_front"] == "★" for row in snapshot.front_history)
     assert snapshot.voids_summary[0]["category"] == "geometry_constraint"
@@ -206,3 +210,71 @@ def test_diversity_alerts_thresholds() -> None:
         })
         == []
     )
+
+
+def test_cost_stats_and_breakdown_headless(tmp_path: Path) -> None:
+    """TODO30 8.6: §5 projection bar + per-primitive walltime from the KB."""
+    root = tmp_path / "root"
+    _seed_fixture(root)
+    snapshot = render_snapshot(root, root / "logs" / "continuous_500.log")
+
+    costs = snapshot.costs
+    assert costs["measured"] == 4
+    assert costs["target"] is None  # no heartbeat in the fixture
+    # fixture walltimes 1.5, 1.6, 1.7, 1.8 → mean 1.65
+    assert costs["mean_walltime_s"] == pytest.approx(1.6, abs=0.1)
+    assert costs["projected_remaining_s"] is None
+
+    axes = {(row["axis"], row["primitive"]) for row in snapshot.cost_breakdown}
+    assert ("dynamics", "energy_minimization") in axes
+    dynamics_means = [
+        row["mean_walltime_s"]
+        for row in snapshot.cost_breakdown
+        if row["axis"] == "dynamics"
+    ]
+    assert all(isinstance(value, float) for value in dynamics_means)
+
+    # with a heartbeat carrying a target, the projection lands
+    (root / "heartbeat.json").write_text(
+        json.dumps({
+            "pid": 1,
+            "state": "training",
+            "burst": None,
+            "cell_index": 4,
+            "started_at": 0.0,
+            "updated_at": 1.0,
+            "log_path": None,
+            "target_cells": 10,
+            "loop": False,
+        })
+    )
+    costs = cost_stats(root)
+    assert costs["coverage_pct"] == "40%"
+    # 6 cells remaining × mean walltime (rounded to int seconds)
+    assert costs["projected_remaining_s"] == pytest.approx(6 * 1.65, rel=0.05)
+
+
+def test_maturation_and_report_generation(tmp_path: Path) -> None:
+    """TODO30 8.8: §7.2 maturity rollup + §7.3 Markdown report assembly."""
+    root = tmp_path / "root"
+    _seed_fixture(root)
+    snapshot = render_snapshot(root, root / "logs" / "continuous_500.log")
+    counts = {row["level"]: row["count"] for row in snapshot.maturation}
+    assert counts["maturity:l0"] == 4
+    assert counts["maturity:l2"] == 0
+
+    from computronium.autoscientist.report import generate_report
+
+    report = generate_report(root)
+    text = report.read_text(encoding="utf-8")
+    for heading in (
+        "# Computronium campaign summary",
+        "## Totals",
+        "## Final Pareto front",
+        "## Maturation",
+        "## Negative results",
+        "## Cost breakdown",
+        "maturity:l2",
+    ):
+        assert heading in text, heading
+    assert report == root / "campaign_report.md"

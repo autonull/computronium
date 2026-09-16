@@ -43,6 +43,7 @@ from computronium.autoscientist.broad_map import (
     run_burst,
     run_l1_maturation,
 )
+from computronium.autoscientist.report import generate_report
 from computronium.utils import seed_everything
 
 if TYPE_CHECKING:
@@ -242,6 +243,8 @@ class ContinuousDaemon:
             "started_at": self._started_at,
             "updated_at": time.time(),
             "log_path": str(log_path) if log_path is not None else None,
+            "target_cells": getattr(self.args, "target_cells", None),
+            "loop": bool(getattr(self.args, "loop", False)),
         }
 
     def _write_heartbeat(self) -> None:
@@ -322,6 +325,10 @@ class ContinuousDaemon:
             self._sleep(args.sleep)
         if args.maturation and not args.loop:
             run_l1_maturation(args, campaign, getattr(driver, "burst_tag", None))
+        last = self._last_summary
+        if last is not None and str(last.get("stop_reason")) == "target":
+            report = generate_report(self.root)
+            self.events.publish({"kind": "report", "path": str(report)})
         self._set_state(DaemonState.STOPPED)
         self._release_lockfile()
         self.events.publish({"kind": "daemon_stopped"})

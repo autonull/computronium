@@ -397,6 +397,83 @@ def front_history_rows(
     return rows
 
 
+def cost_stats(root: Path) -> dict[str, object]:
+    """§5: projection-bar payload from the KB (honest aggregation — no
+    smoothing, credit-trace-inclusive cells weighted as measured)."""
+    from computronium.autoscientist.defects import read_defects
+
+    cells = _measured_cells(root)
+    walltimes = [row.walltime for row in cells if row.walltime > 0]  # type: ignore[attr-defined]
+    heartbeat = read_heartbeat(root)
+    target = heartbeat.get("target_cells") if heartbeat else None
+    mean_walltime = sum(walltimes) / len(walltimes) if walltimes else 0.0
+    remaining: float | None = None
+    if isinstance(target, int) and target > len(cells):
+        remaining = (target - len(cells)) * mean_walltime
+    defects = read_defects(root / "runtime_defects.jsonl")
+    return {
+        "measured": len(cells),
+        "target": target,
+        "coverage_pct": (
+            f"{100.0 * len(cells) / target:.0f}%"
+            if isinstance(target, int) and target > 0
+            else "∞ (loop mode)"
+            if heartbeat and heartbeat.get("loop")
+            else None
+        ),
+        "mean_walltime_s": round(mean_walltime, 1),
+        "projected_remaining_s": (round(remaining) if remaining is not None else None),
+        "defects": len({record.defect_id for record in defects}),
+    }
+
+
+def cost_breakdown_rows(root: Path, top: int = 8) -> list[dict[str, object]]:
+    """§5.2: mean walltime per primitive on the dynamics and credit axes —
+    the 40× physics-learning cost spread, surfaced honestly."""
+    from collections import defaultdict
+
+    per_axis: dict[str, dict[str, list[float]]] = {
+        "dynamics": defaultdict(list),
+        "credit": defaultdict(list),
+    }
+    cells = _measured_cells(root)
+    for row in cells:
+        for axis in per_axis:
+            if row.walltime > 0:  # type: ignore[attr-defined]
+                per_axis[axis][str(getattr(row, axis))].append(row.walltime)  # type: ignore[attr-defined]
+    rows: list[dict[str, object]] = []
+    for axis, means in per_axis.items():
+        for primitive, times in sorted(
+            means.items(), key=lambda kv: -sum(kv[1]) / len(kv[1])
+        )[:top]:
+            rows.append({
+                "axis": axis,
+                "primitive": primitive,
+                "mean_walltime_s": round(sum(times) / len(times), 1),
+                "n": len(times),
+            })
+    return rows
+
+
+def maturation_rows(root: Path) -> list[dict[str, object]]:
+    """§7.2: maturity rollup. Only l2 cells may back comparative claims."""
+    meanings = {
+        "l0": "mapping fidelity (1 epoch, 1 seed)",
+        "l1": "promoted (3 epochs)",
+        "l2": "claim-grade (10 epochs, 3 seeds)",
+    }
+    counts: dict[str, int] = {"l0": 0, "l1": 0, "l2": 0}
+    for row in _measured_cells(root):
+        for level in row.levels:  # type: ignore[attr-defined]
+            tag = str(level).removeprefix("maturity:")
+            if tag in counts:
+                counts[tag] += 1
+    return [
+        {"level": f"maturity:{tag}", "meaning": meaning, "count": counts[tag]}
+        for tag, meaning in meanings.items()
+    ]
+
+
 def health_stats(root: Path) -> dict[str, object]:
     """Open/resolved defects, cells-per-burst rate, last-burst mean walltime."""
     from computronium.autoscientist.broad_map import _load_measured_cells
@@ -531,6 +608,9 @@ class DashboardSnapshot:
     voids_summary: list[dict[str, object]] = field(default_factory=list)
     diversity: dict[str, float] = field(default_factory=dict)
     alerts: list[str] = field(default_factory=list)
+    costs: dict[str, object] = field(default_factory=dict)
+    cost_breakdown: list[dict[str, object]] = field(default_factory=list)
+    maturation: list[dict[str, object]] = field(default_factory=list)
 
 
 def _atlas_data(
@@ -598,6 +678,9 @@ def render_snapshot(
         voids_summary=void_summary_rows(root),
         diversity=diversity,
         alerts=diversity_alerts(diversity),
+        costs=cost_stats(root),
+        cost_breakdown=cost_breakdown_rows(root),
+        maturation=maturation_rows(root),
     )
 
 
@@ -710,12 +793,22 @@ def _landscape_boxes() -> tuple[Element, ...]:
     """§4/§5 landscape panel containers, in render order."""
     from nicegui import ui
 
-    return tuple(ui.column().classes("w-full") for _ in range(6))
+    return tuple(ui.column().classes("w-full") for _ in range(9))
 
 
 def _render_landscape(boxes: tuple[Element, ...], snapshot: DashboardSnapshot) -> None:
-    """§4.1/§4.2/§4.3/§4.4 additive panels on shipped data."""
-    front_box, graveyard_box, voids_box, coverage_box, strata_box, diversity_box = boxes
+    """§4.1/§4.2/§4.3/§4.4/§5 additive panels on shipped data."""
+    (
+        front_box,
+        graveyard_box,
+        voids_box,
+        coverage_box,
+        strata_box,
+        diversity_box,
+        cost_box,
+        cost_axes_box,
+        maturation_box,
+    ) = boxes
     _table_panel(
         front_box,
         "Pareto front history (★ = front expansion at that burst)",
@@ -743,6 +836,38 @@ def _render_landscape(boxes: tuple[Element, ...], snapshot: DashboardSnapshot) -
         snapshot.strata_rows,
     )
     _diversity_panel(diversity_box, snapshot.diversity, snapshot.alerts)
+    _cost_panel(cost_box, snapshot.costs)
+    _table_panel(
+        cost_axes_box,
+        "Per-primitive mean walltime (dynamics / credit axes)",
+        snapshot.cost_breakdown,
+    )
+    _table_panel(
+        maturation_box,
+        "Maturation (only maturity:l2 cells may back comparative claims)",
+        snapshot.maturation,
+    )
+
+
+def _cost_panel(container: Element, costs: dict[str, object]) -> None:
+    """§5.1 projection bar."""
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        ui.label("Cost projection").classes("text-bold")
+        remaining = costs.get("projected_remaining_s")
+        projected = (
+            f"{remaining / 60:.0f}m remaining"
+            if isinstance(remaining, int | float)
+            else "—"
+        )
+        ui.label(
+            f"measured {costs.get('measured')}/{costs.get('target') or '—'} "
+            f"({costs.get('coverage_pct') or '—'}) · mean "
+            f"{costs.get('mean_walltime_s')}s/cell · {projected} · "
+            f"defects {costs.get('defects')}"
+        ).classes("font-mono text-xs")
 
 
 def _panel_scaffold() -> tuple[Element, ...]:
