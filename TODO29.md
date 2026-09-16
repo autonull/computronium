@@ -58,7 +58,7 @@ New/changed surfaces:
 | `scripts/broad_mapping_sweep.py`, `scripts/visualize_atlas.py` | Become thin argparse wrappers over the library modules (backwards compatibility: none, per AGENTS.md). |
 | `computronium/autoscientist/defects.py` | **New (Phase 2).** Defect ledger: `DefectRecord`, `defect_id()`, `read_defects()`, `quarantined_cells()`, `resolve_defect()`. |
 | `computronium/cli/continuous.py` | **New (Phase 3/4).** `comp continuous` — burst runner + `unquarantine` + `deep-tier` subcommands. |
-| `computronium/cli/dashboard.py` + `computronium/visualization/live_atlas.py` | **New (Phase 5).** `comp dashboard` — live view, no execution. |
+| `computronium/cli/dashboard.py` + `computronium/visualization/live_atlas.py` | **New (Phase 5).** `comp dashboard` — live view, no execution. `--log-path` flag for ticker source. |
 | `computronium/autoscientist/campaign.py` | **One edit (Phase 1):** `walltime_s` in `_execute_proposal`'s result dict. |
 | `computronium/cli/__main__.py` | Two rows in `_SUBCOMMANDS`: `continuous`, `dashboard`. |
 
@@ -85,9 +85,11 @@ story needs per-cell walltime recorded.*
    _run_broad_demo`) keeps working unchanged — it shells out to the script.
 3. **`walltime_s`**: wrap `trainer.fit()` in
    `AutoScientistCampaign._execute_proposal` with `time.monotonic()`; add
-   `round(dt, 3)` to the result dict. The KB's numeric-key passthrough picks
-   it up with zero further wiring — and TODO28's dropped compute-efficiency
-   metric becomes real (`accuracy / walltime_s` spoke in the atlas, Phase 5).
+   `round(dt, 3)` to the result dict. The KB's numeric-key passthrough
+   (`_update_knowledge_base` lines 1190–1194 in `campaign.py`) picks it up
+   automatically — no further wiring. The atlas gains a compute-efficiency
+   spoke (`accuracy / walltime_s`), and the burst log reports per-family
+   mean walltime.
 4. Tests: existing sweep/atlas tests re-pointed at the library imports;
    `test_campaign_fidelity` green (it exercises `_execute_proposal`).
 
@@ -103,7 +105,7 @@ Verification: `uv run python -m pytest tests/ -k "campaign or atlas or broad" -q
 cell is *not* KB-cover-marked, so a code bug can burn budget on the same
 broken coordinate every burst, forever.
 
-New module `computronium/autoscientist/defects.py`:
+New module `computronium/autoscientist/defects.py` (strict-typed, frozen):
 
 ```python
 type DefectId = str                      # sha256[:12]
@@ -204,16 +206,21 @@ class ContinuousBudget:
   stop between proposals. This is the "loose time limit" from the design
   conversation, made concrete: the run degrades by *granularity of one
   cell*, never by corruption.
+- **Precedence:** `--target-cells` is a hard cap; `--budget` is a soft time
+  cap. Both can be set; the first limit reached stops the burst.
 - On stop: `campaign.save_checkpoint()`, log cells/voids/defects counts,
   exit 0. Cron or `--loop` just calls it again — the KB coverage seed makes
   every burst resume-safe by construction.
 - `--loop --sleep N`: in-process loop instead of a shell loop (still one
-  fresh `ContinuousBudget` per iteration; `^C` → same graceful flush path,
-  handled via `try/except KeyboardInterrupt` around the loop, *not* in a
-  `finally` — PEP 765).
+  fresh `ContinuousBudget` per iteration; `^C` / `SIGTERM` → same graceful
+  flush path, handled via `try/except (KeyboardInterrupt, SystemExit)` around
+  the loop, *not* in a `finally` — PEP 765). `signal.signal(SIGTERM, ...)`
+  registers the same handler for container stops.
 - Flags carried over from the sweep: `--epochs`, `--task`, `--seed`,
-  `--cells-per-iter`, `--param-budget`, `--credit-trace`, `--max-iterations`.
-  New: `--budget`, `--target-cells`, `--loop`, `--sleep`, `--root`.
+  `--cells-per-iter`, `--param-budget`, `--credit-trace` (opt-in: one
+  flat batch, settle phases + split-half + BP reference — adds settle
+  overhead per cell), `--max-iterations`. New: `--budget`, `--target-cells`,
+  `--loop`, `--sleep`, `--root`.
 
 **Budget-aware scheduling note (honest scope):** with `walltime_s` recorded
 (Phase 1), the burst log reports per-family mean walltime, and the atlas
@@ -255,6 +262,8 @@ Burst cells are 1-epoch/1-seed: valid for *mapping topology*, not for
   is what buys claim status, matching the repo's `quality={"seeds": n}`
   convention). Output: one claim-grade row per cell + `maturation.jsonl`
   summary under the campaign root.
+  - `deep-tier` flags: `--top K`, `--epochs E` (default 10), `--seeds S`
+    (default 3), `--root`, `--task` (filter), `--dry-run` (show plan only).
 - **Variance audit.** The promotion query also flags cells measured in ≥ 2
   bursts whose accuracy spread exceeds 0.2 → `seed_sensitivity` note in
   `maturation.jsonl` (contradictions become findings, not discarded data —
@@ -289,7 +298,8 @@ Read-only. Runs `uv run comp dashboard --root artifacts/broad_map --port 8088`.
   4. *Pareto strip* — current top-3 cells with instrument spokes
      (accuracy, 1−deficit, credit_alignment, settle_horizon).
   5. *Ticker* — tail of the burst log (`logs/continuous-*.log`), last 30
-     lines, monospace.
+     lines, monospace. The CLI `--log-path` flag (default derived from
+     `--root`) points the dashboard at the right file.
 - **Gallery note:** HTML/live artifact, not a PNG demo — per TODO28 §
   improvement 3 precedent, no `DEMOS` registry row or manifest re-pin.
 
@@ -330,6 +340,7 @@ instead of a monolithic 2–4 h run:
 # AGENTS environment rules: background, streaming log, ≤2-min polls
 nohup uv run comp continuous --target-cells 500 --credit-trace \
     --root artifacts/broad_map --loop --sleep 15 \
+    --log-path logs/continuous_500.log \
     > logs/continuous_500.log 2>&1 &
 ```
 
@@ -346,6 +357,26 @@ Per-commit (AGENTS checklist): dev-env smoke → `ruff format` + `ruff check
 --fix` on changed files → `pyright` (strict: `broad_map.py`, `defects.py`,
 `continuous.py`, `atlas.py`, `live_atlas.py` are new modules) → targeted
 tests shown above.
+
+**Targeted test commands per phase:**
+```bash
+# Phase 1: library extraction + walltime
+uv run python -m pytest tests/ -k "campaign or atlas or broad" -q
+
+# Phase 2: defect funnel
+uv run python -m pytest tests/property/test_defect_ledger.py -q
+uv run python -m pytest tests/integration/test_continuous_burst.py -q
+
+# Phase 3: continuous budget + CLI
+uv run python -m pytest tests/property/test_continuous_budget.py -q
+uv run python -m pytest tests/integration/test_continuous_burst.py -q
+
+# Phase 4: maturation
+uv run python -m pytest tests/integration/test_continuous_burst.py -k "maturation" -q
+
+# Phase 5: dashboard
+uv run python -m pytest tests/integration/test_dashboard_smoke.py -q
+```
 
 Fast gate at round close: demo/gallery-adjacent (`gallery.py` now imports
 the moved atlas path indirectly via the script) — run
