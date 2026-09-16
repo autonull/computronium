@@ -2430,7 +2430,9 @@ class PCALMCredit(_SurrogateUndefined):
             dual_vars = nudged_state.dual_vars
         # Fallback to metrics for backward compatibility
         elif hasattr(nudged_state, "metrics") and nudged_state.metrics:
-            dual_vars = nudged_state.metrics.get("dual_vars_nudged") or nudged_state.metrics.get("dual_vars")
+            dual_vars = nudged_state.metrics.get(
+                "dual_vars_nudged"
+            ) or nudged_state.metrics.get("dual_vars")
 
         if dual_vars is None or not isinstance(dual_vars, list):
             return []

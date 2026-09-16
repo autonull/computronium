@@ -119,7 +119,9 @@ class TestPCALMGradientEquivalence:
         # Create identical architectures with same seed
         seed = 42
         torch.manual_seed(seed)
-        pc_system = _create_pc_alm_system(depth=4, hidden_dim=64, max_steps=60, seed=seed)
+        pc_system = _create_pc_alm_system(
+            depth=4, hidden_dim=64, max_steps=60, seed=seed
+        )
 
         torch.manual_seed(seed)
         bp_system = _create_bp_system(depth=4, hidden_dim=64, seed=seed)
@@ -352,7 +354,11 @@ class TestPCALMEnergyTracking:
     def test_free_energy_history_recorded(self):
         """When track_free_energy_per_iter=True, energy history should be recorded."""
         system = _create_pc_alm_system(
-            depth=4, hidden_dim=64, max_steps=20, rho=1.0, track_free_energy_per_iter=True
+            depth=4,
+            hidden_dim=64,
+            max_steps=20,
+            rho=1.0,
+            track_free_energy_per_iter=True,
         )
 
         x = torch.randn(8, 784)
@@ -368,7 +374,11 @@ class TestPCALMEnergyTracking:
     def test_augmented_lagrangian_decreases(self):
         """Augmented Lagrangian should generally decrease during relaxation (Lyapunov)."""
         system = _create_pc_alm_system(
-            depth=4, hidden_dim=64, max_steps=30, rho=1.0, track_free_energy_per_iter=True
+            depth=4,
+            hidden_dim=64,
+            max_steps=30,
+            rho=1.0,
+            track_free_energy_per_iter=True,
         )
 
         x = torch.randn(8, 784)
@@ -445,7 +455,10 @@ class TestPCALMConfiguration:
     def test_pcalm_credit_type_validation(self):
         """PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit."""
         from computronium.ontology.system import SystemConfig
-        from computronium.ontology import RandomProjectionsCredit, CreditAssignmentConfig
+        from computronium.ontology import (
+            RandomProjectionsCredit,
+            CreditAssignmentConfig,
+        )
 
         config = SystemConfig(
             substrate=SubstrateConfig.digital(device="cpu"),
@@ -457,7 +470,10 @@ class TestPCALMConfiguration:
             update=ParameterUpdateConfig.euclidean(),
         )
 
-        with pytest.raises(ValueError, match="PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit"):
+        with pytest.raises(
+            ValueError,
+            match="PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit",
+        ):
             config.validate()
 
 
@@ -488,9 +504,7 @@ class TestPCALMCompiledPath:
         torch.manual_seed(42)
         substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
         geometry = RecurrentGeometry(
-            GeometryConfig.recurrent(
-                input_dim=10, output_dim=2, hidden_dims=(16,)
-            ),
+            GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(16,)),
             hidden_dim=16,
         )
         dynamics = PCALMDynamics(

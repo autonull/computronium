@@ -1564,14 +1564,16 @@ class PCALMDynamics(_SettleTelemetry):
             # Assume max_train_steps ~ 10000; scale appropriately
             max_steps = getattr(self, "_max_train_steps", 10000)
             progress = min(self._train_step / max_steps, 1.0)
-            return self.config.rho + progress * (self.config.rho_final - self.config.rho)
+            return self.config.rho + progress * (
+                self.config.rho_final - self.config.rho
+            )
         elif self.config.rho_schedule == "cosine":
             # Cosine annealing from rho to rho_final
             max_steps = getattr(self, "_max_train_steps", 10000)
             progress = min(self._train_step / max_steps, 1.0)
-            return self.config.rho_final + (self.config.rho - self.config.rho_final) * 0.5 * (
-                1 + math.cos(math.pi * progress)
-            )
+            return self.config.rho_final + (
+                self.config.rho - self.config.rho_final
+            ) * 0.5 * (1 + math.cos(math.pi * progress))
         return self.config.rho
 
     def set_max_train_steps(self, max_steps: int) -> None:
@@ -1614,7 +1616,11 @@ class PCALMDynamics(_SettleTelemetry):
         batch_size = acts[0].shape[0]
 
         # Initialize dual variables λ to zero (or warm-start from previous step)
-        if self.config.warm_start_duals and self._dual_vars is not None and len(self._dual_vars) == num_layers:
+        if (
+            self.config.warm_start_duals
+            and self._dual_vars is not None
+            and len(self._dual_vars) == num_layers
+        ):
             dual_vars = self._dual_vars
         else:
             dual_vars = [torch.zeros_like(acts[i + 1]) for i in range(num_layers)]
@@ -1625,7 +1631,9 @@ class PCALMDynamics(_SettleTelemetry):
         # Track initial augmented Lagrangian
         if self._free_energy_history is not None:
             self._free_energy_history.append(
-                self._compute_augmented_lagrangian(acts, dual_vars, layered, op, current_rho).item()
+                self._compute_augmented_lagrangian(
+                    acts, dual_vars, layered, op, current_rho
+                ).item()
             )
 
         # Primal–dual relaxation loop
@@ -1658,7 +1666,9 @@ class PCALMDynamics(_SettleTelemetry):
             )
             self._settle_steps_used = self.config.max_steps
         else:
-            acts = self._eager_relaxation(acts, dual_vars, layered, op, target, current_rho)
+            acts = self._eager_relaxation(
+                acts, dual_vars, layered, op, target, current_rho
+            )
 
         # Store dual variables for credit assignment
         self._dual_vars = dual_vars
@@ -1741,13 +1751,19 @@ class PCALMDynamics(_SettleTelemetry):
             new_acts = [acts_step[0]]  # input layer clamped
             for i in range(num_layers):
                 # Bottom-up: c_{i+1} + λ_{i+1} + ρ*c_{i+1}
-                primal_grad = constraints[i] + dual_vars_step[i] + current_rho * constraints[i]
+                primal_grad = (
+                    constraints[i] + dual_vars_step[i] + current_rho * constraints[i]
+                )
 
                 # Top-down coupling: J_{i+2}^T * (c_{i+2} + λ_{i+2} + ρ*c_{i+2})
                 # Only for hidden layers (not output layer)
                 if i < num_layers - 1:
                     # Error signal from layer i+2: v = c_{i+2} + λ_{i+2} + ρ*c_{i+2}
-                    v = constraints[i + 1] + dual_vars_step[i + 1] + current_rho * constraints[i + 1]
+                    v = (
+                        constraints[i + 1]
+                        + dual_vars_step[i + 1]
+                        + current_rho * constraints[i + 1]
+                    )
                     # Jacobian J_{i+2} = diag(act'(z_{i+2})) @ W_{i+2}
                     # where z_{i+2} = h_{i+1} @ W_{i+2}^T + b_{i+2}
                     # h_{i+1} = acts_step[i+1], W_{i+2} = layered.weights[i+1]
@@ -1785,12 +1801,16 @@ class PCALMDynamics(_SettleTelemetry):
                         _relaxation_step, acts, dual_vars, step, use_reentrant=False
                     )
                 else:
-                    acts, dual_vars, constraints = _relaxation_step(acts, dual_vars, step)
+                    acts, dual_vars, constraints = _relaxation_step(
+                        acts, dual_vars, step
+                    )
 
                 # Track augmented Lagrangian per iteration
                 if self._free_energy_history is not None:
                     self._free_energy_history.append(
-                        self._compute_augmented_lagrangian(acts, dual_vars, layered, op, current_rho).item()
+                        self._compute_augmented_lagrangian(
+                            acts, dual_vars, layered, op, current_rho
+                        ).item()
                     )
 
                 # Check convergence on constraint violation norm
@@ -1806,7 +1826,9 @@ class PCALMDynamics(_SettleTelemetry):
                 # Track augmented Lagrangian per iteration
                 if self._free_energy_history is not None:
                     self._free_energy_history.append(
-                        self._compute_augmented_lagrangian(acts, dual_vars, layered, op, current_rho).item()
+                        self._compute_augmented_lagrangian(
+                            acts, dual_vars, layered, op, current_rho
+                        ).item()
                     )
 
                 # Check convergence on constraint violation norm
@@ -1893,7 +1915,9 @@ class PCALMDynamics(_SettleTelemetry):
 
         # Get current rho (with scheduling)
         current_rho = self._get_current_rho()
-        return self._compute_augmented_lagrangian(acts, dual_vars, layered, op, current_rho)
+        return self._compute_augmented_lagrangian(
+            acts, dual_vars, layered, op, current_rho
+        )
 
     def get_free_energy_history(self) -> list[float] | None:
         """Return the augmented Lagrangian history tracked during settling."""
