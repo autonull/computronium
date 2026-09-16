@@ -26,6 +26,15 @@
 > consolidated into `broad_map.budget_from_args`. Tests:
 > `tests/property/test_daemon_state.py` (lifecycle, boundary pause/stop,
 > lockfile, heartbeat, REST controls, bridge drop-oldest, hook isolation).
+> **8.3** landed: `liveness()` + `lifecycle_buttons()` + `DaemonClient`
+> (urllib, 1 s timeout, never errors) in `live_atlas.py`; the Lifecycle
+> Control Bar + Liveness Badge render inside `build_dashboard` when
+> `--daemon-url` is passed to `comp dashboard` (poll-only stub otherwise).
+> Dual-source badge per §2.2: fresh heartbeat drives the state even when
+> the API is unreachable (artifact-polling degradation note in the badge
+> detail); stale heartbeat → CONNECTION LOST; no file → OFFLINE. Tests:
+> `tests/unit/test_live_atlas_liveness.py` (badge matrix, button table,
+> unreachable-degradation, and a live-uvicorn REST round-trip).
 >
 > **Design Principle:** The AutoScientist is autonomous. The dashboard is a
 > telemetry window, not a control surface for the science. The only human
@@ -610,15 +619,15 @@ crash; criterion 1–2 do not require the WS to be up).
 
 1. ~~**Extract `ContinuousDaemon`**~~ **DONE** (8.1 + lockfile + batch-trimming note: target-boundary batch trimming already shipped in `run_burst`; the daemon adds the boundary gate).
 2. ~~**Add the trainer telemetry hook**~~ **DONE** (8.2, `step_callback`, behavior-identical verified).
-3. **Build the Lifecycle Control Bar and Liveness Badge** in `live_atlas.py`
-   (8.3), including polling-only degradation. The daemon REST/WS surface it
-   needs is live: `GET /state` returns the heartbeat payload + uptime +
-   `last_summary`; `POST /control/{start,pause,resume,stop,skip_sleep}`;
-   `WS /ws/telemetry` streams `{metric: float}` dicts per training batch
-   (drop-oldest); `WS /ws/events` streams `{kind, ...}` lifecycle events
-   (`daemon_started`, `state`, `burst_finished`, `campaign_complete`,
-   `daemon_stopped`). `heartbeat.json` is written under the campaign root
-   with `{pid, state, burst, cell_index, started_at, updated_at, log_path}`.
+3. ~~**Build the Lifecycle Control Bar and Liveness Badge**~~ **DONE**
+   (8.3). The daemon REST/WS surface it uses: `GET /state` returns the
+   heartbeat payload + uptime + `last_summary`;
+   `POST /control/{start,pause,resume,stop,skip_sleep}`; `WS /ws/telemetry`
+   streams `{metric: float}` dicts per training batch (drop-oldest);
+   `WS /ws/events` streams `{kind, ...}` lifecycle events. The bar's
+   buttons fire REST posts fire-and-forget (1 s timeout); badge refresh
+   rides the existing 2 s artifact poll. **Not yet consumed: the WS
+   streams** — the §3.1 Active Cell Inspector (8.5+) is their first UI.
 4. **Run the 500-cell shakedown through the new daemon** (per §8.11 launch
    guidance: no `--credit-trace`, `--limit-batches 30`). Watch it on the
    dashboard. Verify: no terminal needed for the full run. Collect

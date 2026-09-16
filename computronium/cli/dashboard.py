@@ -34,6 +34,14 @@ def main() -> int:
         help="artifact polling interval in seconds",
     )
     parser.add_argument(
+        "--daemon-url",
+        type=str,
+        default=None,
+        help="lifecycle API base (e.g. http://127.0.0.1:8940). Adds the "
+        "Start/Pause/Stop bar + live badge; without it the dashboard is "
+        "artifact-polling only",
+    )
+    parser.add_argument(
         "--no-open",
         action="store_true",
         help="do not open a browser tab (headless/server use)",
@@ -48,7 +56,7 @@ def main() -> int:
     # re-execution fails under a console-script entry point.
     @ui.page("/")
     def _dashboard_page() -> None:
-        build_dashboard(args.root, args.log_path, args.poll)
+        build_dashboard(args.root, args.log_path, args.poll, args.daemon_url)
 
     ui.run(
         title="Computronium — Live Broad Map",

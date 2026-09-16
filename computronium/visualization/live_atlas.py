@@ -12,6 +12,7 @@ recomputed snapshot, never a trajectory or a stability frontier.
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
@@ -30,6 +31,115 @@ POLL_SECONDS = 2.0
 TICKER_LINES = 30
 MESSAGE_HEAD_CHARS = 80
 WATCHED = ("kb.sqlite", "structural_voids.jsonl", "runtime_defects.jsonl")
+HEARTBEAT_NAME = "heartbeat.json"
+HEARTBEAT_STALE_S = 10.0
+
+
+def read_heartbeat(root: Path) -> dict[str, object] | None:
+    """Parse ``heartbeat.json`` (the daemon's liveness beacon), if present."""
+    import json
+
+    try:
+        return cast(
+            "dict[str, object] | None",
+            json.loads((root / HEARTBEAT_NAME).read_text(encoding="utf-8")),
+        )
+    except OSError, ValueError:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class Liveness:
+    """§2.2 badge payload: dual-source (heartbeat freshness + API reach)."""
+
+    label: str
+    color: str
+    detail: str
+
+
+_STATE_COLORS = {
+    "idle": ("● IDLE — ready, no campaign active", "green"),
+    "proposing": ("● RUNNING", "green"),
+    "training": ("● RUNNING", "green"),
+    "sleeping": ("● SLEEPING", "yellow"),
+    "paused": ("● PAUSED", "amber"),
+    "stopped": ("● STOPPED", "grey"),
+}
+
+
+def liveness(root: Path, daemon_reachable: bool, now: float | None = None) -> Liveness:
+    """Badge state from the heartbeat artifact; the API adds connection
+    context only — the heartbeat alone drives the landscape (hybrid
+    transport, §0), so a fresh heartbeat with a dead API still renders."""
+    heartbeat = read_heartbeat(root)
+    if heartbeat is None:
+        return Liveness(
+            "● OFFLINE", "grey", "no heartbeat — daemon not running on this root"
+        )
+    now = time.time() if now is None else now
+    updated_at = heartbeat.get("updated_at")
+    if not isinstance(updated_at, int | float) or now - updated_at > HEARTBEAT_STALE_S:
+        return Liveness("● CONNECTION LOST", "red", "heartbeat stale (>10 s)")
+    state = str(heartbeat.get("state", ""))
+    label, color = _STATE_COLORS.get(state, (f"● {state.upper()}", "grey"))
+    if state in {"proposing", "training"}:
+        label = "● RUNNING"
+    detail_parts = [
+        f"pid {heartbeat.get('pid')}",
+        f"cells {heartbeat.get('cell_index')}",
+        f"burst {heartbeat.get('burst') or '—'}",
+    ]
+    if not daemon_reachable:
+        detail_parts.append("API unreachable (artifact-polling mode)")
+    return Liveness(label, color, " · ".join(detail_parts))
+
+
+def lifecycle_buttons(state: str | None) -> tuple[str, ...]:
+    """§2.1 — the only three controls that may ever exist."""
+    if state is None or state in {"idle", "stopped"}:
+        return ("start",)
+    if state == "paused":
+        return ("resume", "stop")
+    return ("pause", "stop")
+
+
+class DaemonClient:
+    """Minimal REST client for the daemon lifecycle API (urllib, 1 s timeout).
+
+    Every call returns ``None``/``False`` when the daemon is unreachable —
+    the dashboard degrades to artifact-polling, never errors."""
+
+    def __init__(self, base_url: str, timeout: float = 1.0) -> None:
+        self._base = base_url.rstrip("/")
+        self._timeout = timeout
+
+    def get_state(self) -> dict[str, object] | None:
+        import json
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(  # noqa: S310 (base_url is operator-supplied)
+                f"{self._base}/state", timeout=self._timeout
+            ) as response:
+                return cast("dict[str, object] | None", json.loads(response.read()))
+        except OSError, ValueError:
+            return None
+
+    def control(self, action: str) -> bool:
+        import urllib.request
+
+        request = urllib.request.Request(  # noqa: S310 (operator-supplied base)
+            f"{self._base}/control/{action}",
+            method="POST",
+            data=b"",
+        )
+        try:
+            urllib.request.urlopen(  # noqa: S310 (base_url is operator-supplied)
+                request, timeout=self._timeout
+            ).read()
+        except OSError:
+            return False
+        return True
 
 
 def watch_signature(root: Path) -> tuple[tuple[int, int], ...]:
@@ -336,18 +446,79 @@ def _ticker_panel(container: Element, log_path: Path | None, lines: list[str]) -
             ui.label("no log lines yet.").classes("text-grey")
 
 
+def _lifecycle_bar(
+    container: Element,
+    badge: Liveness,
+    actions: tuple[str, ...],
+    on_action: object | None = None,
+) -> None:
+    """§2.1 bar: liveness badge + (at most) three lifecycle buttons. No
+    other controls — the campaign config is CLI-immutable."""
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        with ui.card().classes("items-center py-2"):
+            ui.label(badge.label).classes(f"text-lg font-bold text-{badge.color}")
+            ui.label(badge.detail).classes("text-xs text-grey")
+        for action in actions:
+            icon, text = {
+                "start": ("▶", "Start"),
+                "pause": ("⏸", "Pause"),
+                "resume": ("▶", "Resume"),
+                "stop": ("⏹", "Stop"),
+            }[action]
+            handler = (
+                (lambda a=action: on_action(a))  # type: ignore[misc, operator]
+                if on_action is not None
+                else None
+            )
+            ui.button(text, icon=icon, on_click=handler).props(
+                f"flat {'color=red' if action == 'stop' else ''}"
+            )
+
+
+def _panel_scaffold() -> tuple[Element, ...]:
+    """Page row/column layout containers, in render order."""
+    from nicegui import ui
+
+    lifecycle_row = ui.row().classes("w-full items-center flex-wrap")
+    health_row = ui.row().classes("w-full flex-wrap")
+    atlas_box = ui.column().classes("w-full")
+    funnel_box = ui.column().classes("w-full")
+    pareto_box = ui.column().classes("w-full")
+    ticker_box = ui.column().classes("w-full")
+    return lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box
+
+
+def _poll_only_bar(container: Element) -> None:
+    """§2.1 stub when no daemon URL was configured: badge only, no buttons."""
+    _lifecycle_bar(
+        container,
+        Liveness("● POLL-ONLY", "grey", "no --daemon-url: artifact polling only"),
+        (),
+    )
+
+
 def build_dashboard(
-    root: Path, log_path: Path | None = None, poll_seconds: float = POLL_SECONDS
+    root: Path,
+    log_path: Path | None = None,
+    poll_seconds: float = POLL_SECONDS,
+    daemon_url: str | None = None,
 ) -> None:
     """Build the read-only NiceGUI page. Call inside a UI context, then
-    ``ui.run`` (see ``computronium.cli.dashboard``)."""
+    ``ui.run`` (see ``computronium.cli.dashboard``). ``daemon_url`` opts in
+    to the lifecycle bar + live badge; without it the dashboard is
+    polling-only (TODO30 §0 hybrid transport)."""
     from nicegui import run, ui
 
     log_path = resolve_log_path(root, log_path)
     cache = EmbedCache()
+    client = DaemonClient(daemon_url) if daemon_url else None
     state: dict[str, object] = {
         "signature": watch_signature(root),
         "atlas_busy": False,
+        "daemon_state": None,
     }
 
     ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
@@ -355,11 +526,11 @@ def build_dashboard(
         "text-caption text-grey"
     )
 
-    health_row = ui.row().classes("w-full flex-wrap")
-    atlas_box = ui.column().classes("w-full")
-    funnel_box = ui.column().classes("w-full")
-    pareto_box = ui.column().classes("w-full")
-    ticker_box = ui.column().classes("w-full")
+    lifecycle_row, health_row, atlas_box, funnel_box, pareto_box, ticker_box = (
+        _panel_scaffold()
+    )
+
+    send_action = client.control if client is not None else (lambda _action: None)
 
     def _render_panels(snapshot: DashboardSnapshot) -> None:
         health_row.clear()
@@ -378,8 +549,23 @@ def build_dashboard(
         )
         _ticker_panel(ticker_box, log_path, snapshot.ticker)
 
+    def _refresh_lifecycle() -> None:
+        """Badge + buttons from one daemon probe (or the poll-only stub)."""
+        if client is None:
+            _poll_only_bar(lifecycle_row)
+            return
+        daemon_state = client.get_state()
+        state["daemon_state"] = str(daemon_state.get("state")) if daemon_state else None
+        _lifecycle_bar(
+            lifecycle_row,
+            liveness(root, daemon_state is not None),
+            lifecycle_buttons(state["daemon_state"]),  # type: ignore[arg-type]
+            on_action=send_action,
+        )
+
     def refresh_cheap() -> None:
         """Fast paint: everything except the UMAP fit."""
+        _refresh_lifecycle()
         _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
 
     async def load_atlas() -> None:
