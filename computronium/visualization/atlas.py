@@ -159,29 +159,55 @@ def load_voids(voids_path: Path) -> pd.DataFrame:
 def apply_bp_deficit(
     df: pd.DataFrame, ruler_table: Path, task: str | None = None
 ) -> pd.DataFrame:
-    """BP-deficit = ruler ceiling - measured accuracy (clipped at 0)."""
+    """BP-deficit = ruler ceiling - measured accuracy (clipped at 0).
+
+    Also computes ruler-relative ratios for walltime and energy
+    (TODO31 Phase 2.6): cell_value / ruler_value for each objective.
+    """
     if df.empty:
         return df
     df = df.copy()
+    ceilings: dict[str, float] = {}
+    ruler_walltimes: dict[str, float] = {}
+    ruler_energies: dict[str, float] = {}
+
+    if ruler_table.exists():
+        rows = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
+        for r in rows:
+            t = str(r["task"])
+            ceilings[t] = float(r["bp_val_accuracy"])
+            if "walltime_s" in r:
+                ruler_walltimes[t] = float(r["walltime_s"])
+            if "energy_per_step" in r:
+                ruler_energies[t] = float(r["energy_per_step"])
+
     if task is None:
-        # Multi-task: apply per-task ceiling
-        if ruler_table.exists():
-            rulers = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
-            ceilings = {r["task"]: float(r["bp_val_accuracy"]) for r in rulers}
-            for t, ceiling in ceilings.items():
-                mask = df["task"] == t
-                df.loc[mask, "bp_deficit"] = (ceiling - df.loc[mask, "accuracy"]).clip(
-                    lower=0.0
-                )
-    else:
-        ceiling = 1.0
-        if ruler_table.exists():
-            rows = json.loads(ruler_table.read_text(encoding="utf-8"))["rows"]
-            ceiling = next(
-                (float(r["bp_val_accuracy"]) for r in rows if r["task"] == task),
-                ceiling,
+        # Multi-task: apply per-task ceilings and ratios
+        for t, ceiling in ceilings.items():
+            mask = df["task"] == t
+            df.loc[mask, "bp_deficit"] = (ceiling - df.loc[mask, "accuracy"]).clip(
+                lower=0.0
             )
+            if t in ruler_walltimes:
+                ruler_wt = ruler_walltimes[t]
+                df.loc[mask, "ruler_walltime_ratio"] = (
+                    df.loc[mask, "walltime_s"] / ruler_wt
+                ).clip(lower=0.0)
+            if t in ruler_energies:
+                ruler_en = ruler_energies[t]
+                df.loc[mask, "ruler_energy_ratio"] = (
+                    df.loc[mask, "energy_per_step"] / ruler_en
+                ).clip(lower=0.0)
+    else:
+        ceiling = ceilings.get(task, 1.0)
         df["bp_deficit"] = (ceiling - df["accuracy"]).clip(lower=0.0)
+        if task in ruler_walltimes:
+            ruler_wt = ruler_walltimes[task]
+            df["ruler_walltime_ratio"] = (df["walltime_s"] / ruler_wt).clip(lower=0.0)
+        if task in ruler_energies:
+            ruler_en = ruler_energies[task]
+            df["ruler_energy_ratio"] = (df["energy_per_step"] / ruler_en).clip(lower=0.0)
+
     return df
 
 

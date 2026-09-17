@@ -222,7 +222,7 @@ def _deep_tier(args: argparse.Namespace) -> int:
     root: Path = args.root
     from computronium.autoscientist.objectives import parse_objectives
 
-    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     objectives = parse_objectives(obj_spec)
     if args.dry_run:
         from computronium.autoscientist.broad_map import _deep_tier_candidates

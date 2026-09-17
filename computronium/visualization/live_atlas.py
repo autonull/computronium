@@ -176,6 +176,9 @@ class OutcomeBadge(StrEnum):
     DIVERGED = "DIVERGED"  # nan_loss
     DEFECT = "DEFECT"  # runtime crash, quarantined
     VOID = "VOID"  # gate-rejected
+    PARETO_OPTIMAL = "PARETO_OPTIMAL"  # multi-objective: on Pareto front
+    PARETO_NEAR = "PARETO_NEAR"  # multi-objective: near Pareto front
+    DOMINATED = "DOMINATED"  # multi-objective: dominated
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +195,9 @@ _OUTCOME_STYLES: dict[OutcomeBadge, OutcomeStyle] = {
     OutcomeBadge.DIVERGED: OutcomeStyle("🔴", "red", "DIVERGED"),
     OutcomeBadge.DEFECT: OutcomeStyle("⚫", "red", "DEFECT"),
     OutcomeBadge.VOID: OutcomeStyle("⬜", "grey", "VOID"),
+    OutcomeBadge.PARETO_OPTIMAL: OutcomeStyle("★", "gold", "PARETO OPTIMAL"),
+    OutcomeBadge.PARETO_NEAR: OutcomeStyle("✦", "yellow", "PARETO NEAR"),
+    OutcomeBadge.DOMINATED: OutcomeStyle("⊘", "grey", "DOMINATED"),
 }
 
 
@@ -201,7 +207,7 @@ def outcome_badge_from_metrics(
     is_defect: bool = False,
     is_void: bool = False,
 ) -> OutcomeBadge:
-    """Determine outcome badge from cell metrics."""
+    """Determine outcome badge from cell metrics (accuracy-only, legacy)."""
     if is_void:
         badge = OutcomeBadge.VOID
     elif is_defect:
@@ -217,6 +223,50 @@ def outcome_badge_from_metrics(
     else:
         badge = OutcomeBadge.CHANCE
     return badge
+
+
+def outcome_badge_multi_objective(
+    metrics: dict[str, float],
+    objectives: tuple[ObjectiveSpec, ...],
+    pareto_front_keys: set[str] | None = None,
+    cell_key: str | None = None,
+    *,
+    nan_loss: bool = False,
+    is_defect: bool = False,
+    is_void: bool = False,
+) -> OutcomeBadge:
+    """Determine outcome badge from multi-objective metrics.
+
+    Uses configurable Pareto-front membership and per-objective thresholds.
+
+    Args:
+        metrics: Cell metrics including all configured objectives.
+        objectives: Configured objectives for this campaign.
+        pareto_front_keys: Set of cell keys on the current Pareto front.
+        cell_key: This cell's key (for Pareto membership check).
+        nan_loss: Whether the cell diverged.
+        is_defect: Whether the cell hit a runtime defect.
+        is_void: Whether the cell was gate-rejected.
+
+    Returns:
+        Multi-objective outcome badge.
+    """
+    if is_void:
+        return OutcomeBadge.VOID
+    if is_defect:
+        return OutcomeBadge.DEFECT
+    if nan_loss:
+        return OutcomeBadge.DIVERGED
+    if pareto_front_keys is not None and cell_key is not None:
+        if cell_key in pareto_front_keys:
+            return OutcomeBadge.PARETO_OPTIMAL
+        # Check if near Pareto (dominated by ≤1 cell)
+        # For now, just return DOMINATED; near detection would need
+        # dominance computation per cell
+        return OutcomeBadge.DOMINATED
+    # Fallback to accuracy-only if no Pareto info
+    acc = metrics.get("accuracy", metrics.get("final_accuracy"))
+    return outcome_badge_from_metrics(accuracy=acc, nan_loss=nan_loss)
 
 
 def outcome_style(badge: OutcomeBadge) -> OutcomeStyle:

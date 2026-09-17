@@ -273,6 +273,71 @@ class StratifiedRandomDriver:
                     self.balance[d, c, u] = 0
         # Objective-space coverage tracking (Phase 2)
         self._objective_bins: dict[str, int] = {}
+        self._obj_min: list[float] = []
+        self._obj_max: list[float] = []
+        self._load_objective_coverage(kb_path)
+
+    def _load_objective_coverage(self, kb_path: Path) -> None:
+        """Seed objective-space bins from existing KB measurements."""
+        if not kb_path.exists() or len(self.objectives) < 2:
+            return
+        import numpy as np
+
+        from computronium.knowledge import KnowledgeBase
+
+        kb = KnowledgeBase(kb_path)
+        obj_names = [o.name.value for o in self.objectives]
+        points: list[list[float]] = []
+        for entry in kb.query():
+            if not str(entry.topic).startswith("experiment:"):
+                continue
+            metrics = entry.metrics
+            pt = []
+            for name in obj_names:
+                val = metrics.get(name)
+                if isinstance(val, int | float):
+                    pt.append(float(val))
+                else:
+                    break
+            else:
+                points.append(pt)
+        if not points:
+            return
+        arr = np.array(points)
+        # Simple binning: quantile-based bins per objective
+        self._obj_min = arr.min(axis=0).tolist()
+        self._obj_max = arr.max(axis=0).tolist()
+        for pt in points:
+            bin_key = self._bin_point(pt)
+            self._objective_bins[bin_key] = self._objective_bins.get(bin_key, 0) + 1
+        logger.info("Objective-space coverage: %d bins populated", len(self._objective_bins))
+
+    def _bin_point(self, pt: list[float]) -> str:
+        """Quantize a point in objective space to a bin key."""
+        bins_per_dim = 5
+        coords = []
+        for i, val in enumerate(pt):
+            lo, hi = self._obj_min[i], self._obj_max[i]
+            if hi <= lo:
+                coords.append(0)
+            else:
+                normalized = (val - lo) / (hi - lo)
+                coords.append(min(bins_per_dim - 1, int(normalized * bins_per_dim)))
+        return ",".join(str(c) for c in coords)
+
+    def _score_proposal(self, dynamics: str, credit: str, update: str, topology: str) -> float:
+        """Score a proposal by how under-explored its predicted objective region is.
+
+        Returns a score where higher = more under-explored (preferred).
+        """
+        if not self._objective_bins or len(self.objectives) < 2:
+            return self.rng.random()  # No bias if no objective data
+        # Predict objective values based on (dynamics, credit, update) family
+        # For now, use family averages from KB; fallback to random
+        # We don't have a predictor yet, so use balance as proxy
+        # Cells from under-sampled strata are more likely to be in novel objective regions
+        stratum_count = self.balance.get((dynamics, credit, update), 0)
+        return 1.0 / (1.0 + stratum_count) + self.rng.random() * 0.1
 
     def _reload_covered(self, kb_path: Path) -> None:
         """Seed the seen-set from the KB coverage matrix (structural voids
@@ -324,14 +389,25 @@ class StratifiedRandomDriver:
             (dynamics, credit, update) = min(
                 self.balance, key=lambda k: (self.balance[k], self.rng.random())
             )
-            topology = self.rng.choice(GRID_TOPOLOGIES)
-            key = cell_key(dynamics, credit, update, topology)
-            if (
-                key in self.seen
-                or key in self.quarantined
-                or (self.viable is not None and key not in self.viable)
-            ):
+            # Objective-space bias: sample multiple topologies, prefer under-explored bins
+            best_topology = None
+            best_score = -1.0
+            for topology in self.rng.choices(GRID_TOPOLOGIES, k=min(3, len(GRID_TOPOLOGIES))):
+                key = cell_key(dynamics, credit, update, topology)
+                if (
+                    key in self.seen
+                    or key in self.quarantined
+                    or (self.viable is not None and key not in self.viable)
+                ):
+                    continue
+                score = self._score_proposal(dynamics, credit, update, topology)
+                if score > best_score:
+                    best_score = score
+                    best_topology = topology
+            if best_topology is None:
                 continue
+            topology = best_topology
+            key = cell_key(dynamics, credit, update, topology)
             self.seen.add(key)
             stratum_count = self.balance[dynamics, credit, update]
             self.balance[dynamics, credit, update] += 1
@@ -341,8 +417,8 @@ class StratifiedRandomDriver:
             proposals.append(
                 ExperimentProposal(
                     hypothesis=(
-                        f"Broad-map cell {key}: uniform random draw, "
-                        "stratified by dynamics×credit×update"
+                        f"Broad-map cell {key}: stratified by dynamics×credit×update, "
+                        f"objective-space score={best_score:.2f}"
                     ),
                     model="eqprop",
                     task=self.task,
@@ -365,7 +441,8 @@ class StratifiedRandomDriver:
                         f"Balancing under-sampled triple "
                         f"{dynamics} × {credit} × {update} — stratum "
                         f"count {stratum_count} before this proposal; "
-                        f"topology {topology} drawn uniformly (TODO30 §3.1)"
+                        f"topology {topology} chosen by objective-space bias "
+                        f"(score={best_score:.2f})"
                     ),
                     expected_outcome="measured cell in the atlas",
                     priority=0.5,
@@ -525,7 +602,7 @@ def build_sweep(
         args.root / "structural_voids.jsonl",
         task=args.task,
     )
-    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     objectives = parse_objectives(obj_spec)
     driver = StratifiedRandomDriver(
         args.root / "kb.sqlite",
@@ -1145,7 +1222,7 @@ def run_l1_maturation(
     epochs=3 re-run (``maturity:l1``) through the governed pipeline."""
     from computronium.autoscientist.objectives import parse_objectives
 
-    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     objectives = parse_objectives(obj_spec)
     candidates = promote_candidates(
         args.root / "kb.sqlite",

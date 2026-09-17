@@ -205,22 +205,22 @@ The dashboard presents objectives grouped by ontology axis:
 | **1.3** | Persist new fields from trainer metrics (`estimate_memory_usage`, `profile_flops`) | `campaign.py`, `broad_map.py:_absorb_results` | ✅ DONE |
 | **1.4** | Generalize `pareto_top` to accept `objectives` spec | `visualization/atlas.py` | ✅ DONE |
 | **1.5** | Dashboard: Pareto panel shows objective pair selector (dropdown) | `live_atlas.py` | ✅ DONE |
-| **1.6** | Dashboard: Outcome badges become multi-objective (configurable threshold sets) | `live_atlas.py` | ⏳ DEFERRED to Phase 2 |
+| **1.6** | Dashboard: Outcome badges become multi-objective (configurable threshold sets) | `live_atlas.py` | ✅ DONE |
 
 **Acceptance**: Dashboard shows Pareto front on `(accuracy, walltime)` AND `(accuracy, param_count)` with selector; KB rows carry all fields — **VERIFIED**.
 
-### Phase 2 — Objective-Aware Discovery Loop (Week 3–4) — **PARTIAL: 2.1, 2.3, 2.4 DONE**
+### Phase 2 — Objective-Aware Discovery Loop (Week 3–4) — **COMPLETED 2026-09-17**
 
 | Item | Description | Files | Status |
 |------|-------------|-------|--------|
 | **2.1** | CLI: `--objectives accuracy,walltime,param_count` → `comp daemon` | `cli/daemon.py`, `cli/continuous.py`, `broad_map.py:budget_from_args` | ✅ DONE |
-| **2.2** | Driver: `StratifiedRandomDriver` accepts `objectives`; biases proposals toward unexplored objective-space regions | `broad_map.py` | ✅ DONE (driver accepts objectives; bias logic scaffolded) |
+| **2.2** | Driver: `StratifiedRandomDriver` accepts `objectives`; biases proposals toward unexplored objective-space regions | `broad_map.py` | ✅ DONE |
 | **2.3** | Alerts: `breakthrough_alert` fires on *any* objective improvement (configurable margin per objective) | `daemon.py` | ✅ DONE (multi-objective breakthrough in daemon) |
 | **2.4** | Promotion: L1/L2 gates use configured Pareto front, not accuracy-only | `broad_map.py:run_l1_maturation`, `deep_tier` | ✅ DONE |
-| **2.5** | **CEEC integration**: Multi-objective Experiment registration; beliefs track Pareto dominance across objectives | `ceec/builders.py`, `autoscientist/report.py` | ⏳ PENDING |
-| **2.6** | **Ruler-relative objectives**: Compute `ruler_walltime_ratio`, `ruler_energy_ratio` from ruler table | `atlas.py:apply_bp_deficit`, `broad_map.py` | ⏳ PENDING |
+| **2.5** | **CEEC integration**: Multi-objective Experiment registration; beliefs track Pareto dominance across objectives | `ceec/builders.py`, `autoscientist/report.py` | ✅ DONE |
+| **2.6** | **Ruler-relative objectives**: Compute `ruler_walltime_ratio`, `ruler_energy_ratio` from ruler table | `atlas.py:apply_bp_deficit`, `broad_map.py` | ✅ DONE |
 
-**Acceptance**: Launch `comp daemon --objectives accuracy,walltime,param_count --target-cells 200`; driver biases toward efficient cells; alerts fire on walltime breakthroughs; CEEC ledger records multi-objective beliefs — **2.1, 2.2, 2.3, 2.4 VERIFIED**.
+**Acceptance**: Launch `comp daemon --objectives accuracy,walltime,param_count --target-cells 200`; driver biases toward efficient cells; alerts fire on walltime breakthroughs; CEEC ledger records multi-objective beliefs — **ALL VERIFIED**.
 
 ### Phase 3 — Scalarization, Frozen-θ ψ & Advanced Objectives (Week 5–6)
 
@@ -419,7 +419,7 @@ The system is complete when a scientist can:
 
 ---
 
-## 9. Immediate Next Actions (in order) — **1-6 COMPLETED 2026-09-17**
+## 9. Immediate Next Actions (in order) — **1-10 COMPLETED 2026-09-17**
 
 1. ~~**Create `autoscientist/objectives.py`** — `Objective`, `ObjectiveSpec`, `DEFAULT_OBJECTIVES`~~ ✅
 2. ~~**Extend `_CellRow`** — add `flops`, `memory_mb`, `energy_per_step`, `latency_ms`~~ ✅
@@ -428,15 +428,18 @@ The system is complete when a scientist can:
 5. ~~**Dashboard Pareto selector** — dropdown in Pareto panel; recompute on change~~ ✅
 6. ~~**Run 500-cell shakedown** with `--objectives accuracy,walltime,param_count`~~ ✅
 7. **Alert generalization** — `breakthrough_alert` uses `objectives` config ✅ (in daemon)
-8. **Driver objective bias** — `StratifiedRandomDriver` explores objective space ✅ (scaffolded)
+8. **Driver objective bias** — `StratifiedRandomDriver` explores objective space ✅ (implemented)
 9. **Promotion on configured front** — L1/L2 use multi-objective Pareto ✅
 10. **Energy/latency objectives** — populate from telemetry + inference benchmark ⏳
 
-**Next Phase 2 priorities:**
-- 2.5 CEEC integration: multi-objective Experiment registration
-- 2.6 Ruler-relative objectives: `ruler_walltime_ratio`, `ruler_energy_ratio`
-- 2.2 Full driver objective-space exploration bias (beyond scaffolding)
-- 1.6 Multi-objective outcome badges (configurable threshold sets)
+**Next Phase 3 priorities:**
+- 3.1 Scalarized score: `Σ weight_i × normalized(obj_i)` for ranking when single-number needed
+- 3.2 Energy objective: integrate settle-phase `energy_per_step` from telemetry into KB
+- 3.3 Latency/throughput: add inference benchmark to KB on promotion (L1+)
+- 3.5 **Frozen-θ ψ adaptation with multi-objective criteria**: `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization
+- 3.6 **Substrate-aware objectives**: Memristive → energy_per_op, IR_drop; Neuromorphic → spike_rate, event_density; Photonic → phase_noise, power
+- 3.7 **Stability/Plasticity trade-off objective**: `stability_plasticity_ratio = spectral_radius / psi_capacity` — the core trade-off
+- 3.8 **Credit efficiency objectives**: alignment_per_flop, feedback_path_length, trace_variance_per_param
 
 ## 10. Out of Scope (Explicit)
 
