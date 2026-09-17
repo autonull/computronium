@@ -4,9 +4,19 @@ Multi-Objective Metrics
 Implements Pareto dominance, non-dominated sorting, and composite scoring.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from computronium.autoscientist.objectives import ObjectiveSpec
+
+import pandas as pd
 
 __all__ = [
     "TrialMetrics",
@@ -15,6 +25,8 @@ __all__ = [
     "non_dominated_indices",
     "non_dominated_sort",
     "rank_trials",
+    "scalarize_objectives",
+    "scalarize_row",
 ]
 
 
@@ -248,3 +260,65 @@ def rank_trials(
         scores = scores[:top_k]
 
     return scores
+
+
+# --- Multi-objective scalarization (TODO31 Phase 3.1) -------------------------
+
+
+def scalarize_row(
+    values: dict[str, float],
+    objectives: Sequence[ObjectiveSpec],
+    *,
+    normalizers: dict[str, Callable[[float], float]] | None = None,
+) -> float:
+    """Compute scalarized score for a single objective vector.
+
+    Args:
+        values: Dict of objective_name -> raw value.
+        objectives: Configured objectives with weights and normalizers.
+        normalizers: Optional override normalizers (defaults to ObjectiveSpec.normalizer).
+
+    Returns:
+        Scalar score where higher is better (all objectives normalized to
+        maximize direction and weighted).
+    """
+    score = 0.0
+    total_weight = 0.0
+    for obj in objectives:
+        name = obj.name.value
+        if name not in values:
+            continue
+        raw_val = values[name]
+        normalizer = (normalizers or {}).get(name) or obj.normalizer
+        if normalizer is None:
+            # Default: identity for maximize, reciprocal for minimize
+            norm_val = raw_val if obj.direction == "maximize" else (1.0 / (1.0 + raw_val))
+        else:
+            norm_val = normalizer(raw_val)
+        # Ensure maximize direction: normalizers already produce [0,1] where higher=better
+        score += obj.weight * norm_val
+        total_weight += obj.weight
+    return score / total_weight if total_weight > 0 else 0.0
+
+
+def scalarize_objectives(
+    df: pd.DataFrame,
+    objectives: Sequence[ObjectiveSpec],
+    *,
+    normalizers: dict[str, Callable[[float], float]] | None = None,
+) -> pd.Series:
+    """Add scalarized score column to a DataFrame of objective vectors.
+
+    Args:
+        df: DataFrame with columns matching objective names.
+        objectives: Configured objectives with weights and normalizers.
+        normalizers: Optional override normalizers.
+
+    Returns:
+        Series of scalar scores (higher is better).
+    """
+    scores = []
+    for _, row in df.iterrows():
+        vals = {o.name.value: float(row[o.name.value]) for o in objectives if o.name.value in row}
+        scores.append(scalarize_row(vals, objectives, normalizers=normalizers))
+    return pd.Series(scores, index=df.index, name="scalarized_score")

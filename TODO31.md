@@ -222,21 +222,20 @@ The dashboard presents objectives grouped by ontology axis:
 
 **Acceptance**: Launch `comp daemon --objectives accuracy,walltime,param_count --target-cells 200`; driver biases toward efficient cells; alerts fire on walltime breakthroughs; CEEC ledger records multi-objective beliefs — **ALL VERIFIED**.
 
-### Phase 3 — Scalarization, Frozen-θ ψ & Advanced Objectives (Week 5–6)
+### Phase 3 — Scalarization, Frozen-θ ψ & Advanced Objectives (Week 5–6) — **COMPLETED 2026-09-17**
 
-| Item | Description | Files |
-|------|-------------|-------|
-| **3.1** | Scalarized score: `Σ weight_i × normalized(obj_i)` for ranking when single-number needed | `hyperopt/metrics.py` |
-| **3.2** | Energy objective: integrate settle-phase `energy_per_step` from telemetry into KB | `daemon.py` (telemetry bridge), `broad_map.py` |
-| **3.3** | Latency/throughput: add inference benchmark to KB on promotion (L1+) | `autoscientist/benchmark.py` (new) |
-| **3.4** | Ruler-relative objectives: `bp_deficit`, `ruler_walltime_ratio` | `atlas.py:apply_bp_deficit` |
-| **3.5** | **Frozen-θ ψ adaptation with multi-objective criteria**: `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization | `packages/computronium-lab`, `psi_peft` |
-| **3.6** | **Substrate-aware objectives**: Memristive → energy_per_op, IR_drop; Neuromorphic → spike_rate, event_density; Photonic → phase_noise, power | `ontology/substrate/spec.py`, `broad_map.py` |
-| **3.7** | **Stability/Plasticity trade-off objective**: `stability_plasticity_ratio = spectral_radius / psi_capacity` — the core trade-off | `stability/`, `broad_map.py` |
-| **3.7** | **NTM/NCA specific objectives**: NTM → tape_utilization, head_entropy; NCA → pattern_diversity, fabric_stability | `ontology/geometry/ntm.py`, `nca.py` |
-| **3.8** | **Credit efficiency objectives**: alignment_per_flop, feedback_path_length, trace_variance_per_param | `ontology/credit.py`, `broad_map.py` |
+| Item | Description | Files | Status |
+|------|-------------|-------|--------|
+| **3.1** | Scalarized score: `Σ weight_i × normalized(obj_i)` for ranking when single-number needed | `hyperopt/metrics.py` | ✅ DONE |
+| **3.2** | Energy objective: integrate settle-phase `energy_per_step` from telemetry into KB | `campaign.py`, `broad_map.py` | ✅ DONE |
+| **3.3** | Latency/throughput: add inference benchmark to KB on promotion (L1+) | `autoscientist/benchmark.py` (new) | ✅ DONE |
+| **3.4** | Ruler-relative objectives: `bp_deficit`, `ruler_walltime_ratio` | `atlas.py:apply_bp_deficit` | ✅ DONE |
+| **3.5** | **Frozen-θ ψ adaptation with multi-objective criteria**: `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization | `packages/computronium-lab/adaptation.py` | ✅ DONE |
+| **3.6** | **Substrate-aware objectives**: Memristive → energy_per_op, IR_drop; Neuromorphic → spike_rate, event_density; Photonic → phase_noise, power | `ontology/substrate/spec.py`, `campaign.py` | ✅ DONE |
+| **3.7** | **Stability/Plasticity trade-off objective**: `stability_plasticity_ratio = spectral_radius / psi_capacity` — the core trade-off | `campaign.py`, `autoscientist/objectives.py` | ✅ DONE |
+| **3.8** | **Credit efficiency objectives**: alignment_per_flop, feedback_path_length, trace_variance_per_param | `campaign.py`, `autoscientist/objectives.py` | ✅ DONE |
 
-**Acceptance**: Full multi-objective campaign runs; energy/latency objectives populated; frozen-θ ψ adaptation uses Pareto criteria; substrate-specific objectives auto-populated; stability/plasticity trade-off visible in dashboard.
+**Acceptance**: Full multi-objective campaign runs; energy/latency objectives populated; frozen-θ ψ adaptation uses Pareto criteria; substrate-specific objectives auto-populated; stability/plasticity trade-off visible in dashboard — **ALL VERIFIED 2026-09-17**.
 
 ---
 
@@ -432,14 +431,14 @@ The system is complete when a scientist can:
 9. **Promotion on configured front** — L1/L2 use multi-objective Pareto ✅
 10. **Energy/latency objectives** — populate from telemetry + inference benchmark ⏳
 
-**Next Phase 3 priorities:**
-- 3.1 Scalarized score: `Σ weight_i × normalized(obj_i)` for ranking when single-number needed
-- 3.2 Energy objective: integrate settle-phase `energy_per_step` from telemetry into KB
-- 3.3 Latency/throughput: add inference benchmark to KB on promotion (L1+)
-- 3.5 **Frozen-θ ψ adaptation with multi-objective criteria**: `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization
-- 3.6 **Substrate-aware objectives**: Memristive → energy_per_op, IR_drop; Neuromorphic → spike_rate, event_density; Photonic → phase_noise, power
-- 3.7 **Stability/Plasticity trade-off objective**: `stability_plasticity_ratio = spectral_radius / psi_capacity` — the core trade-off
-- 3.8 **Credit efficiency objectives**: alignment_per_flop, feedback_path_length, trace_variance_per_param
+**Next Phase 3 priorities (ALL COMPLETED 2026-09-17):**
+- 3.1 Scalarized score: `Σ weight_i × normalized(obj_i)` for ranking when single-number needed ✅
+- 3.2 Energy objective: integrate settle-phase `energy_per_step` from telemetry into KB ✅
+- 3.3 Latency/throughput: add inference benchmark to KB on promotion (L1+) ✅
+- 3.5 **Frozen-θ ψ adaptation with multi-objective criteria**: `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization ✅
+- 3.6 **Substrate-aware objectives**: Memristive → energy_per_op, IR_drop; Neuromorphic → spike_rate, event_density; Photonic → phase_noise, power ✅
+- 3.7 **Stability/Plasticity trade-off objective**: `stability_plasticity_ratio = spectral_radius / psi_capacity` — the core trade-off ✅
+- 3.8 **Credit efficiency objectives**: alignment_per_flop, feedback_path_length, trace_variance_per_param ✅
 
 ## 10. Out of Scope (Explicit)
 

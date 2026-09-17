@@ -1220,6 +1220,7 @@ def run_l1_maturation(
 ) -> list[dict[str, object]]:
     """``--maturation N``: after a burst, promote up to N front cells to an
     epochs=3 re-run (``maturity:l1``) through the governed pipeline."""
+    from computronium.autoscientist.benchmark import benchmark_inference_from_campaign_result
     from computronium.autoscientist.objectives import parse_objectives
 
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
@@ -1243,6 +1244,9 @@ def run_l1_maturation(
     for proposal, result in zip(proposals, results, strict=False):
         if result.get("status") != "completed":
             continue
+        # Inference benchmark for L1+ promotion (TODO31 Phase 3.3)
+        inf_metrics = benchmark_inference_from_campaign_result(result)
+        latency_ms = inf_metrics.latency_ms if inf_metrics else 0.0
         row: dict[str, object] = {
             "maturity": "l1",
             "cell": proposal.tags[-1],
@@ -1251,6 +1255,7 @@ def run_l1_maturation(
             "burst": burst_tag,
             "accuracy": result.get("final_accuracy"),
             "walltime_s": result.get("walltime_s"),
+            "latency_ms": latency_ms,
             "timestamp": time.time(),
         }
         _append_maturation(args.root / "maturation.jsonl", row)
@@ -1273,6 +1278,8 @@ def run_deep_tier(
     """L2 deep tier: cells front-stable across ≥ 2 bursts, re-executed at
     ``--epochs`` for ``--seeds`` fresh seeds — each seed a separately
     pre-registered CEEC experiment. Rows land in ``maturation.jsonl``."""
+    from computronium.autoscientist.benchmark import benchmark_inference_from_campaign_result
+
     candidates = _deep_tier_candidates(root / "kb.sqlite", top, task, objectives=objectives)
     for flag in _seed_sensitivity_flags(_load_measured_cells(root / "kb.sqlite", task)):
         _append_maturation(
@@ -1285,6 +1292,7 @@ def run_deep_tier(
     written: list[dict[str, object]] = []
     for candidate in candidates:
         accuracies: list[float] = []
+        latencies: list[float] = []
         for i in range(seeds):
             seed_everything(seed + i, deterministic=False)
             proposal = _maturation_proposal(candidate, level="l2", epochs=epochs)
@@ -1294,8 +1302,13 @@ def run_deep_tier(
                     acc = r.get("final_accuracy")
                     if isinstance(acc, int | float):
                         accuracies.append(float(acc))
+                    # Inference benchmark for L2 promotion (TODO31 Phase 3.3)
+                    inf_metrics = benchmark_inference_from_campaign_result(r)
+                    if inf_metrics:
+                        latencies.append(inf_metrics.latency_ms)
         if not accuracies:
             continue
+        mean_latency = round(sum(latencies) / len(latencies), 2) if latencies else 0.0
         row: dict[str, object] = {
             "maturity": "l2",
             "cell": candidate.key,
@@ -1306,6 +1319,7 @@ def run_deep_tier(
             "mean": round(sum(accuracies) / len(accuracies), 4),
             "spread": round(max(accuracies) - min(accuracies), 4),
             "front_bursts": candidate.front_bursts,
+            "latency_ms": mean_latency,
             # Verification-level aspiration: Level 4 quality (seeds, matched
             # controls pending) — claims still require human review per CEEC.
             "quality": {"seeds": len(accuracies), "matched_control": False},

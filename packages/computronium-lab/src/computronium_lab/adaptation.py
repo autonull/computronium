@@ -4,6 +4,10 @@ Wraps the existing P-axis pipeline (`pipeline.run_train_step`) and ψ
 plasticity primitives; no new ontology semantics. The U-axis is parked
 behind a frozen no-op update for the duration of an adaptation episode,
 making bitwise θ invariance structural rather than aspirational.
+
+Multi-objective extensions (TODO31 Phase 3.5): ``adapt`` and ``adapt_multi_objective``
+support Pareto-front optimization over (accuracy, stability, cost) for
+ψ-only optimization.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from computronium.experiments.joint.z3_fixed_weights import Z3Operators
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from computronium.autoscientist.objectives import ObjectiveSpec
     from computronium.ontology.credit import CreditAssignment
     from computronium_lab.training import StabilityCertificate
 
@@ -482,6 +487,125 @@ def adapt(  # ruff: ignore[too-many-locals]
     )
 
 
+# --- Multi-objective ψ adaptation (TODO31 Phase 3.5) -------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class MultiObjectiveAdaptationResult:
+    """Result of multi-objective ψ adaptation.
+
+    Contains the Pareto-optimal ψ states across (accuracy, stability, cost)
+    objectives with their trade-off metrics.
+    """
+
+    pareto_states: list[AdaptationResult]  # Non-dominated ψ states
+    objectives: tuple[ObjectiveSpec, ...]  # Objectives used for Pareto front
+    scalarized_best: AdaptationResult  # Best by scalarized score
+    walltime_s: float
+
+
+def adapt_multi_objective(
+    system: object,
+    task_data: object,
+    objectives: Sequence[ObjectiveSpec],
+    *,
+    modes: Sequence[AdaptationMode] = (
+        AdaptationMode.TEMPORAL,
+        AdaptationMode.CLOSED_FORM,
+        AdaptationMode.CONFLICT_ADAPTIVE,
+        AdaptationMode.ROLE_SPLIT,
+    ),
+    episodes_per_mode: int = 10,
+    stability_check: bool = True,
+    psi_step: str = "final",
+    initial_psi: dict[str, Tensor] | None = None,
+) -> MultiObjectiveAdaptationResult:
+    """Run ψ-only adaptation across multiple modes and select Pareto-optimal states.
+
+    Evaluates each adaptation mode on the configured objectives and returns
+    the Pareto frontier over (accuracy, stability, cost). The stability
+    objective uses the spectral radius from the stability certificate; the
+    cost objective uses walltime_s.
+
+    Args:
+        system: The composed system to adapt.
+        task_data: Task data stream for adaptation episodes.
+        objectives: Configured objectives (e.g., accuracy, spectral_radius, walltime_s).
+        modes: Adaptation modes to evaluate.
+        episodes_per_mode: Episodes per mode.
+        stability_check: Whether to run stability probe.
+        psi_step: Psi step strategy ("final" or "every_timestep").
+        initial_psi: Optional carried ψ state.
+
+    Returns:
+        MultiObjectiveAdaptationResult with Pareto states and scalarized best.
+    """
+    import pandas as pd
+
+    from computronium.hyperopt.metrics import scalarize_objectives
+    from computronium.visualization.atlas import pareto_top
+
+    t0 = time.perf_counter()
+    results: list[AdaptationResult] = []
+
+    for mode in modes:
+        result = adapt(
+            system,
+            task_data,
+            mode=mode,
+            episodes=episodes_per_mode,
+            stability_check=stability_check,
+            psi_step=psi_step,
+            psi=initial_psi,
+        )
+        results.append(result)
+
+    # Build objective vectors for Pareto computation
+    obj_names = [o.name.value for o in objectives]
+    rows: list[dict[str, float]] = []
+    for r in results:
+        row = {"mode": r.mode.value}
+        for name in obj_names:
+            if name == "accuracy":
+                row[name] = r.metrics.get("psi_accuracy", r.metrics.get("accuracy", 0.0))
+            elif name == "spectral_radius":
+                row[name] = r.stability.spectral_radius if r.stability else 0.0
+            elif name == "walltime_s":
+                row[name] = r.walltime_s
+            elif name == "energy_per_step":
+                row[name] = r.walltime_s / max(episodes_per_mode, 1)  # Proxy
+            elif name == "psi_capacity":
+                row[name] = r.metrics.get("psi_accuracy", 0.0) * 100  # Proxy
+            else:
+                row[name] = r.metrics.get(name, 0.0)
+        rows.append(row)
+
+    if not rows:
+        return MultiObjectiveAdaptationResult(
+            pareto_states=[],
+            objectives=objectives,
+            scalarized_best=results[0] if results else None,
+            walltime_s=time.perf_counter() - t0,
+        )
+
+    df = pd.DataFrame(rows)
+    front = pareto_top(df, k=len(df), objectives=objectives)
+    pareto_indices = [rows.index({**r, "mode": r["mode"]}) for r in front.to_dict("records")]
+    pareto_states = [results[i] for i in pareto_indices]
+
+    # Scalarized best
+    df["scalarized_score"] = scalarize_objectives(df, objectives)
+    best_idx = df["scalarized_score"].idxmax()
+    scalarized_best = results[int(best_idx)]
+
+    return MultiObjectiveAdaptationResult(
+        pareto_states=pareto_states,
+        objectives=objectives,
+        scalarized_best=scalarized_best,
+        walltime_s=time.perf_counter() - t0,
+    )
+
+
 def _stability_certificate(
     system: object, stability_check: bool, episodes: int
 ) -> StabilityCertificate | None:
@@ -754,6 +878,7 @@ __all__ = [
     "PSI_ONLY",
     "AdaptationMode",
     "AdaptationResult",
+    "MultiObjectiveAdaptationResult",
     "ProbeCampaignResult",
     "PsiPlasticity",
     "PsiProgram",
@@ -763,6 +888,7 @@ __all__ = [
     "ThetaInvarianceProof",
     "Z3Selection",
     "adapt",
+    "adapt_multi_objective",
     "fork_system",
     "heldout_split",
     "paired_slope",

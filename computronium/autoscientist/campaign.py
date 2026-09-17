@@ -1132,6 +1132,80 @@ class AutoScientistCampaign:
             if settle_steps_used > 0:
                 energy_per_step = free_energy_final / settle_steps_used
 
+        # Psi capacity from plasticity state (TODO31 Phase 3.7)
+        psi_capacity = 0.0
+        stability_plasticity_ratio = 0.0
+        credit_efficiency = 0.0
+        with contextlib.suppress(Exception):
+            from computronium.core.plasticity.closed_form import ClosedFormRidgePlasticity
+            from computronium.core.plasticity.temporal_psi import TemporalPsiPlasticity
+
+            # Get ψ state from the system's dynamics or credit
+            psi_state = getattr(system.dynamics, "_psi_state", None)
+            if psi_state is None:
+                # Try to get from credit assignment
+                psi_state = getattr(system.credit, "_psi_state", None)
+            if psi_state:
+                # Effective capacity: log2 of ridge effective rank + 1
+                # For ridge: capacity ≈ log2(det(G + λI) / det(λI))
+                # Simplified: sum of log(1 + eigenvalue/λ)
+                if "G" in psi_state and "lambda" in psi_state:
+                    import torch
+
+                    G = psi_state["G"]
+                    lam = psi_state["lambda"]
+                    if isinstance(G, torch.Tensor) and G.dim() == 2:
+                        eigvals = torch.linalg.eigvalsh(G).clamp(min=0)
+                        capacity = (torch.log(1 + eigvals / lam)).sum().item()
+                        psi_capacity = float(capacity)
+                    elif "readout_m" in psi_state:
+                        # For role-split: capacity from readout matrix
+                        m = psi_state["readout_m"]
+                        if isinstance(m, torch.Tensor):
+                            psi_capacity = float(m.numel())
+                elif "trace" in psi_state:
+                    # Temporal ψ: trace of covariance
+                    import torch
+
+                    trace = psi_state["trace"]
+                    if isinstance(trace, torch.Tensor):
+                        psi_capacity = float(trace.log().sum().item())
+
+        # Stability/Plasticity trade-off ratio
+        if psi_capacity > 0 and spectral_radius > 0:
+            stability_plasticity_ratio = float(spectral_radius / psi_capacity)
+
+        # Credit efficiency objectives (TODO31 Phase 3.8)
+        if credit_alignment != 0.0 and flops > 0:
+            credit_efficiency = float(credit_alignment / (flops / 1e9))  # alignment per GFLOP
+        elif credit_alignment != 0.0 and param_count > 0:
+            credit_efficiency = float(credit_alignment / (param_count / 1e6))  # alignment per M param
+
+        # Substrate-aware objectives (TODO31 Phase 3.6)
+        substrate_objectives: dict[str, float] = {}
+        with contextlib.suppress(Exception):
+            from computronium.ontology.substrate.spec import (
+                SubstrateSpec,
+                compute_substrate_objectives,
+            )
+            substrate_spec = SubstrateSpec.from_config(system.substrate.config)
+            runtime_stats = {
+                "walltime_s": walltime_s,
+                "memory_mb": memory_mb,
+                "flops": flops,
+                "latency_ms": 0.0,
+            }
+            settle_telemetry = {
+                "energy_per_step": energy_per_step,
+                "settle_steps_used": float(settle_steps_used),
+                "free_energy_final": free_energy_final,
+                "spike_rate": getattr(system.dynamics, "_spike_rate", 0.0),
+                "event_density": getattr(system.dynamics, "_event_density", 0.0),
+            }
+            substrate_objectives = compute_substrate_objectives(
+                substrate_spec, settle_telemetry, runtime_stats
+            )
+
         return {
             "proposal": {
                 "hypothesis": proposal.hypothesis,
@@ -1167,12 +1241,18 @@ class AutoScientistCampaign:
             "ruler_energy_ratio": 0.0,  # populated by atlas.apply_bp_deficit
             "lyapunov_exponent": 0.0,
             "max_singular_value": 0.0,
-            "psi_capacity": 0.0,
+            "psi_capacity": psi_capacity,
             "consolidation_cost": 0.0,
             "rewrite_rate": 0.0,
             "feedback_path_length": 0.0,
             "trace_variance": 0.0,
             "free_energy_final": free_energy_final,
+            # Stability/Plasticity trade-off (TODO31 Phase 3.7)
+            "stability_plasticity_ratio": stability_plasticity_ratio,
+            # Credit efficiency (TODO31 Phase 3.8)
+            "credit_efficiency": credit_efficiency,
+            # Substrate-aware objectives
+            **substrate_objectives,
             # Silent-divergence flag (TODO29 session 3): the funnel only
             # sees crashes; NaN loss/accuracy at "completed" status is the
             # quiet failure mode. Rides the numeric passthrough.

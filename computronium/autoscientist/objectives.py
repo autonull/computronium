@@ -51,6 +51,10 @@ class Objective(StrEnum):
     FEEDBACK_PATH_LENGTH = "feedback_path_length"
     TRACE_VARIANCE = "trace_variance"
 
+    # Composite objectives (cross-axis)
+    STABILITY_PLASTICITY_RATIO = "stability_plasticity_ratio"  # spectral_radius / psi_capacity
+    CREDIT_EFFICIENCY = "credit_efficiency"  # credit_alignment / flops
+
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveSpec:
@@ -132,6 +136,16 @@ def normalize_ruler_ratio(x: float) -> float:
     return 1.0 / (1.0 + max(0.0, x - 1.0))
 
 
+def normalize_stability_plasticity_ratio(x: float) -> float:
+    """Lower ratio is better (more stable per unit plasticity)."""
+    return 1.0 / (1.0 + x)
+
+
+def normalize_credit_efficiency(x: float) -> float:
+    """Higher is better (more alignment per FLOP)."""
+    return x / (1.0 + x)
+
+
 DEFAULT_NORMALIZERS: dict[Objective, Callable[[float], float]] = {
     Objective.ACCURACY: normalize_accuracy,
     Objective.WALLTIME_S: normalize_walltime,
@@ -151,6 +165,8 @@ DEFAULT_NORMALIZERS: dict[Objective, Callable[[float], float]] = {
     Objective.BP_DEFICIT: normalize_bp_deficit,
     Objective.RULER_WALLTIME_RATIO: normalize_ruler_ratio,
     Objective.RULER_ENERGY_RATIO: normalize_ruler_ratio,
+    Objective.STABILITY_PLASTICITY_RATIO: normalize_stability_plasticity_ratio,
+    Objective.CREDIT_EFFICIENCY: normalize_credit_efficiency,
 }
 
 
@@ -174,6 +190,8 @@ OBJECTIVE_DIRECTION: dict[Objective, Literal["maximize", "minimize"]] = {
     Objective.CREDIT_ALIGNMENT: "maximize",
     Objective.FEEDBACK_PATH_LENGTH: "minimize",
     Objective.TRACE_VARIANCE: "minimize",
+    Objective.STABILITY_PLASTICITY_RATIO: "minimize",
+    Objective.CREDIT_EFFICIENCY: "maximize",
 }
 
 OBJECTIVE_AXIS: dict[Objective, str] = {
@@ -196,6 +214,8 @@ OBJECTIVE_AXIS: dict[Objective, str] = {
     Objective.RULER_ENERGY_RATIO: "task",
     Objective.WALLTIME_S: "cost",
     Objective.LATENCY_MS: "cost",
+    Objective.STABILITY_PLASTICITY_RATIO: "D",  # Dynamics/Plasticity cross-axis
+    Objective.CREDIT_EFFICIENCY: "C",  # Credit axis
 }
 
 
@@ -242,10 +262,24 @@ PRESET_STABILITY_PLASTICITY: tuple[ObjectiveSpec, ...] = (
     make_objective_spec(Objective.PSI_CAPACITY),
 )
 
+PRESET_STABILITY_PLASTICITY_RATIO: tuple[ObjectiveSpec, ...] = (
+    make_objective_spec(Objective.ACCURACY),
+    make_objective_spec(Objective.STABILITY_PLASTICITY_RATIO),
+    make_objective_spec(Objective.PSI_CAPACITY),
+)
+
 PRESET_CREDIT_EFFICIENCY: tuple[ObjectiveSpec, ...] = (
     make_objective_spec(Objective.ACCURACY),
     make_objective_spec(Objective.CREDIT_ALIGNMENT),
     make_objective_spec(Objective.FEEDBACK_PATH_LENGTH),
+)
+
+PRESET_CREDIT_EFFICIENCY_FULL: tuple[ObjectiveSpec, ...] = (
+    make_objective_spec(Objective.ACCURACY),
+    make_objective_spec(Objective.CREDIT_EFFICIENCY),
+    make_objective_spec(Objective.CREDIT_ALIGNMENT),
+    make_objective_spec(Objective.FEEDBACK_PATH_LENGTH),
+    make_objective_spec(Objective.TRACE_VARIANCE),
 )
 
 
@@ -279,9 +313,11 @@ __all__ = [
     "OBJECTIVE_DIRECTION",
     "PRESET_ACCURACY_WALLTIME_PARAMS",
     "PRESET_CREDIT_EFFICIENCY",
+    "PRESET_CREDIT_EFFICIENCY_FULL",
     "PRESET_EFFICIENCY",
     "PRESET_FULL_COST",
     "PRESET_STABILITY_PLASTICITY",
+    "PRESET_STABILITY_PLASTICITY_RATIO",
     "Objective",
     "ObjectiveSpec",
     "make_objective_spec",
