@@ -19,7 +19,7 @@ The library is usable independently of the research hypotheses; the research pro
 | Aspect | What It Is | What You Get |
 |------|------------|--------------|
 | **📦 ML Library** | Composable learning systems behind one training API | Train and compare every implemented rule — Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint — under a single interface |
-| **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), AutoScientist campaigns, property-verified hypercube, stability-plasticity monitoring, Pareto frontier analysis | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation |
+| **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), AutoScientist campaigns, property-verified hypercube, stability-plasticity monitoring, **multi-objective Pareto frontier analysis** (configurable objectives per axis) | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation; **axis-aligned objective optimization** (accuracy, walltime, params, FLOPs, energy, latency, stability, plasticity, credit alignment, ruler-relative) |
 | **🧪 Scientific Program** | Hypotheses on locality, plasticity, stability, and physical constraints as first-class dimensions; stability-plasticity trade-off as controlled departure from contraction; resource-vector Pareto analysis (compute, memory, energy, latency, plastic-state capacity) | Ongoing empirical investigation—not validated claims. Large-scale campaigns and physical-hardware validation remain future work. |
 
 | Audience | Entry Point |
@@ -105,6 +105,7 @@ one.
 | **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
 | **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
 | **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee ([figure](docs/figures/d5_z3_frozen_theta.png)) |
+| **Multi-objective discovery** | `comp continuous --objectives` / `comp daemon --objectives` — configurable Pareto fronts across 20+ objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2), CEEC-governed claims, dashboard Pareto selector |
 | **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) — TODO15 §13.3 / TODO16 §0.1 ([figure](docs/figures/d19_depth_harvest.png)) |
 | **Recipe cards** (`recipe_cards.py`) | Family→optimizer/geometry/config canonical-constructor registry — TODO16 §0.3 |
 | **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy — TODO16 §4 |
@@ -191,9 +192,7 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(
-                input_dim=784, output_dim=10, hidden_dims=(32,)
-            )
+            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
@@ -415,26 +414,85 @@ All subcommands of the `comp` dispatcher:
 | `comp campaign` | Run/compare/resume joint campaigns; render the static discovery report (HTML/JSON) | `comp campaign run --config <campaign.yaml>` |
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
-| `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, Pareto radar) | `comp gallery --run` |
-| `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs | `comp continuous --budget 5m --limit-batches 30 --root artifacts/broad_map` |
-| `comp dashboard` | Live read-only window over a continuous-discovery root: living atlas, defect funnel, health gauge, Pareto strip, burst-log ticker | `comp dashboard --root artifacts/broad_map --port 8088` |
+| `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28/31) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, **multi-objective** Pareto radar with selector) | `comp gallery --run` |
+| `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29/31): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs; multi-objective via `--objectives` | `comp continuous --budget 5m --limit-batches 30 --objectives accuracy,walltime_s,param_count --root artifacts/broad_map` |
+| `comp dashboard` | Live read-only window over a continuous-discovery root: living atlas, defect funnel, health gauge, Pareto strip with objective-pair selector, burst-log ticker | `comp dashboard --root artifacts/broad_map --port 8088` |
 
-### Continuous Discovery (TODO29)
+### Continuous Discovery (TODO29/31)
 
-`comp continuous` turns the one-shot broad-mapping sweep into a time-budgeted,
-resume-safe loop that harvests failures as data:
+`comp continuous` (and `comp daemon`) turns the one-shot broad-mapping sweep into a time-budgeted,
+resume-safe loop that harvests failures as data. **Multi-objective optimization** is configured via `--objectives`:
 
 - **Budgeted bursts** — `--budget 12m` / `--target-cells N` / `--loop --sleep 15`; every cell is KB-flushed on completion, so an interrupted run resumes with nothing re-measured.
 - **Shorter cells** — `--limit-batches N` caps batches per epoch (~40× more cells/hour at L0 mapping fidelity; 0 = full epoch).
+- **Multi-objective** — `--objectives accuracy,walltime_s,param_count` (or presets: `accuracy,walltime`, `accuracy,walltime,param_count,flops,memory_mb`, `accuracy,walltime,param_count,energy_per_step`, `accuracy,spectral_radius,psi_capacity`, etc.) drives the driver, Pareto front, promotion, and breakthrough alerts.
 - **Defect funnel** — gate-passing crashes land in `runtime_defects.jsonl` and their cells are quarantined until `comp continuous unquarantine --defect <id>`; gate rejections remain structural voids (ontology boundaries, not bugs).
 - **Divergence flags** — NaN-loss results are tagged `nan_loss` and excluded from Pareto fronts, promotion, and the deep tier.
 - **Maturation** — burst cells are `maturity:l0`; `--maturation N` re-runs front cells at epochs=3 (`l1`), and `deep-tier` re-runs front-stable cells per seed as claim-grade CEEC experiments (`l2`).
-- **Live dashboard** — `comp dashboard` (defaults to `artifacts/broad_map`, port 8088, opens a browser): islands/voids atlas, defect funnel, health gauge with divergence count, Pareto strip, burst-log ticker.
+- **Live dashboard** — `comp dashboard` (defaults to `artifacts/broad_map`, port 8088, opens a browser): islands/voids atlas, defect funnel, health gauge with divergence count, Pareto strip with objective-pair selector, burst-log ticker, event stream with alert toasts.
 
 ```bash
-uv run comp continuous --target-cells 500 --limit-batches 30 --loop --sleep 15
+# Multi-objective campaign (accuracy, walltime, param count)
+uv run comp continuous --target-cells 500 --limit-batches 30 --objectives accuracy,walltime_s,param_count --loop --sleep 15
 uv run comp dashboard
+
+# Daemon mode with lifecycle API + WebSockets
+uv run comp daemon --target-cells 500 --limit-batches 30 --objectives accuracy,walltime_s,param_count --port 8940
 ```
+
+### Multi-Objective Autonomous Discovery (TODO31)
+
+The AutoScientist now optimizes **multiple objectives simultaneously** across the 6-axis ontology (S×G×D×P×C×U), not just accuracy. Every axis contributes natural objectives:
+
+| Axis | Objectives (auto-populated from telemetry) |
+|------|--------------------------------------------|
+| **S** Substrate | `energy_per_step`, `spike_rate`, `ir_drop_variance`, `phase_noise`, `flops`, `memory_mb`, `latency_ms` |
+| **G** Geometry | `param_count`, `flops`, `depth`, `fan_in_out`, `recurrence_density` |
+| **D** StateDynamics | `settle_steps`, `free_energy`, `spectral_radius`, `lyapunov_exponent`, `max_singular_value` |
+| **P** Plasticity | `psi_capacity`, `consolidation_cost`, `rewrite_rate` |
+| **C** CreditAssignment | `credit_alignment`, `feedback_path_length`, `trace_variance` |
+| **U** ParameterUpdate | `update_norm`, `fisher_condition`, `orthogonality` |
+| **Task** | `accuracy`, `bp_deficit`, `ruler_walltime_ratio`, `ruler_energy_ratio` |
+| **Composite** | `stability_plasticity_ratio` (ρ(J_F)/ψ_capacity), `credit_efficiency` (alignment/flops) |
+
+**Key capabilities:**
+
+- **Configurable Pareto front** — `pareto_top(df, objectives=...)` computes non-dominated cells on any objective set
+- **Objective-aware driver** — `StratifiedRandomDriver` biases proposals toward under-explored regions of *objective space*, not just (D,C,U) strata
+- **Multi-objective breakthrough alerts** — fire on *any* objective improvement (configurable margin per objective)
+- **Multi-objective promotion** — L1/L2 maturation gates use the configured Pareto front, not accuracy-only
+- **CEEC-governed claims** — experiments registered with Pareto-front evidence across declared objectives; beliefs track Pareto dominance per objective
+- **Dashboard Pareto selector** — dropdown to switch objective pairs (accuracy/walltime, accuracy/params, walltime/params, etc.) with instant recompute
+- **Outcome badges** — `PARETO_OPTIMAL`, `PARETO_NEAR`, `DOMINATED` replace accuracy-only LEARNED/MARGINAL/CHANCE
+- **Substrate-aware objectives** — Memristive → energy_per_op/IR-drop; Neuromorphic → spike_rate/event_density; Photonic → phase_noise/power; Quantum → gate_fidelity/coherence
+- **Frozen-θ ψ adaptation** — `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization with bitwise θ invariance
+
+**Objective presets** (via `--objectives`):
+
+```bash
+# Default: accuracy + walltime
+--objectives accuracy,walltime_s
+
+# Cost-aware (3 objectives)
+--objectives accuracy,walltime_s,param_count
+
+# Full cost (5 objectives)
+--objectives accuracy,walltime_s,param_count,flops,memory_mb
+
+# Energy efficiency
+--objectives accuracy,walltime_s,param_count,energy_per_step
+
+# Stability/Plasticity trade-off
+--objectives accuracy,spectral_radius,psi_capacity
+
+# Credit efficiency
+--objectives accuracy,credit_alignment,feedback_path_length
+```
+
+**Ruler-relative objectives** (auto-computed when ruler table exists):
+- `bp_deficit` = ruler_accuracy - measured_accuracy
+- `ruler_walltime_ratio` = cell_walltime / ruler_walltime
+- `ruler_energy_ratio` = cell_energy / ruler_energy
 
 Module entry points (not installed as scripts):
 
@@ -485,17 +543,20 @@ from computronium_lab import Lab, Constraints
 
 lab = Lab()
 spec = lab.specify(
-    "image_classification", "cifar100",
+    "image_classification",
+    "cifar100",
     constraints=Constraints(substrate="digital", continual=False),
     objectives=("accuracy", "stability"),
 )
-result = lab.synthesize(spec)      # → coordinate + provenance + predicted viability
+result = lab.synthesize(spec)  # → coordinate + provenance + predicted viability
 print(result.coordinate, result.provenance)
-system = result.build(spec)        # composed System, hard-screened by SystemConfig.validate()
-trained = lab.train(system, epochs=1)   # → TrainingResult (metrics + certificates)
+system = result.build(spec)  # composed System, hard-screened by SystemConfig.validate()
+trained = lab.train(system, epochs=1)  # → TrainingResult (metrics + certificates)
 print(trained.metrics)
-frontier = lab.explore(spec)       # Pareto frontier of constraint-satisfying mechanisms
-adapted = lab.adapt(system, task_stream, mode="conflict_adaptive")  # ψ-only, θ bitwise frozen
+frontier = lab.explore(spec)  # Pareto frontier of constraint-satisfying mechanisms
+adapted = lab.adapt(
+    system, task_stream, mode="conflict_adaptive"
+)  # ψ-only, θ bitwise frozen
 print(adapted.theta.bitwise_invariant, adapted.metrics["psi_accuracy"])
 ```
 
@@ -506,15 +567,16 @@ from computronium_lab import EvolutionBudget, EvolutionSpec, Lab
 
 lab = Lab(record_ledger="scratch/todo24.sqlite3")
 spec = lab.specify("flat_classification", "gaussian_blob")
-plan = lab.plan_evolution(          # dry run: genomes, checks, budgets
+plan = lab.plan_evolution(  # dry run: genomes, checks, budgets
     spec,
     EvolutionSpec(
-        population=6, generations=3,
+        population=6,
+        generations=3,
         seed_candidates=("backprop_mlp", "temporal_psi_task_switcher"),
         budget=EvolutionBudget.quick(),
     ),
 )
-report = lab.run_evolution(plan)    # campaign-backed fitness, audited ledger
+report = lab.run_evolution(plan)  # campaign-backed fitness, audited ledger
 print(report.best_candidates[0].mechanism, report.negative_results)
 ```
 
