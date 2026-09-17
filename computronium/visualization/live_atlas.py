@@ -15,6 +15,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 if TYPE_CHECKING:
@@ -34,6 +35,185 @@ MESSAGE_HEAD_CHARS = 80
 WATCHED = ("kb.sqlite", "structural_voids.jsonl", "runtime_defects.jsonl")
 HEARTBEAT_NAME = "heartbeat.json"
 HEARTBEAT_STALE_S = 10.0
+
+# Event panel constants
+EVENT_HISTORY_MAX = 100
+TOAST_DURATION_S = 8.0
+
+# Outcome badge thresholds
+LEARNED_ACC_THRESHOLD = 0.5  # task-specific; MNIST chance=0.1
+MARGINAL_ACC_THRESHOLD = 0.15  # above chance but below learned
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardEvent:
+    """Structured event from /ws/events for the event panel."""
+    kind: str
+    timestamp: float
+    payload: dict[str, Any]
+    # Derived for rendering
+    icon: str = ""
+    color: str = ""
+    summary: str = ""
+
+
+def _classify_event(raw: dict[str, Any], now: float) -> DashboardEvent:
+    """Map a raw /ws/events record to a rendered DashboardEvent."""
+    kind = raw.get("kind", "unknown")
+    payload = {k: v for k, v in raw.items() if k != "kind"}
+
+    # Default styling
+    icon, color, summary = "📋", "grey", str(raw)[:MESSAGE_HEAD_CHARS]
+
+    handler = _EVENT_HANDLERS.get(kind)
+    if handler:
+        icon, color, summary = handler(payload)
+
+    return DashboardEvent(
+        kind=kind,
+        timestamp=now,
+        payload=payload,
+        icon=icon,
+        color=color,
+        summary=summary,
+    )
+
+
+def _handle_state(payload: dict[str, Any]) -> tuple[str, str, str]:
+    state = str(payload.get("state", ""))
+    icons = {"idle": "⏸", "proposing": "🔍", "training": "⚙️",
+             "sleeping": "😴", "paused": "⏸", "stopped": "⏹"}
+    colors = {"idle": "grey", "proposing": "blue", "training": "green",
+              "sleeping": "amber", "paused": "orange", "stopped": "red"}
+    return icons.get(state, "📋"), colors.get(state, "grey"), f"State → {state.upper()}"
+
+
+def _handle_daemon_started(payload: dict[str, Any]) -> tuple[str, str, str]:
+    return "🚀", "green", f"Daemon started on {payload.get('root', '?')}"
+
+
+def _handle_daemon_stopped(_payload: dict[str, Any]) -> tuple[str, str, str]:
+    return "🛑", "red", "Daemon stopped gracefully"
+
+
+def _handle_burst_finished(payload: dict[str, Any]) -> tuple[str, str, str]:
+    reason = payload.get("stop_reason", "?")
+    icons = {"target": "🎯", "paused": "⏸", "stopped": "⏹",
+             "exhausted": "🏁", "budget": "💰"}
+    colors = {"target": "green", "paused": "amber", "stopped": "red",
+              "exhausted": "blue", "budget": "orange"}
+    return icons.get(reason, "✅"), colors.get(reason, "green"), f"Burst finished: {reason}"
+
+
+def _handle_campaign_complete(_payload: dict[str, Any]) -> tuple[str, str, str]:
+    return "🏁", "green", "Campaign complete — target reached"
+
+
+def _handle_alert(payload: dict[str, Any]) -> tuple[str, str, str]:
+    alert_kind = payload.get("alert_kind", "?")
+    icons = {"breakthrough": "★", "cascade": "🔥", "completion": "🏁"}
+    colors = {"breakthrough": "green", "cascade": "red", "completion": "blue"}
+    icon = icons.get(alert_kind, "⚠️")
+    color = colors.get(alert_kind, "orange")
+    summary = f"{payload.get('title', alert_kind)}: {payload.get('body', '')}"
+    return icon, color, summary
+
+
+def _handle_report(payload: dict[str, Any]) -> tuple[str, str, str]:
+    return "📄", "blue", f"Report generated: {payload.get('path', '?')}"
+
+
+def _handle_cell_completed(payload: dict[str, Any]) -> tuple[str, str, str]:
+    cell = payload.get("cell", "?")
+    acc = payload.get("val_acc", payload.get("accuracy"))
+    nan_loss = payload.get("nan_loss", False)
+    badge = outcome_badge_from_metrics(accuracy=acc, nan_loss=nan_loss)
+    style = outcome_style(badge)
+    acc_str = f"{acc:.3f}" if isinstance(acc, int | float) else "?"
+    return style.icon, style.color, f"{style.label}: {cell} (acc={acc_str})"
+
+
+def _handle_defect_quarantined(payload: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        "🦠", "red",
+        f"Defect quarantined: {payload.get('defect_id', '?')} — {payload.get('message', '')[:50]}"
+    )
+
+
+def _handle_proposal_batch(payload: dict[str, Any]) -> tuple[str, str, str]:
+    n = payload.get("n_proposals", payload.get("count", "?"))
+    quarantined = payload.get("quarantined", 0)
+    voids = payload.get("voids_pruned", 0)
+    return "📦", "blue", f"Proposed {n} cells | {quarantined} quarantined | {voids} voids"
+
+
+_EVENT_HANDLERS: dict[str, Callable[[dict[str, Any]], tuple[str, str, str]]] = {
+    "state": _handle_state,
+    "daemon_started": _handle_daemon_started,
+    "daemon_stopped": _handle_daemon_stopped,
+    "burst_finished": _handle_burst_finished,
+    "campaign_complete": _handle_campaign_complete,
+    "alert": _handle_alert,
+    "report": _handle_report,
+    "cell_completed": _handle_cell_completed,
+    "defect_quarantined": _handle_defect_quarantined,
+    "proposal_batch": _handle_proposal_batch,
+}
+
+
+class OutcomeBadge(StrEnum):
+    """§3.3 per-cell outcome badges."""
+    LEARNED = "LEARNED"
+    MARGINAL = "MARGINAL"
+    CHANCE = "CHANCE"  # below marginal threshold
+    DIVERGED = "DIVERGED"  # nan_loss
+    DEFECT = "DEFECT"  # runtime crash, quarantined
+    VOID = "VOID"  # gate-rejected
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeStyle:
+    icon: str
+    color: str
+    label: str
+
+
+_OUTCOME_STYLES: dict[OutcomeBadge, OutcomeStyle] = {
+    OutcomeBadge.LEARNED: OutcomeStyle("🟢", "green", "LEARNED"),
+    OutcomeBadge.MARGINAL: OutcomeStyle("🟡", "amber", "MARGINAL"),
+    OutcomeBadge.CHANCE: OutcomeStyle("⚪", "grey", "CHANCE"),
+    OutcomeBadge.DIVERGED: OutcomeStyle("🔴", "red", "DIVERGED"),
+    OutcomeBadge.DEFECT: OutcomeStyle("⚫", "red", "DEFECT"),
+    OutcomeBadge.VOID: OutcomeStyle("⬜", "grey", "VOID"),
+}
+
+
+def outcome_badge_from_metrics(
+    accuracy: float | None = None,
+    nan_loss: bool = False,
+    is_defect: bool = False,
+    is_void: bool = False,
+) -> OutcomeBadge:
+    """Determine outcome badge from cell metrics."""
+    if is_void:
+        badge = OutcomeBadge.VOID
+    elif is_defect:
+        badge = OutcomeBadge.DEFECT
+    elif nan_loss:
+        badge = OutcomeBadge.DIVERGED
+    elif accuracy is None:
+        badge = OutcomeBadge.CHANCE
+    elif accuracy >= LEARNED_ACC_THRESHOLD:
+        badge = OutcomeBadge.LEARNED
+    elif accuracy >= MARGINAL_ACC_THRESHOLD:
+        badge = OutcomeBadge.MARGINAL
+    else:
+        badge = OutcomeBadge.CHANCE
+    return badge
+
+
+def outcome_style(badge: OutcomeBadge) -> OutcomeStyle:
+    return _OUTCOME_STYLES[badge]
 
 
 def read_heartbeat(root: Path) -> dict[str, object] | None:
@@ -251,9 +431,13 @@ def graveyard_rows(root: Path) -> list[dict[str, object]]:
             for row in diverged  # type: ignore[attr-defined]
         )
         for primitive, n in bad.most_common():
+            badge = outcome_badge_from_metrics(nan_loss=True)
+            style = outcome_style(badge)
             rows.append({
                 "axis": axis,
                 "primitive": primitive,
+                "outcome": style.label,
+                "outcome_icon": style.icon,
                 "diverged": n,
                 "measured": total[primitive],
                 "share": f"{100.0 * n / max(total[primitive], 1):.0f}%",
@@ -266,6 +450,8 @@ def void_summary_rows(root: Path) -> list[dict[str, object]]:
     failures."""
     import json
 
+    badge = outcome_badge_from_metrics(is_void=True)
+    style = outcome_style(badge)
     by_category: dict[str, list[str]] = {}
     path = root / "structural_voids.jsonl"
     if not path.exists():
@@ -284,6 +470,8 @@ def void_summary_rows(root: Path) -> list[dict[str, object]]:
     return [
         {
             "category": category,
+            "outcome": style.label,
+            "outcome_icon": style.icon,
             "count": len(group),
             "example": group[0][:MESSAGE_HEAD_CHARS],
         }
@@ -881,7 +1069,7 @@ def _panel_scaffold() -> tuple[Element, ...]:
     atlas_box = ui.column().classes("w-full")
     funnel_box = ui.column().classes("w-full")
     pareto_box = ui.column().classes("w-full")
-    ticker_box = ui.column().classes("w-full")
+    event_box = ui.column().classes("w-full")
     return (
         lifecycle_row,
         active_box,
@@ -889,7 +1077,7 @@ def _panel_scaffold() -> tuple[Element, ...]:
         atlas_box,
         funnel_box,
         pareto_box,
-        ticker_box,
+        event_box,
     )
 
 
@@ -912,13 +1100,57 @@ def _diversity_panel(
             ui.label(alert).classes("text-caption text-orange")
 
 
+def _event_panel(container: Element, events: list[DashboardEvent]) -> None:
+    """§3.2 structured event stream — replaces the raw log ticker.
+
+    Color-coded by type, scrollable, last 30 visible by default.
+    Alerts also fire toasts via the parent refresh loop.
+    """
+    from nicegui import ui
+
+    container.clear()
+    with container:
+        ui.label("Event stream").classes("text-bold")
+        if not events:
+            ui.label("no events yet — waiting for daemon...").classes("text-grey")
+            return
+
+        # Show last 30 events, most recent first
+        for ev in reversed(events[-30:]):
+            time_str = time.strftime("%H:%M:%S", time.localtime(ev.timestamp))
+            with ui.row().classes("w-full items-start gap-2 px-2 py-1"):
+                ui.label(time_str).classes("font-mono text-xs text-grey w-16 shrink-0")
+                ui.label(ev.icon).classes("text-base shrink-0")
+                ui.label(ev.summary).classes(
+                    f"font-mono text-xs text-{ev.color} break-all flex-1"
+                )
+
+
+def _toast_for_alert(event: DashboardEvent) -> None:
+    """Fire a NiceGUI toast for alert events (breakthrough/cascade/completion)."""
+    from nicegui import ui
+
+    if event.kind != "alert":
+        return
+    alert_kind = event.payload.get("alert_kind", "?")
+    title = event.payload.get("title", alert_kind)
+    body = event.payload.get("body", "")
+
+    if alert_kind == "breakthrough":
+        ui.notify(f"★ {title}", message=body, type="positive", timeout=TOAST_DURATION_S * 1000)
+    elif alert_kind == "cascade":
+        ui.notify(f"⚠️ {title}", message=body, type="negative", timeout=TOAST_DURATION_S * 1000)
+    elif alert_kind == "completion":
+        ui.notify(f"🏁 {title}", message=body, type="info", timeout=TOAST_DURATION_S * 1000)
+
+
 def _active_cell_panel(
     container: Element,
     daemon_state: dict[str, object] | None,
     loss_history: list[float],
 ) -> None:
-    """§3.1 inspector: coordinate card, progress, live loss curve. The
-    telemetry stream is best-effort — the panel renders what arrived."""
+    """§3.1 inspector: coordinate card, progress, live loss curve, resource gauges.
+    The telemetry stream is best-effort — the panel renders what arrived."""
     from nicegui import ui
 
     container.clear()
@@ -934,6 +1166,20 @@ def _active_cell_panel(
                 f"{daemon_state.get('burst') or '—'} · cells done "
                 f"{daemon_state.get('cell_index')}/{daemon_state.get('target_cells') or '∞'}"
             ).classes("font-mono text-xs")
+            # Resource gauges from heartbeat
+            resources = daemon_state.get("resources")
+            if isinstance(resources, dict) and resources:
+                with ui.row().classes("w-full gap-4"):
+                    cpu = resources.get("cpu_pct")
+                    ram = resources.get("ram_mb")
+                    gpu = resources.get("gpu_vram_mb")
+                    if isinstance(cpu, int | float):
+                        ui.linear_progress(value=cpu / 100, show_value=False).classes("w-48")
+                        ui.label(f"CPU {cpu:.0f}%").classes("text-xs text-grey")
+                    if isinstance(ram, int | float):
+                        ui.label(f"RAM {ram:.0f} MB").classes("text-xs text-grey")
+                    if isinstance(gpu, int | float):
+                        ui.label(f"GPU VRAM {gpu:.0f} MB").classes("text-xs text-grey")
             if loss_history:
                 ui.echart({
                     "xAxis": {"type": "category", "show": False},
@@ -1040,6 +1286,44 @@ def _make_telemetry_consumer(
     return consume
 
 
+def _make_events_consumer(
+    client: DaemonClient | None,
+    daemon_url: str | None,
+    state: dict[str, object],
+    event_history: deque[DashboardEvent],
+    refresh: Callable[[], None],
+) -> Callable[[], Any]:
+    """§3.2: drain /ws/events into the event panel + fire alert toasts."""
+
+    async def _consume_events(ws_url: str) -> None:
+        import json as _json
+
+        import websockets
+
+        async with websockets.connect(ws_url) as ws:
+            async for message in ws:
+                raw = _json.loads(message)
+                now = time.time()
+                ev = _classify_event(raw, now)
+                event_history.append(ev)
+                _toast_for_alert(ev)
+                refresh()
+
+    async def consume() -> None:
+        if client is None or state["events_busy"]:
+            return
+        ws_url = f"{(daemon_url or '').replace('http://', 'ws://', 1)}/ws/events"
+        state["events_busy"] = True
+        try:
+            await _consume_events(ws_url)
+        except OSError:
+            pass
+        finally:
+            state["events_busy"] = False
+
+    return consume
+
+
 def _poll_only_bar(container: Element) -> None:
     """§2.1 stub when no daemon URL was configured: badge only, no buttons."""
     _lifecycle_bar(
@@ -1069,6 +1353,7 @@ def build_dashboard(
         "atlas_busy": False,
         "daemon_state": None,
         "telemetry_busy": False,
+        "events_busy": False,
     }
 
     ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
@@ -1076,69 +1361,102 @@ def build_dashboard(
         "text-caption text-grey"
     )
 
-    (
-        lifecycle_row,
-        active_box,
-        health_row,
-        atlas_box,
-        funnel_box,
-        pareto_box,
-        ticker_box,
-    ) = _panel_scaffold()
+    # Panel containers
+    panels = _make_panel_boxes()
     landscape = _landscape_boxes()
 
     loss_history: deque[float] = deque(maxlen=60)
+    event_history: deque[DashboardEvent] = deque(maxlen=EVENT_HISTORY_MAX)
 
     def _render_panels(snapshot: DashboardSnapshot) -> None:
-        health_row.clear()
-        _health_cards(health_row, snapshot.health)
-        _atlas_panel(atlas_box, snapshot)
+        _health_cards(panels.health_row, snapshot.health)
+        _atlas_panel(panels.atlas_box, snapshot)
         _table_panel(
-            funnel_box,
+            panels.funnel_box,
             "Defect funnel (bug bounty — open first, then most hits)",
             snapshot.funnel_rows,
             pagination=10,
         )
         _table_panel(
-            pareto_box,
+            panels.pareto_box,
             "Pareto strip (top cells with instrument spokes)",
             snapshot.pareto_rows,
         )
-        _ticker_panel(ticker_box, log_path, snapshot.ticker)
         _render_landscape(landscape, snapshot)
 
     def refresh_lifecycle() -> None:
-        """Badge + buttons + inspector from one daemon probe."""
+        """Badge + buttons + inspector + event panel from one daemon probe."""
         if client is None:
-            _poll_only_bar(lifecycle_row)
-            _active_cell_panel(active_box, None, [])
+            _poll_only_bar(panels.lifecycle_row)
+            _active_cell_panel(panels.active_box, None, [])
+            _event_panel(panels.event_box, list(event_history))
             return
         daemon_state = client.get_state()
         state["daemon_state"] = str(daemon_state.get("state")) if daemon_state else None
         _lifecycle_bar(
-            lifecycle_row,
+            panels.lifecycle_row,
             liveness(root, daemon_state is not None),
             lifecycle_buttons(state["daemon_state"]),  # type: ignore[arg-type]
             on_action=client.control if client is not None else (lambda _a: None),
         )
-        _active_cell_panel(active_box, daemon_state, list(loss_history))
+        _active_cell_panel(panels.active_box, daemon_state, list(loss_history))
+        _event_panel(panels.event_box, list(event_history))
 
     def refresh_cheap() -> None:
         """Fast paint: everything except the UMAP fit."""
         refresh_lifecycle()
         _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
 
-    load_atlas, poll = _make_atlas_loop(root, cache, state, atlas_box, refresh_cheap)
+    load_atlas, poll = _make_atlas_loop(
+        root, cache, state, panels.atlas_box, refresh_cheap
+    )
 
     refresh_cheap()
     if client is not None:
-        ui.timer(
-            poll_seconds,
-            _make_telemetry_consumer(
-                client, daemon_url, state, loss_history, refresh_lifecycle
-            ),
+        _start_stream_timers(
+            client, daemon_url, state, loss_history, event_history,
+            refresh_lifecycle, poll_seconds
         )
     ui.timer(0.5, load_atlas, once=True)
     ui.timer(poll_seconds, poll)
     # statement count is at the lint ceiling; any new panel goes through
     # _render_landscape, not this body
+
+
+def _make_panel_boxes() -> Any:
+    """Create all panel containers as a simple namespace."""
+    from types import SimpleNamespace
+
+    from nicegui import ui
+
+    return SimpleNamespace(
+        lifecycle_row=ui.row().classes("w-full items-center flex-wrap"),
+        active_box=ui.column().classes("w-full"),
+        health_row=ui.row().classes("w-full flex-wrap"),
+        atlas_box=ui.column().classes("w-full"),
+        funnel_box=ui.column().classes("w-full"),
+        pareto_box=ui.column().classes("w-full"),
+        event_box=ui.column().classes("w-full"),
+    )
+
+
+def _start_stream_timers(
+    client: DaemonClient,
+    daemon_url: str,
+    state: dict[str, object],
+    loss_history: deque[float],
+    event_history: deque[DashboardEvent],
+    refresh: Callable[[], None],
+    poll_seconds: float,
+) -> None:
+    """Start telemetry and events WebSocket consumers."""
+    from nicegui import ui
+
+    ui.timer(
+        poll_seconds,
+        _make_telemetry_consumer(client, daemon_url, state, loss_history, refresh),
+    )
+    ui.timer(
+        poll_seconds,
+        _make_events_consumer(client, daemon_url, state, event_history, refresh),
+    )

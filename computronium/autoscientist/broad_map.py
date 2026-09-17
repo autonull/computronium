@@ -624,6 +624,7 @@ def run_burst(
     *,
     max_iterations: int,
     gate: Callable[[], str | None] | None = None,
+    on_cell_complete: Callable[[int], None] | None = None,
 ) -> dict[str, object]:
     """One budgeted burst (TODO29 Phase 3): sweep loop extracted from
     ``broad_mapping_sweep.main``.
@@ -667,6 +668,9 @@ def run_burst(
         done, batch_failed = _absorb_results(results, walltime_by_family)
         completed += done
         failed += batch_failed
+        if on_cell_complete is not None:
+            for _ in range(done):
+                on_cell_complete(budget.done + _ + 1)
         budget = budget.advance_by(done)
         logger.info(
             "Burst iteration %d: %d completed / %d proposed (%.0fs); total %d%s",

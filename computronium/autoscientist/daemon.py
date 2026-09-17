@@ -26,6 +26,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import psutil
 from fastapi import FastAPI, HTTPException
 
 from computronium.autoscientist.alerts import (
@@ -243,9 +244,36 @@ class ContinuousDaemon:
 
     # --- heartbeat (§2.2 liveness beacon) ---
 
+    def _gpu_vram_mb(self) -> float | None:
+        """Try to get GPU VRAM usage via pynvml."""
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            info = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            return info.used / (1024 * 1024)
+        except (ImportError, Exception):
+            return None
+
+    def _resource_metrics(self) -> dict[str, float] | None:
+        """Collect CPU, RAM, and GPU VRAM usage for the daemon process."""
+        try:
+            proc = psutil.Process(os.getpid())
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return None
+        cpu_pct = proc.cpu_percent(interval=None)
+        mem = proc.memory_info()
+        ram_mb = mem.rss / (1024 * 1024)
+        metrics = {"cpu_pct": round(cpu_pct, 1), "ram_mb": round(ram_mb, 1)}
+        gpu_vram_mb = self._gpu_vram_mb()
+        if gpu_vram_mb is not None:
+            metrics["gpu_vram_mb"] = round(gpu_vram_mb, 1)
+        return metrics
+
     def _heartbeat_payload(self) -> dict[str, object]:
         log_path = getattr(self.args, "log_path", None)
-        return {
+        resources = self._resource_metrics()
+        payload: dict[str, object] = {
             "pid": os.getpid(),
             "state": str(self.state.value),
             "burst": self._burst,
@@ -257,6 +285,9 @@ class ContinuousDaemon:
             "target_cells": getattr(self.args, "target_cells", None),
             "loop": bool(getattr(self.args, "loop", False)),
         }
+        if resources:
+            payload["resources"] = resources
+        return payload
 
     def _write_heartbeat(self) -> None:
         path = self.root / _HEARTBEAT_NAME
@@ -315,6 +346,7 @@ class ContinuousDaemon:
                 budget,
                 max_iterations=args.max_iterations,
                 gate=self._gate,
+                on_cell_complete=self._on_cell_complete,
             )
             self._last_summary = summary
             self._cells_done = int(cast("int", summary["done"]))
@@ -358,6 +390,11 @@ class ContinuousDaemon:
             )
             self._current_cell = " × ".join([*axes, topology])
             return
+
+    def _on_cell_complete(self, cell_index: int) -> None:
+        """Update per-cell progress and write heartbeat for live tracking."""
+        self._cells_done = cell_index
+        self._write_heartbeat()
 
     def _check_alerts(self, summary: dict[str, object], elapsed_s: float) -> None:
         """§6: breakthrough / cascade / completion — daemon-side so they

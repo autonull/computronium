@@ -11,6 +11,8 @@ import torch
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.substrate import Substrate
     from computronium.state import CompositeState
@@ -683,6 +685,7 @@ class StateDynamics(Protocol):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         """Settle the network to a fixed point (or run single pass).
 
@@ -691,6 +694,8 @@ class StateDynamics(Protocol):
             geometry: Network topology for routing
             substrate: Physical substrate for operators/noise
             target: Optional target for nudged phase
+            on_step: Optional callback invoked at each settle step with
+                (step_index, current_energy). Used for live telemetry.
 
         Returns:
             Updated state with settled activations in state.activations
@@ -862,6 +867,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         # Run settling iterations for full multi-layer EqProp dynamics
         # Implements the same dynamics as legacy EquilibriumMLP.forward_dynamics
@@ -1007,9 +1013,10 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
                 # Track free energy if enabled
                 if self._free_energy_history is not None:
-                    self._free_energy_history.append(
-                        _compute_hopfield_energy(all_acts, geometry).item()
-                    )
+                    energy_val = _compute_hopfield_energy(all_acts, geometry).item()
+                    self._free_energy_history.append(energy_val)
+                    if on_step is not None:
+                        on_step(_step, energy_val)
 
                 # Check convergence (can't checkpoint this as it's not differentiable)
                 if _step >= self.config.convergence_start:
@@ -1029,9 +1036,10 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
                 # Track free energy if enabled
                 if self._free_energy_history is not None:
-                    self._free_energy_history.append(
-                        _compute_hopfield_energy(new_acts, geometry).item()
-                    )
+                    energy_val = _compute_hopfield_energy(new_acts, geometry).item()
+                    self._free_energy_history.append(energy_val)
+                    if on_step is not None:
+                        on_step(step, energy_val)
 
                 # Check convergence
                 if step >= self.config.convergence_start:
@@ -1094,6 +1102,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         # Predictive coding settling: minimize prediction error
         x = _get_state_x(state)
@@ -1111,20 +1120,20 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         # target with the configured beta); R11.1.4.
         self._note_settle_start()
         if hasattr(geometry, "_graph"):
-            return self._settle_tile(state, x, geometry, substrate, target)
+            return self._settle_tile(state, x, geometry, substrate, target, on_step)
 
         # For layered geometries (feedforward, recurrent with layered params),
         # settle layer-wise to produce per-layer activations for credit assignment.
         layered = extract_layered_params(geometry)
         if layered is not None and len(layered.weights) > 0:
-            return self._settle_layered(state, x, geometry, layered, substrate, target)
+            return self._settle_layered(state, x, geometry, layered, substrate, target, on_step)
 
         # Fallback: standard predictive coding settling for recurrent geometries
         # (single state vector, no per-layer structure)
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
 
-        for _step in range(self.config.max_steps):
+        for step in range(self.config.max_steps):
             # Predictive coding update
             prediction = geometry.route(h)
             # Ensure prediction matches input dimension for shape-safe error computation
@@ -1147,6 +1156,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             ):
                 fe = error.pow(2).sum().item()
                 self._free_energy_history.append(fe)
+                if on_step is not None:
+                    on_step(step, fe)
 
         new_state = _create_output_state(
             state,
@@ -1167,6 +1178,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         layered: LayeredParams,
         substrate: Substrate,
         target: Tensor | None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         """Layer-wise predictive coding settle over the geometry's Linear transitions.
 
@@ -1216,7 +1228,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             )
             acts = list(acts)
         else:
-            acts = self._eager_layered_steps(acts, layered, op, layer_free_energy)
+            acts = self._eager_layered_steps(acts, layered, op, layer_free_energy, on_step)
 
         if target is not None:
             # Nudge the output layer toward the target
@@ -1242,6 +1254,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         layered: LayeredParams,
         op: object,
         layer_free_energy: list[float] | None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> list[Tensor]:
         """Eager settle loop: top-down prediction, bottom-up error correction.
 
@@ -1249,8 +1262,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate operator and recurrent weights keep this path general
         (any substrate, per-iteration energy tracking).
         """
-        for _step in range(self.config.max_steps):
+        for step in range(self.config.max_steps):
             new_acts = [acts[0]]  # Input layer is clamped
+            step_energy = 0.0
 
             for i, (weight, bias) in enumerate(
                 zip(layered.weights, layered.biases, strict=True)
@@ -1268,7 +1282,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                     self.config.track_free_energy_per_iter
                     and layer_free_energy is not None
                 ):
-                    layer_free_energy.append(error.pow(2).sum().item())
+                    fe = error.pow(2).sum().item()
+                    layer_free_energy.append(fe)
+                    step_energy += fe
 
             # Recurrent connection on the last hidden layer (RecurrentGeometry)
             if layered.recurrent_weight is not None and len(new_acts) >= 3:
@@ -1278,6 +1294,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                     h_hidden, layered.recurrent_weight
                 )  # type: ignore[operator]
 
+            if on_step is not None:
+                on_step(step, step_energy)
             acts = new_acts
         return acts
 
@@ -1288,6 +1306,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         """Block-view relaxation over the tile mesh via the settle kernel."""
         kernel = SubstrateSettleKernel(
@@ -1314,6 +1333,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                         pred = pred + b
                     fe += (new_acts[i + 1] - pred).pow(2).sum().item()
                 self._free_energy_history.append(fe)
+                if on_step is not None:
+                    on_step(step, fe)
             if step >= self.config.convergence_start:
                 delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
