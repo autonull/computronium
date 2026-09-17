@@ -45,6 +45,12 @@ from computronium.autoscientist.local_llm import (
     create_local_llm,
     get_recommended_local_model,
 )
+from computronium.autoscientist.objectives import (
+    DEFAULT_OBJECTIVES,
+    Objective,
+    ObjectiveSpec,
+    parse_objectives,
+)
 from computronium.autoscientist.proposer import ExperimentProposer
 from computronium.autoscientist.reasoner import (
     Hypothesis,
@@ -64,6 +70,7 @@ __all__ = [
     "Counterfactual",
     "CounterfactualBatch",
     "CounterfactualGenerator",
+    "DEFAULT_OBJECTIVES",
     "ExperimentProposal",
     "ExperimentProposer",
     "Hypothesis",
@@ -76,6 +83,8 @@ __all__ = [
     "LlamaCppBackend",
     "LocalLLMBackend",
     "LocalLLMHypothesisGenerator",
+    "Objective",
+    "ObjectiveSpec",
     "OllamaBackend",
     "TransformersBackend",
     "VLLMBackend",
@@ -85,4 +94,5 @@ __all__ = [
     "get_recommended_local_model",
     "list_branches",
     "list_campaigns",
+    "parse_objectives",
 ]

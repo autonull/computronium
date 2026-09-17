@@ -11,12 +11,19 @@ recomputed snapshot, never a trajectory or a stability frontier.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal, cast
+
+from computronium.autoscientist.objectives import (
+    DEFAULT_OBJECTIVES,
+    ObjectiveSpec,
+    parse_objectives,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -218,7 +225,6 @@ def outcome_style(badge: OutcomeBadge) -> OutcomeStyle:
 
 def read_heartbeat(root: Path) -> dict[str, object] | None:
     """Parse ``heartbeat.json`` (the daemon's liveness beacon), if present."""
-    import json
 
     try:
         return cast(
@@ -295,7 +301,6 @@ class DaemonClient:
         self._timeout = timeout
 
     def get_state(self) -> dict[str, object] | None:
-        import json
         import urllib.request
 
         try:
@@ -448,7 +453,6 @@ def graveyard_rows(root: Path) -> list[dict[str, object]]:
 def void_summary_rows(root: Path) -> list[dict[str, object]]:
     """§4.3: structural voids by rejection category — boundaries, not
     failures."""
-    import json
 
     badge = outcome_badge_from_metrics(is_void=True)
     style = outcome_style(badge)
@@ -532,10 +536,17 @@ def diversity_alerts(stats: dict[str, float]) -> list[str]:
 
 
 def front_history_rows(
-    root: Path, sample_points: int = 5, k: int = 3
+    root: Path,
+    sample_points: int = 5,
+    k: int = 3,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
 ) -> list[dict[str, object]]:
-    """§4.2: the Pareto front (accuracy↑, walltime↓) at sampled burst
-    cutoffs; `new_front` marks cells that expanded the front (★)."""
+    """§4.2: the Pareto front at sampled burst cutoffs; `new_front` marks
+    cells that expanded the front (★). Uses configurable objectives."""
+    import pandas as pd
+
+    from computronium.visualization.atlas import pareto_top
+
     cells = _measured_cells(root)
     bursts = sorted({b for row in cells for b in row.bursts})  # type: ignore[attr-defined]
     if not bursts:
@@ -557,32 +568,46 @@ def front_history_rows(
             for row in cells
             if min(row.bursts) <= cutoff  # type: ignore[attr-defined]
         ]
-        dominated = [
-            any(
-                other.accuracy >= row.accuracy  # type: ignore[attr-defined]
-                and other.walltime <= row.walltime  # type: ignore[attr-defined]
-                and (
-                    other.accuracy > row.accuracy  # type: ignore[attr-defined]
-                    or other.walltime < row.walltime  # type: ignore[attr-defined]
-                )
-                for other in cumulative
-            )
+        if not cumulative:
+            continue
+        # Convert to DataFrame for pareto_top
+        df = pd.DataFrame([
+            {
+                "key": row.key,
+                "accuracy": row.accuracy,
+                "walltime": row.walltime,
+                "bp_deficit": getattr(row, "bp_deficit", 0.0),
+                "flops": getattr(row, "flops", 0.0),
+                "memory_mb": getattr(row, "memory_mb", 0.0),
+                "energy_per_step": getattr(row, "energy_per_step", 0.0),
+                "latency_ms": getattr(row, "latency_ms", 0.0),
+                "spectral_radius": getattr(row, "spectral_radius", 0.0),
+                "lyapunov_exponent": getattr(row, "lyapunov_exponent", 0.0),
+                "max_singular_value": getattr(row, "max_singular_value", 0.0),
+                "psi_capacity": getattr(row, "psi_capacity", 0.0),
+                "consolidation_cost": getattr(row, "consolidation_cost", 0.0),
+                "rewrite_rate": getattr(row, "rewrite_rate", 0.0),
+                "credit_alignment": getattr(row, "credit_alignment", 0.0),
+                "feedback_path_length": getattr(row, "feedback_path_length", 0.0),
+                "trace_variance": getattr(row, "trace_variance", 0.0),
+            }
             for row in cumulative
-        ]
-        front = sorted(
-            (row for row, dom in zip(cumulative, dominated) if not dom),
-            key=lambda row: -row.accuracy,  # type: ignore[attr-defined]
-        )[:k]
-        for row in front:
-            key = row.key  # type: ignore[attr-defined]
-            rows.append({
-                "burst": cutoff,
-                "cell": key,
-                "accuracy": round(row.accuracy, 3),  # type: ignore[attr-defined]
-                "walltime_s": round(row.walltime, 1),  # type: ignore[attr-defined]
-                "new_front": "★" if key not in previous else "",
-            })
-        previous = {row.key for row in front}  # type: ignore[attr-defined]
+            if not getattr(row, "nan_loss", False)
+        ])
+        if df.empty:
+            continue
+        top = pareto_top(df, k=len(df), objectives=objectives)
+        front_keys = set(top["key"].tolist())
+        for row in cumulative:
+            if row.key in front_keys:
+                rows.append({
+                    "burst": cutoff,
+                    "cell": row.key,
+                    "accuracy": round(row.accuracy, 3),
+                    "walltime_s": round(row.walltime, 1),
+                    "new_front": "★" if row.key not in previous else "",
+                })
+        previous = front_keys
     return rows
 
 
@@ -698,7 +723,9 @@ def health_stats(root: Path) -> dict[str, object]:
     }
 
 
-def pareto_strip_rows(root: Path, k: int = 3) -> list[dict[str, object]]:
+def pareto_strip_rows(
+    root: Path, k: int = 3, objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES
+) -> list[dict[str, object]]:
     """Current top-k Pareto cells with their instrument spokes."""
     from computronium.visualization.atlas import (
         apply_bp_deficit,
@@ -713,7 +740,7 @@ def pareto_strip_rows(root: Path, k: int = 3) -> list[dict[str, object]]:
     df = apply_bp_deficit(df, ruler_table, None)
     if "nan_loss" in df.columns:
         df = df.query("~nan_loss")
-    top = pareto_top(df, k)
+    top = pareto_top(df, k, objectives=objectives)
     rows: list[dict[str, object]] = []
     for _, row in top.iterrows():
         rows.append({
@@ -841,6 +868,7 @@ def render_snapshot(
     root: Path,
     log_path: Path | None = None,
     cache: EmbedCache | None = None,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
     *,
     with_atlas: bool = True,
 ) -> DashboardSnapshot:
@@ -855,14 +883,14 @@ def render_snapshot(
     return DashboardSnapshot(
         health=health_stats(root),
         funnel_rows=defect_funnel_rows(root / "runtime_defects.jsonl"),
-        pareto_rows=pareto_strip_rows(root),
+        pareto_rows=pareto_strip_rows(root, objectives=objectives),
         ticker=log_tail(log_path),
         atlas=figure,
         layout_note=layout_note,
         errors=errors,
         coverage_rows=coverage_by_axis(root),
         strata_rows=stratum_coverage(root),
-        front_history=front_history_rows(root),
+        front_history=front_history_rows(root, objectives=objectives),
         graveyard=graveyard_rows(root),
         voids_summary=void_summary_rows(root),
         diversity=diversity,
@@ -1333,6 +1361,46 @@ def _poll_only_bar(container: Element) -> None:
     )
 
 
+def _on_pareto_change(
+    selected: str,
+    pareto_state: dict[str, object],
+    pareto_presets: dict[str, tuple[str, str]],
+    root: Path,
+    log_path: Path | None,
+    cache: EmbedCache,
+    panels: Any,
+) -> None:
+    """Handle Pareto objective selector change."""
+    from computronium.autoscientist.objectives import parse_objectives
+
+    pareto_state["selected"] = selected
+    obj_names = pareto_presets[selected]
+    pareto_state["objectives"] = parse_objectives(",".join(obj_names))
+    # Re-render Pareto panel immediately
+    from computronium.visualization.live_atlas import _table_panel, render_snapshot
+
+    snapshot = render_snapshot(root, log_path, cache, objectives=pareto_state["objectives"], with_atlas=False)
+    _table_panel(
+        panels.pareto_box,
+        "Pareto strip (top cells with instrument spokes)",
+        snapshot.pareto_rows,
+    )
+
+
+def _objectives_from_heartbeat(root: Path) -> tuple[ObjectiveSpec, ...]:
+    """Read objectives configuration from heartbeat.json if present."""
+    heartbeat = read_heartbeat(root)
+    if heartbeat is None:
+        return DEFAULT_OBJECTIVES
+    obj_spec = heartbeat.get("objectives")
+    if isinstance(obj_spec, str):
+        try:
+            return parse_objectives(obj_spec)
+        except ValueError:
+            pass
+    return DEFAULT_OBJECTIVES
+
+
 def build_dashboard(
     root: Path,
     log_path: Path | None = None,
@@ -1348,18 +1416,42 @@ def build_dashboard(
     log_path = resolve_log_path(root, log_path)
     cache = EmbedCache()
     client = DaemonClient(daemon_url) if daemon_url else None
+    objectives = _objectives_from_heartbeat(root)
     state: dict[str, object] = {
         "signature": watch_signature(root),
         "atlas_busy": False,
         "daemon_state": None,
         "telemetry_busy": False,
         "events_busy": False,
+        "objectives": objectives,
     }
+
+    # Pareto selector state (TODO31 Phase 1.5)
+    pareto_presets = {
+        "accuracy + walltime": ("accuracy", "walltime_s"),
+        "accuracy + params": ("accuracy", "param_count"),
+        "accuracy + flops": ("accuracy", "flops"),
+        "accuracy + memory": ("accuracy", "memory_mb"),
+        "accuracy + energy": ("accuracy", "energy_per_step"),
+        "walltime + params": ("walltime_s", "param_count"),
+        "accuracy + bp_deficit": ("accuracy", "bp_deficit"),
+        "stability + plasticity": ("spectral_radius", "psi_capacity"),
+    }
+    pareto_state = {"selected": "accuracy + walltime", "objectives": objectives}
 
     ui.label("Computronium — live broad map").classes("text-h5 q-mb-none")
     ui.label(f"root: {root} · poll {poll_seconds:.0f}s · read-only").classes(
         "text-caption text-grey"
     )
+
+    # Pareto objective selector (TODO31 Phase 1.5)
+    with ui.row().classes("w-full items-center gap-2 mb-2"):
+        ui.label("Pareto objectives:").classes("text-bold")
+        _ = ui.select(
+            options=list(pareto_presets.keys()),
+            value=pareto_state["selected"],
+            on_change=lambda e: _on_pareto_change(e.value, pareto_state, pareto_presets, root, log_path, cache, panels),
+        ).classes("w-64")
 
     # Panel containers
     panels = _make_panel_boxes()
@@ -1405,7 +1497,7 @@ def build_dashboard(
     def refresh_cheap() -> None:
         """Fast paint: everything except the UMAP fit."""
         refresh_lifecycle()
-        _render_panels(render_snapshot(root, log_path, cache, with_atlas=False))
+        _render_panels(render_snapshot(root, log_path, cache, objectives=pareto_state["objectives"], with_atlas=False))
 
     load_atlas, poll = _make_atlas_loop(
         root, cache, state, panels.atlas_box, refresh_cheap

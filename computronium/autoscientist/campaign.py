@@ -15,6 +15,7 @@ Features:
   - Resume from checkpoints
 """
 
+import contextlib
 import json
 import math
 import os
@@ -54,11 +55,11 @@ if TYPE_CHECKING:
         substrate: Substrate
         credit: CreditAssignment
 
-
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.autoscientist.reasoner import HypothesisReasoner
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
+from computronium.core.profiling import estimate_train_step_flops, get_gpu_memory_mb
 
 logger = get_logger(__name__)
 
@@ -1113,6 +1114,24 @@ class AutoScientistCampaign:
             history = trainer.fit()
             walltime_s = round(time.monotonic() - fit_started, 3)
             last = history[-1] if history else {}
+
+        # Multi-objective metrics (TODO31 Phase 1.3)
+        flops = 0.0
+        memory_mb = 0.0
+        with contextlib.suppress(Exception):
+            flops = float(estimate_train_step_flops(system, 64))
+        with contextlib.suppress(Exception):
+            memory_mb = get_gpu_memory_mb()
+
+        # Settle-phase energy from telemetry (if available)
+        energy_per_step = 0.0
+        settle_steps_used = int(getattr(system.dynamics, "_settle_steps_used", 0) or 0)
+        free_energy_final = 0.0
+        if hasattr(system.dynamics, "_free_energy_trace") and system.dynamics._free_energy_trace:
+            free_energy_final = float(system.dynamics._free_energy_trace[-1])
+            if settle_steps_used > 0:
+                energy_per_step = free_energy_final / settle_steps_used
+
         return {
             "proposal": {
                 "hypothesis": proposal.hypothesis,
@@ -1134,12 +1153,26 @@ class AutoScientistCampaign:
             "epochs_completed": len(history),
             "param_count": param_count,
             "spectral_radius": spectral_radius,
-            "settle_horizon": int(
-                getattr(system.dynamics, "_settle_steps_used", 0) or 0
-            ),
+            "settle_horizon": settle_steps_used,
             "credit_alignment": credit_alignment,
             "walltime_s": walltime_s,
             "lr": lr,
+            # Multi-objective fields (TODO31)
+            "flops": flops,
+            "memory_mb": memory_mb,
+            "energy_per_step": energy_per_step,
+            "latency_ms": 0.0,  # populated on L1+ promotion
+            "bp_deficit": 0.0,  # populated by atlas.apply_bp_deficit
+            "ruler_walltime_ratio": 0.0,  # populated by atlas.apply_bp_deficit
+            "ruler_energy_ratio": 0.0,  # populated by atlas.apply_bp_deficit
+            "lyapunov_exponent": 0.0,
+            "max_singular_value": 0.0,
+            "psi_capacity": 0.0,
+            "consolidation_cost": 0.0,
+            "rewrite_rate": 0.0,
+            "feedback_path_length": 0.0,
+            "trace_variance": 0.0,
+            "free_energy_final": free_energy_final,
             # Silent-divergence flag (TODO29 session 3): the funnel only
             # sees crashes; NaN loss/accuracy at "completed" status is the
             # quiet failure mode. Rides the numeric passthrough.

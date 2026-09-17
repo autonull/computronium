@@ -25,6 +25,11 @@ from typing import TYPE_CHECKING, TypedDict
 import numpy as np
 import pandas as pd
 
+from computronium.autoscientist.objectives import (
+    DEFAULT_OBJECTIVES,
+    ObjectiveSpec,
+)
+
 logger = logging.getLogger("atlas")
 if TYPE_CHECKING:
     import argparse
@@ -50,6 +55,22 @@ class AtlasRow(TypedDict):
     credit_alignment: float
     walltime_s: float
     is_void: bool
+    # Multi-objective fields (TODO31)
+    flops: float
+    memory_mb: float
+    energy_per_step: float
+    latency_ms: float
+    ruler_walltime_ratio: float
+    ruler_energy_ratio: float
+    lyapunov_exponent: float
+    max_singular_value: float
+    psi_capacity: float
+    consolidation_cost: float
+    rewrite_rate: float
+    feedback_path_length: float
+    trace_variance: float
+    free_energy_final: float
+    nan_loss: bool
 
 
 AXIS_NAMES: tuple[str, ...] = ("dynamics", "credit", "update", "topology")
@@ -91,13 +112,29 @@ def load_cells(kb_path: Path, task: str | None = None) -> pd.DataFrame:
             "accuracy": float(metrics.get("final_accuracy", 0.0)),
             "train_accuracy": float(metrics.get("train_accuracy", 0.0)),
             "loss": float(metrics.get("final_loss", 0.0)),
-            "bp_deficit": 0.0,
+            "bp_deficit": float(metrics.get("bp_deficit", 0.0)),
             "param_count": float(metrics.get("param_count", 0.0)),
             "lr": float(metrics.get("lr", 0.0)),
             "spectral_radius": float(metrics.get("spectral_radius", 0.0)),
             "settle_horizon": float(metrics.get("settle_horizon", 0.0)),
             "credit_alignment": float(metrics.get("credit_alignment", 0.0)),
             "walltime_s": float(metrics.get("walltime_s", 0.0)),
+            # Multi-objective fields (TODO31)
+            "flops": float(metrics.get("flops", 0.0)),
+            "memory_mb": float(metrics.get("memory_mb", 0.0)),
+            "energy_per_step": float(metrics.get("energy_per_step", 0.0)),
+            "latency_ms": float(metrics.get("latency_ms", 0.0)),
+            "ruler_walltime_ratio": float(metrics.get("ruler_walltime_ratio", 0.0)),
+            "ruler_energy_ratio": float(metrics.get("ruler_energy_ratio", 0.0)),
+            "lyapunov_exponent": float(metrics.get("lyapunov_exponent", 0.0)),
+            "max_singular_value": float(metrics.get("max_singular_value", 0.0)),
+            "psi_capacity": float(metrics.get("psi_capacity", 0.0)),
+            "consolidation_cost": float(metrics.get("consolidation_cost", 0.0)),
+            "rewrite_rate": float(metrics.get("rewrite_rate", 0.0)),
+            "feedback_path_length": float(metrics.get("feedback_path_length", 0.0)),
+            "trace_variance": float(metrics.get("trace_variance", 0.0)),
+            "free_energy_final": float(metrics.get("free_energy_final", 0.0)),
+            "nan_loss": bool(metrics.get("nan_loss", False)),
             "is_void": False,
         })
     df = pd.DataFrame(rows)
@@ -188,21 +225,62 @@ def embed(features: np.ndarray) -> np.ndarray:
     )
 
 
-def pareto_top(df: pd.DataFrame, k: int = 3) -> pd.DataFrame:
-    """Non-dominated cells on (maximize accuracy, minimize deficit)."""
-    if df.empty:
+def pareto_top(
+    df: pd.DataFrame,
+    k: int = 3,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
+) -> pd.DataFrame:
+    """Non-dominated cells on configurable objectives.
+
+    Args:
+        df: DataFrame with objective columns
+        k: Maximum number of front cells to return
+        objectives: Tuple of ObjectiveSpec defining the optimization
+    """
+    if df.empty or not objectives:
         return df
-    pts = df[["accuracy", "bp_deficit"]].to_numpy()
+
+    # Build objective vectors with directions
+    obj_names = [o.name.value for o in objectives]
+    directions = [o.direction for o in objectives]
+
+    # Check all objective columns exist
+    for name in obj_names:
+        if name not in df.columns:
+            logger.warning("Objective column %s not in DataFrame; skipping", name)
+            return df
+
+    pts = df[obj_names].to_numpy()
     dominated = np.zeros(len(df), dtype=bool)
-    for i, (a, d) in enumerate(pts):
-        dominated[i] = bool(
-            np.any(
-                (pts[:, 0] >= a)
-                & (pts[:, 1] <= d)
-                & ((pts[:, 0] > a) | (pts[:, 1] < d))
-            )
-        )
-    front = df.loc[np.flatnonzero(~dominated)].sort_values("accuracy", ascending=False)
+
+    for i, row_vals in enumerate(pts):
+        # A point is dominated if another point is >= in all maximize objectives
+        # and <= in all minimize objectives, with at least one strict
+        for j, other_vals in enumerate(pts):
+            if i == j:
+                continue
+            dominates = True
+            strict = False
+            for val_i, val_j, direction in zip(row_vals, other_vals, directions, strict=False):
+                if direction == "maximize":
+                    if val_j < val_i:
+                        dominates = False
+                        break
+                    if val_j > val_i:
+                        strict = True
+                else:  # minimize
+                    if val_j > val_i:
+                        dominates = False
+                        break
+                    if val_j < val_i:
+                        strict = True
+            if dominates and strict:
+                dominated[i] = True
+                break
+
+    front = df.loc[np.flatnonzero(~dominated)].sort_values(
+        obj_names[0], ascending=(directions[0] == "minimize")
+    )
     return front.head(k)
 
 
@@ -357,7 +435,10 @@ def _river_figure(measured: pd.DataFrame) -> go_Figure:
     return fig
 
 
-def _radar_figure(measured: pd.DataFrame) -> go_Figure:
+def _radar_figure(
+    measured: pd.DataFrame,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
+) -> go_Figure:
     """Instrument radar: the Pareto front against available continuous metrics.
 
     Instrument axes (settle_horizon, spectral_radius, acc/walltime) are
@@ -367,7 +448,7 @@ def _radar_figure(measured: pd.DataFrame) -> go_Figure:
     import plotly.graph_objects as go
 
     fig = go.Figure()
-    top = pareto_top(measured)
+    top = pareto_top(measured, objectives=objectives)
 
     def norm(col: str) -> list[float]:
         vals = top[col].astype(float).to_numpy()
@@ -429,6 +510,7 @@ def render_atlas(
     out: Path,
     task: str | None,
     multi_task: bool = False,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
 ) -> None:
     import plotly.io as pio
 
@@ -441,7 +523,7 @@ def render_atlas(
 
     fig_map = _islands_figure(live, ghost, multi_task=multi_task)
     fig_river = _river_figure(measured)
-    fig_radar = _radar_figure(measured.reset_index(drop=True))
+    fig_radar = _radar_figure(measured.reset_index(drop=True), objectives=objectives)
 
     html = pio.to_html(fig_map, include_plotlyjs=True, full_html=True)
     html += pio.to_html(fig_river, include_plotlyjs=False)
@@ -538,12 +620,14 @@ def main(args: argparse.Namespace) -> None:
             "No data found under %s — run the broad mapping sweep first", args.root
         )
         return
+    objectives = getattr(args, "objectives", DEFAULT_OBJECTIVES)
     render_atlas(
         combined,
         voids,
         args.root / "atlas.html",
         args.task if not args.multi_task else None,
         multi_task=args.multi_task,
+        objectives=objectives,
     )
     if args.png:
         _atlas_png(

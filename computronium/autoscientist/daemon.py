@@ -32,7 +32,6 @@ from fastapi import FastAPI, HTTPException
 from computronium.autoscientist.alerts import (
     Alert,
     WebhookDispatcher,
-    breakthrough_alert,
     cascade_alert,
     completion_alert,
 )
@@ -43,6 +42,10 @@ from computronium.autoscientist.broad_map import (
     build_sweep,
     run_burst,
     run_l1_maturation,
+)
+from computronium.autoscientist.objectives import (
+    ObjectiveSpec,
+    parse_objectives,
 )
 from computronium.autoscientist.report import generate_report
 from computronium.utils import seed_everything
@@ -192,6 +195,9 @@ class ContinuousDaemon:
         self._campaign: BroadMappingCampaign | None = None
         self._dispatcher = WebhookDispatcher(getattr(args, "alert_webhook", None))
         self._best_accuracy: float | None = None
+        # Multi-objective configuration (TODO31 Phase 1)
+        obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
+        self._objectives: tuple[ObjectiveSpec, ...] = parse_objectives(obj_spec)
 
     # --- lifecycle commands (idempotent; wake every wait path) ---
 
@@ -284,6 +290,7 @@ class ContinuousDaemon:
             "current_cell": self._current_cell,
             "target_cells": getattr(self.args, "target_cells", None),
             "loop": bool(getattr(self.args, "loop", False)),
+            "objectives": ",".join(o.name.value for o in self._objectives),
         }
         if resources:
             payload["resources"] = resources
@@ -400,14 +407,28 @@ class ContinuousDaemon:
         """§6: breakthrough / cascade / completion — daemon-side so they
         fire with no browser attached; toasts replay from the event log."""
         alerts: list[Alert] = []
-        best = self._best_accuracy_from_kb()
-        if best is not None and best != self._best_accuracy:
-            alert = breakthrough_alert(
-                self._best_accuracy, best, f"front best {best:.3f}"
-            )
-            if alert is not None:
-                alerts.append(alert)
-            self._best_accuracy = best
+
+        # Multi-objective breakthrough detection (TODO31 Phase 2)
+        best_values = self._best_objectives_from_kb()
+        if best_values:
+            for obj_spec in self._objectives:
+                obj_name = obj_spec.name.value
+                if obj_name in best_values:
+                    current_best = best_values[obj_name]
+                    previous_best = getattr(self, f"_best_{obj_name}", None)
+                    if previous_best is not None and self._is_improvement(obj_spec.direction, current_best, previous_best):
+                        margin = abs(current_best - previous_best)
+                        # Configurable margin per objective (default 2% for accuracy)
+                        threshold = 0.02 if obj_name == "accuracy" else (0.05 if obj_spec.direction == "minimize" else 0.02)
+                        if margin >= threshold:
+                            alert = Alert(
+                                "breakthrough",
+                                f"★ Breakthrough on {obj_name}: {current_best:.3f}",
+                                f"{obj_name} improved from {previous_best:.3f} to {current_best:.3f} (margin={margin:.1%})",
+                            )
+                            alerts.append(alert)
+                    setattr(self, f"_best_{obj_name}", current_best)
+
         for alert in (cascade_alert(summary), completion_alert(summary, elapsed_s)):
             if alert is not None:
                 alerts.append(alert)
@@ -434,6 +455,40 @@ class ContinuousDaemon:
         except Exception:  # noqa: BLE001 (telemetry must never kill the loop)
             return None
         return max(accuracies) if accuracies else None
+
+    def _best_objectives_from_kb(self) -> dict[str, float] | None:
+        """Query KB for best values of each configured objective."""
+        campaign = self._campaign
+        kb = getattr(campaign, "knowledge_base", None) if campaign else None
+        if kb is None:
+            return None
+        try:
+            # Collect all metrics for each objective
+            obj_values: dict[str, list[float]] = {o.name.value: [] for o in self._objectives}
+            for entry in kb.query():
+                if not str(entry.topic).startswith("experiment:"):
+                    continue
+                metrics = entry.metrics
+                for obj_spec in self._objectives:
+                    name = obj_spec.name.value
+                    if name in metrics:
+                        val = metrics[name]
+                        if isinstance(val, int | float):
+                            obj_values[name].append(float(val))
+            # Compute best per objective
+            best: dict[str, float] = {}
+            for obj_spec in self._objectives:
+                name = obj_spec.name.value
+                vals = obj_values[name]
+                if vals:
+                    best[name] = max(vals) if obj_spec.direction == "maximize" else min(vals)
+            return best if best else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    @staticmethod
+    def _is_improvement(direction: str, current: float, previous: float) -> bool:
+        return current > previous if direction == "maximize" else current < previous
 
     def start_worker(self) -> None:
         if self._worker is not None:

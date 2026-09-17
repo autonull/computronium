@@ -43,6 +43,10 @@ from computronium.autoscientist.defects import (
     quarantined_cells,
     read_defects,
 )
+from computronium.autoscientist.objectives import (
+    DEFAULT_OBJECTIVES,
+    ObjectiveSpec,
+)
 from computronium.autoscientist.proposer import (
     GRID_CREDITS,
     GRID_DYNAMICS,
@@ -221,6 +225,9 @@ class StratifiedRandomDriver:
 
     Improvement: balances (dynamics, credit, update) triples so no river axis
     starves at small sample sizes (TODO28 improvement opportunity 1).
+
+    Phase 2 (TODO31): Accepts ``objectives`` for objective-space exploration
+    bias — prefers cells in under-explored regions of the Pareto front.
     """
 
     def __init__(  # noqa: PLR0913 (driver mirrors sweep axes)
@@ -239,6 +246,7 @@ class StratifiedRandomDriver:
         viable: frozenset[str] | None = None,
         defects_path: Path | None = None,
         burst_tag: str | None = None,
+        objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
     ) -> None:
         # Sampling RNG, not security-sensitive (S311).
         self.rng = random.Random(seed)  # noqa: S311 (sampling, not crypto)
@@ -253,6 +261,7 @@ class StratifiedRandomDriver:
         self.viable = viable
         self.defects_path = defects_path
         self.burst_tag = burst_tag
+        self.objectives = objectives
         self.seen: set[str] = set()
         self.quarantined: frozenset[str] = frozenset()
         self._reload_covered(kb_path)
@@ -262,6 +271,8 @@ class StratifiedRandomDriver:
             for c in GRID_CREDITS:
                 for u in GRID_UPDATES:
                     self.balance[d, c, u] = 0
+        # Objective-space coverage tracking (Phase 2)
+        self._objective_bins: dict[str, int] = {}
 
     def _reload_covered(self, kb_path: Path) -> None:
         """Seed the seen-set from the KB coverage matrix (structural voids
@@ -507,11 +518,15 @@ def build_sweep(
 ) -> tuple[BroadMappingCampaign, StratifiedRandomDriver]:
     """Shared construction used by the sweep script and ``comp continuous``:
     void enumeration, stratified driver, defect-wired campaign."""
+    from computronium.autoscientist.objectives import parse_objectives
+
     viable = enumerate_constraint_voids(
         args.root / "kb.sqlite",
         args.root / "structural_voids.jsonl",
         task=args.task,
     )
+    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    objectives = parse_objectives(obj_spec)
     driver = StratifiedRandomDriver(
         args.root / "kb.sqlite",
         task=args.task,
@@ -526,6 +541,7 @@ def build_sweep(
         viable=frozenset(viable),
         defects_path=args.root / "runtime_defects.jsonl",
         burst_tag=next_burst_tag(args.root / "kb.sqlite"),
+        objectives=objectives,
     )
     campaign = BroadMappingCampaign(
         knowledge_base=None,
@@ -757,6 +773,30 @@ class _CellRow:
     nan_loss: bool
     bursts: tuple[str, ...]
     levels: tuple[str, ...]
+    # NEW — multi-objective fields (TODO31 Phase 1)
+    flops: float = 0.0
+    memory_mb: float = 0.0
+    energy_per_step: float = 0.0
+    latency_ms: float = 0.0
+    # Ruler-relative
+    bp_deficit: float = 0.0
+    ruler_walltime_ratio: float = 0.0
+    ruler_energy_ratio: float = 0.0
+    # Stability instruments
+    spectral_radius: float = 0.0
+    lyapunov_exponent: float = 0.0
+    max_singular_value: float = 0.0
+    # Credit instruments
+    credit_alignment: float = 0.0
+    feedback_path_length: float = 0.0
+    trace_variance: float = 0.0
+    # Plasticity
+    psi_capacity: float = 0.0
+    consolidation_cost: float = 0.0
+    rewrite_rate: float = 0.0
+    # Settle
+    settle_steps_used: int = 0
+    free_energy_final: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -818,6 +858,7 @@ def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRo
             continue
         tags = [str(t) for t in entry.tags]
         budget_raw = hp.get("param_budget", 0)
+        metrics = entry.metrics
         rows.append(
             _CellRow(
                 key=cell_key(
@@ -832,18 +873,37 @@ def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRo
                 update=str(hp["update"]),
                 topology=str(geometry.get("topology_type", "feedforward")),
                 geometry=dict(geometry),
-                accuracy=float(entry.metrics.get("final_accuracy", 0.0)),
-                walltime=float(entry.metrics.get("walltime_s", 0.0)),
+                accuracy=float(metrics.get("final_accuracy", 0.0)),
+                walltime=float(metrics.get("walltime_s", 0.0)),
                 param_budget=int(budget_raw)
                 if isinstance(budget_raw, int | float)
                 else 0,
-                nan_loss=bool(entry.metrics.get("nan_loss")),
+                nan_loss=bool(metrics.get("nan_loss")),
                 bursts=tuple(
                     t.split(":", 1)[1] for t in tags if t.startswith("burst:")
                 ),
                 levels=tuple(
                     t.split(":", 1)[1] for t in tags if t.startswith("maturity:")
                 ),
+                # NEW — multi-objective fields from KB metrics (TODO31)
+                flops=float(metrics.get("flops", 0.0)),
+                memory_mb=float(metrics.get("memory_mb", 0.0)),
+                energy_per_step=float(metrics.get("energy_per_step", 0.0)),
+                latency_ms=float(metrics.get("latency_ms", 0.0)),
+                bp_deficit=float(metrics.get("bp_deficit", 0.0)),
+                ruler_walltime_ratio=float(metrics.get("ruler_walltime_ratio", 0.0)),
+                ruler_energy_ratio=float(metrics.get("ruler_energy_ratio", 0.0)),
+                spectral_radius=float(metrics.get("spectral_radius", 0.0)),
+                lyapunov_exponent=float(metrics.get("lyapunov_exponent", 0.0)),
+                max_singular_value=float(metrics.get("max_singular_value", 0.0)),
+                credit_alignment=float(metrics.get("credit_alignment", 0.0)),
+                feedback_path_length=float(metrics.get("feedback_path_length", 0.0)),
+                trace_variance=float(metrics.get("trace_variance", 0.0)),
+                psi_capacity=float(metrics.get("psi_capacity", 0.0)),
+                consolidation_cost=float(metrics.get("consolidation_cost", 0.0)),
+                rewrite_rate=float(metrics.get("rewrite_rate", 0.0)),
+                settle_steps_used=int(metrics.get("settle_steps_used", 0)),
+                free_energy_final=float(metrics.get("free_energy_final", 0.0)),
             )
         )
     return rows
@@ -869,11 +929,16 @@ def _void_keys(voids_path: Path) -> frozenset[str]:
     return frozenset(keys)
 
 
-def promote_candidates(kb_path: Path, voids_path: Path, k: int) -> list[_Candidate]:
-    """Promotion query (TODO29 Phase 4): cells on the burst Pareto front
-    (``atlas.pareto_top`` over accuracy vs. BP-deficit, deficit 0 without a
-    ruler ceiling) that have no ``maturity:l1`` row yet. Void-covered keys
-    are excluded. Up to ``k`` candidates, best accuracy first."""
+def promote_candidates(
+    kb_path: Path,
+    voids_path: Path,
+    k: int,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
+) -> list[_Candidate]:
+    """Promotion query (TODO29 Phase 4 / TODO31 Phase 1): cells on the burst
+    Pareto front (``atlas.pareto_top`` over configurable objectives) that have
+    no ``maturity:l1`` row yet. Void-covered keys are excluded. Up to ``k``
+    candidates, best on primary objective first."""
     import pandas as pd
 
     from computronium.visualization.atlas import pareto_top
@@ -884,18 +949,27 @@ def promote_candidates(kb_path: Path, voids_path: Path, k: int) -> list[_Candida
         by_key.setdefault(row.key, []).append(row)
     if not by_key or k <= 0:
         return []
-    per_cell = [
-        {
-            "key": key,
-            "accuracy": max(r.accuracy for r in group),
-            "bp_deficit": 0.0,
-        }
-        for key, group in by_key.items()
-        if not any(r.nan_loss for r in group)
-    ]
+
+    # Build per-cell best metrics for all configured objectives
+    obj_names = [o.name.value for o in objectives]
+
+    per_cell: list[dict[str, float]] = []
+    for key, group in by_key.items():
+        if any(r.nan_loss for r in group):
+            continue
+        cell_data = {"key": key}
+        for obj_name in obj_names:
+            vals = [getattr(r, obj_name, 0.0) for r in group]
+            if vals:
+                obj_spec = next(o for o in objectives if o.name.value == obj_name)
+                cell_data[obj_name] = max(vals) if obj_spec.direction == "maximize" else min(vals)
+            else:
+                cell_data[obj_name] = 0.0
+        per_cell.append(cell_data)
+
     if not per_cell:
         return []
-    front = pareto_top(pd.DataFrame(per_cell), k=len(per_cell))
+    front = pareto_top(pd.DataFrame(per_cell), k=len(per_cell), objectives=objectives)
     void_keys = _void_keys(voids_path)
     candidates: list[_Candidate] = []
     for key in (str(v) for v in front["key"]):
@@ -925,9 +999,13 @@ def promote_candidates(kb_path: Path, voids_path: Path, k: int) -> list[_Candida
 
 
 def _deep_tier_candidates(
-    kb_path: Path, top: int, task: str | None = None
+    kb_path: Path,
+    top: int,
+    task: str | None = None,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
 ) -> list[_Candidate]:
-    """Cells on a per-burst Pareto front in ≥ 2 distinct bursts (L2 gate)."""
+    """Cells on a per-burst Pareto front in ≥ 2 distinct bursts (L2 gate).
+    Uses configurable objectives for multi-objective Pareto front."""
     import pandas as pd
 
     from computronium.visualization.atlas import pareto_top
@@ -939,15 +1017,27 @@ def _deep_tier_candidates(
         by_key.setdefault(row.key, []).append(row)
         for burst in row.bursts:
             burst_rows.setdefault(burst, []).append(row)
+
+    obj_names = [o.name.value for o in objectives]
+
     front_bursts: dict[str, set[str]] = {}
     for burst, group in burst_rows.items():
-        df = pd.DataFrame([
-            {"key": r.key, "accuracy": r.accuracy, "bp_deficit": 0.0}
-            for r in group
-            if not r.nan_loss
-        ])
-        for key in (str(v) for v in pareto_top(df, k=len(group))["key"]):
+        per_cell: list[dict[str, float]] = []
+        for r in group:
+            if r.nan_loss:
+                continue
+            cell_data = {"key": r.key}
+            for obj_name in obj_names:
+                val = getattr(r, obj_name, 0.0)
+                cell_data[obj_name] = val
+            per_cell.append(cell_data)
+        if not per_cell:
+            continue
+        df = pd.DataFrame(per_cell)
+        front = pareto_top(df, k=len(group), objectives=objectives)
+        for key in (str(v) for v in front["key"]):
             front_bursts.setdefault(key, set()).add(burst)
+
     candidates = [
         _Candidate(
             key=key,
@@ -964,7 +1054,9 @@ def _deep_tier_candidates(
         for key, group in by_key.items()
         if len(front_bursts.get(key, ())) >= 2
     ]
-    candidates.sort(key=lambda c: c.accuracy, reverse=True)
+    # Sort by primary objective
+    primary_obj = obj_names[0] if obj_names else "accuracy"
+    candidates.sort(key=lambda c: getattr(c, primary_obj, 0.0), reverse=True)
     return candidates[:top]
 
 
@@ -1051,8 +1143,15 @@ def run_l1_maturation(
 ) -> list[dict[str, object]]:
     """``--maturation N``: after a burst, promote up to N front cells to an
     epochs=3 re-run (``maturity:l1``) through the governed pipeline."""
+    from computronium.autoscientist.objectives import parse_objectives
+
+    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    objectives = parse_objectives(obj_spec)
     candidates = promote_candidates(
-        args.root / "kb.sqlite", args.root / "structural_voids.jsonl", args.maturation
+        args.root / "kb.sqlite",
+        args.root / "structural_voids.jsonl",
+        args.maturation,
+        objectives=objectives,
     )
     if not candidates:
         logger.info("Maturation: no promotion candidates on the burst front.")
@@ -1092,11 +1191,12 @@ def run_deep_tier(
     epochs: int,
     seeds: int,
     seed: int,
+    objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
 ) -> list[dict[str, object]]:
     """L2 deep tier: cells front-stable across ≥ 2 bursts, re-executed at
     ``--epochs`` for ``--seeds`` fresh seeds — each seed a separately
     pre-registered CEEC experiment. Rows land in ``maturation.jsonl``."""
-    candidates = _deep_tier_candidates(root / "kb.sqlite", top, task)
+    candidates = _deep_tier_candidates(root / "kb.sqlite", top, task, objectives=objectives)
     for flag in _seed_sensitivity_flags(_load_measured_cells(root / "kb.sqlite", task)):
         _append_maturation(
             root / "maturation.jsonl",

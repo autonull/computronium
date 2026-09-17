@@ -56,6 +56,18 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         "--target-cells", type=int, default=None, help="hard cap on completed cells"
     )
     parser.add_argument(
+        "--objectives",
+        type=str,
+        default="accuracy,walltime_s",
+        help="comma-separated objectives for multi-objective optimization "
+        "(e.g. accuracy,walltime_s,param_count). "
+        "Available: accuracy, walltime_s, param_count, flops, memory_mb, "
+        "energy_per_step, latency_ms, bp_deficit, ruler_walltime_ratio, "
+        "ruler_energy_ratio, spectral_radius, lyapunov_exponent, "
+        "max_singular_value, psi_capacity, consolidation_cost, rewrite_rate, "
+        "credit_alignment, feedback_path_length, trace_variance",
+    )
+    parser.add_argument(
         "--maturation",
         type=int,
         default=0,
@@ -208,10 +220,14 @@ def _run_burst(args: argparse.Namespace) -> None:
 def _deep_tier(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
     root: Path = args.root
+    from computronium.autoscientist.objectives import parse_objectives
+
+    obj_spec = getattr(args, "objectives", "accuracy,walltime")
+    objectives = parse_objectives(obj_spec)
     if args.dry_run:
         from computronium.autoscientist.broad_map import _deep_tier_candidates
 
-        plan = _deep_tier_candidates(root / "kb.sqlite", args.top, args.task)
+        plan = _deep_tier_candidates(root / "kb.sqlite", args.top, args.task, objectives=objectives)
         for candidate in plan:
             print(
                 f"{candidate.key}  acc={candidate.accuracy:.3f}  "
@@ -238,6 +254,7 @@ def _deep_tier(args: argparse.Namespace) -> int:
         epochs=args.epochs,
         seeds=args.seeds,
         seed=args.seed,
+        objectives=objectives,
     )
     print(f"deep-tier: {len(rows)} claim-grade row(s) in {root / 'maturation.jsonl'}")
     return 0
