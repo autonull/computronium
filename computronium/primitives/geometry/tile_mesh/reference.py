@@ -50,3 +50,7 @@ def forward(case: Any) -> torch.Tensor:
         torch.set_rng_state(rng_state)
 
     return output
+
+
+# Alias for the central registry test which expects `step`
+step = forward

@@ -468,6 +468,7 @@ dependencies = [
     { name = "local-feedback" },
     { name = "numpy" },
     { name = "omegaconf" },
+    { name = "optuna" },
     { name = "pandas" },
     { name = "psi-peft" },
     { name = "pydantic" },
@@ -475,6 +476,7 @@ dependencies = [
     { name = "stability" },
     { name = "torch" },
     { name = "torch-geometric" },
+    { name = "torchvision" },
     { name = "tqdm" },
 ]
 
@@ -657,6 +659,7 @@ requires-dist = [
     { name = "onnxruntime", marker = "extra == 'export'" },
     { name = "onnxscript", marker = "extra == 'export'" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
+    { name = "optuna", specifier = ">=4.9.0" },
     { name = "optuna", marker = "extra == 'analysis'" },
     { name = "optuna", marker = "extra == 'dev'" },
     { name = "pandas", specifier = ">=3.0.5" },
@@ -695,6 +698,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.5" },
     { name = "torch-geometric", specifier = ">=2.8.0.post1" },
     { name = "torch-geometric", marker = "extra == 'graphs'", specifier = ">=2.5" },
+    { name = "torchvision", specifier = ">=0.29.0" },
     { name = "torchvision", marker = "extra == 'dev'" },
     { name = "torchvision", marker = "extra == 'vision'" },
     { name = "tqdm" },

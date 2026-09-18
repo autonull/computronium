@@ -27,3 +27,7 @@ def forward(case: Any) -> Any:
     from .reference import forward as reference_forward
 
     return reference_forward(case)
+
+
+# Alias for the central registry test which expects `step`
+step = forward

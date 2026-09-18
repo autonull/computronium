@@ -43,6 +43,8 @@ dependencies = [
     "local-feedback",
     "computronium-lab",
     "pandas>=3.0.5",
+    "optuna>=4.9.0",
+    "torchvision>=0.29.0",
 ]
 
 [tool.uv.workspace]
@@ -245,8 +247,8 @@ ignore = [
     # enabling these rules only churns guard-rails without lint signal.
     "RUF100",  # unused-noqa
     "RUF103",  # invalid-suppression-comment
-    "RUF105",  # noqa-comments — new preview rule prefers `ruff: ignore`; canonical directive migration is Register C
-    "RUF201",  # rule-codes-in-selectors — codes are the enforced canonical selector form (2026-09-16 mid-flight fix)
+    # # "RUF105",  # noqa-comments — new preview rule prefers `ruff: ignore`; canonical directive migration is Register C
+    # "RUF201",  # rule-codes-in-selectors — codes are the enforced canonical selector form (2026-09-16 mid-flight fix)
 ]
 
 [tool.ruff.lint.per-file-ignores]
