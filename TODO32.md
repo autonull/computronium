@@ -37,6 +37,8 @@ The registry makes implementation status explicit.
 | 6 | Add central registry test | ✅ Done |
 | 7 | Update old acceleration imports | ✅ Done (pcalm_kernels.py already delegates) |
 | 8 | Run repository health checks | ✅ Done |
+| 9 | Fix lint issues in new files (RUF067, format) | ✅ Done |
+| 10 | Fix pyright type issues (registry, PCALMDynamics settle signature) | ✅ Done |
 
 ### ✅ Verification Results
 
@@ -45,6 +47,15 @@ All new tests pass when run per-directory:
 uv run pytest tests/primitives/state_dynamics/pc_alm_settling -q     # 10 passed
 uv run pytest tests/algorithms/pcalm -q                              # 13 passed
 uv run pytest tests/acceleration/test_all_implementations.py -q      # 4 passed
+```
+
+All existing tests continue to pass:
+```bash
+uv run pytest tests/unit/core/test_dynamics.py -q                    # 5 passed, 1 xfailed
+uv run pytest tests/integration/test_lazy_dynamics.py -q            # 5 passed
+uv run pytest tests/property/test_dynamics_wiring_lock.py -q        # 4 passed
+uv run pytest tests/integration/test_pc_alm_validation.py -q        # 28 passed
+uv run pytest tests/integration/test_demo_pc_alm.py -q              # 1 passed
 ```
 
 Note: Test files with identical names in different directories (test_cases.py, test_kernel_parity.py, test_reference.py) cause pytest collection conflicts when run together. Run per-directory or rename files to resolve.
@@ -75,8 +86,35 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - tests/acceleration/test_all_implementations.py (parametrized over all_specs())
 
 **Lint fixes:**
-- Added noqa comments for intentional patterns (non-empty-init-module for registration, try-except-pass refactored)
+- Added noqa comments for intentional patterns (non-empty-init-module RUF067 for registration)
 - Fixed import ordering and type annotations
+- Fixed ruff format on registry.py
+
+**Type fixes:**
+- Fixed registry.py pyright errors (getattr for package attributes, type ignore for SPEC)
+- Added `on_step` parameter to PCALMDynamics.settle() to match StateDynamics protocol
+
+### 📋 Remaining Work (Phase 3+: Migration of Other Primitives/Algorithms)
+
+Per the plan, the next phases are:
+- **Phase 3**: Migrate high-value primitives (predictive_settling, random_projections credit, local_goodness credit, etc.)
+- **Phase 4**: Migrate named algorithms (backprop, fa, dfa, ff, pepita, pc, eqprop, hebbian, stdp, tile, fast_weight, routing)
+
+### 💡 New Improvement Opportunities
+
+1. **Test file naming**: Rename test files to avoid pytest collection conflicts (e.g., `test_primitive_reference.py`, `test_algorithm_reference.py`)
+2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (--iterations, --warmup, JSON output to file)
+3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration
+4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup
+5. **PCALMCredit primitive**: The credit_assignment.pc_alm primitive is declared in uses_primitives but not yet implemented as a separate primitive directory
+6. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
+
+### ✅ Facilitating Changes
+
+- The `StateDynamics` protocol now has a consistent signature across all implementations
+- Registry discovery is working and testable via `all_specs()`
+- Parity testing framework is in place and validated
+- Microbenchmark infrastructure exists for engineering smoke tests
 
 ---
 

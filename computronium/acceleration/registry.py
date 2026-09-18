@@ -21,7 +21,9 @@ def register(spec: ImplementationSpec) -> None:
         # Allow re-registration of the same spec (e.g., during test discovery)
         existing = _REGISTRY[spec.id]
         if existing is not spec:
-            raise ValueError(f"implementation already registered with different spec: {spec.id}")
+            raise ValueError(
+                f"implementation already registered with different spec: {spec.id}"
+            )
         return
     _REGISTRY[spec.id] = spec
 
@@ -40,12 +42,18 @@ def _discover_package(package_name: str) -> None:
     if package is None:
         return
 
+    # package is a module with __path__ and __name__ attributes
+    package_path = getattr(package, "__path__", None)
+    package_name_attr = getattr(package, "__name__", None)
+    if package_path is None or package_name_attr is None:
+        return
+
     for _, module_name, _ in pkgutil.walk_packages(
-        package.__path__, package.__name__ + "."
+        package_path, package_name_attr + "."
     ):
         module = _try_import_module(module_name)
         if module is not None and hasattr(module, "SPEC"):
-            register(module.SPEC)
+            register(module.SPEC)  # type: ignore[attr-defined]
 
 
 def _discover() -> None:

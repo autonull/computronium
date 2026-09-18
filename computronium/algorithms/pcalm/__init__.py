@@ -1,4 +1,5 @@
 # ruff: noqa: PLC0415
+# ruff: noqa: INP001
 """PC-ALM algorithm.
 
 Composes primitives into a named method. Wraps
@@ -20,7 +21,7 @@ from .kernel import step as kernel_step
 from .reference import step as reference_step
 from .spec import SPEC
 
-_register(SPEC)
+_register(SPEC)  # noqa: RUF067
 
 __all__ = [
     "SPEC",

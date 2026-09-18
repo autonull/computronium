@@ -1,4 +1,5 @@
 # ruff: noqa: PLC0415
+# ruff: noqa: INP001
 """PC-ALM settling primitive.
 
 This primitive implements the primal-dual settling dynamics used by
@@ -19,7 +20,7 @@ from .kernel import step as kernel_step
 from .reference import step as reference_step
 from .spec import SPEC
 
-_register(SPEC)
+_register(SPEC)  # noqa: RUF067
 
 __all__ = [
     "SPEC",

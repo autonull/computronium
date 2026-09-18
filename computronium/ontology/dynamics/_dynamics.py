@@ -1607,6 +1607,7 @@ class PCALMDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         x = _get_state_x(state)
         if x is None:
