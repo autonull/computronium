@@ -313,7 +313,9 @@ def compute_substrate_objectives(
                 objectives["ir_drop_variance"] = spec.noise_model.level * spread
             else:
                 objectives["ir_drop_variance"] = 0.0
-            objectives["write_energy_pj"] = spec.cost_model.joules_per_mac * 1e12 * 10  # Write ~10x MAC
+            objectives["write_energy_pj"] = (
+                spec.cost_model.joules_per_mac * 1e12 * 10
+            )  # Write ~10x MAC
             objectives["endurance_cycles"] = 1e12  # Typical endurance
 
         case DeviceModel.NEUROMORPHIC:
@@ -321,15 +323,23 @@ def compute_substrate_objectives(
             objectives["spike_rate"] = settle.get("spike_rate", 0.0)
             objectives["event_density"] = settle.get("event_density", 0.0)
             # Synaptic ops per sample: approximate from spike rate
-            objectives["synaptic_ops_per_sample"] = objectives["spike_rate"] * 100  # Fan-in proxy
+            objectives["synaptic_ops_per_sample"] = (
+                objectives["spike_rate"] * 100
+            )  # Fan-in proxy
             objectives["spike_energy_pj"] = spec.cost_model.joules_per_mac * 1e12
 
         case DeviceModel.PHOTONIC:
             # Photonic: phase noise, optical power
             objectives["phase_noise"] = spec.noise_model.level
-            objectives["optical_power_mw"] = spec.cost_model.joules_per_mac * 1e3 * 1e6  # mW proxy
-            objectives["insertion_loss_db"] = 0.1 * spec.noise_model.level * 100  # Proxy
-            objectives["phase_shifter_energy_pj"] = spec.cost_model.joules_per_mac * 1e12
+            objectives["optical_power_mw"] = (
+                spec.cost_model.joules_per_mac * 1e3 * 1e6
+            )  # mW proxy
+            objectives["insertion_loss_db"] = (
+                0.1 * spec.noise_model.level * 100
+            )  # Proxy
+            objectives["phase_shifter_energy_pj"] = (
+                spec.cost_model.joules_per_mac * 1e12
+            )
 
         case DeviceModel.QUANTUM:
             # Quantum: gate fidelity, coherence time
@@ -340,8 +350,10 @@ def compute_substrate_objectives(
 
         case DeviceModel.ANALOG:
             # Analog: thermal noise, nonlinearity, drift
-            objectives["thermal_noise_variance"] = spec.noise_model.level ** 2
-            objectives["nonlinearity_error"] = spec.structural_constraints.sparsity * 0.1
+            objectives["thermal_noise_variance"] = spec.noise_model.level**2
+            objectives["nonlinearity_error"] = (
+                spec.structural_constraints.sparsity * 0.1
+            )
             objectives["drift_rate"] = 1e-6  # Proxy
             objectives["precision_bits"] = 10.0  # Proxy
 

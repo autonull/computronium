@@ -89,9 +89,9 @@ def run_depth_sweep(
     results = []
 
     for depth in depths:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"Testing depth={depth}, hidden_dim={hidden_dim}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         system = create_pc_alm_system(
             depth=depth,
@@ -145,15 +145,21 @@ def run_depth_sweep(
             }
             depth_results["epochs_data"].append(epoch_data)
 
-            print(f"  Epoch {epoch+1}/{epochs}: loss={avg_loss:.4f}, acc={avg_acc:.2%}, settle_steps={steps_used}")
+            print(
+                f"  Epoch {epoch + 1}/{epochs}: loss={avg_loss:.4f}, acc={avg_acc:.2%}, settle_steps={steps_used}"
+            )
 
         elapsed = time.time() - start_time
         depth_results["walltime_seconds"] = elapsed
         depth_results["final_loss"] = depth_results["epochs_data"][-1]["avg_loss"]
         depth_results["final_acc"] = depth_results["epochs_data"][-1]["avg_acc"]
-        depth_results["diverged"] = not torch.isfinite(torch.tensor(depth_results["final_loss"]))
+        depth_results["diverged"] = not torch.isfinite(
+            torch.tensor(depth_results["final_loss"])
+        )
 
-        print(f"  Final: loss={depth_results['final_loss']:.4f}, acc={depth_results['final_acc']:.2%}, time={elapsed:.1f}s")
+        print(
+            f"  Final: loss={depth_results['final_loss']:.4f}, acc={depth_results['final_acc']:.2%}, time={elapsed:.1f}s"
+        )
         if depth_results["diverged"]:
             print(f"  *** DIVERGED ***")
 
@@ -170,18 +176,29 @@ def run_depth_sweep(
 def main():
     parser = argparse.ArgumentParser(description="PC-ALM Depth Scaling Probe")
     parser.add_argument(
-        "--depths", nargs="+", type=int, default=[10, 20, 50, 100, 200, 500, 1000],
-        help="Depths to test"
+        "--depths",
+        nargs="+",
+        type=int,
+        default=[10, 20, 50, 100, 200, 500, 1000],
+        help="Depths to test",
     )
     parser.add_argument("--hidden-dim", type=int, default=128, help="Hidden dimension")
     parser.add_argument("--epochs", type=int, default=3, help="Epochs per depth")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--max-steps", type=int, default=150, help="Max settle steps")
-    parser.add_argument("--step-size", type=float, default=0.1, help="Primal/dual step size")
-    parser.add_argument("--rho", type=float, default=1.0, help="Augmented Lagrangian penalty")
-    parser.add_argument("--prospective-leak", type=float, default=0.0, help="Prospective leak (alpha)")
+    parser.add_argument(
+        "--step-size", type=float, default=0.1, help="Primal/dual step size"
+    )
+    parser.add_argument(
+        "--rho", type=float, default=1.0, help="Augmented Lagrangian penalty"
+    )
+    parser.add_argument(
+        "--prospective-leak", type=float, default=0.0, help="Prospective leak (alpha)"
+    )
     parser.add_argument("--compiled", action="store_true", help="Use torch.compile")
-    parser.add_argument("--output", type=str, default="pc_alm_depth_sweep.json", help="Output JSON file")
+    parser.add_argument(
+        "--output", type=str, default="pc_alm_depth_sweep.json", help="Output JSON file"
+    )
 
     args = parser.parse_args()
 
@@ -213,14 +230,18 @@ def main():
     print(f"\nResults saved to {output_path}")
 
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("SUMMARY")
-    print(f"{'='*60}")
-    print(f"{'Depth':>6} | {'Final Loss':>10} | {'Final Acc':>8} | {'Steps':>5} | {'Time (s)':>8} | {'Diverged':>8}")
+    print(f"{'=' * 60}")
+    print(
+        f"{'Depth':>6} | {'Final Loss':>10} | {'Final Acc':>8} | {'Steps':>5} | {'Time (s)':>8} | {'Diverged':>8}"
+    )
     print("-" * 60)
     for r in results:
-        print(f"{r['depth']:>6} | {r['final_loss']:>10.4f} | {r['final_acc']:>7.2%} | "
-              f"{r['epochs_data'][-1]['settle_steps_used']:>5} | {r['walltime_seconds']:>8.1f} | {str(r['diverged']):>8}")
+        print(
+            f"{r['depth']:>6} | {r['final_loss']:>10.4f} | {r['final_acc']:>7.2%} | "
+            f"{r['epochs_data'][-1]['settle_steps_used']:>5} | {r['walltime_seconds']:>8.1f} | {str(r['diverged']):>8}"
+        )
 
     # Find max trainable depth
     trainable = [r for r in results if not r["diverged"]]

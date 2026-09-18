@@ -55,6 +55,7 @@ if TYPE_CHECKING:
         substrate: Substrate
         credit: CreditAssignment
 
+
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.autoscientist.reasoner import HypothesisReasoner
 from computronium.core.exceptions import KnowledgeBaseError
@@ -1127,7 +1128,10 @@ class AutoScientistCampaign:
         energy_per_step = 0.0
         settle_steps_used = int(getattr(system.dynamics, "_settle_steps_used", 0) or 0)
         free_energy_final = 0.0
-        if hasattr(system.dynamics, "_free_energy_trace") and system.dynamics._free_energy_trace:
+        if (
+            hasattr(system.dynamics, "_free_energy_trace")
+            and system.dynamics._free_energy_trace
+        ):
             free_energy_final = float(system.dynamics._free_energy_trace[-1])
             if settle_steps_used > 0:
                 energy_per_step = free_energy_final / settle_steps_used
@@ -1137,7 +1141,9 @@ class AutoScientistCampaign:
         stability_plasticity_ratio = 0.0
         credit_efficiency = 0.0
         with contextlib.suppress(Exception):
-            from computronium.core.plasticity.closed_form import ClosedFormRidgePlasticity
+            from computronium.core.plasticity.closed_form import (
+                ClosedFormRidgePlasticity,
+            )
             from computronium.core.plasticity.temporal_psi import TemporalPsiPlasticity
 
             # Get ψ state from the system's dynamics or credit
@@ -1177,9 +1183,13 @@ class AutoScientistCampaign:
 
         # Credit efficiency objectives (TODO31 Phase 3.8)
         if credit_alignment != 0.0 and flops > 0:
-            credit_efficiency = float(credit_alignment / (flops / 1e9))  # alignment per GFLOP
+            credit_efficiency = float(
+                credit_alignment / (flops / 1e9)
+            )  # alignment per GFLOP
         elif credit_alignment != 0.0 and param_count > 0:
-            credit_efficiency = float(credit_alignment / (param_count / 1e6))  # alignment per M param
+            credit_efficiency = float(
+                credit_alignment / (param_count / 1e6)
+            )  # alignment per M param
 
         # Substrate-aware objectives (TODO31 Phase 3.6)
         substrate_objectives: dict[str, float] = {}
@@ -1188,6 +1198,7 @@ class AutoScientistCampaign:
                 SubstrateSpec,
                 compute_substrate_objectives,
             )
+
             substrate_spec = SubstrateSpec.from_config(system.substrate.config)
             runtime_stats = {
                 "walltime_s": walltime_s,

@@ -52,7 +52,9 @@ class Objective(StrEnum):
     TRACE_VARIANCE = "trace_variance"
 
     # Composite objectives (cross-axis)
-    STABILITY_PLASTICITY_RATIO = "stability_plasticity_ratio"  # spectral_radius / psi_capacity
+    STABILITY_PLASTICITY_RATIO = (
+        "stability_plasticity_ratio"  # spectral_radius / psi_capacity
+    )
     CREDIT_EFFICIENCY = "credit_efficiency"  # credit_alignment / flops
 
 
@@ -296,7 +298,9 @@ def parse_objectives(spec: str) -> tuple[ObjectiveSpec, ...]:
         try:
             obj = Objective(name)
         except ValueError:
-            raise ValueError(f"Unknown objective: {name}. Valid: {[o.value for o in Objective]}")
+            raise ValueError(
+                f"Unknown objective: {name}. Valid: {[o.value for o in Objective]}"
+            )
         specs.append(make_objective_spec(obj))
     return tuple(specs)
 

@@ -1126,7 +1126,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         # settle layer-wise to produce per-layer activations for credit assignment.
         layered = extract_layered_params(geometry)
         if layered is not None and len(layered.weights) > 0:
-            return self._settle_layered(state, x, geometry, layered, substrate, target, on_step)
+            return self._settle_layered(
+                state, x, geometry, layered, substrate, target, on_step
+            )
 
         # Fallback: standard predictive coding settling for recurrent geometries
         # (single state vector, no per-layer structure)
@@ -1228,7 +1230,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             )
             acts = list(acts)
         else:
-            acts = self._eager_layered_steps(acts, layered, op, layer_free_energy, on_step)
+            acts = self._eager_layered_steps(
+                acts, layered, op, layer_free_energy, on_step
+            )
 
         if target is not None:
             # Nudge the output layer toward the target

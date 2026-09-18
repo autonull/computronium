@@ -36,14 +36,22 @@ def make_case(
     # Layer 0: input (2, 4)
     # Layer 1: hidden (2, 4) - from Linear(4, 4)
     # Layer 2: output (2, 4) - from Linear(4, 4)
-    h1 = torch.randn(2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True)
-    h2 = torch.randn(2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True)
+    h1 = torch.randn(
+        2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True
+    )
+    h2 = torch.randn(
+        2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True
+    )
 
     activations = [state, h1, h2]
 
     # Nudged activations also need requires_grad
-    h1_n = torch.randn(2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True)
-    h2_n = torch.randn(2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True)
+    h1_n = torch.randn(
+        2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True
+    )
+    h2_n = torch.randn(
+        2, 4, device=device, dtype=dtype, generator=generator, requires_grad=True
+    )
     nudged_activations = [state, h1_n, h2_n]
 
     # Create a fixed geometry for deterministic testing

@@ -292,7 +292,9 @@ def scalarize_row(
         normalizer = (normalizers or {}).get(name) or obj.normalizer
         if normalizer is None:
             # Default: identity for maximize, reciprocal for minimize
-            norm_val = raw_val if obj.direction == "maximize" else (1.0 / (1.0 + raw_val))
+            norm_val = (
+                raw_val if obj.direction == "maximize" else (1.0 / (1.0 + raw_val))
+            )
         else:
             norm_val = normalizer(raw_val)
         # Ensure maximize direction: normalizers already produce [0,1] where higher=better
@@ -319,6 +321,10 @@ def scalarize_objectives(
     """
     scores = []
     for _, row in df.iterrows():
-        vals = {o.name.value: float(row[o.name.value]) for o in objectives if o.name.value in row}
+        vals = {
+            o.name.value: float(row[o.name.value])
+            for o in objectives
+            if o.name.value in row
+        }
         scores.append(scalarize_row(vals, objectives, normalizers=normalizers))
     return pd.Series(scores, index=df.index, name="scalarized_score")

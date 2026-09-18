@@ -76,6 +76,9 @@ def compare(reference: Any, kernel: Any) -> dict[str, float]:
 
     if ref.numel() == 0:
         cosine = 1.0
+    elif torch.allclose(ref, torch.zeros_like(ref)) and torch.allclose(acc, torch.zeros_like(acc)):
+        # Both are all zeros - they are identical
+        cosine = 1.0
     else:
         cosine = torch.nn.functional.cosine_similarity(
             ref.unsqueeze(0),

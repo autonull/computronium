@@ -43,6 +43,8 @@ The registry makes implementation status explicit.
 | 12 | Add predictive_settling tests | ✅ Done |
 | 13 | Create random_projections primitive (credit_assignment) | ✅ Done |
 | 14 | Add random_projections tests | ✅ Done |
+| 15 | Create local_goodness primitive (credit_assignment) | ✅ Done |
+| 16 | Add local_goodness tests | ✅ Done |
 
 ### ✅ Verification Results
 
@@ -51,8 +53,9 @@ All new tests pass when run per-directory:
 uv run pytest tests/primitives/state_dynamics/pc_alm_settling -q     # 10 passed
 uv run pytest tests/primitives/state_dynamics/predictive_settling -q # 7 passed
 uv run pytest tests/primitives/credit_assignment/random_projections -q # 7 passed
+uv run pytest tests/primitives/credit_assignment/local_goodness -q   # 8 passed
 uv run pytest tests/algorithms/pcalm -q                              # 13 passed
-uv run pytest tests/acceleration/test_all_implementations.py -q      # 8 passed
+uv run pytest tests/acceleration/test_all_implementations.py -q      # 10 passed
 ```
 
 All existing tests continue to pass:
@@ -91,6 +94,11 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - Reference wraps RandomProjectionsCredit; kernel falls back to reference (Triton TODO)
 - Deterministic RNG handling for parity testing
 
+**Primitive (local_goodness):**
+- `computronium/primitives/credit_assignment/local_goodness/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
+- Reference wraps LocalGoodnessCredit (FF/LEMMA variants); kernel falls back to reference
+- Deterministic RNG handling for parity testing
+
 **Algorithm exemplar (pcalm):**
 - `computronium/algorithms/pcalm/` with spec.py, reference.py, kernel.py, factory.py, cases.py, __init__.py
 - Factory wraps compose_joint_system with backend selection
@@ -100,6 +108,7 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - tests/primitives/state_dynamics/pc_alm_settling/ (test_reference.py, test_kernel_parity.py, test_cases.py)
 - tests/primitives/state_dynamics/predictive_settling/ (test_reference.py, test_kernel_parity.py, test_cases.py)
 - tests/primitives/credit_assignment/random_projections/ (test_reference.py, test_kernel_parity.py, test_cases.py)
+- tests/primitives/credit_assignment/local_goodness/ (test_reference.py, test_kernel_parity.py, test_cases.py)
 - tests/algorithms/pcalm/ (test_reference.py, test_kernel_parity.py, test_factory.py, test_cases.py)
 - tests/acceleration/test_all_implementations.py (parametrized over all_specs())
 
@@ -116,7 +125,7 @@ Note: Test files with identical names in different directories (test_cases.py, t
 ### 📋 Remaining Work (Phase 3+: Migration of Other Primitives/Algorithms)
 
 Per the plan, the next phases are:
-- **Phase 3**: Migrate high-value primitives (local_goodness credit, temporal_trace credit, muon update, tile routing, fast_weight plasticity, routing plasticity)
+- **Phase 3**: Migrate high-value primitives (temporal_trace credit, muon update, tile routing, fast_weight plasticity, routing plasticity)
 - **Phase 4**: Migrate named algorithms (backprop, fa, dfa, ff, pepita, pc, eqprop, hebbian, stdp, tile, fast_weight, routing)
 
 ### 💡 New Improvement Opportunities
@@ -135,7 +144,7 @@ Per the plan, the next phases are:
 - Registry discovery is working and testable via `all_specs()`
 - Parity testing framework is in place and validated
 - Microbenchmark infrastructure exists for engineering smoke tests
-- Primitive template validated with 3 primitives (pc_alm_settling, predictive_settling, random_projections)
+- Primitive template validated with 4 primitives (pc_alm_settling, predictive_settling, random_projections, local_goodness)
 
 ---
 

@@ -254,18 +254,19 @@ class ContinuousDaemon:
         """Try to get GPU VRAM usage via pynvml."""
         try:
             import pynvml
+
             pynvml.nvmlInit()
             handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             info = pynvml.nvmlDeviceGetMemoryInfo(handle)
             return info.used / (1024 * 1024)
-        except (ImportError, Exception):
+        except ImportError, Exception:
             return None
 
     def _resource_metrics(self) -> dict[str, float] | None:
         """Collect CPU, RAM, and GPU VRAM usage for the daemon process."""
         try:
             proc = psutil.Process(os.getpid())
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except psutil.NoSuchProcess, psutil.AccessDenied:
             return None
         cpu_pct = proc.cpu_percent(interval=None)
         mem = proc.memory_info()
@@ -416,10 +417,16 @@ class ContinuousDaemon:
                 if obj_name in best_values:
                     current_best = best_values[obj_name]
                     previous_best = getattr(self, f"_best_{obj_name}", None)
-                    if previous_best is not None and self._is_improvement(obj_spec.direction, current_best, previous_best):
+                    if previous_best is not None and self._is_improvement(
+                        obj_spec.direction, current_best, previous_best
+                    ):
                         margin = abs(current_best - previous_best)
                         # Configurable margin per objective (default 2% for accuracy)
-                        threshold = 0.02 if obj_name == "accuracy" else (0.05 if obj_spec.direction == "minimize" else 0.02)
+                        threshold = (
+                            0.02
+                            if obj_name == "accuracy"
+                            else (0.05 if obj_spec.direction == "minimize" else 0.02)
+                        )
                         if margin >= threshold:
                             alert = Alert(
                                 "breakthrough",
@@ -464,7 +471,9 @@ class ContinuousDaemon:
             return None
         try:
             # Collect all metrics for each objective
-            obj_values: dict[str, list[float]] = {o.name.value: [] for o in self._objectives}
+            obj_values: dict[str, list[float]] = {
+                o.name.value: [] for o in self._objectives
+            }
             for entry in kb.query():
                 if not str(entry.topic).startswith("experiment:"):
                     continue
@@ -481,7 +490,9 @@ class ContinuousDaemon:
                 name = obj_spec.name.value
                 vals = obj_values[name]
                 if vals:
-                    best[name] = max(vals) if obj_spec.direction == "maximize" else min(vals)
+                    best[name] = (
+                        max(vals) if obj_spec.direction == "maximize" else min(vals)
+                    )
             return best if best else None
         except Exception:  # noqa: BLE001
             return None

@@ -227,7 +227,9 @@ def _deep_tier(args: argparse.Namespace) -> int:
     if args.dry_run:
         from computronium.autoscientist.broad_map import _deep_tier_candidates
 
-        plan = _deep_tier_candidates(root / "kb.sqlite", args.top, args.task, objectives=objectives)
+        plan = _deep_tier_candidates(
+            root / "kb.sqlite", args.top, args.task, objectives=objectives
+        )
         for candidate in plan:
             print(
                 f"{candidate.key}  acc={candidate.accuracy:.3f}  "

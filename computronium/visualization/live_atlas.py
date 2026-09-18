@@ -55,6 +55,7 @@ MARGINAL_ACC_THRESHOLD = 0.15  # above chance but below learned
 @dataclass(frozen=True, slots=True)
 class DashboardEvent:
     """Structured event from /ws/events for the event panel."""
+
     kind: str
     timestamp: float
     payload: dict[str, Any]
@@ -88,10 +89,22 @@ def _classify_event(raw: dict[str, Any], now: float) -> DashboardEvent:
 
 def _handle_state(payload: dict[str, Any]) -> tuple[str, str, str]:
     state = str(payload.get("state", ""))
-    icons = {"idle": "⏸", "proposing": "🔍", "training": "⚙️",
-             "sleeping": "😴", "paused": "⏸", "stopped": "⏹"}
-    colors = {"idle": "grey", "proposing": "blue", "training": "green",
-              "sleeping": "amber", "paused": "orange", "stopped": "red"}
+    icons = {
+        "idle": "⏸",
+        "proposing": "🔍",
+        "training": "⚙️",
+        "sleeping": "😴",
+        "paused": "⏸",
+        "stopped": "⏹",
+    }
+    colors = {
+        "idle": "grey",
+        "proposing": "blue",
+        "training": "green",
+        "sleeping": "amber",
+        "paused": "orange",
+        "stopped": "red",
+    }
     return icons.get(state, "📋"), colors.get(state, "grey"), f"State → {state.upper()}"
 
 
@@ -105,11 +118,25 @@ def _handle_daemon_stopped(_payload: dict[str, Any]) -> tuple[str, str, str]:
 
 def _handle_burst_finished(payload: dict[str, Any]) -> tuple[str, str, str]:
     reason = payload.get("stop_reason", "?")
-    icons = {"target": "🎯", "paused": "⏸", "stopped": "⏹",
-             "exhausted": "🏁", "budget": "💰"}
-    colors = {"target": "green", "paused": "amber", "stopped": "red",
-              "exhausted": "blue", "budget": "orange"}
-    return icons.get(reason, "✅"), colors.get(reason, "green"), f"Burst finished: {reason}"
+    icons = {
+        "target": "🎯",
+        "paused": "⏸",
+        "stopped": "⏹",
+        "exhausted": "🏁",
+        "budget": "💰",
+    }
+    colors = {
+        "target": "green",
+        "paused": "amber",
+        "stopped": "red",
+        "exhausted": "blue",
+        "budget": "orange",
+    }
+    return (
+        icons.get(reason, "✅"),
+        colors.get(reason, "green"),
+        f"Burst finished: {reason}",
+    )
 
 
 def _handle_campaign_complete(_payload: dict[str, Any]) -> tuple[str, str, str]:
@@ -142,8 +169,9 @@ def _handle_cell_completed(payload: dict[str, Any]) -> tuple[str, str, str]:
 
 def _handle_defect_quarantined(payload: dict[str, Any]) -> tuple[str, str, str]:
     return (
-        "🦠", "red",
-        f"Defect quarantined: {payload.get('defect_id', '?')} — {payload.get('message', '')[:50]}"
+        "🦠",
+        "red",
+        f"Defect quarantined: {payload.get('defect_id', '?')} — {payload.get('message', '')[:50]}",
     )
 
 
@@ -151,7 +179,11 @@ def _handle_proposal_batch(payload: dict[str, Any]) -> tuple[str, str, str]:
     n = payload.get("n_proposals", payload.get("count", "?"))
     quarantined = payload.get("quarantined", 0)
     voids = payload.get("voids_pruned", 0)
-    return "📦", "blue", f"Proposed {n} cells | {quarantined} quarantined | {voids} voids"
+    return (
+        "📦",
+        "blue",
+        f"Proposed {n} cells | {quarantined} quarantined | {voids} voids",
+    )
 
 
 _EVENT_HANDLERS: dict[str, Callable[[dict[str, Any]], tuple[str, str, str]]] = {
@@ -170,6 +202,7 @@ _EVENT_HANDLERS: dict[str, Callable[[dict[str, Any]], tuple[str, str, str]]] = {
 
 class OutcomeBadge(StrEnum):
     """§3.3 per-cell outcome badges."""
+
     LEARNED = "LEARNED"
     MARGINAL = "MARGINAL"
     CHANCE = "CHANCE"  # below marginal threshold
@@ -1215,11 +1248,17 @@ def _toast_for_alert(event: DashboardEvent) -> None:
     body = event.payload.get("body", "")
 
     if alert_kind == "breakthrough":
-        ui.notify(f"★ {title}", message=body, type="positive", timeout=TOAST_DURATION_S * 1000)
+        ui.notify(
+            f"★ {title}", message=body, type="positive", timeout=TOAST_DURATION_S * 1000
+        )
     elif alert_kind == "cascade":
-        ui.notify(f"⚠️ {title}", message=body, type="negative", timeout=TOAST_DURATION_S * 1000)
+        ui.notify(
+            f"⚠️ {title}", message=body, type="negative", timeout=TOAST_DURATION_S * 1000
+        )
     elif alert_kind == "completion":
-        ui.notify(f"🏁 {title}", message=body, type="info", timeout=TOAST_DURATION_S * 1000)
+        ui.notify(
+            f"🏁 {title}", message=body, type="info", timeout=TOAST_DURATION_S * 1000
+        )
 
 
 def _active_cell_panel(
@@ -1252,7 +1291,9 @@ def _active_cell_panel(
                     ram = resources.get("ram_mb")
                     gpu = resources.get("gpu_vram_mb")
                     if isinstance(cpu, int | float):
-                        ui.linear_progress(value=cpu / 100, show_value=False).classes("w-48")
+                        ui.linear_progress(value=cpu / 100, show_value=False).classes(
+                            "w-48"
+                        )
                         ui.label(f"CPU {cpu:.0f}%").classes("text-xs text-grey")
                     if isinstance(ram, int | float):
                         ui.label(f"RAM {ram:.0f} MB").classes("text-xs text-grey")
@@ -1429,7 +1470,9 @@ def _on_pareto_change(
     # Re-render Pareto panel immediately
     from computronium.visualization.live_atlas import _table_panel, render_snapshot
 
-    snapshot = render_snapshot(root, log_path, cache, objectives=pareto_state["objectives"], with_atlas=False)
+    snapshot = render_snapshot(
+        root, log_path, cache, objectives=pareto_state["objectives"], with_atlas=False
+    )
     _table_panel(
         panels.pareto_box,
         "Pareto strip (top cells with instrument spokes)",
@@ -1500,7 +1543,9 @@ def build_dashboard(
         _ = ui.select(
             options=list(pareto_presets.keys()),
             value=pareto_state["selected"],
-            on_change=lambda e: _on_pareto_change(e.value, pareto_state, pareto_presets, root, log_path, cache, panels),
+            on_change=lambda e: _on_pareto_change(
+                e.value, pareto_state, pareto_presets, root, log_path, cache, panels
+            ),
         ).classes("w-64")
 
     # Panel containers
@@ -1547,7 +1592,15 @@ def build_dashboard(
     def refresh_cheap() -> None:
         """Fast paint: everything except the UMAP fit."""
         refresh_lifecycle()
-        _render_panels(render_snapshot(root, log_path, cache, objectives=pareto_state["objectives"], with_atlas=False))
+        _render_panels(
+            render_snapshot(
+                root,
+                log_path,
+                cache,
+                objectives=pareto_state["objectives"],
+                with_atlas=False,
+            )
+        )
 
     load_atlas, poll = _make_atlas_loop(
         root, cache, state, panels.atlas_box, refresh_cheap
@@ -1556,8 +1609,13 @@ def build_dashboard(
     refresh_cheap()
     if client is not None:
         _start_stream_timers(
-            client, daemon_url, state, loss_history, event_history,
-            refresh_lifecycle, poll_seconds
+            client,
+            daemon_url,
+            state,
+            loss_history,
+            event_history,
+            refresh_lifecycle,
+            poll_seconds,
         )
     ui.timer(0.5, load_atlas, once=True)
     ui.timer(poll_seconds, poll)

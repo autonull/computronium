@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 import torch
 
 if TYPE_CHECKING:
-
     from computronium.autoscientist.bridge import ExperimentProposal
 
 __all__ = [
@@ -62,7 +61,9 @@ def benchmark_inference(
     from computronium.domains.factory import create_task
 
     target_device = get_device() if device is None else torch.device(device)
-    task = create_task(task_name, device=str(target_device), quick_mode=True, num_workers=0)
+    task = create_task(
+        task_name, device=str(target_device), quick_mode=True, num_workers=0
+    )
     task.setup()
 
     # Compose the system
@@ -139,7 +140,9 @@ def benchmark_inference(
 
     return InferenceMetrics(
         latency_ms=float(latencies_np.mean()),
-        throughput_samples_s=float(total_samples / total_time_s) if total_time_s > 0 else 0.0,
+        throughput_samples_s=float(total_samples / total_time_s)
+        if total_time_s > 0
+        else 0.0,
         latency_p50_ms=float(np.percentile(latencies_np, 50)),
         latency_p95_ms=float(np.percentile(latencies_np, 95)),
         latency_p99_ms=float(np.percentile(latencies_np, 99)),
@@ -172,7 +175,9 @@ def benchmark_inference_on_system(
     from computronium.domains.factory import create_task
 
     target_device = get_device() if device is None else torch.device(device)
-    task = create_task(task_name, device=str(target_device), quick_mode=True, num_workers=0)
+    task = create_task(
+        task_name, device=str(target_device), quick_mode=True, num_workers=0
+    )
     task.setup()
 
     system.to(target_device)  # type: ignore[attr-defined]
@@ -236,7 +241,9 @@ def benchmark_inference_on_system(
 
     return InferenceMetrics(
         latency_ms=float(latencies_np.mean()),
-        throughput_samples_s=float(total_samples / total_time_s) if total_time_s > 0 else 0.0,
+        throughput_samples_s=float(total_samples / total_time_s)
+        if total_time_s > 0
+        else 0.0,
         latency_p50_ms=float(np.percentile(latencies_np, 50)),
         latency_p95_ms=float(np.percentile(latencies_np, 95)),
         latency_p99_ms=float(np.percentile(latencies_np, 99)),

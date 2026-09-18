@@ -310,7 +310,9 @@ class StratifiedRandomDriver:
         for pt in points:
             bin_key = self._bin_point(pt)
             self._objective_bins[bin_key] = self._objective_bins.get(bin_key, 0) + 1
-        logger.info("Objective-space coverage: %d bins populated", len(self._objective_bins))
+        logger.info(
+            "Objective-space coverage: %d bins populated", len(self._objective_bins)
+        )
 
     def _bin_point(self, pt: list[float]) -> str:
         """Quantize a point in objective space to a bin key."""
@@ -325,7 +327,9 @@ class StratifiedRandomDriver:
                 coords.append(min(bins_per_dim - 1, int(normalized * bins_per_dim)))
         return ",".join(str(c) for c in coords)
 
-    def _score_proposal(self, dynamics: str, credit: str, update: str, topology: str) -> float:
+    def _score_proposal(
+        self, dynamics: str, credit: str, update: str, topology: str
+    ) -> float:
         """Score a proposal by how under-explored its predicted objective region is.
 
         Returns a score where higher = more under-explored (preferred).
@@ -392,7 +396,9 @@ class StratifiedRandomDriver:
             # Objective-space bias: sample multiple topologies, prefer under-explored bins
             best_topology = None
             best_score = -1.0
-            for topology in self.rng.choices(GRID_TOPOLOGIES, k=min(3, len(GRID_TOPOLOGIES))):
+            for topology in self.rng.choices(
+                GRID_TOPOLOGIES, k=min(3, len(GRID_TOPOLOGIES))
+            ):
                 key = cell_key(dynamics, credit, update, topology)
                 if (
                     key in self.seen
@@ -1039,7 +1045,9 @@ def promote_candidates(
             vals = [getattr(r, obj_name, 0.0) for r in group]
             if vals:
                 obj_spec = next(o for o in objectives if o.name.value == obj_name)
-                cell_data[obj_name] = max(vals) if obj_spec.direction == "maximize" else min(vals)
+                cell_data[obj_name] = (
+                    max(vals) if obj_spec.direction == "maximize" else min(vals)
+                )
             else:
                 cell_data[obj_name] = 0.0
         per_cell.append(cell_data)
@@ -1220,7 +1228,9 @@ def run_l1_maturation(
 ) -> list[dict[str, object]]:
     """``--maturation N``: after a burst, promote up to N front cells to an
     epochs=3 re-run (``maturity:l1``) through the governed pipeline."""
-    from computronium.autoscientist.benchmark import benchmark_inference_from_campaign_result
+    from computronium.autoscientist.benchmark import (
+        benchmark_inference_from_campaign_result,
+    )
     from computronium.autoscientist.objectives import parse_objectives
 
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
@@ -1278,9 +1288,13 @@ def run_deep_tier(
     """L2 deep tier: cells front-stable across ≥ 2 bursts, re-executed at
     ``--epochs`` for ``--seeds`` fresh seeds — each seed a separately
     pre-registered CEEC experiment. Rows land in ``maturation.jsonl``."""
-    from computronium.autoscientist.benchmark import benchmark_inference_from_campaign_result
+    from computronium.autoscientist.benchmark import (
+        benchmark_inference_from_campaign_result,
+    )
 
-    candidates = _deep_tier_candidates(root / "kb.sqlite", top, task, objectives=objectives)
+    candidates = _deep_tier_candidates(
+        root / "kb.sqlite", top, task, objectives=objectives
+    )
     for flag in _seed_sensitivity_flags(_load_measured_cells(root / "kb.sqlite", task)):
         _append_maturation(
             root / "maturation.jsonl",

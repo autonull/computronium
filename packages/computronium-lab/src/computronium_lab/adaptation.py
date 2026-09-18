@@ -567,7 +567,9 @@ def adapt_multi_objective(
         row = {"mode": r.mode.value}
         for name in obj_names:
             if name == "accuracy":
-                row[name] = r.metrics.get("psi_accuracy", r.metrics.get("accuracy", 0.0))
+                row[name] = r.metrics.get(
+                    "psi_accuracy", r.metrics.get("accuracy", 0.0)
+                )
             elif name == "spectral_radius":
                 row[name] = r.stability.spectral_radius if r.stability else 0.0
             elif name == "walltime_s":
@@ -590,7 +592,9 @@ def adapt_multi_objective(
 
     df = pd.DataFrame(rows)
     front = pareto_top(df, k=len(df), objectives=objectives)
-    pareto_indices = [rows.index({**r, "mode": r["mode"]}) for r in front.to_dict("records")]
+    pareto_indices = [
+        rows.index({**r, "mode": r["mode"]}) for r in front.to_dict("records")
+    ]
     pareto_states = [results[i] for i in pareto_indices]
 
     # Scalarized best

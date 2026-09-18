@@ -206,7 +206,9 @@ def apply_bp_deficit(
             df["ruler_walltime_ratio"] = (df["walltime_s"] / ruler_wt).clip(lower=0.0)
         if task in ruler_energies:
             ruler_en = ruler_energies[task]
-            df["ruler_energy_ratio"] = (df["energy_per_step"] / ruler_en).clip(lower=0.0)
+            df["ruler_energy_ratio"] = (df["energy_per_step"] / ruler_en).clip(
+                lower=0.0
+            )
 
     return df
 
@@ -287,7 +289,9 @@ def pareto_top(
                 continue
             dominates = True
             strict = False
-            for val_i, val_j, direction in zip(row_vals, other_vals, directions, strict=False):
+            for val_i, val_j, direction in zip(
+                row_vals, other_vals, directions, strict=False
+            ):
                 if direction == "maximize":
                     if val_j < val_i:
                         dominates = False

@@ -264,7 +264,9 @@ def compute_dominance(
                 continue
             dominates = True
             strict = False
-            for val_i, val_j, direction in zip(pts[i], pts[j], directions, strict=False):
+            for val_i, val_j, direction in zip(
+                pts[i], pts[j], directions, strict=False
+            ):
                 if direction == "maximize":
                     if val_j < val_i:
                         dominates = False
