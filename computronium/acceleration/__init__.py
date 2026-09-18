@@ -50,6 +50,7 @@ from computronium.acceleration.backends import (
     enable_tf32,
     get_dispatcher,
     get_optimal_backend,
+    kernel_available,
     profile_kernel,
 )
 from computronium.acceleration.compile import compile_model, compile_settling_loop
@@ -240,6 +241,7 @@ __all__ = [
     "get_optimal_backend",
     "get_triton_ops",
     "infer_algorithm_family",
+    "kernel_available",
     "lif_step",
     "pepita_error_modulation",
     "phase_encode",

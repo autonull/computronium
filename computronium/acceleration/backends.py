@@ -36,6 +36,7 @@ __all__ = [
     "dispatch_kernel",
     "enable_tf32",
     "get_optimal_backend",
+    "kernel_available",
     "profile_kernel",
 ]
 
@@ -451,6 +452,46 @@ class CupyChecker:
             return False, f"CuPy installed but CUDA failed: {e}"
         else:
             return True, "CuPy available with CUDA"
+
+
+def kernel_available(technology: str) -> bool:
+    """
+    Return True if the given kernel technology is usable in the current environment.
+
+    Args:
+        technology: One of "triton", "cuda", "torch_compile", "cupy", "numpy"
+    """
+    if technology == "triton":
+        try:
+            import triton  # noqa: F401
+            import torch
+
+            return torch.cuda.is_available()
+        except Exception:
+            return False
+
+    if technology == "cuda":
+        import torch
+
+        return torch.cuda.is_available()
+
+    if technology == "torch_compile":
+        import torch
+
+        return hasattr(torch, "compile")
+
+    if technology == "cupy":
+        try:
+            import cupy  # noqa: F401
+
+            return True
+        except Exception:
+            return False
+
+    if technology == "numpy":
+        return True
+
+    return False
 
 
 class TritonChecker:
