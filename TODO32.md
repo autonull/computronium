@@ -39,14 +39,20 @@ The registry makes implementation status explicit.
 | 8 | Run repository health checks | ✅ Done |
 | 9 | Fix lint issues in new files (RUF067, format) | ✅ Done |
 | 10 | Fix pyright type issues (registry, PCALMDynamics settle signature) | ✅ Done |
+| 11 | Create predictive_settling primitive (state_dynamics) | ✅ Done |
+| 12 | Add predictive_settling tests | ✅ Done |
+| 13 | Create random_projections primitive (credit_assignment) | ✅ Done |
+| 14 | Add random_projections tests | ✅ Done |
 
 ### ✅ Verification Results
 
 All new tests pass when run per-directory:
 ```bash
 uv run pytest tests/primitives/state_dynamics/pc_alm_settling -q     # 10 passed
+uv run pytest tests/primitives/state_dynamics/predictive_settling -q # 7 passed
+uv run pytest tests/primitives/credit_assignment/random_projections -q # 7 passed
 uv run pytest tests/algorithms/pcalm -q                              # 13 passed
-uv run pytest tests/acceleration/test_all_implementations.py -q      # 4 passed
+uv run pytest tests/acceleration/test_all_implementations.py -q      # 8 passed
 ```
 
 All existing tests continue to pass:
@@ -75,6 +81,16 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - Reference wraps PCALMDynamics; kernel delegates to pcalm_kernels._compiled_pcalm_settle
 - Deterministic RNG handling for parity testing
 
+**Primitive (predictive_settling):**
+- `computronium/primitives/state_dynamics/predictive_settling/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
+- Reference wraps PredictiveSettlingDynamics; kernel delegates to _compiled_layered_settle (torch.compile)
+- Deterministic RNG handling for parity testing
+
+**Primitive (random_projections):**
+- `computronium/primitives/credit_assignment/random_projections/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
+- Reference wraps RandomProjectionsCredit; kernel falls back to reference (Triton TODO)
+- Deterministic RNG handling for parity testing
+
 **Algorithm exemplar (pcalm):**
 - `computronium/algorithms/pcalm/` with spec.py, reference.py, kernel.py, factory.py, cases.py, __init__.py
 - Factory wraps compose_joint_system with backend selection
@@ -82,6 +98,8 @@ Note: Test files with identical names in different directories (test_cases.py, t
 
 **Tests:**
 - tests/primitives/state_dynamics/pc_alm_settling/ (test_reference.py, test_kernel_parity.py, test_cases.py)
+- tests/primitives/state_dynamics/predictive_settling/ (test_reference.py, test_kernel_parity.py, test_cases.py)
+- tests/primitives/credit_assignment/random_projections/ (test_reference.py, test_kernel_parity.py, test_cases.py)
 - tests/algorithms/pcalm/ (test_reference.py, test_kernel_parity.py, test_factory.py, test_cases.py)
 - tests/acceleration/test_all_implementations.py (parametrized over all_specs())
 
@@ -89,6 +107,7 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - Added noqa comments for intentional patterns (non-empty-init-module RUF067 for registration)
 - Fixed import ordering and type annotations
 - Fixed ruff format on registry.py
+- Fixed missing newlines, unsorted imports, unused imports, TYPE_CHECKING blocks
 
 **Type fixes:**
 - Fixed registry.py pyright errors (getattr for package attributes, type ignore for SPEC)
@@ -97,7 +116,7 @@ Note: Test files with identical names in different directories (test_cases.py, t
 ### 📋 Remaining Work (Phase 3+: Migration of Other Primitives/Algorithms)
 
 Per the plan, the next phases are:
-- **Phase 3**: Migrate high-value primitives (predictive_settling, random_projections credit, local_goodness credit, etc.)
+- **Phase 3**: Migrate high-value primitives (local_goodness credit, temporal_trace credit, muon update, tile routing, fast_weight plasticity, routing plasticity)
 - **Phase 4**: Migrate named algorithms (backprop, fa, dfa, ff, pepita, pc, eqprop, hebbian, stdp, tile, fast_weight, routing)
 
 ### 💡 New Improvement Opportunities
@@ -108,6 +127,7 @@ Per the plan, the next phases are:
 4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup
 5. **PCALMCredit primitive**: The credit_assignment.pc_alm primitive is declared in uses_primitives but not yet implemented as a separate primitive directory
 6. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
+7. **Kernel implementations**: random_projections kernel falls back to reference; implement Triton FA kernels
 
 ### ✅ Facilitating Changes
 
@@ -115,6 +135,7 @@ Per the plan, the next phases are:
 - Registry discovery is working and testable via `all_specs()`
 - Parity testing framework is in place and validated
 - Microbenchmark infrastructure exists for engineering smoke tests
+- Primitive template validated with 3 primitives (pc_alm_settling, predictive_settling, random_projections)
 
 ---
 
