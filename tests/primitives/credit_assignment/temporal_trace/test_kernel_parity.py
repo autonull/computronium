@@ -1,20 +1,20 @@
-"""Tests for Predictive Settling kernel parity."""
+"""Tests for Temporal Trace Credit kernel parity."""
 
 import pytest
 
 from computronium.acceleration.parity import assert_parity
 from computronium.acceleration.registry import get
-from computronium.primitives.state_dynamics.predictive_settling import (
+from computronium.primitives.credit_assignment.temporal_trace import (
     make_case,
     reference_step,
 )
 
 # Try to import kernel; skip if not available
 try:
-    from computronium.primitives.state_dynamics.predictive_settling.kernel import (
+    from computronium.primitives.credit_assignment.temporal_trace.kernel import (
         is_available,
     )
-    from computronium.primitives.state_dynamics.predictive_settling.kernel import (
+    from computronium.primitives.credit_assignment.temporal_trace.kernel import (
         step as kernel_step,
     )
 
@@ -22,7 +22,7 @@ try:
 except ImportError:
     KERNEL_AVAILABLE = False
 
-spec = get("primitive.state_dynamics.predictive_settling")
+spec = get("primitive.credit_assignment.temporal_trace")
 
 
 @pytest.mark.skipif(not KERNEL_AVAILABLE, reason="kernel not available")

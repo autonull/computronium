@@ -1,6 +1,5 @@
 """Tests for local_goodness kernel parity."""
 
-
 from computronium.acceleration.parity import assert_parity
 from computronium.primitives.credit_assignment.local_goodness import (
     SPEC,

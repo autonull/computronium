@@ -10,8 +10,8 @@ def test_make_case_deterministic():
     assert case1.state.shape == case2.state.shape
     assert case1.state.allclose(case2.state)
     # Config differs in seed and loss (random)
-    config1 = {k: v for k, v in case1.config.items() if k not in ("seed", "loss")}
-    config2 = {k: v for k, v in case2.config.items() if k not in ("seed", "loss")}
+    config1 = {k: v for k, v in case1.config.items() if k not in {"seed", "loss"}}
+    config2 = {k: v for k, v in case2.config.items() if k not in {"seed", "loss"}}
     assert config1 == config2
 
 
@@ -22,6 +22,6 @@ def test_make_case_different_seeds():
     assert case1.state.shape == case2.state.shape
     assert not case1.state.allclose(case2.state)
     # Config differs in seed and loss
-    config1 = {k: v for k, v in case1.config.items() if k not in ("seed", "loss")}
-    config2 = {k: v for k, v in case2.config.items() if k not in ("seed", "loss")}
+    config1 = {k: v for k, v in case1.config.items() if k not in {"seed", "loss"}}
+    config2 = {k: v for k, v in case2.config.items() if k not in {"seed", "loss"}}
     assert config1 == config2

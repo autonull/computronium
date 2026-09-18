@@ -13,6 +13,8 @@ from computronium.primitives.credit_assignment.random_projections import (
 try:
     from computronium.primitives.credit_assignment.random_projections.kernel import (
         is_available,
+    )
+    from computronium.primitives.credit_assignment.random_projections.kernel import (
         step as kernel_step,
     )
 
