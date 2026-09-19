@@ -244,12 +244,22 @@ Note: Test files with identical names in different directories (test_cases.py, t
 | 50 | Verify all new tests pass (per-directory due to pytest collection conflicts) | ✅ Done |
 | 51 | Verify all existing integration/property tests pass | ✅ Done |
 | 52 | Verify central registry test (48 tests) passes | ✅ Done |
+| 53 | Fix all lint issues in new primitives/algorithms (noqa-comments, rule-codes-in-suppression-comments) | ✅ Done |
+| 54 | Run pyright type checking on new modules | ✅ Done |
+| 55 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
 
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
 - **Future**: Migrate remaining algorithms (stdp, etc.)
 - **Future**: Implement Triton kernels for primitives currently falling back to reference
+- **Future**: Create remaining primitives from target layout:
+  - state_dynamics: energy_minimization, spike_integration, instantaneous_pass, lazy_state_dynamics, diffusion
+  - credit_assignment: reverse_mode, thermodynamic_contrast, target_inversion, homeostatic
+  - parameter_update: euclidean, spectral_constrained, natural_gradient, elastic_consolidation
+  - plasticity: null, substrate_coupled, rule_state, closed_form_ridge, temporal_psi
+  - geometry: feedforward_dag, recurrent_attractor, fabric_pc, spatial_lattice_3d, ntm, nca
+  - substrate: digital, memristive, neuromorphic, photonic, quantum, noisy, sparse, complex, ternary
 
 ### 💡 New Improvement Opportunities
 
@@ -272,8 +282,11 @@ Per the plan, future phases include:
 - Phase 5 (missing primitives & algorithms) complete: PCALMCredit primitive, target_prop, dfa algorithms
 - Algorithm template validated with 14 algorithms (pcalm + 11 Phase 4 algorithms + tp + dfa)
 - All 161 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests)
+- All 73 primitive tests pass (10+7+7+8+7+7+10+12+13+8)
 - All 48 central registry tests pass (2 tests × 24 implementations)
 - All existing integration/property tests continue to pass
+- All lint checks pass for new code
+- All pyright type checks pass for new code
 
 ---
 

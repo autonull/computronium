@@ -17,7 +17,7 @@ from .kernel import step as kernel_step
 from .reference import step as reference_step
 from .spec import SPEC
 
-register(SPEC)  # noqa: RUF067 (registration side effect required)
+register(SPEC)  # ruff: ignore[non-empty-init-module] (registration side effect required)
 
 __all__ = [
     "SPEC",

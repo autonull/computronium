@@ -1,5 +1,5 @@
-# ruff: noqa: PLC0415
-# ruff: noqa: INP001
+# ruff: file-ignore[import-outside-top-level]
+# ruff: file-ignore[implicit-namespace-package]
 """Routing algorithm (6-D joint).
 
 State-dependent gating with RoutingPlasticity. Wraps
@@ -21,7 +21,7 @@ from .kernel import step as kernel_step
 from .reference import step as reference_step
 from .spec import SPEC
 
-_register(SPEC)  # noqa: RUF067
+_register(SPEC)  # ruff: ignore[non-empty-init-module]
 
 __all__ = [
     "SPEC",
