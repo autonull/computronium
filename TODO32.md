@@ -251,33 +251,337 @@ Note: Test files with identical names in different directories (test_cases.py, t
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
-- **Future**: Implement Triton kernels for primitives currently falling back to reference
-- **Future**: Create remaining primitives from target layout:
-  - state_dynamics: energy_minimization, spike_integration, instantaneous_pass, lazy_state_dynamics, diffusion
-  - credit_assignment: reverse_mode, thermodynamic_contrast, target_inversion, homeostatic
-  - parameter_update: euclidean, spectral_constrained, natural_gradient, elastic_consolidation
-  - plasticity: null, substrate_coupled, rule_state, closed_form_ridge, temporal_psi
-  - geometry: feedforward_dag, recurrent_attractor, fabric_pc, spatial_lattice_3d, ntm, nca
-  - substrate: digital, memristive, neuromorphic, photonic, quantum, noisy, sparse, complex, ternary
-- **Note**: `algorithm.hebbian` (STDP via LocalGoodnessCredit) covers the stdp family; separate `algorithm.stdp` not needed per current design
+
+#### Phase 6: Remaining Primitives (6 Axes × ~5 each = ~30 primitives)
+
+Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.py`, `cases.py`, `__init__.py`, tests). Reference delegates to ontology class; kernel starts as reference fallback, Triton added later.
+
+**Use scaffolding**: `uv run python scripts/scaffold_primitive.py --axis <axis> --name <name> ...` (see Force Multipliers)
+
+| Axis | Primitive | Ontology Class | Priority | Dependencies | Scaffold Command |
+|------|-----------|----------------|----------|--------------|------------------|
+| **state_dynamics** | `energy_minimization` | `EnergyMinimizationDynamics` | **High** | - | `--axis state_dynamics --name energy_minimization --ontology-class EnergyMinimizationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.energy_minimization` |
+| | `spike_integration` | `SpikeIntegrationDynamics` | **High** | - | `--axis state_dynamics --name spike_integration --ontology-class SpikeIntegrationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.spike_integration` |
+| | `instantaneous_pass` | `InstantaneousDynamics` | Medium | - | `--axis state_dynamics --name instantaneous_pass --ontology-class InstantaneousDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.instantaneous_pass` |
+| | `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy_state_dynamics` |
+| | `diffusion` | `DiffusionDynamics` | Low | - | `--axis state_dynamics --name diffusion --ontology-class DiffusionDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.diffusion` |
+| **credit_assignment** | `reverse_mode` | `BackpropCredit` | **High** | - | `--axis credit_assignment --name reverse_mode --ontology-class BackpropCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.backprop` |
+| | `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
+| | `target_inversion` | `TargetInversionCredit` | Medium | - | `--axis credit_assignment --name target_inversion --ontology-class TargetInversionCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.target_inversion` |
+| | `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
+| **parameter_update** | `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
+| | `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
+| | `natural_gradient` | `NaturalGradientUpdate` | Low | - | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
+| | `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
+| **plasticity** | `null` | `NullPlasticity` | **High** | - | `--axis plasticity --name null --ontology-class NullPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.null` |
+| | `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
+| | `rule_state` | `RuleStatePlasticity` | Low | - | `--axis plasticity --name rule_state --ontology-class RuleStatePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.rule_state` |
+| | `closed_form_ridge` | `ClosedFormRidgePlasticity` | Medium | - | `--axis plasticity --name closed_form_ridge --ontology-class ClosedFormRidgePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.closed_form_ridge` |
+| | `temporal_psi` | `TemporalPsiPlasticity` | Medium | - | `--axis plasticity --name temporal_psi --ontology-class TemporalPsiPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.temporal_psi` |
+| **geometry** | `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
+| | `recurrent_attractor` | `RecurrentGeometry` | **High** | - | `--axis geometry --name recurrent_attractor --ontology-class RecurrentGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.recurrent` |
+| | `fabric_pc` | `FabricPCGeometry` | Medium | - | `--axis geometry --name fabric_pc --ontology-class FabricPCGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.fabric_pc` |
+| | `spatial_lattice_3d` | `SpatialLattice3DGeometry` | Low | - | `--axis geometry --name spatial_lattice_3d --ontology-class SpatialLattice3DGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.spatial_lattice_3d` |
+| | `ntm` | `NtmGeometry` | Medium | - | `--axis geometry --name ntm --ontology-class NtmGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.ntm` |
+| | `nca` | `NcaGeometry` | Medium | - | `--axis geometry --name nca --ontology-class NcaGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.nca` |
+| **substrate** | `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
+| | `memristive` | `MemristiveSubstrate` | Medium | - | `--axis substrate --name memristive --ontology-class MemristiveSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.memristive` |
+| | `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
+| | `photonic` | `PhotonicSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class PhotonicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.photonic` |
+| | `quantum` | `QuantumSubstrate` | Low | - | `--axis substrate --name quantum --ontology-class QuantumSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.quantum` |
+| | `noisy` | `NoisySubstrate` | Low | - | `--axis substrate --name noisy --ontology-class NoisySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.noisy` |
+| | `sparse` | `SparseSubstrate` | Low | - | `--axis substrate --name sparse --ontology-class SparseSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.sparse` |
+| | `complex` | `ComplexSubstrate` | Low | - | `--axis substrate --name complex --ontology-class ComplexSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.complex` |
+| | `ternary` | `TernarySubstrate` | Low | - | `--axis substrate --name ternary --ontology-class TernarySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.ternary` |
+
+**Substrate/Geometry Note**: These are structural primitives. Their `reference.py` exposes `make_substrate()` / `make_geometry()` factories, not `step(case)`. Parity tests verify structural equivalence via integration tests, not `assert_parity`. See Force Multiplier #6.
+
+### Phase 6 Execution Order (Dependency-Aware)
+
+1. **Week 1**: `energy_minimization`, `thermodynamic_contrast`, `euclidean`, `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
+2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
+3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
+4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
+
+### Phase 7: Additional Algorithms (beyond current 14)
+
+| Algorithm | Coordinate (S×G×D×P×C×U) | Primitives Used | Priority | Scaffold Command |
+|-----------|--------------------------|-----------------|----------|------------------|
+| `directed_ep` | Digital × Recurrent × EnergyMin × Null × RandomProj × Euclidean | energy_minimization, random_projections, euclidean | Medium | `--name directed_ep --family equilibrium_propagation --primitives energy_minimization,random_projections,euclidean --factory create_directed_ep_mlp` |
+| `finite_nudge_ep` | Digital × Recurrent × EnergyMin(β≥1) × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean | Medium | `--name finite_nudge_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_finite_nudge_ep_mlp` |
+| `ternary_eqprop` | Ternary × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, ternary substrate | Low | `--name ternary_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,ternary --factory create_ternary_eqprop_mlp` |
+| `momentum_eqprop` | Digital × Recurrent × EnergyMin(momentum) × Null × ThermoContrast × Euclidean | energy_minimization(momentum), thermodynamic_contrast, euclidean | Low | `--name momentum_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_momentum_eqprop_mlp` |
+| `sparse_eqprop` | Sparse × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, sparse substrate | Low | `--name sparse_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,sparse --factory create_sparse_eqprop_mlp` |
+| `diffusion_eqprop` | Digital × Recurrent × Diffusion × Null × ThermoContrast × Euclidean | diffusion, thermodynamic_contrast, euclidean | Low | `--name diffusion_eqprop --family equilibrium_propagation --primitives diffusion,thermodynamic_contrast,euclidean --factory create_diffusion_eqprop_mlp` |
+| `holomorphic_ep` | Quantum × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, quantum substrate | Low | `--name holomorphic_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,quantum --factory create_holomorphic_ep_mlp` |
+
+**Algorithm Scaffolding**: `uv run python scripts/scaffold_algorithm.py ...` generates factory + reference + kernel + cases + tests.
+
+#### Phase 8: Triton Kernel Implementation
+
+Primitives currently falling back to reference; need Triton kernels:
+
+| Primitive | Current Fallback | Target Kernel | Effort | Depends On |
+|-----------|-----------------|---------------|--------|------------|
+| `predictive_settling` | `torch.compile` | Triton fused layered settle | Medium | Phase 6: energy_minimization |
+| `random_projections` | reference | Triton batched matmul + projection | Medium | - |
+| `local_goodness` | reference | Triton layer-local goodness | Medium | - |
+| `temporal_trace` | reference | Triton STDP trace update | Medium | - |
+| `muon` | reference | Triton orthogonalization (Newton-Schulz) | High | - |
+| `fast_weight` | reference | Triton fast-weight outer product | Medium | - |
+| `routing` | reference | Triton gating/routing | Medium | Phase 6: substrate_coupled |
+| `tile_mesh` | reference | Triton tile routing | Medium | - |
+| `energy_minimization` | reference | Triton energy gradient + settle | Medium | Phase 6 |
+| `spike_integration` | reference | Triton LIF/Izhikevich step | Medium | Phase 6 |
+| `thermodynamic_contrast` | reference | Triton free/nudged contrast | Medium | Phase 6 |
+| `target_inversion` | reference | Triton inverse mapping | Medium | Phase 6 |
+| `spectral_constrained` | reference | Triton spectral norm projection | Medium | Phase 6 |
+
+**Kernel Development Order** (maximizes reuse):
+1. `random_projections` → reusable batched matmul primitive
+2. `local_goodness` → reusable layer-wise reduction
+3. `energy_minimization` → reusable gradient + settle loop
+4. `thermodynamic_contrast` → reuses energy_minimization kernels
+5. `fast_weight` / `routing` → outer product + gating
+6. `muon` → standalone Newton-Schulz
+7. `tile_mesh` → sparse routing
+8. `spike_integration` → LIF step
+9. `target_inversion` → inverse mapping
+10. `spectral_constrained` → spectral norm
+11. `temporal_trace` → STDP trace
+12. `predictive_settling` → layered settle (depends on energy_minimization)
+
+### 🎯 Immediate Next Steps (Do This Week)
+
+| Step | Task | Command/Action | Done When |
+|------|------|----------------|-----------|
+| 1 | Create scaffolding script | `scripts/scaffold_primitive.py` with Jinja2 templates | Generates working primitive |
+| 2 | Create test generator | `tests/generate_tests.py` from spec + case | Generates 3 test files |
+| 3 | Add CI parity gate | `.github/workflows/ci.yml` matrix + parity step | PR shows matrix comment |
+| 4 | Fix test file naming | Rename `test_*.py` → `test_primitive_*.py` / `test_algorithm_*.py` | `pytest tests/` works globally |
+| 5 | Scaffold first Phase 6 primitive | `energy_minimization` (high priority, unblocks eqprop kernels) | Primitive + tests pass |
+| 6 | Add lazy registry loading | `computronium/primitives/__init__.py` `__getattr__` | Import time < 500ms |
 
 ### 💡 New Improvement Opportunities
 
 1. **Test file naming**: Rename test files to avoid pytest collection conflicts (e.g., `test_primitive_reference.py`, `test_algorithm_reference.py`). **Known issue**: pytest collection fails when running all tests together due to duplicate module names (`test_reference.py`, `test_kernel_parity.py`, `test_cases.py` in multiple directories). **Workaround**: run tests per-directory (as documented in verification commands).
 
-2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (--iterations, --warmup, JSON output to file)
+2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
 
-3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration
+3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration (GitHub Actions table, PR comments).
 
-4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup
+4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup (currently ~2s import time).
 
-5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
+5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
 
-6. **Kernel implementations**: random_projections, local_goodness, temporal_trace, muon, fast_weight, routing, tile_mesh, predictive_settling kernels fall back to reference; implement Triton kernels
+6. **Pre-existing lint debt**: Old `acceleration/` modules (fa_kernels.py, triton_kernels.py, pc_kernels.py, ff_kernels.py, hebbian_kernels.py, snn_kernels.py, tp_kernels.py, tile_kernels.py, mep_kernels.py, backprop_kernels.py, contrastive_kernels.py, pcalm_kernels.py, eqprop_kernel_backend.py, compile.py, kernels.py, kernel_backend.py, backends.py) have invalid `# noqa` directives (missing comma-separated codes). These are legacy files not part of the new primitives/algorithms structure. Fix when touched.
 
-7. **Pre-existing lint debt**: Old `acceleration/` modules (fa_kernels.py, triton_kernels.py, etc.) have invalid `# noqa` directives (missing comma-separated codes). These are legacy files not part of the new primitives/algorithms structure.
+### 🚀 Leverage New Architecture: Force Multipliers for Future Work
 
-### ✅ Facilitating Changes
+The new `primitives/` + `algorithms/` + `acceleration/` structure enables several force multipliers that dramatically reduce effort for future additions:
+
+#### 1. Code Generation / Scaffolding (NEW: `scripts/scaffold_primitive.py`, `scripts/scaffold_algorithm.py`)
+
+**Problem**: Creating a new primitive requires 6 files + 3 test files with repetitive boilerplate.
+
+**Solution**: CLI scaffolding that generates complete, working primitive/algorithm from a spec:
+
+```bash
+# Generate primitive from minimal spec
+uv run python scripts/scaffold_primitive.py \
+    --axis state_dynamics \
+    --name energy_minimization \
+    --ontology-class EnergyMinimizationDynamics \
+    --ontology-module computronium.ontology.dynamics \
+    --config-class StateDynamicsConfig.energy_minimization
+
+# Generate algorithm from primitive list
+uv run python scripts/scaffold_algorithm.py \
+    --name directed_ep \
+    --family equilibrium_propagation \
+    --primitives energy_minimization,random_projections,euclidean \
+    --factory create_directed_ep_mlp
+```
+
+**Outputs**: All 6 primitive files + 3 test files + registry registration, ready to edit.
+
+**Effort reduction**: ~90% boilerplate eliminated. New primitive in 30 seconds vs 30 minutes.
+
+#### 2. Test Generation from Specs (NEW: `tests/generate_tests.py`)
+
+**Problem**: Test files (`test_reference.py`, `test_kernel_parity.py`, `test_cases.py`) are nearly identical across primitives.
+
+**Solution**: Generate tests from the `ImplementationSpec` + `Case` dataclass:
+
+```python
+# In spec.py, add:
+TEST_CONFIG = {
+    "reference_tests": ["deterministic", "different_seeds", "returns_expected_type"],
+    "parity_tests": ["default_tolerance", "different_seeds"],
+    "case_tests": ["deterministic", "config_structure"],
+}
+
+# Generate:
+uv run python tests/generate_tests.py --spec primitive.state_dynamics.energy_minimization
+```
+
+**Benefits**: Tests stay in sync with spec changes; new primitives get tests automatically.
+
+#### 3. CI Integration: Parity Gates & Matrix Reports
+
+**Add to CI pipeline** (`.github/workflows/ci.yml`):
+
+```yaml
+- name: Parity Gate
+  run: |
+    uv run python -m computronium.acceleration.matrix --format json > matrix.json
+    uv run python -m computronium.acceleration.microbench --all --format json > bench.json
+    uv run pytest tests/acceleration/test_all_implementations.py -q
+
+- name: Comment PR with Matrix
+  uses: actions/github-script@v7
+  with:
+    script: |
+      const matrix = require('./matrix.json');
+      // Post formatted table as PR comment
+```
+
+**Artifacts**: Matrix table, parity reports, microbench results as CI artifacts for regression tracking.
+
+#### 4. Kernel Development Workflow (NEW: `scripts/kernel_dev.py`)
+
+**Problem**: Writing Triton kernels is error-prone; parity testing is manual.
+
+**Solution**: Scaffold + guided development:
+
+```bash
+# 1. Scaffold kernel with parity harness
+uv run python scripts/scaffold_kernel.py \
+    --primitive primitive.state_dynamics.energy_minimization \
+    --technology triton
+
+# 2. Run parity in watch mode during development
+uv run python scripts/kernel_dev.py \
+    --primitive primitive.state_dynamics.energy_minimization \
+    --watch  # re-runs parity on file change
+
+# 3. Microbench comparison
+uv run python -m computronium.acceleration.microbench \
+    --id primitive.state_dynamics.energy_minimization \
+    --backend reference,kernel \
+    --device cpu,cuda \
+    --iterations 100
+```
+
+**Template includes**: Triton kernel stub, reference delegate, `is_available()`, parity tolerance from spec.
+
+#### 5. Algorithm Composition Validation (NEW: `scripts/validate_composition.py`)
+
+**Problem**: `uses_primitives` in algorithm spec may drift from actual imports.
+
+**Solution**: Static validation:
+
+```python
+# In algorithm spec.py:
+USES_PRIMITIVES = (
+    "primitive.state_dynamics.energy_minimization",
+    "primitive.credit_assignment.thermodynamic_contrast",
+    "primitive.parameter_update.euclidean",
+)
+
+# Validation script checks:
+# 1. All listed primitives exist in registry
+# 2. Algorithm reference.py imports only from listed primitives (+ ontology)
+# 3. No undeclared primitive dependencies
+```
+
+Run in CI: `uv run python scripts/validate_composition.py --all-algorithms`
+
+#### 6. Substrate/Geometry: Structural Primitives (Special Handling)
+
+Substrate and Geometry primitives differ from computational axes:
+- **No `step(case)` interface** - they construct system topology/state space
+- **Factory-style**: `make_substrate(spec)`, `make_geometry(config)`
+- **Kernel = JIT/compile optimization** (e.g., sparse matmul, IR-drop solver)
+
+**Template adjustment** for substrate/geometry:
+```python
+# substrate/digital/spec.py
+SPEC = ImplementationSpec(
+    id="primitive.substrate.digital",
+    kind="primitive",
+    axis="substrate",
+    reference_entrypoint="computronium.primitives.substrate.digital.reference.make_substrate",
+    kernel_entrypoint="computronium.primitives.substrate.digital.kernel.make_substrate",
+    # No parity.test - structural equivalence verified by integration tests
+)
+```
+
+#### 7. Documentation Generation from Specs (NEW: `scripts/generate_docs.py`)
+
+Specs carry rich metadata: `summary`, `equations`, `invariants`, `notes`, `tags`, `evidence_ids`.
+
+**Generate**:
+- `docs/primitives/<axis>/<name>.md` - per-primitive docs
+- `docs/algorithms/<name>.md` - per-algorithm docs
+- `docs/IDENTITY_CARDS.md` - algorithm identity cards (already exists)
+- `docs/IMPLEMENTATION_MATRIX.md` - from `matrix.py`
+
+```bash
+uv run python scripts/generate_docs.py --all --output docs/generated/
+```
+
+#### 8. Registry: Lazy Loading + Explicit Registration
+
+Current: eager import scans all submodules (~2s startup).
+
+**Option A**: Lazy loading with `__getattr__` in `computronium.primitives` + `computronium.algorithms`
+**Option B**: Explicit registration via `pyproject.toml` entry points (faster, explicit)
+
+```toml
+# pyproject.toml
+[project.entry-points."computronium.primitives"]
+state_dynamics = "computronium.primitives.state_dynamics:register_all"
+credit_assignment = "computronium.primitives.credit_assignment:register_all"
+# ...
+```
+
+#### 9. Benchmark Harness: Comparative Regression Tracking
+
+Extend microbench to track performance over time:
+
+```bash
+# Store results with git SHA
+uv run python -m computronium.acceleration.microbench \
+    --id primitive.state_dynamics.pc_alm_settling \
+    --backend kernel \
+    --device cuda \
+    --output benchmarks/pcalm_settling_${GIT_SHA}.json
+```
+
+**Dashboard**: `scripts/bench_dashboard.py` plots latency/memory over commits.
+
+#### 10. Property Tests from Spec Invariants
+
+Spec `invariants` tuple can generate Hypothesis property tests:
+
+```python
+# spec.py
+invariants=(
+    "settling residual decreases or remains bounded",
+    "state remains finite",
+    "deterministic under fixed seed",
+)
+
+# scripts/invariant_to_property.py generates:
+@given(data=st.data())
+def test_settling_residual_decreases(data):
+    case = make_case(seed=data.draw(st.integers(0, 1000)))
+    output = reference_step(case)
+    # Check residual decreased...
+```
+
+### 🔧 Facilitating Changes (for next sessions)
 
 - The `StateDynamics` protocol now has a consistent signature across all implementations (including `on_step` callback)
 - Registry discovery is working and testable via `all_specs()`
