@@ -17,7 +17,9 @@ def __getattr__(name: str) -> Any:
     if name in _PRIMITIVES:
         return importlib.import_module(f".{name}", __name__)
 
-    raise AttributeError(f"module 'computronium.primitives.substrate' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'computronium.primitives.substrate' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:

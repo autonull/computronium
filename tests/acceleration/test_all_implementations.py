@@ -55,10 +55,12 @@ def test_kernel_parity(spec):
     if not kernel_module.is_available():
         pytest.skip("kernel not available")
 
-    case = case_module.make_case()
+    # Use separate cases for reference and kernel to avoid autograd graph reuse issues
+    case_ref = case_module.make_case()
+    case_kern = case_module.make_case()
 
-    reference_output = reference_module.step(case)
-    kernel_output = kernel_module.step(case)
+    reference_output = reference_module.step(case_ref)
+    kernel_output = kernel_module.step(case_kern)
 
     from computronium.acceleration.parity import assert_parity
 

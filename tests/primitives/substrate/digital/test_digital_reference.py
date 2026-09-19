@@ -16,6 +16,7 @@ def test_reference_make_substrate_returns_substrate():
     assert substrate is not None
     # Check it's a DigitalSubstrate
     from computronium.ontology.substrate._substrate import DigitalSubstrate
+
     assert isinstance(substrate, DigitalSubstrate)
 
 
@@ -29,6 +30,7 @@ def test_reference_make_substrate_deterministic():
 
     # Both should be DigitalSubstrate instances
     from computronium.ontology.substrate._substrate import DigitalSubstrate
+
     assert isinstance(substrate1, DigitalSubstrate)
     assert isinstance(substrate2, DigitalSubstrate)
 
@@ -36,9 +38,11 @@ def test_reference_make_substrate_deterministic():
 def test_reference_make_substrate_noisy():
     """Test that reference_make_substrate handles noisy spec."""
     from computronium.primitives.substrate.digital import make_case_noisy
+
     case = make_case_noisy(device="cpu", seed=0, noise_level=0.1)
     substrate = reference_make_substrate(case.spec)
 
     assert substrate is not None
     from computronium.ontology.substrate._substrate import DigitalSubstrate
+
     assert isinstance(substrate, DigitalSubstrate)

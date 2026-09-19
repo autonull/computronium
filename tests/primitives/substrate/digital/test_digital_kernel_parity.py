@@ -30,6 +30,7 @@ def test_kernel_substrate_equivalence():
 
     # Both should be DigitalSubstrate
     from computronium.ontology.substrate._substrate import DigitalSubstrate
+
     assert isinstance(reference_substrate, DigitalSubstrate)
     assert isinstance(kernel_substrate, DigitalSubstrate)
 
@@ -40,6 +41,7 @@ def test_kernel_substrate_equivalence_noisy():
         pytest.skip("kernel not available")
 
     from computronium.primitives.substrate.digital import make_case_noisy
+
     case = make_case_noisy(device="cpu", seed=0, noise_level=0.1)
 
     reference_substrate = reference_make_substrate(case.spec)
@@ -54,6 +56,7 @@ def test_kernel_substrate_equivalence_sparse():
         pytest.skip("kernel not available")
 
     from computronium.primitives.substrate.digital import make_case_sparse
+
     case = make_case_sparse(device="cpu", seed=0, sparsity=0.5)
 
     reference_substrate = reference_make_substrate(case.spec)

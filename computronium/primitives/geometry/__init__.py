@@ -25,7 +25,9 @@ def __getattr__(name: str) -> Any:
         module = importlib.import_module(f".{primitive_path}", __name__)
         return module
 
-    raise AttributeError(f"module 'computronium.primitives.geometry' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'computronium.primitives.geometry' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:

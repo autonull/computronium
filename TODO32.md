@@ -63,14 +63,26 @@ All new tests pass when run per-directory (and now globally with renamed test fi
 uv run pytest tests/primitives/state_dynamics/pc_alm_settling -q     # 10 passed
 uv run pytest tests/primitives/state_dynamics/predictive_settling -q # 7 passed
 uv run pytest tests/primitives/state_dynamics/energy_minimization -q # 9 passed
+uv run pytest tests/primitives/state_dynamics/spike_integration -q   # 9 passed
 uv run pytest tests/primitives/credit_assignment/random_projections -q # 7 passed
 uv run pytest tests/primitives/credit_assignment/local_goodness -q   # 8 passed
 uv run pytest tests/primitives/credit_assignment/temporal_trace -q   # 7 passed
 uv run pytest tests/primitives/credit_assignment/pc_alm -q           # 8 passed
+uv run pytest tests/primitives/credit_assignment/thermodynamic_contrast -q # 7 passed
+uv run pytest tests/primitives/credit_assignment/reverse_mode -q     # 9 passed
 uv run pytest tests/primitives/parameter_update/muon -q              # 7 passed
+uv run pytest tests/primitives/parameter_update/euclidean -q         # 9 passed
+uv run pytest tests/primitives/parameter_update/spectral_constrained -q # 9 passed
 uv run pytest tests/primitives/geometry/tile_mesh -q                 # 10 passed
+uv run pytest tests/primitives/geometry/feedforward_dag -q           # 10 passed
+uv run pytest tests/primitives/geometry/recurrent_attractor -q       # 10 passed
 uv run pytest tests/primitives/plasticity/fast_weight -q             # 12 passed
 uv run pytest tests/primitives/plasticity/routing -q                 # 13 passed
+uv run pytest tests/primitives/plasticity/null -q                    # 9 passed
+uv run pytest tests/primitives/plasticity/substrate_coupled -q       # 9 passed
+uv run pytest tests/primitives/substrate/digital -q                  # 10 passed
+uv run pytest tests/primitives/substrate/memristive -q               # 10 passed
+uv run pytest tests/primitives/substrate/neuromorphic -q             # 10 passed
 uv run pytest tests/algorithms/pcalm -q                              # 13 passed
 uv run pytest tests/algorithms/backprop -q                           # 13 passed
 uv run pytest tests/algorithms/fa -q                                 # 13 passed
@@ -85,7 +97,7 @@ uv run pytest tests/algorithms/fast_weight -q                        # 13 passed
 uv run pytest tests/algorithms/spiking_snn -q                        # 13 passed
 uv run pytest tests/algorithms/tp -q                                 # 9 passed
 uv run pytest tests/algorithms/dfa -q                                # 9 passed
-uv run pytest tests/acceleration/test_all_implementations.py -q      # 50 passed
+uv run pytest tests/acceleration/test_all_implementations.py -q      # 62 passed
 ```
 
 All existing tests continue to pass:
@@ -339,6 +351,22 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 93 | Run all primitive/algorithm/acceleration tests (384 passed, 8 skipped) | ✅ Done |
 | 94 | Run integration/property tests (43 passed) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 Week 2 Primitives)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 95 | Create `spike_integration` primitive (state_dynamics, high priority) | ✅ Done |
+| 96 | Create `reverse_mode` primitive (credit_assignment, high priority) with GradientCredit | ✅ Done |
+| 97 | Create `spectral_constrained` primitive (parameter_update, medium priority) | ✅ Done |
+| 98 | Create `substrate_coupled` primitive (plasticity, medium priority) | ✅ Done |
+| 99 | Create `memristive` primitive (substrate, medium priority) with factory pattern | ✅ Done |
+| 100 | Create `neuromorphic` primitive (substrate, medium priority) with factory pattern | ✅ Done |
+| 101 | Fix test file naming to `test_<name>_*.py` pattern for all new primitives | ✅ Done |
+| 102 | Fix central registry test to use separate cases for reference/kernel (autograd safety) | ✅ Done |
+| 103 | Run ruff format, ruff check, pyright on all new primitives | ✅ Done |
+| 104 | Run all primitive/algorithm/acceleration tests (448 passed, 12 skipped) | ✅ Done |
+| 105 | Run integration/property tests (38 passed) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -352,20 +380,20 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | Axis | Primitive | Ontology Class | Priority | Dependencies | Scaffold Command |
 |------|-----------|----------------|----------|--------------|------------------|
 | **state_dynamics** | ✅ `energy_minimization` | `EnergyMinimizationDynamics` | **High** | - | `--axis state_dynamics --name energy_minimization --ontology-class EnergyMinimizationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.energy_minimization` |
-| | `spike_integration` | `SpikeIntegrationDynamics` | **High** | - | `--axis state_dynamics --name spike_integration --ontology-class SpikeIntegrationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.spike_integration` |
+| | ✅ `spike_integration` | `SpikeIntegrationDynamics` | **High** | - | `--axis state_dynamics --name spike_integration --ontology-class SpikeIntegrationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.spike_integration` |
 | | `instantaneous_pass` | `InstantaneousDynamics` | Medium | - | `--axis state_dynamics --name instantaneous_pass --ontology-class InstantaneousDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.instantaneous_pass` |
 | | `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy_state_dynamics` |
 | | `diffusion` | `DiffusionDynamics` | Low | - | `--axis state_dynamics --name diffusion --ontology-class DiffusionDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.diffusion` |
-| **credit_assignment** | `reverse_mode` | `BackpropCredit` | **High** | - | `--axis credit_assignment --name reverse_mode --ontology-class BackpropCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.backprop` |
+| **credit_assignment** | ✅ `reverse_mode` | `GradientCredit` | **High** | - | `--axis credit_assignment --name reverse_mode --ontology-class GradientCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.gradient` |
 | | ✅ `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
 | | `target_inversion` | `TargetInversionCredit` | Medium | - | `--axis credit_assignment --name target_inversion --ontology-class TargetInversionCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.target_inversion` |
 | | `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
 | **parameter_update** | `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
-| | `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
+| | ✅ `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
 | | `natural_gradient` | `NaturalGradientUpdate` | Low | - | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
 | | `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
 | **plasticity** | `null` | `NullPlasticity` | **High** | - | `--axis plasticity --name null --ontology-class NullPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.null` |
-| | `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
+| | ✅ `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
 | | `rule_state` | `RuleStatePlasticity` | Low | - | `--axis plasticity --name rule_state --ontology-class RuleStatePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.rule_state` |
 | | `closed_form_ridge` | `ClosedFormRidgePlasticity` | Medium | - | `--axis plasticity --name closed_form_ridge --ontology-class ClosedFormRidgePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.closed_form_ridge` |
 | | `temporal_psi` | `TemporalPsiPlasticity` | Medium | - | `--axis plasticity --name temporal_psi --ontology-class TemporalPsiPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.temporal_psi` |
@@ -376,8 +404,8 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | `ntm` | `NtmGeometry` | Medium | - | `--axis geometry --name ntm --ontology-class NtmGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.ntm` |
 | | `nca` | `NcaGeometry` | Medium | - | `--axis geometry --name nca --ontology-class NcaGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.nca` |
 | **substrate** | ✅ `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
-| | `memristive` | `MemristiveSubstrate` | Medium | - | `--axis substrate --name memristive --ontology-class MemristiveSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.memristive` |
-| | `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
+| | ✅ `memristive` | `MemristiveSubstrate` | Medium | - | `--axis substrate --name memristive --ontology-class MemristiveSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.memristive` |
+| | ✅ `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
 | | `photonic` | `PhotonicSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class PhotonicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.photonic` |
 | | `quantum` | `QuantumSubstrate` | Low | - | `--axis substrate --name quantum --ontology-class QuantumSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.quantum` |
 | | `noisy` | `NoisySubstrate` | Low | - | `--axis substrate --name noisy --ontology-class NoisySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.noisy` |
@@ -390,7 +418,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 ### Phase 6 Execution Order (Dependency-Aware)
 
 1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
-2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
+2. **Week 2**: ✅ `spike_integration`, ✅ `reverse_mode`, ✅ `spectral_constrained`, ✅ `substrate_coupled`, ✅ `memristive`, ✅ `neuromorphic` (6 primitives)
 3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
 4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
 
