@@ -19,7 +19,9 @@ if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
 
 
-def _make_activations(tensor: torch.Tensor, n_layers: int, seed: int) -> list[torch.Tensor]:
+def _make_activations(
+    tensor: torch.Tensor, n_layers: int, seed: int
+) -> list[torch.Tensor]:
     """Create a list of deterministic activations from a single tensor for n_layers."""
     # For a minimal feedforward network, we need input + hidden + output
     # The tensor represents the input, so we create deterministic hidden/output

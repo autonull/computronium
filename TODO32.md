@@ -234,6 +234,17 @@ Note: Test files with identical names in different directories (test_cases.py, t
 | 45 | Add dfa algorithm tests | ✅ Done |
 | 46 | Run repository health checks | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 47 | Fix RUF067 lint in __init__.py registration (dfa, tp, pc_alm credit) | ✅ Done |
+| 48 | Fix pyright type errors: add `on_step` to InstantaneousDynamics & SpikeIntegrationDynamics | ✅ Done |
+| 49 | Fix ruff format on 4 primitive files | ✅ Done |
+| 50 | Verify all new tests pass (per-directory due to pytest collection conflicts) | ✅ Done |
+| 51 | Verify all existing integration/property tests pass | ✅ Done |
+| 52 | Verify central registry test (48 tests) passes | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -251,7 +262,7 @@ Per the plan, future phases include:
 
 ### ✅ Facilitating Changes
 
-- The `StateDynamics` protocol now has a consistent signature across all implementations
+- The `StateDynamics` protocol now has a consistent signature across all implementations (including `on_step` callback)
 - Registry discovery is working and testable via `all_specs()`
 - Parity testing framework is in place and validated
 - Microbenchmark infrastructure exists for engineering smoke tests

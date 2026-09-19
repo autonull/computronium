@@ -14,6 +14,7 @@ from computronium.state import CompositeState
 
 class _MockContext:
     """Minimal mock context for testing - only needs device property."""
+
     def __init__(self, device: torch.device):
         self._device = device
 

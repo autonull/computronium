@@ -13,9 +13,7 @@ SPEC = ImplementationSpec(
     reference_entrypoint=(
         "computronium.primitives.parameter_update.muon.reference.step"
     ),
-    kernel_entrypoint=(
-        "computronium.primitives.parameter_update.muon.kernel.step"
-    ),
+    kernel_entrypoint=("computronium.primitives.parameter_update.muon.kernel.step"),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     parity=ParityTolerance(

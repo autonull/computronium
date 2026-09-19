@@ -13,9 +13,7 @@ SPEC = ImplementationSpec(
     reference_entrypoint=(
         "computronium.primitives.credit_assignment.pc_alm.reference.step"
     ),
-    kernel_entrypoint=(
-        "computronium.primitives.credit_assignment.pc_alm.kernel.step"
-    ),
+    kernel_entrypoint=("computronium.primitives.credit_assignment.pc_alm.kernel.step"),
     kernel_technology="triton",
     supported_backends=("reference", "kernel"),
     parity=ParityTolerance(
@@ -38,6 +36,6 @@ SPEC = ImplementationSpec(
         "credit_norm normalization options: relative, rms, spectral",
     ),
     notes="Accelerated kernel should preserve the pseudo-gradient within tolerance. "
-          "Requires PCALMDynamics to provide dual_vars in state.metrics or state.dual_vars.",
+    "Requires PCALMDynamics to provide dual_vars in state.metrics or state.dual_vars.",
     tags=("predictive_coding", "augmented_lagrangian", "local_learning", "hebbian"),
 )
