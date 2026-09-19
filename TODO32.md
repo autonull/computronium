@@ -251,7 +251,6 @@ Note: Test files with identical names in different directories (test_cases.py, t
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
-- **Future**: Migrate remaining algorithms (stdp, etc.)
 - **Future**: Implement Triton kernels for primitives currently falling back to reference
 - **Future**: Create remaining primitives from target layout:
   - state_dynamics: energy_minimization, spike_integration, instantaneous_pass, lazy_state_dynamics, diffusion
@@ -260,15 +259,23 @@ Per the plan, future phases include:
   - plasticity: null, substrate_coupled, rule_state, closed_form_ridge, temporal_psi
   - geometry: feedforward_dag, recurrent_attractor, fabric_pc, spatial_lattice_3d, ntm, nca
   - substrate: digital, memristive, neuromorphic, photonic, quantum, noisy, sparse, complex, ternary
+- **Note**: `algorithm.hebbian` (STDP via LocalGoodnessCredit) covers the stdp family; separate `algorithm.stdp` not needed per current design
 
 ### 💡 New Improvement Opportunities
 
-1. **Test file naming**: Rename test files to avoid pytest collection conflicts (e.g., `test_primitive_reference.py`, `test_algorithm_reference.py`)
+1. **Test file naming**: Rename test files to avoid pytest collection conflicts (e.g., `test_primitive_reference.py`, `test_algorithm_reference.py`). **Known issue**: pytest collection fails when running all tests together due to duplicate module names (`test_reference.py`, `test_kernel_parity.py`, `test_cases.py` in multiple directories). **Workaround**: run tests per-directory (as documented in verification commands).
+
 2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (--iterations, --warmup, JSON output to file)
+
 3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration
+
 4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup
+
 5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
+
 6. **Kernel implementations**: random_projections, local_goodness, temporal_trace, muon, fast_weight, routing, tile_mesh, predictive_settling kernels fall back to reference; implement Triton kernels
+
+7. **Pre-existing lint debt**: Old `acceleration/` modules (fa_kernels.py, triton_kernels.py, etc.) have invalid `# noqa` directives (missing comma-separated codes). These are legacy files not part of the new primitives/algorithms structure.
 
 ### ✅ Facilitating Changes
 
@@ -278,15 +285,16 @@ Per the plan, future phases include:
 - Microbenchmark infrastructure exists for engineering smoke tests
 - Primitive template validated with 10 primitives (pc_alm_settling, predictive_settling, random_projections, local_goodness, temporal_trace, muon, tile_mesh, fast_weight, routing, pc_alm)
 - Phase 3 (high-value primitives migration) complete: geometry/tile_mesh, plasticity/fast_weight, plasticity/routing
-- Phase 4 (named algorithms migration) complete: 11 algorithms migrated with full test coverage
-- Phase 5 (missing primitives & algorithms) complete: PCALMCredit primitive, target_prop, dfa algorithms
+- Phase 4 (named algorithms migration) complete: 11 algorithms migrated with full test coverage (backprop, fa, eqprop, ff, pepita, pc, hebbian, tile, fast_weight, routing, spiking_snn)
+- Phase 5 (missing primitives & algorithms) complete: PCALMCredit primitive, target_prop (tp), dfa algorithms
 - Algorithm template validated with 14 algorithms (pcalm + 11 Phase 4 algorithms + tp + dfa)
-- All 161 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests)
-- All 73 primitive tests pass (10+7+7+8+7+7+10+12+13+8)
+- All 161 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests) when run per-directory
+- All 73 primitive tests pass (10+7+7+8+7+7+10+12+13+8) when run per-directory
 - All 48 central registry tests pass (2 tests × 24 implementations)
-- All existing integration/property tests continue to pass
-- All lint checks pass for new code
-- All pyright type checks pass for new code
+- All existing integration/property tests continue to pass (test_lazy_dynamics, test_pc_alm_validation, test_demo_pc_alm, test_dynamics_wiring_lock)
+- All lint checks pass for new primitives/algorithms code
+- All pyright type checks pass for new primitives/algorithms code
+- **Note**: `algorithm.hebbian` covers STDP using LocalGoodnessCredit as proxy; separate `algorithm.stdp` not needed per current design
 - **Session complete**: All Phase 1-5 work done. 10 primitives + 14 algorithms registered, 282 tests pass (73 primitive + 161 algorithm + 48 registry), all existing tests pass.
 
 ---

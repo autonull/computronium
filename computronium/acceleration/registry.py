@@ -58,7 +58,7 @@ def _discover_package(package_name: str) -> None:
 
 def _discover() -> None:
     """Discover and register implementations from primitives/ and algorithms/ packages."""
-    global _DISCOVERED  # noqa: PLW0603
+    global _DISCOVERED  # ruff: ignore[global-statement]
     if _DISCOVERED:
         return
 
