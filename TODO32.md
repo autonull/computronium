@@ -313,6 +313,17 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 77 | Run full primitive/algorithm/acceleration test suite (355 tests) | ✅ Done |
 | 78 | Run integration/property tests (38 tests) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 feedforward_dag)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 79 | Create `feedforward_dag` primitive (geometry, high priority) | ✅ Done |
+| 80 | Add feedforward_dag to lazy registry loading (primitives/__init__.py, primitives/geometry/__init__.py) | ✅ Done |
+| 81 | Add feedforward_dag tests (10 tests: reference, kernel_parity, cases) | ✅ Done |
+| 82 | Run ruff format, ruff check, pyright on new primitive | ✅ Done |
+| 83 | Run all primitive/algorithm/acceleration tests | ✅ Done (203 tests passed) |
+| 84 | Run integration/property tests | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -343,7 +354,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | `rule_state` | `RuleStatePlasticity` | Low | - | `--axis plasticity --name rule_state --ontology-class RuleStatePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.rule_state` |
 | | `closed_form_ridge` | `ClosedFormRidgePlasticity` | Medium | - | `--axis plasticity --name closed_form_ridge --ontology-class ClosedFormRidgePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.closed_form_ridge` |
 | | `temporal_psi` | `TemporalPsiPlasticity` | Medium | - | `--axis plasticity --name temporal_psi --ontology-class TemporalPsiPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.temporal_psi` |
-| **geometry** | `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
+| **geometry** | ✅ `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
 | | `recurrent_attractor` | `RecurrentGeometry` | **High** | - | `--axis geometry --name recurrent_attractor --ontology-class RecurrentGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.recurrent` |
 | | `fabric_pc` | `FabricPCGeometry` | Medium | - | `--axis geometry --name fabric_pc --ontology-class FabricPCGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.fabric_pc` |
 | | `spatial_lattice_3d` | `SpatialLattice3DGeometry` | Low | - | `--axis geometry --name spatial_lattice_3d --ontology-class SpatialLattice3DGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.spatial_lattice_3d` |
@@ -363,7 +374,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 ### Phase 6 Execution Order (Dependency-Aware)
 
-1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
+1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
 3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
 4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)

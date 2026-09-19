@@ -41,6 +41,7 @@ _PRIMITIVES: dict[str, str] = {  # noqa: RUF067
     "null": "plasticity.null",
     # geometry
     "tile_mesh": "geometry.tile_mesh",
+    "feedforward_dag": "geometry.feedforward_dag",
 }
 
 
