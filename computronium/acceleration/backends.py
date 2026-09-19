@@ -463,8 +463,8 @@ def kernel_available(technology: str) -> bool:
     """
     if technology == "triton":
         try:
-            import triton  # noqa: F401
             import torch
+            import triton  # ruff: ignore[unused-import]
 
             return torch.cuda.is_available()
         except Exception:
@@ -482,7 +482,7 @@ def kernel_available(technology: str) -> bool:
 
     if technology == "cupy":
         try:
-            import cupy  # noqa: F401
+            import cupy  # ruff: ignore[unused-import]
 
             return True
         except Exception:

@@ -101,7 +101,7 @@ def benchmark_inference(
         for i, (batch_inputs, _) in enumerate(loader):
             if i >= warmup_batches:
                 break
-            batch_inputs = batch_inputs.to(target_device)  # noqa: PLW2901
+            batch_inputs = batch_inputs.to(target_device)  # ruff: ignore[redefined-loop-name]
             _ = system(batch_inputs)
 
     # Benchmark
@@ -112,7 +112,7 @@ def benchmark_inference(
         for i, (batch_inputs, _) in enumerate(loader):
             if i >= benchmark_batches:
                 break
-            batch_inputs = batch_inputs.to(target_device)  # noqa: PLW2901
+            batch_inputs = batch_inputs.to(target_device)  # ruff: ignore[redefined-loop-name]
             batch_size_actual = batch_inputs.shape[0]
             total_samples += batch_size_actual
 
@@ -202,7 +202,7 @@ def benchmark_inference_on_system(
         for i, (batch_inputs, _) in enumerate(loader):
             if i >= warmup_batches:
                 break
-            batch_inputs = batch_inputs.to(target_device)  # noqa: PLW2901
+            batch_inputs = batch_inputs.to(target_device)  # ruff: ignore[redefined-loop-name]
             _ = system(batch_inputs)
 
     # Benchmark
@@ -213,7 +213,7 @@ def benchmark_inference_on_system(
         for i, (batch_inputs, _) in enumerate(loader):
             if i >= benchmark_batches:
                 break
-            batch_inputs = batch_inputs.to(target_device)  # noqa: PLW2901
+            batch_inputs = batch_inputs.to(target_device)  # ruff: ignore[redefined-loop-name]
             batch_size_actual = batch_inputs.shape[0]
             total_samples += batch_size_actual
 

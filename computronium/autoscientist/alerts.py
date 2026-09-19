@@ -99,13 +99,13 @@ class WebhookDispatcher:
             "content": f"{alert.title}\n{alert.body}",  # Discord-style
             "text": f"{alert.title}\n{alert.body}",  # Slack-style
         }).encode()
-        request = urllib.request.Request(  # noqa: S310 (operator-supplied URL)
+        request = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage] (operator-supplied URL)
             self._url,
             data=payload,
             headers={"Content-Type": "application/json"},
         )
         try:
-            urllib.request.urlopen(  # noqa: S310 (operator-supplied URL)
+            urllib.request.urlopen(  # ruff: ignore[suspicious-url-open-usage] (operator-supplied URL)
                 request, timeout=self._timeout
             ).read()
         except OSError as e:

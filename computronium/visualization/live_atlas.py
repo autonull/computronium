@@ -387,7 +387,7 @@ class DaemonClient:
         import urllib.request
 
         try:
-            with urllib.request.urlopen(  # noqa: S310 (base_url is operator-supplied)
+            with urllib.request.urlopen(  # ruff: ignore[suspicious-url-open-usage] (base_url is operator-supplied)
                 f"{self._base}/state", timeout=self._timeout
             ) as response:
                 return cast("dict[str, object] | None", json.loads(response.read()))
@@ -397,13 +397,13 @@ class DaemonClient:
     def control(self, action: str) -> bool:
         import urllib.request
 
-        request = urllib.request.Request(  # noqa: S310 (operator-supplied base)
+        request = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage] (operator-supplied base)
             f"{self._base}/control/{action}",
             method="POST",
             data=b"",
         )
         try:
-            urllib.request.urlopen(  # noqa: S310 (base_url is operator-supplied)
+            urllib.request.urlopen(  # ruff: ignore[suspicious-url-open-usage] (base_url is operator-supplied)
                 request, timeout=self._timeout
             ).read()
         except OSError:

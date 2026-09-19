@@ -161,7 +161,7 @@ def run_depth_sweep(
             f"  Final: loss={depth_results['final_loss']:.4f}, acc={depth_results['final_acc']:.2%}, time={elapsed:.1f}s"
         )
         if depth_results["diverged"]:
-            print(f"  *** DIVERGED ***")
+            print("  *** DIVERGED ***")
 
         results.append(depth_results)
 
@@ -202,7 +202,7 @@ def main():
 
     args = parser.parse_args()
 
-    print(f"PC-ALM Depth Scaling Probe")
+    print("PC-ALM Depth Scaling Probe")
     print(f"Depths: {args.depths}")
     print(f"Hidden dim: {args.hidden_dim}")
     print(f"Epochs: {args.epochs}")
@@ -240,7 +240,7 @@ def main():
     for r in results:
         print(
             f"{r['depth']:>6} | {r['final_loss']:>10.4f} | {r['final_acc']:>7.2%} | "
-            f"{r['epochs_data'][-1]['settle_steps_used']:>5} | {r['walltime_seconds']:>8.1f} | {str(r['diverged']):>8}"
+            f"{r['epochs_data'][-1]['settle_steps_used']:>5} | {r['walltime_seconds']:>8.1f} | {r['diverged']!s:>8}"
         )
 
     # Find max trainable depth

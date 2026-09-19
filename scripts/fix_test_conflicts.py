@@ -11,16 +11,20 @@ from pathlib import Path
 
 def fix_conflicts():
     test_root = Path("tests")
-    
+
     # Conflicts: primitive names that also exist as algorithm names
     conflicts = {
         "routing": "plasticity",
         "fast_weight": "plasticity",
     }
-    
+
     for prim_name, axis_name in conflicts.items():
-        for test_file in test_root.glob(f"primitives/**/{prim_name}/test_{prim_name}_*.py"):
-            new_name = test_file.name.replace(f"test_{prim_name}_", f"test_{axis_name}_{prim_name}_")
+        for test_file in test_root.glob(
+            f"primitives/**/{prim_name}/test_{prim_name}_*.py"
+        ):
+            new_name = test_file.name.replace(
+                f"test_{prim_name}_", f"test_{axis_name}_{prim_name}_"
+            )
             new_path = test_file.parent / new_name
             test_file.rename(new_path)
             print(f"Renamed: {test_file} -> {new_path}")

@@ -59,6 +59,7 @@ from computronium.autoscientist.reasoner import (
 )
 
 __all__ = [
+    "DEFAULT_OBJECTIVES",
     "ArxivClient",
     "ArxivPaper",
     "AutoScientistBridge",
@@ -70,7 +71,6 @@ __all__ = [
     "Counterfactual",
     "CounterfactualBatch",
     "CounterfactualGenerator",
-    "DEFAULT_OBJECTIVES",
     "ExperimentProposal",
     "ExperimentProposer",
     "Hypothesis",

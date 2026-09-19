@@ -230,7 +230,7 @@ class StratifiedRandomDriver:
     bias — prefers cells in under-explored regions of the Pareto front.
     """
 
-    def __init__(  # noqa: PLR0913 (driver mirrors sweep axes)
+    def __init__(  # ruff: ignore[too-many-arguments] (driver mirrors sweep axes)
         self,
         kb_path: Path,
         *,
@@ -249,7 +249,7 @@ class StratifiedRandomDriver:
         objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
     ) -> None:
         # Sampling RNG, not security-sensitive (S311).
-        self.rng = random.Random(seed)  # noqa: S311 (sampling, not crypto)
+        self.rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] (sampling, not crypto)
         self.task = task
         self.cells = cells
         self.epochs = epochs

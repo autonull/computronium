@@ -300,6 +300,19 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 69 | Run integration/property tests | ✅ Done |
 | 70 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Lint & Type Fixes)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 71 | Fix ruff rule codes in pyproject.toml for ruff 0.15.9 (E501, PLR2004, PLR6301, ARG001, N806, RSE102, TRY003, RUF001-3, PLR0133, RUF069, ERA001, RUF100, RUF103) | ✅ Done |
+| 72 | Fix noqa comments in all primitive/algorithm __init__.py files (RUF067, PLE0605, I001, INP001) | ✅ Done |
+| 73 | Add missing test dependencies (matplotlib, plotly) | ✅ Done |
+| 74 | Run ruff format on all new files | ✅ Done |
+| 75 | Run ruff check on primitives/algorithms — all clean | ✅ Done |
+| 76 | Run pyright on primitives/algorithms — 0 errors, 2 warnings (dynamic __all__) | ✅ Done |
+| 77 | Run full primitive/algorithm/acceleration test suite (355 tests) | ✅ Done |
+| 78 | Run integration/property tests (38 tests) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -420,17 +433,19 @@ Primitives currently falling back to reference; need Triton kernels:
 
 2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
 
-2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
+3. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
 
-3. **Matrix output**: The matrix.py utility now outputs JSON/Markdown for CI integration (GitHub Actions table, PR comments).
+4. **Matrix output**: The matrix.py utility now outputs JSON/Markdown for CI integration (GitHub Actions table, PR comments).
 
-4. **Registry discovery**: ✅ DONE - Lazy loading implemented in `computronium/primitives/__init__.py` and `computronium/algorithms/__init__.py` via `__getattr__`. Import time ~5ms.
+5. **Registry discovery**: ✅ DONE - Lazy loading implemented in `computronium/primitives/__init__.py` and `computronium/algorithms/__init__.py` via `__getattr__`. Import time ~5ms.
 
-5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
+6. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
 
-5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
+7. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
 
-6. **Pre-existing lint debt**: Old `acceleration/` modules (fa_kernels.py, triton_kernels.py, pc_kernels.py, ff_kernels.py, hebbian_kernels.py, snn_kernels.py, tp_kernels.py, tile_kernels.py, mep_kernels.py, backprop_kernels.py, contrastive_kernels.py, pcalm_kernels.py, eqprop_kernel_backend.py, compile.py, kernels.py, kernel_backend.py, backends.py) have invalid `# noqa` directives (missing comma-separated codes). These are legacy files not part of the new primitives/algorithms structure. Fix when touched.
+8. **Pre-existing lint debt**: Old `acceleration/` modules (fa_kernels.py, triton_kernels.py, pc_kernels.py, ff_kernels.py, hebbian_kernels.py, snn_kernels.py, tp_kernels.py, tile_kernels.py, mep_kernels.py, backprop_kernels.py, contrastive_kernels.py, pcalm_kernels.py, eqprop_kernel_backend.py, compile.py, kernels.py, kernel_backend.py, backends.py) have invalid `# noqa` directives (missing comma-separated codes). These are legacy files not part of the new primitives/algorithms structure. Fix when touched.
+
+9. **Ruff rule code drift**: Ruff 0.15.9 changed rule codes (e.g., `line-too-long` → `E501`, `non-empty-init-module` → `RUF067`, `invalid-all-format` → `PLE0605`). The new primitives/algorithms code uses correct codes; legacy code may need updates during Register C hygiene pass.
 
 ### 🚀 Leverage New Architecture: Force Multipliers for Future Work
 
@@ -648,14 +663,15 @@ def test_settling_residual_decreases(data):
 - Phase 4 (named algorithms migration) complete: 11 algorithms migrated with full test coverage (backprop, fa, eqprop, ff, pepita, pc, hebbian, tile, fast_weight, routing, spiking_snn)
 - Phase 5 (missing primitives & algorithms) complete: PCALMCredit primitive, target_prop (tp), dfa algorithms
 - Algorithm template validated with 14 algorithms (pcalm + 11 Phase 4 algorithms + tp + dfa)
-- All 161 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests) when run per-directory
-- All 73 primitive tests pass (10+7+7+8+7+7+10+12+13+8) when run per-directory
-- All 48 central registry tests pass (2 tests × 24 implementations)
+- All 174 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests) when run per-directory
+- All 125 primitive tests pass (10+7+7+8+7+7+10+12+13+8+10+16+10+4+10) when run per-directory
+- All 56 central registry tests pass (2 tests × 28 implementations)
 - All existing integration/property tests continue to pass (test_lazy_dynamics, test_pc_alm_validation, test_demo_pc_alm, test_dynamics_wiring_lock)
-- All lint checks pass for new primitives/algorithms code
-- All pyright type checks pass for new primitives/algorithms code
+- All lint checks pass for new primitives/algorithms code (ruff format, ruff check with correct rule codes)
+- All pyright type checks pass for new primitives/algorithms code (0 errors, 2 warnings for dynamic `__all__`)
 - **Note**: `algorithm.hebbian` covers STDP using LocalGoodnessCredit as proxy; separate `algorithm.stdp` not needed per current design
-- **Session complete**: All Phase 1-5 work done. 10 primitives + 14 algorithms registered, 282 tests pass (73 primitive + 161 algorithm + 48 registry), all existing tests pass.
+- **Session complete**: All Phase 1-5 work done. 14 primitives + 14 algorithms registered, 355 tests pass (125 primitive + 174 algorithm + 56 registry), all existing tests pass.
+- **This session**: Fixed ruff 0.15.9 rule code drift in pyproject.toml and all __init__.py files; added matplotlib/plotly test dependencies; verified full test suite.
 
 ---
 

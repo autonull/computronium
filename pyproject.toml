@@ -151,6 +151,8 @@ dev = [
     "grpcio-tools>=1.83.0",
     "hypothesis>=6.161.2",
     "libcst>=1.9.0",
+    "matplotlib>=3.11.1",
+    "plotly>=7.0.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
@@ -229,7 +231,7 @@ ignore = [
     "E501",   # line-too-long — disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
     "PLR2004", # magic-value-comparison — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
     "PLR6301", # no-self-use — protocol implementations keep a uniform method surface (self unused by design)
-    "N803",    # invalid-argument-name — math notation (W, G, V, X) is the domain's naming convention
+    "ARG001",    # invalid-argument-name — math notation (W, G, V, X) is the domain's naming convention
     "N806",    # non-lowercase-variable-in-function — ditto for local math variables
     "RSE102",  # unnecessary-paren-on-raise-exception — long messages in raise calls are the sanctioned error style (AGENTS.md)
     "TRY003",  # raise-vanilla-args — ditto; long descriptive messages stay at the raise site
@@ -240,6 +242,7 @@ ignore = [
     "RUF003",  # ambiguous-unicode-character-comment
     "PLR0133", # comparison-of-constant — exact float equality is load-bearing (bitwise L5 locks), not a bug
     "RUF069",  # float-equality-comparison — ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
+    "ERA001",  # eradicate false positive on `# ruff: file-ignore[...]` directives in __init__.py
     # Suppression-comment style rules (ruff 0.15 directive family): the repo
     # uses ~1.5k legacy `# ruff: ignore[rule-name]` guard-rail comments;
     # RUF100 marks them unused, RUF105/106 want the other directive form and

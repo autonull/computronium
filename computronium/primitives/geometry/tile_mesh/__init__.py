@@ -1,5 +1,5 @@
-# ruff: file-ignore[import-outside-top-level]
-# ruff: file-ignore[implicit-namespace-package]
+# ruff: file-ignore[I001]
+# ruff: file-ignore[INP001]
 """Tile Mesh Geometry primitive.
 
 This primitive implements the TileNet mesh topology with modular independent
@@ -20,7 +20,7 @@ from .kernel import forward as kernel_forward
 from .reference import forward as reference_forward
 from .spec import SPEC
 
-_register(SPEC)  # ruff: ignore[non-empty-init-module]
+_register(SPEC)  # noqa: RUF067
 
 __all__ = [
     "SPEC",

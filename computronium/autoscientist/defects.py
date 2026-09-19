@@ -33,7 +33,7 @@ MESSAGE_HEAD_CHARS = 500
 # ID stability: addresses and tmp paths are noise; tensor shapes and layer
 # names are preserved (they discriminate shape-mismatch bugs).
 _ADDRESS_RE = re.compile(r"0x[0-9a-fA-F]+")
-_TMP_RE = re.compile(r"/tmp/[\w./-]+")  # noqa: S108 (message pattern, not file I/O)
+_TMP_RE = re.compile(r"/tmp/[\w./-]+")  # ruff: ignore[hardcoded-temp-file] (message pattern, not file I/O)
 
 
 @dataclass(frozen=True, slots=True)

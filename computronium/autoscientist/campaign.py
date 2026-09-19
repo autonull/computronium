@@ -534,7 +534,7 @@ class AutoScientistCampaign:
         - Human approval gates
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917 (mirrors the sweep's CLI axes)
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] (mirrors the sweep's CLI axes)
         self,
         knowledge_base: KnowledgeBase | None = None,
         output_dir: str = "autoscientist_campaigns",
@@ -673,7 +673,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(  # noqa: F841 (branch row persisted by create_campaign)
+        new_state = db.create_campaign(  # ruff: ignore[unused-variable] (branch row persisted by create_campaign)
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -803,7 +803,7 @@ class AutoScientistCampaign:
             })
         return recent
 
-    def run_iteration(  # noqa: C901, PLR0912 (proposal lifecycle branches are linear)
+    def run_iteration(  # ruff: ignore[complex-structure, too-many-branches] (proposal lifecycle branches are linear)
         self,
         n_experiments: int = 5,
         dry_run: bool = False,
@@ -991,7 +991,7 @@ class AutoScientistCampaign:
         except (KnowledgeBaseError, OSError, ValueError) as e:
             logger.warning("Failed to record incompatible cell: %s", e)
 
-    def _execute_proposal(  # noqa: PLR0914 (single compose→fit→measure pipeline)
+    def _execute_proposal(  # ruff: ignore[too-many-locals] (single compose→fit→measure pipeline)
         self, proposal: ExperimentProposal, dry_run: bool = False
     ) -> dict[str, object]:
         """Execute a proposal: 5-D system -> SystemTrainer.
@@ -1020,7 +1020,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # noqa: S101 (task contract)
+        assert input_dim is not None  # ruff: ignore[assert] (task contract)
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         lr_raw = proposal.hyperparams.get("lr")
@@ -1141,11 +1141,6 @@ class AutoScientistCampaign:
         stability_plasticity_ratio = 0.0
         credit_efficiency = 0.0
         with contextlib.suppress(Exception):
-            from computronium.core.plasticity.closed_form import (
-                ClosedFormRidgePlasticity,
-            )
-            from computronium.core.plasticity.temporal_psi import TemporalPsiPlasticity
-
             # Get ψ state from the system's dynamics or credit
             psi_state = getattr(system.dynamics, "_psi_state", None)
             if psi_state is None:
