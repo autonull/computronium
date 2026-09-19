@@ -14,6 +14,7 @@ from typing import Any
 _PRIMITIVES: dict[str, str] = {  # noqa: RUF067
     "tile_mesh": "tile_mesh",
     "feedforward_dag": "feedforward_dag",
+    "recurrent_attractor": "recurrent_attractor",
 }
 
 

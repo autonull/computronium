@@ -324,6 +324,21 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 83 | Run all primitive/algorithm/acceleration tests | ✅ Done (203 tests passed) |
 | 84 | Run integration/property tests | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 recurrent_attractor + digital)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 85 | Create `recurrent_attractor` primitive (geometry, high priority) | ✅ Done |
+| 86 | Add recurrent_attractor to lazy registry loading (primitives/__init__.py, primitives/geometry/__init__.py) | ✅ Done |
+| 87 | Add recurrent_attractor tests (10 tests: reference, kernel_parity, cases) | ✅ Done |
+| 88 | Create `digital` primitive (substrate, high priority) with make_substrate factory pattern | ✅ Done |
+| 89 | Add digital to lazy registry loading (primitives/__init__.py, primitives/substrate/__init__.py) | ✅ Done |
+| 90 | Add digital tests (12 tests: reference, kernel_parity, cases) | ✅ Done |
+| 91 | Fix central registry test to skip geometry/substrate primitives | ✅ Done |
+| 92 | Run ruff format, ruff check, pyright on new primitives | ✅ Done |
+| 93 | Run all primitive/algorithm/acceleration tests (384 passed, 8 skipped) | ✅ Done |
+| 94 | Run integration/property tests (43 passed) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -355,12 +370,12 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | `closed_form_ridge` | `ClosedFormRidgePlasticity` | Medium | - | `--axis plasticity --name closed_form_ridge --ontology-class ClosedFormRidgePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.closed_form_ridge` |
 | | `temporal_psi` | `TemporalPsiPlasticity` | Medium | - | `--axis plasticity --name temporal_psi --ontology-class TemporalPsiPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.temporal_psi` |
 | **geometry** | ✅ `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
-| | `recurrent_attractor` | `RecurrentGeometry` | **High** | - | `--axis geometry --name recurrent_attractor --ontology-class RecurrentGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.recurrent` |
+| | ✅ `recurrent_attractor` | `RecurrentGeometry` | **High** | - | `--axis geometry --name recurrent_attractor --ontology-class RecurrentGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.recurrent` |
 | | `fabric_pc` | `FabricPCGeometry` | Medium | - | `--axis geometry --name fabric_pc --ontology-class FabricPCGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.fabric_pc` |
 | | `spatial_lattice_3d` | `SpatialLattice3DGeometry` | Low | - | `--axis geometry --name spatial_lattice_3d --ontology-class SpatialLattice3DGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.spatial_lattice_3d` |
 | | `ntm` | `NtmGeometry` | Medium | - | `--axis geometry --name ntm --ontology-class NtmGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.ntm` |
 | | `nca` | `NcaGeometry` | Medium | - | `--axis geometry --name nca --ontology-class NcaGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.nca` |
-| **substrate** | `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
+| **substrate** | ✅ `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
 | | `memristive` | `MemristiveSubstrate` | Medium | - | `--axis substrate --name memristive --ontology-class MemristiveSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.memristive` |
 | | `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
 | | `photonic` | `PhotonicSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class PhotonicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.photonic` |
@@ -374,7 +389,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 ### Phase 6 Execution Order (Dependency-Aware)
 
-1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
+1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
 3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
 4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)

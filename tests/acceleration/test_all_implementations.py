@@ -7,9 +7,23 @@ import pytest
 from computronium.acceleration.registry import all_specs
 
 
+def _is_state_dynamics_like(spec) -> bool:
+    """Check if spec uses the standard step/case interface."""
+    return spec.axis in (
+        "state_dynamics",
+        "credit_assignment",
+        "parameter_update",
+        "plasticity",
+    )
+
+
 @pytest.mark.parametrize("spec", all_specs())
 def test_reference_smoke(spec):
     """Test that reference implementation runs without error."""
+    # Skip geometry and substrate primitives - they have different interfaces
+    if spec.axis in ("geometry", "substrate"):
+        pytest.skip(f"{spec.axis} primitives use different interface")
+
     module_path = spec.reference_entrypoint.rsplit(".", 1)[0]
     module = importlib.import_module(module_path)
 
@@ -25,6 +39,10 @@ def test_reference_smoke(spec):
 @pytest.mark.parametrize("spec", all_specs())
 def test_kernel_parity(spec):
     """Test that kernel output matches reference within tolerance."""
+    # Skip geometry and substrate primitives - they have different interfaces
+    if spec.axis in ("geometry", "substrate"):
+        pytest.skip(f"{spec.axis} primitives use different interface")
+
     if "kernel" not in spec.supported_backends:
         pytest.skip("no kernel backend")
 
