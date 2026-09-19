@@ -1,0 +1,42 @@
+"""{{ spec_name }} Primitive Specification."""
+
+from computronium.acceleration.spec import (
+    ImplementationSpec,
+    ParityTolerance,
+)
+
+SPEC = ImplementationSpec(
+    id="{{ spec_id }}",
+    kind="primitive",
+    name="{{ spec_name }}",
+    axis="{{ axis }}",
+    reference_entrypoint=(
+        "computronium.primitives.{{ axis }}.{{ name }}.reference.step"
+    ),
+    kernel_entrypoint=(
+        "computronium.primitives.{{ axis }}.{{ name }}.kernel.step"
+    ),
+    kernel_technology="{{ kernel_tech }}",
+    supported_backends=("reference", "kernel"),
+    parity=ParityTolerance(
+        max_abs_diff=1e-4,
+        max_rel_diff=1e-3,
+        min_cosine=0.999,
+    ),
+    status="reference_only",
+    summary="{{ summary }}",
+    equations="""
+{{ equations }}
+    """,
+    invariants=(
+{% for inv in invariants %}
+        "{{ inv }}",
+{% endfor %}
+    ),
+    notes="{{ notes }}",
+    tags=(
+{% for tag in tags %}
+        "{{ tag }}",
+{% endfor %}
+    ),
+)

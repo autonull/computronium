@@ -89,6 +89,12 @@ jobs:
         run: uv run comp repro --device cpu
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
+      - name: Parity Gate (all implementations)
+        run: uv run pytest tests/acceleration/test_all_implementations.py -q
+      - name: Implementation Matrix
+        run: uv run python -m computronium.acceleration.matrix --format json > matrix.json
+      - name: Microbenchmark Smoke
+        run: uv run python -m computronium.acceleration.microbench --all --format json > bench.json || true
 
   formal-verification:
     runs-on: ubuntu-latest

@@ -91,7 +91,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Run microbenchmark for an implementation"
     )
-    parser.add_argument("--id", required=True, help="Implementation ID from registry")
+    parser.add_argument("--id", help="Implementation ID from registry")
     parser.add_argument(
         "--backend",
         default="auto",
@@ -102,23 +102,61 @@ def main():
     parser.add_argument("--steps", type=int, default=3, help="Number of steps")
     parser.add_argument("--dtype", default="float32", help="Data type")
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
-    parser.add_argument("--json", action="store_true", help="Output JSON")
+    parser.add_argument(
+        "--all", action="store_true", help="Run for all registered implementations"
+    )
+    parser.add_argument(
+        "--format", choices=["json", "pretty"], default="pretty", help="Output format"
+    )
 
     args = parser.parse_args()
 
-    result = run_microbench(
-        implementation_id=args.id,
-        backend=args.backend,
-        device=args.device,
-        steps=args.steps,
-        dtype=args.dtype,
-        seed=args.seed,
-    )
+    if args.all:
+        from computronium.acceleration.registry import all_specs
 
-    if args.json:
-        print(json.dumps(result))
+        specs = all_specs()
+        results = []
+        for spec in specs:
+            if args.id and spec.id != args.id:
+                continue
+            try:
+                result = run_microbench(
+                    implementation_id=spec.id,
+                    backend=args.backend,
+                    device=args.device,
+                    steps=args.steps,
+                    dtype=args.dtype,
+                    seed=args.seed,
+                )
+                results.append(result)
+            except Exception as e:
+                results.append({
+                    "id": spec.id,
+                    "backend": args.backend,
+                    "device": args.device,
+                    "steps": args.steps,
+                    "wall_time_s": 0.0,
+                    "status": f"error: {e}",
+                })
+        if args.format == "json":
+            print(json.dumps(results))
+        else:
+            print(json.dumps(results, indent=2))
+    elif args.id:
+        result = run_microbench(
+            implementation_id=args.id,
+            backend=args.backend,
+            device=args.device,
+            steps=args.steps,
+            dtype=args.dtype,
+            seed=args.seed,
+        )
+        if args.format == "json":
+            print(json.dumps(result))
+        else:
+            print(json.dumps(result, indent=2))
     else:
-        print(json.dumps(result, indent=2))
+        parser.error("Either --id or --all is required")
 
 
 if __name__ == "__main__":

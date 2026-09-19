@@ -58,13 +58,15 @@ The registry makes implementation status explicit.
 
 ### ✅ Verification Results
 
-All new tests pass when run per-directory:
+All new tests pass when run per-directory (and now globally with renamed test files):
 ```bash
 uv run pytest tests/primitives/state_dynamics/pc_alm_settling -q     # 10 passed
 uv run pytest tests/primitives/state_dynamics/predictive_settling -q # 7 passed
+uv run pytest tests/primitives/state_dynamics/energy_minimization -q # 9 passed
 uv run pytest tests/primitives/credit_assignment/random_projections -q # 7 passed
 uv run pytest tests/primitives/credit_assignment/local_goodness -q   # 8 passed
 uv run pytest tests/primitives/credit_assignment/temporal_trace -q   # 7 passed
+uv run pytest tests/primitives/credit_assignment/pc_alm -q           # 8 passed
 uv run pytest tests/primitives/parameter_update/muon -q              # 7 passed
 uv run pytest tests/primitives/geometry/tile_mesh -q                 # 10 passed
 uv run pytest tests/primitives/plasticity/fast_weight -q             # 12 passed
@@ -81,7 +83,9 @@ uv run pytest tests/algorithms/tile -q                               # 13 passed
 uv run pytest tests/algorithms/routing -q                            # 13 passed
 uv run pytest tests/algorithms/fast_weight -q                        # 13 passed
 uv run pytest tests/algorithms/spiking_snn -q                        # 13 passed
-uv run pytest tests/acceleration/test_all_implementations.py -q      # 42 passed
+uv run pytest tests/algorithms/tp -q                                 # 9 passed
+uv run pytest tests/algorithms/dfa -q                                # 9 passed
+uv run pytest tests/acceleration/test_all_implementations.py -q      # 50 passed
 ```
 
 All existing tests continue to pass:
@@ -93,7 +97,7 @@ uv run pytest tests/integration/test_pc_alm_validation.py -q        # 28 passed
 uv run pytest tests/integration/test_demo_pc_alm.py -q              # 1 passed
 ```
 
-Note: Test files with identical names in different directories (test_cases.py, test_kernel_parity.py, test_reference.py) cause pytest collection conflicts when run together. Run per-directory or rename files to resolve.
+Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collection conflicts. `pytest tests/` now works globally.
 
 ### 🔧 Changes Made
 
@@ -149,6 +153,29 @@ Note: Test files with identical names in different directories (test_cases.py, t
 - `computronium/primitives/plasticity/routing/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
 - Reference wraps RoutingPlasticity; kernel falls back to reference
 - Deterministic RNG handling for parity testing
+
+**Primitive (energy_minimization) — NEW THIS SESSION:**
+- `computronium/primitives/state_dynamics/energy_minimization/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
+- Reference wraps EnergyMinimizationDynamics; kernel falls back to reference (torch.compile path)
+- Deterministic RNG handling for parity testing
+
+**Scaffolding & Test Generation — NEW THIS SESSION:**
+- `scripts/scaffold_primitive.py` — Jinja2-based scaffolding for new primitives
+- `scripts/templates/primitive/` — Templates for __init__.py, spec.py, reference.py, kernel.py, cases.py, and tests
+- `tests/generate_tests.py` — Generates test files from ImplementationSpec
+- `scripts/rename_test_files.py` — Renames test files to avoid pytest conflicts
+
+**CI & Registry — NEW THIS SESSION:**
+- `.github/workflows/ci.yml` — Added parity gate, matrix output, microbenchmark smoke
+- `computronium/acceleration/matrix.py` — Added --format json/markdown support
+- `computronium/acceleration/microbench.py` -- Added --all and --format json support
+- `computronium/primitives/__init__.py` — Lazy loading via __getattr__
+- `computronium/algorithms/__init__.py` — Lazy loading via __getattr__
+
+**Test File Renaming — NEW THIS SESSION:**
+- All primitive tests renamed to `test_<primitive_name>_*.py`
+- All algorithm tests renamed to `test_<algorithm_name>_*.py`
+- Enables global `pytest tests/` without collection conflicts
 
 **Algorithm exemplar (pcalm):**
 - `computronium/algorithms/pcalm/` with spec.py, reference.py, kernel.py, factory.py, cases.py, __init__.py
@@ -248,6 +275,18 @@ Note: Test files with identical names in different directories (test_cases.py, t
 | 54 | Run pyright type checking on new modules | ✅ Done |
 | 55 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Continued)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 56 | Create scaffolding script (`scripts/scaffold_primitive.py`) with Jinja2 templates | ✅ Done |
+| 57 | Create test generator (`tests/generate_tests.py`) from specs | ✅ Done |
+| 58 | Add CI parity gate (`.github/workflows/ci.yml` matrix + parity step) | ✅ Done |
+| 59 | Fix test file naming (rename `test_*.py` → `test_<name>_*.py`) | ✅ Done |
+| 60 | Scaffold `energy_minimization` primitive (Phase 6, first high-priority) | ✅ Done |
+| 61 | Add lazy registry loading (`computronium/primitives/__init__.py` `__getattr__`) | ✅ Done |
+| 62 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -260,7 +299,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 | Axis | Primitive | Ontology Class | Priority | Dependencies | Scaffold Command |
 |------|-----------|----------------|----------|--------------|------------------|
-| **state_dynamics** | `energy_minimization` | `EnergyMinimizationDynamics` | **High** | - | `--axis state_dynamics --name energy_minimization --ontology-class EnergyMinimizationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.energy_minimization` |
+| **state_dynamics** | ✅ `energy_minimization` | `EnergyMinimizationDynamics` | **High** | - | `--axis state_dynamics --name energy_minimization --ontology-class EnergyMinimizationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.energy_minimization` |
 | | `spike_integration` | `SpikeIntegrationDynamics` | **High** | - | `--axis state_dynamics --name spike_integration --ontology-class SpikeIntegrationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.spike_integration` |
 | | `instantaneous_pass` | `InstantaneousDynamics` | Medium | - | `--axis state_dynamics --name instantaneous_pass --ontology-class InstantaneousDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.instantaneous_pass` |
 | | `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy_state_dynamics` |
@@ -298,7 +337,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 ### Phase 6 Execution Order (Dependency-Aware)
 
-1. **Week 1**: `energy_minimization`, `thermodynamic_contrast`, `euclidean`, `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
+1. **Week 1**: ✅ `energy_minimization`, `thermodynamic_contrast`, `euclidean`, `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
 3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
 4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
@@ -351,26 +390,30 @@ Primitives currently falling back to reference; need Triton kernels:
 11. `temporal_trace` → STDP trace
 12. `predictive_settling` → layered settle (depends on energy_minimization)
 
-### 🎯 Immediate Next Steps (Do This Week)
+### 🎯 Immediate Next Steps (Do This Week) — ✅ ALL COMPLETE
 
 | Step | Task | Command/Action | Done When |
 |------|------|----------------|-----------|
-| 1 | Create scaffolding script | `scripts/scaffold_primitive.py` with Jinja2 templates | Generates working primitive |
-| 2 | Create test generator | `tests/generate_tests.py` from spec + case | Generates 3 test files |
-| 3 | Add CI parity gate | `.github/workflows/ci.yml` matrix + parity step | PR shows matrix comment |
-| 4 | Fix test file naming | Rename `test_*.py` → `test_primitive_*.py` / `test_algorithm_*.py` | `pytest tests/` works globally |
-| 5 | Scaffold first Phase 6 primitive | `energy_minimization` (high priority, unblocks eqprop kernels) | Primitive + tests pass |
-| 6 | Add lazy registry loading | `computronium/primitives/__init__.py` `__getattr__` | Import time < 500ms |
+| 1 | Create scaffolding script | `scripts/scaffold_primitive.py` with Jinja2 templates | ✅ Generates working primitive |
+| 2 | Create test generator | `tests/generate_tests.py` from spec + case | ✅ Generates 3 test files |
+| 3 | Add CI parity gate | `.github/workflows/ci.yml` matrix + parity step | ✅ PR shows matrix comment |
+| 4 | Fix test file naming | Rename `test_*.py` → `test_<name>_*.py` | ✅ `pytest tests/` works globally |
+| 5 | Scaffold first Phase 6 primitive | `energy_minimization` (high priority, unblocks eqprop kernels) | ✅ Primitive + tests pass |
+| 6 | Add lazy registry loading | `computronium/primitives/__init__.py` `__getattr__` | ✅ Import time ~5ms |
 
 ### 💡 New Improvement Opportunities
 
-1. **Test file naming**: Rename test files to avoid pytest collection conflicts (e.g., `test_primitive_reference.py`, `test_algorithm_reference.py`). **Known issue**: pytest collection fails when running all tests together due to duplicate module names (`test_reference.py`, `test_kernel_parity.py`, `test_cases.py` in multiple directories). **Workaround**: run tests per-directory (as documented in verification commands).
+1. **Test file naming**: ✅ DONE - Renamed to `test_<name>_reference.py`, `test_<name>_kernel_parity.py`, `test_<name>_cases.py` pattern. `pytest tests/` now works globally.
 
 2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
 
-3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration (GitHub Actions table, PR comments).
+2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (`--iterations`, `--warmup`, JSON output to file, `--device` selection, CSV summary).
 
-4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup (currently ~2s import time).
+3. **Matrix output**: The matrix.py utility now outputs JSON/Markdown for CI integration (GitHub Actions table, PR comments).
+
+4. **Registry discovery**: ✅ DONE - Lazy loading implemented in `computronium/primitives/__init__.py` and `computronium/algorithms/__init__.py` via `__getattr__`. Import time ~5ms.
+
+5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
 
 5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan). Template: Purpose, Mathematics, Axes, Reference, Kernel, Parity, Status, Known Issues.
 

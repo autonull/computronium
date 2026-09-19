@@ -9,9 +9,7 @@ Verifies PC-ALM implementation against paper claims:
 
 import pytest
 import torch
-from torch import Tensor
 
-from computronium.core.pipeline import phase_states
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -397,7 +395,6 @@ class TestPCALMConfiguration:
 
     def test_pcalm_requires_layered_geometry(self):
         """PC-ALM should reject non-layered geometries."""
-        from computronium.ontology import RecurrentGeometry
         from computronium.ontology.system import SystemConfig
 
         config = SystemConfig(
@@ -416,7 +413,6 @@ class TestPCALMConfiguration:
     def test_pcalm_rejects_attention_geometry(self):
         """PC-ALM should reject attention geometry (non-layered)."""
         from computronium.ontology.system import SystemConfig
-        from computronium.ontology import TransformerGeometry
 
         config = SystemConfig(
             substrate=SubstrateConfig.digital(device="cpu"),
@@ -454,11 +450,10 @@ class TestPCALMConfiguration:
 
     def test_pcalm_credit_type_validation(self):
         """PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit."""
-        from computronium.ontology.system import SystemConfig
         from computronium.ontology import (
-            RandomProjectionsCredit,
             CreditAssignmentConfig,
         )
+        from computronium.ontology.system import SystemConfig
 
         config = SystemConfig(
             substrate=SubstrateConfig.digital(device="cpu"),
@@ -498,8 +493,8 @@ class TestPCALMCompiledPath:
 
     def test_compiled_fallback_on_recurrent(self):
         """Compiled path should fall back to eager for recurrent geometry."""
-        from computronium.ontology import RecurrentGeometry
         from computronium.core.system_trainer import compose_system
+        from computronium.ontology import RecurrentGeometry
 
         torch.manual_seed(42)
         substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))

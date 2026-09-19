@@ -20,21 +20,21 @@ from itertools import islice
 import torch
 
 from computronium import (
+    CreditAssignmentConfig,
     DigitalSubstrate,
     EuclideanUpdate,
+    FeedforwardGeometry,
     GeometryConfig,
     NullPlasticity,
     ParameterUpdateConfig,
+    PCALMCredit,
+    PCALMDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     SystemTrainer,
     SystemTrainerConfig,
-    FeedforwardGeometry,
     compose_joint_system,
     create_task,
-    PCALMDynamics,
-    PCALMCredit,
-    CreditAssignmentConfig,
 )
 from computronium.visualization import bars_panel, figure_spec
 
