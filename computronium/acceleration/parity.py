@@ -68,6 +68,14 @@ def compare(reference: Any, kernel: Any) -> dict[str, float]:
     ref = _flatten(reference)
     acc = _flatten(kernel)
 
+    if ref.numel() == 0 and acc.numel() == 0:
+        # Both empty - perfect match
+        return {
+            "max_abs_diff": 0.0,
+            "max_rel_diff": 0.0,
+            "cosine": 1.0,
+        }
+
     abs_diff = torch.abs(ref - acc)
     max_abs_diff = abs_diff.max().item()
 

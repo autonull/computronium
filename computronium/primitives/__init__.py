@@ -31,11 +31,14 @@ _PRIMITIVES: dict[str, str] = {  # ruff: ignore[non-empty-init-module]
     "local_goodness": "credit_assignment.local_goodness",
     "temporal_trace": "credit_assignment.temporal_trace",
     "pc_alm": "credit_assignment.pc_alm",
+    "thermodynamic_contrast": "credit_assignment.thermodynamic_contrast",
     # parameter_update
     "muon": "parameter_update.muon",
+    "euclidean": "parameter_update.euclidean",
     # plasticity
     "fast_weight": "plasticity.fast_weight",
     "routing": "plasticity.routing",
+    "null": "plasticity.null",
     # geometry
     "tile_mesh": "geometry.tile_mesh",
 }
@@ -57,9 +60,14 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     """List available attributes for tab completion."""
-    return sorted(
-        [*_SUBMODULES, *_PRIMITIVES.keys(), "__all__", "__doc__", "__name__", "__package__"]
-    )
+    return sorted([
+        *_SUBMODULES,
+        *_PRIMITIVES.keys(),
+        "__all__",
+        "__doc__",
+        "__name__",
+        "__package__",
+    ])
 
 
 __all__: list[str] = sorted([*_SUBMODULES, *_PRIMITIVES.keys()])  # ruff: ignore[invalid-all-format]

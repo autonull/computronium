@@ -287,6 +287,19 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 61 | Add lazy registry loading (`computronium/primitives/__init__.py` `__getattr__`) | ✅ Done |
 | 62 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 Primitives)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 63 | Create `thermodynamic_contrast` primitive (credit_assignment, high priority) | ✅ Done |
+| 64 | Create `euclidean` primitive (parameter_update, high priority) | ✅ Done |
+| 65 | Create `null` primitive (plasticity, high priority) | ✅ Done |
+| 66 | Fix parity.py to handle empty tensor comparison | ✅ Done |
+| 67 | Fix test file naming conflicts (test_<name>_*.py pattern) | ✅ Done |
+| 68 | Run all primitive/algorithm/registry tests | ✅ Done (299 passed) |
+| 69 | Run integration/property tests | ✅ Done |
+| 70 | Run repository health checks (ruff format, ruff check, pyright) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -305,7 +318,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy_state_dynamics` |
 | | `diffusion` | `DiffusionDynamics` | Low | - | `--axis state_dynamics --name diffusion --ontology-class DiffusionDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.diffusion` |
 | **credit_assignment** | `reverse_mode` | `BackpropCredit` | **High** | - | `--axis credit_assignment --name reverse_mode --ontology-class BackpropCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.backprop` |
-| | `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
+| | ✅ `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
 | | `target_inversion` | `TargetInversionCredit` | Medium | - | `--axis credit_assignment --name target_inversion --ontology-class TargetInversionCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.target_inversion` |
 | | `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
 | **parameter_update** | `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
@@ -337,7 +350,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 ### Phase 6 Execution Order (Dependency-Aware)
 
-1. **Week 1**: ✅ `energy_minimization`, `thermodynamic_contrast`, `euclidean`, `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
+1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, `feedforward_dag`, `recurrent_attractor`, `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: `spike_integration`, `reverse_mode`, `spectral_constrained`, `substrate_coupled`, `memristive`, `neuromorphic` (6 primitives)
 3. **Week 3**: `instantaneous_pass`, `target_inversion`, `closed_form_ridge`, `temporal_psi`, `fabric_pc`, `ntm`, `nca` (7 primitives)
 4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
