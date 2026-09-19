@@ -222,14 +222,23 @@ Note: Test files with identical names in different directories (test_cases.py, t
 | 38 | Add tests for all Phase 4 algorithms | ✅ Done |
 | 39 | Run repository health checks | ✅ Done |
 
+### ✅ Completed Steps (Phase 5: Missing Primitives & Algorithms)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 40 | Create PCALMCredit primitive (primitive.credit_assignment.pc_alm) | ✅ Done |
+| 41 | Add PCALMCredit primitive tests | ✅ Done |
+| 42 | Create target_prop algorithm (algorithm.tp) | ✅ Done |
+| 43 | Add target_prop algorithm tests | ✅ Done |
+| 44 | Create dfa algorithm (algorithm.dfa) | ✅ Done |
+| 45 | Add dfa algorithm tests | ✅ Done |
+| 46 | Run repository health checks | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
-- **Future**: Migrate remaining algorithms (dfa, stdp, target_prop, snn, etc.)
-- **Future**: Implement PCALMCredit primitive (declared in pcalm uses_primitives)
+- **Future**: Migrate remaining algorithms (stdp, etc.)
 - **Future**: Implement Triton kernels for primitives currently falling back to reference
-
-### 💡 New Improvement Opportunities
 
 ### 💡 New Improvement Opportunities
 
@@ -237,9 +246,8 @@ Per the plan, future phases include:
 2. **Microbench CLI**: The microbench.py module exists but could be enhanced with more options (--iterations, --warmup, JSON output to file)
 3. **Matrix output**: The matrix.py utility could output JSON/Markdown for CI integration
 4. **Registry discovery**: The auto-discovery in registry.py currently scans all submodules - consider lazy loading or explicit registration for faster startup
-5. **PCALMCredit primitive**: The credit_assignment.pc_alm primitive is declared in uses_primitives but not yet implemented as a separate primitive directory
-6. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
-7. **Kernel implementations**: random_projections kernel falls back to reference; implement Triton FA kernels
+5. **Documentation**: Consider adding local README.md files to complex primitives (optional per plan)
+6. **Kernel implementations**: random_projections, local_goodness, temporal_trace, muon, fast_weight, routing, tile_mesh, predictive_settling kernels fall back to reference; implement Triton kernels
 
 ### ✅ Facilitating Changes
 
@@ -247,12 +255,13 @@ Per the plan, future phases include:
 - Registry discovery is working and testable via `all_specs()`
 - Parity testing framework is in place and validated
 - Microbenchmark infrastructure exists for engineering smoke tests
-- Primitive template validated with 9 primitives (pc_alm_settling, predictive_settling, random_projections, local_goodness, temporal_trace, muon, tile_mesh, fast_weight, routing)
+- Primitive template validated with 10 primitives (pc_alm_settling, predictive_settling, random_projections, local_goodness, temporal_trace, muon, tile_mesh, fast_weight, routing, pc_alm)
 - Phase 3 (high-value primitives migration) complete: geometry/tile_mesh, plasticity/fast_weight, plasticity/routing
 - Phase 4 (named algorithms migration) complete: 11 algorithms migrated with full test coverage
-- Algorithm template validated with 12 algorithms (pcalm + 11 Phase 4 algorithms)
-- All 143 algorithm tests pass (13 tests × 11 algorithms + 13 pcalm tests)
-- All 42 central registry tests pass
+- Phase 5 (missing primitives & algorithms) complete: PCALMCredit primitive, target_prop, dfa algorithms
+- Algorithm template validated with 14 algorithms (pcalm + 11 Phase 4 algorithms + tp + dfa)
+- All 161 algorithm tests pass (13 tests × 11 Phase 4 algorithms + 13 pcalm tests + 9 tp tests + 9 dfa tests)
+- All 48 central registry tests pass (2 tests × 24 implementations)
 - All existing integration/property tests continue to pass
 
 ---
