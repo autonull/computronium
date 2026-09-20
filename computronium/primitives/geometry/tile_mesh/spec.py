@@ -21,7 +21,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="TileNet mesh topology with modular independent tiles and local routing.",
     equations="""
     h_l = σ(W_l · h_{l-1} + b_l)  # per-tile computation

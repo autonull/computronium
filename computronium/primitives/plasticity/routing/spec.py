@@ -19,7 +19,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="State-dependent pathway gating with Gumbel-Softmax routing and per-unit modulation.",
     equations="""
     gate_logits_{t+1} = decay * gate_logits_t + lr * (x @ G)

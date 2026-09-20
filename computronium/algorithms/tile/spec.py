@@ -19,7 +19,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     uses_primitives=(
         "primitive.geometry.tile_mesh",
         "primitive.state_dynamics.instantaneous_pass",

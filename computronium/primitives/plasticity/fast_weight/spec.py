@@ -21,7 +21,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Episode-local associative memory via Hebbian outer-product with random projection.",
     equations="""
     A_{t+1} = decay * A_t + lr * Proj(outer(pre_t, post_t))

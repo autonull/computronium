@@ -23,7 +23,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Spike-timing correlations (STDP) for credit assignment.",
     equations="""
     Rate-coded fallback: ΔW = a_plus·postᵀ·pre - a_minus·preᵀ·post

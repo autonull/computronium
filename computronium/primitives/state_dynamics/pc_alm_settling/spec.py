@@ -23,7 +23,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Primal-dual settling dynamics for PC-ALM.",
     equations="""
     c_l = h_l - f_θ_l(h_{l-1})                  # constraint violation

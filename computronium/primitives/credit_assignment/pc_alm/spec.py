@@ -21,7 +21,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Local Hebbian credit assignment using dual variables from PCALMDynamics.",
     equations="""
     ΔW_l = -λ_l @ h_{l-1}^T / batch

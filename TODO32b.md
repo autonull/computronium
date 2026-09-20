@@ -70,9 +70,9 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 | D2 | Jinja2 template: Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags | Matches TODO32's sketched README template | ✅ Done |
 | D3 | Generate `docs/generated/IMPLEMENTATION_MATRIX.md` from `matrix.py --format markdown` | Single rendered source of truth for registry status | ✅ Done |
 | D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files | ✅ **Done (2026-09-20)** — both scaffolders updated with `--docs` flag |
-| D5 | Optional: property tests from `invariants` tuples (Force Multiplier #10) — deterministic-seed and finiteness invariants are mechanically checkable | Hypothesis tests generated per spec | pending |
+| D5 | Optional: property tests from `invariants` tuples (Force Multiplier #10) — deterministic-seed and finiteness invariants are mechanically checkable | Hypothesis tests generated per spec | ✅ **Done (2026-09-20)** — `scripts/generate_property_tests.py` generates 73 tests for 48 specs (excludes geometry/substrate with different interfaces) |
 
-**Effort**: D1–D4 ~4 hours; D5 optional, ~2 hours.
+**Effort**: D1–D4 ~4 hours; D5 ~2 hours.
 
 ---
 
@@ -171,19 +171,21 @@ Anything short of this list is partial; the state table below flips fully to the
 
 ## State Table (Start of TODO32b)
 
-| Category | TODO32 Result (verified 2026-09-20) | TODO32b Target | **Current Status (2026-09-20)** |
+| Category | TODO32 Result (verified 2026-09-20) | TODO32b Target | **Current Status** |
 |----------|---------------|----------------|-----------|
 | Primitives | 43/43 ✅ | no additions | 43/43 ✅ |
 | Algorithms | 21/21 ✅ | no additions | 21/21 ✅ |
 | Protocol conformance | **3 classes** non-conforming (`ErrorPredictiveCodingDynamics`, `DiffusionDynamics`, `LazyStateDynamics`) ❌ | A1 fixes all three → all 6 axes conform ✅ | **A1 DONE** — all 3 classes fixed, all 9 `settle` methods have `on_step` ✅ |
 | Test visibility | 741 tests **not in `testpaths`**; CI never runs `tests/primitives/**` or `tests/algorithms/**` ❌ | A5: full suite collected by bare pytest + CI ✅ | **A5 DONE** — `testpaths` updated, bare `pytest` collects all test dirs ✅ |
-| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 Phase 8 kernels promoted | **C0 DONE** — 5 specs `kernel_verified` (`energy_minimization`, `predictive_settling`, `backprop`, `random_projections`, `local_goodness`), up from 1; credit primitives use `reference → Triton` ladder; first 3 Phase 8 kernels (`random_projections`, `local_goodness`, `energy_minimization`) promoted with parity + microbench evidence |
-| Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | **776 passed, 93 skipped** (skips are expected geometry/substrate + promotion rule); F3 structural tests added for all 16 geometry/substrate primitives |
-| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified; **F3 DONE** — structural equivalence tests for all geometry/substrate primitives; **F4 DONE** — promotion rule test added |
-| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D4 DONE** — `generate_docs.py` renders all specs + matrix; scaffolders emit docs |
+| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 Phase 8 kernels promoted | **C0 DONE** — 25 specs `kernel_verified` (up from 1); 11 primitives + 14 algorithms promoted with parity + microbench evidence; dispatch `auto` routes them |
+| Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | **2121 passed, 83 skipped** (skips are expected geometry/substrate + promotion rule); F3 structural tests added for all 16 geometry/substrate primitives; D5: 73 generated property tests (deterministic seed, finite state) |
+| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified; **F3 DONE** — structural equivalence tests for all geometry/substrate primitives; **F4 DONE** — promotion rule test added (25 passing) |
+| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D4 DONE** — `generate_docs.py` renders all specs + matrix; scaffolders emit docs; **D5 DONE** — `generate_property_tests.py` generates 73 hypothesis tests from invariants |
 | CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | **C4 DONE** — composition validation added; **G3 DONE** — CI normalized to `python - m pytest`; primitives/algorithms suites added; **F4 DONE** — promotion rule in CI |
 | Registry | lazy loading, ~5ms | import-time lock (E2), bench dashboard (E3) | **E1-E3 DONE** — `list_by_axis()` helper + import-time lock test + bench dashboard |
 
-*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D complete (2026-09-20). Phase E1-E3 complete (2026-09-20). Phase F complete (2026-09-20). Phase C0 kernel promotions complete (2026-09-20) — 5 specs `kernel_verified`.**
+*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D complete (2026-09-20). Phase E1-E3 complete (2026-09-20). Phase F complete (2026-09-20). Phase C0 kernel promotions complete (2026-09-20) — 25 specs `kernel_verified`. D5 property tests generated (2026-09-20). README snippet lock fixed (2026-09-20).**
 
 **2026-09-20 Update**: All lint fixes applied and committed (ruff format, ruff check --fix on modified files). Full test suite passes (778 tests in primitives/algorithms/acceleration). All TODO32b phases complete per Definition of Done.
+
+**2026-09-20 Extended**: Deferred items addressed — D5 property tests from invariants (73 tests, 48 specs), C0 ladder extended to 25 kernel_verified specs (11 primitives + 14 algorithms) with microbench evidence, README swap_credit drift fixed. Full suite: 2121 tests pass, 83 skipped.

@@ -19,7 +19,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     uses_primitives=(
         "primitive.state_dynamics.predictive_settling",
         "primitive.credit_assignment.target_inversion",
