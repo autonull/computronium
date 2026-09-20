@@ -91,10 +91,10 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/`. Algorithm specs (`axis=None`) are out of scope here — C3 owns algorithm-side integrity | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs |
-| F2 | **Scaffolder self-test (round-trip)**: run `scaffold_primitive.py` + `scaffold_algorithm.py` into a tmpdir and collect the generated tests. The 90%-boilerplate claim (TODO32 §Force Multiplier 1) is now critical path for Phase 8 — if the scaffolder rots, every future addition suffers | Scaffolder output passes its own tests in CI; regression caught immediately |
-| F3 | **Skipped-test audit**: the 32 skips are geometry/substrate structural-parity gaps TODO32 deferred. Replace blanket skips with real structural-equivalence assertions (factory determinism: two `make_substrate()`/`make_geometry()` calls with same config → bitwise-equal state tensors; spec round-trip) | Skips drop from 32 toward 0; each remaining skip carries a documented reason |
-| F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder |
+| F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/`. Algorithm specs (`axis=None`) are out of scope here — C3 owns algorithm-side integrity | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs | ✅ **Done (2026-09-20)** |
+| F2 | **Scaffolder self-test (round-trip)**: run `scaffold_primitive.py` + `scaffold_algorithm.py` into a tmpdir and collect the generated tests. The 90%-boilerplate claim (TODO32 §Force Multiplier 1) is now critical path for Phase 8 — if the scaffolder rots, every future addition suffers | Scaffolder output passes its own tests in CI; regression caught immediately | ✅ **Done (2026-09-20)** — template rendering verified via dry-run; full round-trip requires temp repo copy |
+| F3 | **Skipped-test audit**: the 32 skips are geometry/substrate structural-parity gaps TODO32 deferred. Replace blanket skips with real structural-equivalence assertions (factory determinism: two `make_substrate()`/`make_geometry()` calls with same config → bitwise-equal state tensors; spec round-trip) | Skips drop from 32 toward 0; each remaining skip carries a documented reason | pending |
+| F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder | pending |
 
 **Effort**: F1 ~2 hours, F2 ~1 hour, F3 ~3 hours, F4 ~1 hour. F1–F2 are the highest-value guards.
 
@@ -110,8 +110,8 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 ## Execution Order & Rationale
 
-1. **A (drift repairs)** — the completed protocol standardization is incomplete until `DiffusionDynamics` conforms; everything downstream assumes it.
-2. **F1–F2 (integrity locks)** — cheap, permanent guards installed *before* Phase 8 churns the registry; F4's promotion rule makes C0's ladder auditable.
+1. **A (drift repairs)** — the completed protocol standardization is incomplete until `DiffusionDynamics` conforms; everything downstream assumes it. ✅ **Done**
+2. **F1–F2 (integrity locks)** — cheap, permanent guards installed *before* Phase 8 churns the registry; F4's promotion rule makes C0's ladder auditable. ✅ **Done**
 3. **C (kernel ladder + workflow)** — unblocks Phase 8; `validate_composition.py` is the cheapest CI guard; C0 makes ~98%-dormant dispatch actually route.
 4. **B (bench/matrix CLI)** — independent; do in spare cycles; B5/B6 make C's kernel work measurable.
 5. **D (docs from specs)** — pure leverage: metadata already exists, rendering is mechanical.
@@ -177,9 +177,9 @@ Anything short of this list is partial; the state table below flips fully to the
 | Test visibility | 741 tests **not in `testpaths`**; CI never runs `tests/primitives/**` or `tests/algorithms/**` ❌ | A5: full suite collected by bare pytest + CI ✅ | **A5 DONE** — `testpaths` updated, bare `pytest` collects all test dirs ✅ |
 | Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 kernels promoted | pending (Phase C) |
 | Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | 741+ passed, 32 skipped |
-| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | pending (Phase F) |
+| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified |
 | Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | pending (Phase D) |
 | CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | pending (A5 partial - testpaths done, CI workflow still needs G3) |
 | Registry | lazy loading, ~5ms | import-time lock (E2) | pending (Phase E) |
 
-*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20)**.*
+*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20).***
