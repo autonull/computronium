@@ -43,8 +43,20 @@ _PRIMITIVES: dict[str, str] = {  # noqa: RUF067
     "tile_mesh": "geometry.tile_mesh",
     "feedforward_dag": "geometry.feedforward_dag",
     "recurrent_attractor": "geometry.recurrent_attractor",
+    "fabric_pc": "geometry.fabric_pc",
+    "ntm": "geometry.ntm",
+    "nca": "geometry.nca",
+    "spatial_lattice_3d": "geometry.spatial_lattice_3d",
     # substrate
     "digital": "substrate.digital",
+    "memristive": "substrate.memristive",
+    "neuromorphic": "substrate.neuromorphic",
+    "photonic": "substrate.photonic",
+    "quantum": "substrate.quantum",
+    "noisy": "substrate.noisy",
+    "sparse": "substrate.sparse",
+    "complex": "substrate.complex",
+    "ternary": "substrate.ternary",
 }
 
 

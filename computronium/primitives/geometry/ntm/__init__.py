@@ -9,9 +9,9 @@ standard primitive interface (spec, reference, kernel, cases).
 from computronium.acceleration.registry import register as _register
 from computronium.acceleration.spec import ImplementationSpec as _ImplementationSpec
 
-from .spec import SPEC
-from .reference import forward as reference_forward
 from .cases import Case, make_case
+from .reference import forward as reference_forward
+from .spec import SPEC
 
 __all__ = [
     "SPEC",
@@ -22,4 +22,4 @@ __all__ = [
 ]
 
 # Register this primitive's spec
-_register(SPEC)  # ruff: ignore[non-empty-init-module]
+_register(SPEC)  # noqa: RUF067

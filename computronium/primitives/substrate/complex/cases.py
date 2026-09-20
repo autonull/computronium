@@ -1,0 +1,59 @@
+"""Deterministic test cases for Complex Substrate.
+
+These cases are intentionally small. They are used for parity tests,
+smoke tests, and microbenchmarks. They are not scientific benchmarks.
+"""
+
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+
+from computronium.ontology.substrate.spec import (
+    ConstraintConfig,
+    CostConfig,
+    DeviceModel,
+    ExecutionModel,
+    NoiseConfig,
+    NumericRepresentation,
+    SubstrateSpec,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Case:
+    spec: SubstrateSpec
+    config: dict[str, Any]
+
+
+def make_case(
+    *,
+    device: str = "cpu",
+    dtype: torch.dtype = torch.complex64,
+    seed: int = 0,
+) -> Case:
+    """Create a deterministic test case for complex substrate."""
+
+    spec = SubstrateSpec(
+        execution_model=ExecutionModel.NATIVE,
+        device_model=DeviceModel.DIGITAL,
+        numeric_representation=NumericRepresentation.COMPLEX,
+        noise_model=NoiseConfig(kind="none", level=0.0),
+        structural_constraints=ConstraintConfig(weight_bounds=None, sparsity=0.0),
+        cost_model=CostConfig(joules_per_mac=0.0, fab_cost_ratio=1.0),
+        substrate_type=None,
+    )
+
+    config = {
+        "precision": "complex",
+        "noise_level": 0.0,
+        "weight_bounds": None,
+        "sparsity": 0.0,
+        "device": device,
+        "seed": seed,
+    }
+
+    return Case(
+        spec=spec,
+        config=config,
+    )

@@ -293,6 +293,33 @@ ignore = [
     "ARG005",  # unused-lambda-argument — lambda placeholders in tracker callbacks
     "SIM113",  # enumerate-for-loop — manual counters read clearer in sweep loops
 ]
+"computronium/primitives/substrate/noisy/reference.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/sparse/reference.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/complex/reference.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/ternary/reference.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/geometry/spatial_lattice_3d/reference.py" = [
+    "TC001", # FeedforwardGeometry used in function signature and body; false positive
+]
+"computronium/primitives/substrate/noisy/kernel.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/sparse/kernel.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/complex/kernel.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
+"computronium/primitives/substrate/ternary/kernel.py" = [
+    "TC001", # SubstrateSpec used in function signature and body; false positive
+]
 "tests/**/*.py" = [
     "S101",   # assert in tests
     "S404",   # suspicious-subprocess-import — subprocess CLI smoke / wheel-acceptance tests

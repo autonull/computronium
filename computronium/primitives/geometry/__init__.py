@@ -15,6 +15,10 @@ _PRIMITIVES: dict[str, str] = {  # noqa: RUF067
     "tile_mesh": "tile_mesh",
     "feedforward_dag": "feedforward_dag",
     "recurrent_attractor": "recurrent_attractor",
+    "fabric_pc": "fabric_pc",
+    "ntm": "ntm",
+    "nca": "nca",
+    "spatial_lattice_3d": "spatial_lattice_3d",
 }
 
 

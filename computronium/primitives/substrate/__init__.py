@@ -9,6 +9,14 @@ from typing import Any
 # Primitive modules that can be directly accessed
 _PRIMITIVES: frozenset[str] = frozenset({  # noqa: RUF067
     "digital",
+    "memristive",
+    "neuromorphic",
+    "photonic",
+    "quantum",
+    "noisy",
+    "sparse",
+    "complex",
+    "ternary",
 })
 
 

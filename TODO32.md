@@ -391,6 +391,25 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 135 | Run integration/property tests (9 passed) | ✅ Done |
 | 136 | Update TODO32.md with Week 4 completion status | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 Remaining Substrate & Geometry Primitives)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 137 | Create `spatial_lattice_3d` primitive (geometry, low priority) | ✅ Done |
+| 138 | Add spatial_lattice_3d tests (8 tests) | ✅ Done |
+| 139 | Create `noisy` primitive (substrate, low priority) | ✅ Done |
+| 140 | Add noisy tests (9 tests) | ✅ Done |
+| 141 | Create `sparse` primitive (substrate, low priority) | ✅ Done |
+| 142 | Add sparse tests (9 tests) | ✅ Done |
+| 143 | Create `complex` primitive (substrate, low priority) | ✅ Done |
+| 144 | Add complex tests (7 tests) | ✅ Done |
+| 145 | Create `ternary` primitive (substrate, low priority) | ✅ Done |
+| 146 | Add ternary tests (7 tests) | ✅ Done |
+| 147 | Fix ruff TC001 false positives with per-file ignores in pyproject.toml | ✅ Done |
+| 148 | Run all primitive/algorithm/acceleration tests (632 passed, 22 skipped) | ✅ Done |
+| 149 | Run integration/property tests (38 passed) | ✅ Done |
+| 150 | Update TODO32.md with remaining substrate/geometry completion status | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -412,7 +431,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | ✅ `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
 | | ✅ `target_inversion` | `TargetInversionCredit` | Medium | - | `--axis credit_assignment --name target_inversion --ontology-class TargetInversionCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.target_inversion` |
 | | ✅ `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
-| **parameter_update** | `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
+| **parameter_update** | ✅ `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
 | | ✅ `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
 | | `natural_gradient` | `NaturalGradientUpdate` | Low | - | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
 | | ✅ `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
@@ -424,7 +443,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | **geometry** | ✅ `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
 | | ✅ `recurrent_attractor` | `RecurrentGeometry` | **High** | - | `--axis geometry --name recurrent_attractor --ontology-class RecurrentGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.recurrent` |
 | | ✅ `fabric_pc` | `GraphGeometry` | Medium | - | `--axis geometry --name fabric_pc --ontology-class GraphGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.graph` |
-| | `spatial_lattice_3d` | `SpatialLattice3DGeometry` | Low | - | `--axis geometry --name spatial_lattice_3d --ontology-class SpatialLattice3DGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.spatial_lattice_3d` |
+| | ✅ `spatial_lattice_3d` | `SpatialLattice3DGeometry` | Low | - | `--axis geometry --name spatial_lattice_3d --ontology-class SpatialLattice3DGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.spatial_lattice` |
 | | ✅ `ntm` | `NtmGeometry` | Medium | - | `--axis geometry --name ntm --ontology-class NtmGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.ntm` |
 | | ✅ `nca` | `NcaGeometry` | Medium | - | `--axis geometry --name nca --ontology-class NcaGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.nca` |
 | **substrate** | ✅ `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
@@ -432,10 +451,10 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | ✅ `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
 | | ✅ `photonic` | `OpticalSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class OpticalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.optical` |
 | | ✅ `quantum` | `QuantumSubstrate` | Low | - | `--axis substrate --name quantum --ontology-class QuantumSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.quantum` |
-| | `noisy` | `NoisySubstrate` | Low | - | `--axis substrate --name noisy --ontology-class NoisySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.noisy` |
-| | `sparse` | `SparseSubstrate` | Low | - | `--axis substrate --name sparse --ontology-class SparseSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.sparse` |
-| | `complex` | `ComplexSubstrate` | Low | - | `--axis substrate --name complex --ontology-class ComplexSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.complex` |
-| | `ternary` | `TernarySubstrate` | Low | - | `--axis substrate --name ternary --ontology-class TernarySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.ternary` |
+| | ✅ `noisy` | `NoisySubstrate` | Low | - | `--axis substrate --name noisy --ontology-class NoisySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital(noise_level=0.1)` |
+| | ✅ `sparse` | `SparseSubstrate` | Low | - | `--axis substrate --name sparse --ontology-class SparseSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.sparse` |
+| | ✅ `complex` | `ComplexSubstrate` | Low | - | `--axis substrate --name complex --ontology-class ComplexSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.complex` |
+| | ✅ `ternary` | `TernarySubstrate` | Low | - | `--axis substrate --name ternary --ontology-class TernarySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.ternary` |
 
 **Substrate/Geometry Note**: These are structural primitives. Their `reference.py` exposes `make_substrate()` / `make_geometry()` factories, not `step(case)`. Parity tests verify structural equivalence via integration tests, not `assert_parity`. See Force Multiplier #6.
 
@@ -444,7 +463,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: ✅ `spike_integration`, ✅ `reverse_mode`, ✅ `spectral_constrained`, ✅ `substrate_coupled`, ✅ `memristive`, ✅ `neuromorphic` (6 primitives)
 3. **Week 3**: ✅ `instantaneous_pass`, ✅ `target_inversion`, ✅ `closed_form_ridge`, ✅ `temporal_psi`, ✅ `fabric_pc`, ✅ `ntm`, ✅ `nca` (7 primitives)
-4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient`, ✅ `elastic_consolidation`, ✅ `rule_state`, `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
+4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient`, ✅ `elastic_consolidation`, ✅ `rule_state`, ✅ `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, ✅ `noisy`, ✅ `sparse`, ✅ `complex`, ✅ `ternary` (13 primitives, low priority)
 
 ### Phase 7: Additional Algorithms (beyond current 14)
 

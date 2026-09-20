@@ -20,7 +20,7 @@ from .kernel import make_substrate as kernel_make_substrate
 from .reference import make_substrate as reference_make_substrate
 from .spec import SPEC
 
-_register(SPEC)  # ruff: ignore[non-empty-init-module]
+_register(SPEC)  # noqa: RUF067
 
 __all__ = [
     "SPEC",
