@@ -35,6 +35,9 @@ _PRIMITIVES: dict[str, str] = {  # ruff: ignore[non-empty-init-module]
     # parameter_update
     "muon": "parameter_update.muon",
     "euclidean": "parameter_update.euclidean",
+    "natural_gradient": "parameter_update.natural_gradient",
+    "spectral_constrained": "parameter_update.spectral_constrained",
+    "elastic_consolidation": "parameter_update.elastic_consolidation",
     # plasticity
     "fast_weight": "plasticity.fast_weight",
     "routing": "plasticity.routing",

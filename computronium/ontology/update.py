@@ -42,6 +42,7 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
     "lion": "per_element_displacement",
     "spectral_constrained": "per_element_displacement",
     "elastic_consolidation": "per_element_displacement",
+    "natural_gradient": "per_element_displacement",
 }
 
 
@@ -268,6 +269,41 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+        )
+
+    @classmethod
+    def natural_gradient(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        momentum: float = 0.9,
+        fisher_damping: float = 1e-3,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Natural gradient update config (Fisher-geometry preconditioning).
+
+        Implements the Amari natural gradient: Δθ = −lr · F⁻¹ · g
+        where F is the Fisher Information Matrix. This uses a diagonal
+        Fisher approximation with Tikhonov damping for numerical stability.
+
+        Distinct from ``mean_norm`` (per-tensor mean-|g| normalization):
+        natural gradient uses the actual diagonal Fisher (E[g²]) as the
+        preconditioner, not a uniform per-tensor scale. The D14 regime
+        showed this distinction is load-bearing for deep local learning.
+        """
+        return cls(
+            update_type="natural_gradient",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=fisher_damping,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
+            eps=eps,
         )
 
     @classmethod
@@ -1279,6 +1315,92 @@ class MeanNormUpdate:
             return param - self.config.step_size * grad / (grad.abs().mean() + 1e-8)
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
+
+
+class NaturalGradientUpdate:
+    """Fisher-information geometry update (natural gradient).
+
+    Implements Amari's natural gradient: Δθ = −lr · F⁻¹ · g
+    where F is the Fisher Information Matrix. Uses a diagonal Fisher
+    approximation with Tikhonov damping for numerical stability.
+
+    This is the Fisher-faithful rule; ``MeanNormUpdate`` is a simplified
+    per-tensor magnitude normalizer rung.
+    """
+
+    IDENTITY_CARD = AlgorithmIdentityCard(
+        name="NaturalGradientUpdate",
+        reference_equations="Natural gradient; Amari (1998) — Fisher Information Geometry; diagonal Fisher approximation with Tikhonov damping",
+        deviations_from_literature=(
+            "Diagonal Fisher approximation: F ≈ diag(E[g²]) instead of "
+            "full Fisher matrix; Tikhonov damping (fisher_damping) added "
+            "for numerical stability",
+        ),
+        objective_function="min_θ E[L(θ)] under Fisher-Rao metric",
+        pseudo_gradient_def="ΔW = −lr · (F + λI)⁻¹ · g  (diagonal F, λ = fisher_damping)",
+        symmetry_requirements=("none",),
+        approximation_parameters=("step_size", "fisher_damping", "beta2"),
+        validated_limits=(
+            "diagonal Fisher faithful to direction but underestimates "
+            "cross-parameter curvature; load-bearing for deep local credit",
+        ),
+    )
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.natural_gradient()
+        self._fisher_diag: dict[str, Tensor] = {}
+        self._momentum: dict[str, Tensor] = {}
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+        bias_grads: dict[str, Tensor] | None = None,
+    ) -> dict[str, Tensor]:
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            # Update diagonal Fisher estimate (EMA of g²)
+            g2 = grad.detach() ** 2
+            if name not in self._fisher_diag:
+                self._fisher_diag[name] = g2
+            else:
+                beta2 = self.config.beta2
+                self._fisher_diag[name].mul_(beta2).add_(g2, alpha=1 - beta2)
+
+            # Natural gradient: g / (sqrt(F) + eps)
+            fisher_sqrt = self._fisher_diag[name].sqrt() + self.config.eps
+            nat_grad = grad / fisher_sqrt
+
+            # Optional momentum
+            if self.config.momentum > 0:
+                if name not in self._momentum:
+                    self._momentum[name] = torch.zeros_like(nat_grad)
+                self._momentum[name].mul_(self.config.momentum).add_(nat_grad)
+                nat_grad = self._momentum[name]
+
+            # Gradient clipping (global norm)
+            if self.config.grad_clip and self.config.grad_clip > 0:
+                total_norm = torch.norm(
+                    torch.stack([torch.norm(g) for g in nat_grad.flatten()])
+                )
+                if total_norm > self.config.grad_clip:
+                    nat_grad.mul_(self.config.grad_clip / (total_norm + 1e-8))
+
+            return param - self.config.step_size * nat_grad
+
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "fisher_diag": {k: v.clone() for k, v in self._fisher_diag.items()},
+            "momentum": {k: v.clone() for k, v in self._momentum.items()},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._fisher_diag = {
+            k: v.clone() for k, v in state.get("fisher_diag", {}).items()
+        }
+        self._momentum = {k: v.clone() for k, v in state.get("momentum", {}).items()}
 
 
 class ElasticConsolidationUpdate:

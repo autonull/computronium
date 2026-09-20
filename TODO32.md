@@ -73,6 +73,7 @@ uv run pytest tests/primitives/credit_assignment/reverse_mode -q     # 9 passed
 uv run pytest tests/primitives/parameter_update/muon -q              # 7 passed
 uv run pytest tests/primitives/parameter_update/euclidean -q         # 9 passed
 uv run pytest tests/primitives/parameter_update/spectral_constrained -q # 9 passed
+uv run pytest tests/primitives/parameter_update/natural_gradient -q  # 9 passed
 uv run pytest tests/primitives/geometry/tile_mesh -q                 # 10 passed
 uv run pytest tests/primitives/geometry/feedforward_dag -q           # 10 passed
 uv run pytest tests/primitives/geometry/recurrent_attractor -q       # 10 passed
@@ -171,6 +172,11 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 - Reference wraps EnergyMinimizationDynamics; kernel falls back to reference (torch.compile path)
 - Deterministic RNG handling for parity testing
 
+**Primitive (natural_gradient) — NEW THIS SESSION:**
+- `computronium/primitives/parameter_update/natural_gradient/` with spec.py, reference.py, kernel.py, cases.py, __init__.py
+- Reference wraps NaturalGradientUpdate (Fisher diagonal EMA with Tikhonov damping); kernel falls back to reference
+- Deterministic RNG handling for parity testing
+
 **Scaffolding & Test Generation — NEW THIS SESSION:**
 - `scripts/scaffold_primitive.py` — Jinja2-based scaffolding for new primitives
 - `scripts/templates/primitive/` — Templates for __init__.py, spec.py, reference.py, kernel.py, cases.py, and tests
@@ -242,6 +248,7 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 **Type fixes:**
 - Fixed registry.py pyright errors (getattr for package attributes, type ignore for SPEC)
 - Added `on_step` parameter to PCALMDynamics.settle() to match StateDynamics protocol
+- Added `NaturalGradientUpdate` class and `ParameterUpdateConfig.natural_gradient()` to ontology/update.py
 
 ### ✅ Completed Steps (Phase 4: Migration of Named Algorithms)
 
@@ -424,6 +431,19 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 158 | Run integration/property tests (43 passed) | ✅ Done |
 | 159 | Commit lint and type fixes | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — natural_gradient Primitive Completion)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 160 | Add `NaturalGradientUpdate` class to ontology/update.py with Fisher diagonal EMA | ✅ Done |
+| 161 | Add `natural_gradient` classmethod to `ParameterUpdateConfig` | ✅ Done |
+| 162 | Create `natural_gradient` primitive (parameter_update, low priority) | ✅ Done |
+| 163 | Add natural_gradient tests (9 tests: reference, kernel_parity, cases) | ✅ Done |
+| 164 | Register in lazy loading (primitives/__init__.py, parameter_update/__init__.py) | ✅ Done |
+| 165 | Run ruff format, ruff check, pyright on new primitive | ✅ Done |
+| 166 | Run all primitive/algorithm/acceleration tests (653 passed, 32 skipped) | ✅ Done |
+| 167 | Run integration/property tests (10 passed, 1 xfailed) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -447,7 +467,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | ✅ `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
 | **parameter_update** | ✅ `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
 | | ✅ `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
-| | `natural_gradient` | `NaturalGradientUpdate` | Low | Requires ontology class | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
+| | ✅ `natural_gradient` | `NaturalGradientUpdate` | Low | ✅ Done | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
 | | ✅ `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
 | **plasticity** | `null` | `NullPlasticity` | **High** | - | `--axis plasticity --name null --ontology-class NullPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.null` |
 | | ✅ `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
@@ -477,7 +497,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: ✅ `spike_integration`, ✅ `reverse_mode`, ✅ `spectral_constrained`, ✅ `substrate_coupled`, ✅ `memristive`, ✅ `neuromorphic` (6 primitives)
 3. **Week 3**: ✅ `instantaneous_pass`, ✅ `target_inversion`, ✅ `closed_form_ridge`, ✅ `temporal_psi`, ✅ `fabric_pc`, ✅ `ntm`, ✅ `nca` (7 primitives)
-4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient` (requires ontology class), ✅ `elastic_consolidation`, ✅ `rule_state`, ✅ `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, ✅ `noisy`, ✅ `sparse`, ✅ `complex`, ✅ `ternary` (13 primitives, low priority; `natural_gradient` is the only remaining)
+4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, ✅ `natural_gradient`, ✅ `elastic_consolidation`, ✅ `rule_state`, ✅ `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, ✅ `noisy`, ✅ `sparse`, ✅ `complex`, ✅ `ternary` (13 primitives, low priority; all complete)
 
 ### Phase 7: Additional Algorithms (beyond current 14)
 
