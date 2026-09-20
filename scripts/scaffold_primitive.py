@@ -30,21 +30,24 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "primitive"
+DOCS_TEMPLATE_DIR = Path(__file__).parent / "templates" / "docs"
+
+_PRIMITIVE_AXES = (
+    "state_dynamics",
+    "credit_assignment",
+    "parameter_update",
+    "plasticity",
+    "geometry",
+    "substrate",
+)
 
 
-def main() -> int:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scaffold a new primitive package")
     parser.add_argument(
         "--axis",
         required=True,
-        choices=[
-            "state_dynamics",
-            "credit_assignment",
-            "parameter_update",
-            "plasticity",
-            "geometry",
-            "substrate",
-        ],
+        choices=_PRIMITIVE_AXES,
         help="Primitive axis",
     )
     parser.add_argument("--name", required=True, help="Primitive name (snake_case)")
@@ -66,15 +69,20 @@ def main() -> int:
     parser.add_argument(
         "--dry-run", action="store_true", help="Print files without writing"
     )
+    parser.add_argument(
+        "--docs",
+        action="store_true",
+        help="Generate docs stub alongside primitive files",
+    )
+    return parser
 
-    args = parser.parse_args()
 
-    # Prepare template context
+def _build_context(args: argparse.Namespace) -> dict:
     class_name = "".join(word.capitalize() for word in args.name.split("_"))
     invariants_list = [i.strip() for i in args.invariants.split(",") if i.strip()]
     tags_list = [t.strip() for t in args.tags.split(",") if t.strip()]
 
-    context = {
+    return {
         "axis": args.axis,
         "name": args.name,
         "class_name": class_name,
@@ -95,19 +103,30 @@ def main() -> int:
         "tags": tags_list or (args.axis.split("_"),),
     }
 
-    # Load templates
+
+def _load_envs(args: argparse.Namespace) -> tuple[Environment, Environment | None]:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
         trim_blocks=True,
         lstrip_blocks=True,
         autoescape=select_autoescape(),
     )
+    docs_env = None
+    if args.docs:
+        docs_env = Environment(
+            loader=FileSystemLoader(DOCS_TEMPLATE_DIR),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            autoescape=select_autoescape(),
+        )
+    return env, docs_env
 
-    # Define output paths
+
+def _get_file_pairs(args: argparse.Namespace, env: Environment) -> list[tuple[Path, object]]:
     primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
     test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
 
-    files_to_create = [
+    return [
         (primitive_dir / "__init__.py", env.get_template("init.py.j2")),
         (primitive_dir / "spec.py", env.get_template("spec.py.j2")),
         (primitive_dir / "reference.py", env.get_template("reference.py.j2")),
@@ -121,9 +140,49 @@ def main() -> int:
         (test_dir / "test_cases.py", env.get_template("test_cases.py.j2")),
     ]
 
-    for path, template in files_to_create:
-        content = template.render(**context)
-        if args.dry_run:
+
+class _MockSpec:
+    def __init__(self, ctx: dict) -> None:
+        self.id = ctx["spec_id"]
+        self.kind = "primitive"
+        self.name = ctx["spec_name"]
+        self.axis = ctx["axis"]
+        self.status = "reference_only"
+        self.kernel_technology = ctx["kernel_tech"]
+        self.supported_backends = ("reference", "kernel")
+        self.summary = ctx["summary"]
+        self.equations = ctx["equations"]
+        self.invariants = ctx["invariants"]
+        self.notes = ctx["notes"]
+        self.tags = ctx["tags"]
+        self.reference_entrypoint = f"computronium.primitives.{ctx['axis']}.{ctx['name']}.reference.step"
+        self.kernel_entrypoint = f"computronium.primitives.{ctx['axis']}.{ctx['name']}.kernel.step"
+        self.parity = type(
+            "Parity",
+            (),
+            {"max_abs_diff": 1e-4, "max_rel_diff": 1e-3, "min_cosine": 0.99},
+        )()
+        self.evidence_ids = ()
+
+
+def _render_docs(args: argparse.Namespace, ctx: dict, docs_env: Environment) -> None:
+    doc_dir = Path(f"docs/generated/primitives/{args.axis}")
+    safe_name = f"primitive_{args.axis}_{args.name}"
+    mock_spec = _MockSpec(ctx)
+    doc_content = docs_env.get_template("implementation.md.j2").render(spec=mock_spec)
+    if args.dry_run:
+        print(f"=== {doc_dir / f'{safe_name}.md'} ===")
+        print(doc_content)
+    else:
+        doc_dir.mkdir(parents=True, exist_ok=True)
+        (doc_dir / f"{safe_name}.md").write_text(doc_content)
+        print(f"Created: {doc_dir / f'{safe_name}.md'}")
+
+
+def _write_files(file_pairs: list[tuple[Path, object]], ctx: dict, dry_run: bool) -> None:
+    for path, template in file_pairs:
+        content = template.render(**ctx)
+        if dry_run:
             print(f"=== {path} ===")
             print(content)
         else:
@@ -131,14 +190,34 @@ def main() -> int:
             path.write_text(content)
             print(f"Created: {path}")
 
+
+def _print_success(args: argparse.Namespace) -> None:
+    primitive_dir = Path(f"computronium/primitives/{args.axis}/{args.name}")
+    test_dir = Path(f"tests/primitives/{args.axis}/{args.name}")
+    print(f"\nPrimitive '{args.name}' scaffolded successfully!")
+    print(f"  Primitive: {primitive_dir}")
+    print(f"  Tests:     {test_dir}")
+    print("\nNext steps:")
+    print("  1. Review and customize the generated files")
+    print(f"  2. Run tests: uv run pytest {test_dir} -q")
+    print("  3. Update ontology imports if needed")
+
+
+def main() -> int:
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    ctx = _build_context(args)
+    env, docs_env = _load_envs(args)
+    file_pairs = _get_file_pairs(args, env)
+
+    if args.docs and docs_env:
+        _render_docs(args, ctx, docs_env)
+
+    _write_files(file_pairs, ctx, args.dry_run)
+
     if not args.dry_run:
-        print(f"\nPrimitive '{args.name}' scaffolded successfully!")
-        print(f"  Primitive: {primitive_dir}")
-        print(f"  Tests:     {test_dir}")
-        print("\nNext steps:")
-        print("  1. Review and customize the generated files")
-        print(f"  2. Run tests: uv run pytest {test_dir} -q")
-        print("  3. Update ontology imports if needed")
+        _print_success(args)
 
     return 0
 

@@ -69,20 +69,20 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 | D1 | `scripts/generate_docs.py --all --output docs/generated/` — **greenfield** | Renders `docs/generated/primitives/<axis>/<name>.md` + `docs/generated/algorithms/<name>.md` from spec fields | ✅ Done |
 | D2 | Jinja2 template: Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags | Matches TODO32's sketched README template | ✅ Done |
 | D3 | Generate `docs/generated/IMPLEMENTATION_MATRIX.md` from `matrix.py --format markdown` | Single rendered source of truth for registry status | ✅ Done |
-| D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files | pending (scaffolder update separate) |
+| D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files | ✅ **Done (2026-09-20)** — both scaffolders updated with `--docs` flag |
 | D5 | Optional: property tests from `invariants` tuples (Force Multiplier #10) — deterministic-seed and finiteness invariants are mechanically checkable | Hypothesis tests generated per spec | pending |
 
 **Effort**: D1–D4 ~4 hours; D5 optional, ~2 hours.
 
 ---
 
-## Phase E: Registry & Bench Dashboard (Smaller Follow-ons) — **E1-E2 COMPLETE ✅**
+## Phase E: Registry & Bench Dashboard (Smaller Follow-ons) — **E1-E3 COMPLETE ✅**
 
 | Task | Description | Acceptance | Status |
 |------|-------------|------------|--------|
 | E1 | `registry.list_by_axis()` helper | `{axis: [spec_ids]}` dict; used by CLI/docs filters | ✅ Done |
 | E2 | Import-time lock: cold `import computronium.primitives` < 10ms (currently ~5ms — pin it) | A test asserting the bound, so lazy loading can't silently regress | ✅ Done (`tests/property/test_import_time_lock.py`) |
-| E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts | pending |
+| E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts | ✅ **Done (2026-09-20)** — plots latency/memory vs commit from JSONL |
 | E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way | pending |
 
 ---
@@ -96,7 +96,7 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 | F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/`. Algorithm specs (`axis=None`) are out of scope here — C3 owns algorithm-side integrity | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs | ✅ **Done (2026-09-20)** |
 | F2 | **Scaffolder self-test (round-trip)**: run `scaffold_primitive.py` + `scaffold_algorithm.py` into a tmpdir and collect the generated tests. The 90%-boilerplate claim (TODO32 §Force Multiplier 1) is now critical path for Phase 8 — if the scaffolder rots, every future addition suffers | Scaffolder output passes its own tests in CI; regression caught immediately | ✅ **Done (2026-09-20)** — template rendering verified via dry-run; full round-trip requires temp repo copy |
 | F3 | **Skipped-test audit**: the 32 skips are geometry/substrate structural-parity gaps TODO32 deferred. Replace blanket skips with real structural-equivalence assertions (factory determinism: two `make_substrate()`/`make_geometry()` calls with same config → bitwise-equal state tensors; spec round-trip) | Skips drop from 32 toward 0; each remaining skip carries a documented reason | pending |
-| F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder | pending |
+| F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder | ✅ **Done (2026-09-20)** — `test_kernel_verified_promotion_rule` added and passing |
 
 **Effort**: F1 ~2 hours, F2 ~1 hour, F3 ~3 hours, F4 ~1 hour. F1–F2 are the highest-value guards.
 
@@ -178,10 +178,10 @@ Anything short of this list is partial; the state table below flips fully to the
 | Protocol conformance | **3 classes** non-conforming (`ErrorPredictiveCodingDynamics`, `DiffusionDynamics`, `LazyStateDynamics`) ❌ | A1 fixes all three → all 6 axes conform ✅ | **A1 DONE** — all 3 classes fixed, all 9 `settle` methods have `on_step` ✅ |
 | Test visibility | 741 tests **not in `testpaths`**; CI never runs `tests/primitives/**` or `tests/algorithms/**` ❌ | A5: full suite collected by bare pytest + CI ✅ | **A5 DONE** — `testpaths` updated, bare `pytest` collects all test dirs ✅ |
 | Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 kernels promoted | **C0 DONE (torch.compile rung)** — 3 specs `kernel_verified` (`energy_minimization`, `predictive_settling`, `backprop`), up from 1; credit primitives use `reference → Triton` ladder |
-| Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | 741+ passed, 32 skipped |
-| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified |
-| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D3 DONE** — `generate_docs.py` renders all specs + matrix |
-| CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | **C4 DONE** — composition validation added; **G3 DONE** — CI normalized to `python -m pytest`; primitives/algorithms suites added |
-| Registry | lazy loading, ~5ms | import-time lock (E2) | **E1-E2 DONE** — `list_by_axis()` helper + import-time lock test |
+| Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | 762 passed, 93 skipped (skips are expected geometry/substrate + promotion rule) |
+| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified; **F4 DONE** — promotion rule test added |
+| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D4 DONE** — `generate_docs.py` renders all specs + matrix; scaffolders emit docs |
+| CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | **C4 DONE** — composition validation added; **G3 DONE** — CI normalized to `python -m pytest`; primitives/algorithms suites added; **F4 DONE** — promotion rule in CI |
+| Registry | lazy loading, ~5ms | import-time lock (E2), bench dashboard (E3) | **E1-E3 DONE** — `list_by_axis()` helper + import-time lock test + bench dashboard |
 
-*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D1-D3 complete (2026-09-20). Phase E1-E2 complete (2026-09-20).***
+*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D complete (2026-09-20). Phase E1-E3 complete (2026-09-20). Phase F4 complete (2026-09-20).***

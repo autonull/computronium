@@ -1,17 +1,3 @@
-# Algorithm Identity Cards
-
-Rendered from the `IDENTITY_CARD` class attributes on Credit, Update,
-and Plasticity primitives (`scripts/generate_identity_cards.py`). Each
-card records the reference equation, deviations from the literature,
-the objective, the pseudo-gradient definition, and the feedback
-symmetry. Cards are the source for the README §5 primitives table.
-
-**Status:** 25 of 25 concrete primitives carded (aliases
-`BackpropCredit` = `GradientCredit` and `ThermodynamicContrastCredit`
-dedupe to their target class). The `--strict` gate is wired into
-pre-commit (C.1): adding a Credit/Update/Plasticity primitive without
-an attached `AlgorithmIdentityCard` now blocks the commit.
-
 | Name | Reference | Deviations | Objective | Pseudo-gradient | Symmetry |
 |---|---|---|---|---|---|
 | GradientCredit | Standard backpropagation; Rumelhart, Hinton & Williams (1986) | weights-only by default (bias deltas 0.0, locked H2 contract); train_biases=True extends to biases for contract-honest baselines; missing-graph fail-loud: autograd grads that do not reach every learnable weight raise instead of zero-filling | task loss on the nudged/output phase settle | exact autograd ∂L/∂W via torch.autograd.grad (create_graph=False) | none |
@@ -31,6 +17,7 @@ an attached `AlgorithmIdentityCard` now blocks the commit.
 | LionUpdate | Lion; Chen et al. (2023), arXiv 2302.06675 | operates on credit pseudo-gradients (identical math); reuses Adam's clip/state machinery; only m buffer live (v empty for snapshot-protocol compatibility) | — | ΔW = −lr · sign(β1·m + (1−β1)·g); m ← β2·m + (1−β2)·g | none |
 | LocalAdamUpdate | LAMB-style scalar-second-moment variant (RESEARCH4 A1 rung); You et al. (2020) for the LAMB family | denominator is ONE scalar per tensor (mean of v̂), not per-coordinate — preserves within-tensor relative gradient structure | — | ΔW = −lr · m̂ / (sqrt(mean(v̂)) + ε), standard Adam moment updates with bias correction | none |
 | MeanNormUpdate | natural-gradient / Fisher-geometry family; Amari (1998) — simplified rung | SIMPLIFIED: per-tensor mean-|g| normalization standing in for a true inverse-Fisher preconditioner — direction preserving, magnitude per-element-normalized | — | ΔW = −lr · g / (mean|g| + ε) per tensor | none |
+| NaturalGradientUpdate | Natural gradient; Amari (1998) — Fisher Information Geometry; diagonal Fisher approximation with Tikhonov damping | Diagonal Fisher approximation: F ≈ diag(E[g²]) instead of full Fisher matrix; Tikhonov damping (fisher_damping) added for numerical stability | min_θ E[L(θ)] under Fisher-Rao metric | ΔW = −lr · (F + λI)⁻¹ · g  (diagonal F, λ = fisher_damping) | none |
 | OrthoAdamUpdate | Adam (Kingma & Ba 2015) direction-swapped with Muon's orthogonalize-the-momentum; Liu et al. (2023) for Muon | matrix params: bias-corrected first moment replaced by its SVD polar factor (ortho_steps=0, config of record) or Newton–Schulz (ortho_steps>0), rescaled to the plain Adam step's Frobenius magnitude; vector params ride plain Adam; non-finite grad / SVD non-convergence skip the tensor update | — | ΔW = −ortho_lr · polar(m̂)·(‖adam_step‖/‖polar‖); vectors: −lr · adam_step | none |
 | RiemannianOrthogonalUpdate | Muon; Liu et al. (2023), arXiv 2409.00125 (Newton-Schulz orthogonalized momentum) | orthogonalizes the MOMENTUM buffer (EMA), not the raw single-batch gradient — orthogonalization amplifies the noise floor; vectors (biases) ride plain SGD (matrix-only rule); ortho_steps=0 selects the exact SVD polar factor (NOT reduced QR — its R-diagonal is sign-arbitrary, direction uncorrelated with the gradient, measured cos ≈ 0); non-finite momentum / SVD non-convergence skip the tensor instead of killing long runs | — | ΔW = −lr · polar(μ·buf + g) for matrices; −lr·g for vectors | none |
 | RoleSplitUpdate | per-parameter-name rule dispatch (composition primitive, no canonical optimizer reference) | not a new optimizer — routes each parameter name to exactly one sub-rule (X-USU-001: muon-on-readout + euclid-elsewhere); global-norm clip semantics are per-subset: each sub-rule clips its own name set independently | — | ΔW_n = on_role.step(g_n) for n ∈ role_names; other.step(g_n) otherwise | role_names must name existing parameters |

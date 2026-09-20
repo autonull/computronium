@@ -1,5 +1,7 @@
 # Primitive/Algorithm Structure with a Shared Acceleration Layer
 
+> **⚠️ This plan is superseded by `TODO32b.md`** — continued by **TODO32b: Polish, Drift Repairs & Force-Multiplier Enablement**. See `TODO32b.md` for active work, drift repairs, kernel workflow, and verification extensions built on this foundation.
+
 This plan restructures Computronium so that:
 
 ```text
@@ -607,7 +609,9 @@ All phases from the original TODO32.md plan have been implemented:
 - **Phase 7**: 7 additional EqProp-family algorithms ✅
 - **Infrastructure**: Scaffolding scripts, test generation, CI parity gate, lazy registry loading ✅
 
-### 💡 New Improvement Opportunities
+### 💡 New Improvement Opportunities  ⚠️ **Superseded by TODO32b.md**
+
+> **See `TODO32b.md` Phases B, D, E, F for the active tracking of these items.** The items below were captured during TODO32 execution and have been migrated to the continuation plan.
 
 1. **Test file naming**: ✅ DONE - Renamed to `test_<name>_reference.py`, `test_<name>_kernel_parity.py`, `test_<name>_cases.py` pattern. `pytest tests/` now works globally.
 
@@ -627,7 +631,9 @@ All phases from the original TODO32.md plan have been implemented:
 
 9. **Ruff rule code drift**: Ruff 0.15.9 changed rule codes (e.g., `line-too-long` → `E501`, `non-empty-init-module` → `RUF067`, `invalid-all-format` → `PLE0605`). The new primitives/algorithms code uses correct codes; legacy code may need updates during Register C hygiene pass.
 
-### 🚀 Leverage New Architecture: Force Multipliers for Future Work
+### 🚀 Leverage New Architecture: Force Multipliers for Future Work  ⚠️ **Superseded by TODO32b.md**
+
+> **See `TODO32b.md` Phases C, D, E, F for the active tracking of these items.** The force multipliers below were identified during TODO32 and have been migrated to the continuation plan with implementation status.
 
 The new `primitives/` + `algorithms/` + `acceleration/` structure enables several force multipliers that dramatically reduce effort for future additions:
 
@@ -869,7 +875,9 @@ def test_settling_residual_decreases(data):
 - **Types**: pyright 0 errors on new modules (4 warnings for dynamic `__all__` lazy loading)
 - **Import Time**: ~5ms for `computronium.primitives` and `computronium.algorithms` via lazy loading
 
-### 💡 New Improvement Opportunities (Post-Plan)
+### 💡 New Improvement Opportunities (Post-Plan)  ⚠️ **Superseded by TODO32b.md**
+
+> **See `TODO32b.md` Phases B, D, E for the active tracking of these items.** The items below were captured at TODO32 completion and have been migrated to the continuation plan.
 
 1. **Microbench CLI enhancements**: Add `--iterations`, `--warmup`, `--output-file`, `--device` selection, CSV summary options
 2. **Matrix output**: Already outputs JSON/Markdown for CI integration (GitHub Actions table, PR comments) - could add HTML dashboard
