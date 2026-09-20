@@ -6,35 +6,33 @@
 import hypothesis
 import hypothesis.strategies as st
 import pytest
-import torch
-
 
 from computronium.acceleration.registry import get
 
-
-SPEC_ID = 'primitive.plasticity.null'
+SPEC_ID = "primitive.plasticity.null"
 
 
 @pytest.fixture(scope="module")
 def spec():
-    return get('primitive.plasticity.null')
+    return get("primitive.plasticity.null")
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_deterministic_under_fixed_seed(spec, seed):
     """Test that implementation is deterministic under fixed seed."""
-    from computronium.primitives.plasticity.null.cases import make_case
     from importlib import import_module
+
     from computronium.acceleration.parity import compare
+    from computronium.primitives.plasticity.null.cases import make_case
 
     case1 = make_case(seed=seed)
     case2 = make_case(seed=seed)
 
-    ref_module = import_module('computronium.primitives.plasticity.null.reference')
+    ref_module = import_module("computronium.primitives.plasticity.null.reference")
     out1 = ref_module.step(case1)
     out2 = ref_module.step(case2)
 
     # Use the existing compare function which handles CompositeState, dicts, etc.
     metrics = compare(out1, out2)
-    assert metrics['max_abs_diff'] == 0.0, f'Outputs differ for seed {seed}: {metrics}'
+    assert metrics["max_abs_diff"] == 0.0, f"Outputs differ for seed {seed}: {metrics}"

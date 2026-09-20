@@ -8,64 +8,68 @@ import hypothesis.strategies as st
 import pytest
 import torch
 
-
 from computronium.acceleration.registry import get
 
-
-SPEC_ID = 'primitive.state_dynamics.spike_integration'
+SPEC_ID = "primitive.state_dynamics.spike_integration"
 
 
 @pytest.fixture(scope="module")
 def spec():
-    return get('primitive.state_dynamics.spike_integration')
+    return get("primitive.state_dynamics.spike_integration")
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_deterministic_under_fixed_seed(spec, seed):
     """Test that implementation is deterministic under fixed seed."""
-    from computronium.primitives.state_dynamics.spike_integration.cases import make_case
     from importlib import import_module
+
     from computronium.acceleration.parity import compare
+    from computronium.primitives.state_dynamics.spike_integration.cases import make_case
 
     case1 = make_case(seed=seed)
     case2 = make_case(seed=seed)
 
-    ref_module = import_module('computronium.primitives.state_dynamics.spike_integration.reference')
+    ref_module = import_module(
+        "computronium.primitives.state_dynamics.spike_integration.reference"
+    )
     out1 = ref_module.step(case1)
     out2 = ref_module.step(case2)
 
     # Use the existing compare function which handles CompositeState, dicts, etc.
     metrics = compare(out1, out2)
-    assert metrics['max_abs_diff'] == 0.0, f'Outputs differ for seed {seed}: {metrics}'
+    assert metrics["max_abs_diff"] == 0.0, f"Outputs differ for seed {seed}: {metrics}"
 
 
 @hypothesis.given(st.integers(min_value=0, max_value=1000))
 @hypothesis.settings(max_examples=10, deadline=None)
 def test_state_remains_finite(spec, seed):
     """Test that all outputs remain finite (no NaN/Inf)."""
-    from computronium.primitives.state_dynamics.spike_integration.cases import make_case
     from importlib import import_module
+
+    from computronium.primitives.state_dynamics.spike_integration.cases import make_case
 
     case = make_case(seed=seed)
 
-    ref_module = import_module('computronium.primitives.state_dynamics.spike_integration.reference')
+    ref_module = import_module(
+        "computronium.primitives.state_dynamics.spike_integration.reference"
+    )
     out = ref_module.step(case)
 
-    def _check_finite(x, path='output'):
+    def _check_finite(x, path="output"):
         if isinstance(x, torch.Tensor):
-            assert not torch.isnan(x).any(), f'NaN found in {path}'
-            assert not torch.isinf(x).any(), f'Inf found in {path}'
+            assert not torch.isnan(x).any(), f"NaN found in {path}"
+            assert not torch.isinf(x).any(), f"Inf found in {path}"
         elif isinstance(x, dict):
             for k, v in x.items():
-                _check_finite(v, f'{path}.{k}')
+                _check_finite(v, f"{path}.{k}")
         elif isinstance(x, (list, tuple)):
             for i, v in enumerate(x):
-                _check_finite(v, f'{path}[{i}]')
+                _check_finite(v, f"{path}[{i}]")
         # Handle CompositeState and similar objects with __dict__
-        elif hasattr(x, '__dict__') and not isinstance(x, type):
+        elif hasattr(x, "__dict__") and not isinstance(x, type):
             for k, v in x.__dict__.items():
-                if not k.startswith('_'):
-                    _check_finite(v, f'{path}.{k}')
+                if not k.startswith("_"):
+                    _check_finite(v, f"{path}.{k}")
 
     _check_finite(out)
