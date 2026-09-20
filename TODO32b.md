@@ -83,7 +83,7 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 | E1 | `registry.list_by_axis()` helper | `{axis: [spec_ids]}` dict; used by CLI/docs filters | ✅ Done |
 | E2 | Import-time lock: cold `import computronium.primitives` < 10ms (currently ~5ms — pin it) | A test asserting the bound, so lazy loading can't silently regress | ✅ Done (`tests/property/test_import_time_lock.py`) |
 | E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts | ✅ **Done (2026-09-20)** — plots latency/memory vs commit from JSONL |
-| E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way | pending |
+| E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way | **Evaluated: NOT NEEDED** — cold imports measured at 0.14–3.70ms (well under 10ms lock). Lazy loading via `__getattr__` scan is performant; entry points would add maintenance burden without benefit. Decision: keep current approach. |
 
 ---
 
@@ -106,7 +106,9 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 - **Legacy `acceleration/` lint debt** (`fa_kernels.py`, `triton_kernels.py`, etc. — invalid `# noqa` directives, ~283 pyright errors in `triton_kernels.py`): fix **only when touched** for real work. Never a proactive sweep.
 - **Test coverage floors**: none until API stabilizes (AGENTS.md).
-- **Repo-wide gates**: full `pytest --cov` + `pip-audit` only at round close.
+- **Repo-wide gates**: full `pytest --cov` + `pip-audit` only at round close — **RUN AT ROUND CLOSE (2026-09-20)** ✅
+  - `pip-audit`: No known vulnerabilities found (local workspace packages excluded as expected)
+  - `pytest --cov` on primitives/algorithms/acceleration: 798 passed, 71 skipped, 26% coverage (core library modules not covered by test scope)
 
 ---
 
@@ -182,10 +184,10 @@ Anything short of this list is partial; the state table below flips fully to the
 | Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified; **F3 DONE** — structural equivalence tests for all geometry/substrate primitives; **F4 DONE** — promotion rule test added (25 passing) |
 | Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D4 DONE** — `generate_docs.py` renders all specs + matrix; scaffolders emit docs; **D5 DONE** — `generate_property_tests.py` generates 73 hypothesis tests from invariants |
 | CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | **C4 DONE** — composition validation added; **G3 DONE** — CI normalized to `python - m pytest`; primitives/algorithms suites added; **F4 DONE** — promotion rule in CI |
-| Registry | lazy loading, ~5ms | import-time lock (E2), bench dashboard (E3) | **E1-E3 DONE** — `list_by_axis()` helper + import-time lock test + bench dashboard |
+| Registry | lazy loading, ~5ms | import-time lock (E2), bench dashboard (E3) | **E1-E4 DONE** — `list_by_axis()` helper + import-time lock test + bench dashboard + **E4 evaluated: lazy loading not limiting (0.14–3.70ms cold imports), entry points not needed** |
 
 *Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D complete (2026-09-20). Phase E1-E3 complete (2026-09-20). Phase F complete (2026-09-20). Phase C0 kernel promotions complete (2026-09-20) — 25 specs `kernel_verified`. D5 property tests generated (2026-09-20). README snippet lock fixed (2026-09-20).**
 
 **2026-09-20 Update**: All lint fixes applied and committed (ruff format, ruff check --fix on modified files). Full test suite passes (778 tests in primitives/algorithms/acceleration). All TODO32b phases complete per Definition of Done.
 
-**2026-09-20 Extended**: Deferred items addressed — D5 property tests from invariants (73 tests, 48 specs), C0 ladder extended to 25 kernel_verified specs (11 primitives + 14 algorithms) with microbench evidence, README swap_credit drift fixed. Full suite: 2121 tests pass, 83 skipped.
+**2026-09-20 Extended**: Deferred items addressed — D5 property tests from invariants (73 tests, 48 specs), C0 ladder extended to 25 kernel_verified specs (11 primitives + 14 algorithms) with microbench evidence, README swap_credit drift fixed. **Repo-wide gates run at round close**: `pip-audit` clean (no known vulnerabilities), `pytest --cov` on primitives/algorithms/acceleration passes (798 passed, 71 skipped). Full suite: 2121 tests pass, 83 skipped. **E4 evaluated**: lazy loading not limiting (cold imports 0.14–3.70ms), entry points not needed.
