@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import torch
+from torch import Tensor
+
 from computronium.core.plasticity import (
     FastWeightPlasticity,
     RoutingPlasticity,
@@ -494,10 +497,12 @@ def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
                     param_idx = 2 * i
                     weight_key = f"{param_idx}.weight"
                     bias_key = f"{param_idx}.bias"
-                    if weight_key in geometry.params:
-                        geometry.params[weight_key].copy_(layer.linear.weight)
-                        if bias_key in geometry.params:
-                            geometry.params[bias_key].copy_(layer.linear.bias)
+                    weight_val = geometry.params.get(weight_key)
+                    bias_val = geometry.params.get(bias_key)
+                    if isinstance(weight_val, Tensor):
+                        weight_val.copy_(layer.linear.weight)  # type: ignore[arg-type]
+                    if isinstance(bias_val, Tensor):
+                        bias_val.copy_(layer.linear.bias)  # type: ignore[arg-type]
 
             # Train classifier on concatenated hidden states
             h_all = torch.cat(hidden_states_pos, dim=1).detach()

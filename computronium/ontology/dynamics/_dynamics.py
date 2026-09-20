@@ -1449,6 +1449,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         x = _get_state_x(state)
         if x is None:
@@ -1499,6 +1500,9 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
                     for new, old in zip(new_eps, eps, strict=True)
                 )
             eps = [e.detach().requires_grad_(True) for e in new_eps]
+
+            if on_step is not None:
+                on_step(step, delta)
 
             if (
                 step >= self.config.convergence_start
@@ -2205,6 +2209,7 @@ class DiffusionDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         x = _get_state_x(state)
         if x is None:
@@ -2224,7 +2229,7 @@ class DiffusionDynamics(_SettleTelemetry):
                     "Diffusion settling requires a layered activation stack"
                 )
             input_act = acts[0]
-            for _step in range(self.config.max_steps):
+            for step in range(self.config.max_steps):
                 leaves = [a.detach().requires_grad_(True) for a in acts]
                 with torch.enable_grad():
                     energy = self._langevin_energy(
@@ -2241,12 +2246,15 @@ class DiffusionDynamics(_SettleTelemetry):
                     ]
                 acts[0] = input_act  # clamp the input
 
+                if on_step is not None:
+                    on_step(step, energy.item())
+
             acts = [a.detach() for a in acts]
         else:
             # Fallback: prior-only walk on the raw state (no geometry
             # weights to descend) — unreachable through the campaign grid.
             h = substrate.initial_state(x).detach().requires_grad_(True)
-            for _step in range(self.config.max_steps):
+            for step in range(self.config.max_steps):
                 with torch.enable_grad():
                     energy = self._prior_energy(h, target)
                     energy_grad = torch.autograd.grad(energy, h)[0]
@@ -2254,6 +2262,10 @@ class DiffusionDynamics(_SettleTelemetry):
                 with torch.no_grad():
                     h = h - self.config.step_size * energy_grad + noise
                 h = h.detach().requires_grad_(True)
+
+                if on_step is not None:
+                    on_step(step, energy.item())
+
             acts = [h.detach()]
 
         new_state = _create_output_state(
@@ -2354,6 +2366,7 @@ class LazyStateDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         """Sequential per-layer settle (Gauss–Seidel sweeps)."""
         params = self._layered(geometry)
@@ -2393,6 +2406,9 @@ class LazyStateDynamics(_SettleTelemetry):
                 out = out + beta * (_one_hot(target, out) - out)
             max_delta = max(max_delta, torch.dist(out, acts[-1], p=float("inf")).item())
             acts[-1] = out
+
+            if on_step is not None:
+                on_step(sweep, max_delta)
 
             if sweep >= self.config.convergence_start:
                 self._activation_cache[sweep] = [a.clone() for a in acts]

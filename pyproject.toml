@@ -148,7 +148,9 @@ comp = "computronium.cli.__main__:main"
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.141.1",
     "grpcio-tools>=1.83.0",
+    "httpx2>=2.12.0",
     "hypothesis>=6.161.2",
     "libcst>=1.9.0",
     "matplotlib>=3.11.1",
@@ -159,7 +161,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/unit", "tests/property"]
+testpaths = ["tests/unit", "tests/property", "tests/primitives", "tests/algorithms", "tests/acceleration"]
 markers = [
     "slow: marks tests as slow (e.g. MNIST full epoch)",
     "gpu: runs on CUDA device; skipped when GPU unavailable",
