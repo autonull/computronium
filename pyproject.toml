@@ -154,6 +154,7 @@ dev = [
     "hypothesis>=6.161.2",
     "libcst>=1.9.0",
     "matplotlib>=3.11.1",
+    "pip-audit>=2.10.1",
     "plotly>=7.0.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
