@@ -444,6 +444,32 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 166 | Run all primitive/algorithm/acceleration tests (653 passed, 32 skipped) | ✅ Done |
 | 167 | Run integration/property tests (10 passed, 1 xfailed) | ✅ Done |
 
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 7 Algorithms)
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 168 | Add factory functions for Phase 7 algorithms to presets.py | ✅ Done |
+| 169 | Create `scaffold_algorithm.py` with Jinja2 templates | ✅ Done |
+| 170 | Scaffold `directed_ep` algorithm (EqProp + FA variant) | ✅ Done |
+| 171 | Add `directed_ep` tests (12 tests: reference, kernel_parity, factory, cases) | ✅ Done |
+| 172 | Scaffold `finite_nudge_ep` algorithm (large β EqProp) | ✅ Done |
+| 173 | Add `finite_nudge_ep` tests (12 tests) | ✅ Done |
+| 174 | Scaffold `ternary_eqprop` algorithm (ternary substrate EqProp) | ✅ Done |
+| 175 | Fix TernarySubstrate config (weight_bounds vs alpha) | ✅ Done |
+| 176 | Add `ternary_eqprop` tests (12 tests) | ✅ Done |
+| 177 | Scaffold `momentum_eqprop` algorithm (heavy-ball dynamics) | ✅ Done |
+| 178 | Add `momentum_eqprop` tests (12 tests) | ✅ Done |
+| 179 | Scaffold `sparse_eqprop` algorithm (sparse substrate EqProp) | ✅ Done |
+| 180 | Add `sparse_eqprop` tests (12 tests) | ✅ Done |
+| 181 | Scaffold `diffusion_eqprop` algorithm (DiffusionDynamics) | ✅ Done |
+| 182 | Fix DiffusionDynamics import in presets.py | ✅ Done |
+| 183 | Add `diffusion_eqprop` tests (12 tests) | ✅ Done |
+| 184 | Scaffold `holomorphic_ep` algorithm (QuantumSubstrate EqProp) | ✅ Done |
+| 185 | Add `holomorphic_ep` tests (12 tests) | ✅ Done |
+| 186 | Fix test file naming for all new algorithms (`test_<name>_*.py`) | ✅ Done |
+| 187 | Run ruff format, ruff check, pyright on all new algorithms | ✅ Done |
+| 188 | Run all primitive/algorithm/acceleration tests (741 passed, 32 skipped) | ✅ Done |
+
 ### 📋 Remaining Work
 
 Per the plan, future phases include:
@@ -503,13 +529,13 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 
 | Algorithm | Coordinate (S×G×D×P×C×U) | Primitives Used | Priority | Scaffold Command |
 |-----------|--------------------------|-----------------|----------|------------------|
-| `directed_ep` | Digital × Recurrent × EnergyMin × Null × RandomProj × Euclidean | energy_minimization, random_projections, euclidean | Medium | `--name directed_ep --family equilibrium_propagation --primitives energy_minimization,random_projections,euclidean --factory create_directed_ep_mlp` |
-| `finite_nudge_ep` | Digital × Recurrent × EnergyMin(β≥1) × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean | Medium | `--name finite_nudge_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_finite_nudge_ep_mlp` |
-| `ternary_eqprop` | Ternary × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, ternary substrate | Low | `--name ternary_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,ternary --factory create_ternary_eqprop_mlp` |
-| `momentum_eqprop` | Digital × Recurrent × EnergyMin(momentum) × Null × ThermoContrast × Euclidean | energy_minimization(momentum), thermodynamic_contrast, euclidean | Low | `--name momentum_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_momentum_eqprop_mlp` |
-| `sparse_eqprop` | Sparse × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, sparse substrate | Low | `--name sparse_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,sparse --factory create_sparse_eqprop_mlp` |
-| `diffusion_eqprop` | Digital × Recurrent × Diffusion × Null × ThermoContrast × Euclidean | diffusion, thermodynamic_contrast, euclidean | Low | `--name diffusion_eqprop --family equilibrium_propagation --primitives diffusion,thermodynamic_contrast,euclidean --factory create_diffusion_eqprop_mlp` |
-| `holomorphic_ep` | Quantum × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, quantum substrate | Low | `--name holomorphic_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,quantum --factory create_holomorphic_ep_mlp` |
+| ✅ `directed_ep` | Digital × Recurrent × EnergyMin × Null × RandomProj × Euclidean | energy_minimization, random_projections, euclidean | Medium | `--name directed_ep --family equilibrium_propagation --primitives energy_minimization,random_projections,euclidean --factory create_directed_ep_mlp` |
+| ✅ `finite_nudge_ep` | Digital × Recurrent × EnergyMin(β≥1) × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean | Medium | `--name finite_nudge_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_finite_nudge_ep_mlp` |
+| ✅ `ternary_eqprop` | Ternary × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, ternary substrate | Low | `--name ternary_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,ternary --factory create_ternary_eqprop_mlp` |
+| ✅ `momentum_eqprop` | Digital × Recurrent × EnergyMin(momentum) × Null × ThermoContrast × Euclidean | energy_minimization(momentum), thermodynamic_contrast, euclidean | Low | `--name momentum_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean --factory create_momentum_eqprop_mlp` |
+| ✅ `sparse_eqprop` | Sparse × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, sparse substrate | Low | `--name sparse_eqprop --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,sparse --factory create_sparse_eqprop_mlp` |
+| ✅ `diffusion_eqprop` | Digital × Recurrent × Diffusion × Null × ThermoContrast × Euclidean | diffusion, thermodynamic_contrast, euclidean | Low | `--name diffusion_eqprop --family equilibrium_propagation --primitives diffusion,thermodynamic_contrast,euclidean --factory create_diffusion_eqprop_mlp` |
+| ✅ `holomorphic_ep` | Quantum × Recurrent × EnergyMin × Null × ThermoContrast × Euclidean | energy_minimization, thermodynamic_contrast, euclidean, quantum substrate | Low | `--name holomorphic_ep --family equilibrium_propagation --primitives energy_minimization,thermodynamic_contrast,euclidean,quantum --factory create_holomorphic_ep_mlp` |
 
 **Algorithm Scaffolding**: `uv run python scripts/scaffold_algorithm.py ...` generates factory + reference + kernel + cases + tests.
 

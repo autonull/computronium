@@ -1,0 +1,40 @@
+"""{{ class_name }} Algorithm Specification."""
+
+from computronium.acceleration.spec import (
+    ImplementationSpec,
+    ParityTolerance,
+)
+
+SPEC = ImplementationSpec(
+    id="algorithm.{{ name }}",
+    kind="algorithm",
+    name="{{ spec_name }}",
+    family="{{ family }}",
+    reference_entrypoint="computronium.algorithms.{{ name }}.reference.step",
+    kernel_entrypoint="computronium.algorithms.{{ name }}.kernel.step",
+    kernel_technology="{{ kernel_tech }}",
+    supported_backends=("reference", "kernel"),
+    parity=ParityTolerance(
+        max_abs_diff=1e-4,
+        max_rel_diff=1e-3,
+        min_cosine=0.999,
+    ),
+    status="reference_only",
+    uses_primitives=(
+        {% for prim in primitives %}"{{ prim }}",
+        {% endfor %}
+    ),
+    summary="{{ summary }}",
+    equations="""
+{{ equations or "    # TODO: Add equations" }}
+    """,
+    invariants=(
+        {% for inv in invariants %}"{{ inv }}",
+        {% endfor %}
+    ),
+    notes="{{ notes }}",
+    tags=(
+        {% for tag in tags %}"{{ tag }}",
+        {% endfor %}
+    ),
+)

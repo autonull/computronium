@@ -25,6 +25,7 @@ from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
+    DiffusionDynamics,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
@@ -825,6 +826,369 @@ def create_spiking_snn_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
+def create_directed_ep_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    feedback_scale: float = 0.01,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Directed Equilibrium Propagation MLP system (5-D coordinate).
+
+    Directed EP uses Feedback Alignment within the energy-based framework:
+    fixed random feedback matrices (no transport shortcut) with thermodynamic
+    settling dynamics.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        feedback_scale: Scale for random feedback matrix initialization
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with RandomProjections (FA) credit assignment
+        and EnergyMinimization dynamics.
+    """
+    substrate = _default_substrate(device)
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = RandomProjectionsCredit(
+        CreditAssignmentConfig.random_projections(
+            beta=beta,
+            feedback_scale=feedback_scale,
+        )
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_finite_nudge_ep_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 1.0,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Finite-Nudge Equilibrium Propagation MLP system (5-D coordinate).
+
+    Finite-Nudge EP uses large β (finite nudge) instead of infinitesimal limit.
+    Stronger supervision signals while maintaining equilibrium dynamics.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 1.0, finite nudge)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with ThermodynamicContrast credit assignment
+        and EnergyMinimization dynamics with finite β.
+    """
+    substrate = _default_substrate(device)
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_ternary_eqprop_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    weight_bounds: tuple[float, float] = (-1.0, 1.0),
+    device: str = "cpu",
+) -> System:
+    """Create a Ternary-Weight Equilibrium Propagation MLP system (5-D coordinate).
+
+    Ternary EP constrains weights to {-α, 0, +α} using STE-based quantization.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        init_scale: Weight initialization scale
+        weight_bounds: Ternary weight bounds (default: (-1.0, 1.0))
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System on TernarySubstrate with ThermodynamicContrast
+        credit assignment and EnergyMinimization dynamics.
+    """
+    from computronium.ontology import TernarySubstrate, SubstrateConfig
+
+    substrate = TernarySubstrate(
+        SubstrateConfig.ternary(weight_bounds=weight_bounds, device=device)
+    )
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_momentum_eqprop_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    momentum: float = 0.9,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Momentum Equilibrium Propagation MLP system (5-D coordinate).
+
+    Momentum EP uses heavy-ball settling dynamics for faster equilibrium convergence.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        momentum: Heavy-ball momentum coefficient (default: 0.9)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with EnergyMinimization(momentum) dynamics
+        and ThermodynamicContrast credit assignment.
+    """
+    substrate = _default_substrate(device)
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            momentum=momentum,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_sparse_eqprop_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    sparsity: float = 0.9,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Sparse Equilibrium Propagation MLP system (5-D coordinate).
+
+    Sparse EP uses dynamic sparsity masks with efficient sparse matmul.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        sparsity: Target sparsity ratio (default: 0.9)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System on SparseSubstrate with ThermodynamicContrast
+        credit assignment and EnergyMinimization dynamics.
+    """
+    from computronium.ontology import SparseSubstrate, SubstrateConfig
+
+    substrate = SparseSubstrate(
+        SubstrateConfig.sparse(sparsity=sparsity, device=device)
+    )
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_diffusion_eqprop_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Diffusion Equilibrium Propagation MLP system (5-D coordinate).
+
+    Diffusion EP uses continuous-time diffusion settling dynamics.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System with DiffusionDynamics and ThermodynamicContrast
+        credit assignment.
+    """
+    substrate = _default_substrate(device)
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = DiffusionDynamics(
+        StateDynamicsConfig.diffusion(
+            max_steps=inference_steps,
+            step_size=0.1,
+            beta=beta,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
+def create_holomorphic_ep_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...] = (512, 512, 512),
+    output_dim: int = 10,
+    beta: float = 0.5,
+    inference_steps: int = 20,
+    lr: float = 0.001,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a Holomorphic Equilibrium Propagation MLP system (5-D coordinate).
+
+    Holomorphic EP uses complex-valued Equilibrium Propagation with holomorphic
+    (analytic) activation functions and conjugate-transpose feedback pathways.
+    Note: complex-valued, not quantum — the quantum label applies only when
+    running on the specific simulated unitary-gate substrate.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (default: 3 layers of 512)
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        beta: Nudge strength for EqProp (default: 0.5)
+        inference_steps: Number of settling iterations (default: 20)
+        lr: Learning rate (default: 0.001)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System on QuantumSubstrate with ThermodynamicContrast
+        credit assignment and EnergyMinimization dynamics.
+    """
+    from computronium.ontology import QuantumSubstrate, SubstrateConfig
+
+    substrate = QuantumSubstrate(
+        SubstrateConfig.quantum(device=device)
+    )
+    geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            max_steps=inference_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=beta,
+            track_free_energy_per_iter=False,
+        )
+    )
+    credit = ThermodynamicContrast(
+        CreditAssignmentConfig.thermodynamic_contrast(beta=beta)
+    )
+    update = _default_update(lr)
+
+    return compose_system(substrate, geometry, dynamics, credit, update)
+
+
 # ============================================================
 # 6-D Joint System Factories (Extended Ontology with Plasticity)
 # ============================================================
@@ -990,6 +1354,14 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "create_snn_mlp",
     "create_spiking_snn_mlp",
     "create_tile_mlp",
+    # Phase 7: EqProp variants
+    "create_directed_ep_mlp",
+    "create_finite_nudge_ep_mlp",
+    "create_ternary_eqprop_mlp",
+    "create_momentum_eqprop_mlp",
+    "create_sparse_eqprop_mlp",
+    "create_diffusion_eqprop_mlp",
+    "create_holomorphic_ep_mlp",
     # 6-D factories
     "create_routing_mlp",
     "create_fast_weight_mlp",
