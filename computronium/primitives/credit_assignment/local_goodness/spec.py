@@ -23,7 +23,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="reference_only",
+    status="kernel_verified",
     summary="Layer-local contrastive credit assignment (Forward-Forward and LEMMA variants).",
     equations="""
     FF mode: ΔW_l ∝ -∇_W (G_free - G_nudged)_l

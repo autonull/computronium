@@ -23,7 +23,7 @@ SPEC = ImplementationSpec(
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Fixed random feedback matrix credit assignment (Feedback Alignment).",
     equations="""
     δ_l = B_{l+1} δ_{l+1} ⊙ f'(h_l)       # error signal via fixed random feedback

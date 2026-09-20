@@ -315,7 +315,11 @@ try:  # noqa: too-many-statements-in-try-clause
         BLOCK_B: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """Fused feedback weight projection: error @ B.T"""
+        """Fused feedback weight projection: error @ B.T
+
+        feedback matrix has shape [D_out, D_in] (row-major, stride D_in).
+        Computes error @ feedback.T where error: [B, D_out], feedback.T: [D_in, D_out].
+        """
         pid_b = tl.program_id(0)
         pid_d = tl.program_id(1)
 
@@ -325,27 +329,83 @@ try:  # noqa: too-many-statements-in-try-clause
         mask_b = offs_b < B
         mask_d = offs_d < D_in
 
-        # Accumulate error @ B.T
+        # Accumulate error @ feedback.T
         acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
         for k in range(0, D_out, BLOCK_D):
             offs_k = k + tl.arange(0, BLOCK_D)
             mask_k = offs_k < D_out
 
-            # Load error tile [BLOCK_B, BLOCK_D]
+            # Load error tile [BLOCK_B, BLOCK_D] from error[offs_b, offs_k]
             error_tile = tl.load(
                 error_ptr + offs_b[:, None] * D_out + offs_k[None, :],
                 mask=mask_b[:, None] & mask_k[None, :],
                 other=0.0,
             )
 
-            # Load feedback tile [BLOCK_D, BLOCK_D]
+            # Load feedback tile [BLOCK_D, BLOCK_D] from feedback.T[offs_d, offs_k]
+            # feedback is [D_out, D_in], so feedback.T[offs_d, offs_k] = feedback[offs_k, offs_d]
             fb_tile = tl.load(
-                feedback_ptr + offs_d[:, None] * D_out + offs_k[None, :],
-                mask=mask_d[:, None] & mask_k[None, :],
+                feedback_ptr + offs_k[:, None] * D_in + offs_d[None, :],
+                mask=mask_k[:, None] & mask_d[None, :],
                 other=0.0,
             )
 
             acc += tl.dot(error_tile, tl.trans(fb_tile), input_precision="ieee")
+
+        tl.store(
+            out_ptr + offs_b[:, None] * D_in + offs_d[None, :],
+            acc,
+            mask=mask_b[:, None] & mask_d[None, :],
+        )
+
+    @triton.jit
+    def _fa_feedback_projection_notrans_kernel(
+        error_ptr,
+        feedback_ptr,
+        out_ptr,
+        B,
+        D_in,
+        D_out,
+        BLOCK_B: tl.constexpr,
+        BLOCK_D: tl.constexpr,
+    ):
+        """Fused feedback weight projection: error @ B (no transpose).
+
+        feedback matrix has shape [D_out, D_in] (row-major, stride D_in).
+        Computes error @ feedback where error: [B, D_out], feedback: [D_out, D_in].
+        Output: [B, D_in]
+        """
+        pid_b = tl.program_id(0)
+        pid_d = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
+
+        mask_b = offs_b < B
+        mask_d = offs_d < D_in
+
+        # Accumulate error @ feedback
+        acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
+        for k in range(0, D_out, BLOCK_D):
+            offs_k = k + tl.arange(0, BLOCK_D)
+            mask_k = offs_k < D_out
+
+            # Load error tile [BLOCK_B, BLOCK_D] from error[offs_b, offs_k]
+            error_tile = tl.load(
+                error_ptr + offs_b[:, None] * D_out + offs_k[None, :],
+                mask=mask_b[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+
+            # Load feedback tile [BLOCK_D, BLOCK_D] from feedback[offs_k, offs_d]
+            # feedback is [D_out, D_in], so feedback[offs_k, offs_d]
+            fb_tile = tl.load(
+                feedback_ptr + offs_k[:, None] * D_in + offs_d[None, :],
+                mask=mask_k[:, None] & mask_d[None, :],
+                other=0.0,
+            )
+
+            acc += tl.dot(error_tile, fb_tile, input_precision="ieee")
 
         tl.store(
             out_ptr + offs_b[:, None] * D_in + offs_d[None, :],
@@ -441,3 +501,239 @@ for hw in HardwareTarget:
 
 
 __all__ = ["HAS_TRITON_FA", "FAKernelBackend"]
+
+
+# Standalone Triton functions for primitive-level FA acceleration
+# These can be used by primitive kernels without the full FAKernelBackend
+
+import math
+
+from computronium.ontology.credit import _apply_credit_norm
+
+
+def _activation_type_from_module(activation: torch.nn.Module) -> int:
+    """Map activation module to integer type for Triton kernel."""
+    if isinstance(activation, torch.nn.SiLU):
+        return 1
+    if isinstance(activation, torch.nn.Tanh):
+        return 2
+    if isinstance(activation, torch.nn.GELU):
+        return 3
+    return 0  # ReLU default
+
+
+def fa_feedback_projection_triton(
+    error: torch.Tensor,
+    feedback: torch.Tensor,
+) -> torch.Tensor:
+    """Compute error @ feedback.T using Triton (kept for backward compatibility).
+
+    Args:
+        error: [B, D_out]
+        feedback: [D_out, D_in]
+
+    Returns:
+        [B, D_in]
+    """
+    if not HAS_TRITON or not error.is_cuda:
+        return error @ feedback.T
+
+    B, D_out = error.shape
+    D_in = feedback.shape[1]
+    assert feedback.shape[0] == D_out
+
+    out = torch.empty(B, D_in, device=error.device, dtype=error.dtype)
+
+    BLOCK_B = 32
+    BLOCK_D = 64
+    grid = (math.ceil(B / BLOCK_B), math.ceil(D_in / BLOCK_D))
+
+    _fa_feedback_projection_kernel[grid](
+        error,
+        feedback,
+        out,
+        B,
+        D_in,
+        D_out,
+        BLOCK_B=BLOCK_B,
+        BLOCK_D=BLOCK_D,
+    )
+    return out
+
+
+def fa_feedback_projection_notrans_triton(
+    error: torch.Tensor,
+    feedback: torch.Tensor,
+) -> torch.Tensor:
+    """Compute error @ feedback (no transpose) using Triton.
+
+    Args:
+        error: [B, D_out]
+        feedback: [D_out, D_in]
+
+    Returns:
+        [B, D_in]
+    """
+    if not HAS_TRITON or not error.is_cuda:
+        return error @ feedback
+
+    B, D_out = error.shape
+    D_in = feedback.shape[1]
+    assert feedback.shape[0] == D_out
+
+    out = torch.empty(B, D_in, device=error.device, dtype=error.dtype)
+
+    BLOCK_B = 32
+    BLOCK_D = 64
+    grid = (math.ceil(B / BLOCK_B), math.ceil(D_in / BLOCK_D))
+
+    _fa_feedback_projection_notrans_kernel[grid](
+        error,
+        feedback,
+        out,
+        B,
+        D_in,
+        D_out,
+        BLOCK_B=BLOCK_B,
+        BLOCK_D=BLOCK_D,
+    )
+    return out
+
+
+def fa_activation_derivative_triton(
+    grad: torch.Tensor,
+    h: torch.Tensor,
+    activation: torch.nn.Module,
+) -> torch.Tensor:
+    """Apply activation derivative using Triton."""
+    if not HAS_TRITON or not grad.is_cuda:
+        return _apply_activation_derivative(grad, h, activation)
+
+    n_elements = grad.numel()
+    out = torch.empty_like(grad)
+
+    BLOCK_SIZE = 1024
+    grid = (math.ceil(n_elements / BLOCK_SIZE),)
+    act_type = _activation_type_from_module(activation)
+
+    _fa_activation_derivative_kernel[grid](
+        grad,
+        h,
+        out,
+        n_elements,
+        act_type,
+        BLOCK_SIZE=BLOCK_SIZE,
+    )
+    return out
+
+
+def fa_batched_outer_triton(
+    pre: torch.Tensor,
+    post: torch.Tensor,
+) -> torch.Tensor:
+    """Compute batched outer product using Triton.
+
+    Args:
+        pre: [B, D_in]
+        post: [B, D_out]
+
+    Returns:
+        [D_out, D_in] (averaged over batch)
+    """
+    if not HAS_TRITON or not pre.is_cuda:
+        return (post.T @ pre) / pre.shape[0]
+
+    B, D_in = pre.shape
+    D_out = post.shape[1]
+    assert post.shape[0] == B
+
+    out = torch.empty(D_out, D_in, device=pre.device, dtype=pre.dtype)
+
+    BLOCK_IN = 64
+    BLOCK_OUT = 64
+    grid = (math.ceil(D_in / BLOCK_IN), math.ceil(D_out / BLOCK_OUT))
+
+    _fa_batched_outer_kernel[grid](
+        pre,
+        post,
+        out,
+        B,
+        D_in,
+        D_out,
+        BLOCK_IN=BLOCK_IN,
+        BLOCK_OUT=BLOCK_OUT,
+    )
+    return out
+
+
+def fa_backward_triton(
+    activations: list[torch.Tensor],
+    output_error: torch.Tensor,
+    feedback_weights: list[torch.Tensor],
+    activation: torch.nn.Module,
+    credit_norm: str = "none",
+) -> list[torch.Tensor]:
+    """Triton-accelerated FA backward pass for primitive-level use.
+
+    Args:
+        activations: List of [x, h1, h2, ..., output] - length num_layers + 1
+        output_error: [B, D_out] - error at output layer (from autograd)
+        feedback_weights: List of feedback matrices B_i [D_{i+1}, D_i] for each layer
+        activation: Activation module
+        credit_norm: Credit normalization type
+
+    Returns:
+        List of weight gradients [grad_W0, grad_W1, ...]
+    """
+    num_layers = len(feedback_weights)
+    if num_layers != len(activations) - 1:
+        raise ValueError(
+            f"Expected {len(activations) - 1} feedback weights, got {num_layers}"
+        )
+
+    # Apply credit norm to output error
+    err = _apply_credit_norm([output_error], credit_norm)[0]
+
+    weight_grads = []
+
+    for i in range(num_layers - 1, -1, -1):
+        h_prev = activations[i]
+        h_curr = activations[i + 1]
+
+        # Weight gradient: err.T @ h_prev / batch
+        if HAS_TRITON_FA and err.is_cuda:
+            wgrad = fa_batched_outer_triton(h_prev, err)
+        else:
+            wgrad = (err.T @ h_prev) / h_prev.shape[0]
+        weight_grads.append(wgrad)
+
+        # Propagate error to previous layer
+        if i > 0:
+            B = feedback_weights[i]
+            if HAS_TRITON_FA and err.is_cuda:
+                err = fa_feedback_projection_triton(err, B)
+            else:
+                err = err @ B.T
+
+            # Apply activation derivative
+            if HAS_TRITON_FA and err.is_cuda:
+                err = fa_activation_derivative_triton(err, h_curr, activation)
+            else:
+                err = _apply_activation_derivative(err, h_curr, activation)
+
+            # Apply credit norm
+            err = _apply_credit_norm([err], credit_norm, [h_curr])[0]
+
+    weight_grads.reverse()
+    return weight_grads
+
+
+__all__ = [
+    "HAS_TRITON_FA",
+    "FAKernelBackend",
+    "fa_activation_derivative_triton",
+    "fa_backward_triton",
+    "fa_batched_outer_triton",
+    "fa_feedback_projection_notrans_triton",
+    "fa_feedback_projection_triton",
+]
