@@ -117,7 +117,9 @@ def _load_envs(args: argparse.Namespace) -> tuple[Environment, Environment | Non
     return env, docs_env
 
 
-def _get_file_pairs(args: argparse.Namespace, env: Environment) -> list[tuple[Path, object]]:
+def _get_file_pairs(
+    args: argparse.Namespace, env: Environment
+) -> list[tuple[Path, object]]:
     algorithm_dir = Path(f"computronium/algorithms/{args.name}")
     test_dir = Path(f"tests/algorithms/{args.name}")
 
@@ -153,7 +155,9 @@ class _MockAlgoSpec:
         self.invariants = ctx["invariants"]
         self.notes = ctx["notes"]
         self.tags = ctx["tags"]
-        self.reference_entrypoint = f"computronium.algorithms.{ctx['name']}.reference.step"
+        self.reference_entrypoint = (
+            f"computronium.algorithms.{ctx['name']}.reference.step"
+        )
         self.kernel_entrypoint = f"computronium.algorithms.{ctx['name']}.kernel.step"
         self.parity = type(
             "Parity",
@@ -178,7 +182,9 @@ def _render_docs(args: argparse.Namespace, ctx: dict, docs_env: Environment) -> 
         print(f"Created: {doc_dir / f'{safe_name}.md'}")
 
 
-def _write_files(file_pairs: list[tuple[Path, object]], ctx: dict, dry_run: bool) -> None:
+def _write_files(
+    file_pairs: list[tuple[Path, object]], ctx: dict, dry_run: bool
+) -> None:
     for path, template in file_pairs:
         content = template.render(**ctx)
         if dry_run:

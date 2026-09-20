@@ -12,7 +12,9 @@ def test_import_primitives_under_10ms():
     start = time.perf_counter()
     _ = __import__("computronium.primitives")
     elapsed_ms = (time.perf_counter() - start) * 1000
-    assert elapsed_ms < 10, f"primitives import took {elapsed_ms:.2f}ms, expected < 10ms"
+    assert elapsed_ms < 10, (
+        f"primitives import took {elapsed_ms:.2f}ms, expected < 10ms"
+    )
 
 
 def test_import_algorithms_under_10ms():
@@ -20,7 +22,9 @@ def test_import_algorithms_under_10ms():
     start = time.perf_counter()
     _ = __import__("computronium.algorithms")
     elapsed_ms = (time.perf_counter() - start) * 1000
-    assert elapsed_ms < 10, f"algorithms import took {elapsed_ms:.2f}ms, expected < 10ms"
+    assert elapsed_ms < 10, (
+        f"algorithms import took {elapsed_ms:.2f}ms, expected < 10ms"
+    )
 
 
 def test_import_primitives_core_under_10ms():
@@ -38,4 +42,6 @@ def test_import_primitives_core_under_10ms():
     assert spec.loader is not None
     spec.loader.exec_module(registry)
     elapsed_ms = (time.perf_counter() - start) * 1000
-    assert elapsed_ms < 10, f"acceleration.registry direct load took {elapsed_ms:.2f}ms, expected < 10ms"
+    assert elapsed_ms < 10, (
+        f"acceleration.registry direct load took {elapsed_ms:.2f}ms, expected < 10ms"
+    )

@@ -237,7 +237,10 @@ def gate_evidence(
 
 
 # chance_verdict lives in ceec.stats (TODO26 §2.5); re-exported here.
-from ceec.stats import ChanceVerdict, chance_verdict  # ruff: ignore[module-import-not-at-top-of-file]
+from ceec.stats import (  # ruff: ignore[module-import-not-at-top-of-file]
+    ChanceVerdict,
+    chance_verdict,
+)
 
 # --- Multi-objective CEEC builders (TODO31 Phase 2.5) ----------------------
 

@@ -65,7 +65,9 @@ def compute_stats(values: list[float]) -> dict[str, float]:
     }
 
 
-def _extract_commit_series(grouped: dict[str, list[dict]]) -> tuple[list[str], list[float], list[float]]:
+def _extract_commit_series(
+    grouped: dict[str, list[dict]],
+) -> tuple[list[str], list[float], list[float]]:
     """Extract commit labels, median latencies, and p95 latencies from grouped results."""
     commits = sorted(grouped.keys())
     medians = []
@@ -84,7 +86,9 @@ def _extract_commit_series(grouped: dict[str, list[dict]]) -> tuple[list[str], l
     return labels, medians, p95s
 
 
-def _extract_memory_series(grouped: dict[str, list[dict]]) -> tuple[list[str], list[float]]:
+def _extract_memory_series(
+    grouped: dict[str, list[dict]],
+) -> tuple[list[str], list[float]]:
     """Extract commit labels and median memory from grouped results."""
     commits = sorted(grouped.keys())
     mem_medians = []
@@ -101,7 +105,9 @@ def _extract_memory_series(grouped: dict[str, list[dict]]) -> tuple[list[str], l
     return labels, mem_medians
 
 
-def _plot_latency(ax, spec_id: str, labels: list[str], medians: list[float], p95s: list[float]) -> None:
+def _plot_latency(
+    ax, spec_id: str, labels: list[str], medians: list[float], p95s: list[float]
+) -> None:
     """Plot latency series on axis."""
     if not medians:
         return

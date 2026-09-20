@@ -39,12 +39,16 @@ def _check_primitive_exists(spec, prim_id: str, errors: list[str]) -> bool:
 def _check_primitive_kind(spec, prim_spec, prim_id: str, errors: list[str]) -> bool:
     """Check if spec is a primitive (not algorithm)."""
     if prim_spec.kind != "primitive":
-        errors.append(f"  {spec.id} -> {prim_id}: is {prim_spec.kind}, expected primitive")
+        errors.append(
+            f"  {spec.id} -> {prim_id}: is {prim_spec.kind}, expected primitive"
+        )
         return False
     return True
 
 
-def _check_primitive_importable(spec, prim_spec, prim_id: str, errors: list[str]) -> bool:
+def _check_primitive_importable(
+    spec, prim_spec, prim_id: str, errors: list[str]
+) -> bool:
     """Check if primitive is importable."""
     try:
         module_path = prim_spec.reference_entrypoint.rsplit(".", 1)[0]
@@ -90,16 +94,14 @@ def validate_algorithm(spec, verbose: bool = False) -> tuple[bool, list[str]]:
 
 def _parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Validate algorithm primitive dependencies")
+    parser = argparse.ArgumentParser(
+        description="Validate algorithm primitive dependencies"
+    )
     parser.add_argument(
         "--all-algorithms", action="store_true", help="Validate all algorithm specs"
     )
-    parser.add_argument(
-        "--algorithm", help="Validate a specific algorithm by ID"
-    )
-    parser.add_argument(
-        "--verbose", "-v", action="store_true", help="Verbose output"
-    )
+    parser.add_argument("--algorithm", help="Validate a specific algorithm by ID")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
     return parser.parse_args()
 
 

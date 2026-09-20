@@ -218,7 +218,6 @@ def test_trainer_step_callback_is_optional_and_observed(tmp_path: Path) -> None:
         SystemTrainerConfig,
         compose_system,
     )
-    from computronium.core.system_trainer import StepCallback  # ruff: ignore[unused-import] (export lock)
 
     def _system():
         torch.manual_seed(7)  # weights init from the global RNG pre-trainer-seed

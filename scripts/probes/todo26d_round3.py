@@ -93,7 +93,9 @@ from computronium.core.plasticity.temporal_psi import (
     TemporalPsiPlasticity,
 )
 from computronium.experiments.joint.tasks import create_switching_task
-from computronium.ontology.geometry import InitScheme  # ruff: ignore[typing-only-first-party-import]
+from computronium.ontology.geometry import (
+    InitScheme,  # ruff: ignore[typing-only-first-party-import]
+)
 from computronium.state import CompositeState
 
 INPUT_DIM = 16
