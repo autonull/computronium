@@ -1,8 +1,8 @@
 | ID | KIND | AXIS | BACKENDS | STATUS | KERNEL TECH | SUMMARY |
 |----|------|------|----------|--------|-------------|---------|
-| primitive.credit_assignment.local_goodness | primitive | credit_assignment | reference,kernel | reference_only | triton | Layer-local contrastive credit assignment (Forward-Forward a |
+| primitive.credit_assignment.local_goodness | primitive | credit_assignment | reference,kernel | kernel_verified | triton | Layer-local contrastive credit assignment (Forward-Forward a |
 | primitive.credit_assignment.pc_alm | primitive | credit_assignment | reference,kernel | kernel_unverified | triton | Local Hebbian credit assignment using dual variables from PC |
-| primitive.credit_assignment.random_projections | primitive | credit_assignment | reference,kernel | kernel_unverified | triton | Fixed random feedback matrix credit assignment (Feedback Ali |
+| primitive.credit_assignment.random_projections | primitive | credit_assignment | reference,kernel | kernel_verified | triton | Fixed random feedback matrix credit assignment (Feedback Ali |
 | primitive.credit_assignment.temporal_trace | primitive | credit_assignment | reference,kernel | kernel_unverified | triton | Spike-timing correlations (STDP) for credit assignment. |
 | primitive.credit_assignment.homeostatic | primitive | credit_assignment | reference,kernel | reference_only | triton | Homeostatic synaptic scaling with timing-asymmetric STDP |
 | primitive.credit_assignment.reverse_mode | primitive | credit_assignment | reference,kernel | reference_only | triton | Reverse-mode autograd credit (backprop baseline). |

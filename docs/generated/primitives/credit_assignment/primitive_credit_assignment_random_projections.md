@@ -2,7 +2,7 @@
 
 **Kind:** primitive
 **Axis:** credit_assignment
-**Status:** kernel_unverified
+**Status:** kernel_verified
 **Kernel Technology:** triton
 **Supported Backends:** reference, kernel
 
@@ -42,7 +42,7 @@ Fixed random feedback matrix credit assignment (Feedback Alignment).
 
 ## Status
 
-Current status: **kernel_unverified**
+Current status: **kernel_verified**
 
 ## Tags
 

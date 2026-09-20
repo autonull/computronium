@@ -27,8 +27,12 @@ And corresponding test files under tests/algorithms/<name>/:
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+if TYPE_CHECKING:
+    from jinja2.environment import Template
 
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "algorithm"
 DOCS_TEMPLATE_DIR = Path(__file__).parent / "templates" / "docs"
@@ -119,7 +123,7 @@ def _load_envs(args: argparse.Namespace) -> tuple[Environment, Environment | Non
 
 def _get_file_pairs(
     args: argparse.Namespace, env: Environment
-) -> list[tuple[Path, object]]:
+) -> list[tuple[Path, Template]]:
     algorithm_dir = Path(f"computronium/algorithms/{args.name}")
     test_dir = Path(f"tests/algorithms/{args.name}")
 
@@ -183,7 +187,7 @@ def _render_docs(args: argparse.Namespace, ctx: dict, docs_env: Environment) -> 
 
 
 def _write_files(
-    file_pairs: list[tuple[Path, object]], ctx: dict, dry_run: bool
+    file_pairs: list[tuple[Path, Template]], ctx: dict, dry_run: bool
 ) -> None:
     for path, template in file_pairs:
         content = template.render(**ctx)

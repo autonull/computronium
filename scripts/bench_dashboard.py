@@ -153,7 +153,8 @@ def plot_dashboard(
         specs = [spec_filter]
     else:
         # Get unique spec IDs
-        specs = sorted({r.get("id") for r in results if r.get("id")})
+        specs_set: set[str] = {r["id"] for r in results if r.get("id") is not None}
+        specs = sorted(specs_set)
 
     fig, axes = plt.subplots(len(specs), 2, figsize=(14, 5 * len(specs)), squeeze=False)
 
@@ -181,7 +182,8 @@ def print_summary(results: list[dict], spec_filter: str | None = None) -> None:
         results = filter_by_spec(results, spec_filter)
         specs = [spec_filter]
     else:
-        specs = sorted({r.get("id") for r in results if r.get("id") is not None})
+        specs_set: set[str] = {r["id"] for r in results if r.get("id") is not None}
+        specs = sorted(specs_set)
 
     for spec_id in specs:
         spec_results = filter_by_spec(results, spec_id)

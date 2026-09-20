@@ -2,7 +2,7 @@
 
 **Kind:** primitive
 **Axis:** credit_assignment
-**Status:** reference_only
+**Status:** kernel_verified
 **Kernel Technology:** triton
 **Supported Backends:** reference, kernel
 
@@ -42,7 +42,7 @@ Layer-local contrastive credit assignment (Forward-Forward and LEMMA variants).
 
 ## Status
 
-Current status: **reference_only**
+Current status: **kernel_verified**
 
 ## Tags
 
