@@ -10,6 +10,8 @@ from computronium.primitives.credit_assignment.reverse_mode import (
 )
 from computronium.primitives.credit_assignment.reverse_mode.kernel import (
     is_available,
+)
+from computronium.primitives.credit_assignment.reverse_mode.kernel import (
     step as kernel_step,
 )
 

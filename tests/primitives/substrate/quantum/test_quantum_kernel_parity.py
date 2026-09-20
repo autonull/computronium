@@ -3,10 +3,10 @@
 import pytest
 
 from computronium.primitives.substrate.quantum import (
+    is_available,
+    kernel_make_substrate,
     make_case,
     reference_make_substrate,
-    kernel_make_substrate,
-    is_available,
 )
 
 

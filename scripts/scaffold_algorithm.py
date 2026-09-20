@@ -36,16 +36,32 @@ TEMPLATE_DIR = Path(__file__).parent / "templates" / "algorithm"
 def main() -> int:
     parser = argparse.ArgumentParser(description="Scaffold a new algorithm package")
     parser.add_argument("--name", required=True, help="Algorithm name (snake_case)")
-    parser.add_argument("--family", required=True, help="Algorithm family (e.g., equilibrium_propagation)")
-    parser.add_argument("--primitives", required=True, help="Comma-separated list of primitive IDs")
-    parser.add_argument("--factory", required=True, help="Factory function name (e.g., create_directed_ep_mlp)")
-    parser.add_argument("--kernel-tech", default="torch_compile", help="Kernel technology")
+    parser.add_argument(
+        "--family",
+        required=True,
+        help="Algorithm family (e.g., equilibrium_propagation)",
+    )
+    parser.add_argument(
+        "--primitives", required=True, help="Comma-separated list of primitive IDs"
+    )
+    parser.add_argument(
+        "--factory",
+        required=True,
+        help="Factory function name (e.g., create_directed_ep_mlp)",
+    )
+    parser.add_argument(
+        "--kernel-tech", default="torch_compile", help="Kernel technology"
+    )
     parser.add_argument("--summary", default="", help="Short summary for spec")
     parser.add_argument("--equations", default="", help="Equations for spec")
-    parser.add_argument("--invariants", default="", help="Comma-separated invariants for spec")
+    parser.add_argument(
+        "--invariants", default="", help="Comma-separated invariants for spec"
+    )
     parser.add_argument("--notes", default="", help="Notes for spec")
     parser.add_argument("--tags", default="", help="Comma-separated tags for spec")
-    parser.add_argument("--dry-run", action="store_true", help="Print files without writing")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print files without writing"
+    )
 
     args = parser.parse_args()
 
@@ -96,7 +112,10 @@ def main() -> int:
         (algorithm_dir / "cases.py", env.get_template("cases.py.j2")),
         (algorithm_dir / "factory.py", env.get_template("factory.py.j2")),
         (test_dir / "test_reference.py", env.get_template("test_reference.py.j2")),
-        (test_dir / "test_kernel_parity.py", env.get_template("test_kernel_parity.py.j2")),
+        (
+            test_dir / "test_kernel_parity.py",
+            env.get_template("test_kernel_parity.py.j2"),
+        ),
         (test_dir / "test_factory.py", env.get_template("test_factory.py.j2")),
         (test_dir / "test_cases.py", env.get_template("test_cases.py.j2")),
     ]

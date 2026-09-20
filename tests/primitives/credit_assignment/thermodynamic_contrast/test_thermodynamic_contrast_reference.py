@@ -1,6 +1,5 @@
 """Tests for Thermodynamic Contrast reference implementation."""
 
-import pytest
 import torch
 
 from computronium.primitives.credit_assignment.thermodynamic_contrast import (

@@ -10,6 +10,8 @@ from computronium.primitives.plasticity.closed_form_ridge import (
 )
 from computronium.primitives.plasticity.closed_form_ridge.kernel import (
     is_available,
+)
+from computronium.primitives.plasticity.closed_form_ridge.kernel import (
     step as kernel_step,
 )
 

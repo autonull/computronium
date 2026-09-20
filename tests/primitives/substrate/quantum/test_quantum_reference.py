@@ -1,6 +1,5 @@
 """Reference implementation tests for Quantum Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.quantum import (
     make_case,

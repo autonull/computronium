@@ -1,6 +1,5 @@
 """Tests for Rule State Plasticity case generation."""
 
-import pytest
 import torch
 
 from computronium.primitives.plasticity.rule_state import make_case

@@ -1,6 +1,5 @@
 """Case factory tests for Digital Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.digital.cases import (
     Case,

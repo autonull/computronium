@@ -1,7 +1,5 @@
 """Tests for Photonic Substrate case generation."""
 
-import pytest
-import torch
 
 from computronium.primitives.substrate.photonic import make_case, make_case_noisy
 

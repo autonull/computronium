@@ -10,6 +10,8 @@ from computronium.primitives.state_dynamics.instantaneous_pass import (
 )
 from computronium.primitives.state_dynamics.instantaneous_pass.kernel import (
     is_available,
+)
+from computronium.primitives.state_dynamics.instantaneous_pass.kernel import (
     step as kernel_step,
 )
 

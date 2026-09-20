@@ -10,6 +10,8 @@ from computronium.primitives.state_dynamics.lazy_state_dynamics import (
 )
 from computronium.primitives.state_dynamics.lazy_state_dynamics.kernel import (
     is_available,
+)
+from computronium.primitives.state_dynamics.lazy_state_dynamics.kernel import (
     step as kernel_step,
 )
 

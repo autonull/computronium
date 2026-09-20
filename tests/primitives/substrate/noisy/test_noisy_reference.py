@@ -1,10 +1,10 @@
 """Reference implementation tests for Noisy Substrate primitive."""
 
+from computronium.ontology.substrate._substrate import NoisySubstrate
 from computronium.primitives.substrate.noisy import (
     make_case,
     reference_make_substrate,
 )
-from computronium.ontology.substrate._substrate import NoisySubstrate
 
 
 def test_reference_make_substrate_returns_substrate():

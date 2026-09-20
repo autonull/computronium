@@ -11,6 +11,8 @@ from computronium.primitives.substrate.neuromorphic import (
 )
 from computronium.primitives.substrate.neuromorphic.kernel import (
     is_available,
+)
+from computronium.primitives.substrate.neuromorphic.kernel import (
     make_substrate as kernel_make_substrate,
 )
 

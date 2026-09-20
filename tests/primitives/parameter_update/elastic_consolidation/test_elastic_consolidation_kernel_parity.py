@@ -4,10 +4,10 @@ import pytest
 import torch
 
 from computronium.primitives.parameter_update.elastic_consolidation import (
+    is_available,
+    kernel_step,
     make_case,
     reference_step,
-    kernel_step,
-    is_available,
 )
 
 

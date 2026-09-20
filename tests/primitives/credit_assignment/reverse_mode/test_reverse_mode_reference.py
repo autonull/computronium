@@ -1,6 +1,5 @@
 """Reference implementation tests for Reverse Mode primitive."""
 
-import torch
 
 from computronium.primitives.credit_assignment.reverse_mode import (
     make_case,

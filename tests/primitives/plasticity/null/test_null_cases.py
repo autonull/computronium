@@ -1,6 +1,5 @@
 """Tests for Null Plasticity case generation."""
 
-import pytest
 import torch
 
 from computronium.primitives.plasticity.null import make_case

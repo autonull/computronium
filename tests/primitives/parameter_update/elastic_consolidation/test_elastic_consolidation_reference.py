@@ -1,6 +1,5 @@
 """Tests for Elastic Consolidation Update reference implementation."""
 
-import pytest
 import torch
 
 from computronium.primitives.parameter_update.elastic_consolidation import (

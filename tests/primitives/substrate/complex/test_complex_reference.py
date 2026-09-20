@@ -1,10 +1,10 @@
 """Reference implementation tests for Complex Substrate primitive."""
 
+from computronium.ontology.substrate._substrate import ComplexSubstrate
 from computronium.primitives.substrate.complex import (
     make_case,
     reference_make_substrate,
 )
-from computronium.ontology.substrate._substrate import ComplexSubstrate
 
 
 def test_reference_make_substrate_returns_substrate():

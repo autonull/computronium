@@ -1,6 +1,5 @@
 """Case factory tests for Memristive Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.memristive.cases import (
     Case,

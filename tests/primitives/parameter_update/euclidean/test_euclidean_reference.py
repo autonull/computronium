@@ -1,6 +1,5 @@
 """Tests for Euclidean Update reference implementation."""
 
-import pytest
 import torch
 
 from computronium.primitives.parameter_update.euclidean import (

@@ -10,6 +10,8 @@ from computronium.primitives.state_dynamics.spike_integration import (
 )
 from computronium.primitives.state_dynamics.spike_integration.kernel import (
     is_available,
+)
+from computronium.primitives.state_dynamics.spike_integration.kernel import (
     step as kernel_step,
 )
 

@@ -10,6 +10,8 @@ from computronium.primitives.plasticity.temporal_psi import (
 )
 from computronium.primitives.plasticity.temporal_psi.kernel import (
     is_available,
+)
+from computronium.primitives.plasticity.temporal_psi.kernel import (
     step as kernel_step,
 )
 

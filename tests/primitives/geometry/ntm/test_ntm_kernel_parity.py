@@ -9,8 +9,10 @@ from computronium.primitives.geometry.ntm import (
     reference_forward,
 )
 from computronium.primitives.geometry.ntm.kernel import (
-    is_available,
     forward as kernel_forward,
+)
+from computronium.primitives.geometry.ntm.kernel import (
+    is_available,
 )
 
 

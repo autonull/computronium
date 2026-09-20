@@ -10,6 +10,8 @@ from computronium.primitives.credit_assignment.target_inversion import (
 )
 from computronium.primitives.credit_assignment.target_inversion.kernel import (
     is_available,
+)
+from computronium.primitives.credit_assignment.target_inversion.kernel import (
     step as kernel_step,
 )
 

@@ -1,10 +1,10 @@
 """Reference implementation tests for Ternary Substrate primitive."""
 
+from computronium.ontology.substrate._substrate import TernarySubstrate
 from computronium.primitives.substrate.ternary import (
     make_case,
     reference_make_substrate,
 )
-from computronium.ontology.substrate._substrate import TernarySubstrate
 
 
 def test_reference_make_substrate_returns_substrate():

@@ -1,6 +1,5 @@
 """Reference implementation tests for Digital Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.digital import (
     make_case,

@@ -1,6 +1,5 @@
 """Reference implementation tests for Neuromorphic Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.neuromorphic import (
     make_case,

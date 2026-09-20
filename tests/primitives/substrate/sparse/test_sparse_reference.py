@@ -1,10 +1,10 @@
 """Reference implementation tests for Sparse Substrate primitive."""
 
+from computronium.ontology.substrate._substrate import SparseSubstrate
 from computronium.primitives.substrate.sparse import (
     make_case,
     reference_make_substrate,
 )
-from computronium.ontology.substrate._substrate import SparseSubstrate
 
 
 def test_reference_make_substrate_returns_substrate():

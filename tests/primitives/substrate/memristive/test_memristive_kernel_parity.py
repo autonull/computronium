@@ -11,6 +11,8 @@ from computronium.primitives.substrate.memristive import (
 )
 from computronium.primitives.substrate.memristive.kernel import (
     is_available,
+)
+from computronium.primitives.substrate.memristive.kernel import (
     make_substrate as kernel_make_substrate,
 )
 

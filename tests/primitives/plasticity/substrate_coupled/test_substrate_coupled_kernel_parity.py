@@ -10,6 +10,8 @@ from computronium.primitives.plasticity.substrate_coupled import (
 )
 from computronium.primitives.plasticity.substrate_coupled.kernel import (
     is_available,
+)
+from computronium.primitives.plasticity.substrate_coupled.kernel import (
     step as kernel_step,
 )
 

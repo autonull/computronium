@@ -1,6 +1,5 @@
 """Reference implementation tests for Target Inversion primitive."""
 
-import torch
 
 from computronium.primitives.credit_assignment.target_inversion import (
     make_case,

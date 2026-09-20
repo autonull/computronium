@@ -1,6 +1,5 @@
 """Tests for Euclidean Update case generation."""
 
-import pytest
 import torch
 
 from computronium.primitives.parameter_update.euclidean import make_case

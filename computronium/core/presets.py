@@ -24,8 +24,8 @@ from computronium.core.system_trainer import (
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
-    DigitalSubstrate,
     DiffusionDynamics,
+    DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
@@ -960,7 +960,7 @@ def create_ternary_eqprop_mlp(
         A composed 5-D System on TernarySubstrate with ThermodynamicContrast
         credit assignment and EnergyMinimization dynamics.
     """
-    from computronium.ontology import TernarySubstrate, SubstrateConfig
+    from computronium.ontology import SubstrateConfig, TernarySubstrate
 
     substrate = TernarySubstrate(
         SubstrateConfig.ternary(weight_bounds=weight_bounds, device=device)
@@ -1167,9 +1167,7 @@ def create_holomorphic_ep_mlp(
     """
     from computronium.ontology import QuantumSubstrate, SubstrateConfig
 
-    substrate = QuantumSubstrate(
-        SubstrateConfig.quantum(device=device)
-    )
+    substrate = QuantumSubstrate(SubstrateConfig.quantum(device=device))
     geometry = _recurrent_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = EnergyMinimizationDynamics(
         StateDynamicsConfig.energy_minimization(

@@ -1,6 +1,5 @@
 """Reference implementation tests for Memristive Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.memristive import (
     make_case,

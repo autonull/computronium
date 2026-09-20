@@ -1,6 +1,5 @@
 """Tests for Natural Gradient case generation."""
 
-import pytest
 import torch
 
 from computronium.primitives.parameter_update.natural_gradient import make_case

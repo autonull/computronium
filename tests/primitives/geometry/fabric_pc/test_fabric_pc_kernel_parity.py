@@ -9,8 +9,10 @@ from computronium.primitives.geometry.fabric_pc import (
     reference_forward,
 )
 from computronium.primitives.geometry.fabric_pc.kernel import (
-    is_available,
     forward as kernel_forward,
+)
+from computronium.primitives.geometry.fabric_pc.kernel import (
+    is_available,
 )
 
 

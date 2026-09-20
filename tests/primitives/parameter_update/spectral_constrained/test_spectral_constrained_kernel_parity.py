@@ -10,6 +10,8 @@ from computronium.primitives.parameter_update.spectral_constrained import (
 )
 from computronium.primitives.parameter_update.spectral_constrained.kernel import (
     is_available,
+)
+from computronium.primitives.parameter_update.spectral_constrained.kernel import (
     step as kernel_step,
 )
 

@@ -1,6 +1,5 @@
 """Reference implementation tests for Photonic Substrate primitive."""
 
-import torch
 
 from computronium.primitives.substrate.photonic import (
     make_case,

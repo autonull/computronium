@@ -10,6 +10,8 @@ from computronium.primitives.state_dynamics.diffusion import (
 )
 from computronium.primitives.state_dynamics.diffusion.kernel import (
     is_available,
+)
+from computronium.primitives.state_dynamics.diffusion.kernel import (
     step as kernel_step,
 )
 

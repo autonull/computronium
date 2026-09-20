@@ -9,8 +9,10 @@ from computronium.primitives.geometry.recurrent_attractor import (
     reference_forward,
 )
 from computronium.primitives.geometry.recurrent_attractor.kernel import (
-    is_available,
     forward as kernel_forward,
+)
+from computronium.primitives.geometry.recurrent_attractor.kernel import (
+    is_available,
 )
 
 

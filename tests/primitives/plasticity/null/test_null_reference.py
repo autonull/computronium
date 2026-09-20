@@ -1,6 +1,5 @@
 """Tests for Null Plasticity reference implementation."""
 
-import pytest
 import torch
 
 from computronium.primitives.plasticity.null import (
