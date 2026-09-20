@@ -53,13 +53,17 @@ def _matches_filter(spec, filters: dict[str, str]) -> bool:
 
 def _print_table(specs) -> None:
     """Print default table format."""
-    print(f"{'ID':<55} {'KIND':<10} {'AXIS':<20} {'BACKENDS':<20} {'STATUS':<18} {'KERNEL TECH':<15}")
+    print(
+        f"{'ID':<55} {'KIND':<10} {'AXIS':<20} {'BACKENDS':<20} {'STATUS':<18} {'KERNEL TECH':<15}"
+    )
     print("-" * 150)
     for spec in specs:
         axis = spec.axis or ""
         backends = ",".join(spec.supported_backends)
         kernel_tech = spec.kernel_technology or ""
-        print(f"{spec.id:<55} {spec.kind:<10} {axis:<20} {backends:<20} {spec.status:<18} {kernel_tech:<15}")
+        print(
+            f"{spec.id:<55} {spec.kind:<10} {axis:<20} {backends:<20} {spec.status:<18} {kernel_tech:<15}"
+        )
 
 
 def _print_markdown(specs) -> None:
@@ -71,7 +75,9 @@ def _print_markdown(specs) -> None:
         backends = ",".join(spec.supported_backends)
         kernel_tech = spec.kernel_technology or ""
         summary = (spec.summary or "")[:60]
-        print(f"| {spec.id} | {spec.kind} | {axis} | {backends} | {spec.status} | {kernel_tech} | {summary} |")
+        print(
+            f"| {spec.id} | {spec.kind} | {axis} | {backends} | {spec.status} | {kernel_tech} | {summary} |"
+        )
 
 
 def _print_json(specs) -> None:
@@ -92,14 +98,24 @@ def _print_json(specs) -> None:
 
 
 def _parse_filters(filter_list: list[str]) -> dict[str, str]:
-    """Parse filter arguments into a dictionary."""
+    """Parse filter arguments into a dictionary.
+
+    Supports both comma-separated (--filter "axis=state_dynamics,kind=primitive")
+    and repeated flags (--filter axis=state_dynamics --filter kind=primitive).
+    """
     filters = {}
     for f in filter_list:
-        if "=" not in f:
-            print(f"Invalid filter format: {f} (expected key=value)", file=sys.stderr)
-            continue
-        key, value = f.split("=", 1)
-        filters[key.strip()] = value.strip()
+        # Split on comma first, then on equals
+        parts = f.split(",")
+        for part in parts:
+            if "=" not in part:
+                print(
+                    f"Invalid filter format: {part} (expected key=value)",
+                    file=sys.stderr,
+                )
+                continue
+            key, value = part.split("=", 1)
+            filters[key.strip()] = value.strip()
     return filters
 
 

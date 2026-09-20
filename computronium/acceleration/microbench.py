@@ -8,20 +8,20 @@ import argparse
 import importlib
 import json
 import pathlib
-import subprocess  # needed for git SHA detection
+import subprocess  # needed for git SHA detection  # noqa: S404
 import time
 from typing import Any
 
 import torch
 
-# ruff: file-ignore[suspicious-subprocess-import,subprocess-without-shell-equals-true,start-process-with-partial-path] (subprocess import/run with fixed args is intentional for git SHA detection)
+# ruff: file-ignore[S404,S607] (subprocess import/run with fixed args is intentional for git SHA detection)
 
 
 def _get_git_sha() -> str | None:
     """Get current git SHA if available."""
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "HEAD"],  # noqa: S607
             capture_output=True,
             text=True,
             timeout=2,
@@ -324,13 +324,51 @@ def _output_results(results: list[dict[str, Any]], args) -> None:
 
 def _print_to_stdout(results: list[dict[str, Any]], args) -> None:
     """Print results to stdout."""
+    import sys
+
     if args.format == "json":
         print(json.dumps(results))
     elif args.format == "jsonl":
         for r in results:
             print(json.dumps(r))
     elif args.format == "csv":
-        _write_csv(results, "/dev/stdout")
+        import csv
+
+        if not results:
+            return
+        stats = _compute_stats(results)
+        first = results[0]
+        writer = csv.writer(sys.stdout)
+        writer.writerow([
+            "id",
+            "backend",
+            "device",
+            "dtype",
+            "seed",
+            "steps",
+            "median_ms",
+            "p95_ms",
+            "throughput",
+            "peak_mem_mb",
+            "git_sha",
+            "iterations",
+            "warmup",
+        ])
+        writer.writerow([
+            first["id"],
+            first["backend"],
+            first["device"],
+            first.get("dtype", "float32"),
+            first.get("seed", 0),
+            first["steps"],
+            f"{stats.get('median_ms', 0):.3f}",
+            f"{stats.get('p95_ms', 0):.3f}",
+            f"{stats.get('throughput', 0):.3f}",
+            f"{first.get('peak_mem_mb', 0):.3f}",
+            first.get("git_sha", ""),
+            len(results),
+            first.get("warmup", 1),
+        ])
     else:
         print(json.dumps(results, indent=2))
 

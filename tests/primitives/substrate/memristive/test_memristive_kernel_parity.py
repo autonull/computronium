@@ -28,7 +28,7 @@ def test_kernel_substrate_equivalence():
     kernel_substrate = kernel_make_substrate(case.spec)
 
     # Both should be same type
-    assert type(reference_substrate) == type(kernel_substrate)
+    assert type(reference_substrate) is type(kernel_substrate)
 
     # Both should be MemristiveSubstrate
     from computronium.ontology.substrate._substrate import MemristiveSubstrate
@@ -49,4 +49,4 @@ def test_kernel_substrate_equivalence_noisy():
     reference_substrate = reference_make_substrate(case.spec)
     kernel_substrate = kernel_make_substrate(case.spec)
 
-    assert type(reference_substrate) == type(kernel_substrate)
+    assert type(reference_substrate) is type(kernel_substrate)
