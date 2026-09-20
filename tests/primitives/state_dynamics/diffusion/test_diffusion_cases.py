@@ -37,9 +37,11 @@ def test_make_case_different_seeds():
     case2 = make_case(device="cpu", seed=1)
 
     # At least one tensor should differ
-    assert not torch.allclose(case1.state, case2.state) or \
-           not torch.allclose(case1.prediction, case2.prediction) or \
-           not torch.allclose(case1.multiplier, case2.multiplier)
+    assert (
+        not torch.allclose(case1.state, case2.state)
+        or not torch.allclose(case1.prediction, case2.prediction)
+        or not torch.allclose(case1.multiplier, case2.multiplier)
+    )
 
 
 def test_make_case_config_structure():
