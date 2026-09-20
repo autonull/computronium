@@ -32,6 +32,7 @@ TODO32 standardized the `StateDynamics` protocol (uniform `settle(..., on_step=.
 | B3 | `matrix.py`: `--format github-markdown` | Table renders natively in PR comments |
 | B4 | `matrix.py`: `--filter axis=state_dynamics kind=primitive status=kernel_unverified` | Composable filters for CI subsets |
 | B5 | Git-SHA stamping: `--tag ${GIT_SHA}` written into JSONL rows (Force Multiplier #9 from TODO32) | Benchmarks become comparative-regression trackable |
+| B6 | Peak-memory capture: `torch.cuda.max_memory_allocated` / CPU RSS delta alongside latency (memory_mb is a first-class research objective in this repo) | JSONL rows carry `peak_mem_mb`; CSV gains the column |
 
 **Effort**: ~2 hours. Independent.
 
@@ -39,18 +40,19 @@ TODO32 standardized the `StateDynamics` protocol (uniform `settle(..., on_step=.
 
 ## Phase C: Kernel Development Workflow (Unlocks TODO32 Phase 8)
 
-Highest-leverage item: TODO32's Triton roadmap (12 kernels) is blocked on tooling.
+Highest-leverage item: TODO32's Triton roadmap (12 kernels) is blocked on tooling. **Registry reality (2026-09-20): 41 `reference_only`, 22 `kernel_unverified`, 1 `kernel_verified` — `dispatch.select_backend(spec, "auto")` returns `"reference"` for ~98% of the fleet. The dispatch plumbing is wired into every generated factory; this phase is what makes it route somewhere.**
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology triton` | Generates Triton stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance` |
+| C0 | **Kernel ladder** (new, before any Triton): each primitive's `kernel.py` promotes through `reference → torch.compile → Triton`, with microbench evidence at each rung. `predictive_settling` and `energy_minimization` already prove the `torch.compile` rung works. Measure compile gains **before** writing Triton; skip Triton where compile achieves parity + speedup (be skeptical of low-performing experiments — an unprofitable Triton kernel is a defect, not a deliverable). GPU-first per AGENTS.md | Each promoted kernel: parity passes, `spec.status` promoted to `kernel_verified`, microbench JSONL attached as evidence |
+| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology {compile,triton}` (compile is the default first rung) | Generates kernel stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance`; `--technology compile` emits the torch.compile wrapper |
 | C2 | `scripts/kernel_dev.py --primitive <id> --watch` | Re-runs parity on file change (watchdog/polling); prints pass/fail + max abs diff |
-| C3 | `scripts/validate_composition.py --all-algorithms` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; wired into CI gate |
+| C3 | `scripts/validate_composition.py --all-algorithms` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; first run is expected to surface drift in the 21 scaffolded algorithms — record findings |
 | C4 | Wire C3 into `.github/workflows/ci.yml` alongside existing parity gate | CI fails on undeclared primitive dependencies |
 
-**Effort**: C1–C2 ~3 hours, C3–C4 ~2 hours.
+**Effort**: C0-C1 ~3 hours, C2 ~2 hours, C3–C4 ~2 hours.
 
-**Then** execute the TODO32 Phase 8 kernel order (first three maximize reuse):
+**Then** execute the TODO32 Phase 8 kernel order **through the ladder (C0), Triton only where compile insufficient**:
 1. `random_projections` (batched matmul) → 2. `local_goodness` (layer reduction) → 3. `energy_minimization` (gradient+settle) → 4. `thermodynamic_contrast` (reuses #3) → remaining per TODO32 §"Kernel Development Order".
 
 ---
@@ -82,6 +84,21 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 
 ---
 
+## Phase F: Registry Integrity Locks (Protect the Completed Work — TODO32's Own Doctrine, Extended)
+
+TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 64-spec registry has **no equivalent lock** and can drift silently.
+
+| Task | Description | Acceptance |
+|------|-------------|------------|
+| F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/` + `algorithms/` | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs |
+| F2 | **Scaffolder self-test (round-trip)**: run `scaffold_primitive.py` + `scaffold_algorithm.py` into a tmpdir and collect the generated tests. The 90%-boilerplate claim (TODO32 §Force Multiplier 1) is now critical path for Phase 8 — if the scaffolder rots, every future addition suffers | Scaffolder output passes its own tests in CI; regression caught immediately |
+| F3 | **Skipped-test audit**: the 32 skips are geometry/substrate structural-parity gaps TODO32 deferred. Replace blanket skips with real structural-equivalence assertions (factory determinism: two `make_substrate()`/`make_geometry()` calls with same config → bitwise-equal state tensors; spec round-trip) | Skips drop from 32 toward 0; each remaining skip carries a documented reason |
+| F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder |
+
+**Effort**: F1 ~2 hours, F2 ~1 hour, F3 ~3 hours, F4 ~1 hour. F1–F2 are the highest-value guards.
+
+---
+
 ## Deferred (Unchanged Policy from TODO32)
 
 - **Legacy `acceleration/` lint debt** (`fa_kernels.py`, `triton_kernels.py`, etc. — invalid `# noqa` directives, ~283 pyright errors in `triton_kernels.py`): fix **only when touched** for real work. Never a proactive sweep.
@@ -93,11 +110,19 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 ## Execution Order & Rationale
 
 1. **A (drift repairs)** — the completed protocol standardization is incomplete until `DiffusionDynamics` conforms; everything downstream assumes it.
-2. **C1–C4 (kernel workflow)** — unblocks the entire Phase 8 roadmap; `validate_composition.py` is the cheapest permanent guard.
-3. **B (bench/matrix CLI)** — independent; do in spare cycles; B5 makes C's kernel work measurable.
-4. **D (docs from specs)** — pure leverage: metadata already exists, rendering is mechanical.
-5. **E** — small polish; E2 is the one item with regression value.
-6. **Phase 8 kernels** — now unblocked by C; follow TODO32's reuse-maximizing order.
+2. **F1–F2 (integrity locks)** — cheap, permanent guards installed *before* Phase 8 churns the registry; F4's promotion rule makes C0's ladder auditable.
+3. **C (kernel ladder + workflow)** — unblocks Phase 8; `validate_composition.py` is the cheapest CI guard; C0 makes ~98%-dormant dispatch actually route.
+4. **B (bench/matrix CLI)** — independent; do in spare cycles; B5/B6 make C's kernel work measurable.
+5. **D (docs from specs)** — pure leverage: metadata already exists, rendering is mechanical.
+6. **E** — small polish; E2 is the one item with regression value.
+7. **F3–F4 / Phase 8 kernels** — interleave: each ladder rung (C0) exercises F4; skip audit lands once kernels stop changing structural primitives.
+
+## Housekeeping (G)
+
+| Task | Description |
+|------|-------------|
+| G1 | Append a pointer row to `TODO32.md`'s progress tables: "Continued by TODO32b.md" so future sessions find the active plan |
+| G2 | Mark TODO32.md's "New Improvement Opportunities" / "Force Multipliers" sections as superseded by this file |
 
 ## Per-Commit Checklist (Scoped & Fast — per AGENTS.md)
 
@@ -115,8 +140,9 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 | Primitives | 43/43 ✅ | no additions |
 | Algorithms | 21/21 ✅ | no additions |
 | Protocol conformance | `DiffusionDynamics` non-conforming ❌ | A1 fixes → all 6 axes conform ✅ |
-| Triton kernels | 0 (all reference fallback) | workflow (C) + first 3 kernels |
-| Tests | 741 passed, 32 skipped | + invariant property tests (D5) |
+| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient |
+| Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) |
+| Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) |
 | Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) |
 | CI | parity gate + matrix | + composition validation (C4) |
 | Registry | lazy loading, ~5ms | import-time lock (E2) |
