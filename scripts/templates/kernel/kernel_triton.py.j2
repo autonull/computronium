@@ -1,0 +1,86 @@
+"""Accelerated kernel for {{ spec_name }} (Triton rung).
+
+This rung implements a custom Triton kernel for the primitive.
+Promotion criteria (all required):
+- Parity passes within {{ parity.max_abs_diff }} abs / {{ parity.max_rel_diff }} rel / {{ parity.min_cosine }} cosine
+- Microbench shows speedup over torch.compile rung
+- spec.status promoted to 'kernel_verified' with evidence attached
+- dispatch.auto routes to this kernel
+
+NOTE: Be skeptical of low-performing experiments. An unprofitable Triton kernel
+is a defect, not a deliverable. Measure torch.compile gains FIRST; skip Triton
+where compile achieves parity + speedup.
+"""
+
+from typing import Any
+
+import torch
+
+from computronium.acceleration.backends import kernel_available
+
+KERNEL_TECHNOLOGY = "triton"
+
+
+def is_available() -> bool:
+    """Check if Triton is available with CUDA."""
+    return kernel_available(KERNEL_TECHNOLOGY)
+
+
+# TODO: Implement custom Triton kernel for {{ spec_name }}
+# 
+# Steps:
+# 1. Define the Triton kernel(s) in computronium/acceleration/triton_kernels.py
+#    or a new dedicated kernel file
+# 2. Import and use the kernel here
+# 3. Ensure the kernel signature matches the reference step() interface
+# 4. Add proper error handling and fallback to reference
+#
+# Example kernel structure:
+#
+# import triton
+# import triton.language as tl
+# 
+# @triton.jit
+# def {{ spec_name }}_kernel(
+#     input_ptr, output_ptr, ...,
+#     BLOCK_SIZE: tl.constexpr
+# ):
+#     # Kernel implementation
+#     pass
+#
+# def _launch_kernel(case: Any) -> Any:
+#     # Prepare inputs, launch kernel, return output
+#     pass
+
+
+def step(case: Any) -> Any:
+    """Execute one accelerated step using Triton kernel.
+
+    Args:
+        case: Opaque case object from cases.make_case()
+
+    Returns:
+        Same output format as reference.step()
+    """
+    if not is_available():
+        # Fallback to reference
+        module_path = "{{ reference_entrypoint }}".rsplit(".", 1)[0]
+        func_name = "{{ reference_entrypoint }}".rsplit(".", 1)[1]
+        module = __import__(module_path, fromlist=[func_name])
+        reference_step = getattr(module, func_name)
+        return reference_step(case)
+
+    # TODO: Implement Triton kernel path
+    # For now, delegate to reference with a warning
+    import warnings
+
+    warnings.warn(
+        f"Triton kernel for {{ spec_id }} not yet implemented; falling back to reference",
+        RuntimeWarning,
+    )
+
+    module_path = "{{ reference_entrypoint }}".rsplit(".", 1)[0]
+    func_name = "{{ reference_entrypoint }}".rsplit(".", 1)[1]
+    module = __import__(module_path, fromlist=[func_name])
+    reference_step = getattr(module, func_name)
+    return reference_step(case)

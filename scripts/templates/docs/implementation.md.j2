@@ -1,0 +1,87 @@
+# {{ spec.name }} ({{ spec.id }})
+
+**Kind:** {{ spec.kind }}
+**Axis:** {{ spec.axis or "N/A (algorithm)" }}
+**Status:** {{ spec.status }}
+{% if spec.kernel_technology %}**Kernel Technology:** {{ spec.kernel_technology }}
+{% endif %}**Supported Backends:** {{ spec.supported_backends | join(", ") }}
+
+## Purpose
+
+{{ spec.summary or "No summary provided." }}
+
+## Mathematics
+
+{{ spec.equations or "No equations documented." }}
+
+## Invariants
+
+{% if spec.invariants %}
+{% for inv in spec.invariants %}
+- {{ inv }}
+{% endfor %}
+{% else %}
+No invariants documented.
+{% endif %}
+
+## Reference Implementation
+
+**Entrypoint:** `{{ spec.reference_entrypoint }}`
+
+{% if spec.kernel_entrypoint %}
+## Kernel Implementation
+
+**Entrypoint:** `{{ spec.kernel_entrypoint }}`
+**Technology:** {{ spec.kernel_technology }}
+{% endif %}
+
+## Parity Tolerance
+
+| Metric | Threshold |
+|--------|-----------|
+| Max Absolute Difference | {{ spec.parity.max_abs_diff }} |
+| Max Relative Difference | {{ spec.parity.max_rel_diff }} |
+| Minimum Cosine Similarity | {{ spec.parity.min_cosine }} |
+
+## Status
+
+Current status: **{{ spec.status }}**
+
+{% if spec.tags %}
+## Tags
+
+{% for tag in spec.tags %}
+- `{{ tag }}`
+{% endfor %}
+{% endif %}
+
+{% if spec.notes %}
+## Notes
+
+{{ spec.notes }}
+{% endif %}
+
+{% if spec.evidence_ids %}
+## Evidence
+
+{% for evidence in spec.evidence_ids %}
+- {{ evidence }}
+{% endfor %}
+{% endif %}
+
+{% if spec.family %}
+## Algorithm Family
+
+**Family:** {{ spec.family }}
+{% endif %}
+
+{% if spec.uses_primitives %}
+## Primitive Dependencies
+
+{% for prim in spec.uses_primitives %}
+- {{ prim }}
+{% endfor %}
+{% endif %}
+
+---
+*Generated from `ImplementationSpec` metadata. Do not edit manually.*

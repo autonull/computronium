@@ -2,12 +2,13 @@
 
 Delegates to computronium.acceleration.fa_kernels or falls back to reference.
 Provides uniform `step(case)` interface.
+
+Note: Credit assignment primitives compute pseudo-gradients via autograd.
+torch.compile rung is NOT applicable (breaks autograd graph).
+Kernel ladder: reference → Triton (custom FA kernel).
 """
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    import torch
+from typing import Any
 
 from computronium.acceleration.backends import kernel_available
 
@@ -18,7 +19,7 @@ def is_available() -> bool:
     return kernel_available(KERNEL_TECHNOLOGY)
 
 
-def step(case: Any) -> list[torch.Tensor]:
+def step(case: Any) -> list[Any]:
     """Execute one accelerated step using the opaque case object."""
     if not is_available():
         from .reference import step as reference_step

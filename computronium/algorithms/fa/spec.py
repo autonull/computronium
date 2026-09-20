@@ -21,7 +21,7 @@ SPEC = ImplementationSpec(
     ),
     status="kernel_unverified",
     uses_primitives=(
-        "primitive.state_dynamics.instantaneous",
+        "primitive.state_dynamics.instantaneous_pass",
         "primitive.credit_assignment.random_projections",
         "primitive.parameter_update.euclidean",
     ),

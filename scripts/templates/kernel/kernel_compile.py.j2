@@ -1,16 +1,15 @@
-"""Accelerated kernel for Predictive Settling (torch.compile rung).
+"""Accelerated kernel for {{ spec_name }} (torch.compile rung).
 
 This rung uses torch.compile on the reference implementation.
 Promotion criteria:
-- Parity passes within 0.0001 abs / 0.001 rel / 0.999 cosine
+- Parity passes within {{ parity.max_abs_diff }} abs / {{ parity.max_rel_diff }} rel / {{ parity.min_cosine }} cosine
 - Microbench shows speedup over reference
 - spec.status promoted to 'kernel_verified' with evidence attached
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    import torch
+import torch
 
 from computronium.acceleration.backends import kernel_available
 from computronium.acceleration.compile import compile_model
@@ -19,25 +18,30 @@ KERNEL_TECHNOLOGY = "torch_compile"
 
 
 def is_available() -> bool:
+    """Check if torch.compile is available and functional."""
     return kernel_available(KERNEL_TECHNOLOGY)
 
 
-# Cached compiled step function (using function attribute to avoid global)
+# Cached compiled step function
+_compiled_step_fn = None
+
+
 def _get_compiled_step_fn():
     """Get or create the compiled step function."""
-    if not hasattr(_get_compiled_step_fn, "_compiled_step_fn"):
+    global _compiled_step_fn
+    if _compiled_step_fn is None:
         # Import reference step
-        module_path = ["computronium.primitives.state_dynamics.predictive_settling.reference", "step"][0]
-        func_name = ["computronium.primitives.state_dynamics.predictive_settling.reference", "step"][1]
+        module_path = "{{ reference_entrypoint }}".rsplit(".", 1)[0]
+        func_name = "{{ reference_entrypoint }}".rsplit(".", 1)[1]
         module = __import__(module_path, fromlist=[func_name])
         reference_step = getattr(module, func_name)
 
         # Compile the reference step function
-        _get_compiled_step_fn._compiled_step_fn = compile_model(reference_step, mode="reduce-overhead")
-    return _get_compiled_step_fn._compiled_step_fn
+        _compiled_step_fn = compile_model(reference_step, mode="reduce-overhead")
+    return _compiled_step_fn
 
 
-def step(case: Any) -> list[torch.Tensor]:
+def step(case: Any) -> Any:
     """Execute one accelerated step using torch.compile.
 
     Args:
@@ -47,8 +51,11 @@ def step(case: Any) -> list[torch.Tensor]:
         Same output format as reference.step()
     """
     if not is_available():
-        from .reference import step as reference_step
-
+        # Fallback to reference
+        module_path = "{{ reference_entrypoint }}".rsplit(".", 1)[0]
+        func_name = "{{ reference_entrypoint }}".rsplit(".", 1)[1]
+        module = __import__(module_path, fromlist=[func_name])
+        reference_step = getattr(module, func_name)
         return reference_step(case)
 
     # Use torch.compile accelerated step

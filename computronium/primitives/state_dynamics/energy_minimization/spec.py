@@ -16,14 +16,14 @@ SPEC = ImplementationSpec(
     kernel_entrypoint=(
         "computronium.primitives.state_dynamics.energy_minimization.kernel.step"
     ),
-    kernel_technology="triton",
+    kernel_technology="torch_compile",
     supported_backends=("reference", "kernel"),
     parity=ParityTolerance(
         max_abs_diff=1e-4,
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="reference_only",
+    status="kernel_verified",
     summary="Energy-based settling (Equilibrium Propagation, Hopfield, CHL).",
     equations="""
 Free energy: F = -1/2 Σ_ij W_ij s_i s_j - Σ_i b_i s_i

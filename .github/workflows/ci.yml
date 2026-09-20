@@ -28,14 +28,14 @@ jobs:
       - name: Type Check (Pyright)
         run: uv run pyright .
       - name: Property Tests (Fast CI Gate)
-        run: uv run pytest tests/property/ -q
+        run: uv run python -m pytest tests/property/ -q
       - name: Demo Gate (demonstration suite + figure lock)
-        run: uv run pytest tests/integration/ -k "demo or gallery_lock" -q
+        run: uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
       - name: Vertical Slice Gate (C.2: energy descent, gradient sign, J2 invariance, baseline digest)
-        run: uv run pytest tests/integration/test_vertical_slice_gate.py tests/property/test_vertical_slice.py -q
+        run: uv run python -m pytest tests/integration/test_vertical_slice_gate.py tests/property/test_vertical_slice.py -q
       - name: Drift Locks (README snippets, root exports)
         run: |
-          uv run pytest tests/unit/core/test_readme_snippet_lock.py \
+          uv run python -m pytest tests/unit/core/test_readme_snippet_lock.py \
             tests/unit/core/test_root_exports.py -q
       - name: Preset Validation (from-config)
         run: |
@@ -82,6 +82,8 @@ jobs:
           "
       - name: Registry Audit (metadata completeness)
         run: uv run comp audit --metadata
+      - name: Composition Validation (algorithm primitive dependencies)
+        run: uv run python scripts/validate_composition.py --all-algorithms
       - name: Reproducibility Check
         # native_tile_ep excluded from REPRO_MODELS (R11.1.3): no tile-mesh
         # settle kernel — the coordinate cannot settle, reproducibility is
@@ -90,7 +92,11 @@ jobs:
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
       - name: Parity Gate (all implementations)
-        run: uv run pytest tests/acceleration/test_all_implementations.py -q
+        run: uv run python -m pytest tests/acceleration/test_all_implementations.py -q
+      - name: Primitives Suite
+        run: uv run python -m pytest tests/primitives/ -q
+      - name: Algorithms Suite
+        run: uv run python -m pytest tests/algorithms/ -q
       - name: Implementation Matrix
         run: uv run python -m computronium.acceleration.matrix --format json > matrix.json
       - name: Microbenchmark Smoke

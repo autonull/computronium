@@ -69,7 +69,7 @@ dev = [
     "hypothesis>=6.0",
     # Code quality
     "ruff>=0.6",
-    "pyright>=1.1",
+    "pyright>=1.1.414",
     "pre-commit",
     "build",
     "twine",

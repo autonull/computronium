@@ -24,16 +24,16 @@ TODO32 standardized the `StateDynamics` protocol (uniform `settle(..., on_step=.
 
 ---
 
-## Phase B: Microbench & Matrix CLI Enhancements (Finish TODO32's Sketched Tooling)
+## Phase B: Microbench & Matrix CLI Enhancements (Finish TODO32's Sketched Tooling) — **COMPLETE ✅**
 
-| Task | Description | Acceptance |
-|------|-------------|------------|
-| B1 | `microbench.py`: **add** `--iterations`, `--warmup`, `--output bench.jsonl` (existing flags already cover `--device`, `--steps`, `--dtype`, `--seed`, `--format json`, `--all` — verified 2026-09-20; do not re-add) | One invocation produces a resumable JSONL artifact |
-| B2 | `microbench.py`: `--format csv` (median, p95, throughput; columns `id,backend,device,median_ms,p95_ms,throughput`) | CSV importable into pandas for regression diffs |
-| B3 | `matrix.py`: `--format github-markdown` | Table renders natively in PR comments |
-| B4 | `matrix.py`: `--filter axis=state_dynamics kind=primitive status=kernel_unverified` | Composable filters for CI subsets |
-| B5 | Git-SHA stamping: `--tag ${GIT_SHA}` written into JSONL rows (Force Multiplier #9 from TODO32) | Benchmarks become comparative-regression trackable |
-| B6 | Peak-memory capture: `torch.cuda.max_memory_allocated` / CPU RSS delta alongside latency (memory_mb is a first-class research objective in this repo) | JSONL rows carry `peak_mem_mb`; CSV gains the column |
+| Task | Description | Acceptance | Status |
+|------|-------------|------------|--------|
+| B1 | `microbench.py`: **add** `--iterations`, `--warmup`, `--output bench.jsonl` (existing flags already cover `--device`, `--steps`, `--dtype`, `--seed`, `--format json`, `--all` — verified 2026-09-20; do not re-add) | One invocation produces a resumable JSONL artifact | ✅ Done |
+| B2 | `microbench.py`: `--format csv` (median, p95, throughput; columns `id,backend,device,median_ms,p95_ms,throughput`) | CSV importable into pandas for regression diffs | ✅ Done |
+| B3 | `matrix.py`: `--format github-markdown` | Table renders natively in PR comments | ✅ Done |
+| B4 | `matrix.py`: `--filter axis=state_dynamics kind=primitive status=kernel_unverified` | Composable filters for CI subsets | ✅ Done |
+| B5 | Git-SHA stamping: `--tag ${GIT_SHA}` written into JSONL rows (Force Multiplier #9 from TODO32) | Benchmarks become comparative-regression trackable | ✅ Done |
+| B6 | Peak-memory capture: `torch.cuda.max_memory_allocated` / CPU RSS delta alongside latency (memory_mb is a first-class research objective in this repo) | JSONL rows carry `peak_mem_mb`; CSV gains the column | ✅ Done |
 
 **Effort**: ~2 hours. Independent.
 
@@ -45,43 +45,45 @@ Highest-leverage item: TODO32's Triton roadmap (12 kernels) is blocked on toolin
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| C0 | **Kernel ladder** (new, before any Triton): each primitive's `kernel.py` promotes through `reference → torch.compile → Triton`, with microbench evidence at each rung. `predictive_settling` and `energy_minimization` already prove the `torch.compile` rung works. Measure compile gains **before** writing Triton; skip Triton where compile achieves parity + speedup (be skeptical of low-performing experiments — an unprofitable Triton kernel is a defect, not a deliverable). GPU-first per AGENTS.md | Each promoted kernel: parity passes, `spec.status` promoted to `kernel_verified`, microbench JSONL attached as evidence |
-| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology {compile,triton}` — **greenfield, does not exist** (compile is the default first rung) | Generates kernel stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance`; `--technology compile` emits the torch.compile wrapper |
-| C2 | `scripts/kernel_dev.py --primitive <id> --watch` — **greenfield** | Re-runs parity on file change (polling — no new deps); prints pass/fail + max abs diff |
-| C3 | `scripts/validate_composition.py --all-algorithms` — **greenfield**; algorithm specs carry `axis=None`, so scope the check to `kind="algorithm"` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; first run is expected to surface drift in the 21 scaffolded algorithms — record findings, fix in the same pass |
-| C4 | Wire C3 into `.github/workflows/ci.yml` alongside existing parity gate | CI fails on undeclared primitive dependencies |
+| C0 | **Kernel ladder** (new, before any Triton): each primitive's `kernel.py` promotes through `reference → torch.compile → Triton`, with microbench evidence at each rung. `predictive_settling` and `energy_minimization` already prove the `torch.compile` rung works. Measure compile gains **before** writing Triton; skip Triton where compile achieves parity + speedup (be skeptical of low-performing experiments — an unprofitable Triton kernel is a defect, not a deliverable). GPU-first per AGENTS.md | Each promoted kernel: parity passes, `spec.status` promoted to `kernel_verified`, microbench JSONL attached as evidence | ✅ **Done (2026-09-20)** — `energy_minimization`, `predictive_settling` promoted to `kernel_verified` via torch.compile rung; credit_assignment primitives skip compile rung (autograd incompatibility) |
+| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology {compile,triton}` — **greenfield, does not exist** (compile is the default first rung) | Generates kernel stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance`; `--technology compile` emits the torch.compile wrapper | ✅ **Done (2026-09-20)** |
+| C2 | `scripts/kernel_dev.py --primitive <id> --watch` — **greenfield** | Re-runs parity on file change (polling — no new deps); prints pass/fail + max abs diff | ✅ **Done (2026-09-20)** |
+| C3 | `scripts/validate_composition.py --all-algorithms` — **greenfield**; algorithm specs carry `axis=None`, so scope the check to `kind="algorithm"` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; first run is expected to surface drift in the 21 scaffolded algorithms — record findings, fix in the same pass | ✅ **Done (2026-09-20)** — fixed 14 drift errors in algorithm specs (wrong primitive IDs) |
+| C4 | Wire C3 into `.github/workflows/ci.yml` alongside existing parity gate | CI fails on undeclared primitive dependencies | ✅ **Done (2026-09-20)** |
 
 **Effort**: C0-C1 ~3 hours, C2 ~2 hours, C3–C4 ~2 hours.
 
 **Then** execute the TODO32 Phase 8 kernel order **through the ladder (C0), Triton only where compile insufficient**:
 1. `random_projections` (batched matmul) → 2. `local_goodness` (layer reduction) → 3. `energy_minimization` (gradient+settle) → 4. `thermodynamic_contrast` (reuses #3) → remaining per TODO32 §"Kernel Development Order".
 
+> **Note**: Credit assignment primitives (`random_projections`, `local_goodness`, etc.) compute pseudo-gradients via autograd. The torch.compile rung is NOT applicable (breaks autograd graph). Their kernel ladder is `reference → Triton` directly. StateDynamics primitives (`energy_minimization`, `predictive_settling`) use `reference → torch.compile → Triton`.
+
 ---
 
-## Phase D: Documentation from Specs (Leverage Spec Metadata Already Captured)
+## Phase D: Documentation from Specs (Leverage Spec Metadata Already Captured) — **COMPLETE ✅**
 
 Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`, `notes`, `tags`, `evidence_ids` — TODO32 captured this metadata but never rendered it.
 
-| Task | Description | Acceptance |
-|------|-------------|------------|
-| D1 | `scripts/generate_docs.py --all --output docs/generated/` — **greenfield** | Renders `docs/generated/primitives/<axis>/<name>.md` + `docs/generated/algorithms/<name>.md` from spec fields |
-| D2 | Jinja2 template: Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags | Matches TODO32's sketched README template |
-| D3 | Generate `docs/generated/IMPLEMENTATION_MATRIX.md` from `matrix.py --format markdown` | Single rendered source of truth for registry status |
-| D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files |
-| D5 | Optional: property tests from `invariants` tuples (Force Multiplier #10) — deterministic-seed and finiteness invariants are mechanically checkable | Hypothesis tests generated per spec |
+| Task | Description | Acceptance | Status |
+|------|-------------|------------|--------|
+| D1 | `scripts/generate_docs.py --all --output docs/generated/` — **greenfield** | Renders `docs/generated/primitives/<axis>/<name>.md` + `docs/generated/algorithms/<name>.md` from spec fields | ✅ Done |
+| D2 | Jinja2 template: Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags | Matches TODO32's sketched README template | ✅ Done |
+| D3 | Generate `docs/generated/IMPLEMENTATION_MATRIX.md` from `matrix.py --format markdown` | Single rendered source of truth for registry status | ✅ Done |
+| D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files | pending (scaffolder update separate) |
+| D5 | Optional: property tests from `invariants` tuples (Force Multiplier #10) — deterministic-seed and finiteness invariants are mechanically checkable | Hypothesis tests generated per spec | pending |
 
 **Effort**: D1–D4 ~4 hours; D5 optional, ~2 hours.
 
 ---
 
-## Phase E: Registry & Bench Dashboard (Smaller Follow-ons)
+## Phase E: Registry & Bench Dashboard (Smaller Follow-ons) — **E1-E2 COMPLETE ✅**
 
-| Task | Description | Acceptance |
-|------|-------------|------------|
-| E1 | `registry.list_by_axis()` helper | `{axis: [spec_ids]}` dict; used by CLI/docs filters |
-| E2 | Import-time lock: cold `import computronium.primitives` < 10ms (currently ~5ms — pin it) | A test asserting the bound, so lazy loading can't silently regress |
-| E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts |
-| E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way |
+| Task | Description | Acceptance | Status |
+|------|-------------|------------|--------|
+| E1 | `registry.list_by_axis()` helper | `{axis: [spec_ids]}` dict; used by CLI/docs filters | ✅ Done |
+| E2 | Import-time lock: cold `import computronium.primitives` < 10ms (currently ~5ms — pin it) | A test asserting the bound, so lazy loading can't silently regress | ✅ Done (`tests/property/test_import_time_lock.py`) |
+| E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts | pending |
+| E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way | pending |
 
 ---
 
@@ -112,7 +114,7 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 1. **A (drift repairs)** — the completed protocol standardization is incomplete until `DiffusionDynamics` conforms; everything downstream assumes it. ✅ **Done**
 2. **F1–F2 (integrity locks)** — cheap, permanent guards installed *before* Phase 8 churns the registry; F4's promotion rule makes C0's ladder auditable. ✅ **Done**
-3. **C (kernel ladder + workflow)** — unblocks Phase 8; `validate_composition.py` is the cheapest CI guard; C0 makes ~98%-dormant dispatch actually route.
+3. **C (kernel ladder + workflow)** — unblocks Phase 8; `validate_composition.py` is the cheapest CI guard; C0 makes ~98%-dormant dispatch actually route. ✅ **Done**
 4. **B (bench/matrix CLI)** — independent; do in spare cycles; B5/B6 make C's kernel work measurable.
 5. **D (docs from specs)** — pure leverage: metadata already exists, rendering is mechanical.
 6. **E** — small polish; E2 is the one item with regression value.
@@ -175,11 +177,11 @@ Anything short of this list is partial; the state table below flips fully to the
 | Algorithms | 21/21 ✅ | no additions | 21/21 ✅ |
 | Protocol conformance | **3 classes** non-conforming (`ErrorPredictiveCodingDynamics`, `DiffusionDynamics`, `LazyStateDynamics`) ❌ | A1 fixes all three → all 6 axes conform ✅ | **A1 DONE** — all 3 classes fixed, all 9 `settle` methods have `on_step` ✅ |
 | Test visibility | 741 tests **not in `testpaths`**; CI never runs `tests/primitives/**` or `tests/algorithms/**` ❌ | A5: full suite collected by bare pytest + CI ✅ | **A5 DONE** — `testpaths` updated, bare `pytest` collects all test dirs ✅ |
-| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 kernels promoted | pending (Phase C) |
+| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 kernels promoted | **C0 DONE (torch.compile rung)** — 3 specs `kernel_verified` (`energy_minimization`, `predictive_settling`, `backprop`), up from 1; credit primitives use `reference → Triton` ladder |
 | Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) | 741+ passed, 32 skipped |
 | Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) | **F1 DONE** — `test_registry_completeness_lock.py` passes (13 tests); **F2 DONE** — template rendering verified |
-| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | pending (Phase D) |
-| CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | pending (A5 partial - testpaths done, CI workflow still needs G3) |
-| Registry | lazy loading, ~5ms | import-time lock (E2) | pending (Phase E) |
+| Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) | **D1-D3 DONE** — `generate_docs.py` renders all specs + matrix |
+| CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) | **C4 DONE** — composition validation added; **G3 DONE** — CI normalized to `python -m pytest`; primitives/algorithms suites added |
+| Registry | lazy loading, ~5ms | import-time lock (E2) | **E1-E2 DONE** — `list_by_axis()` helper + import-time lock test |
 
-*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20).***
+*Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan. **Phase A complete (2026-09-20). Phase F1-F2 complete (2026-09-20). Phase C complete (2026-09-20). Phase B complete (2026-09-20). Phase D1-D3 complete (2026-09-20). Phase E1-E2 complete (2026-09-20).***

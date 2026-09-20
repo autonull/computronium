@@ -21,8 +21,8 @@ SPEC = ImplementationSpec(
     ),
     status="kernel_unverified",
     uses_primitives=(
-        "primitive.state_dynamics.instantaneous",
-        "primitive.credit_assignment.pepita",
+        "primitive.state_dynamics.instantaneous_pass",
+        "primitive.credit_assignment.local_goodness",
         "primitive.parameter_update.euclidean",
     ),
     summary="PEPITA: fixed random B, error-modulated second forward pass, autograd update.",

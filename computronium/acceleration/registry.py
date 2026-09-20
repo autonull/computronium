@@ -6,6 +6,7 @@ for implementation metadata and entrypoints.
 
 import importlib
 import pkgutil
+from collections import defaultdict
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -90,3 +91,18 @@ def algorithms() -> tuple[ImplementationSpec, ...]:
     """Get all registered algorithm specifications."""
     _discover()
     return tuple(spec for spec in _REGISTRY.values() if spec.kind == "algorithm")
+
+
+def list_by_axis() -> dict[str, list[str]]:
+    """Get all registered primitive specifications grouped by axis.
+
+    Returns:
+        Dictionary mapping axis name to list of implementation IDs.
+        Algorithms (which have axis=None) are grouped under "algorithm".
+    """
+    _discover()
+    by_axis: dict[str, list[str]] = defaultdict(list)
+    for spec in _REGISTRY.values():
+        axis = spec.axis or "algorithm"
+        by_axis[axis].append(spec.id)
+    return dict(by_axis)

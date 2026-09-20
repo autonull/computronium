@@ -21,8 +21,8 @@ SPEC = ImplementationSpec(
     ),
     status="kernel_verified",
     uses_primitives=(
-        "primitive.state_dynamics.instantaneous",
-        "primitive.credit_assignment.backprop",
+        "primitive.state_dynamics.instantaneous_pass",
+        "primitive.credit_assignment.reverse_mode",
         "primitive.parameter_update.euclidean",
     ),
     summary="Standard backpropagation with automatic differentiation.",

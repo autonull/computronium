@@ -16,14 +16,14 @@ SPEC = ImplementationSpec(
     kernel_entrypoint=(
         "computronium.primitives.state_dynamics.predictive_settling.kernel.step"
     ),
-    kernel_technology="triton",
+    kernel_technology="torch_compile",
     supported_backends=("reference", "kernel"),
     parity=ParityTolerance(
         max_abs_diff=1e-4,
         max_rel_diff=1e-3,
         min_cosine=0.999,
     ),
-    status="kernel_unverified",
+    status="kernel_verified",
     summary="Predictive coding settling dynamics (PCN).",
     equations="""
     μ_0 = x                    # input clamped

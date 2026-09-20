@@ -63,20 +63,20 @@ class _CompileCache:
 
 
 def compile_model(
-    model: torch.nn.Module,
+    model: torch.nn.Module | Callable,
     mode: str = "auto",
     fullgraph: bool = False,
     dynamic: bool | None = None,
     **compile_kwargs,
-) -> torch.nn.Module:
+) -> torch.nn.Module | Callable:
     """
-    Wrap model with torch.compile for significant speedup.
+    Wrap model/function with torch.compile for significant speedup.
 
     Works on CPU, CUDA, ROCm, and MPS without modification.
     Falls back gracefully if torch.compile is unavailable or broken.
 
     Args:
-        model: PyTorch model to compile
+        model: PyTorch model or callable function to compile
         mode: Compilation mode:
             - 'auto': Auto-select based on model size
             - 'default': Balanced speed and compile time
@@ -87,11 +87,13 @@ def compile_model(
         **compile_kwargs: Additional arguments passed to torch.compile
 
     Returns:
-        Compiled model (or original if compile unavailable)
+        Compiled model/function (or original if compile unavailable)
 
     Example:
         >>> model = LoopedMLP(784, 256, 10)
         >>> model = compile_model(model, mode="reduce-overhead")
+        >>> fn = lambda x: x * 2
+        >>> fn = compile_model(fn, mode="reduce-overhead")
     """
     if not hasattr(torch, "compile"):
         warnings.warn(
@@ -107,6 +109,21 @@ def compile_model(
     if not HAS_TRITON:
         logger.debug("Triton not available, skipping torch.compile")
         return model
+
+    # Handle functions by wrapping in a simple module
+    is_function = callable(model) and not isinstance(model, nn.Module)
+    if is_function:
+        fn = model
+
+        class _FnWrapper(nn.Module):
+            def __init__(self, fn):
+                super().__init__()
+                self.fn = fn
+
+            def forward(self, *args, **kwargs):
+                return self.fn(*args, **kwargs)
+
+        model = _FnWrapper(fn)
 
     # Auto-select mode based on model size
     if mode == "auto":
@@ -137,12 +154,19 @@ def compile_model(
         )
         return model
     else:
+        if is_function:
+            # Return the compiled forward method as a callable
+            return compiled.forward
         return compiled
 
 
 def _select_compile_mode(model: nn.Module) -> str:
     """Auto-select compilation mode based on model size."""
-    param_count = sum(p.numel() for p in model.parameters())
+    try:
+        param_count = sum(p.numel() for p in model.parameters())
+    except AttributeError, TypeError:
+        # Function wrapper has no parameters
+        return "reduce-overhead"
 
     if param_count < 1_000_000:  # < 1M params
         return "reduce-overhead"
@@ -154,9 +178,15 @@ def _select_compile_mode(model: nn.Module) -> str:
 
 def _should_use_dynamic_shapes(model: nn.Module) -> bool:
     """Determine if dynamic shapes should be enabled."""
+    try:
+        modules = model.modules()
+    except AttributeError, TypeError:
+        # Function wrapper - assume no dynamic shapes needed
+        return False
+
     # Check if model has any dynamic components
     # (e.g., RNNs, variable sequence length, etc.)
-    for module in model.modules():
+    for module in modules:
         if isinstance(module, (nn.RNN, nn.LSTM, nn.GRU, nn.Transformer)):
             return True
         # Check for dynamic shape annotations

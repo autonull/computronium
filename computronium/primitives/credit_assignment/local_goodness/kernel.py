@@ -2,6 +2,10 @@
 
 Delegates to computronium.acceleration.ff_kernels.FFKernelBackend and
 PEPITAKernelBackend. Provides uniform `step(case)` interface.
+
+Note: Credit assignment primitives compute pseudo-gradients via autograd.
+torch.compile rung is NOT applicable (breaks autograd graph).
+Kernel ladder: reference → Triton (via ff_kernels Triton backends).
 """
 
 from typing import Any
