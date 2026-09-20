@@ -1,6 +1,5 @@
 """Reference implementation tests for Digital Substrate primitive."""
 
-
 from computronium.primitives.substrate.digital import (
     make_case,
     reference_make_substrate,

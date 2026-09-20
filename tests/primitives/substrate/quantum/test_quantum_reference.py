@@ -1,6 +1,5 @@
 """Reference implementation tests for Quantum Substrate primitive."""
 
-
 from computronium.primitives.substrate.quantum import (
     make_case,
     reference_make_substrate,

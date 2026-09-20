@@ -1,6 +1,5 @@
 """Case factory tests for Neuromorphic Substrate primitive."""
 
-
 from computronium.primitives.substrate.neuromorphic.cases import (
     Case,
     make_case,

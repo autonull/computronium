@@ -1,6 +1,5 @@
 """Reference implementation tests for Substrate-Coupled Plasticity primitive."""
 
-
 from computronium.primitives.plasticity.substrate_coupled import (
     make_case,
     reference_step,

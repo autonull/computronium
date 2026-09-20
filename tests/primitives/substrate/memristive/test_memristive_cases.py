@@ -1,6 +1,5 @@
 """Case factory tests for Memristive Substrate primitive."""
 
-
 from computronium.primitives.substrate.memristive.cases import (
     Case,
     make_case,

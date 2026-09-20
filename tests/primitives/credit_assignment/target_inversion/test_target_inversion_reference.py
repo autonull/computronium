@@ -1,6 +1,5 @@
 """Reference implementation tests for Target Inversion primitive."""
 
-
 from computronium.primitives.credit_assignment.target_inversion import (
     make_case,
     reference_step,

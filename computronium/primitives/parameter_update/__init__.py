@@ -2,11 +2,11 @@
 
 # Import submodules to register their SPECs
 from . import (
-    elastic_consolidation,  # ruff: ignore[unused-import]
-    euclidean,  # ruff: ignore[unused-import]
-    muon,  # ruff: ignore[unused-import]
-    natural_gradient,  # ruff: ignore[unused-import]
-    spectral_constrained,  # ruff: ignore[unused-import]
+    elastic_consolidation,  # noqa: F401
+    euclidean,  # noqa: F401
+    muon,  # noqa: F401
+    natural_gradient,  # noqa: F401
+    spectral_constrained,  # noqa: F401
 )
 
 __all__ = [

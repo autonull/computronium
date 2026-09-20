@@ -1,6 +1,5 @@
 """Reference implementation tests for Temporal ψ Plasticity primitive."""
 
-
 from computronium.primitives.plasticity.temporal_psi import (
     make_case,
     reference_step,

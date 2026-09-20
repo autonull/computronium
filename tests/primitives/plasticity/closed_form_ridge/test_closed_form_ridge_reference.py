@@ -1,6 +1,5 @@
 """Reference implementation tests for Closed-form Ridge Plasticity primitive."""
 
-
 from computronium.primitives.plasticity.closed_form_ridge import (
     make_case,
     reference_step,

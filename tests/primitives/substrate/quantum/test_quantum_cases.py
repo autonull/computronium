@@ -1,6 +1,5 @@
 """Tests for Quantum Substrate case generation."""
 
-
 from computronium.primitives.substrate.quantum import make_case, make_case_noisy
 
 

@@ -1,6 +1,5 @@
 """Tests for Photonic Substrate case generation."""
 
-
 from computronium.primitives.substrate.photonic import make_case, make_case_noisy
 
 

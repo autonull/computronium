@@ -1,6 +1,5 @@
 """Reference implementation tests for Neuromorphic Substrate primitive."""
 
-
 from computronium.primitives.substrate.neuromorphic import (
     make_case,
     reference_make_substrate,

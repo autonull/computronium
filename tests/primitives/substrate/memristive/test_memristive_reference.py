@@ -1,6 +1,5 @@
 """Reference implementation tests for Memristive Substrate primitive."""
 
-
 from computronium.primitives.substrate.memristive import (
     make_case,
     reference_make_substrate,

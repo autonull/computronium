@@ -1,6 +1,5 @@
 """Case factory tests for Digital Substrate primitive."""
 
-
 from computronium.primitives.substrate.digital.cases import (
     Case,
     make_case,

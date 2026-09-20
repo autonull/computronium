@@ -1,6 +1,5 @@
 """Reference implementation tests for Photonic Substrate primitive."""
 
-
 from computronium.primitives.substrate.photonic import (
     make_case,
     reference_make_substrate,

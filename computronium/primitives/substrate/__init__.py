@@ -7,7 +7,7 @@ import importlib
 from typing import Any
 
 # Primitive modules that can be directly accessed
-_PRIMITIVES: frozenset[str] = frozenset({  # ruff: ignore[non-empty-init-module]
+_PRIMITIVES: frozenset[str] = frozenset({  # noqa: RUF067
     "digital",
     "memristive",
     "neuromorphic",
@@ -35,4 +35,4 @@ def __dir__() -> list[str]:
     return sorted([*_PRIMITIVES, "__all__", "__doc__", "__name__", "__package__"])
 
 
-__all__: list[str] = sorted([*_PRIMITIVES])  # ruff: ignore[invalid-all-format]
+__all__: list[str] = sorted([*_PRIMITIVES])  # noqa: PLE0605
