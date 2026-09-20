@@ -20,7 +20,7 @@ from computronium.acceleration.registry import get
 
 def run_parity_check(spec) -> tuple[bool, str]:
     """Run parity check for a spec. Returns (passed, message)."""
-    if spec.axis in ("geometry", "substrate"):
+    if spec.axis in {"geometry", "substrate"}:
         return False, f"{spec.axis} primitives use different interface"
 
     if "kernel" not in spec.supported_backends:
@@ -51,7 +51,10 @@ def run_parity_check(spec) -> tuple[bool, str]:
         from computronium.acceleration.parity import compare
 
         report = compare(reference_output, kernel_output)
-        return True, f"PASS: max_abs_diff={report['max_abs_diff']:.2e}, max_rel_diff={report['max_rel_diff']:.2e}, cosine={report['cosine']:.6f}"
+        return (
+            True,
+            f"PASS: max_abs_diff={report['max_abs_diff']:.2e}, max_rel_diff={report['max_rel_diff']:.2e}, cosine={report['cosine']:.6f}",
+        )
 
     except AssertionError as e:
         return False, f"FAIL: {e}"
@@ -86,7 +89,7 @@ def watch_kernel(spec, poll_interval: float = 1.0) -> int:
 
     # Initial run
     print("=== Initial parity check ===")
-    passed, msg = run_parity_check(spec)
+    _passed, msg = run_parity_check(spec)
     print(msg)
     run_count += 1
 
@@ -104,7 +107,7 @@ def watch_kernel(spec, poll_interval: float = 1.0) -> int:
                 last_mtime = current_mtime
                 run_count += 1
                 print(f"\n=== Change detected (run #{run_count}) ===")
-                passed, msg = run_parity_check(spec)
+                _passed, msg = run_parity_check(spec)
                 print(msg)
 
     except KeyboardInterrupt:
@@ -127,7 +130,10 @@ def main() -> int:
         "--once", action="store_true", help="Run parity check once and exit"
     )
     parser.add_argument(
-        "--poll-interval", type=float, default=1.0, help="Poll interval in seconds (watch mode)"
+        "--poll-interval",
+        type=float,
+        default=1.0,
+        help="Poll interval in seconds (watch mode)",
     )
 
     args = parser.parse_args()
@@ -138,7 +144,10 @@ def main() -> int:
     spec = get(args.primitive)
 
     if spec.kind != "primitive":
-        print(f"Error: {args.primitive} is not a primitive (kind={spec.kind})", file=sys.stderr)
+        print(
+            f"Error: {args.primitive} is not a primitive (kind={spec.kind})",
+            file=sys.stderr,
+        )
         return 1
 
     if args.once:

@@ -20,12 +20,13 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from computronium.acceleration.registry import get
 
-
 TEMPLATE_DIR = Path(__file__).parent / "templates" / "kernel"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Scaffold a kernel implementation for a primitive")
+    parser = argparse.ArgumentParser(
+        description="Scaffold a kernel implementation for a primitive"
+    )
     parser.add_argument(
         "--primitive",
         required=True,
@@ -51,11 +52,17 @@ def main() -> int:
     spec = get(args.primitive)
 
     if spec.kind != "primitive":
-        print(f"Error: {args.primitive} is not a primitive (kind={spec.kind})", file=sys.stderr)
+        print(
+            f"Error: {args.primitive} is not a primitive (kind={spec.kind})",
+            file=sys.stderr,
+        )
         return 1
 
-    if spec.axis in ("geometry", "substrate"):
-        print(f"Error: {spec.axis} primitives have different kernel interface", file=sys.stderr)
+    if spec.axis in {"geometry", "substrate"}:
+        print(
+            f"Error: {spec.axis} primitives have different kernel interface",
+            file=sys.stderr,
+        )
         return 1
 
     # Determine output path
@@ -109,11 +116,17 @@ def main() -> int:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(content)
         print(f"Created: {output_path}")
-        print(f"\nNext steps:")
-        print(f"  1. Review and customize the generated kernel")
-        print(f"  2. Run parity test: uv run pytest tests/primitives/{spec.axis}/{spec.name}/test_kernel_parity.py -q")
-        print(f"  3. Run microbench: uv run python -m computronium.acceleration.microbench --id {spec.id} --backend kernel")
-        print(f"  4. Update spec status to 'kernel_unverified' then 'kernel_verified' after parity passes")
+        print("\nNext steps:")
+        print("  1. Review and customize the generated kernel")
+        print(
+            f"  2. Run parity test: uv run pytest tests/primitives/{spec.axis}/{spec.name}/test_kernel_parity.py -q"
+        )
+        print(
+            f"  3. Run microbench: uv run python -m computronium.acceleration.microbench --id {spec.id} --backend kernel"
+        )
+        print(
+            "  4. Update spec status to 'kernel_unverified' then 'kernel_verified' after parity passes"
+        )
 
     return 0
 

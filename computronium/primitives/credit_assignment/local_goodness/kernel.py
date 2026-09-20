@@ -50,7 +50,9 @@ def _init_feedback_weights(
                 fb, generator=torch.Generator(device=w.device).manual_seed(layer_seed)
             )
         else:
-            fb.normal_(generator=torch.Generator(device=w.device).manual_seed(layer_seed))
+            fb.normal_(
+                generator=torch.Generator(device=w.device).manual_seed(layer_seed)
+            )
         fb *= feedback_scale
         feedback_weights.append(fb)
     return feedback_weights
@@ -124,7 +126,9 @@ def _lemma_backward_triton(  # noqa: PLR0914
 
         # Reference covariate for credit_norm
         ref_idx = c - offset
-        ref = free_activations[ref_idx] if 0 <= ref_idx < len(free_activations) else None
+        ref = (
+            free_activations[ref_idx] if 0 <= ref_idx < len(free_activations) else None
+        )
 
         # Project e1 through feedback matrix: err = e1 @ B
         B = feedback_weights[k]
@@ -134,7 +138,9 @@ def _lemma_backward_triton(  # noqa: PLR0914
             err = e1 @ B
 
         # Apply credit norm
-        err = _apply_credit_norm([err], credit_norm, [ref] if ref is not None else None)[0]
+        err = _apply_credit_norm(
+            [err], credit_norm, [ref] if ref is not None else None
+        )[0]
 
         # Gradient: -(err.T @ stream[c]) / batch
         if HAS_TRITON_FA and err.is_cuda:
@@ -154,11 +160,13 @@ def step(case: Any) -> list[Any]:
     # Delegate to reference for now
     if local_objective == "ff":
         from .reference import step as reference_step
+
         return reference_step(case)
 
     # LEMMA mode: Triton acceleration possible
     if not is_available():
         from .reference import step as reference_step
+
         return reference_step(case)
 
     # Extract data from case
@@ -170,6 +178,7 @@ def step(case: Any) -> list[Any]:
 
     if target is None:
         from .reference import step as reference_step
+
         return reference_step(case)
 
     # Try Triton-accelerated LEMMA backward
@@ -183,6 +192,7 @@ def step(case: Any) -> list[Any]:
 
     if grads is None:
         from .reference import step as reference_step
+
         return reference_step(case)
 
     return grads

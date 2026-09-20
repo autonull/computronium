@@ -31,6 +31,7 @@ def step(case: Any) -> list[Any]:  # noqa: PLR0914
     """Execute one accelerated step using Triton-accelerated FA backward pass."""
     if not is_available():
         from .reference import step as reference_step
+
         return reference_step(case)
 
     # Extract data from case
@@ -48,6 +49,7 @@ def step(case: Any) -> list[Any]:  # noqa: PLR0914
     ]
     if not weight_names:
         from .reference import step as reference_step
+
         return reference_step(case)
 
     # Initialize deterministic feedback weights (same as RandomProjectionsCredit)
@@ -78,6 +80,7 @@ def step(case: Any) -> list[Any]:  # noqa: PLR0914
     num_layers = len(feedback_weights)
     if num_layers != len(nudged_activations) - 1:
         from .reference import step as reference_step
+
         return reference_step(case)
 
     batch = nudged_activations[0].shape[0]

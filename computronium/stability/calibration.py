@@ -153,7 +153,7 @@ def _quantify_disagreement(
     return reports
 
 
-def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
+def calibrate_demo_harvest(  # noqa: PLR0913
     *,
     input_dim: int = 784,
     hidden_dims: tuple[int, ...] = (32,),
@@ -296,26 +296,26 @@ def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "DEMO_GOOD_COORDINATES",
     "DISAGREEMENT_COORDINATES",
-    "calibrate_demo_harvest",
-    "harvest_good_statistics",
     "EXPLOSION_FACTOR",
-    "UNROLL_STEPS",
-    "GINIBRE_DIM",
     "GINIBRE_BATCH",
+    "GINIBRE_DIM",
     "GINIBRE_GAINS",
     "GINIBRE_SEEDS_PER_GAIN",
     "HARVEST_SEED",
     "OVERHEAD_BUDGET",
-    "PR5Calibration",
     "STATISTIC_KINDS",
+    "UNROLL_STEPS",
+    "PR5Calibration",
+    "calibrate_demo_harvest",
     "calibrate_ginibre_harvest",
+    "calibrate_threshold",
     "ginibre_run",
     "harvest_bad_statistics",
+    "harvest_good_statistics",
+    "measure_guard_overhead",
     "overhead_and_interval",
     "probe_interval_for_overhead",
+    "quantify_proxy_disagreement",
     "rates_at_tau",
     "unrolled_divergence",
-    "calibrate_threshold",
-    "measure_guard_overhead",
-    "quantify_proxy_disagreement",
 ]

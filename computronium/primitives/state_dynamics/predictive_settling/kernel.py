@@ -27,13 +27,21 @@ def _get_compiled_step_fn():
     """Get or create the compiled step function."""
     if not hasattr(_get_compiled_step_fn, "_compiled_step_fn"):
         # Import reference step
-        module_path = ["computronium.primitives.state_dynamics.predictive_settling.reference", "step"][0]
-        func_name = ["computronium.primitives.state_dynamics.predictive_settling.reference", "step"][1]
+        module_path = [
+            "computronium.primitives.state_dynamics.predictive_settling.reference",
+            "step",
+        ][0]
+        func_name = [
+            "computronium.primitives.state_dynamics.predictive_settling.reference",
+            "step",
+        ][1]
         module = __import__(module_path, fromlist=[func_name])
         reference_step = getattr(module, func_name)
 
         # Compile the reference step function
-        _get_compiled_step_fn._compiled_step_fn = compile_model(reference_step, mode="reduce-overhead")
+        _get_compiled_step_fn._compiled_step_fn = compile_model(
+            reference_step, mode="reduce-overhead"
+        )
     return _get_compiled_step_fn._compiled_step_fn
 
 

@@ -8,6 +8,7 @@ Usage:
     uv run python scripts/generate_docs.py --id primitive.state_dynamics.energy_minimization --output docs/generated/
 """
 
+# ruff: noqa: S404,S607
 import argparse
 import pathlib
 import subprocess  # needed for git SHA and matrix.py invocation
@@ -18,8 +19,6 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from computronium.acceleration.registry import all_specs
 
 TEMPLATE_DIR = pathlib.Path(__file__).parent / "templates" / "docs"
-
-# ruff: file-ignore[suspicious-subprocess-import,subprocess-without-shell-equals-true,start-process-with-partial-path] (subprocess import/run with fixed args for git SHA and matrix.py)
 
 
 def _get_git_sha() -> str | None:
@@ -67,7 +66,13 @@ def _generate_matrix_md(output_dir: pathlib.Path) -> pathlib.Path:
     """Generate IMPLEMENTATION_MATRIX.md using matrix.py."""
     output_path = output_dir / "IMPLEMENTATION_MATRIX.md"
     result = subprocess.run(
-        [sys.executable, "-m", "computronium.acceleration.matrix", "--format", "github-markdown"],
+        [
+            sys.executable,
+            "-m",
+            "computronium.acceleration.matrix",
+            "--format",
+            "github-markdown",
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -84,18 +89,20 @@ def _generate_matrix_md(output_dir: pathlib.Path) -> pathlib.Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate documentation from specs")
     parser.add_argument(
-        "--all", action="store_true", help="Generate docs for all registered implementations"
+        "--all",
+        action="store_true",
+        help="Generate docs for all registered implementations",
     )
-    parser.add_argument(
-        "--id", help="Generate docs for a specific implementation ID"
-    )
+    parser.add_argument("--id", help="Generate docs for a specific implementation ID")
     parser.add_argument(
         "--output",
         default="docs/generated",
         help="Output directory (default: docs/generated)",
     )
     parser.add_argument(
-        "--matrix-only", action="store_true", help="Only generate the implementation matrix"
+        "--matrix-only",
+        action="store_true",
+        help="Only generate the implementation matrix",
     )
 
     args = parser.parse_args()
@@ -122,6 +129,7 @@ def main() -> int:
     elif args.id:
         try:
             from computronium.acceleration.registry import get
+
             spec = get(args.id)
             specs_to_render = [spec]
             print(f"Generating docs for {spec.id}...")
