@@ -367,22 +367,29 @@ Note: Test files renamed to `test_<name>_*.py` pattern to avoid pytest collectio
 | 104 | Run all primitive/algorithm/acceleration tests (448 passed, 12 skipped) | ✅ Done |
 | 105 | Run integration/property tests (38 passed) | ✅ Done |
 
-### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 Week 3 Primitives)
+### ✅ Completed Steps (This Session: 2026-09-19 — Phase 6 Week 4 Primitives)
 
 | Step | Description | Status |
 |------|-------------|--------|
-| 106 | Create `instantaneous_pass` primitive (state_dynamics, medium priority) | ✅ Done |
-| 107 | Create `target_inversion` primitive (credit_assignment, medium priority) | ✅ Done |
-| 108 | Create `closed_form_ridge` primitive (plasticity, medium priority) | ✅ Done |
-| 109 | Create `temporal_psi` primitive (plasticity, medium priority) | ✅ Done |
-| 110 | Create `fabric_pc` primitive (geometry, medium priority) using GraphGeometry | ✅ Done |
-| 111 | Create `ntm` primitive (geometry, medium priority) with NtmGeometry | ✅ Done |
-| 112 | Create `nca` primitive (geometry, medium priority) with NcaGeometry | ✅ Done |
-| 113 | Fix test file naming to `test_<name>_*.py` pattern for all new primitives | ✅ Done |
-| 114 | Run ruff format, ruff check, pyright on all new primitives | ✅ Done |
-| 115 | Run all primitive/algorithm/acceleration tests (519 passed, 18 skipped) | ✅ Done |
-| 116 | Run integration/property tests (10 passed) | ✅ Done |
-| 117 | Update TODO32.md with Week 3 completion status | ✅ Done |
+| 118 | Create `lazy_state_dynamics` primitive (state_dynamics, low priority) | ✅ Done |
+| 119 | Add lazy_state_dynamics tests | ✅ Done |
+| 120 | Create `diffusion` primitive (state_dynamics, low priority) | ✅ Done |
+| 121 | Add diffusion tests | ✅ Done |
+| 122 | Create `homeostatic` primitive (credit_assignment, low priority) | ✅ Done |
+| 123 | Add homeostatic tests | ✅ Done |
+| 124 | Create `elastic_consolidation` primitive (parameter_update, low priority) | ✅ Done |
+| 125 | Add elastic_consolidation tests | ✅ Done |
+| 126 | Create `rule_state` primitive (plasticity, low priority) | ✅ Done |
+| 127 | Add rule_state tests | ✅ Done |
+| 128 | Create `photonic` primitive (substrate, low priority) | ✅ Done |
+| 129 | Add photonic tests | ✅ Done |
+| 130 | Create `quantum` primitive (substrate, low priority) | ✅ Done |
+| 131 | Add quantum tests | ✅ Done |
+| 132 | Fix test file naming to `test_<name>_*.py` pattern for all new primitives | ✅ Done |
+| 133 | Run ruff format, ruff check, pyright on all new primitives | ✅ Done |
+| 134 | Run all primitive/algorithm/acceleration tests (592 passed, 22 skipped) | ✅ Done |
+| 135 | Run integration/property tests (9 passed) | ✅ Done |
+| 136 | Update TODO32.md with Week 4 completion status | ✅ Done |
 
 ### 📋 Remaining Work
 
@@ -399,19 +406,19 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | **state_dynamics** | ✅ `energy_minimization` | `EnergyMinimizationDynamics` | **High** | - | `--axis state_dynamics --name energy_minimization --ontology-class EnergyMinimizationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.energy_minimization` |
 | | ✅ `spike_integration` | `SpikeIntegrationDynamics` | **High** | - | `--axis state_dynamics --name spike_integration --ontology-class SpikeIntegrationDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.spike_integration` |
 | | ✅ `instantaneous_pass` | `InstantaneousDynamics` | Medium | - | `--axis state_dynamics --name instantaneous_pass --ontology-class InstantaneousDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.instantaneous` |
-| | `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy_state_dynamics` |
-| | `diffusion` | `DiffusionDynamics` | Low | - | `--axis state_dynamics --name diffusion --ontology-class DiffusionDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.diffusion` |
+| | ✅ `lazy_state_dynamics` | `LazyStateDynamics` | Low | - | `--axis state_dynamics --name lazy_state_dynamics --ontology-class LazyStateDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.lazy` |
+| | ✅ `diffusion` | `DiffusionDynamics` | Low | - | `--axis state_dynamics --name diffusion --ontology-class DiffusionDynamics --ontology-module computronium.ontology.dynamics --config StateDynamicsConfig.diffusion` |
 | **credit_assignment** | ✅ `reverse_mode` | `GradientCredit` | **High** | - | `--axis credit_assignment --name reverse_mode --ontology-class GradientCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.gradient` |
 | | ✅ `thermodynamic_contrast` | `ThermodynamicContrast` | **High** | - | `--axis credit_assignment --name thermodynamic_contrast --ontology-class ThermodynamicContrast --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.thermodynamic_contrast` |
 | | ✅ `target_inversion` | `TargetInversionCredit` | Medium | - | `--axis credit_assignment --name target_inversion --ontology-class TargetInversionCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.target_inversion` |
-| | `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
+| | ✅ `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
 | **parameter_update** | `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
 | | ✅ `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
 | | `natural_gradient` | `NaturalGradientUpdate` | Low | - | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
-| | `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
+| | ✅ `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
 | **plasticity** | `null` | `NullPlasticity` | **High** | - | `--axis plasticity --name null --ontology-class NullPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.null` |
 | | ✅ `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
-| | `rule_state` | `RuleStatePlasticity` | Low | - | `--axis plasticity --name rule_state --ontology-class RuleStatePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.rule_state` |
+| | ✅ `rule_state` | `RuleStatePlasticity` | Low | - | `--axis plasticity --name rule_state --ontology-class RuleStatePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.rule_state` |
 | | ✅ `closed_form_ridge` | `ClosedFormRidgePlasticity` | Medium | - | `--axis plasticity --name closed_form_ridge --ontology-class ClosedFormRidgePlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.closed_form_ridge` |
 | | ✅ `temporal_psi` | `TemporalPsiPlasticity` | Medium | - | `--axis plasticity --name temporal_psi --ontology-class TemporalPsiPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.temporal_psi` |
 | **geometry** | ✅ `feedforward_dag` | `FeedforwardGeometry` | **High** | - | `--axis geometry --name feedforward_dag --ontology-class FeedforwardGeometry --ontology-module computronium.ontology.geometry --config GeometryConfig.feedforward` |
@@ -423,8 +430,8 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | **substrate** | ✅ `digital` | `DigitalSubstrate` | **High** | - | `--axis substrate --name digital --ontology-class DigitalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.digital` |
 | | ✅ `memristive` | `MemristiveSubstrate` | Medium | - | `--axis substrate --name memristive --ontology-class MemristiveSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.memristive` |
 | | ✅ `neuromorphic` | `NeuromorphicSubstrate` | Medium | - | `--axis substrate --name neuromorphic --ontology-class NeuromorphicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.neuromorphic` |
-| | `photonic` | `PhotonicSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class PhotonicSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.photonic` |
-| | `quantum` | `QuantumSubstrate` | Low | - | `--axis substrate --name quantum --ontology-class QuantumSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.quantum` |
+| | ✅ `photonic` | `OpticalSubstrate` | Low | - | `--axis substrate --name photonic --ontology-class OpticalSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.optical` |
+| | ✅ `quantum` | `QuantumSubstrate` | Low | - | `--axis substrate --name quantum --ontology-class QuantumSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.quantum` |
 | | `noisy` | `NoisySubstrate` | Low | - | `--axis substrate --name noisy --ontology-class NoisySubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.noisy` |
 | | `sparse` | `SparseSubstrate` | Low | - | `--axis substrate --name sparse --ontology-class SparseSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.sparse` |
 | | `complex` | `ComplexSubstrate` | Low | - | `--axis substrate --name complex --ontology-class ComplexSubstrate --ontology-module computronium.ontology.substrate --config SubstrateConfig.complex` |
@@ -437,7 +444,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: ✅ `spike_integration`, ✅ `reverse_mode`, ✅ `spectral_constrained`, ✅ `substrate_coupled`, ✅ `memristive`, ✅ `neuromorphic` (6 primitives)
 3. **Week 3**: ✅ `instantaneous_pass`, ✅ `target_inversion`, ✅ `closed_form_ridge`, ✅ `temporal_psi`, ✅ `fabric_pc`, ✅ `ntm`, ✅ `nca` (7 primitives)
-4. **Week 4**: `lazy_state_dynamics`, `diffusion`, `homeostatic`, `natural_gradient`, `elastic_consolidation`, `rule_state`, `spatial_lattice_3d`, `photonic`, `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
+4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient`, ✅ `elastic_consolidation`, ✅ `rule_state`, `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, `noisy`, `sparse`, `complex`, `ternary` (13 primitives, low priority)
 
 ### Phase 7: Additional Algorithms (beyond current 14)
 
