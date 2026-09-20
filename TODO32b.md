@@ -12,14 +12,15 @@ TODO32 standardized the `StateDynamics` protocol (uniform `settle(..., on_step=.
 
 | Task | File | Problem | Fix |
 |------|------|---------|-----|
-| A1 | `computronium/ontology/dynamics/_dynamics.py:2167` (`DiffusionDynamics`) | `settle` lacks the `on_step` callback parameter — protocol-incompatible; `compose_system` rejects it (confirmed pyright error) | Add `on_step: ((int, float) -> None) \| None = None`, mirroring `InstantaneousDynamics`/`SpikeIntegrationDynamics` (steps 48/250 of TODO32) |
+| A1 | `computronium/ontology/dynamics/_dynamics.py` — **three classes**, verified 2026-09-20 | `ErrorPredictiveCodingDynamics`, `DiffusionDynamics`, `LazyStateDynamics` all lack the `on_step` callback — protocol-incompatible; `compose_system` rejects `DiffusionDynamics` (confirmed pyright error). TODO32's signature sweep (steps 48/250) fixed `Instantaneous`/`SpikeIntegration` but stopped there | Add `on_step: ((int, float) -> None) \| None = None` to all three `settle` signatures, mirroring `InstantaneousDynamics`. Verify with: pyright on `_dynamics.py` + a one-off audit (script or `grep`) that **no** `def settle` in the ontology lacks `on_step` |
 | A2 | `computronium/core/presets.py:498,500` | `.weight`/`.bias` accessed on values typed `Tensor \| Module` | Narrow with `isinstance(..., nn.Linear)` or type the container precisely; strict-mode clean |
 | A3 | Stale test artifacts | LSP reports `unknown import symbol` against non-renamed paths (`tests/primitives/substrate/memristive/test_reference.py`, `.../elastic_consolidation/test_kernel_parity.py`, `.../rule_state/test_kernel_parity.py`) that no longer exist on disk | Confirm files are gone (`git status`), purge `__pycache__`/`.pytest_cache` if needed; verify `uv run python -m pytest tests/primitives -q` collects cleanly |
 | A4 | `computronium/primitives/substrate/memristive/__init__.py` | `make_case_noisy` exported but unused by renamed tests — verify consumers or drop | Grep for consumers; keep only if referenced |
+| A5 | `pyproject.toml` `testpaths` + CI — **the 741-test suite is invisible to default collection** (verified) | `testpaths = ["tests/unit", "tests/property"]` excludes `tests/primitives/`, `tests/algorithms/`, `tests/acceleration/`; bare `uv run python -m pytest` collects only unit+property. CI (`.github/workflows/ci.yml`) runs `tests/acceleration/test_all_implementations.py` but **never** `tests/primitives/**` or `tests/algorithms/**` — TODO32's "pytest tests/ works globally" claim only holds when paths are passed explicitly | Add the three paths to `testpaths`; add `uv run python -m pytest tests/primitives/ tests/algorithms/ tests/acceleration/ -q` as a CI step; normalize CI invocations to `python -m pytest` (see G3) |
 
-**Acceptance**: `pyright computronium/ontology/dynamics/_dynamics.py computronium/core/presets.py` → 0 errors; full primitive suite still passes.
+**Acceptance**: `pyright computronium/ontology/dynamics/_dynamics.py computronium/core/presets.py` → 0 errors; no `def settle` in the ontology without `on_step`; bare `uv run python -m pytest -q` collects and passes the primitive/algorithm/acceleration suites; full primitive suite still passes.
 
-**Effort**: ~1 hour.
+**Effort**: ~2 hours (A5 includes a CI edit + full-suite run).
 
 ---
 
@@ -27,7 +28,7 @@ TODO32 standardized the `StateDynamics` protocol (uniform `settle(..., on_step=.
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| B1 | `microbench.py`: `--iterations`, `--warmup`, `--device cpu,cuda`, `--output bench.jsonl` | One invocation produces a resumable JSONL artifact |
+| B1 | `microbench.py`: **add** `--iterations`, `--warmup`, `--output bench.jsonl` (existing flags already cover `--device`, `--steps`, `--dtype`, `--seed`, `--format json`, `--all` — verified 2026-09-20; do not re-add) | One invocation produces a resumable JSONL artifact |
 | B2 | `microbench.py`: `--format csv` (median, p95, throughput; columns `id,backend,device,median_ms,p95_ms,throughput`) | CSV importable into pandas for regression diffs |
 | B3 | `matrix.py`: `--format github-markdown` | Table renders natively in PR comments |
 | B4 | `matrix.py`: `--filter axis=state_dynamics kind=primitive status=kernel_unverified` | Composable filters for CI subsets |
@@ -45,9 +46,9 @@ Highest-leverage item: TODO32's Triton roadmap (12 kernels) is blocked on toolin
 | Task | Description | Acceptance |
 |------|-------------|------------|
 | C0 | **Kernel ladder** (new, before any Triton): each primitive's `kernel.py` promotes through `reference → torch.compile → Triton`, with microbench evidence at each rung. `predictive_settling` and `energy_minimization` already prove the `torch.compile` rung works. Measure compile gains **before** writing Triton; skip Triton where compile achieves parity + speedup (be skeptical of low-performing experiments — an unprofitable Triton kernel is a defect, not a deliverable). GPU-first per AGENTS.md | Each promoted kernel: parity passes, `spec.status` promoted to `kernel_verified`, microbench JSONL attached as evidence |
-| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology {compile,triton}` (compile is the default first rung) | Generates kernel stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance`; `--technology compile` emits the torch.compile wrapper |
-| C2 | `scripts/kernel_dev.py --primitive <id> --watch` | Re-runs parity on file change (watchdog/polling); prints pass/fail + max abs diff |
-| C3 | `scripts/validate_composition.py --all-algorithms` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; first run is expected to surface drift in the 21 scaffolded algorithms — record findings |
+| C1 | `scripts/scaffold_kernel.py --primitive <id> --technology {compile,triton}` — **greenfield, does not exist** (compile is the default first rung) | Generates kernel stub, `is_available()`, reference delegate, tolerance pulled from spec's `ParityTolerance`; `--technology compile` emits the torch.compile wrapper |
+| C2 | `scripts/kernel_dev.py --primitive <id> --watch` — **greenfield** | Re-runs parity on file change (polling — no new deps); prints pass/fail + max abs diff |
+| C3 | `scripts/validate_composition.py --all-algorithms` — **greenfield**; algorithm specs carry `axis=None`, so scope the check to `kind="algorithm"` | Static check: each algorithm's `uses_primitives` ⊆ actually-imported primitives; exits nonzero on drift; first run is expected to surface drift in the 21 scaffolded algorithms — record findings, fix in the same pass |
 | C4 | Wire C3 into `.github/workflows/ci.yml` alongside existing parity gate | CI fails on undeclared primitive dependencies |
 
 **Effort**: C0-C1 ~3 hours, C2 ~2 hours, C3–C4 ~2 hours.
@@ -63,7 +64,7 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| D1 | `scripts/generate_docs.py --all --output docs/generated/` | Renders `docs/generated/primitives/<axis>/<name>.md` + `docs/generated/algorithms/<name>.md` from spec fields |
+| D1 | `scripts/generate_docs.py --all --output docs/generated/` — **greenfield** | Renders `docs/generated/primitives/<axis>/<name>.md` + `docs/generated/algorithms/<name>.md` from spec fields |
 | D2 | Jinja2 template: Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags | Matches TODO32's sketched README template |
 | D3 | Generate `docs/generated/IMPLEMENTATION_MATRIX.md` from `matrix.py --format markdown` | Single rendered source of truth for registry status |
 | D4 | Scaffolders gain `--docs` flag: new primitives/algorithms get doc stubs automatically | `scaffold_primitive.py --docs` emits README alongside the 6 files |
@@ -79,7 +80,7 @@ Every `ImplementationSpec` already carries `summary`, `equations`, `invariants`,
 |------|-------------|------------|
 | E1 | `registry.list_by_axis()` helper | `{axis: [spec_ids]}` dict; used by CLI/docs filters |
 | E2 | Import-time lock: cold `import computronium.primitives` < 10ms (currently ~5ms — pin it) | A test asserting the bound, so lazy loading can't silently regress |
-| E3 | `scripts/bench_dashboard.py` | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts |
+| E3 | `scripts/bench_dashboard.py` — **greenfield** | Matplotlib/plotly latency-vs-commit plot from B5's JSONL artifacts |
 | E4 | `pyproject.toml` entry points for explicit registration (alternative to `__getattr__` scan) — **evaluate only if** lazy loading proves limiting | Decision recorded either way |
 
 ---
@@ -90,7 +91,7 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 | Task | Description | Acceptance |
 |------|-------------|------------|
-| F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/` + `algorithms/` | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs |
+| F1 | **Ontology ↔ primitive completeness lock**: every concrete ontology class across all 6 axes has exactly one primitive spec (id, ontology class, config classmethod), and every primitive spec resolves to a live ontology class. Extends `test_dynamics_wiring_lock` doctrine to `primitives/`. Algorithm specs (`axis=None`) are out of scope here — C3 owns algorithm-side integrity | `tests/property/test_registry_completeness_lock.py`; fails on orphan ontology classes or dead specs |
 | F2 | **Scaffolder self-test (round-trip)**: run `scaffold_primitive.py` + `scaffold_algorithm.py` into a tmpdir and collect the generated tests. The 90%-boilerplate claim (TODO32 §Force Multiplier 1) is now critical path for Phase 8 — if the scaffolder rots, every future addition suffers | Scaffolder output passes its own tests in CI; regression caught immediately |
 | F3 | **Skipped-test audit**: the 32 skips are geometry/substrate structural-parity gaps TODO32 deferred. Replace blanket skips with real structural-equivalence assertions (factory determinism: two `make_substrate()`/`make_geometry()` calls with same config → bitwise-equal state tensors; spec round-trip) | Skips drop from 32 toward 0; each remaining skip carries a documented reason |
 | F4 | **Status-promotion rule**: `kernel_verified` requires (a) parity green on CPU + GPU where available, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel. Encode as a check in `test_all_implementations.py` so the 22 `kernel_unverified` specs can't silently claim verified | Count of `kernel_verified` only grows via the C0 ladder |
@@ -123,6 +124,39 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 |------|-------------|
 | G1 | Append a pointer row to `TODO32.md`'s progress tables: "Continued by TODO32b.md" so future sessions find the active plan |
 | G2 | Mark TODO32.md's "New Improvement Opportunities" / "Force Multipliers" sections as superseded by this file |
+| G3 | Normalize `.github/workflows/ci.yml` invocations to `uv run python -m pytest` (some steps use bare `uv run pytest`, which resolved to the shadowing system pytest in the 2026-09-20 incident; CI is the enforcement point for the repo-standard invocation) |
+
+## Dependency Graph
+
+```text
+A1 (3 settle signatures) ──┐
+A5 (testpaths + CI) ───────┤
+                           ├─→ everything below runs against a conforming, visible suite
+F1 (completeness lock) ────┤
+F4 (promotion rule) ───────┘
+B1 (jsonl) ──→ B5 (SHA stamp) ──→ B6 (peak mem) ──→ E3 (dashboard)
+C0 (ladder) ──→ F4 enforcement (statuses only grow via ladder)
+C1 (scaffold_kernel) ──→ C0 execution;  C2 (watch) parallel to C0
+C3 (validate_composition) ──→ C4 (CI wiring)
+C0 evidence ──→ D3/D2 rendered docs reflect promoted statuses
+```
+
+**Rule**: A and F1/F4 before any C0 rung promotion; B1 before C0 evidence exists; D3 regenerated after each C0 promotion.
+
+## Definition of Done (complete result)
+
+Executing every phase leaves the repository in this state — all verifiable:
+
+1. `uv run python -m pytest -q` (bare, no args) collects and passes the **full** suite: primitives + algorithms + acceleration + unit + property; skip count documented (≤ remaining structural skips from F3, each with reason).
+2. `pyright` clean on `ontology/dynamics/_dynamics.py`, `core/presets.py`, and all new scripts; no `def settle` in the ontology without `on_step` (A1).
+3. CI gates: primitives/algorithms/acceleration suite, composition validation (C4), promotion-rule check (F4) — all green on a clean checkout.
+4. Registry integrity: F1 lock passes — zero orphan ontology classes, zero dead primitive specs.
+5. Kernel ladder active: at least the first three TODO32 Phase 8 kernels (`random_projections`, `local_goodness`, `energy_minimization`) promoted with parity + microbench evidence; dispatch `auto` routes them (statuses `kernel_verified` ≥ 4, up from 1).
+6. Tooling: `microbench --output/--format csv` (B1/B2/B5/B6), `matrix --format github-markdown --filter` (B3/B4), `kernel_dev --watch` (C2), `validate_composition` (C3), `generate_docs` (D1) — each exercised once in the final verification with output shown.
+7. Docs: `docs/generated/` reflects the promoted registry (D3 regenerated last).
+8. TODO32.md cross-linked (G1/G2); all work committed in phase-sized commits.
+
+Anything short of this list is partial; the state table below flips fully to the target column.
 
 ## Per-Commit Checklist (Scoped & Fast — per AGENTS.md)
 
@@ -135,16 +169,17 @@ TODO32 built `test_dynamics_wiring_lock.py` for the ontology registry; the new 6
 
 ## State Table (Start of TODO32b)
 
-| Category | TODO32 Result | TODO32b Target |
+| Category | TODO32 Result (verified 2026-09-20) | TODO32b Target |
 |----------|---------------|----------------|
 | Primitives | 43/43 ✅ | no additions |
 | Algorithms | 21/21 ✅ | no additions |
-| Protocol conformance | `DiffusionDynamics` non-conforming ❌ | A1 fixes → all 6 axes conform ✅ |
-| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient |
+| Protocol conformance | **3 classes** non-conforming (`ErrorPredictiveCodingDynamics`, `DiffusionDynamics`, `LazyStateDynamics`) ❌ | A1 fixes all three → all 6 axes conform ✅ |
+| Test visibility | 741 tests **not in `testpaths`**; CI never runs `tests/primitives/**` or `tests/algorithms/**` ❌ | A5: full suite collected by bare pytest + CI ✅ |
+| Triton kernels | 0 (all reference fallback); dispatch resolves to reference for ~98% of fleet | kernel ladder (C0): compile rung measured first, Triton only where insufficient; first 3 kernels promoted |
 | Tests | 741 passed, **32 skipped** | + invariant property tests (D5); skips audited → structural assertions (F3) |
 | Registry locks | dynamics wiring lock only | completeness lock for 64-spec registry (F1), scaffolder round-trip (F2), status-promotion rule (F4) |
 | Docs | IDENTITY_CARDS only | per-implementation rendered docs (D) |
-| CI | parity gate + matrix | + composition validation (C4) |
+| CI | parity gate + matrix; some steps use bare `uv run pytest` | + primitive/algorithm suite, composition validation (C4), promotion rule (F4); normalized invocations (G3) |
 | Registry | lazy loading, ~5ms | import-time lock (E2) |
 
 *Created 2026-09-20. Continues TODO32.md; supersedes its "New Improvement Opportunities" and "Force Multipliers" sections as the active plan.*
