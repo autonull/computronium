@@ -447,7 +447,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 | | ✅ `homeostatic` | `HomeostaticCredit` | Low | - | `--axis credit_assignment --name homeostatic --ontology-class HomeostaticCredit --ontology-module computronium.ontology.credit --config CreditAssignmentConfig.homeostatic` |
 | **parameter_update** | ✅ `euclidean` | `EuclideanUpdate` | **High** | - | `--axis parameter_update --name euclidean --ontology-class EuclideanUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.euclidean` |
 | | ✅ `spectral_constrained` | `SpectralConstrainedUpdate` | Medium | - | `--axis parameter_update --name spectral_constrained --ontology-class SpectralConstrainedUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.spectral_constrained` |
-| | `natural_gradient` | `NaturalGradientUpdate` | Low | - | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
+| | `natural_gradient` | `NaturalGradientUpdate` | Low | Requires ontology class | `--axis parameter_update --name natural_gradient --ontology-class NaturalGradientUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.natural_gradient` |
 | | ✅ `elastic_consolidation` | `ElasticConsolidationUpdate` | Low | - | `--axis parameter_update --name elastic_consolidation --ontology-class ElasticConsolidationUpdate --ontology-module computronium.ontology.update --config ParameterUpdateConfig.elastic_consolidation` |
 | **plasticity** | `null` | `NullPlasticity` | **High** | - | `--axis plasticity --name null --ontology-class NullPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.null` |
 | | ✅ `substrate_coupled` | `SubstrateCoupledPlasticity` | Medium | substrate primitives | `--axis plasticity --name substrate_coupled --ontology-class SubstrateCoupledPlasticity --ontology-module computronium.ontology.plasticity --config PlasticityConfig.substrate_coupled` |
@@ -477,7 +477,7 @@ Each primitive follows the 6-file template (`spec.py`, `reference.py`, `kernel.p
 1. **Week 1**: ✅ `energy_minimization`, ✅ `thermodynamic_contrast`, ✅ `euclidean`, ✅ `null`, ✅ `feedforward_dag`, ✅ `recurrent_attractor`, ✅ `digital` (7 primitives, unblocks most algorithms)
 2. **Week 2**: ✅ `spike_integration`, ✅ `reverse_mode`, ✅ `spectral_constrained`, ✅ `substrate_coupled`, ✅ `memristive`, ✅ `neuromorphic` (6 primitives)
 3. **Week 3**: ✅ `instantaneous_pass`, ✅ `target_inversion`, ✅ `closed_form_ridge`, ✅ `temporal_psi`, ✅ `fabric_pc`, ✅ `ntm`, ✅ `nca` (7 primitives)
-4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient`, ✅ `elastic_consolidation`, ✅ `rule_state`, ✅ `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, ✅ `noisy`, ✅ `sparse`, ✅ `complex`, ✅ `ternary` (13 primitives, low priority)
+4. **Week 4**: ✅ `lazy_state_dynamics`, ✅ `diffusion`, ✅ `homeostatic`, `natural_gradient` (requires ontology class), ✅ `elastic_consolidation`, ✅ `rule_state`, ✅ `spatial_lattice_3d`, ✅ `photonic`, ✅ `quantum`, ✅ `noisy`, ✅ `sparse`, ✅ `complex`, ✅ `ternary` (13 primitives, low priority; `natural_gradient` is the only remaining)
 
 ### Phase 7: Additional Algorithms (beyond current 14)
 
@@ -784,6 +784,7 @@ def test_settling_residual_decreases(data):
 - **Note**: `algorithm.hebbian` covers STDP using LocalGoodnessCredit as proxy; separate `algorithm.stdp` not needed per current design
 - **Session complete**: All Phase 1-6 work done. 30 primitives + 14 algorithms registered, 632 tests pass (125 primitive + 174 algorithm + 56 registry + 30 substrate/geometry parity + 247 geometry/substrate cases), all existing tests pass.
 - **This session**: Fixed ruff 0.15.9 rule code drift in pyproject.toml and all __init__.py files (RUF067→non-empty-init-module, PLE0605→invalid-all-format, I001→unsorted-imports, INP001→implicit-namespace-package, F401→unused-import, TC001→typing-only-first-party-import); verified full test suite (632 passed, 32 skipped); committed all fixes.
+- **Current verification**: All 632 primitive/algorithm/acceleration tests pass (32 skipped for geometry/substrate structural primitives); all 14 integration/property/unit tests pass; ruff format/check clean on new code; pyright 0 errors / 4 warnings (dynamic `__all__` for lazy loading) on primitives/algorithms/acceleration.
 
 ---
 
