@@ -2,8 +2,8 @@
 
 # Import submodules to register their SPECs
 from . import (
-    euclidean,  # noqa: F401
-    muon,  # noqa: F401
+    euclidean,  # ruff: ignore[unused-import]
+    muon,  # ruff: ignore[unused-import]
 )
 
 __all__ = ["euclidean", "muon"]

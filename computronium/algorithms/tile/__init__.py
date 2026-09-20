@@ -1,5 +1,5 @@
-# ruff: file-ignore[I001]
-# ruff: file-ignore[INP001]
+# ruff: file-ignore[unsorted-imports]
+# ruff: file-ignore[implicit-namespace-package]
 """TileNet algorithm.
 
 Modular tiled architecture with TileGeometry. Wraps
@@ -21,7 +21,7 @@ from .kernel import step as kernel_step
 from .reference import step as reference_step
 from .spec import SPEC
 
-_register(SPEC)  # noqa: RUF067
+_register(SPEC)  # ruff: ignore[non-empty-init-module]
 
 __all__ = [
     "SPEC",

@@ -11,7 +11,7 @@ import importlib
 from typing import Any
 
 # Submodule names that should be lazily loaded
-_SUBMODULES: frozenset[str] = frozenset({  # noqa: RUF067
+_SUBMODULES: frozenset[str] = frozenset({  # ruff: ignore[non-empty-init-module]
     "credit_assignment",
     "parameter_update",
     "state_dynamics",
@@ -21,7 +21,7 @@ _SUBMODULES: frozenset[str] = frozenset({  # noqa: RUF067
 })
 
 # Primitive modules that can be directly accessed
-_PRIMITIVES: dict[str, str] = {  # noqa: RUF067
+_PRIMITIVES: dict[str, str] = {  # ruff: ignore[non-empty-init-module]
     # state_dynamics
     "pc_alm_settling": "state_dynamics.pc_alm_settling",
     "predictive_settling": "state_dynamics.predictive_settling",
@@ -86,4 +86,4 @@ def __dir__() -> list[str]:
     ])
 
 
-__all__: list[str] = sorted([*_SUBMODULES, *_PRIMITIVES.keys()])  # noqa: PLE0605
+__all__: list[str] = sorted([*_SUBMODULES, *_PRIMITIVES.keys()])  # ruff: ignore[invalid-all-format]

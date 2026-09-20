@@ -10,7 +10,7 @@ import importlib
 from typing import Any
 
 # Algorithm modules that can be directly accessed
-_ALGORITHMS: frozenset[str] = frozenset({  # noqa: RUF067
+_ALGORITHMS: frozenset[str] = frozenset({  # ruff: ignore[non-empty-init-module]
     "backprop",
     "fa",
     "dfa",
@@ -42,4 +42,4 @@ def __dir__() -> list[str]:
     return sorted([*_ALGORITHMS, "__all__", "__doc__", "__name__", "__package__"])
 
 
-__all__: list[str] = sorted(_ALGORITHMS)  # noqa: PLE0605
+__all__: list[str] = sorted(_ALGORITHMS)  # ruff: ignore[invalid-all-format]

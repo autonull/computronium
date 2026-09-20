@@ -4,7 +4,7 @@ Delegates to computronium.ontology.substrate._substrate.NoisySubstrate (the sour
 This wrapper provides the uniform `make_substrate(spec)` factory interface.
 """
 
-# noqa: TC001
+# ruff: ignore[typing-only-first-party-import]
 from computronium.ontology.substrate._substrate import (
     NoisySubstrate,
     SubstrateConfig,

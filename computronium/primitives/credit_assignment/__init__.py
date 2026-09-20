@@ -5,10 +5,10 @@ Reusable credit assignment mechanisms.
 
 # Import submodules to trigger SPEC registration
 from . import (
-    local_goodness,  # noqa: F401
-    pc_alm,  # noqa: F401
-    random_projections,  # noqa: F401
-    temporal_trace,  # noqa: F401
+    local_goodness,  # ruff: ignore[unused-import]
+    pc_alm,  # ruff: ignore[unused-import]
+    random_projections,  # ruff: ignore[unused-import]
+    temporal_trace,  # ruff: ignore[unused-import]
 )
 
 __all__ = [
