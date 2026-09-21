@@ -11,7 +11,7 @@ Provides:
 import os
 import warnings
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import nn
@@ -24,6 +24,25 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from typing import Protocol
+
+    from torch import Tensor
+
+
+class _EqPropModel(Protocol):
+    """Protocol for models compatible with EqPropFunction."""
+
+    def settle(
+        self, input: Tensor, target: Tensor | None = None, beta: float = 0.5, steps: int = 30
+    ) -> Tensor: ...
+
+    def get_activations(self) -> list[Tensor]: ...
+
+    def parameters(self): ...
+
+    def zero_grad(self, set_to_none: bool = False) -> None: ...
+
+    def eval(self) -> None: ...
 
 
 class _CompileCache:
@@ -79,23 +98,24 @@ def _check_compile_available() -> bool:
     return True
 
 
-def _wrap_function(model):
+class _FnWrapper(nn.Module):
+    """Wrapper to make a callable function compatible with torch.compile."""
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, *args, **kwargs):
+        return self.fn(*args, **kwargs)
+
+
+def _wrap_function(model: nn.Module | Callable) -> tuple[nn.Module | _FnWrapper, bool]:
     """Wrap a callable function in a nn.Module for compilation."""
     is_function = callable(model) and not isinstance(model, nn.Module)
     if not is_function:
-        return model, False
+        return cast("nn.Module", model), False
 
-    fn = model
-
-    class _FnWrapper(nn.Module):
-        def __init__(self, fn):
-            super().__init__()
-            self.fn = fn
-
-        def forward(self, *args, **kwargs):
-            return self.fn(*args, **kwargs)
-
-    return _FnWrapper(fn), True
+    return _FnWrapper(model), True
 
 
 def compile_model(
@@ -135,6 +155,7 @@ def compile_model(
         return model
 
     model, is_function = _wrap_function(model)
+    model = cast("nn.Module | _FnWrapper", model)
 
     # Auto-select mode based on model size
     if mode == "auto":
@@ -171,7 +192,7 @@ def compile_model(
         return compiled
 
 
-def _select_compile_mode(model: nn.Module) -> str:
+def _select_compile_mode(model: nn.Module | _FnWrapper) -> str:
     """Auto-select compilation mode based on model size."""
     try:
         param_count = sum(p.numel() for p in model.parameters())
@@ -187,7 +208,7 @@ def _select_compile_mode(model: nn.Module) -> str:
         return "max-autotune"
 
 
-def _should_use_dynamic_shapes(model: nn.Module) -> bool:
+def _should_use_dynamic_shapes(model: nn.Module | _FnWrapper) -> bool:
     """Determine if dynamic shapes should be enabled."""
     try:
         modules = model.modules()
@@ -311,7 +332,7 @@ class EqPropFunction(Function):
         ctx,
         input: torch.Tensor,
         target: torch.Tensor,
-        model: nn.Module,
+        model: _EqPropModel,
         beta: float = 0.5,
         steps: int = 30,
         gamma: float = 1.0,
@@ -322,7 +343,7 @@ class EqPropFunction(Function):
         Args:
             input: Input tensor [B, D_in]
             target: Target tensor [B, D_out] or class indices [B]
-            model: EqProp model with forward_step method
+            model: EqProp model with settle method
             beta: Nudge strength
             steps: Number of settling steps
             gamma: Decay factor for state updates
@@ -451,7 +472,7 @@ class EqPropTritonFunction(Function):
         ctx,
         input: torch.Tensor,
         target: torch.Tensor,
-        model: nn.Module,
+        model: _EqPropModel,
         beta: float = 0.5,
         steps: int = 30,
         lr: float = 0.01,
@@ -569,7 +590,8 @@ def compile_model_with_preset(
     """
     preset = CompileMode.get_preset(model_type)
     preset.update(override_kwargs)
-    return compile_model(model, **preset)
+    result = compile_model(model, **preset)
+    return cast("nn.Module", result)
 
 
 def get_compile_config(model: nn.Module) -> dict:

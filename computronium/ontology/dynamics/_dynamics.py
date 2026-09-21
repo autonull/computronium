@@ -11,7 +11,7 @@ import torch
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.substrate import Substrate
@@ -28,6 +28,12 @@ from computronium.ontology._settle_kernel import (
 from computronium.ontology.geometry import layer_stack
 
 GainControlMode = Literal["none", "unit_rms", "spectral"]
+
+# Type alias for state-like objects (SystemState or CompositeState)
+type StateLike = object
+
+# Forward operator type: takes (input, weight) -> output
+type ForwardOp = Callable[[Tensor, Tensor], Tensor]
 
 
 def _apply_gain_control(acts: list[Tensor], mode: GainControlMode) -> list[Tensor]:
@@ -67,37 +73,43 @@ def _apply_gain_control(acts: list[Tensor], mode: GainControlMode) -> list[Tenso
 # ============================================================
 
 
-def _is_composite_state(state: object) -> bool:
+def _is_composite_state(state: StateLike) -> bool:
     """Check if state is a CompositeState (has activity/plastic/substrate dicts)."""
     return hasattr(state, "activity") and isinstance(
         getattr(state, "activity", None), dict
     )
 
 
-def _get_state_x(state: object) -> Tensor | None:
+def _get_state_x(state: StateLike) -> Tensor | None:
     """Get input x from either SystemState or CompositeState."""
     return getattr(state, "x", None)
 
 
-def _get_state_activations(state: object) -> list[Tensor] | Tensor | None:
+def _get_state_activations(state: StateLike) -> list[Tensor] | Tensor | None:
     """Get activations from either SystemState or CompositeState."""
     return getattr(state, "activations", None)
 
 
-def _get_state_free_state(state: object) -> list[Tensor] | Tensor | None:
+def _get_state_free_state(state: StateLike) -> list[Tensor] | Tensor | None:
     """Get free_state from either SystemState or CompositeState."""
     return getattr(state, "free_state", None)
 
 
-def _get_state_dual_vars(state: object) -> list[Tensor] | None:
+def _get_state_dual_vars(state: StateLike) -> list[Tensor] | None:
     """Get dual_vars from either SystemState or CompositeState."""
     if _is_composite_state(state):
         activity = cast("CompositeState", state).activity
-        return activity.get("dual_vars")
-    return getattr(state, "dual_vars", None)
+        val = activity.get("dual_vars")
+        return val if isinstance(val, list) else None
+    val = getattr(state, "dual_vars", None)
+    return val if isinstance(val, list) else None
 
 
-def _get_state_activity(state: object) -> dict[str, ActivityValue] | None:
+# Backwards compat alias (used by external code)
+_get_state_dual_vars_compat = _get_state_dual_vars
+
+
+def _get_state_activity(state: StateLike) -> Mapping[str, ActivityValue] | None:
     """Get the activity dict from a CompositeState-shaped state, else None."""
     if _is_composite_state(state):
         return cast("CompositeState", state).activity
@@ -121,7 +133,7 @@ def _energy_tensor(value: ActivityValue) -> Tensor:
             return torch.zeros(1)
 
 
-def _state_energy_vector(state: object) -> Tensor:
+def _state_energy_vector(state: StateLike) -> Tensor:
     """The activity field an output-energy reads: the last activation, else
     the ``output`` activity."""
     acts = _get_state_activations(state)
@@ -135,7 +147,7 @@ def _state_energy_vector(state: object) -> Tensor:
 
 
 def _create_output_state(
-    state: object,
+    state: StateLike,
     *,
     x: Tensor | None = None,
     output: Tensor | None = None,
@@ -174,7 +186,9 @@ def _create_output_state(
         if spike_counts is not None:
             activity["spike_counts"] = spike_counts
         if spike_rasters is not None:
-            activity["spike_rasters"] = spike_rasters
+            # spike_rasters is list[list[Tensor]] which is not in ActivityValue
+            # Store as a special key that won't be used for energy computation
+            activity["_spike_rasters"] = spike_rasters  # type: ignore[assignment]
         if dual_vars is not None:
             activity["dual_vars"] = dual_vars
         result: dict[str, ActivityValue] = activity
@@ -740,7 +754,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
         and block_count is not None
         and len(all_acts) == block_count
     ):
-        return tile_energy(all_acts)
+        return cast("Tensor", tile_energy(all_acts))
 
     if not all_acts or len(all_acts) < 2:
         return torch.tensor(0.0, device=all_acts[0].device if all_acts else "cpu")
@@ -881,9 +895,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         # extracted weight/bias transitions.
         block_builder = getattr(geometry, "settle_blocks", None)
         if callable(block_builder):
-            all_acts = block_builder(state.x, substrate)
+            all_acts: list[Tensor] = list(cast("list[Tensor]", block_builder(state.x, substrate)))
         else:
-            all_acts = geometry.forward_with_intermediates(state.x, substrate)
+            all_acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(state.x, substrate)))
         if not all_acts:
             return state
 
@@ -1199,19 +1213,19 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         )
         if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
             # Use feedforward activations as initial states
-            acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
+            acts: list[Tensor] = list(init_acts)  # [input, hidden1, hidden2, ..., output]
         else:
             # Fallback: initialize with zeros of correct shape
             h = substrate.initial_state(x)
             h = h.flatten(1) if h.dim() > 2 else h
             acts = [h]
-            for weight, bias in zip(layered.weights, layered.biases, strict=True):
+            for weight, _bias in zip(layered.weights, layered.biases, strict=True):
                 out_shape = (h.shape[0], weight.shape[0])
                 h = torch.zeros(out_shape, device=h.device, dtype=h.dtype)
                 acts.append(h)
 
         # Track free energy per iteration across all layers
-        layer_free_energy: list[float] = (
+        layer_free_energy: list[float] | None = (
             [] if self.config.track_free_energy_per_iter else None
         )
 
@@ -1270,7 +1284,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             new_acts = [acts[0]]  # Input layer is clamped
             step_energy = 0.0
 
-            for i, (weight, bias) in enumerate(
+            for i, (weight, _bias) in enumerate(
                 zip(layered.weights, layered.biases, strict=True)
             ):
                 # acts[i+1] is current state of layer i+1; weight maps from
@@ -1368,7 +1382,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         builder = getattr(geometry, "settle_blocks", None)
         if not callable(builder):
             raise TypeError("Tile settling requires settle_blocks")
-        return builder(x, substrate)
+        return list(cast("list[Tensor]", builder(x, substrate)))
 
     def get_free_energy_history(self) -> list[float] | None:
         """Return the free energy history tracked during settling.
@@ -1637,13 +1651,12 @@ class PCALMDynamics(_SettleTelemetry):
         # Initialize layer states from a feedforward pass
         init_acts = geometry.forward_with_intermediates(x, substrate)
         if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
-            acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
+            acts: list[Tensor] = list(init_acts)  # [input, hidden1, hidden2, ..., output]
         else:
             raise TypeError("PC-ALM requires valid feedforward intermediates")
 
         # Number of layers (excluding input)
         num_layers = len(acts) - 1
-        batch_size = acts[0].shape[0]
 
         # Initialize dual variables λ to zero (or warm-start from previous step)
         if (
@@ -1704,20 +1717,28 @@ class PCALMDynamics(_SettleTelemetry):
         self._dual_vars = dual_vars
 
         # Write dual_vars to state for PCALMCredit to read
-        # Use the dedicated dual_vars field (nudged phase) and metrics for backward compat
+        # Use the activity dict (not metrics, which expects float values)
         dual_vars_for_state = [lam.detach() for lam in dual_vars]
 
         if target is None:
             state.free_state = acts
-            state.metrics = state.metrics or {}
-            state.metrics["dual_vars_free"] = dual_vars_for_state
+            if _is_composite_state(state):
+                cast("CompositeState", state).set_activity("dual_vars_free", dual_vars_for_state)
+            else:
+                state.metrics = state.metrics or {}
+                state.metrics["dual_vars_free"] = len(dual_vars_for_state)  # placeholder count
         else:
             state.nudged_state = acts
             # Nudged phase duals are the ones used for credit assignment
-            state.dual_vars = dual_vars_for_state
-            state.metrics = state.metrics or {}
-            state.metrics["dual_vars"] = dual_vars_for_state
-            state.metrics["dual_vars_nudged"] = dual_vars_for_state
+            if hasattr(state, "dual_vars"):  # SystemState has dual_vars field
+                setattr(state, "dual_vars", dual_vars_for_state)
+            if _is_composite_state(state):
+                cast("CompositeState", state).set_activity("dual_vars", dual_vars_for_state)
+                cast("CompositeState", state).set_activity("dual_vars_nudged", dual_vars_for_state)
+            else:
+                state.metrics = state.metrics or {}
+                state.metrics["dual_vars"] = len(dual_vars_for_state)
+                state.metrics["dual_vars_nudged"] = len(dual_vars_for_state)
         state.activations = acts
 
         return state
@@ -1727,7 +1748,7 @@ class PCALMDynamics(_SettleTelemetry):
         acts: list[Tensor],
         dual_vars: list[Tensor],
         layered: LayeredParams,
-        op: object,
+        op: ForwardOp,
         target: Tensor | None,
         rho: float | None = None,
     ) -> list[Tensor]:
@@ -1874,12 +1895,11 @@ class PCALMDynamics(_SettleTelemetry):
         acts: list[Tensor],
         dual_vars: list[Tensor],
         layered: LayeredParams,
-        op: object,
+        op: ForwardOp,
         rho: float | None = None,
     ) -> Tensor:
         """Compute the augmented Lagrangian L_ρ at the current state."""
         num_layers = len(acts) - 1
-        batch_size = acts[0].shape[0]
         current_rho = rho if rho is not None else self.config.rho
 
         total = torch.zeros((), device=acts[0].device, dtype=acts[0].dtype)
@@ -1908,9 +1928,9 @@ class PCALMDynamics(_SettleTelemetry):
             constraint_norm_sq = (c**2).sum()
             dual_term = (dual_vars[i] * c).sum()
 
-            total = total + 0.5 * (1 + rho) * constraint_norm_sq + dual_term
+            total = total + 0.5 * (1 + current_rho) * constraint_norm_sq + dual_term
 
-        return total / batch_size
+        return total / acts[0].shape[0]
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         """Compute the augmented Lagrangian energy at the settled state."""
@@ -1924,18 +1944,23 @@ class PCALMDynamics(_SettleTelemetry):
         if layered is None:
             return torch.tensor(0.0)
 
-        op = (
-            geometry.substrate.get_forward_operator()
-            if hasattr(geometry, "substrate")
-            else None
-        )
-        if op is None:
+        # Get forward operator from substrate
+        substrate = getattr(geometry, "substrate", None)
+        if substrate is not None:
+            op = substrate.get_forward_operator()
+        else:
             from computronium.ontology.substrate import DigitalSubstrate
 
             op = DigitalSubstrate().get_forward_operator()
 
-        # Need dual_vars from state metrics or internal buffer
-        dual_vars = state.metrics.get("dual_vars") if state.metrics else None
+        # Need dual_vars from state activity or internal buffer
+        dual_vars: list[Tensor] | None = None
+        if _is_composite_state(state):
+            activity = cast("CompositeState", state).activity
+            dual_vars_raw = activity.get("dual_vars") or activity.get("dual_vars_nudged")
+            if isinstance(dual_vars_raw, list) and all(isinstance(t, Tensor) for t in dual_vars_raw):
+                dual_vars = dual_vars_raw
+
         if dual_vars is None and self._dual_vars is not None:
             dual_vars = self._dual_vars
 
@@ -2131,10 +2156,11 @@ class InstantaneousDynamics(_SettleTelemetry):
         # output clamp (R11.1.4). For standard geometries, nudge the output
         # layer toward the target when provided.
         self._settle_steps_used = 1
+        acts: list[Tensor] = []
         if state.x is not None:
             block_builder = getattr(geometry, "settle_blocks", None)
             if callable(block_builder):
-                acts = block_builder(state.x, substrate)
+                acts = list(cast("list[Tensor]", block_builder(state.x, substrate)))
                 if target is not None:
                     acts = [
                         *acts[:-1],
@@ -2142,7 +2168,7 @@ class InstantaneousDynamics(_SettleTelemetry):
                         + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
                     ]
             else:
-                acts = geometry.forward_with_intermediates(state.x, substrate)
+                acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(state.x, substrate)))
                 if target is not None and acts:
                     # Nudge the output activation toward the target
                     acts = [
@@ -2151,8 +2177,12 @@ class InstantaneousDynamics(_SettleTelemetry):
                         + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
                     ]
         else:
-            acts = state.activations if state.activations is not None else []
-        if isinstance(acts, list):
+            existing = state.activations
+            if isinstance(existing, list):
+                acts = existing
+            elif isinstance(existing, Tensor):
+                acts = [existing]
+        if acts:
             acts = _apply_gain_control(acts, self.config.gain_control)
         if target is None:
             state.free_state = acts
