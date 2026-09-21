@@ -53,7 +53,19 @@ from computronium.acceleration.backends import (
     kernel_available,
     profile_kernel,
 )
-from computronium.acceleration.compile import compile_model, compile_settling_loop
+from computronium.acceleration.compile import (
+    compile_model,
+    compile_model_with_preset,
+    compile_settling_loop,
+    get_compile_config,
+)
+from computronium.acceleration.contrastive_primitives import (
+    conductance_matmul,
+    forward_forward_goodness,
+    pepita_error_modulation,
+    phase_encode,
+    target_propagation_target,
+)
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -157,22 +169,28 @@ __all__ = [
     "check_cupy_available",
     "check_triton_available",
     "compile_model",
+    "compile_model_with_preset",
     "compile_settling_loop",
+    "conductance_matmul",
     "cross_entropy",
     "dispatch_kernel",
     "enable_tf32",
     "eqprop_kernel_backend",
+    "forward_forward_goodness",
     "get_algorithm_kernels",
     "get_backend",
+    "get_compile_config",
     "get_dispatcher",
     "get_kernel_classes",
     "get_optimal_backend",
     "get_triton_ops",
     "infer_algorithm_family",
     "kernel_available",
+    "pepita_error_modulation",
+    "phase_encode",
     "profile_kernel",
     "softmax",
     "spectral_normalize",
+    "target_propagation_target",
     "to_numpy",
 ]
-
