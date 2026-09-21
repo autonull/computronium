@@ -108,7 +108,7 @@ class EqPropKernelBackend:
             self._device = layers[0].weight.device
             self._dtype = layers[0].weight.dtype
 
-    def _sync_weights_to_kernel(self) -> None:  # ruff: ignore[complex-structure]
+    def _sync_weights_to_kernel(self) -> None:
         """Sync PyTorch layer weights to EqPropKernel's internal weights."""
         if self._kernel is None or not self._layers:
             return
@@ -116,94 +116,59 @@ class EqPropKernelBackend:
         kernel = self._kernel
         xp = kernel.xp
 
-        if kernel.architecture == "layered":
-            # Map: embed -> layers[0], W1/W2 -> intermediate, head -> layers[-1]
-            # The model has a simple linear stack, kernel has layered architecture
-            # We'll just sync what we can: input -> embed, output -> head
-            if len(self._layers) >= 2:
-                # First layer -> embed
-                kernel.weights["embed"] = xp.asarray(
-                    self._layers[0].weight.detach().cpu().numpy()
-                )
-                if self._layers[0].bias is not None:
-                    kernel.biases["embed"] = xp.asarray(
-                        self._layers[0].bias.detach().cpu().numpy()
-                    )
+        if kernel.architecture == "layered" and len(self._layers) >= 2:
+            self._sync_layer_to_kernel(self._layers[0], "embed", xp, kernel)
+            self._sync_layer_to_kernel(self._layers[-1], "head", xp, kernel)
+        elif kernel.architecture == "rnn" and len(self._layers) >= 3:
+            self._sync_layer_to_kernel(self._layers[0], "W_in", xp, kernel)
+            self._sync_layer_to_kernel(self._layers[1], "W_rec", xp, kernel)
+            self._sync_layer_to_kernel(self._layers[-1], "W_out", xp, kernel)
 
-                # Last layer -> head
-                kernel.weights["head"] = xp.asarray(
-                    self._layers[-1].weight.detach().cpu().numpy()
-                )
-                if self._layers[-1].bias is not None:
-                    kernel.biases["head"] = xp.asarray(
-                        self._layers[-1].bias.detach().cpu().numpy()
-                    )
-        elif kernel.architecture == "rnn":  # ruff: ignore[collapsible-if]
-            # RNN architecture: W_in, W_rec, W_out
-            if len(self._layers) >= 3:
-                kernel.weights["W_in"] = xp.asarray(
-                    self._layers[0].weight.detach().cpu().numpy()
-                )
-                if self._layers[0].bias is not None:
-                    kernel.biases["W_in"] = xp.asarray(
-                        self._layers[0].bias.detach().cpu().numpy()
-                    )
+    def _sync_layer_to_kernel(self, layer, key: str, xp, kernel) -> None:
+        """Sync a single layer's weight and bias to kernel."""
+        kernel.weights[key] = xp.asarray(layer.weight.detach().cpu().numpy())
+        if layer.bias is not None:
+            kernel.biases[key] = xp.asarray(layer.bias.detach().cpu().numpy())
 
-                kernel.weights["W_rec"] = xp.asarray(
-                    self._layers[1].weight.detach().cpu().numpy()
-                )
-                if self._layers[1].bias is not None:
-                    kernel.biases["W_rec"] = xp.asarray(
-                        self._layers[1].bias.detach().cpu().numpy()
-                    )
-
-                kernel.weights["W_out"] = xp.asarray(
-                    self._layers[-1].weight.detach().cpu().numpy()
-                )
-                if self._layers[-1].bias is not None:
-                    kernel.biases["W_out"] = xp.asarray(
-                        self._layers[-1].bias.detach().cpu().numpy()
-                    )
-
-    def _sync_weights_from_kernel(self) -> None:  # ruff: ignore[complex-structure]
+    def _sync_weights_from_kernel(self) -> None:
         """Sync EqPropKernel's weights back to PyTorch layers."""
         if self._kernel is None or not self._layers:
             return
 
         kernel = self._kernel
-        xp = kernel.xp  # ruff: ignore[unused-variable]
 
         def to_torch(arr):
-            # Handle CuPy arrays explicitly
             if hasattr(arr, "get"):  # CuPy array
                 arr = arr.get()
             elif hasattr(arr, "__array__"):
                 arr = np.asarray(arr)
             return torch.from_numpy(arr).to(device=self._device, dtype=self._dtype)
 
-        if kernel.architecture == "layered":
-            if len(self._layers) >= 2:
-                self._layers[0].weight.data.copy_(to_torch(kernel.weights["embed"]))
-                if self._layers[0].bias is not None:
-                    self._layers[0].bias.data.copy_(to_torch(kernel.biases["embed"]))
-
-                self._layers[-1].weight.data.copy_(to_torch(kernel.weights["head"]))
-                if self._layers[-1].bias is not None:
-                    self._layers[-1].bias.data.copy_(to_torch(kernel.biases["head"]))
+        if kernel.architecture == "layered" and len(self._layers) >= 2:
+            self._sync_layer_from_kernel(self._layers[0], "embed", to_torch, kernel)
+            self._sync_layer_from_kernel(self._layers[-1], "head", to_torch, kernel)
         elif kernel.architecture == "rnn" and len(self._layers) >= 3:
-            self._layers[0].weight.data.copy_(to_torch(kernel.weights["W_in"]))
-            if self._layers[0].bias is not None:
-                self._layers[0].bias.data.copy_(to_torch(kernel.biases["W_in"]))
+            self._sync_layer_from_kernel(self._layers[0], "W_in", to_torch, kernel)
+            self._sync_layer_from_kernel(self._layers[1], "W_rec", to_torch, kernel)
+            self._sync_layer_from_kernel(self._layers[-1], "W_out", to_torch, kernel)
 
-            self._layers[1].weight.data.copy_(to_torch(kernel.weights["W_rec"]))
-            if self._layers[1].bias is not None:
-                self._layers[1].bias.data.copy_(to_torch(kernel.biases["W_rec"]))
+    def _numpy_to_tensor(self, arr, device=None, dtype=None):
+        """Convert numpy/CuPy array to torch tensor."""
+        device = device or self._device
+        dtype = dtype or self._dtype
+        if hasattr(arr, "get"):  # CuPy array
+            arr = arr.get()
+        elif hasattr(arr, "__array__"):
+            arr = np.asarray(arr)
+        return torch.from_numpy(arr).to(device=device, dtype=dtype)
 
-            self._layers[-1].weight.data.copy_(to_torch(kernel.weights["W_out"]))
-            if self._layers[-1].bias is not None:
-                self._layers[-1].bias.data.copy_(to_torch(kernel.biases["W_out"]))
+    def _extract_activation(self, act_log, key):
+        """Extract and convert activation from act_log."""
+        if not act_log or key not in act_log[-1]:
+            return None
+        return self._numpy_to_tensor(act_log[-1][key])
 
-    def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:  # ruff: ignore[complex-structure]
+    def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and activations (for uniform interface).
 
         Runs free phase equilibrium and returns logits + intermediate activations.
@@ -226,37 +191,15 @@ class EqPropKernelBackend:
         h_free, act_log, info = kernel.solve_equilibrium(x_np)
         logits_np = kernel.compute_output(h_free)
 
-        # Convert logits to torch (handle CuPy arrays)
-        if hasattr(logits_np, "get"):  # CuPy array
-            logits_np = logits_np.get()
-        elif hasattr(logits_np, "__array__"):
-            logits_np = np.asarray(logits_np)
-        logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)
+        # Convert logits to torch
+        logits = self._numpy_to_tensor(logits_np)
 
         # Build activations list for compatibility
         activations = [x]
-        if act_log:
-            last_acts = act_log[-1]
-            if "h" in last_acts:
-                h_arr = last_acts["h"]
-                if hasattr(h_arr, "get"):
-                    h_arr = h_arr.get()
-                elif hasattr(h_arr, "__array__"):
-                    h_arr = np.asarray(h_arr)
-                h_tensor = torch.from_numpy(h_arr).to(
-                    device=self._device, dtype=self._dtype
-                )
-                activations.append(h_tensor)
-            if "h_next" in last_acts:
-                h_next_arr = last_acts["h_next"]
-                if hasattr(h_next_arr, "get"):
-                    h_next_arr = h_next_arr.get()
-                elif hasattr(h_next_arr, "__array__"):
-                    h_next_arr = np.asarray(h_next_arr)
-                h_next = torch.from_numpy(h_next_arr).to(
-                    device=self._device, dtype=self._dtype
-                )
-                activations.append(h_next)
+        if (h := self._extract_activation(act_log, "h")) is not None:
+            activations.append(h)
+        if (h_next := self._extract_activation(act_log, "h_next")) is not None:
+            activations.append(h_next)
         activations.append(logits)
 
         # Record telemetry

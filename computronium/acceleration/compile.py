@@ -62,6 +62,42 @@ class _CompileCache:
         return cls._works
 
 
+def _check_compile_available() -> bool:
+    """Check if torch.compile is available and should be used."""
+    if not hasattr(torch, "compile"):
+        warnings.warn(
+            "torch.compile not available (requires PyTorch 2.0+). "
+            "Using uncompiled model.",
+            RuntimeWarning,
+        )
+        return False
+    if not _CompileCache.check():
+        return False
+    if not HAS_TRITON:
+        logger.debug("Triton not available, skipping torch.compile")
+        return False
+    return True
+
+
+def _wrap_function(model):
+    """Wrap a callable function in a nn.Module for compilation."""
+    is_function = callable(model) and not isinstance(model, nn.Module)
+    if not is_function:
+        return model, False
+
+    fn = model
+
+    class _FnWrapper(nn.Module):
+        def __init__(self, fn):
+            super().__init__()
+            self.fn = fn
+
+        def forward(self, *args, **kwargs):
+            return self.fn(*args, **kwargs)
+
+    return _FnWrapper(fn), True
+
+
 def compile_model(
     model: torch.nn.Module | Callable,
     mode: str = "auto",
@@ -95,35 +131,10 @@ def compile_model(
         >>> fn = lambda x: x * 2
         >>> fn = compile_model(fn, mode="reduce-overhead")
     """
-    if not hasattr(torch, "compile"):
-        warnings.warn(
-            "torch.compile not available (requires PyTorch 2.0+). "
-            "Using uncompiled model.",
-            RuntimeWarning,
-        )
+    if not _check_compile_available():
         return model
 
-    if not _CompileCache.check():
-        return model
-
-    if not HAS_TRITON:
-        logger.debug("Triton not available, skipping torch.compile")
-        return model
-
-    # Handle functions by wrapping in a simple module
-    is_function = callable(model) and not isinstance(model, nn.Module)
-    if is_function:
-        fn = model
-
-        class _FnWrapper(nn.Module):
-            def __init__(self, fn):
-                super().__init__()
-                self.fn = fn
-
-            def forward(self, *args, **kwargs):
-                return self.fn(*args, **kwargs)
-
-        model = _FnWrapper(fn)
+    model, is_function = _wrap_function(model)
 
     # Auto-select mode based on model size
     if mode == "auto":

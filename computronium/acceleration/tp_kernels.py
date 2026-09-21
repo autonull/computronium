@@ -220,7 +220,90 @@ class TPKernelBackend:
                 elif param_type == "bias" and layer.bias is not None:
                     layer.bias.add_(grad)
 
-    def kernel_train_step(  # ruff: ignore[too-many-locals, too-many-statements]
+    def _prepare_inputs(self, x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
+        """Prepare and move inputs to device."""
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        return (
+            x.to(device=self._device, dtype=self._dtype),
+            y.to(device=self._device),
+        )
+
+    def _get_dtp_config(self, model) -> tuple:
+        """Extract DTP-specific config from model."""
+        layers = getattr(model, "layers", None)
+        out_layer = getattr(model, "out_layer", None)
+        out_opt = getattr(model, "out_opt", None)
+        criterion = getattr(model, "criterion", None) or torch.nn.CrossEntropyLoss()
+        target_lr = float(getattr(model, "target_lr", self._target_lr))
+        return layers, out_layer, out_opt, criterion, target_lr
+
+    def _forward_pass(self, layers, x: Tensor) -> tuple[list[Tensor], Tensor]:
+        """Run forward pass and collect hidden states."""
+        hs: list[Tensor] = [x]
+        h = x
+        for layer in layers:
+            h = layer.forward_net(h)
+            hs.append(h)
+        return hs, h
+
+    def _update_output_layer(self, out_layer, h: Tensor, y: Tensor, out_opt, criterion):
+        """Update output layer via its own optimizer."""
+        out = out_layer(h)
+        loss = criterion(out, y)
+        if out_opt is not None:
+            out_opt.zero_grad()
+            loss.backward()
+            out_opt.step()
+        return out, loss
+
+    def _compute_target(self, h: Tensor, out_layer, y: Tensor, criterion, target_lr: float) -> Tensor:
+        """Compute difference target for output layer."""
+        t = h.clone().detach().requires_grad_(True)
+        with torch.enable_grad():
+            out_t = out_layer(t)
+            loss_t = criterion(out_t, y)
+            grad_t = torch.autograd.grad(loss_t, t)[0]
+        with torch.no_grad():
+            return h - target_lr * grad_t
+
+    def _propagate_targets(self, layers, hs: list[Tensor], t_target: Tensor) -> list[Tensor]:
+        """Propagate targets backward through inverse nets."""
+        targets: list[Tensor] = [t_target]
+        for i in reversed(range(len(layers))):
+            layer = layers[i]
+            if i > 0:
+                h_prev = hs[i].detach()
+                h_curr = hs[i + 1].detach()
+                t_curr = targets[-1]
+                with torch.no_grad():
+                    t_prev = (
+                        h_prev - layer.inverse_net(h_curr) + layer.inverse_net(t_curr)
+                    )
+                    targets.append(t_prev)
+        return targets
+
+    def _fit_forward_inverse(self, layers, hs: list[Tensor], targets: list[Tensor]):
+        """Fit forward and inverse networks."""
+        for i in reversed(range(len(layers))):
+            layer = layers[i]
+            t_curr = targets[-len(targets)]
+            h_prev_det = hs[i].detach()
+            layer.opt_f.zero_grad()
+            pred_h = layer.forward_net(h_prev_det)
+            loss_f = torch.nn.functional.mse_loss(pred_h, t_curr)
+            loss_f.backward()
+
+            if i > 0:
+                layer.opt_g.zero_grad()
+                inv_out = layer.inverse_net(pred_h.detach())
+                loss_g = torch.nn.functional.mse_loss(inv_out, h_prev_det)
+                loss_g.backward()
+                layer.opt_g.step()
+
+            layer.opt_f.step()
+
+    def kernel_train_step(
         self,
         model: torch.nn.Module,
         config: KernelConfig | None,
@@ -256,74 +339,19 @@ class TPKernelBackend:
             ``{"loss", "accuracy", "logits"}`` or ``None`` when the model does
             not expose the DTP surface (caller falls through to ``train_step``).
         """
-        layers = getattr(model, "layers", None)
-        out_layer = getattr(model, "out_layer", None)
+        layers, out_layer, out_opt, criterion, target_lr = self._get_dtp_config(model)
         if not layers or out_layer is None:
             return None
 
         self._forward_layers = [layer.forward_net[0] for layer in layers]
         self._inverse_layers = [layer.inverse_net[0] for layer in layers]
 
-        out_opt = getattr(model, "out_opt", None)
-        criterion = getattr(model, "criterion", None) or torch.nn.CrossEntropyLoss()
-        target_lr = float(getattr(model, "target_lr", self._target_lr))
-
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
-        x = x.to(device=self._device, dtype=self._dtype)
-        y = y.to(device=self._device)
-
-        hs: list[Tensor] = [x]
-        h = x
-        for layer in layers:
-            h = layer.forward_net(h)
-            hs.append(h)
-        out = out_layer(h)
-
-        loss = criterion(out, y)
-
-        if out_opt is not None:
-            out_opt.zero_grad()
-            loss.backward()
-            out_opt.step()
-
-        t = h.clone().detach().requires_grad_(True)
-        with torch.enable_grad():
-            out_t = out_layer(t)
-            loss_t = criterion(out_t, y)
-            grad_t = torch.autograd.grad(loss_t, t)[0]
-        with torch.no_grad():
-            t_target = h - target_lr * grad_t
-
-        targets: list[Tensor] = [t_target]
-
-        for i in reversed(range(len(layers))):
-            layer = layers[i]
-            if i > 0:
-                h_prev = hs[i].detach()
-                h_curr = hs[i + 1].detach()
-                t_curr = targets[-1]
-                with torch.no_grad():
-                    t_prev = (
-                        h_prev - layer.inverse_net(h_curr) + layer.inverse_net(t_curr)
-                    )
-                    targets.append(t_prev)
-
-            t_curr = targets[-len(targets)]
-            h_prev_det = hs[i].detach()
-            layer.opt_f.zero_grad()
-            pred_h = layer.forward_net(h_prev_det)
-            loss_f = torch.nn.functional.mse_loss(pred_h, t_curr)
-            loss_f.backward()
-
-            if i > 0:
-                layer.opt_g.zero_grad()
-                inv_out = layer.inverse_net(pred_h.detach())
-                loss_g = torch.nn.functional.mse_loss(inv_out, h_prev_det)
-                loss_g.backward()
-                layer.opt_g.step()
-
-            layer.opt_f.step()
+        x, y = self._prepare_inputs(x, y)
+        hs, h = self._forward_pass(layers, x)
+        out, loss = self._update_output_layer(out_layer, h, y, out_opt, criterion)
+        t_target = self._compute_target(h, out_layer, y, criterion, target_lr)
+        targets = self._propagate_targets(layers, hs, t_target)
+        self._fit_forward_inverse(layers, hs, targets)
 
         accuracy = (out.argmax(dim=1) == y).float().mean().item()
         return {

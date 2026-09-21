@@ -460,7 +460,88 @@ class AblationStudy:
         variances.sort(key=lambda x: x[1] if pd.notna(x[1]) else 0.0, reverse=True)
         return [col for col, var in variances]
 
-    def generate_report(  # ruff: ignore[complex-structure]
+    def _save_raw_data(self, df, output_dir: Path, report_paths: dict):
+        """Save raw CSV and JSON summary."""
+        csv_path = output_dir / "ablation_results.csv"
+        df.to_csv(csv_path, index=False)
+        report_paths["csv"] = csv_path
+
+        summary = {
+            "n_experiments": len(df),
+            "n_successful": int(df["success"].sum()),
+            "dimensions": list(self.dimensions.keys()),
+            "baseline_accuracy": self._baseline_result.val_accuracy
+            if self._baseline_result
+            else None,
+            "critical_params": self.identify_critical_hyperparams(),
+            "leave_one_out": [asdict(r) for r in self.run_leave_one_out()],
+        }
+
+        sobol = self._compute_sobol_safe()
+        if sobol:
+            summary["sobol_first_order"] = sobol.first_order
+            summary["sobol_total_order"] = sobol.total_order
+            summary["sobol_second_order"] = {
+                f"{a}×{b}": v for (a, b), v in sobol.second_order.items()
+            }
+
+        json_path = output_dir / "ablation_summary.json"
+        with Path(json_path).open("w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2, default=str)
+        report_paths["json"] = json_path
+        return summary, sobol
+
+    def _compute_sobol_safe(self):
+        """Compute Sobol indices with graceful fallback."""
+        try:
+            return self.compute_sobol_indices(n_samples=500)
+        except ImportError:
+            return None
+
+    def _generate_plots(self, df, output_dir: Path, sobol, report_paths: dict):
+        """Generate and save all plots."""
+        dim_names = list(self.dimensions.keys())
+        for i, p1 in enumerate(dim_names):
+            for p2 in dim_names[i + 1 :]:
+                if p1 in df.columns and p2 in df.columns:
+                    fig = self.plot_sensitivity_heatmap(p1, p2)
+                    fig.savefig(
+                        output_dir / f"heatmap_{p1}_vs_{p2}.png",
+                        dpi=150,
+                        bbox_inches="tight",
+                    )
+                    plt.close(fig)
+
+        fig = self.plot_leave_one_out(self.run_leave_one_out())
+        fig.savefig(output_dir / "leave_one_out.png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        report_paths["loo_plot"] = output_dir / "leave_one_out.png"
+
+        if sobol:
+            fig = self.plot_sobol_indices(sobol)
+            fig.savefig(
+                output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight"
+            )
+            plt.close(fig)
+            report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
+
+    def _generate_formatted_reports(
+        self, output_dir: Path, summary: dict, df, loo_results, sobol, format: str, report_paths: dict
+    ):
+        """Generate HTML and/or Markdown reports."""
+        if format in ("html", "all"):
+            html_path = self._generate_html_report(
+                output_dir, summary, df, loo_results, sobol
+            )
+            report_paths["html"] = html_path
+
+        if format in ("markdown", "all"):
+            md_path = self._generate_markdown_report(
+                output_dir, summary, loo_results, sobol
+            )
+            report_paths["markdown"] = md_path
+
+    def generate_report(
         self,
         output_dir: str | Path = "results/ablation",
         include_plots: bool = True,
@@ -485,86 +566,15 @@ class AblationStudy:
             raise ValueError("No results to report. Call run() first.")
 
         report_paths = {}
+        summary, sobol = self._save_raw_data(df, output_dir, report_paths)
 
-        # Run leave-one-out if not done
-        loo_results = self.run_leave_one_out()
-
-        # Compute Sobol indices (optional, can be slow)
-        try:
-            sobol = self.compute_sobol_indices(n_samples=500)
-        except ImportError:
-            sobol = None
-
-        # Save raw data
-        csv_path = output_dir / "ablation_results.csv"
-        df.to_csv(csv_path, index=False)
-        report_paths["csv"] = csv_path
-
-        # Generate JSON summary
-        summary = {
-            "n_experiments": len(df),
-            "n_successful": int(df["success"].sum()),
-            "dimensions": list(self.dimensions.keys()),
-            "baseline_accuracy": self._baseline_result.val_accuracy
-            if self._baseline_result
-            else None,
-            "critical_params": self.identify_critical_hyperparams(),
-            "leave_one_out": [asdict(r) for r in loo_results],
-        }
-        if sobol:
-            summary["sobol_first_order"] = sobol.first_order
-            summary["sobol_total_order"] = sobol.total_order
-            summary["sobol_second_order"] = {
-                f"{a}×{b}": v for (a, b), v in sobol.second_order.items()
-            }
-
-        json_path = output_dir / "ablation_summary.json"
-        with Path(json_path).open("w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2, default=str)
-        report_paths["json"] = json_path
-
-        # Generate plots
         if include_plots:
-            # Pairwise heatmaps for all dimension pairs
-            dim_names = list(self.dimensions.keys())
-            for i, p1 in enumerate(dim_names):
-                for p2 in dim_names[i + 1 :]:
-                    if p1 in df.columns and p2 in df.columns:
-                        fig = self.plot_sensitivity_heatmap(p1, p2)
-                        fig.savefig(
-                            output_dir / f"heatmap_{p1}_vs_{p2}.png",
-                            dpi=150,
-                            bbox_inches="tight",
-                        )
-                        plt.close(fig)
+            self._generate_plots(df, output_dir, sobol, report_paths)
 
-            # Leave-one-out plot
-            fig = self.plot_leave_one_out(loo_results)
-            fig.savefig(output_dir / "leave_one_out.png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            report_paths["loo_plot"] = output_dir / "leave_one_out.png"
-
-            # Sobol plot
-            if sobol:
-                fig = self.plot_sobol_indices(sobol)
-                fig.savefig(
-                    output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight"
-                )
-                plt.close(fig)
-                report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
-
-        # Generate formatted report
-        if format in ("html", "all"):  # ruff: ignore[literal-membership]
-            html_path = self._generate_html_report(
-                output_dir, summary, df, loo_results, sobol
-            )
-            report_paths["html"] = html_path
-
-        if format in ("markdown", "all"):  # ruff: ignore[literal-membership]
-            md_path = self._generate_markdown_report(
-                output_dir, summary, loo_results, sobol
-            )
-            report_paths["markdown"] = md_path
+        loo_results = self.run_leave_one_out()
+        self._generate_formatted_reports(
+            output_dir, summary, df, loo_results, sobol, format, report_paths
+        )
 
         return report_paths
 
