@@ -254,12 +254,15 @@ The type system is now clean for the hot-path modules. All 10 high-priority comp
 - Added `EvaluationConfigProtocol` for evaluation_config parameter
 - Converted `_ModelView` from frozen dataclass to regular class with properties (compatible with Protocol)
 - Fixed `HyperparamSpec.choices` type from `list[object]` to `list[int | float | str]` for Optuna compatibility
-- All pyright errors resolved on both modules
+- **Fixed `experiment.py` type errors**: Added `Mapping` import, typed `TrialRunner.__init__` storage param as `HyperoptStorage | None`, added return type to `_build_model`, cast `construct_model` result, added type ignores for `dict[str, object]` config access, changed `_sink_completed` metrics param to `Mapping[str, object]` (covariant), added proper int casting with type ignores for config.get() calls
+- All pyright errors resolved on all 4 hyperopt modules (analysis.py, experiment.py, hyperparameter_metamodel.py, optuna_bridge.py)
 
 ### Verification
 - ✅ Core tests pass: 39 passed
-- ✅ Type checking: pyright clean on both modules
-- ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on both modules
+- ✅ Hyperopt unit tests pass: 21 passed (`test_hyperopt_analysis.py`, `test_hyperopt_portfolio.py`)
+- ✅ Integration demos pass: `test_demo_swap_credit`, `test_demo_compose_6axis`
+- ✅ Type checking: pyright clean on all 4 hyperopt modules
+- ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on all 4 hyperopt modules
 
 ### Improvement Opportunities (for future passes)
 1. **`HyperparameterMetamodel.validate_config`** — incomplete implementation (missing `requires` validation)
