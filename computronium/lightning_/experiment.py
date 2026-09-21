@@ -57,7 +57,7 @@ def run_pl_trial(
         logger=False,
     )
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         trainer.fit(module, train_loader, val_loader)
         metrics = trainer.callback_metrics
         if "val_acc" in metrics:
@@ -113,7 +113,7 @@ def run_pl_trial_with_wandb(
         enable_wandb=True,
     )
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         trainer.fit(module, train_loader, val_loader)
         metrics = trainer.callback_metrics
         if "val_acc" in metrics:

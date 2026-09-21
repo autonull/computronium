@@ -175,7 +175,7 @@ class CrossDomainBenchmarkSuite:
         from computronium.core.trainer import CoreTrainer, TrainerConfig
         from computronium.experiment.param_estimator import resolve_native_model
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             config = TrainerConfig(
                 model=model_name,
                 task=task.name,

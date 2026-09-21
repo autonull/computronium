@@ -256,7 +256,7 @@ class ValidationTrack:
 
         start_time = time.time()
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Execute validation
             # Tracks assume self-contained or use global settings.
             # Pass verifier props if needed.

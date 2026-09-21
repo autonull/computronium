@@ -328,7 +328,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_depth = model_df["depth"].median()
             width_df = model_df[model_df["depth"] == median_depth]
             if len(width_df) >= 3:
-                try:  # noqa: too-many-statements-in-try-clause
+                try:  # noqa: PLR0915
                     params = width_df["params"].values
                     acc = width_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)
@@ -344,7 +344,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_width = model_df["width"].median()
             depth_df = model_df[model_df["width"] == median_width]
             if len(depth_df) >= 3:
-                try:  # noqa: too-many-statements-in-try-clause
+                try:  # noqa: PLR0915
                     params = depth_df["params"].values
                     acc = depth_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)

@@ -287,7 +287,7 @@ class JointKernelCache:
         if self._enable_disk:
             with self._disk_lock:
                 entry_path = self._cache_dir / f"{key_str}.pkl"
-                try:  # noqa: too-many-statements-in-try-clause
+                try:  # noqa: PLR0915
                     with entry_path.open("wb") as f:
                         pickle.dump(artifact, f)
                     self._disk_index[key_str] = {

@@ -99,7 +99,7 @@ def get_lm_dataset(  # ruff: ignore[complex-structure, too-many-branches]
         )
 
     if name == "tiny_shakespeare":
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             dataset = load_dataset("tiny_shakespeare")
             split_data = dataset[split]
             texts = []

@@ -121,7 +121,7 @@ class DionUpdate:
         max_rank = min(gradient.shape)
         rank = min(rank, max_rank)
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Gradient clipping
             max_norm = group_config.get("max_grad_norm", 10.0)
             grad_norm = gradient.norm()

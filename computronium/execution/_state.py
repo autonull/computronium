@@ -281,7 +281,7 @@ class FailureTracker:
     def _check_hyperparam_correlation(
         self, param: str, failure_type: str
     ) -> float | None:
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -305,7 +305,7 @@ class FailureTracker:
 
     def _detect_divergence_signatures(self) -> list[dict[str, object]]:
         recs = []
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             with _connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM failures WHERE failure_epoch < 2")
@@ -478,7 +478,7 @@ class ExperimentState:
         )
 
     def get_recent_tasks(self, limit: int = 10) -> list[str]:
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             cursor = self.storage.conn.cursor()
             cursor.execute(
                 "SELECT config_json FROM hyperopt_logs ORDER BY timestamp DESC LIMIT ?",

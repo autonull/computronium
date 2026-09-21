@@ -668,7 +668,7 @@ def _search_kb(state: DashboardState, query: str):
 
 def _run_fastapi_dashboard(state: DashboardState, config: DashboardConfig):  # ruff: ignore[complex-structure]
     """Run dashboard with FastAPI + simple HTML (fallback)."""
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import uvicorn
         from fastapi import FastAPI, WebSocket, WebSocketDisconnect
         from fastapi.responses import HTMLResponse

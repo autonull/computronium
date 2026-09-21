@@ -128,7 +128,7 @@ def _run_single_mep_experiment(config: MEPConfig, device: str) -> dict:
         device=device,
     )
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         trainer = CoreTrainer(trainer_config)
         start_time = time.time()
         history = trainer.fit()
@@ -259,7 +259,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
 
         # Two-way interactions
         for f1, f2 in itertools.combinations(factor_cols, 2):
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 # Create interaction groups
                 task_df[f"{f1}_{f2}"] = task_df[f1] + "_" + task_df[f2]
                 groups = [

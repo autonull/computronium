@@ -236,7 +236,7 @@ def visualize_signal_propagation(
     """
     Create visualizations for the signal propagation experiment.
     """
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         depths = results["depths"]
 
         plt.figure(figsize=(15, 10))

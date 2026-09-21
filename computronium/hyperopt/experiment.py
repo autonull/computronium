@@ -112,7 +112,7 @@ class TrialRunner:
             config=trial.config,
         )
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # 1. Create Model and Trainer
             model, trainer = self._create_model_and_trainer(trial, tracker)
 
@@ -423,7 +423,7 @@ def run_single_trial_task(  # ruff: ignore[complex-structure, too-many-branches,
 
     storage = None
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         storage = HyperoptStorage(str(db_path))
 
         # Create trial entry

@@ -299,7 +299,7 @@ def _apply_activation_derivative(
 
 
 # Triton kernels for fused FA operations
-try:  # noqa: too-many-statements-in-try-clause
+try:  # noqa: PLR0915
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice

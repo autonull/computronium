@@ -317,7 +317,7 @@ def test_backprop_credit():
 if __name__ == "__main__":
     print("Running credit assignment pre-flight checks...\n")
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         test_thermodynamic_contrast()
         test_random_projections_credit()
         test_dfa()

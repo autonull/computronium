@@ -147,7 +147,7 @@ def export_to_onnx(
 
     was_training = model.training
     model.eval()
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         model = model.to(device)
         dummy_input = torch.randn(*input_shape, device=device)
 

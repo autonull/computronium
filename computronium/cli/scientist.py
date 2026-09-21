@@ -221,7 +221,7 @@ def _run_experiment(coordinate: str, objective: str, device: str) -> dict:
         device,
     ]
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
         if result.returncode != 0:
             return {

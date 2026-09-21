@@ -229,7 +229,7 @@ class Verifier:
         from computronium.execution._state import FailureTracker
         from computronium.knowledge.kb import KnowledgeBase
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Map track status to experiment status
             status_map = {
                 "pass": "completed",

@@ -57,7 +57,7 @@ class CausalAnalyzer:
         Returns:
             Dict with causal analysis results.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import pandas as pd
 
             exps = self.list_experiments(limit=500)
@@ -151,7 +151,7 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {alpha, beta, E, A, B, r2}
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import numpy as np
             import pandas as pd
             from scipy.optimize import curve_fit
@@ -200,7 +200,7 @@ class CausalAnalyzer:
                 if len(model_df) < 10:
                     continue
 
-                try:  # noqa: too-many-statements-in-try-clause
+                try:  # noqa: PLR0915
                     X = np.column_stack([
                         model_df["n_params"].values,
                         model_df["n_data"].values,
@@ -262,7 +262,7 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {hyperparam: sensitivity_score}
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import numpy as np
             import pandas as pd
 
@@ -341,7 +341,7 @@ class CausalAnalyzer:
         Returns:
             Dict of failure_cluster -> {error_pattern, algorithms, tasks, count, characteristics}
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import numpy as np
             import pandas as pd
             from sklearn.cluster import DBSCAN
@@ -467,7 +467,7 @@ class CausalAnalyzer:
         Returns:
             Dict with tree structure and cluster assignments.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import numpy as np
             from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
             from sklearn.preprocessing import StandardScaler

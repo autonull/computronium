@@ -119,7 +119,7 @@ class KernelProfiler:
         backend: BackendType,
     ) -> BackendBenchmark:
         """Benchmark a single operation on a specific backend."""
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Prepare inputs
             inputs = self._prepare_inputs(shape, backend)
 
@@ -387,7 +387,7 @@ except ImportError:
     tl = None
 
 HAS_CUPY = False
-try:  # noqa: too-many-statements-in-try-clause
+try:  # noqa: PLR0915
     import cupy as cp
 
     if hasattr(cp, "cuda") and cp.cuda.is_available():

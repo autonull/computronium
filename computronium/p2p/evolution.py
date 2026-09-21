@@ -95,7 +95,7 @@ class P2PEvolution:
                 self._log(f"Could not lower priority: {e}")
 
         # Start DHT
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Try to bind to a port, with retries
             base_port = 8468 + random.randint(0, 1000)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
             for i in range(10):
@@ -180,7 +180,7 @@ class P2PEvolution:
         self._log("Joined P2P Mesh network.")
 
         while self.running:
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 # 1. Fetch Global Best
                 self._update_status("Syncing with Mesh...")
                 best_record = self.dht.get_best_model(self.task)

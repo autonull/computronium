@@ -153,7 +153,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         f"Validating coordinate: {coord['substrate']}/{coord['geometry']}/{coord['dynamics']}/{coord['plasticity']}/{coord['credit']}/{coord['update']}"
     )
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         # Build substrate
         substrate_map = {
             "digital": lambda: (DigitalSubstrate(), SubstrateConfig.digital()),

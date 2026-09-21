@@ -278,7 +278,7 @@ class KernelRegistry:
             if backend is None:
                 continue
 
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 if benchmark_fn is not None:
                     # Use custom benchmark function
                     time_ms = benchmark_fn(backend, shape)

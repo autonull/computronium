@@ -733,7 +733,7 @@ class InferenceServer:
         if not self.tensorrt_config.enabled:
             return
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import torch_tensorrt  # type: ignore  # ruff: ignore[blanket-type-ignore]
 
             self.model.eval()
@@ -820,7 +820,7 @@ class InferenceServer:
 
         start_time = time.perf_counter()
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Stack inputs
             batch_data = []
             for req in requests:
@@ -965,7 +965,7 @@ class _AppState:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             await self.server.start()
-            yield  # noqa: fallible-context-manager
+            yield  
             await self.server.stop()
 
         self.app = FastAPI(

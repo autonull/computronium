@@ -148,7 +148,7 @@ class ExperimentArchiver:
         Returns:
             Path to the created ZIP file, or None if failed.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             trial_name = f"trial_{trial_id}_{config.get('model', 'unknown')}"
             trial_dir = self.base_dir / trial_name
             trial_dir.mkdir(exist_ok=True)
@@ -307,7 +307,7 @@ class CheckpointManager:
             return
 
         conn = sqlite3.connect(self.db_path, timeout=10.0)
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             data = []
             for r in self.buffer:
                 train_acc = r.metrics.get(

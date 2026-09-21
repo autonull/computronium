@@ -831,7 +831,7 @@ class LLMHypothesisGenerator:
 
     def _generate_openai(self, context: str) -> list[Hypothesis]:
         """Generate using OpenAI API."""
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             from openai import OpenAI
 
             client = OpenAI(api_key=self.api_key)

@@ -118,7 +118,7 @@ class DynamicsAnalyzer:
 
             # Helper to check signature or try/except
             # We'll try passing kwargs.
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 # Most EqProp models (LoopedMLP, etc) support this
                 output = self.model(h, **kwargs)
 

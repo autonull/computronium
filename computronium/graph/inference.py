@@ -60,7 +60,7 @@ class InferenceSGD:
         Other nodes compute their activity via forward with predecessor activities.
         """
         activities: dict[str, torch.Tensor] = {}
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             topo_order = structure.topological_order()
             for node in topo_order:
                 preds = structure.get_predecessors(node)

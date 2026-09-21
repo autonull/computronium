@@ -268,7 +268,7 @@ class ExecutionEngine:
             self.num_workers,
         )
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Resolve configs first. This duplicates logic in _process_task a
             # bit, but is necessary to pass resolved configs to the runner.
             configs = []

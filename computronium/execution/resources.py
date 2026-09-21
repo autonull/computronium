@@ -91,7 +91,7 @@ class ResourceMonitor:
     def _check_gpu_overload(self) -> bool:
         """Check if GPU memory usage is too high on ALL available devices."""
         if torch and torch.cuda.is_available():
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 device_count = torch.cuda.device_count()
                 overloaded_devices = 0
                 for i in range(device_count):

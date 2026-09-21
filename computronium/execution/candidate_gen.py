@@ -628,7 +628,7 @@ class CandidateGenerator:
 
         # 1. Query FailureTracker via State for Hard Failures
         if hasattr(self.state, "get_failure_analysis"):  # ruff: ignore[too-many-nested-blocks]
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 analysis = self.state.get_failure_analysis()
                 recommendations = analysis.get("recommendations", [])
 

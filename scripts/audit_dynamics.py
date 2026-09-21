@@ -277,7 +277,7 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     # Check module's forward method source for in-place patterns
     import inspect
 
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         source = inspect.getsource(module.forward)
         # Look for in-place patterns: +=, -=, *=, /=, .add_(), .mul_(), etc.
         lines = source.split("\n")
@@ -342,7 +342,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
 
     # Check dynamics._settle_step source
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import inspect
 
         source = inspect.getsource(dynamics._settle_step)
@@ -376,7 +376,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     pred_dynamics = PredictiveSettlingDynamics(
         StateDynamicsConfig.predictive_settling()
     )
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import inspect
 
         source = inspect.getsource(pred_dynamics.settle)
@@ -410,7 +410,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     from computronium.ontology import SpikeIntegrationDynamics
 
     spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import inspect
 
         source = inspect.getsource(spike_dynamics.settle)
@@ -444,7 +444,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     from computronium.ontology import LazyStateDynamics
 
     lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import inspect
 
         source = inspect.getsource(lazy_dynamics.settle)
@@ -478,7 +478,7 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     from computronium.ontology import DiffusionDynamics
 
     diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
-    try:  # noqa: too-many-statements-in-try-clause
+    try:  # noqa: PLR0915
         import inspect
 
         source = inspect.getsource(diff_dynamics.settle)

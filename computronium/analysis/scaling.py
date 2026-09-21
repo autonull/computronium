@@ -136,7 +136,7 @@ def fit_power_law(  # ruff: ignore[complex-structure, too-many-locals, too-many-
             log_x_v = np.log(x[valid])
             log_y_v = np.log(y_shifted[valid])
             A = np.vstack([log_x_v, np.ones_like(log_x_v)]).T
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 b_log_v, log_a_v = np.linalg.lstsq(A, log_y_v, rcond=None)[0]
                 a_v = np.exp(log_a_v)
                 b_v = b_log_v
@@ -161,7 +161,7 @@ def fit_power_law(  # ruff: ignore[complex-structure, too-many-locals, too-many-
         def power_law(x, a, b, c):
             return a * np.power(x, b) + c
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             popt, _ = curve_fit(power_law, x, y, p0=[1.0, -0.5, 0.0], maxfev=5000)
             a, b, c = popt
             y_pred = power_law(x, a, b, c)

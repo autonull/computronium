@@ -420,7 +420,7 @@ def run_audit() -> dict:
 
     for test_fn in tests:
         print(f"\nRunning {test_fn.__name__}...")
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             result = test_fn()
             results.append(result)
             status = "PASS" if result.passed else "FAIL"

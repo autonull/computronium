@@ -103,7 +103,7 @@ class RobustnessEvaluator:
         """
         metrics = {}
         scores = []
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # 1. Setup Task & Model
             task = create_task(self.task_name, device=self.device, quick_mode=True)
             task.setup()
@@ -382,7 +382,7 @@ class RobustnessEvaluator:
         if acc_clean == 0:
             return 0.0
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             h_adv = h_clean.clone().detach()
 
             if attack_type == "fgsm":
@@ -439,7 +439,7 @@ class RobustnessEvaluator:
         """
         Generate and save saliency maps for interpretation.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             if not self.output_dir:
                 return
 

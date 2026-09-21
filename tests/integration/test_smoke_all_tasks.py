@@ -98,7 +98,7 @@ class TestSmokeAllTasks(unittest.TestCase):
             model = SimpleLM(output_dim)
 
         # Trainer
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             trainer = task.create_trainer(model)
             # Run one epoch (or episode)
             # For RL, episodes_per_epoch=1 to be fast

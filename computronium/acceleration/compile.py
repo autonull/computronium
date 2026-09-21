@@ -393,7 +393,7 @@ class EqPropTritonFunction(Function):
     @staticmethod
     def _init_triton():
         if EqPropTritonFunction._triton_kernel is None and HAS_TRITON:
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
                 from triton.language.extra import (

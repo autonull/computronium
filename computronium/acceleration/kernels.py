@@ -165,7 +165,7 @@ if _detected_cuda_path:
         os.environ["PATH"] = str(bin_path) + os.pathsep + os.environ.get("PATH", "")
 
 # Try to import CuPy for GPU
-try:  # noqa: too-many-statements-in-try-clause
+try:  # noqa: PLR0915
     import cupy as cp
 
     # Guard against mock/stub cupy (e.g. from test conftest mocking)

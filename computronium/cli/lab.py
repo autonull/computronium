@@ -238,7 +238,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:  # ruf
                 hasattr(system.geometry, "params")
                 and free_state.activations is not None
             ):
-                try:  # noqa: too-many-statements-in-try-clause
+                try:  # noqa: PLR0915
                     # Crude activity-norm proxy for σ_max(J); never claim ρ(J) from this
                     acts = free_state.activations
                     if isinstance(acts, list):

@@ -154,7 +154,7 @@ class TileMeshServicer(_ServicerBase):
         context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.BoundarySyncResponse:
         """Receive boundary tile activations from neighbor."""
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             with self._lock:
                 for tile_id, activation_proto in zip(
                     request.boundary_tile_ids, request.boundary_activations

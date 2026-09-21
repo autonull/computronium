@@ -20,7 +20,7 @@ from computronium.acceleration.kernel_backend import (
 # Triton Kernels for Tile Substrate
 # ──────────────────────────────────────────────
 
-try:  # noqa: too-many-statements-in-try-clause
+try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 

@@ -98,7 +98,7 @@ class ResearchSynthesizer:
         Returns:
             Dict[str, object]: Structured insights dictionary.
         """
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             conn = sqlite3.connect(self.db_path)
 
             # Load Data with full metadata
@@ -255,7 +255,7 @@ class ResearchSynthesizer:
             return []
 
         ablations = []
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Helper to check if trial is ablation
             def is_ablation(row: pd.Series) -> bool:
                 if "config" in row and isinstance(row["config"], dict):
@@ -299,7 +299,7 @@ class ResearchSynthesizer:
         if df.empty or "model_name" not in df.columns:
             return []
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             from scipy import stats
 
             model_accs = {}
@@ -357,7 +357,7 @@ class ResearchSynthesizer:
         if df.empty or "model_name" not in df.columns:
             return "No model data available."
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             summary = (
                 df
                 .groupby("model_name")
@@ -529,7 +529,7 @@ class ResearchSynthesizer:
         if df.empty:
             return "No failures recorded."
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             if "failure_type" in df.columns:
                 counts = df["failure_type"].value_counts().to_dict()
 

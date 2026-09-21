@@ -730,7 +730,7 @@ class OntologyExplorer:
     async def run_quick_test(self):
         """Run a quick training test with the selected configuration."""
         self.output_log.push("Starting quick test...")
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             # Use the lab inspect-state command as a test
             import subprocess  # ruff: ignore[suspicious-subprocess-import]
 

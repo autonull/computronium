@@ -109,7 +109,7 @@ class InterferenceMonitor:
             if self._stop_event.wait(self.interval):
                 break
 
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 # System-wide CPU (avg across cores)
                 sys_cpu = psutil.cpu_percent(interval=None)
 

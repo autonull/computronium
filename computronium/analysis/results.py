@@ -140,7 +140,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[comple
         trial["user_attrs"] = user_attrs
 
         # Merge with hyperopt_logs for detailed metrics (param_count, time)
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             cursor.execute(
                 """
                 SELECT param_count, iteration_time

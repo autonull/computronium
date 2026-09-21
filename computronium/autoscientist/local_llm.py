@@ -72,7 +72,7 @@ class OllamaBackend(LocalLLMBackend):
         if self._available is not None:
             return self._available
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             import urllib.request
 
             # Check if Ollama is running
@@ -590,7 +590,7 @@ class LocalLLMHypothesisGenerator:
 
         prompt = f"{self._system_prompt}\n\nContext:\n{context}\n\nGenerate 3-5 hypotheses as JSON:"
 
-        try:  # noqa: too-many-statements-in-try-clause
+        try:  # noqa: PLR0915
             response = self.backend.generate(
                 prompt,
                 max_tokens=1024,
@@ -751,7 +751,7 @@ class OllamaAutoPull:
         payload = json.dumps({"name": model, "stream": show_progress}).encode()
 
         for attempt in range(self.max_retries):  # ruff: ignore[too-many-nested-blocks]
-            try:  # noqa: too-many-statements-in-try-clause
+            try:  # noqa: PLR0915
                 req = urllib.request.Request(  # ruff: ignore[suspicious-url-open-usage]
                     f"{self.base_url}/api/pull",
                     data=payload,
