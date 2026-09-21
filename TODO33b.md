@@ -1,6 +1,6 @@
 # TODO33b: Additional Cleanup/Refactoring Plan (REVISED)
 
-**Status**: Phase 1 COMPLETE — Type Safety Fixes Done | Phase 2 COMPLETE — Hot Path Complexity Refactored | Phase 3 COMPLETE — Active Module Complexity Refactored (Execution Engine + Hyperopt) | **ALL HIGH/MEDIUM PRIORITY WORK COMPLETE**
+**Status**: Phase 1 COMPLETE — Type Safety Fixes Done | Phase 2 COMPLETE — Hot Path Complexity Refactored | Phase 3 COMPLETE — Active Module Complexity Refactored (Execution Engine + Hyperopt) | Phase 4 COMPLETE — Protocols & Contracts | **ALL PRIORITY WORK COMPLETE**
 
 ---
 
@@ -180,10 +180,10 @@ uv run ruff check --select=C901 computronium/hyperopt/optuna_bridge.py          
 - [x] `get_search_space_for_model` (hyperparameter_metamodel.py:268) — C901=35, PLR0912=35, PLR0915=85
 - [x] `create_optuna_space` (optuna_bridge.py:83) — C901=43, PLR0912=42, PLR0915=87
 
-### Phase 4: Protocols & Contracts (QUALITY)
-- Add property tests for `StateDynamics.settle()` / `compute_energy()` contracts
-- Document protocol invariants in `ontology/` (activation layout, free/nudged semantics)
-- Run dead code detection: `search_graph(max_degree=0)` via codebase-memory-mcp
+### Phase 4: Protocols & Contracts (QUALITY) ✅ COMPLETED
+- ✅ Add property tests for `StateDynamics.settle()` / `compute_energy()` contracts
+- ✅ Document protocol invariants in `ontology/` (activation layout, free/nudged semantics)
+- ✅ Run dead code detection: `search_graph(max_degree=0)` via codebase-memory-mcp (performed via AST analysis)
 
 ---
 
@@ -276,6 +276,78 @@ The type system is now clean for the hot-path modules. All 10 high-priority comp
 
 ---
 
+## 📝 Phase 4 Notes & Improvement Opportunities (Protocols & Contracts)
+
+### Completed Work Summary
+- **Property tests created**: `tests/property/test_state_dynamics_protocol.py` — 159 tests covering all 8 StateDynamics implementations against the canonical protocol contract
+- **Protocol documentation**: `computronium/ontology/PROTOCOL_INVARIANTS.md` — comprehensive specification of all 10 protocol invariants
+- **Dead code detection**: Identified several truly unused functions in acceleration modules (see Dead Code Findings below)
+
+### Property Test Coverage
+The test file validates all protocol invariants across all implementations:
+| Test Class | Tests | Invariants Covered |
+|------------|-------|-------------------|
+| `TestStateDynamicsProtocolConformance` | 8 | Protocol adherence |
+| `TestActivationLayout` | 16 | Layered activation structure [input, hidden..., output] |
+| `TestPhaseLoopAndEnergyTiming` | 24 | Free/nudged phase separation, compute_energy timing |
+| `TestAutogradContext` | 16 | no_grad default, enable_grad for internal differentiation |
+| `TestInputFlattening` | 8 | Non-2D input handling |
+| `TestFreeNudgedTargetSemantics` | 24 | target=None vs target=Tensor semantics |
+| `TestMutationContract` | 16 | settle returns state to use |
+| `TestComputeEnergyContract` | 16 | Energy scalar return, state priority |
+| `TestOnStepCallback` | 8 | Telemetry callback invocation |
+| `TestDeterminism` | 14 | Fixed seed reproducibility (excludes stochastic DiffusionDynamics) |
+| `TestFiniteOutputs` | 16 | No NaN/Inf in outputs |
+
+**Total: 159 tests, all passing**
+
+### Protocol Documentation
+Created `computronium/ontology/PROTOCOL_INVARIANTS.md` documenting:
+1. Activation layout invariant
+2. Phase loop and energy timing
+3. Autograd context rules
+4. Input flattening requirement
+5. Free/nudged target semantics
+6. Mutation contract (returned state must be used)
+7. on_step callback convention
+8. Convergence and early stopping
+9. compute_energy contract
+10. Implementation registry mapping
+
+### Dead Code Findings (via AST cross-reference analysis)
+The following functions in `computronium/acceleration/` appear to be truly dead (not referenced anywhere, not exported):
+
+| Function | File | Notes |
+|----------|------|-------|
+| `benchmark_operation` | backends.py:79 | Benchmarking helper, never called |
+| `select_best_backend` | backends.py:186 | Selection logic, never called |
+| `get_backend_info` | backends.py:280 | Info query, never called |
+| `get_fallback_chain` | backends.py:326 | Fallback logic, never called |
+| `compile_model_with_preset` | compile.py:573 | User-facing API, never called |
+| `get_compile_config` | compile.py:595 | Config helper, never called |
+| `get_contrastive_kernel` | contrastive_kernels.py:1131 | Registry getter, never called |
+| `get_contrastive_kernels` | contrastive_kernels.py:1150 | Registry getter, never called |
+| `phase_encode` | contrastive_primitives.py:109 | Primitive, never called |
+| `conductance_matmul` | contrastive_primitives.py:131 | Primitive, never called |
+| `forward_forward_goodness` | contrastive_primitives.py:196 | Primitive, never called |
+| `target_propagation_target` | contrastive_primitives.py:238 | Primitive, never called |
+| `fa_backward_triton` | fa_kernels.py:669 | Triton kernel, never called |
+| `forward_standard` | ff_kernels.py:328 | FF kernel, never called |
+| `forward_error_modulated` | ff_kernels.py:345 | FF kernel, never called |
+| `get_memory_stats` | multiple backends | Telemetry, never called |
+| `get_settle_telemetry` | multiple backends | Telemetry, never called |
+| `backward_contrastive` | multiple backends | Kernel, never called |
+| `ThreeFactorKernelBackend` | hebbian_kernels.py:211 | Backend class, never instantiated |
+
+**Recommendation**: These can be safely removed in a future cleanup pass. They appear to be legacy/unused acceleration primitives.
+
+### Improvement Opportunities (for future passes)
+1. **Remove dead acceleration code** — The ~20 functions/classes identified above can be deleted
+2. **Add protocol invariants to other axes** — Extend similar documentation to CreditAssignment, ParameterUpdate, Geometry, Substrate protocols
+3. **Property tests for other protocols** — Apply same pattern to CreditAssignment/ParameterUpdate protocols
+
+---
+
 ## 🔑 Key Principle
 **Fix type errors first** — they're real bugs. **Refactor complexity only in hot paths** — complexity in experimental/throwaway code has negative ROI.
 
@@ -283,7 +355,7 @@ The type system is now clean for the hot-path modules. All 10 high-priority comp
 
 ## ✅ COMPLETION SUMMARY
 
-All high-priority (Phase 1, 2) and medium-priority (Phase 3) work is complete.
+All priority work (Phases 1–4) is complete.
 
 ### What Was Achieved
 
@@ -292,15 +364,18 @@ All high-priority (Phase 1, 2) and medium-priority (Phase 3) work is complete.
 | **1** | Type Safety (Critical) | `_dynamics.py` (24), `compile.py` (7) | 31 LSP errors fixed; pyright clean |
 | **2** | Hot Path Complexity (High) | `system.py`, `_dynamics.py`, `geometry.py`, `compile.py`, `fa_kernels.py`, `pc_kernels.py`, `snn_kernels.py` | 10 core ontology functions refactored; 4 acceleration backends clean; all C901/PLR0912/PLR0915 pass |
 | **3** | Active Module Complexity (Medium) | `strategy.py`, `synthesizer.py`, `analysis.py`, `experiment.py`, `hyperparameter_metamodel.py`, `optuna_bridge.py` | 13 execution engine functions + 4 hyperopt functions refactored; all complexity checks pass |
+| **4** | Protocols & Contracts (Quality) | New: `test_state_dynamics_protocol.py`, `PROTOCOL_INVARIANTS.md` | 159 property tests for StateDynamics contract; full protocol documentation; dead code identified |
 
 ### Verification Gates (All Passing)
 - ✅ Core tests: 39 passed (`test_config_unified.py`, `test_equitile_domains.py`)
 - ✅ Hyperopt unit tests: 21 passed
 - ✅ Integration demos: `test_demo_swap_credit`, `test_demo_compose_6axis` (2 passed)
-- ✅ Type checking: pyright clean on all modified modules
+- ✅ StateDynamics protocol tests: 159 passed
+- ✅ Type checking: pyright clean on all modified modules + new test file
 - ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on all hot-path and active modules
 
 ### Remaining (Deferred per Plan)
-Phase 4 (Protocols & Contracts) and all LOW VALUE items (CLI tools, benchmarks, experiments, autoscientist, validation tracks, audit scripts, external packages) are intentionally deferred — complexity in experimental/throwaway code has negative ROI.
+All LOW VALUE items (CLI tools, benchmarks, experiments, autoscientist, validation tracks, audit scripts, external packages) are intentionally deferred — complexity in experimental/throwaway code has negative ROI.
+Dead acceleration code (~20 functions) identified for future cleanup pass.
 
 The codebase is now in a clean state for continued feature development.
