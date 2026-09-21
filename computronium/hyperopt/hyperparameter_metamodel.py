@@ -1,5 +1,23 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol
+
+
+class ModelSpecProtocol(Protocol):
+    """Protocol for model specification objects used by the metamodel."""
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def family(self) -> str: ...
+
+    @property
+    def model_type(self) -> str: ...
+
+    @property
+    def credit_assignment_type(self) -> str: ...
+
 
 __all__ = [
     "EQUILIBRIUM_HYPERPARAMS",
@@ -12,6 +30,7 @@ __all__ = [
     "HyperparamScope",
     "HyperparamSpec",
     "HyperparameterMetamodel",
+    "ModelSpecProtocol",
 ]
 
 
@@ -45,8 +64,8 @@ class HyperparamSpec:
     range_max: float | None = None
     scale: str | None = None  # "log", "linear", "int"
 
-    # For categorical
-    choices: list[object] | None = None
+    # For categorical/discrete with choices
+    choices: list[int | float | str] | None = None
 
     # Conditional dependencies
     requires: list[str] | None = None  # Other hyperparams that must exist
@@ -54,7 +73,7 @@ class HyperparamSpec:
 
     # Metadata
     description: str = ""
-    default: object = None
+    default: int | float | str | None = None
 
 
 # Universal hyperparameters (apply to ALL algorithms)
@@ -265,8 +284,8 @@ class HyperparameterMetamodel:
         )
         self._spec_dict = {spec.name: spec for spec in self.all_specs}
 
-    def get_search_space_for_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
-        self, model_spec: object, task_name: str | None = None
+    def get_search_space_for_model(
+        self, model_spec: ModelSpecProtocol, task_name: str | None = None
     ) -> dict[str, HyperparamSpec]:
         """
         Return the appropriate hyperparameters for a given model and task.
@@ -275,100 +294,105 @@ class HyperparameterMetamodel:
         Also applies constraints based on task size
         (e.g., small tasks get smaller models).
         """
-        applicable_scopes = {HyperparamScope.UNIVERSAL}
+        applicable_scopes = self._determine_applicable_scopes(model_spec)
+        search_space = self._filter_specs_by_scopes(applicable_scopes)
+        search_space = self._apply_transformer_params(model_spec, search_space)
+        search_space = self._apply_activation_constraints(model_spec, search_space)
+        search_space = self._apply_eqprop_constraints(model_spec, search_space)
+        search_space = self._apply_small_task_constraints(task_name, search_space)
+        search_space = self._apply_vision_model_constraints(model_spec, search_space, task_name)
+        search_space = self._apply_rl_constraints(model_spec, search_space)
+        return search_space
 
-        # Map model families to hyperparameter scopes
+    def _determine_applicable_scopes(self, model_spec: ModelSpecProtocol) -> set[HyperparamScope]:
+        """Determine which hyperparameter scopes apply to a model."""
+        applicable_scopes = {HyperparamScope.UNIVERSAL}
         family = model_spec.family.lower()
         model_type = model_spec.model_type.lower()
 
-        if family == "baseline":
-            # Backprop uses gradient-based hyperparams
-            applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
+        # Direct family-to-scope mappings
+        family_scopes = {
+            "baseline": HyperparamScope.GRADIENT_BASED,
+            "backprop": HyperparamScope.GRADIENT_BASED,
+            "backpropagation": HyperparamScope.GRADIENT_BASED,
+            "eqprop": HyperparamScope.EQUILIBRIUM,
+            "hebbian": HyperparamScope.HEBBIAN,
+            "fa": HyperparamScope.FEEDBACK_ALIGNMENT,
+            "feedback_alignment": HyperparamScope.FEEDBACK_ALIGNMENT,
+            "mep": HyperparamScope.FORWARD_ONLY,
+            "forward_only": HyperparamScope.FORWARD_ONLY,
+            "forward-only": HyperparamScope.FORWARD_ONLY,
+            "target_prop": HyperparamScope.TARGET_PROP,
+            "target-prop": HyperparamScope.TARGET_PROP,
+            "spiking": HyperparamScope.SPIKING,
+            "predictive_coding": HyperparamScope.PREDICTIVE_CODING,
+            "predictive-coding": HyperparamScope.PREDICTIVE_CODING,
+            "tile": HyperparamScope.EQUILIBRIUM,
+        }
 
-        elif family == "eqprop":
-            # EqProp uses equilibrium hyperparams, NO optimizer
-            applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-
+        if family in family_scopes:
+            applicable_scopes.add(family_scopes[family])
         elif family == "hybrid":
-            # Hybrid models (e.g., Adaptive FA) might use both
-            # Need to check model_type for specifics
-            if "fa" in model_type or "alignment" in model_type:
-                applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
-            if "equilibrium" in model_type or "eq" in model_type:
-                applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-            if "hebbian" in model_type:
-                applicable_scopes.add(HyperparamScope.HEBBIAN)
-
-            # Hybrids might also use gradient methods (often do)
-            applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
-
-        elif family == "hebbian":
-            applicable_scopes.add(HyperparamScope.HEBBIAN)
-
-        elif family == "fa" or family == "feedback_alignment":  # ruff: ignore[repeated-equality-comparison]
-            applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
-
-        elif family == "mep" or family == "forward_only" or family == "forward-only":  # ruff: ignore[repeated-equality-comparison]
-            applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
-
-        elif family == "target_prop" or family == "target-prop":  # ruff: ignore[repeated-equality-comparison]
-            applicable_scopes.add(HyperparamScope.TARGET_PROP)
-
-        elif family == "spiking":
-            applicable_scopes.add(HyperparamScope.SPIKING)
-
-        elif family == "predictive_coding" or family == "predictive-coding":  # ruff: ignore[repeated-equality-comparison]
-            applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
-
-        elif family == "tile":
-            applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-
-        elif family == "backprop" or family == "backpropagation":  # ruff: ignore[repeated-equality-comparison]
-            applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
-
-        # Fallback: infer from credit_assignment_type if family not recognized
+            self._add_hybrid_scopes(model_type, applicable_scopes)
         else:
-            cat = model_spec.credit_assignment_type.lower()
-            if cat == "equilibrium":
+            self._add_fallback_scopes(model_spec, applicable_scopes)
+
+        return applicable_scopes
+
+    def _add_hybrid_scopes(self, model_type: str, applicable_scopes: set[HyperparamScope]) -> None:
+        """Add scopes for hybrid model types."""
+        if "fa" in model_type or "alignment" in model_type:
+            applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
+        if "equilibrium" in model_type or "eq" in model_type:
+            applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
+        if "hebbian" in model_type:
+            applicable_scopes.add(HyperparamScope.HEBBIAN)
+        applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
+
+    def _add_fallback_scopes(self, model_spec: ModelSpecProtocol, applicable_scopes: set[HyperparamScope]) -> None:
+        """Add scopes based on credit_assignment_type when family not recognized."""
+        cat = model_spec.credit_assignment_type.lower()
+        match cat:
+            case "equilibrium":
                 applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-            elif cat == "hebbian":
+            case "hebbian":
                 applicable_scopes.add(HyperparamScope.HEBBIAN)
-            elif cat == "target":
+            case "target":
                 applicable_scopes.add(HyperparamScope.TARGET_PROP)
-            elif cat == "forward-only":
+            case "forward-only":
                 applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
-            elif cat == "spiking":
+            case "spiking":
                 applicable_scopes.add(HyperparamScope.SPIKING)
-            elif cat == "predictive-coding":
+            case "predictive-coding":
                 applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
-            elif cat == "gradient":
+            case "gradient":
                 applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
 
-        # Filter specs by applicable scopes
+    def _filter_specs_by_scopes(self, applicable_scopes: set[HyperparamScope]) -> dict[str, HyperparamSpec]:
+        """Filter hyperparameter specs by applicable scopes."""
         search_space = {}
         for spec in self.all_specs:
             if spec.scope in applicable_scopes:
                 search_space[spec.name] = spec
+        return search_space
 
-        # Add transformer-specific params when model_type indicates a transformer
+    def _apply_transformer_params(
+        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
+    ) -> dict[str, HyperparamSpec]:
+        """Add transformer-specific params when model_type indicates a transformer."""
         model_type = getattr(model_spec, "model_type", "") or ""
         if "transformer" in model_type.lower():
-            applicable_scopes.add(HyperparamScope.TRANSFORMER)
             for spec in self.all_specs:
-                if (
-                    spec.scope == HyperparamScope.TRANSFORMER
-                    and spec.name not in search_space
-                ):
+                if spec.scope == HyperparamScope.TRANSFORMER and spec.name not in search_space:
                     search_space[spec.name] = spec
+        return search_space
 
-        # Apply algorithm-specific activation constraints
-        # Example: Holomorphic EqProp REQUIRES tanh (holomorphic)
+    def _apply_activation_constraints(
+        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
+    ) -> dict[str, HyperparamSpec]:
+        """Apply algorithm-specific activation constraints."""
         if "holomorphic" in model_spec.name.lower():
-            # Create a copy to not modify the global spec
             act_spec = self._spec_dict["activation"]
-            # We need a deep copy or just a new instance if we modify it
-            # Create a new HyperparamSpec instance with modified choices
-            # (cannot modify frozen dataclass fields in place)
             constrained_act = HyperparamSpec(
                 name=act_spec.name,
                 scope=act_spec.scope,
@@ -376,13 +400,16 @@ class HyperparameterMetamodel:
                 choices=["tanh"],
             )
             search_space["activation"] = constrained_act
+        return search_space
 
-        # Constraint: EqProp is computationally heavy (steps * layers), so limit depth
-        if family == "eqprop" or "eqprop" in model_spec.name.lower():  # ruff: ignore[collapsible-if]
+    def _apply_eqprop_constraints(
+        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
+    ) -> dict[str, HyperparamSpec]:
+        """Apply EqProp-specific constraints (limit depth due to computational cost)."""
+        family = model_spec.family.lower()
+        if family == "eqprop" or "eqprop" in model_spec.name.lower():
             if "num_layers" in search_space:
                 layer_spec = self._spec_dict["num_layers"]
-                # EqProp effectively unrolls network 'steps' times.
-                # 6 layers * 30 steps = 180 effective layers.
                 constrained_layers = HyperparamSpec(
                     name=layer_spec.name,
                     scope=layer_spec.scope,
@@ -391,76 +418,100 @@ class HyperparameterMetamodel:
                     default=3,
                 )
                 search_space["num_layers"] = constrained_layers
+        return search_space
 
-        # Constraint: Small Tasks (Efficiency)
-        # For small datasets, we don't need huge models. Constrain to smaller sizes.
-        is_small_task = task_name and task_name in [  # ruff: ignore[literal-membership]
+    def _apply_small_task_constraints(
+        self, task_name: str | None, search_space: dict[str, HyperparamSpec]
+    ) -> dict[str, HyperparamSpec]:
+        """Apply constraints for small tasks (digits, MNIST variants)."""
+        is_small_task = task_name and task_name in {
             "digits",
             "usps",
             "mnist",
             "kmnist",
             "fashion_mnist",
-        ]
+        }
+        if not is_small_task:
+            return search_space
 
-        if is_small_task:
-            # Max Hidden Dim: 128
-            if "hidden_dim" in search_space:
-                hd_spec = search_space["hidden_dim"]
-                constrained_hd = HyperparamSpec(
-                    name=hd_spec.name,
-                    scope=hd_spec.scope,
-                    param_type=hd_spec.param_type,
-                    choices=[c for c in hd_spec.choices if c <= 128] or [64],
-                    default=min(hd_spec.default, 128),
-                )
-                search_space["hidden_dim"] = constrained_hd
-
-            # Max Layers: 4
-            if "num_layers" in search_space:
-                nl_spec = search_space["num_layers"]
-                constrained_nl = HyperparamSpec(
-                    name=nl_spec.name,
-                    scope=nl_spec.scope,
-                    param_type=nl_spec.param_type,
-                    range_max=min(nl_spec.range_max, 4) if nl_spec.range_max else None,
-                    default=min(nl_spec.default, 4),
-                )
-                search_space["num_layers"] = constrained_nl
-
-        # Heuristics: Vision models (Wider Layers)
-        # Apply based on model family/type for vision-oriented models
-        is_vision_model = (
-            "vision" in model_spec.model_type.lower()
-            or model_spec.family in ("backprop", "eqprop", "fa", "tile")  # ruff: ignore[literal-membership]
-        )
-        if is_vision_model and "hidden_dim" in search_space and not is_small_task:
+        if "hidden_dim" in search_space:
             hd_spec = search_space["hidden_dim"]
+            hd_choices: list[int] = [c for c in (hd_spec.choices or []) if isinstance(c, int)]
             constrained_hd = HyperparamSpec(
                 name=hd_spec.name,
                 scope=hd_spec.scope,
                 param_type=hd_spec.param_type,
-                choices=[c for c in hd_spec.choices if 16 <= c <= 256] or [16],
-                default=min(hd_spec.default, 256),
+                choices=[c for c in hd_choices if c <= 128] or [64],
+                default=min(int(hd_spec.default or 64), 128),
             )
             search_space["hidden_dim"] = constrained_hd
 
-        # Heuristics: RL (Specific LR Range)
+        if "num_layers" in search_space:
+            nl_spec = search_space["num_layers"]
+            constrained_nl = HyperparamSpec(
+                name=nl_spec.name,
+                scope=nl_spec.scope,
+                param_type=nl_spec.param_type,
+                range_max=min(nl_spec.range_max, 4) if nl_spec.range_max else None,
+                default=min(int(nl_spec.default or 4), 4),
+            )
+            search_space["num_layers"] = constrained_nl
+
+        return search_space
+
+    def _apply_vision_model_constraints(
+        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec], task_name: str | None
+    ) -> dict[str, HyperparamSpec]:
+        """Apply vision model heuristics (wider layers for non-small tasks)."""
+        is_small_task = task_name and task_name in {
+            "digits",
+            "usps",
+            "mnist",
+            "kmnist",
+            "fashion_mnist",
+        }
+        is_vision_model = (
+            "vision" in model_spec.model_type.lower()
+            or model_spec.family in ("backprop", "eqprop", "fa", "tile")
+        )
+        if is_vision_model and "hidden_dim" in search_space and not is_small_task:
+            hd_spec = search_space["hidden_dim"]
+            hd_choices: list[int] = [c for c in (hd_spec.choices or []) if isinstance(c, int)]
+            constrained_hd = HyperparamSpec(
+                name=hd_spec.name,
+                scope=hd_spec.scope,
+                param_type=hd_spec.param_type,
+                choices=[c for c in hd_choices if 16 <= c <= 256] or [16],
+                default=min(int(hd_spec.default or 16), 256),
+            )
+            search_space["hidden_dim"] = constrained_hd
+        return search_space
+
+    def _apply_rl_constraints(
+        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
+    ) -> dict[str, HyperparamSpec]:
+        """Apply RL-specific learning rate constraints."""
         is_rl_model = "rl" in model_spec.model_type.lower() or model_spec.family == "rl"
         if is_rl_model and "lr" in search_space:
             lr_spec = search_space["lr"]
+            range_min = lr_spec.range_min
+            range_max = lr_spec.range_max
+            if range_min is not None:
+                range_min = max(range_min, 1e-3)
+            if range_max is not None:
+                range_max = min(range_max, 1e-1)
             constrained_lr = HyperparamSpec(
                 name=lr_spec.name,
                 scope=lr_spec.scope,
                 param_type=lr_spec.param_type,
-                range_min=max(lr_spec.range_min, 1e-3) if lr_spec.range_min else None,
-                range_max=min(lr_spec.range_max, 1e-1) if lr_spec.range_max else None,
+                range_min=range_min,
+                range_max=range_max,
             )
             search_space["lr"] = constrained_lr
-
         return search_space
 
     def validate_config(
-        self, model_spec: object, config: dict[str, object]
+        self, model_spec: ModelSpecProtocol, config: dict[str, object]
     ) -> list[str]:
         """
         Validate that a config is compatible with a model.

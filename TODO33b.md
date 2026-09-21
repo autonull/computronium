@@ -1,6 +1,6 @@
 # TODO33b: Additional Cleanup/Refactoring Plan (REVISED)
 
-**Status**: Phase 1 COMPLETE — Type Safety Fixes Done | Phase 2 COMPLETE — Hot Path Complexity Refactored
+**Status**: Phase 1 COMPLETE — Type Safety Fixes Done | Phase 2 COMPLETE — Hot Path Complexity Refactored | Phase 3 COMPLETE — Active Module Complexity Refactored (Execution Engine + Hyperopt)
 
 ---
 
@@ -133,15 +133,48 @@ uv run ruff check --select=C901,PLR0912,PLR0915 computronium/ontology/geometry.p
 - ✅ All complexity checks pass on all hot-path modules
 - ✅ Integration demos pass: `test_demo_swap_credit`, `test_demo_compose_6axis`
 
-### Phase 3: Active Module Complexity (MEDIUM) — NEXT
+### Phase 3: Active Module Complexity (MEDIUM) — IN PROGRESS
 ```bash
-# Execution engine
-uv run ruff check --select=C901 computronium/execution/strategy.py
-uv run ruff check --select=C901 computronium/execution/synthesizer.py
+# Execution engine ✅ COMPLETED
+uv run ruff check --select=C901 computronium/execution/strategy.py      # 0 errors
+uv run ruff check --select=C901 computronium/execution/synthesizer.py  # 0 errors
 
-# Hyperopt (if still used)
-uv run ruff check --select=C901 computronium/hyperopt/
+# Hyperopt (if still used) — IN PROGRESS
+uv run ruff check --select=C901 computronium/hyperopt/analysis.py     # 0 errors ✅
+uv run ruff check --select=C901 computronium/hyperopt/experiment.py   # 0 errors ✅
+uv run ruff check --select=C901 computronium/hyperopt/hyperparameter_metamodel.py  # 0 errors ✅
+uv run ruff check --select=C901 computronium/hyperopt/optuna_bridge.py              # 0 errors ✅
 ```
+
+**Phase 3 Progress (Execution Engine):**
+- ✅ `Strategy._check_criterion` — extracted task-specific overrides to class attribute + simplified logic
+- ✅ `Strategy._generate_standard_candidates` — split into 7 focused methods (verification, low_data, ablation, continual_learning, transfer, cv, exploration)
+- ✅ `Strategy._analyze_failures` — split into `_analyze_hard_failures` + `_analyze_soft_failures` + handler mapping
+- ✅ `Strategy._analyze_saturation` — split into `_find_solved_tasks` + `_apply_implicit_saturation` with data-driven thresholds
+- ✅ `Strategy._check_curriculum` — split into `_find_curriculum_track` + `_get_task_index` + `_check_prerequisite_met`
+- ✅ `Synthesizer._get_trials_df` — split into `_fetch_base_trials_df` + `_fetch_hyperparameters` + `_deserialize_json_columns` + `_rescue_metadata` + `_extract_metadata_from_study_name` + `_estimate_param_count_from_row`
+- ✅ `Synthesizer._rescue_metadata` — promoted from nested function to class method, decomposed
+- ✅ `Synthesizer._analyze_significance` — split into `_collect_model_accuracies` + `_compute_pairwise_significance` + `_compare_models`
+- ✅ `Synthesizer._analyze_efficiency` — split into `_compute_param_efficiency` + `_compute_epoch_efficiency` + `_compute_trial_samples` + `_compute_fast_convergence` + `_compute_sample_efficiency` + `_compute_fastest_learners` + `_compute_fallback_epoch_efficiency`
+- ✅ `Synthesizer._find_quick_wins` — split into `_check_nan_failures` + `_check_model_failure_rates` + `_check_tier_balance` + `_check_underexplored_models`
+- ✅ `Synthesizer._analyze_backprop_gap` — split into `_get_baseline_by_task` + `_compute_model_gaps` + `_compare_model_to_baseline` + `_record_model_gaps` + `_compute_task_advantages` + `_get_task_baseline_acc` + `_get_other_models_best_acc` + `_finalize_results`
+
+**Phase 3 Progress (Hyperopt - completed):**
+- ✅ `encode_configs` (analysis.py) — split into `_classify_keys` + `_build_feature_matrices` + `_apply_transformations` + `_fill_nans_with_mean`
+- ✅ `run_trial` (experiment.py) — split into `_setup_training_components` + `_create_epoch_callback` + `_create_pruning_callback` + `_execute_training_loop` + `_cleanup_trial_resources`
+- ✅ `_create_model_and_trainer` (experiment.py) — split into `_build_model` + `_prepare_trainer_kwargs` + `_resolve_optimizer` + `_create_trainer` + `_update_model_config`
+- ✅ `run_single_trial_task` (experiment.py) — split into `_setup_storage` + `_log_trial_info` + `_extract_task_kwargs` + `_run_training` + `_collect_success_metrics` + `_handle_trial_failure` + `_cleanup_trial`
+- ✅ `get_search_space_for_model` (hyperparameter_metamodel.py) — split into 8 focused methods (determine scopes, filter specs, apply transformer params, activation constraints, eqprop constraints, small task constraints, vision model constraints, RL constraints)
+- ✅ `create_optuna_space` (optuna_bridge.py) — split into 7 focused functions (merge constraints, apply overrides, prepare spec, apply constraints, constrain hidden_dim, constrain num_layers, constrain steps, sample parameter, validate config)
+
+**Verification:**
+- ✅ Core tests pass: `tests/unit/core/test_config_unified.py tests/integration/test_equitile_domains.py` (39 passed)
+- ✅ Type checking clean on both modules (pyright: 0 errors)
+- ✅ Complexity checks pass on both modules (ruff: C901/PLR0912/PLR0915 all clean)
+
+### Phase 3 Remaining: Hyperopt Metamodel & Optuna Bridge
+- [x] `get_search_space_for_model` (hyperparameter_metamodel.py:268) — C901=35, PLR0912=35, PLR0915=85
+- [x] `create_optuna_space` (optuna_bridge.py:83) — C901=43, PLR0912=42, PLR0915=87
 
 ### Phase 4: Protocols & Contracts (QUALITY)
 - Add property tests for `StateDynamics.settle()` / `compute_energy()` contracts
@@ -185,6 +218,53 @@ uv run ruff check --select=C901,PLR0912,PLR0915 <modified_module>
 
 ### Phase 2+ Readiness
 The type system is now clean for the hot-path modules. All 10 high-priority complexity issues in the core ontology have been refactored. Phase 3 (Execution Engine, Hyperopt) can proceed.
+
+---
+
+## 📝 Phase 3 Notes & Improvement Opportunities (Hyperopt)
+
+### Completed Work Summary
+- **All 4 high-complexity Hyperopt functions refactored** (`get_search_space_for_model`: C901=35→clean, `create_optuna_space`: C901=43→clean, `encode_configs`: C901=19→clean, `run_single_trial_task`: C901=17→clean)
+- **Root causes addressed**: Monolithic functions handling multiple concerns (scope determination, constraint application, parameter sampling, validation)
+- **Patterns established**: Protocol-based typing for model specs and evaluation configs, focused helper methods with single responsibilities, type-safe constraint application
+
+### Hyperopt Metamodel (`hyperparameter_metamodel.py`)
+- `get_search_space_for_model` decomposed into 8 methods:
+  - `_determine_applicable_scopes` — uses dict-based family-to-scope mapping + match/fallback
+  - `_filter_specs_by_scopes` — simple scope filtering
+  - `_apply_transformer_params` — adds transformer-specific params
+  - `_apply_activation_constraints` — holomorphic EqProp requires tanh
+  - `_apply_eqprop_constraints` — limits num_layers for computational cost
+  - `_apply_small_task_constraints` — constrains hidden_dim/num_layers for MNIST-class tasks
+  - `_apply_vision_model_constraints` — wider layers for vision models
+  - `_apply_rl_constraints` — adjusts LR range for RL models
+
+### Optuna Bridge (`optuna_bridge.py`)
+- `create_optuna_space` decomposed into 7 functions:
+  - `_merge_evaluation_constraints` — merges EvaluationConfig into constraints
+  - `_apply_search_space_overrides` — applies experiment-owned bounds
+  - `_prepare_spec_for_sampling` — shallow copy for safe mutation
+  - `_apply_parameter_constraints` — dispatches to parameter-specific constrain functions
+  - `_constrain_hidden_dim` / `_constrain_num_layers` / `_constrain_steps` — per-parameter constraint logic
+  - `_sample_parameter` — routes to Optuna suggest_* based on param_type
+  - `_validate_config` — delegates to metamodel validation
+
+### Type Safety Improvements
+- Added `ModelSpecProtocol` (read-only properties) for metamodel input
+- Added `EvaluationConfigProtocol` for evaluation_config parameter
+- Converted `_ModelView` from frozen dataclass to regular class with properties (compatible with Protocol)
+- Fixed `HyperparamSpec.choices` type from `list[object]` to `list[int | float | str]` for Optuna compatibility
+- All pyright errors resolved on both modules
+
+### Verification
+- ✅ Core tests pass: 39 passed
+- ✅ Type checking: pyright clean on both modules
+- ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on both modules
+
+### Improvement Opportunities (for future passes)
+1. **`HyperparameterMetamodel.validate_config`** — incomplete implementation (missing `requires` validation)
+2. **`create_study`** — could extract sampler/pruner/direction logic into helpers
+3. **Protocol adoption** — propagate `ModelSpecProtocol`/`EvaluationConfigProtocol` to callers for stricter typing
 
 ---
 
