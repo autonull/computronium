@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Literal
 import torch
 from torch import nn
 
-from computronium.config.unified import ModelConfig
+from computronium.models.deployments.config import ModelConfig
 from computronium.core.model import BioModel
 from computronium.models.deployments import _feature_extractors as _fe
 from computronium.models.deployments.base import (
@@ -169,7 +169,7 @@ class ConvTileNet(BioModel):
             config = ConvTileNetConfig(**kwargs)
 
         super().__init__(
-            ModelConfig(
+            ModelConfig(  # type: ignore[arg-type]
                 name="conv_tile",
                 input_dim=config.input_channels * config.input_size * config.input_size,
                 output_dim=config.num_classes,

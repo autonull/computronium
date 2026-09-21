@@ -3,9 +3,9 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from computronium.ceec import StoreError, models
-from computronium.ceec.migrate import todo18_records
-from computronium.ceec.probe_adapter import ingest_verdict, record_probe_result
+from ceec import StoreError, models
+from ceec.migrate import todo18_records
+from ceec.probe_adapter import ingest_verdict, record_probe_result
 
 
 class TestStructuredEvidence:

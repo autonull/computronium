@@ -1,7 +1,7 @@
 import pytest
 from ceec.constraints import ConstraintResult
 
-from computronium.ceec import (
+from ceec import (
     CORE_CONSTRAINTS,
     Constraint,
     Profile,

@@ -183,9 +183,9 @@ def run_probe() -> dict[str, object]:
 
 
 def _ingest_ceec(result: dict[str, object]) -> None:
-    from computronium.ceec import models
-    from computronium.ceec.probe_adapter import record_probe_result
-    from computronium.ceec.store import CEECStore
+    from ceec import models
+    from ceec.probe_adapter import record_probe_result
+    from ceec.store import CEECStore
 
     def arms_payload(arm: str) -> dict[str, list[list[float]]]:
         runs = result["arms"][arm]["per_seed"]  # type: ignore[index]

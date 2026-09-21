@@ -179,8 +179,8 @@ def run_probe() -> dict[str, object]:
 
 
 def _ingest_ceec(result: dict[str, object]) -> None:
-    from computronium.ceec.probe_adapter import ingest_verdict
-    from computronium.ceec.store import CEECStore
+    from ceec.probe_adapter import ingest_verdict
+    from ceec.store import CEECStore
 
     supported = bool(result["verdict_supported"])
     output = {

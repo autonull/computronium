@@ -213,10 +213,10 @@ def create_deployment_model(
 
     class DeploymentModel(BioModel):
         def __init__(self) -> None:
-            from computronium.config.unified import ModelConfig
+            from computronium.models.deployments.config import ModelConfig
 
             super().__init__(
-                ModelConfig(
+                ModelConfig(  # type: ignore[arg-type]
                     name=config.__class__.__name__.replace("Config", "").lower(),
                     input_dim=head_input_dim,
                     output_dim=head_output_dim,

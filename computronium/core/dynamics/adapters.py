@@ -10,6 +10,8 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
+from computronium.core.utils.surrogate import surrogate_gradient
+
 from computronium.ontology import (
     EnergyMinimizationDynamics,
     Geometry,
@@ -213,13 +215,7 @@ class SpikeToInstantaneousAdapter(DynamicsAdapter):
 
     def _surrogate_gradient(self, v: Tensor) -> Tensor:
         """Surrogate gradient for spiking threshold."""
-        if self._surrogate_type == "fast_sigmoid":
-            return self._beta / (1 + self._beta * v.abs()) ** 2
-        if self._surrogate_type == "piecewise":
-            return (v.abs() < 1.0 / self._beta).float() * self._beta
-        if self._surrogate_type == "gaussian":
-            return torch.exp(-0.5 * (self._beta * v) ** 2) * self._beta
-        return torch.ones_like(v)
+        return surrogate_gradient(v, self._surrogate_type, self._beta)
 
     def settle(
         self,

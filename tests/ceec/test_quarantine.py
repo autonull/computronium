@@ -1,6 +1,6 @@
 import pytest
 
-from computronium.ceec import StoreError, gates
+from ceec import StoreError, gates
 
 
 def make_instrument_chain(store, scope):
@@ -76,7 +76,7 @@ class TestQuarantinePropagation:
 
 class TestStaleDependencies:
     def test_content_change_marks_stale(self, store, scope):
-        from computronium.ceec import models
+        from ceec import models
 
         instrument, mid, _ = make_instrument_chain(store, scope)
         artifact = store.ingest_artifact(b"instr-ev", "result")

@@ -7,7 +7,7 @@ update belief -> evaluate gate -> record calibration -> run audit.
 
 import pytest
 
-from computronium.ceec import (
+from ceec import (
     audit,
     bootstrap,
     calibration,
@@ -15,8 +15,8 @@ from computronium.ceec import (
     models,
     selection,
 )
-from computronium.ceec.probe_adapter import record_probe_result
-from computronium.ceec.store import CEECStore
+from ceec.probe_adapter import record_probe_result
+from ceec.store import CEECStore
 
 
 @pytest.fixture

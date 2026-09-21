@@ -1,6 +1,6 @@
 import pytest
 
-from computronium.ceec import calibration, models
+from ceec import calibration, models
 
 
 @pytest.fixture

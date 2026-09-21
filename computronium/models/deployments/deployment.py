@@ -22,14 +22,12 @@ Usage:
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
 from torch import nn
 
-from computronium.config.unified import ModelConfig
 from computronium.core.local_learning import (
     TaskHandler,
     TileAlgorithm,
@@ -42,6 +40,7 @@ from computronium.core.tile.feature_extractors import (
     TemporalFeatureExtractor,
 )
 from computronium.models.deployments._feature_extractors import tile_model_factory
+from computronium.models.deployments.config import ModelConfig
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -396,7 +395,7 @@ class TileDeploymentModel(BioModel):
             output_dim = config.pred_len * config.output_dim  # type: ignore[attr-defined]
 
         super().__init__(
-            ModelConfig(
+            ModelConfig(  # type: ignore[arg-type]
                 name=f"{domain}_tile",
                 input_dim=input_dim or 0,
                 output_dim=output_dim or 0,
@@ -651,61 +650,3 @@ register_deployment_variants("conv_tile", "vision", ConvDeploymentConfig)
 register_deployment_variants("rl_tile", "rl", RLDeploymentConfig)
 register_deployment_variants("timeseries_tile", "timeseries", TemporalDeploymentConfig)
 register_deployment_variants("graph_tile", "graph", GraphDeploymentConfig)
-
-
-# =============================================================================
-# Deprecated Module Imports (for backward compatibility)
-# =============================================================================
-
-# These imports maintain backward compatibility. They will emit deprecation warnings.
-# Users should migrate to `create_deployment_model(domain, ...)` or the
-# domain-specific factory functions above.
-
-_DEPRECATED_ATTRS = {
-    "ConvTileNet": ("vision", "ConvTileNet"),
-    "ConvTileNetConfig": ("vision", "ConvTileNetConfig"),
-    "VisionAugmentation": ("vision", "VisionAugmentation"),
-    "create_cifar_model": ("vision", "create_cifar_model"),
-    "create_imagenet_model": ("vision", "create_imagenet_model"),
-    "create_mnist_model": ("vision", "create_mnist_model"),
-    "create_vision_model": ("vision", "create_vision_model"),
-    "RLTileNet": ("rl", "RLTileNet"),
-    "RLTileNetConfig": ("rl", "RLTileNetConfig"),
-    "RecurrentRLTileNet": ("rl", "RecurrentRLTileNet"),
-    "RolloutBuffer": ("rl", "RolloutBuffer"),
-    "compute_gae": ("rl", "compute_gae"),
-    "create_atari_model": ("rl", "create_atari_model"),
-    "create_mujoco_model": ("rl", "create_mujoco_model"),
-    "create_recurrent_rl_model": ("rl", "create_recurrent_rl_model"),
-    "create_rl_model": ("rl", "create_rl_model"),
-    "TimeSeriesConfig": ("timeseries", "TimeSeriesConfig"),
-    "TimeSeriesTileNet": ("timeseries", "TimeSeriesTileNet"),
-    "create_anomaly_detection_model": ("timeseries", "create_anomaly_detection_model"),
-    "create_classification_model": ("timeseries", "create_classification_model"),
-    "create_forecasting_model": ("timeseries", "create_forecasting_model"),
-    "GraphTileNet": ("graph", "GraphTileNet"),
-    "GraphTileNetConfig": ("graph", "GraphTileNetConfig"),
-    "create_molecule_model": ("graph", "create_molecule_model"),
-    "create_social_graph_model": ("graph", "create_social_graph_model"),
-    "create_graph_model": ("graph", "create_graph_model"),
-}
-
-
-def __getattr__(name: str):
-    """Lazy imports with deprecation warnings for backward compatibility."""
-    if name in _DEPRECATED_ATTRS:
-        module_name, attr_name = _DEPRECATED_ATTRS[name]
-        warnings.warn(
-            f"Importing {name} from computronium.models.deployments is deprecated. "
-            f"Use computronium.models.deployments.{module_name}.{attr_name} instead, "
-            f"or use the unified create_deployment_model('{module_name}', ...) factory.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        module = __import__(
-            f"computronium.models.deployments.{module_name}",
-            fromlist=[attr_name],
-        )
-        return getattr(module, attr_name)
-
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

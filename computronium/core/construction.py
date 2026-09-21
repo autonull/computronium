@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
 from computronium.config.experiment import ModelConfig as ExperimentModelConfig
-from computronium.config.unified import compute_hidden_dims
+from computronium.models.deployments.config import compute_hidden_dims
 
 if typing.TYPE_CHECKING:
     from collections.abc import Callable

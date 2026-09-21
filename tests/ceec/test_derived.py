@@ -5,7 +5,7 @@ from ceec.derived import OPERATORS, compute_derived
 from ceec.profile import CORE_CONSTRAINTS, Profile
 from ceec.session import ledger
 
-from computronium.ceec import models
+from ceec import models
 
 PROFILE = Profile(name="t", policy_version="26.0", constraints=CORE_CONSTRAINTS)
 

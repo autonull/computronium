@@ -10,10 +10,10 @@ import pytest
 from computronium.config.unified import (
     BaseConfig,
     BaseStructuredConfig,
-    config_to_dict,
     load_config,
     save_config,
 )
+from computronium.models.deployments.config import config_to_dict
 
 if TYPE_CHECKING:
     from pathlib import Path

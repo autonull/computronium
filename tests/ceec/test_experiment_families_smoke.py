@@ -2,8 +2,8 @@
 
 import pytest
 
-from computronium.ceec import audit, bootstrap
-from computronium.ceec.store import CEECStore
+from ceec import audit, bootstrap
+from ceec.store import CEECStore
 
 
 @pytest.fixture(scope="module")

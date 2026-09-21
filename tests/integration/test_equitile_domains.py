@@ -15,17 +15,20 @@ import pytest
 import torch
 
 from computronium.data.lm import CharacterTokenizer
-from computronium.models.deployments import (
-    ConvTileNet,  # Vision; RL
+from computronium.models.deployments.vision import (
+    ConvTileNet,
     ConvTileNetConfig,
-    RecurrentRLTileNet,
-    RLTileNet,
-    RLTileNetConfig,
-    RolloutBuffer,
     VisionAugmentation,
-    compute_gae,
     create_cifar_model,
     create_mnist_model,
+    create_vision_model,
+)
+from computronium.models.deployments.rl import (
+    RLTileNet,
+    RLTileNetConfig,
+    RecurrentRLTileNet,
+    RolloutBuffer,
+    compute_gae,
     create_rl_model,
 )
 from computronium.models.tile_lm import TileLM

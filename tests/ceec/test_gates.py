@@ -1,6 +1,6 @@
 import pytest
 
-from computronium.ceec import StoreError, gates, models
+from ceec import StoreError, gates, models
 
 
 def add_flagged_evidence(store, scope, quality, belief_id="B-T1"):

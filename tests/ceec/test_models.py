@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from computronium.ceec import models
+from ceec import models
 
 
 class TestProbability:

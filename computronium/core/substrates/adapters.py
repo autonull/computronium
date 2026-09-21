@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.core.utils.surrogate import surrogate_gradient
+
 from computronium.core.substrates.complex_substrate import ComplexSubstrate
 from computronium.core.substrates.sparse_substrate import SparseSubstrate
 from computronium.core.substrates.ternary_substrate import TernarySubstrate
@@ -489,13 +491,7 @@ class DigitalToNeuromorphicAdapter(SubstrateAdapter):
 
     def _surrogate_gradient(self, v: Tensor) -> Tensor:
         """Surrogate gradient for spiking non-linearity."""
-        if self._surrogate_type == "fast_sigmoid":
-            return self._beta / (1 + self._beta * v.abs()) ** 2
-        if self._surrogate_type == "piecewise":
-            return (v.abs() < 1.0 / self._beta).float() * self._beta
-        if self._surrogate_type == "gaussian":
-            return torch.exp(-0.5 * (self._beta * v) ** 2) * self._beta
-        return torch.ones_like(v)  # Straight-through
+        return surrogate_gradient(v, self._surrogate_type, self._beta)
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Neuromorphic forward: rate-coded input -> spikes -> synaptic current."""

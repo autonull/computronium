@@ -2,7 +2,7 @@ import shutil
 
 import pytest
 
-from computronium.ceec import CEECStore, models
+from ceec import CEECStore, models
 
 
 @pytest.fixture

@@ -24,7 +24,7 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 from torch import nn
 from torch.distributions import Categorical, Normal
 
-from computronium.config.unified import ModelConfig
+from computronium.models.deployments.config import ModelConfig
 from computronium.core.local_learning import (
     TaskHandler,
     TileAlgorithm,
@@ -153,7 +153,7 @@ class RLTileNet(BioModel):
             config = RLTileNetConfig(**kwargs)
 
         super().__init__(
-            ModelConfig(
+            ModelConfig(  # type: ignore[arg-type]
                 name="rl_tile",
                 input_dim=config.obs_dim,
                 output_dim=config.action_dim,

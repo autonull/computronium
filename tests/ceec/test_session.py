@@ -7,7 +7,7 @@ from ceec.profile import CORE_CONSTRAINTS, LedgerRole, Profile
 from ceec.run import ProbeResult
 from ceec.session import ledger
 
-from computronium.ceec import models
+from ceec import models
 
 PROFILE = Profile(
     name="test-session",

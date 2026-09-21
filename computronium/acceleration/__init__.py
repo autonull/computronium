@@ -54,37 +54,6 @@ from computronium.acceleration.backends import (
     profile_kernel,
 )
 from computronium.acceleration.compile import compile_model, compile_settling_loop
-from computronium.acceleration.contrastive_kernels import (
-    BaseContrastiveKernel,
-    ContrastiveConfig,
-    ContrastiveKernel,
-    FAContrastiveKernel,
-    FFContrastiveKernel,
-    HebbianContrastiveKernel,
-    MEPContrastiveKernel,
-    O1MemoryContrastiveKernel,
-    PCContrastiveKernel,
-    PEPITAContrastiveKernel,
-    SNNContrastiveKernel,
-    TileContrastiveKernel,
-    TPContrastiveKernel,
-    get_contrastive_kernel,
-    register_contrastive_kernels,
-)
-from computronium.acceleration.contrastive_primitives import (
-    batched_outer_product,
-    conductance_matmul,
-    contrastive_delta,
-    contrastive_hebbian_update,
-    forward_forward_goodness,
-    lif_step,
-    pepita_error_modulation,
-    phase_encode,
-    predictive_coding_inference_step,
-    spectral_norm_power_iteration,
-    stdp_update,
-    target_propagation_target,
-)
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -169,27 +138,6 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
     return kernels
 
 
-def get_contrastive_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
-    """Get all contrastive Hebbian kernel backends (O(1) memory interface).
-
-    Pure getter: does NOT touch the KernelRegistry (registering would clobber
-    the standard uniform-interface backends registered for the same families).
-    Use ``get_contrastive_kernel(AlgorithmFamily)`` for instances.
-    """
-    return {
-        "fa": FAContrastiveKernel,
-        "hebbian": HebbianContrastiveKernel,
-        "ff": FFContrastiveKernel,
-        "pepita": PEPITAContrastiveKernel,
-        "tp": TPContrastiveKernel,
-        "pc": PCContrastiveKernel,
-        "snn": SNNContrastiveKernel,
-        "tile": TileContrastiveKernel,
-        "mep": MEPContrastiveKernel,
-        "o1memory": O1MemoryContrastiveKernel,
-    }
-
-
 __all__ = [
     "HAS_CUPY",
     "HAS_TRITON",
@@ -198,60 +146,33 @@ __all__ = [
     "BackendBenchmark",
     "BackendDetector",
     "BackendType",
-    "BaseContrastiveKernel",
-    "ContrastiveConfig",
-    "ContrastiveKernel",
     "CupyChecker",
-    "FAContrastiveKernel",
-    "FFContrastiveKernel",
     "HardwareTarget",
-    "HebbianContrastiveKernel",
     "KernelBackend",
     "KernelConfig",
     "KernelProfiler",
     "KernelRegistry",
     "LocalityLevel",
-    "MEPContrastiveKernel",
-    "O1MemoryContrastiveKernel",
-    "PCContrastiveKernel",
-    "PEPITAContrastiveKernel",
-    "SNNContrastiveKernel",
-    "TPContrastiveKernel",
-    "TileContrastiveKernel",
     "TritonChecker",
-    "batched_outer_product",
     "check_cupy_available",
     "check_triton_available",
     "compile_model",
     "compile_settling_loop",
-    "conductance_matmul",
-    "contrastive_delta",
-    "contrastive_hebbian_update",
     "cross_entropy",
     "dispatch_kernel",
     "enable_tf32",
     "eqprop_kernel_backend",
-    "forward_forward_goodness",
     "get_algorithm_kernels",
     "get_backend",
-    "get_contrastive_kernel",
-    "get_contrastive_kernels",
     "get_dispatcher",
     "get_kernel_classes",
     "get_optimal_backend",
     "get_triton_ops",
     "infer_algorithm_family",
     "kernel_available",
-    "lif_step",
-    "pepita_error_modulation",
-    "phase_encode",
-    "predictive_coding_inference_step",
     "profile_kernel",
-    "register_contrastive_kernels",
     "softmax",
-    "spectral_norm_power_iteration",
     "spectral_normalize",
-    "stdp_update",
-    "target_propagation_target",
     "to_numpy",
 ]
+

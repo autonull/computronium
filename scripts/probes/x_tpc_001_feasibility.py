@@ -19,7 +19,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-from computronium.ceec import CEECStore, audit, models
+from ceec import CEECStore, audit, models
 
 BELIEF = "B-H2-TEMPORAL-PSI-CREDIT"
 

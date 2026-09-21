@@ -1,13 +1,13 @@
 import pytest
 
-from computronium.ceec import StoreError, bootstrap
+from ceec import StoreError, bootstrap
 
 CONFIG_DIR = "configs/ceec"
 
 
 @pytest.fixture(scope="module")
 def bootstrapped_store(tmp_path_factory):
-    from computronium.ceec import CEECStore
+    from ceec import CEECStore
 
     tmp = tmp_path_factory.mktemp("bootstrap")
     store = CEECStore(tmp / "ceec.sqlite3", tmp / "artifacts")
@@ -43,7 +43,7 @@ class TestBootstrap:
             assert experiment.status == "pre_registered"
 
     def test_no_belief_lacks_scope_or_evidence(self, bootstrapped_store):
-        from computronium.ceec import audit
+        from ceec import audit
 
         store, _ = bootstrapped_store
         findings = [

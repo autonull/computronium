@@ -1,13 +1,9 @@
-"""Core package: trainers, config, model helpers."""
+from __future__ import annotations
 
 # Lazy package init: heavy symbols (CoreTrainer) import the zoo on first access.
 
 _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "BioModel": ("computronium.core.model", "BioModel"),
-    "LayerRole": ("computronium.config.unified", "LayerRole"),
-    "ModelConfig": ("computronium.config.unified", "ModelConfig"),
-    "compute_hidden_dims": ("computronium.config.unified", "compute_hidden_dims"),
-    "resolve_hidden_dims": ("computronium.config.unified", "resolve_hidden_dims"),
     "CoreTrainer": ("computronium.core.trainer", "CoreTrainer"),
     "TrainerConfig": ("computronium.core.trainer", "TrainerConfig"),
     "TrainingMetrics": ("computronium.core.trainer", "TrainingMetrics"),
@@ -43,7 +39,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "InstantaneousDynamics",
     ),
     "ThermodynamicContrast": ("computronium.ontology.credit", "ThermodynamicContrast"),
-    "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
+    "EuclideanUpdate": ("computtonium.ontology.update", "EuclideanUpdate"),
     "ModelAdapter": ("computronium.ontology.system", "ModelAdapter"),
     # Hardware substrates
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
