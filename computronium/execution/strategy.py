@@ -128,37 +128,37 @@ class ExecutionStrategy:
 
         self._events.set_insight(desc)
 
-    def _check_criterion(self, tier: PatientLevel, task: str, acc: float) -> bool:  # ruff: ignore[complex-structure, too-many-return-statements]
+    # Task-specific criterion overrides: (tier -> threshold)
+    _TASK_CRITERIA_OVERRIDES: dict[str, dict[PatientLevel, float]] = {
+        "cifar100": {
+            PatientLevel.SMOKE: 0.05,
+            PatientLevel.SHALLOW: 0.15,
+            PatientLevel.STANDARD: 0.30,
+            PatientLevel.DEEP: 0.50,
+        },
+        "digits": {
+            PatientLevel.SMOKE: 0.50,
+            PatientLevel.SHALLOW: 0.80,
+        },
+        "usps": {
+            PatientLevel.SMOKE: 0.50,
+            PatientLevel.SHALLOW: 0.80,
+        },
+        "tiny_shakespeare": {
+            PatientLevel.SMOKE: 0.30,
+            PatientLevel.STANDARD: 0.45,
+        },
+    }
+
+    def _check_criterion(self, tier: PatientLevel, task: str, acc: float) -> bool:
         """
         Check if accuracy meets the success criterion for a given tier and task.
         Allows task-specific overrides (e.g., lower threshold for CIFAR-100).
         """
-        # Task-specific overrides
-        if task == "cifar100":
-            if tier == PatientLevel.SMOKE:
-                return acc > 0.05  # 5x random chance
-            elif tier == PatientLevel.SHALLOW:
-                return acc > 0.15
-            elif tier == PatientLevel.STANDARD:
-                return acc > 0.30
-            elif tier == PatientLevel.DEEP:
-                return acc > 0.50
-
-        # Fast Fail for Easy Tasks
-        if task in ["digits", "usps"]:  # ruff: ignore[literal-membership]
-            if tier == PatientLevel.SMOKE:
-                return acc > 0.50  # Must be much better than random
-            elif tier == PatientLevel.SHALLOW:
-                return acc > 0.80
-
-        if task == "tiny_shakespeare":
-            # LM uses perplexity mostly but acc is tracked too.
-            # Character-level LM accuracy is usually lower.
-            if tier == PatientLevel.SMOKE:
-                return acc > 0.30
-            elif tier == PatientLevel.STANDARD:
-                return acc > 0.45
-
+        if task in self._TASK_CRITERIA_OVERRIDES:
+            override = self._TASK_CRITERIA_OVERRIDES[task]
+            if tier in override:
+                return acc > override[tier]
         return self.CRITERIA[tier](acc)
 
     def _matches_filter(self, task: str) -> bool:
@@ -298,7 +298,7 @@ class ExecutionStrategy:
             return candidates
 
         smoke_stats = self._get_stats(progress, model, task, PatientLevel.SMOKE)
-        if not self._check_criterion(PatientLevel.SMOKE, task, smoke_stats["best_acc"]):
+        if not self._check_criterion(PatientLevel.SMOKE, task, smoke_stats["best_acc"]):  # type: ignore[arg-type]
             # Retry chance for failed smoke
             if random.random() < 0.01:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
                 retry_task = self._make_task(model, task, PatientLevel.SMOKE, 10.0)
@@ -317,7 +317,7 @@ class ExecutionStrategy:
 
         shallow_stats = self._get_stats(progress, model, task, PatientLevel.SHALLOW)
         if not self._check_criterion(
-            PatientLevel.SHALLOW, task, shallow_stats["best_acc"]
+            PatientLevel.SHALLOW, task, shallow_stats["best_acc"]  # type: ignore[index]
         ):
             self._log(
                 f"stagnated_shallow_{model}_{task}",
@@ -326,7 +326,7 @@ class ExecutionStrategy:
                     f"Model {model} failed Shallow Tier on {task}"
                     f" (Acc: {shallow_stats['best_acc']:.2%}). Stopping."
                 ),
-                {"best_acc": shallow_stats["best_acc"]},
+                {"best_acc": shallow_stats["best_acc"]},  # type: ignore[index]
             )
             return candidates
 
@@ -341,11 +341,11 @@ class ExecutionStrategy:
         # we might stop here? Original code had `continue` if std_stats["count"] < 20.
         # Let's check if we generated a main standard task.
         std_stats = self._get_stats(progress, model, task, PatientLevel.STANDARD)
-        if std_stats["count"] < 20:
+        if std_stats["count"] < 20:  # type: ignore[index]
             return candidates
 
         if not self._check_criterion(
-            PatientLevel.STANDARD, task, std_stats["best_acc"]
+            PatientLevel.STANDARD, task, std_stats["best_acc"]  # type: ignore[index]
         ):
             return candidates
 
@@ -366,8 +366,8 @@ class ExecutionStrategy:
         failure_constraints: dict,
     ) -> ExperimentTask | None:
         smoke_stats = self._get_stats(progress, model, task, PatientLevel.SMOKE)
-        if smoke_stats["count"] < 3:
-            if smoke_stats["count"] == 0:
+        if smoke_stats["count"] < 3:  # type: ignore[index]
+            if smoke_stats["count"] == 0:  # type: ignore[index]
                 self._log(
                     f"smoke_{model}_{task}",
                     "NEW_HYPOTHESIS",
@@ -377,7 +377,7 @@ class ExecutionStrategy:
                     ),
                 )
 
-            p = 100.0 if smoke_stats["count"] == 0 else 80.0
+            p = 100.0 if smoke_stats["count"] == 0 else 80.0  # type: ignore[index]
             task_obj = self._make_task(model, task, PatientLevel.SMOKE, p)
             if model in failure_constraints:
                 task_obj.constraints = failure_constraints[model]
@@ -393,10 +393,10 @@ class ExecutionStrategy:
         failure_constraints: dict,
     ) -> ExperimentTask | None:
         shallow_stats = self._get_stats(progress, model, task, PatientLevel.SHALLOW)
-        if shallow_stats["count"] < 10:
+        if shallow_stats["count"] < 10:  # type: ignore[index]
             # Tuned Priority
-            base_p = 50.0 + (smoke_stats["best_acc"] * 30.0)
-            if shallow_stats["count"] == 0:
+            base_p = 50.0 + (smoke_stats["best_acc"] * 30.0)  # type: ignore[index]
+            if shallow_stats["count"] == 0:  # type: ignore[index]
                 self._log(
                     f"shallow_{model}_{task}",
                     "PROMOTION",
@@ -415,7 +415,7 @@ class ExecutionStrategy:
             return task_obj
         return None
 
-    def _generate_standard_candidates(  # ruff: ignore[complex-structure]
+    def _generate_standard_candidates(
         self,
         model: str,
         task: str,
@@ -426,34 +426,42 @@ class ExecutionStrategy:
         candidates = []
         std_stats = self._get_stats(progress, model, task, PatientLevel.STANDARD)
 
-        # Verification
-        v_task = self._check_verification_needed(
-            std_stats, model, task, PatientLevel.STANDARD
-        )
+        candidates.extend(self._check_verification_candidates(std_stats, model, task, PatientLevel.STANDARD))
+        candidates.extend(self._check_low_data_candidates(std_stats, progress, model, task))
+        candidates.extend(self._check_ablation_candidates(std_stats, progress, model, task))
+        candidates.extend(self._check_continual_learning_candidates(std_stats, progress, model, task))
+        candidates.extend(self._check_transfer_candidates(std_stats, progress, model, task))
+        candidates.extend(self._check_cv_candidates(std_stats, progress, model, task))
+
+        if std_stats["count"] < 20:  # type: ignore[index]
+            candidates.append(self._create_standard_exploration_task(model, task, shallow_stats, std_stats, failure_constraints, progress))
+
+        return candidates
+
+    def _check_verification_candidates(self, stats: dict, model: str, task: str, tier: PatientLevel) -> list[ExperimentTask]:
+        v_task = self._check_verification_needed(stats, model, task, tier)
         if v_task:
             self._log(
                 f"verify_std_{model}_{task}",
                 "VERIFICATION",
                 f"Verifying best result for {model} (Standard Tier).",
             )
-            candidates.append(v_task)
+            return [v_task]
+        return []
 
-        # Low Data
-        ld_task = self._check_low_data_needed(std_stats, progress, model, task)
+    def _check_low_data_candidates(self, stats: dict, progress: dict, model: str, task: str) -> list[ExperimentTask]:
+        ld_task = self._check_low_data_needed(stats, progress, model, task)
         if ld_task:
             self._log(
                 f"low_data_{model}_{task}",
                 "LOW_DATA_REGIME",
-                (
-                    f"Scheduling Low-Data experiment"
-                    f" ({ld_task.fixed_config['data_fraction']:.0%})"
-                    f" for {model}."
-                ),  # type: ignore[unknown]
+                f"Scheduling Low-Data experiment ({ld_task.fixed_config['data_fraction']:.0%}) for {model}."  # type: ignore[index]
             )
-            candidates.append(ld_task)
+            return [ld_task]
+        return []
 
-        # Ablation
-        ab_task = self._check_ablation_needed(std_stats, progress, model, task)
+    def _check_ablation_candidates(self, stats: dict, progress: dict, model: str, task: str) -> list[ExperimentTask]:
+        ab_task = self._check_ablation_needed(stats, progress, model, task)
         if ab_task:
             self._log(
                 f"ablation_{model}_{task}_{ab_task.ablation_param}",
@@ -461,87 +469,77 @@ class ExecutionStrategy:
                 f"Scheduling ablation study for {model} to verify components.",
                 {"param": ab_task.ablation_param},
             )
-            candidates.append(ab_task)
+            return [ab_task]
+        return []
 
-        # Continual Learning
-        cl_task = self._check_continual_learning_needed(
-            std_stats, progress, model, task
-        )
+    def _check_continual_learning_candidates(self, stats: dict, progress: dict, model: str, task: str) -> list[ExperimentTask]:
+        cl_task = self._check_continual_learning_needed(stats, progress, model, task)
         if cl_task:
             self._log(
                 f"cl_{model}_{task}_{cl_task.continual_step}",
                 "CONTINUAL_LEARNING",
-                (
-                    f"Attempting Continual Learning Step"
-                    f" {cl_task.continual_step} for {model}."
-                ),
+                f"Attempting Continual Learning Step {cl_task.continual_step} for {model}.",
             )
-            candidates.append(cl_task)
+            return [cl_task]
+        return []
 
-        # Transfer Learning
-        tf_task = self._check_transfer_needed(std_stats, progress, model, task)
+    def _check_transfer_candidates(self, stats: dict, progress: dict, model: str, task: str) -> list[ExperimentTask]:
+        tf_task = self._check_transfer_needed(stats, progress, model, task)
         if tf_task:
             self._log(
                 f"transfer_{model}_{task}",
                 "TRANSFER_LEARNING",
                 f"Attempting Transfer Learning from {task} for {model}.",
             )
-            candidates.append(tf_task)
+            return [tf_task]
+        return []
 
-        # Cross Validation
-        cv_task = self._check_cv_needed(std_stats, progress, model, task)
+    def _check_cv_candidates(self, stats: dict, progress: dict, model: str, task: str) -> list[ExperimentTask]:
+        cv_task = self._check_cv_needed(stats, progress, model, task)
         if cv_task:
             self._log(
                 f"cv_{model}_{task}",
                 "CROSS_VALIDATION",
                 f"Running 5-Fold Cross-Validation for {model} to confirm stability.",
             )
-            candidates.append(cv_task)
+            return [cv_task]
+        return []
 
-        # Main Standard Exploration
-        if std_stats["count"] < 20:
-            base_p = 60.0 + (
-                shallow_stats["best_acc"] * 20.0
-            )  # Reduced from 40.0 to prevent excessive boosting
+    def _create_standard_exploration_task(
+        self, model: str, task: str, shallow_stats: dict, std_stats: dict, failure_constraints: dict, progress: dict
+    ) -> ExperimentTask | None:
+        base_p = 60.0 + (shallow_stats["best_acc"] * 20.0)
 
-            if std_stats["count"] == 0:
-                self._log(
-                    f"standard_{model}_{task}",
-                    "PROMOTION",
-                    (
-                        f"Promoting {model} to Standard Tier"
-                        f" (Passed Shallow with"
-                        f" {shallow_stats['best_acc']:.2%})."
-                    ),
-                )
-
-            if std_stats["count"] > 15:
-                base_p -= 10.0
-
-            refine_constraints = self._refine_search_space(
-                progress, model, task, PatientLevel.SHALLOW
+        if std_stats["count"] == 0:
+            self._log(
+                f"standard_{model}_{task}",
+                "PROMOTION",
+                f"Promoting {model} to Standard Tier (Passed Shallow with {shallow_stats['best_acc']:.2%}).",
             )
-            fail_constraints = failure_constraints.get(model, {})
+            base_p += 10.0
 
-            final_constraints = {}
-            if refine_constraints:
-                self._log(
-                    f"refine_std_{model}_{task}",
-                    "REFINEMENT",
-                    "Refining search space for Standard Tier based on Shallow results.",
-                    refine_constraints,
-                )
-                final_constraints.update(refine_constraints)
-            if fail_constraints:
-                final_constraints.update(fail_constraints)
+        if std_stats["count"] > 15:
+            base_p -= 10.0
 
-            task_obj = self._make_task(model, task, PatientLevel.STANDARD, base_p)
-            if final_constraints:
-                task_obj.constraints = final_constraints
+        refine_constraints = self._refine_search_space(progress, model, task, PatientLevel.SHALLOW)
+        fail_constraints = failure_constraints.get(model, {})
 
-            candidates.append(task_obj)
+        final_constraints = {}
+        if refine_constraints:
+            self._log(
+                f"refine_std_{model}_{task}",
+                "REFINEMENT",
+                "Refining search space for Standard Tier based on Shallow results.",
+                refine_constraints,
+            )
+            final_constraints.update(refine_constraints)
+        if fail_constraints:
+            final_constraints.update(fail_constraints)
 
-        return candidates
+        task_obj = self._make_task(model, task, PatientLevel.STANDARD, base_p)
+        if final_constraints:
+            task_obj.constraints = final_constraints
+        return task_obj
 
     def _generate_deep_candidates(
         self,
@@ -575,20 +573,20 @@ class ExecutionStrategy:
             candidates.append(v_task)
 
         # Main Deep Exploration
-        if deep_stats["count"] < 5:
-            if deep_stats["count"] == 0:
+        if deep_stats["count"] < 5:  # type: ignore[index]
+            if deep_stats["count"] == 0:  # type: ignore[index]
                 self._log(
                     f"deep_{model}_{task}",
                     "PROMOTION",
                     (
                         f"Promoting {model} to Deep Tier"
                         f" (Passed Standard with"
-                        f" {std_stats['best_acc']:.2%})."
+                        f" {std_stats['best_acc']:.2%})."  # type: ignore[index]
                     ),
                 )
 
             p = 20.0 + (
-                std_stats["best_acc"] * 25.0
+                std_stats["best_acc"] * 25.0  # type: ignore[index]
             )  # Reduced from 50.0 to prevent excessive boosting
 
             refine_constraints = self._refine_search_space(
@@ -727,7 +725,7 @@ class ExecutionStrategy:
         Analyze successful trials from source_tier to refine search space for next tier.
         """
         stats = self._get_stats(progress, model, task, source_tier)
-        trials = stats.get("trials", [])
+        trials: list = stats.get("trials", [])  # type: ignore[assignment]
 
         if len(trials) < 3:
             return None
@@ -776,7 +774,7 @@ class ExecutionStrategy:
                 }
         return constraints
 
-    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def _analyze_failures(self, progress) -> dict[str, dict[str, object]]:
         """
         Analyze failure rates to suggest constraints.
         Returns: Dict[model_name, constraint_dict]
@@ -784,59 +782,75 @@ class ExecutionStrategy:
         constraints = {}
 
         # 1. Query FailureTracker via State for Hard Failures
-        if hasattr(self.state, "get_failure_analysis"):  # ruff: ignore[too-many-nested-blocks]
-            try:  # noqa: PLR0915
-                analysis = self.state.get_failure_analysis()
-                recommendations = analysis.get("recommendations", [])
-
-                for rec in recommendations:
-                    if rec.get("issue") == "High NaN failure rate":
-                        affected = rec.get("affected_models", [])
-                        for model in affected:
-                            if model not in constraints:
-                                constraints[model] = {}
-                            # Aggressive restriction
-                            constraints[model]["max_lr"] = 0.001
-                            constraints[model]["max_beta"] = 0.1
-
-                    elif rec.get("issue") == "Out of memory errors":
-                        # Constrain models to prevent OOM loop
-                        # OOM often crashes system, so blame last run
-                        # If affected_models is empty, apply to all active models
-                        # Trust FailureTracker to have identified context if
-                        # possible, else apply to all models in progress.
-                        affected = rec.get("affected_models", [])
-                        if not affected:
-                            # Fallback: Apply to everything if systemic OOM
-                            affected = list(progress.keys())
-
-                        for model in affected:
-                            if model not in constraints:
-                                constraints[model] = {}
-                            constraints[model]["max_batch_size"] = 64
-                            constraints[model]["max_hidden_dim"] = (
-                                512  # Relaxed aggressive scaling prevention
-                            )
-
-                    elif rec.get("issue") == "Frequent timeouts":
-                        affected = rec.get("affected_models", [])
-                        if not affected:
-                            affected = list(progress.keys())
-
-                        for model in affected:
-                            if model not in constraints:
-                                constraints[model] = {}
-                            constraints[model]["max_hidden_dim"] = 256
-                            constraints[model]["max_num_layers"] = 6
-
-                    elif rec.get("issue") == "Early Training Instability":
-                        # If we knew which models, we'd constrain them.
-                        pass
-
-            except (RuntimeError, ValueError, KeyError) as e:
-                logger.warning("Failed to query failure analysis: %s", e)
+        hard_failure_constraints = self._analyze_hard_failures(progress)
+        constraints.update(hard_failure_constraints)
 
         # 2. Analyze Progress for Soft Failures (Divergence/No Learning)
+        soft_failure_constraints = self._analyze_soft_failures(progress)
+        # Merge soft failures (only if not already constrained more strictly)
+        for model, soft_constraints in soft_failure_constraints.items():
+            if model not in constraints:
+                constraints[model] = soft_constraints
+
+        return constraints
+
+    def _analyze_hard_failures(self, progress) -> dict[str, dict[str, object]]:
+        """Analyze hard failures from FailureTracker (NaN, OOM, timeouts)."""
+        constraints = {}
+
+        if not hasattr(self.state, "get_failure_analysis"):
+            return constraints
+
+        try:
+            analysis = self.state.get_failure_analysis()
+            recommendations: list = analysis.get("recommendations", [])  # type: ignore[assignment]
+
+            for rec in recommendations:
+                issue = rec.get("issue")
+                affected = rec.get("affected_models", [])
+
+                handler = self._HARD_FAILURE_HANDLERS.get(issue)
+                if handler:
+                    handler(self, constraints, affected, progress)
+
+        except (RuntimeError, ValueError, KeyError) as e:
+            logger.warning("Failed to query failure analysis: %s", e)
+
+        return constraints
+
+    def _handle_nan_failure(self, constraints, affected, progress):
+        for model in affected:
+            constraints.setdefault(model, {})
+            constraints[model]["max_lr"] = 0.001
+            constraints[model]["max_beta"] = 0.1
+
+    def _handle_oom_failure(self, constraints, affected, progress):
+        if not affected:
+            affected = list(progress.keys())
+        for model in affected:
+            constraints.setdefault(model, {})
+            constraints[model]["max_batch_size"] = 64
+            constraints[model]["max_hidden_dim"] = 512
+
+    def _handle_timeout_failure(self, constraints, affected, progress):
+        if not affected:
+            affected = list(progress.keys())
+        for model in affected:
+            constraints.setdefault(model, {})
+            constraints[model]["max_hidden_dim"] = 256
+            constraints[model]["max_num_layers"] = 6
+
+    # Mapping of failure issue to handler method
+    _HARD_FAILURE_HANDLERS = {
+        "High NaN failure rate": _handle_nan_failure,
+        "Out of memory errors": _handle_oom_failure,
+        "Frequent timeouts": _handle_timeout_failure,
+    }
+
+    def _analyze_soft_failures(self, progress) -> dict[str, dict[str, object]]:
+        """Analyze soft failures from progress (divergence, no learning)."""
+        constraints = {}
+
         for model, task_data in progress.items():
             total = 0
             failures = 0
@@ -845,13 +859,10 @@ class ExecutionStrategy:
                     trials = stats.get("trials", [])
                     for t in trials:
                         total += 1
-                        if (
-                            t.final_loss > 100 or t.accuracy < 0.11
-                        ):  # Divergence or random chance
+                        if t.final_loss > 100 or t.accuracy < 0.11:  # Divergence or random chance
                             failures += 1
 
-            if total > 5 and (failures / total) > 0.3:  # ruff: ignore[collapsible-if]
-                # If not already constrained more strictly
+            if total > 5 and (failures / total) > 0.3:
                 if model not in constraints:
                     constraints[model] = {}
                     constraints[model]["max_lr"] = 0.005
@@ -859,7 +870,19 @@ class ExecutionStrategy:
 
         return constraints
 
-    def _analyze_saturation(self, progress) -> dict[str, list[str]]:  # ruff: ignore[complex-structure, too-many-branches]
+    # Task-specific saturation thresholds
+    _SATURATION_THRESHOLDS: dict[str, float] = {
+        "digits": 0.98,
+        "mnist": 0.99,
+        "fashion_mnist": 0.94,
+    }
+
+    _IMPLICIT_SATURATION_RULES: dict[str, list[str]] = {
+        "mnist": ["digits", "usps"],
+        "fashion_mnist": ["mnist", "kmnist"],
+    }
+
+    def _analyze_saturation(self, progress) -> dict[str, list[str]]:
         """
         Identify tasks that are effectively "solved" (saturated) for a given model.
         Returns: Dict[model, List[task_name]]
@@ -867,43 +890,36 @@ class ExecutionStrategy:
         saturation = {}
 
         for model, task_data in progress.items():
-            solved_tasks = []
-
-            # Check for direct saturation
-            for task, tiers in task_data.items():
-                best_acc = 0.0
-                for tier_stats in tiers.values():
-                    best_acc = max(best_acc, tier_stats.get("best_acc", 0.0))
-
-                # Dynamic saturation thresholds
-                threshold = 0.99
-                if task == "digits":
-                    threshold = 0.98
-                elif task == "mnist":
-                    threshold = 0.99
-                elif task == "fashion_mnist":
-                    threshold = 0.94
-
-                if best_acc > threshold:
-                    solved_tasks.append(task)
-
-            # Implicit Saturation: If a harder task is solved, easier ones are "solved"
-            if "mnist" in solved_tasks:
-                if "digits" not in solved_tasks:
-                    solved_tasks.append("digits")
-                if "usps" not in solved_tasks:
-                    solved_tasks.append("usps")
-
-            if "fashion_mnist" in solved_tasks:
-                if "mnist" not in solved_tasks:
-                    solved_tasks.append("mnist")
-                if "kmnist" not in solved_tasks:
-                    solved_tasks.append("kmnist")
+            solved_tasks = self._find_solved_tasks(task_data)
+            solved_tasks = self._apply_implicit_saturation(solved_tasks)
 
             if solved_tasks:
                 saturation[model] = solved_tasks
 
         return saturation
+
+    def _find_solved_tasks(self, task_data: dict) -> list[str]:
+        """Find tasks that exceed their saturation threshold."""
+        solved_tasks = []
+
+        for task, tiers in task_data.items():
+            best_acc = max((tier_stats.get("best_acc", 0.0) for tier_stats in tiers.values()), default=0.0)
+            threshold = self._SATURATION_THRESHOLDS.get(task, 0.99)
+
+            if best_acc > threshold:
+                solved_tasks.append(task)
+
+        return solved_tasks
+
+    def _apply_implicit_saturation(self, solved_tasks: list[str]) -> list[str]:
+        """If a harder task is solved, easier ones are implicitly solved."""
+        result = list(solved_tasks)
+        for hard_task, easy_tasks in self._IMPLICIT_SATURATION_RULES.items():
+            if hard_task in solved_tasks:
+                for easy_task in easy_tasks:
+                    if easy_task not in result:
+                        result.append(easy_task)
+        return result
 
     def plan_next(self) -> ExperimentTask | None:
         """
@@ -917,10 +933,10 @@ class ExecutionStrategy:
         # Standard Tier Calibration
         progress = self.state.get_progress()
         total_standard_trials = 0
-        for model in progress.values():
-            for task in model.values():
-                if PatientLevel.STANDARD.value in task:
-                    total_standard_trials += task[PatientLevel.STANDARD.value]["count"]
+        for model in progress.values():  # type: ignore[union-attr]
+            for task in model.values():  # type: ignore[union-attr]
+                if PatientLevel.STANDARD.value in task:  # type: ignore[operator]
+                    total_standard_trials += task[PatientLevel.STANDARD.value]["count"]  # type: ignore[index]
 
         if total_standard_trials < 50:
             boost_applied = False
@@ -972,29 +988,34 @@ class ExecutionStrategy:
         initial = self.curriculum.get_initial_task(model_name)
         return [initial] if initial else ["mnist"]
 
-    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # ruff: ignore[complex-structure]
+    def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:
         """
         Check if we are allowed to run this task based on curriculum.
         """
-        track = None
-        for t_list in self.curriculum.TRACKS.values():
-            if task in t_list:
-                track = t_list
-                break
-
+        track = self._find_curriculum_track(task)
         if not track:
             return True
 
-        try:
-            curr_idx = track.index(task)
-        except ValueError:
-            return True
-
-        if curr_idx == 0:
+        curr_idx = self._get_task_index(track, task)
+        if curr_idx <= 0:
             return True
 
         prev_task = track[curr_idx - 1]
+        return self._check_prerequisite_met(progress, model_name, prev_task)
 
+    def _find_curriculum_track(self, task: str) -> list[str] | None:
+        for t_list in self.curriculum.TRACKS.values():
+            if task in t_list:
+                return t_list
+        return None
+
+    def _get_task_index(self, track: list[str], task: str) -> int:
+        try:
+            return track.index(task)
+        except ValueError:
+            return -1
+
+    def _check_prerequisite_met(self, progress: dict, model_name: str, prev_task: str) -> bool:
         if model_name not in progress or prev_task not in progress[model_name]:
             return False
 
@@ -1005,14 +1026,12 @@ class ExecutionStrategy:
             if tier_data.get("count", 0) > 0:
                 tiers_run = True
                 if "best_acc" in tier_data:
-                    best_metrics["accuracy"] = max(
-                        best_metrics["accuracy"], tier_data["best_acc"]
-                    )
+                    best_metrics["accuracy"] = max(best_metrics["accuracy"], tier_data["best_acc"])
 
         if not tiers_run:
             return False
 
-        return PromotionGate.check_promotion(prev_task, best_metrics)
+        return PromotionGate.check_promotion(prev_task, best_metrics)  # type: ignore[arg-type]
 
     def _get_stats(self, progress, model, task, tier):
         return get_stats(progress, model, task, tier)

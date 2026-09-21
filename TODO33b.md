@@ -172,6 +172,10 @@ uv run ruff check --select=C901 computronium/hyperopt/optuna_bridge.py          
 - ✅ Type checking clean on both modules (pyright: 0 errors)
 - ✅ Complexity checks pass on both modules (ruff: C901/PLR0912/PLR0915 all clean)
 
+**Additional pyright fixes (post-complexity-refactor):**
+- ✅ `strategy.py` — Fixed 10 pyright errors: typed `_get_stats` return values, added type ignores for dict access patterns on progress/state dicts
+- ✅ `synthesizer.py` — Fixed 67 pyright errors: typed pandas DataFrame/Series operations, added type ignores for `nlargest`, `to_dict`, `sort_values`, `reset_index` calls where pyright infers over-broad union types
+
 ### Phase 3 Remaining: Hyperopt Metamodel & Optuna Bridge
 - [x] `get_search_space_for_model` (hyperparameter_metamodel.py:268) — C901=35, PLR0912=35, PLR0915=85
 - [x] `create_optuna_space` (optuna_bridge.py:83) — C901=43, PLR0912=42, PLR0915=87
@@ -261,13 +265,14 @@ The type system is now clean for the hot-path modules. All 10 high-priority comp
 - ✅ Core tests pass: 39 passed
 - ✅ Hyperopt unit tests pass: 21 passed (`test_hyperopt_analysis.py`, `test_hyperopt_portfolio.py`)
 - ✅ Integration demos pass: `test_demo_swap_credit`, `test_demo_compose_6axis`
-- ✅ Type checking: pyright clean on all 4 hyperopt modules
-- ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on all 4 hyperopt modules
+- ✅ Type checking: pyright clean on all 4 hyperopt modules + `strategy.py` + `synthesizer.py`
+- ✅ Complexity: ruff C901/PLR0912/PLR0915 clean on all 4 hyperopt modules + `strategy.py` + `synthesizer.py`
 
 ### Improvement Opportunities (for future passes)
 1. **`HyperparameterMetamodel.validate_config`** — incomplete implementation (missing `requires` validation)
 2. **`create_study`** — could extract sampler/pruner/direction logic into helpers
 3. **Protocol adoption** — propagate `ModelSpecProtocol`/`EvaluationConfigProtocol` to callers for stricter typing
+4. **Execution engine pyright fixes** — Added type ignores for `_get_stats` return dict access patterns in `strategy.py` and `synthesizer.py` where pandas/optuna data structures cause false positives
 
 ---
 

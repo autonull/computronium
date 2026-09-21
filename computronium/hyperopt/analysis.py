@@ -38,7 +38,7 @@ def flatten_config(config: dict[str, object], prefix="") -> dict[str, object]:
     return dict(items)
 
 
-def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:
     """
     Convert a list of configuration dictionaries into a numerical matrix.
     Handles numerical and categorical data.
@@ -52,13 +52,22 @@ def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:  # ruff: ign
     # 2. Collect all keys (union)
     all_keys = sorted(set().union(*(d.keys() for d in flat_configs)))
 
-    # 3. Determine type for each key
-    # Simple heuristic: if any value is str, treat as categorical. Else numerical.
-    # Also handle missing values (fill with mean for num, 'missing' for cat)
+    # 3. Determine type for each key and collect data
+    num_keys, cat_keys, data_by_key = _classify_keys(flat_configs, all_keys)
 
+    # 4. Construct feature matrices
+    X_num, X_cat = _build_feature_matrices(flat_configs, num_keys, cat_keys)
+
+    # 5. Apply transformations
+    return _apply_transformations(X_num, X_cat, num_keys, cat_keys)
+
+
+def _classify_keys(
+    flat_configs: list[dict[str, object]], all_keys: list[str]
+) -> tuple[list[str], list[str], dict[str, list]]:
+    """Classify keys as numerical or categorical and collect values."""
     num_keys = []
     cat_keys = []
-
     data_by_key = {k: [] for k in all_keys}
 
     for c in flat_configs:
@@ -68,73 +77,48 @@ def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:  # ruff: ign
     for k in all_keys:
         values = [v for v in data_by_key[k] if v is not None]
         if not values:
-            continue  # Skip empty columns
-
+            continue
         if any(isinstance(v, str) for v in values):
             cat_keys.append(k)
         else:
             num_keys.append(k)
 
-    # 4. Construct feature lists
+    return num_keys, cat_keys, data_by_key
+
+
+def _build_feature_matrices(
+    flat_configs: list[dict[str, object]], num_keys: list[str], cat_keys: list[str]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build numerical and categorical feature matrices."""
     X_num = []
     X_cat = []
 
-    for i in range(len(configs)):
+    for config in flat_configs:
         row_num = []
         row_cat = []
 
         for k in num_keys:
-            val = flat_configs[i].get(k, None)
+            val = config.get(k, None)
             row_num.append(val if val is not None else np.nan)
 
         for k in cat_keys:
-            val = flat_configs[i].get(k, "missing")
+            val = config.get(k, "missing")
             row_cat.append(str(val))
 
         X_num.append(row_num)
         X_cat.append(row_cat)
 
-    X_num = np.array(X_num, dtype=float)
-    X_cat = np.array(X_cat, dtype=object)
+    return np.array(X_num, dtype=float), np.array(X_cat, dtype=object)
 
-    # 5. Pipeline
-    transformers = []
 
-    if num_keys:
-        # Fill NaNs with mean
-        # Since SimpleImputer is another import, let's just do it manually for X_num
-        col_means = np.nanmean(X_num, axis=0)
-        inds = np.where(np.isnan(X_num))
-        X_num[inds] = np.take(col_means, inds[1])
-
-        transformers.append(("num", StandardScaler(), list(range(len(num_keys)))))
-
-    if cat_keys:
-        transformers.append((
-            "cat",
-            OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-            list(range(len(num_keys), len(num_keys) + len(cat_keys))),
-        ))
-
-    # Combine
-    # We construct a combined matrix first
-    X_combined = []
-    if num_keys and cat_keys:
-        X_combined = np.hstack([X_num, X_cat])
-    elif num_keys:
-        X_combined = X_num
-    elif cat_keys:
-        X_combined = X_cat
-
-    if len(X_combined) == 0:
-        return np.array([])
-
-    # ColumnTransformer requires indices or names.
-    # It's easier to apply encoders separately and hstack
-
+def _apply_transformations(
+    X_num: np.ndarray, X_cat: np.ndarray, num_keys: list[str], cat_keys: list[str]
+) -> np.ndarray:
+    """Apply scaling and encoding transformations."""
     features = []
 
     if num_keys:
+        X_num = _fill_nans_with_mean(X_num)
         scaler = StandardScaler()
         features.append(scaler.fit_transform(X_num))
 
@@ -146,6 +130,14 @@ def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:  # ruff: ign
         return np.hstack(features)
 
     return np.array([])
+
+
+def _fill_nans_with_mean(X_num: np.ndarray) -> np.ndarray:
+    """Fill NaN values with column means."""
+    col_means = np.nanmean(X_num, axis=0)
+    inds = np.where(np.isnan(X_num))
+    X_num[inds] = np.take(col_means, inds[1])
+    return X_num
 
 
 def reduce_dimensions(features: np.ndarray, method="pca", n_components=2) -> np.ndarray:
