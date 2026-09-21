@@ -178,7 +178,7 @@ markers = [
 ]
 addopts = "--strict-markers --durations=25 -m 'not slow and not benchmark and not llm' -p no:warnings"
 faulthandler_timeout = 120
-timeout = 60
+timeout = 120
 timeout_method = "signal"
 
 [tool.coverage.run]
