@@ -738,7 +738,7 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
+def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -747,103 +747,145 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     Tile meshes answer through their block-view energy when the acts carry
     the settled block layout.
     """
-    tile_energy = getattr(geometry, "hopfield_energy", None)
-    block_count = getattr(geometry, "block_act_count", None)
-    if (
-        callable(tile_energy)
-        and block_count is not None
-        and len(all_acts) == block_count
-    ):
-        return cast("Tensor", tile_energy(all_acts))
+    # Fast path for tile geometries
+    if _is_tile_geometry(geometry, all_acts):
+        return _compute_tile_hopfield_energy(geometry, all_acts)
 
+    # Standard path for layered geometries
     if not all_acts or len(all_acts) < 2:
         return torch.tensor(0.0, device=all_acts[0].device if all_acts else "cpu")
 
-    # Use hidden + output layers (skip input)
-    acts = all_acts[1:]  # [hidden1, hidden2, ..., output]
+    acts = all_acts[1:]  # Skip input layer
     device = acts[0].device
+
+    weight_names = _get_sorted_weight_names(geometry)
+    if not weight_names:
+        return torch.tensor(0.0, device=device)
+
+    bias_names = _get_sorted_bias_names(geometry)
+    num_hidden = len(acts) - 1
+    num_ff_weights = len(weight_names)
+    num_ff_biases = len(bias_names)
+
     total_energy = torch.tensor(0.0, device=device)
 
-    # Extract weight matrices from geometry params
+    # Self-energy: 0.5 * sum ||h||^2
+    total_energy = total_energy + sum(0.5 * (h**2).sum() for h in acts)
+
+    # Interaction energy: -sum h^T * W * h_prev
+    total_energy = total_energy - _compute_interaction_energy(
+        acts, weight_names, geometry.params, num_hidden, num_ff_weights, all_acts
+    )
+
+    # Bias energy: -sum h^T * b
+    total_energy = total_energy - _compute_bias_energy(
+        acts, bias_names, geometry.params, num_hidden, num_ff_biases
+    )
+
+    # Return mean per sample
+    batch_size = acts[0].size(0)
+    return total_energy / batch_size
+
+
+def _is_tile_geometry(geometry: Geometry, all_acts: list[Tensor]) -> bool:
+    """Check if geometry is a tile mesh with block-view energy."""
+    tile_energy = getattr(geometry, "hopfield_energy", None)
+    block_count = getattr(geometry, "block_act_count", None)
+    return (
+        callable(tile_energy)
+        and block_count is not None
+        and len(all_acts) == block_count
+    )
+
+
+def _compute_tile_hopfield_energy(geometry: Geometry, all_acts: list[Tensor]) -> Tensor:
+    """Compute energy using tile geometry's block-view method."""
+    tile_energy = getattr(geometry, "hopfield_energy", None)
+    assert callable(tile_energy), "Tile energy function must be callable"
+    return cast("Tensor", tile_energy(all_acts))
+
+
+def _get_sorted_weight_names(geometry: Geometry) -> list[str]:
+    """Extract and sort feedforward weight parameter names."""
     params = geometry.params
     weight_names = [
         n
         for n in params
         if "weight" in n and params[n].ndim == 2 and not n.startswith("recurrent")
     ]
-    # Sort by layer index (e.g., "0.weight" -> 0, "2.weight" -> 2)
     weight_names.sort(
-        key=lambda x: (
-            int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
-        )
+        key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
     )
+    return weight_names
 
-    if not weight_names:
-        return torch.tensor(0.0, device=device)
 
-    num_hidden = len(acts) - 1  # Number of hidden layers (excluding output)
-    num_ff_weights = len(weight_names)  # Number of feedforward weight matrices
-
-    # For each hidden/output layer, compute energy contribution
-    # E = 0.5 * ||h||^2 - h^T * W * h_prev (for each layer)
-    for i in range(len(acts)):
-        h = acts[i]
-        # 0.5 * ||h||^2
-        total_energy = total_energy + 0.5 * (h**2).sum()
-
-    # Subtract interaction terms: h^T * W * h_prev
-    for i in range(len(acts)):
-        h = acts[i]
-        if i < num_hidden:
-            # Hidden layer i: weight index i (0, 1, ..., num_hidden-1)
-            weight_idx = i
-            h_prev = acts[i - 1] if i > 0 else all_acts[0]
-        else:
-            # Output layer: last feedforward weight (hidden -> output)
-            weight_idx = num_ff_weights - 1
-            # For linear network (no hidden layers), h_prev should be input
-            if num_hidden == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
-                h_prev = all_acts[0]
-            else:
-                h_prev = acts[i - 1]  # Last hidden layer
-
-        if weight_idx < num_ff_weights:
-            W = params[weight_names[weight_idx]]
-            # h^T * W * h_prev -> sum over batch, then mean
-            # h: (batch, dim_i), W: (dim_i, dim_{i-1}), h_prev: (batch, dim_{i-1})
-            # h @ W: (batch, dim_{i-1}) @ h_prev.T: (dim_{i-1}, batch) -> (batch, batch)
-            if W.shape[0] != h.shape[-1] or W.shape[1] != h_prev.shape[-1]:
-                continue  # ragged pairing (e.g. per-edge tile weights)
-            interaction = (h @ W @ h_prev.T).trace()
-            total_energy = total_energy - interaction
-
-    # Subtract bias terms (exclude recurrent bias if any)
+def _get_sorted_bias_names(geometry: Geometry) -> list[str]:
+    """Extract and sort feedforward bias parameter names."""
+    params = geometry.params
     bias_names = [
         n
         for n in params
         if "bias" in n and params[n].ndim == 1 and not n.startswith("recurrent")
     ]
     bias_names.sort(
-        key=lambda x: (
-            int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
-        )
+        key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
     )
-    num_ff_biases = len(bias_names)
+    return bias_names
+
+
+def _compute_interaction_energy(
+    acts: list[Tensor],
+    weight_names: list[str],
+    params: dict[str, Tensor],
+    num_hidden: int,
+    num_ff_weights: int,
+    all_acts: list[Tensor],
+) -> Tensor:
+    """Compute interaction energy terms: -sum h^T * W * h_prev."""
+    device = acts[0].device
+    interaction_energy = torch.tensor(0.0, device=device)
+
     for i in range(len(acts)):
         h = acts[i]
-        if i < num_hidden:  # ruff: ignore[if-else-block-instead-of-if-exp]
+        if i < num_hidden:
+            weight_idx = i
+            h_prev = acts[i - 1] if i > 0 else all_acts[0]
+        else:
+            weight_idx = num_ff_weights - 1
+            h_prev = all_acts[0] if num_hidden == 0 else acts[i - 1]
+
+        if weight_idx < num_ff_weights:
+            W = params[weight_names[weight_idx]]
+            if W.shape[0] == h.shape[-1] and W.shape[1] == h_prev.shape[-1]:
+                interaction_energy = interaction_energy + (h @ W @ h_prev.T).trace()
+
+    return interaction_energy
+
+
+def _compute_bias_energy(
+    acts: list[Tensor],
+    bias_names: list[str],
+    params: dict[str, Tensor],
+    num_hidden: int,
+    num_ff_biases: int,
+) -> Tensor:
+    """Compute bias energy terms: -sum h^T * b."""
+    device = acts[0].device
+    bias_energy = torch.tensor(0.0, device=device)
+
+    for i in range(len(acts)):
+        h = acts[i]
+        if i < num_hidden:
             bias_idx = i
         else:
             bias_idx = num_ff_biases - 1
+
         if bias_idx < num_ff_biases:
             b = params[bias_names[bias_idx]]
-            if b.shape[0] != h.shape[-1]:
-                continue
-            total_energy = total_energy - (h @ b).sum()
+            if b.shape[0] == h.shape[-1]:
+                bias_energy = bias_energy + (h @ b).sum()
 
-    # Return mean per sample
-    batch_size = acts[0].size(0)
-    return total_energy / batch_size
+    return bias_energy
 
 
 class _SettleTelemetry:
@@ -874,8 +916,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         self.config = config or StateDynamicsConfig.energy_minimization()
         self._velocity: list[Tensor] | None = None
         self._free_energy_history: list[float] | None = None
+        self._settle_steps_used: int = 0
 
-    def settle(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def settle(  # noqa: PLR0915
         self,
         state: CompositeState,
         geometry: Geometry,
@@ -883,25 +926,58 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
-        # Run settling iterations for full multi-layer EqProp dynamics
-        # Implements the same dynamics as legacy EquilibriumMLP.forward_dynamics
-
+        """Run settling iterations for full multi-layer EqProp dynamics."""
         if state.x is None:
             return state
 
-        # Tile meshes seed the relaxation from their block layout
-        # ([x, z0..z_{L-1}, output]); layered geometries from their
-        # forward intermediates. Both align 1:1 with the settle kernel's
-        # extracted weight/bias transitions.
-        block_builder = getattr(geometry, "settle_blocks", None)
-        if callable(block_builder):
-            all_acts: list[Tensor] = list(cast("list[Tensor]", block_builder(state.x, substrate)))
-        else:
-            all_acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(state.x, substrate)))
-        if not all_acts:
+        # Common setup
+        all_acts, kernel, beta, use_checkpointing, use_compiled = self._setup_settle(
+            state, geometry, substrate, target
+        )
+        if all_acts is None:
             return state
 
-        # Extract layered params and construct substrate-native settle kernel
+        # At this point, kernel is guaranteed to be non-None
+        assert kernel is not None
+
+        # Execute the appropriate settling path
+        if use_compiled:
+            all_acts = self._settle_compiled(all_acts, kernel, beta, target)
+        elif use_checkpointing:
+            all_acts = self._settle_checkpointed(all_acts, kernel, beta, target, geometry, on_step)
+        else:
+            all_acts = self._settle_eager(all_acts, kernel, beta, target, geometry, on_step)
+
+        # Finalize state
+        return self._finalize_settle(state, all_acts, target)
+
+    def _setup_settle(
+        self,
+        state: CompositeState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None,
+    ) -> tuple[
+        list[Tensor] | None,
+        SubstrateSettleKernel | None,
+        float,
+        bool,
+        bool,
+    ]:
+        """Common setup for all settling paths."""
+        # Get initial activations from geometry
+        block_builder = getattr(geometry, "settle_blocks", None)
+        x = state.x
+        if x is None:
+            return None, None, 0.0, False, False
+        if callable(block_builder):
+            all_acts: list[Tensor] = list(cast("list[Tensor]", block_builder(x, substrate)))
+        else:
+            all_acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(x, substrate)))
+        if not all_acts:
+            return None, None, 0.0, False, False
+
+        # Extract layered params and construct settle kernel
         params = extract_layered_params(geometry)
         if params is None:
             raise TypeError("Energy-based settling requires a layered geometry")
@@ -913,78 +989,25 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             residual=params.residual,
         )
 
-        # Number of hidden layers (excluding input and output)
-        # all_acts = [input, hidden1, hidden2, ..., output]  # ruff: ignore[commented-out-code]
+        # Initialize velocity for momentum
         num_hidden = len(all_acts) - 2
-
-        # Initialize velocity for momentum (per hidden layer)
         if self.config.momentum > 0:
-            batch_size = all_acts[0].size(0)
-            self._velocity = [
-                torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)
-            ]
+            self._velocity = [torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)]
         else:
             self._velocity = None
 
-        # Initialize free energy history if tracking enabled
+        # Initialize free energy history
         if self.config.track_free_energy_per_iter:
-            self._free_energy_history = []
-            # Track initial energy
-            self._free_energy_history.append(
-                _compute_hopfield_energy(all_acts, geometry).item()
-            )
+            self._free_energy_history = [_compute_hopfield_energy(all_acts, geometry).item()]
         else:
             self._free_energy_history = None
 
         beta = self.config.beta if target is not None else 0.0
 
-        # Auto-detect gradient checkpointing: never on CPU (pure overhead),
-        # on GPU enable only if explicitly set OR if VRAM would be exceeded.
-        device = all_acts[0].device
-        use_checkpointing = self.config.gradient_checkpointing
-        if use_checkpointing and device.type == "cpu":
-            # Never checkpoint on CPU - it's pure compute overhead with no memory benefit
-            use_checkpointing = False
-        elif use_checkpointing is False and device.type == "cuda":
-            # Auto-enable if model + activations would exceed ~80% of available VRAM
-            try:  # ruff: ignore[too-many-statements-in-try-clause]
-                free_vram, _ = torch.cuda.mem_get_info(device)
-                # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
-                total_params = sum(
-                    p.numel() for p in geometry.params.values() if p.requires_grad
-                )
-                hidden_size = (
-                    all_acts[1].numel() // all_acts[1].shape[0]
-                )  # per-sample hidden dim
-                batch_size = all_acts[0].shape[0]
-                # Rough estimate: activations for all settle steps (each step has ~layers activations)
-                est_activation_mem = (
-                    self.config.max_steps
-                    * (len(layer_stack(geometry) or ()))
-                    * batch_size
-                    * hidden_size
-                    * 4  # fp32 bytes
-                )
-                est_total = (
-                    total_params * 4 * 3
-                ) + est_activation_mem  # params + optimizer + activations
-                if est_total > free_vram * 0.8:
-                    use_checkpointing = True
-            except Exception:  # ruff: ignore[try-except-pass]
-                pass  # Fall back to config value
+        # Determine checkpointing strategy
+        use_checkpointing = self._determine_checkpointing(all_acts, geometry)
 
-        # Kernel step function for checkpointing
-        def _kernel_step(
-            acts: list[Tensor],
-            beta_: float,
-            target_: Tensor | None,
-            velocity_: list[Tensor] | None,
-        ) -> tuple[list[Tensor], list[Tensor] | None]:
-            return kernel.step(acts, beta_, target_, velocity_)
-
-        # Compiled fast path (R11.2.25): whole settle as one graph. Guards
-        # keep it on the kernel's common case; runs a fixed step budget
-        # (skips the eager convergence early-exit).
+        # Determine if compiled path can be used
         use_compiled = (
             self.config.compiled
             and self.config.momentum == 0
@@ -994,78 +1017,151 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             and type(substrate).__name__ == "DigitalSubstrate"
             and len(all_acts) == len(params.weights) + 1
         )
-        if use_compiled:
-            self._settle_steps_used = self.config.max_steps
-            all_acts = list(
-                _compiled_eqprop_settle(
-                    cast("list[Tensor]", all_acts),
-                    params.weights,
-                    params.biases,
-                    params.activations,
-                    self.config.step_size,
-                    beta,
-                    target,
-                    self.config.max_steps,
-                    params.residual,
+
+        return all_acts, kernel, beta, use_checkpointing, use_compiled
+
+    def _determine_checkpointing(self, all_acts: list[Tensor], geometry: Geometry) -> bool:
+        """Auto-detect gradient checkpointing strategy."""
+        device = all_acts[0].device
+        use_checkpointing = self.config.gradient_checkpointing
+        if use_checkpointing and device.type == "cpu":
+            return False  # Never checkpoint on CPU
+        if use_checkpointing is False and device.type == "cuda":
+            try:
+                free_vram, _ = torch.cuda.mem_get_info(device)
+                total_params = sum(
+                    p.numel() for p in geometry.params.values() if p.requires_grad
                 )
+                hidden_size = all_acts[1].numel() // all_acts[1].shape[0]
+                batch_size = all_acts[0].shape[0]
+                est_activation_mem = (
+                    self.config.max_steps
+                    * (len(layer_stack(geometry) or ()))
+                    * batch_size
+                    * hidden_size
+                    * 4
+                )
+                est_total = total_params * 4 * 3 + est_activation_mem
+                if est_total > free_vram * 0.8:
+                    return True
+            except Exception:
+                pass
+        return use_checkpointing
+
+    def _settle_compiled(
+        self,
+        all_acts: list[Tensor],
+        kernel: SubstrateSettleKernel,
+        beta: float,
+        target: Tensor | None,
+    ) -> list[Tensor]:
+        """Compiled fast path: whole settle as one graph."""
+        self._settle_steps_used = self.config.max_steps
+        return list(
+            _compiled_eqprop_settle(
+                cast("list[Tensor]", all_acts),
+                kernel.params.weights,
+                kernel.params.biases,
+                kernel.params.activations,
+                self.config.step_size,
+                beta,
+                target,
+                self.config.max_steps,
+                kernel.params.residual,
             )
-        elif use_checkpointing:
-            from torch.utils import checkpoint
+        )
 
-            self._note_settle_start()
-            for _step in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
-                prev_output = all_acts[-1].detach()
-                # Checkpoint the kernel step function
-                all_acts, self._velocity = checkpoint.checkpoint(
-                    _kernel_step,
-                    all_acts,
-                    beta,
-                    target,
-                    self._velocity,
-                    use_reentrant=False,
-                )
+    def _settle_checkpointed(
+        self,
+        all_acts: list[Tensor],
+        kernel: SubstrateSettleKernel,
+        beta: float,
+        target: Tensor | None,
+        geometry: Geometry,
+        on_step: Callable[[int, float], None] | None,
+    ) -> list[Tensor]:
+        """Checkpointed settling path for memory efficiency."""
+        from torch.utils import checkpoint
 
-                # Track free energy if enabled
-                if self._free_energy_history is not None:
-                    energy_val = _compute_hopfield_energy(all_acts, geometry).item()
-                    self._free_energy_history.append(energy_val)
-                    if on_step is not None:
-                        on_step(_step, energy_val)
+        def _kernel_step(
+            acts: list[Tensor],
+            beta_: float,
+            target_: Tensor | None,
+            velocity_: list[Tensor] | None,
+        ) -> tuple[list[Tensor], list[Tensor] | None]:
+            return kernel.step(acts, beta_, target_, velocity_)
 
-                # Check convergence (can't checkpoint this as it's not differentiable)
-                if _step >= self.config.convergence_start:
-                    delta = torch.dist(all_acts[-1], prev_output, p=float("inf")).item()
-                    if delta < self.config.convergence_threshold:
-                        self._settle_steps_used = _step + 1
-                        break
-        else:
-            # Non-checkpointed path
-            self._note_settle_start()
-            for step in range(self.config.max_steps):
-                new_acts, new_velocity = kernel.step(
-                    all_acts, beta, target, self._velocity
-                )
-                if new_velocity is not None:
-                    self._velocity = new_velocity
+        self._note_settle_start()
+        for step in range(self.config.max_steps):
+            prev_output = all_acts[-1].detach()
+            all_acts, self._velocity = checkpoint.checkpoint(
+                _kernel_step,
+                all_acts,
+                beta,
+                target,
+                self._velocity,
+                use_reentrant=False,
+            )
 
-                # Track free energy if enabled
-                if self._free_energy_history is not None:
-                    energy_val = _compute_hopfield_energy(new_acts, geometry).item()
-                    self._free_energy_history.append(energy_val)
-                    if on_step is not None:
-                        on_step(step, energy_val)
+            self._track_free_energy_and_check_convergence(
+                all_acts, geometry, step, prev_output, on_step
+            )
+            if self._settle_steps_used > 0:
+                break
+        return all_acts
 
-                # Check convergence
-                if step >= self.config.convergence_start:
-                    delta = torch.dist(
-                        new_acts[-1], all_acts[-1], p=float("inf")
-                    ).item()
-                    if delta < self.config.convergence_threshold:
-                        all_acts = new_acts
-                        self._settle_steps_used = step + 1
-                        break
+    def _settle_eager(
+        self,
+        all_acts: list[Tensor],
+        kernel: SubstrateSettleKernel,
+        beta: float,
+        target: Tensor | None,
+        geometry: Geometry,
+        on_step: Callable[[int, float], None] | None,
+    ) -> list[Tensor]:
+        """Eager (non-checkpointed) settling path."""
+        self._note_settle_start()
+        for step in range(self.config.max_steps):
+            new_acts, new_velocity = kernel.step(all_acts, beta, target, self._velocity)
+            if new_velocity is not None:
+                self._velocity = new_velocity
+
+            self._track_free_energy_and_check_convergence(
+                new_acts, geometry, step, all_acts[-1], on_step
+            )
+            if self._settle_steps_used > 0:
                 all_acts = new_acts
+                break
+            all_acts = new_acts
+        return all_acts
 
+    def _track_free_energy_and_check_convergence(
+        self,
+        acts: list[Tensor],
+        geometry: Geometry,
+        step: int,
+        prev_output: Tensor,
+        on_step: Callable[[int, float], None] | None,
+    ) -> None:
+        """Track free energy and check convergence criteria."""
+        if self._free_energy_history is not None:
+            energy_val = _compute_hopfield_energy(acts, geometry).item()
+            self._free_energy_history.append(energy_val)
+            if on_step is not None:
+                on_step(step, energy_val)
+
+        if step >= self.config.convergence_start:
+            delta = torch.dist(acts[-1], prev_output, p=float("inf")).item()
+            if delta < self.config.convergence_threshold:
+                self._settle_steps_used = step + 1
+
+    def _finalize_settle(
+        self,
+        state: CompositeState,
+        all_acts: list[Tensor],
+        target: Tensor | None,
+    ) -> CompositeState:
+        """Finalize the state after settling."""
         if target is None:
             state.free_state = all_acts
         else:
@@ -1118,64 +1214,58 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
-        # Predictive coding settling: minimize prediction error
+        """Predictive coding settling: minimize prediction error."""
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
 
-        # Initialize free energy history if tracking enabled
-        if self.config.track_free_energy_per_iter:
-            self._free_energy_history: list[float] | None = []
-        else:
-            self._free_energy_history = None
+        self._init_free_energy_history()
 
-        # Tile meshes settle through the block-view relaxation kernel —
-        # target-responsive (the nudged phase pulls the output toward the
-        # target with the configured beta); R11.1.4.
+        # Dispatch to appropriate settling strategy based on geometry
         self._note_settle_start()
         if hasattr(geometry, "_graph"):
             return self._settle_tile(state, x, geometry, substrate, target, on_step)
 
-        # For layered geometries (feedforward, recurrent with layered params),
-        # settle layer-wise to produce per-layer activations for credit assignment.
         layered = extract_layered_params(geometry)
         if layered is not None and len(layered.weights) > 0:
             return self._settle_layered(
                 state, x, geometry, layered, substrate, target, on_step
             )
 
-        # Fallback: standard predictive coding settling for recurrent geometries
-        # (single state vector, no per-layer structure)
+        # Fallback: standard predictive coding for recurrent geometries
+        return self._settle_recurrent(state, x, geometry, substrate, target, on_step)
+
+    def _init_free_energy_history(self) -> None:
+        """Initialize free energy history tracking."""
+        if self.config.track_free_energy_per_iter:
+            self._free_energy_history = []
+        else:
+            self._free_energy_history = None
+
+    def _settle_recurrent(
+        self,
+        state: CompositeState,
+        x: Tensor,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None,
+        on_step: Callable[[int, float], None] | None,
+    ) -> CompositeState:
+        """Standard predictive coding settling for recurrent geometries."""
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
 
         for step in range(self.config.max_steps):
-            # Predictive coding update
             prediction = geometry.route(h)
-            # Ensure prediction matches input dimension for shape-safe error computation
-            if prediction.shape[-1] != h.shape[-1]:
-                if prediction.shape[-1] >= h.shape[-1]:
-                    prediction = prediction[..., : h.shape[-1]]
-                else:
-                    pad_size = h.shape[-1] - prediction.shape[-1]
-                    prediction = torch.nn.functional.pad(prediction, (0, pad_size)).to(
-                        prediction.device
-                    )
+            prediction = self._match_prediction_shape(prediction, h)
             error = x - prediction
             h = h + self.config.step_size * op(
                 error,
                 geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
-            # Track free energy per iteration
-            if self.config.track_free_energy_per_iter and (
-                self._free_energy_history is not None
-            ):
-                fe = error.pow(2).sum().item()
-                self._free_energy_history.append(fe)
-                if on_step is not None:
-                    on_step(step, fe)
+            self._track_free_energy_recurrent(error, step, on_step)
 
-        new_state = _create_output_state(
+        return _create_output_state(
             state,
             x=x,
             output=h,
@@ -1184,7 +1274,28 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
             activations=[h],
         )
 
-        return new_state
+    def _match_prediction_shape(self, prediction: Tensor, h: Tensor) -> Tensor:
+        """Ensure prediction matches input dimension for shape-safe error computation."""
+        if prediction.shape[-1] != h.shape[-1]:
+            if prediction.shape[-1] >= h.shape[-1]:
+                prediction = prediction[..., : h.shape[-1]]
+            else:
+                pad_size = h.shape[-1] - prediction.shape[-1]
+                prediction = torch.nn.functional.pad(prediction, (0, pad_size)).to(prediction.device)
+        return prediction
+
+    def _track_free_energy_recurrent(
+        self,
+        error: Tensor,
+        step: int,
+        on_step: Callable[[int, float], None] | None,
+    ) -> None:
+        """Track free energy for recurrent settling."""
+        if self.config.track_free_energy_per_iter and self._free_energy_history is not None:
+            fe = error.pow(2).sum().item()
+            self._free_energy_history.append(fe)
+            if on_step is not None:
+                on_step(step, fe)
 
     def _settle_layered(
         self,
@@ -1631,11 +1742,48 @@ class PCALMDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
+        """PC-ALM primal-dual settling."""
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
 
-        # Initialize free energy history if tracking enabled
+        # Common setup
+        setup = self._setup_pcalm_settle(state, geometry, substrate, target)
+        if setup is None:
+            return state
+        acts, dual_vars, layered, op, current_rho, use_compiled = setup
+
+        # Execute settling path
+        if use_compiled:
+            acts, dual_vars = self._settle_pcalm_compiled(
+                acts, dual_vars, layered, target, current_rho
+            )
+        else:
+            acts = self._eager_relaxation(acts, dual_vars, layered, op, target, current_rho)
+
+        # Finalize
+        return self._finalize_pcalm_settle(state, acts, dual_vars, target)
+
+    def _setup_pcalm_settle(
+        self,
+        state: CompositeState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None,
+    ) -> tuple[
+        list[Tensor],
+        list[Tensor],
+        LayeredParams,
+        ForwardOp,
+        float,
+        bool,
+    ] | None:
+        """Common setup for PC-ALM settling paths."""
+        x = state.x
+        if x is None:
+            return None
+
+        # Initialize free energy history
         if self.config.track_free_energy_per_iter:
             self._free_energy_history = []
         else:
@@ -1648,17 +1796,14 @@ class PCALMDynamics(_SettleTelemetry):
 
         op = substrate.get_forward_operator()
 
-        # Initialize layer states from a feedforward pass
+        # Initialize layer states from feedforward pass
         init_acts = geometry.forward_with_intermediates(x, substrate)
-        if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
-            acts: list[Tensor] = list(init_acts)  # [input, hidden1, hidden2, ..., output]
-        else:
+        if init_acts is None or len(init_acts) != len(layered.weights) + 1:
             raise TypeError("PC-ALM requires valid feedforward intermediates")
+        acts: list[Tensor] = list(init_acts)
 
-        # Number of layers (excluding input)
+        # Initialize dual variables
         num_layers = len(acts) - 1
-
-        # Initialize dual variables λ to zero (or warm-start from previous step)
         if (
             self.config.warm_start_duals
             and self._dual_vars is not None
@@ -1668,7 +1813,7 @@ class PCALMDynamics(_SettleTelemetry):
         else:
             dual_vars = [torch.zeros_like(acts[i + 1]) for i in range(num_layers)]
 
-        # Get current rho (with scheduling/override)
+        # Get current rho
         current_rho = self._get_current_rho()
 
         # Track initial augmented Lagrangian
@@ -1679,8 +1824,7 @@ class PCALMDynamics(_SettleTelemetry):
                 ).item()
             )
 
-        # Primal–dual relaxation loop
-        self._note_settle_start()
+        # Determine if compiled path can be used
         use_compiled = (
             self.config.compiled
             and layered.recurrent_weight is None
@@ -1690,34 +1834,46 @@ class PCALMDynamics(_SettleTelemetry):
             and type(substrate).__name__ == "DigitalSubstrate"
             and len(acts) == len(layered.weights) + 1
         )
-        if use_compiled:
-            from computronium.acceleration.pcalm_kernels import _compiled_pcalm_settle
 
-            beta = self.config.beta if target is not None else 0.0
-            acts, dual_vars = _compiled_pcalm_settle(
-                list(acts),
-                list(dual_vars),
-                layered.weights,
-                layered.biases,
-                layered.activations,
-                self.config.step_size,
-                current_rho,
-                self.config.prospective_leak,
-                beta,
-                target,
-                self.config.max_steps,
-            )
-            self._settle_steps_used = self.config.max_steps
-        else:
-            acts = self._eager_relaxation(
-                acts, dual_vars, layered, op, target, current_rho
-            )
+        return acts, dual_vars, layered, op, current_rho, use_compiled
 
-        # Store dual variables for credit assignment
+    def _settle_pcalm_compiled(
+        self,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        layered: LayeredParams,
+        target: Tensor | None,
+        current_rho: float,
+    ) -> tuple[list[Tensor], list[Tensor]]:
+        """Compiled PC-ALM settling path."""
+        from computronium.acceleration.pcalm_kernels import _compiled_pcalm_settle
+
+        beta = self.config.beta if target is not None else 0.0
+        acts, dual_vars = _compiled_pcalm_settle(
+            list(acts),
+            list(dual_vars),
+            layered.weights,
+            layered.biases,
+            layered.activations,
+            self.config.step_size,
+            current_rho,
+            self.config.prospective_leak,
+            beta,
+            target,
+            self.config.max_steps,
+        )
+        self._settle_steps_used = self.config.max_steps
+        return acts, dual_vars
+
+    def _finalize_pcalm_settle(
+        self,
+        state: CompositeState,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        target: Tensor | None,
+    ) -> CompositeState:
+        """Finalize PC-ALM settling and write dual variables to state."""
         self._dual_vars = dual_vars
-
-        # Write dual_vars to state for PCALMCredit to read
-        # Use the activity dict (not metrics, which expects float values)
         dual_vars_for_state = [lam.detach() for lam in dual_vars]
 
         if target is None:
@@ -1726,11 +1882,10 @@ class PCALMDynamics(_SettleTelemetry):
                 cast("CompositeState", state).set_activity("dual_vars_free", dual_vars_for_state)
             else:
                 state.metrics = state.metrics or {}
-                state.metrics["dual_vars_free"] = len(dual_vars_for_state)  # placeholder count
+                state.metrics["dual_vars_free"] = len(dual_vars_for_state)
         else:
             state.nudged_state = acts
-            # Nudged phase duals are the ones used for credit assignment
-            if hasattr(state, "dual_vars"):  # SystemState has dual_vars field
+            if hasattr(state, "dual_vars"):
                 setattr(state, "dual_vars", dual_vars_for_state)
             if _is_composite_state(state):
                 cast("CompositeState", state).set_activity("dual_vars", dual_vars_for_state)
@@ -1740,7 +1895,6 @@ class PCALMDynamics(_SettleTelemetry):
                 state.metrics["dual_vars"] = len(dual_vars_for_state)
                 state.metrics["dual_vars_nudged"] = len(dual_vars_for_state)
         state.activations = acts
-
         return state
 
     def _eager_relaxation(
@@ -1758,137 +1912,175 @@ class PCALMDynamics(_SettleTelemetry):
         alpha = self.config.prospective_leak
         step_size = self.config.step_size
 
-        # Gradient checkpointing: checkpoint every k steps
+        # Determine checkpointing strategy
         use_checkpointing = self.config.gradient_checkpointing
-        if use_checkpointing:
-            checkpoint_every = max(1, self.config.max_steps // 4)
-        else:
-            checkpoint_every = 0
+        checkpoint_every = max(1, self.config.max_steps // 4) if use_checkpointing else 0
 
-        def _relaxation_step(acts_step, dual_vars_step, step_idx):
-            """Single relaxation step for checkpointing."""
-            # Compute constraint violations c_l = h_l - f_θ_l(h_{l-1})
-            constraints = []
-            for i in range(num_layers):
-                # f_θ_l(h_{l-1}) = activation(W_l @ h_{l-1} + b_l)
-                pre = acts_step[i]
-                weight = layered.weights[i]
-                bias = layered.biases[i]
-                activation = (
-                    layered.activations[i]
-                    if i < len(layered.activations)
-                    else nn.Identity()
-                )
-
-                predicted = op(pre, weight)
-                if bias is not None:
-                    predicted = predicted + bias
-                predicted = activation(predicted)
-
-                if layered.residual and i > 0 and acts_step[i].shape == predicted.shape:
-                    predicted = predicted + acts_step[i]
-
-                c = acts_step[i + 1] - predicted
-                constraints.append(c)
-
-            # Dual update: λ_l ← λ_l + step_size * (c_l + alpha * λ_l)
-            # alpha=0 -> pure integral (PC-ALM); alpha>0 -> leaky integral (prospective config)
-            for i in range(num_layers):
-                dual_vars_step[i] = dual_vars_step[i] + step_size * (
-                    constraints[i] + alpha * dual_vars_step[i]
-                )
-
-            # Primal update: h_l ← h_l - step_size * (c_l + λ_l + ρ*c_l - J_{l+1}^T * (c_{l+1} + λ_{l+1} + ρ*c_{l+1}))
-            new_acts = [acts_step[0]]  # input layer clamped
-            for i in range(num_layers):
-                # Bottom-up: c_{i+1} + λ_{i+1} + ρ*c_{i+1}
-                primal_grad = (
-                    constraints[i] + dual_vars_step[i] + current_rho * constraints[i]
-                )
-
-                # Top-down coupling: J_{i+2}^T * (c_{i+2} + λ_{i+2} + ρ*c_{i+2})
-                # Only for hidden layers (not output layer)
-                if i < num_layers - 1:
-                    # Error signal from layer i+2: v = c_{i+2} + λ_{i+2} + ρ*c_{i+2}
-                    v = (
-                        constraints[i + 1]
-                        + dual_vars_step[i + 1]
-                        + current_rho * constraints[i + 1]
-                    )
-                    # Jacobian J_{i+2} = diag(act'(z_{i+2})) @ W_{i+2}
-                    # where z_{i+2} = h_{i+1} @ W_{i+2}^T + b_{i+2}
-                    # h_{i+1} = acts_step[i+1], W_{i+2} = layered.weights[i+1]
-                    pre = acts_step[i + 1]
-                    weight = layered.weights[i + 1]
-                    bias = layered.biases[i + 1]
-                    z = op(pre, weight)
-                    if bias is not None:
-                        z = z + bias
-                    act_derivative = (z > 0).to(v.dtype)  # ReLU derivative
-                    # J_{i+2}^T @ v = W_{i+2}^T @ (act'(z_{i+2}) * v)
-                    top_down = op(v * act_derivative, weight.T)
-                else:
-                    # Output layer: no top-down coupling
-                    top_down = torch.zeros_like(acts_step[i + 1])
-
-                total_grad = primal_grad - top_down
-                h_new = acts_step[i + 1] - step_size * total_grad
-                new_acts.append(h_new)
-
-            # Nudge output layer in nudged phase
-            if target is not None:
-                beta = self.config.beta
-                target_one_hot = _one_hot(target, new_acts[-1])
-                new_acts[-1] = new_acts[-1] + beta * (target_one_hot - new_acts[-1])
-
+        def _relaxation_step(
+            acts_step: list[Tensor], dual_vars_step: list[Tensor], step_idx: int
+        ) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+            """Single relaxation step: compute constraints, update duals, update primals."""
+            constraints = self._compute_constraints(acts_step, layered, op, num_layers)
+            dual_vars_step = self._dual_update(dual_vars_step, constraints, step_size, alpha, num_layers)
+            new_acts = self._primal_update(
+                acts_step, constraints, dual_vars_step, layered, op, current_rho, step_size, num_layers
+            )
+            new_acts = self._apply_nudge(new_acts, target)
             return new_acts, dual_vars_step, constraints
 
+        # Run relaxation loop (checkpointed or eager)
+        acts = self._run_relaxation_loop(
+            acts, dual_vars, _relaxation_step, use_checkpointing, checkpoint_every,
+            layered, op, current_rho
+        )
+        return acts
+
+    def _compute_constraints(
+        self,
+        acts: list[Tensor],
+        layered: LayeredParams,
+        op: ForwardOp,
+        num_layers: int,
+    ) -> list[Tensor]:
+        """Compute constraint violations c_l = h_l - f_θ_l(h_{l-1})."""
+        constraints = []
+        for i in range(num_layers):
+            pre = acts[i]
+            weight = layered.weights[i]
+            bias = layered.biases[i]
+            activation = (
+                layered.activations[i]
+                if i < len(layered.activations)
+                else nn.Identity()
+            )
+
+            predicted = op(pre, weight)
+            if bias is not None:
+                predicted = predicted + bias
+            predicted = activation(predicted)
+
+            if layered.residual and i > 0 and acts[i].shape == predicted.shape:
+                predicted = predicted + acts[i]
+
+            constraints.append(acts[i + 1] - predicted)
+        return constraints
+
+    def _dual_update(
+        self,
+        dual_vars: list[Tensor],
+        constraints: list[Tensor],
+        step_size: float,
+        alpha: float,
+        num_layers: int,
+    ) -> list[Tensor]:
+        """Dual update: λ_l ← λ_l + step_size * (c_l + alpha * λ_l)."""
+        for i in range(num_layers):
+            dual_vars[i] = dual_vars[i] + step_size * (constraints[i] + alpha * dual_vars[i])
+        return dual_vars
+
+    def _primal_update(
+        self,
+        acts: list[Tensor],
+        constraints: list[Tensor],
+        dual_vars: list[Tensor],
+        layered: LayeredParams,
+        op: ForwardOp,
+        current_rho: float,
+        step_size: float,
+        num_layers: int,
+    ) -> list[Tensor]:
+        """Primal update with top-down coupling."""
+        new_acts = [acts[0]]  # input layer clamped
+        for i in range(num_layers):
+            primal_grad = constraints[i] + dual_vars[i] + current_rho * constraints[i]
+
+            if i < num_layers - 1:
+                # Top-down coupling from layer i+1
+                v = constraints[i + 1] + dual_vars[i + 1] + current_rho * constraints[i + 1]
+                pre = acts[i + 1]
+                weight = layered.weights[i + 1]
+                bias = layered.biases[i + 1]
+                z = op(pre, weight)
+                if bias is not None:
+                    z = z + bias
+                act_derivative = (z > 0).to(v.dtype)  # ReLU derivative
+                top_down = op(v * act_derivative, weight.T)
+            else:
+                top_down = torch.zeros_like(acts[i + 1])
+
+            total_grad = primal_grad - top_down
+            new_acts.append(acts[i + 1] - step_size * total_grad)
+        return new_acts
+
+    def _apply_nudge(self, acts: list[Tensor], target: Tensor | None) -> list[Tensor]:
+        """Apply target nudge to output layer in nudged phase."""
+        if target is not None:
+            beta = self.config.beta
+            target_one_hot = _one_hot(target, acts[-1])
+            acts[-1] = acts[-1] + beta * (target_one_hot - acts[-1])
+        return acts
+
+    def _run_relaxation_loop(
+        self,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        step_fn: Callable[[list[Tensor], list[Tensor], int], tuple[list[Tensor], list[Tensor], list[Tensor]]],
+        use_checkpointing: bool,
+        checkpoint_every: int,
+        layered: LayeredParams,
+        op: ForwardOp,
+        current_rho: float,
+    ) -> list[Tensor]:
+        """Run the relaxation loop with optional checkpointing."""
         if use_checkpointing:
             from torch.utils import checkpoint
 
             for step in range(self.config.max_steps):
                 if step % checkpoint_every == 0 and step > 0:
                     acts, dual_vars, constraints = checkpoint.checkpoint(
-                        _relaxation_step, acts, dual_vars, step, use_reentrant=False
+                        step_fn, acts, dual_vars, step, use_reentrant=False
                     )
                 else:
-                    acts, dual_vars, constraints = _relaxation_step(
-                        acts, dual_vars, step
-                    )
+                    acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
 
-                # Track augmented Lagrangian per iteration
-                if self._free_energy_history is not None:
-                    self._free_energy_history.append(
-                        self._compute_augmented_lagrangian(
-                            acts, dual_vars, layered, op, current_rho
-                        ).item()
-                    )
-
-                # Check convergence on constraint violation norm
-                if step >= self.config.convergence_start:
-                    constraint_norm = max(c.abs().max().item() for c in constraints)
-                    if constraint_norm < self.config.convergence_threshold:
-                        self._settle_steps_used = step + 1
-                        return acts
+                self._track_augmented_lagrangian_and_check_convergence(
+                    acts, dual_vars, constraints, layered, op, current_rho, step
+                )
+                if self._settle_steps_used > 0:
+                    return acts
         else:
             for step in range(self.config.max_steps):
-                acts, dual_vars, constraints = _relaxation_step(acts, dual_vars, step)
+                acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
 
-                # Track augmented Lagrangian per iteration
-                if self._free_energy_history is not None:
-                    self._free_energy_history.append(
-                        self._compute_augmented_lagrangian(
-                            acts, dual_vars, layered, op, current_rho
-                        ).item()
-                    )
-
-                # Check convergence on constraint violation norm
-                if step >= self.config.convergence_start:
-                    constraint_norm = max(c.abs().max().item() for c in constraints)
-                    if constraint_norm < self.config.convergence_threshold:
-                        self._settle_steps_used = step + 1
-                        return acts
+                self._track_augmented_lagrangian_and_check_convergence(
+                    acts, dual_vars, constraints, layered, op, current_rho, step
+                )
+                if self._settle_steps_used > 0:
+                    return acts
         return acts
+
+    def _track_augmented_lagrangian_and_check_convergence(
+        self,
+        acts: list[Tensor],
+        dual_vars: list[Tensor],
+        constraints: list[Tensor],
+        layered: LayeredParams,
+        op: ForwardOp,
+        current_rho: float,
+        step: int,
+    ) -> None:
+        """Track augmented Lagrangian and check convergence."""
+        if self._free_energy_history is not None:
+            self._free_energy_history.append(
+                self._compute_augmented_lagrangian(
+                    acts, dual_vars, layered, op, current_rho
+                ).item()
+            )
+
+        if step >= self.config.convergence_start:
+            constraint_norm = max(c.abs().max().item() for c in constraints)
+            if constraint_norm < self.config.convergence_threshold:
+                self._settle_steps_used = step + 1
 
     def _compute_augmented_lagrangian(
         self,
@@ -2401,59 +2593,99 @@ class LazyStateDynamics(_SettleTelemetry):
         """Sequential per-layer settle (Gauss–Seidel sweeps)."""
         params = self._layered(geometry)
         op = substrate.get_forward_operator()
-        weights, biases, activations = (
-            params.weights,
-            params.biases,
-            params.activations,
-        )
-        if state.x is None:
+        weights, biases, activations = params.weights, params.biases, params.activations
+        x = state.x
+        if x is None:
             return state
-        acts = list(geometry.forward_with_intermediates(state.x, substrate))
+        acts = list(geometry.forward_with_intermediates(x, substrate))
         beta = self.config.beta if target is not None else 0.0
 
         self._note_settle_start()
         for sweep in range(self.config.max_steps):
-            max_delta = 0.0
-            for i in range(len(acts) - 2):
-                pre = op(acts[i], weights[i])
-                b = biases[i]
-                if b is not None:
-                    pre = pre + b
-                total = pre + acts[i + 2] @ weights[i + 1]
-                if params.residual and i > 0 and acts[i].shape == acts[i + 1].shape:
-                    total = total + acts[i]
-                target_h = activations[i](total) if i < len(activations) else total
-                h_new = acts[i + 1] + self.config.step_size * (target_h - acts[i + 1])
-                max_delta = max(
-                    max_delta, torch.dist(h_new, acts[i + 1], p=float("inf")).item()
-                )
-                acts[i + 1] = h_new
-            out = op(acts[-2], weights[-1])
-            b = biases[-1]
-            if b is not None:
-                out = out + b
-            if beta > 0 and target is not None:
-                out = out + beta * (_one_hot(target, out) - out)
-            max_delta = max(max_delta, torch.dist(out, acts[-1], p=float("inf")).item())
-            acts[-1] = out
-
+            max_delta = self._run_sweep(acts, weights, biases, activations, params, op, beta, target)
             if on_step is not None:
                 on_step(sweep, max_delta)
-
             if sweep >= self.config.convergence_start:
                 self._activation_cache[sweep] = [a.clone() for a in acts]
                 if max_delta < self.config.convergence_threshold:
                     self._settle_steps_used = sweep + 1
                     break
 
-        new_state = _create_output_state(
+        return _create_output_state(
             state,
             output=acts[-1],
             free_state=acts if target is None else None,
             nudged_state=acts if target is not None else None,
             activations=acts,
         )
-        return new_state
+
+    def _run_sweep(
+        self,
+        acts: list[Tensor],
+        weights: tuple[Tensor, ...],
+        biases: tuple[Tensor | None, ...],
+        activations: tuple[nn.Module, ...],
+        params: LayeredParams,
+        op: ForwardOp,
+        beta: float,
+        target: Tensor | None,
+    ) -> float:
+        """Run one Gauss-Seidel sweep and return max delta."""
+        max_delta = 0.0
+
+        # Update hidden layers
+        for i in range(len(acts) - 2):
+            h_new = self._update_hidden_layer(
+                i, acts, weights, biases, activations, params, op
+            )
+            max_delta = max(max_delta, torch.dist(h_new, acts[i + 1], p=float("inf")).item())
+            acts[i + 1] = h_new
+
+        # Update output layer
+        out = self._update_output_layer(acts, weights, biases, beta, target, op)
+        max_delta = max(max_delta, torch.dist(out, acts[-1], p=float("inf")).item())
+        acts[-1] = out
+
+        return max_delta
+
+    def _update_hidden_layer(
+        self,
+        i: int,
+        acts: list[Tensor],
+        weights: tuple[Tensor, ...],
+        biases: tuple[Tensor | None, ...],
+        activations: tuple[nn.Module, ...],
+        params: LayeredParams,
+        op: ForwardOp,
+    ) -> Tensor:
+        """Update a single hidden layer (Gauss-Seidel)."""
+        pre = op(acts[i], weights[i])
+        b = biases[i]
+        if b is not None:
+            pre = pre + b
+        total = pre + acts[i + 2] @ weights[i + 1]
+        if params.residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+            total = total + acts[i]
+        target_h = activations[i](total) if i < len(activations) else total
+        return acts[i + 1] + self.config.step_size * (target_h - acts[i + 1])
+
+    def _update_output_layer(
+        self,
+        acts: list[Tensor],
+        weights: tuple[Tensor, ...],
+        biases: tuple[Tensor | None, ...],
+        beta: float,
+        target: Tensor | None,
+        op: ForwardOp,
+    ) -> Tensor:
+        """Update the output layer with optional nudge."""
+        out = op(acts[-2], weights[-1])
+        b = biases[-1]
+        if b is not None:
+            out = out + b
+        if beta > 0 and target is not None:
+            out = out + beta * (_one_hot(target, out) - out)
+        return out
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         """Hopfield energy of the settled state (shared with the EqProp family)."""

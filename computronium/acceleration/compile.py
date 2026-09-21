@@ -11,7 +11,7 @@ Provides:
 import os
 import warnings
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import torch
 from torch import nn
@@ -24,8 +24,6 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from typing import Protocol
-
     from torch import Tensor
 
 

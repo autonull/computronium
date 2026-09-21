@@ -212,6 +212,77 @@ FAMILY_TOLERANCES: dict[str, tuple[float, float]] = {
 }
 
 
+# ============================================================
+# Valid Combinations Data (Module-level constants for valid_combinations)
+# ============================================================
+
+_SUBSTRATES: list[dict[str, object]] = [
+    {"type": "digital", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
+    {"type": "memristive", "precision": "float32", "noise_level": 0.01, "sparsity": 0.0},
+    {"type": "neuromorphic", "precision": "float16", "noise_level": 0.0, "sparsity": 0.95},
+    {"type": "optical", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
+    {"type": "quantum", "precision": "complex64", "noise_level": 0.0, "sparsity": 0.0},
+    {"type": "sparse", "precision": "float32", "noise_level": 0.0, "sparsity": 0.8},
+    {"type": "ternary", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
+]
+
+_GEOMETRIES: list[dict[str, object]] = [
+    {"topology_type": "feedforward", "input_dim": 784, "output_dim": 10, "hidden_dims": [256, 128]},
+    {"topology_type": "recurrent", "input_dim": 784, "output_dim": 10, "hidden_dims": [256]},
+    {
+        "topology_type": "tile_mesh",
+        "input_dim": 784,
+        "output_dim": 10,
+        "num_layers": 4,
+        "neurons_per_tile": 64,
+        "tiles_per_layer": 4,
+    },
+]
+
+_DYNAMICS_OPTIONS: list[dict[str, object]] = [
+    {"dynamics_type": "energy_minimization", "max_steps": 20, "beta": 0.5},
+    {"dynamics_type": "predictive_settling", "max_steps": 20, "beta": 0.5},
+    {"dynamics_type": "spike_integration", "max_steps": 50, "beta": 0.5},
+    {"dynamics_type": "instantaneous", "max_steps": 1, "beta": 0.5},
+    {"dynamics_type": "diffusion", "max_steps": 100, "beta": 0.5},
+]
+
+_PLASTICITIES: list[dict[str, object]] = [
+    {"type": "null"},
+    {"type": "routing", "gate_dim": 64},
+    {"type": "fast_weights", "fast_weight_dim": 512, "decay": 0.9, "learning_rate": 0.1},
+    {"type": "substrate_coupled"},
+]
+
+_CREDITS: list[dict[str, object]] = [
+    {"credit_type": "thermodynamic_contrast", "beta": 0.5},
+    {"credit_type": "random_projections", "beta": 0.5},
+    {"credit_type": "local_goodness", "beta": 0.5},
+    {"credit_type": "temporal_trace", "beta": 0.5},
+    {"credit_type": "target_inversion", "beta": 0.5},
+    {"credit_type": "gradient", "beta": 0.5},
+]
+
+_UPDATES: list[dict[str, object]] = [
+    {"update_type": "euclidean", "step_size": 0.01},
+    {"update_type": "adam", "step_size": 0.001},
+    {"update_type": "ortho_adam", "step_size": 0.001, "ortho_lr": 0.003},
+    {"update_type": "lion", "step_size": 0.003},
+    {"update_type": "riemannian_orthogonal", "step_size": 0.01},
+    {"update_type": "spectral_constrained", "step_size": 0.01},
+    {"update_type": "mean_norm", "step_size": 0.01},
+    {"update_type": "elastic_consolidation", "step_size": 0.01},
+]
+
+# Pre-computed validation rule sets for fast filtering
+_RECURRENT_DYNAMICS = {"energy_minimization"}
+_THERMO_CREDIT_DYNAMICS = {"energy_minimization"}
+_SPIKE_INTEGRATION_CREDITS = {"temporal_trace", "target_inversion", "target_prop"}
+_TILE_MESH_DYNAMICS = {"energy_minimization", "instantaneous"}
+_QUANTUM_DYNAMICS = {"energy_minimization", "instantaneous", "diffusion"}
+_PREDICTIVE_SETTLING_CREDITS = {"thermodynamic_contrast", "equilibrium", "local_goodness", "forward_only"}
+
+
 @dataclass(frozen=True, slots=True)
 class SystemConfig:
     """Validated composition of 6-D ontology — single source of truth for a system.
@@ -248,20 +319,53 @@ class SystemConfig:
             plasticity if plasticity is not None else PlasticityConfig.null(),
         )
 
-    def validate(self) -> None:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+    def validate(self) -> None:
         """Cross-axis validation (hard constraints only).
 
         Raises:
             ValueError: If configuration violates hard compatibility constraints.
         """
-        # Recurrent geometry requires energy-based, PC-family, or instantaneous dynamics.
-        # Measured evidence (TODO28 broad map): predictive_settling ×
-        # recurrent (max 0.867) and error_predictive_coding × recurrent
-        # (max 0.647) train; instantaneous settles by a single forward
-        # pass, valid on any topology. spike_integration's raw route-loop
-        # and lazy's Gauss-Seidel sweep remain forbidden (their own
-        # fail-loud checks below/in-class cover those).
-        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership, collapsible-if]
+        # Geometry-Dynamics compatibility
+        self._validate_recurrent_geometry_dynamics()
+        self._validate_nonlayered_geometry_dynamics()
+        self._validate_tile_mesh_dynamics()
+        self._validate_nca_ntm_geometry()
+        self._validate_diffusion_dynamics_credit()
+        self._validate_spike_integration_credit()
+        self._validate_predictive_settling_credit()
+        self._validate_pc_alm_dynamics()
+        self._validate_residual_connections()
+
+        # Credit-Dynamics compatibility
+        self._validate_thermodynamic_contrast_dynamics()
+
+        # Beta matching (soft constraints)
+        self._validate_beta_matching_energy_minimization()
+        self._validate_beta_matching_pc_alm()
+
+        # Substrate-Dynamics compatibility
+        self._validate_neuromorphic_substrate_dynamics()
+        self._validate_analog_substrate_noise()
+        self._validate_complex_substrate_credit()
+        self._validate_quantum_substrate_dynamics()
+        self._validate_sparse_substrate_update()
+        self._validate_ternary_substrate_credit()
+        self._validate_diffusion_substrate_noise()
+
+        # Geometry-Substrate compatibility
+        self._validate_spatial_neuromorphic_geometry_substrate()
+        self._validate_tile_mesh_sparse_substrate()
+
+        # Special case validations
+        self._validate_gradient_credit_beta_clamp()
+        self._validate_per_element_displacement_step_size()
+        self._validate_energy_minimization_momentum_update()
+
+    # --- Geometry-Dynamics Validation Methods ---
+
+    def _validate_recurrent_geometry_dynamics(self) -> None:
+        """Recurrent geometry requires energy-based, PC-family, or instantaneous dynamics."""
+        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):
             if self.dynamics.dynamics_type not in {
                 "energy_minimization",
                 "predictive_settling",
@@ -275,14 +379,9 @@ class SystemConfig:
                     f"got {self.dynamics.dynamics_type!r}"
                 )
 
-        # Non-layered geometries cannot host settling dynamics: their
-        # route()/head paths assume geometry-internal state shapes
-        # (attention head-split, lattice (b,n,c) unpack), while settling
-        # families feed raw membrane states. Only instantaneous — a single
-        # forward() pass — is compatible (measured: instantaneous ×
-        # attention/spatial_lattice train; every settling × non-layered
-        # pairing crashes). Broad-map audit TODO28 2026-09-15.
-        if self.dynamics.dynamics_type != "instantaneous" and (  # noqa: PLR6201
+    def _validate_nonlayered_geometry_dynamics(self) -> None:
+        """Non-layered geometries cannot host settling dynamics."""
+        if self.dynamics.dynamics_type != "instantaneous" and (
             self.geometry.topology_type
             in {
                 "attention",
@@ -300,10 +399,32 @@ class SystemConfig:
                 f"geometry does not support (state-shape contract)"
             )
 
-        # Diffusion settle is a detached Langevin sampler: its output
-        # carries no autograd graph, so gradient/backprop credit has
-        # nothing to consume (TODO28 broad-map audit: autograd_break).
-        if self.dynamics.dynamics_type == "diffusion":  # ruff: ignore[collapsible-if]
+    def _validate_tile_mesh_dynamics(self) -> None:
+        """Tile mesh geometry requires compatible dynamics."""
+        if self.geometry.topology_type in ("tile_mesh", "tile"):
+            if self.dynamics.dynamics_type not in (
+                "energy_minimization",
+                "pc_alm",
+                "instantaneous",
+            ):
+                raise ValueError(
+                    f"Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics, "
+                    f"got {self.dynamics.dynamics_type!r}"
+                )
+
+    def _validate_nca_ntm_geometry(self) -> None:
+        """NCA/NTM geometries require instantaneous dynamics."""
+        if self.geometry.topology_type in {"nca", "ntm"} and (
+            self.dynamics.dynamics_type != "instantaneous"
+        ):
+            raise ValueError(
+                f"{self.geometry.topology_type.upper()} geometry requires "
+                f"instantaneous dynamics, got {self.dynamics.dynamics_type!r}"
+            )
+
+    def _validate_diffusion_dynamics_credit(self) -> None:
+        """Diffusion settle produces non-differentiable state; gradient/backprop unsupported."""
+        if self.dynamics.dynamics_type == "diffusion":
             if self.credit.credit_type in {"gradient", "backprop"}:
                 raise ValueError(
                     f"Diffusion dynamics produce a non-differentiable settled "
@@ -311,22 +432,68 @@ class SystemConfig:
                     f"(credit_type={self.credit.credit_type!r}) is unsupported"
                 )
 
-        # Residual skips are implemented for the feedforward stack only
-        if (
-            getattr(self.geometry, "residual", False)
-            and self.geometry.topology_type != "feedforward"
+    def _validate_spike_integration_credit(self) -> None:
+        """Spike integration dynamics requires temporal trace or target inversion credit."""
+        if self.dynamics.dynamics_type == "spike_integration":
+            if self.credit.credit_type not in (
+                "temporal_trace",
+                "spiking",
+                "target_inversion",
+                "target_prop",
+            ):
+                raise ValueError(
+                    f"Spike integration dynamics requires temporal trace or target inversion credit, "
+                    f"got {self.credit.credit_type!r}"
+                )
+
+    def _validate_predictive_settling_credit(self) -> None:
+        """Predictive settling dynamics requires compatible credit."""
+        if self.dynamics.dynamics_type in (
+            "predictive_settling",
+            "error_predictive_coding",
         ):
+            if self.credit.credit_type not in (
+                "thermodynamic_contrast",
+                "equilibrium",
+                "local_goodness",
+                "forward_only",
+            ):
+                raise ValueError(
+                    f"{self.dynamics.dynamics_type} dynamics requires "
+                    f"thermodynamic_contrast, local_goodness, or forward_only credit, "
+                    f"got {self.credit.credit_type!r}"
+                )
+
+    def _validate_pc_alm_dynamics(self) -> None:
+        """PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast) and layered geometry."""
+        if self.dynamics.dynamics_type == "pc_alm":
+            if self.credit.credit_type not in ("pc_alm", "thermodynamic_contrast"):
+                raise ValueError(
+                    f"PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit, "
+                    f"got {self.credit.credit_type!r}"
+                )
+            if self.geometry.topology_type not in (
+                "feedforward",
+                "recurrent",
+                "tile_mesh",
+            ):
+                raise ValueError(
+                    f"PC-ALM dynamics requires layered geometry, "
+                    f"got {self.geometry.topology_type!r}"
+                )
+
+    def _validate_residual_connections(self) -> None:
+        """Residual connections only supported on feedforward geometry."""
+        if getattr(self.geometry, "residual", False) and self.geometry.topology_type != "feedforward":
             raise ValueError(
                 f"Residual connections (residual=True) require feedforward geometry, "
                 f"got topology_type={self.geometry.topology_type!r}"
             )
 
-        # Thermodynamic contrast credit requires energy-based or PC-family
-        # dynamics (R5.2: the PC family — sPC/ePC — consumes thermo contrast
-        # legitimately; the dormant contradiction with the predictive-settling
-        # branch below is reconciled by whitelisting it here).
-        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # ruff: ignore[literal-membership, collapsible-if]
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+    def _validate_thermodynamic_contrast_dynamics(self) -> None:
+        """Thermodynamic contrast credit requires energy-based or PC-family dynamics."""
+        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
+            if self.dynamics.dynamics_type not in (
                 "energy_minimization",
                 "predictive_settling",
                 "error_predictive_coding",
@@ -338,46 +505,12 @@ class SystemConfig:
                     f"requires energy-based or PC-family dynamics, got {self.dynamics.dynamics_type!r}"
                 )
 
-        # Spiking dynamics requires temporal trace or STDP credit
-        if self.dynamics.dynamics_type == "spike_integration":  # ruff: ignore[collapsible-if]
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
-                "temporal_trace",
-                "spiking",
-                "target_inversion",
-                "target_prop",
-            ):
-                raise ValueError(
-                    f"Spike integration dynamics requires temporal trace or target inversion credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
+    # --- Beta Matching (Soft Constraints) ---
 
-        # Tile mesh geometry requires compatible dynamics
-        if self.geometry.topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership, collapsible-if]
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
-                "energy_minimization",
-                "pc_alm",
-                "instantaneous",
-            ):
-                raise ValueError(
-                    f"Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics, "
-                    f"got {self.dynamics.dynamics_type!r}"
-                )
-
-        # NCA / NTM geometries: per-step additive/recurrent state updates;
-        # the rollout is a settle→update cycle, not an energy settle
-        # (TODO.ntm_nca.md W8.1/W8.5)
-        if self.geometry.topology_type in {"nca", "ntm"} and (
-            self.dynamics.dynamics_type != "instantaneous"
-        ):
-            raise ValueError(
-                f"{self.geometry.topology_type.upper()} geometry requires "
-                f"instantaneous dynamics, got {self.dynamics.dynamics_type!r}"
-            )
-
-        # Beta matching: StateDynamics.beta should match CreditAssignment.beta for energy-based systems
-        if self.dynamics.dynamics_type == "energy_minimization":  # ruff: ignore[collapsible-if]
+    def _validate_beta_matching_energy_minimization(self) -> None:
+        """Energy minimization dynamics requires matching beta between dynamics and credit."""
+        if self.dynamics.dynamics_type == "energy_minimization":
             if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                # Soft constraint: warn but don't fail
                 warnings.warn(
                     f"Beta mismatch: dynamics.beta={self.dynamics.beta} != credit.beta={self.credit.beta}. "
                     f"This may cause incorrect gradient scaling in EqProp.",
@@ -385,15 +518,23 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # ============================================================
-        # Substrate-Dynamics Compatibility Constraints
-        # ============================================================
+    def _validate_beta_matching_pc_alm(self) -> None:
+        """PC-ALM dynamics requires matching beta (dual LR scale)."""
+        if self.dynamics.dynamics_type == "pc_alm":
+            if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
+                warnings.warn(
+                    f"PC-ALM beta mismatch: dynamics.beta={self.dynamics.beta} "
+                    f"!= credit.beta={self.credit.beta}. Dual LR scaling may be incorrect.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
-        # Neuromorphic substrate requires spike integration or energy minimization dynamics
-        # (instantaneous pass-through doesn't capture neuromorphic temporal dynamics)
-        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:  # ruff: ignore[collapsible-if]
-            # Likely neuromorphic substrate
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+    # --- Substrate-Dynamics Validation Methods ---
+
+    def _validate_neuromorphic_substrate_dynamics(self) -> None:
+        """Neuromorphic substrate requires temporal dynamics."""
+        if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:
+            if self.dynamics.dynamics_type not in (
                 "spike_integration",
                 "energy_minimization",
                 "diffusion",
@@ -405,11 +546,10 @@ class SystemConfig:
                     f"got {self.dynamics.dynamics_type!r}"
                 )
 
-        # Analog substrate with noise requires dynamics that support noise injection
-        if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:  # ruff: ignore[collapsible-if]
+    def _validate_analog_substrate_noise(self) -> None:
+        """Analog substrate with noise warns on instantaneous dynamics."""
+        if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:
             if self.dynamics.dynamics_type == "instantaneous":
-                # Instantaneous dynamics doesn't use substrate noise during settling
-                # (only single forward pass). Warn but don't fail.
                 warnings.warn(
                     f"Analog substrate with noise_level={self.substrate.noise_level} "
                     f"used with instantaneous dynamics. Noise only applied once at input. "
@@ -418,14 +558,10 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Complex substrate requires compatible credit assignment
-        # Complex/holomorphic networks work best with thermodynamic contrast
-        # (phase-sensitive gradients) or backprop (Wirtinger calculus)
-        if self.substrate.precision == "float32" and getattr(  # ruff: ignore[collapsible-if]
-            self.substrate, "_complex_emulated", False
-        ):
-            # This is a complex substrate (emulated via real/imag channels)
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+    def _validate_complex_substrate_credit(self) -> None:
+        """Complex substrate works best with thermodynamic contrast or backprop."""
+        if self.substrate.precision == "float32" and getattr(self.substrate, "_complex_emulated", False):
+            if self.credit.credit_type not in (
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
@@ -439,10 +575,10 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Quantum substrate requires compatible dynamics
-        # Quantum circuits need energy-based or instantaneous dynamics
+    def _validate_quantum_substrate_dynamics(self) -> None:
+        """Quantum substrate requires compatible dynamics and beta matching."""
         if self.substrate.precision == "complex64":
-            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+            if self.dynamics.dynamics_type not in (
                 "energy_minimization",
                 "instantaneous",
                 "diffusion",
@@ -451,9 +587,7 @@ class SystemConfig:
                     f"Quantum substrate requires energy_minimization, instantaneous, "
                     f"or diffusion dynamics, got {self.dynamics.dynamics_type!r}"
                 )
-
-            # Quantum substrate with thermodynamic contrast needs matching beta
-            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # ruff: ignore[literal-membership, collapsible-if]
+            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
                 if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
                     warnings.warn(
                         f"Quantum substrate with thermodynamic contrast: "
@@ -463,9 +597,9 @@ class SystemConfig:
                         stacklevel=2,
                     )
 
-        # Sparse substrate requires compatible update rule
-        # Sparse weights need updates that preserve sparsity structure
-        if self.substrate.sparsity > 0.5:  # ruff: ignore[collapsible-if]
+    def _validate_sparse_substrate_update(self) -> None:
+        """Sparse substrate warns on RiemannianOrthogonalUpdate."""
+        if self.substrate.sparsity > 0.5:
             if self.update.update_type == "riemannian_orthogonal":
                 warnings.warn(
                     f"Sparse substrate (sparsity={self.substrate.sparsity}) with "
@@ -475,16 +609,14 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Ternary substrate requires compatible credit assignment
-        # Ternary quantization works best with equilibrium/thermodynamic contrast
-        # (contrastive learning naturally handles weight quantization)
-        if (  # ruff: ignore[collapsible-if]
+    def _validate_ternary_substrate_credit(self) -> None:
+        """Ternary-like substrate works best with thermodynamic contrast or backprop."""
+        if (
             self.substrate.precision == "float32"
             and self.substrate.sparsity == 0.0
             and self.substrate.weight_bounds == (-1.0, 1.0)
         ):
-            # Heuristic: likely ternary substrate (sparsity emerges from thresholding)
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
+            if self.credit.credit_type not in (
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
@@ -498,8 +630,9 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Diffusion dynamics requires noise-aware substrate
-        if self.dynamics.dynamics_type == "diffusion":  # ruff: ignore[collapsible-if]
+    def _validate_diffusion_substrate_noise(self) -> None:
+        """Diffusion dynamics requires substrate noise_level > 0."""
+        if self.dynamics.dynamics_type == "diffusion":
             if self.substrate.noise_level == 0.0:
                 warnings.warn(
                     "Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
@@ -508,66 +641,11 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Predictive settling dynamics requires compatible credit
-        # PC uses local errors, works with thermodynamic contrast or local goodness
-        if self.dynamics.dynamics_type in (  # ruff: ignore[literal-membership, collapsible-if]
-            "predictive_settling",
-            "error_predictive_coding",
-        ):
-            if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
-                "thermodynamic_contrast",
-                "equilibrium",
-                "local_goodness",
-                "forward_only",
-            ):
-                raise ValueError(
-                    f"{self.dynamics.dynamics_type} dynamics requires "
-                    f"thermodynamic_contrast, local_goodness, or forward_only credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
+    # --- Geometry-Substrate Validation Methods ---
 
-        # PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast as proxy)
-        if self.dynamics.dynamics_type == "pc_alm":  # noqa: SIM102
-            if self.credit.credit_type not in ("pc_alm", "thermodynamic_contrast"):
-                raise ValueError(
-                    f"PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
-            # PC-ALM requires layered geometry
-            if self.geometry.topology_type not in (
-                "feedforward",
-                "recurrent",
-                "tile_mesh",
-            ):
-                raise ValueError(
-                    f"PC-ALM dynamics requires layered geometry, "
-                    f"got {self.geometry.topology_type!r}"
-                )
-            # Beta matching: dynamics.beta ≈ credit.beta (dual LR scale)
-            if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                warnings.warn(
-                    f"PC-ALM beta mismatch: dynamics.beta={self.dynamics.beta} "
-                    f"!= credit.beta={self.credit.beta}. Dual LR scaling may be incorrect.",
-                    UserWarning,
-                    stacklevel=2,
-                )
-
-        # Energy minimization with momentum requires compatible update
-        if (
-            self.dynamics.dynamics_type == "energy_minimization"
-            and self.dynamics.momentum > 0.0
-        ) and self.update.update_type == "riemannian_orthogonal":
-            warnings.warn(
-                f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
-                f"combined with RiemannianOrthogonalUpdate may cause instability. "
-                f"Consider EuclideanUpdate with momentum.",
-                UserWarning,
-                stacklevel=2,
-            )
-
-        # Geometry-Substrate constraints
-        # Spatial lattice / neuromorphic geometry requires neuromorphic substrate
-        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):  # ruff: ignore[literal-membership, collapsible-if]
+    def _validate_spatial_neuromorphic_geometry_substrate(self) -> None:
+        """Spatial/neuromorphic geometry works best with neuromorphic substrate."""
+        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):
             if not (
                 self.substrate.precision == "float16" and self.substrate.sparsity > 0.9
             ):
@@ -580,11 +658,9 @@ class SystemConfig:
                     stacklevel=2,
                 )
 
-        # Tile mesh geometry with sparse substrate
-        if (
-            self.geometry.topology_type in ("tile_mesh", "tile")  # ruff: ignore[literal-membership]
-            and self.substrate.sparsity > 0.5
-        ):
+    def _validate_tile_mesh_sparse_substrate(self) -> None:
+        """Tile mesh with sparse substrate warns about structured sparsity."""
+        if self.geometry.topology_type in ("tile_mesh", "tile") and self.substrate.sparsity > 0.5:
             warnings.warn(
                 f"Sparse substrate (sparsity={self.substrate.sparsity}) "
                 f"with tile mesh geometry may benefit from structured sparsity (N:M or block) "
@@ -593,23 +669,19 @@ class SystemConfig:
                 stacklevel=2,
             )
 
-        # TODO12b H8: beta=1.0 fully clamps the nudged output to the
-        # target — GradientCredit's pseudo-gradient is EXACTLY zero (dead
-        # loss surface, locked in test_defect_hunt_locks.py).
-        if (
-            self.credit.credit_type in {"gradient", "backprop"}
-            and self.credit.beta >= 1.0
-        ):
+    # --- Special Case Validations ---
+
+    def _validate_gradient_credit_beta_clamp(self) -> None:
+        """Gradient/backprop credit with beta >= 1.0 has zero pseudo-gradient."""
+        if self.credit.credit_type in {"gradient", "backprop"} and self.credit.beta >= 1.0:
             raise ValueError(
                 f"credit_type={self.credit.credit_type!r} with beta={self.credit.beta} "
                 f"has an exactly-zero pseudo-gradient (the nudged output is fully "
                 f"clamped to the target); use beta < 1.0."
             )
 
-        # TODO12b R5: per-element-displacement update rules take step_size
-        # as an absolute displacement — an lr grid borrowed from a
-        # gradient-relative rule (0.05–0.1 scale) overshoots into collapse
-        # (H1/H4 measured confounds). Loud-check the classic mislabel.
+    def _validate_per_element_displacement_step_size(self) -> None:
+        """Per-element-displacement update rules warn on gradient-relative step_size range."""
         if (
             self.update.step_semantics == "per_element_displacement"
             and self.update.step_size > 0.05
@@ -623,8 +695,23 @@ class SystemConfig:
                 stacklevel=2,
             )
 
+    def _validate_energy_minimization_momentum_update(self) -> None:
+        """EnergyMinimizationDynamics with momentum warns on RiemannianOrthogonalUpdate."""
+        if (
+            self.dynamics.dynamics_type == "energy_minimization"
+            and self.dynamics.momentum > 0.0
+            and self.update.update_type == "riemannian_orthogonal"
+        ):
+            warnings.warn(
+                f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
+                f"combined with RiemannianOrthogonalUpdate may cause instability. "
+                f"Consider EuclideanUpdate with momentum.",
+                UserWarning,
+                stacklevel=2,
+            )
+
     @classmethod
-    def valid_combinations(cls) -> list[dict[str, str]]:  # ruff: ignore[complex-structure, too-many-branches]
+    def valid_combinations(cls) -> list[dict[str, dict[str, object]]]:
         """Return all valid 6-D coordinate combinations for AutoScientist.
 
         Returns:
@@ -632,189 +719,60 @@ class SystemConfig:
             substrate, geometry, dynamics, plasticity, credit, update.
             These are the coordinates that pass cross-axis validation.
         """
-        # Core valid combinations derived from validation rules
-        combinations = []
+        from itertools import product
 
-        # Substrate types
-        substrates = [
+        combinations = [
             {
-                "type": "digital",
-                "precision": "float32",
-                "noise_level": 0.0,
-                "sparsity": 0.0,
-            },
-            {
-                "type": "memristive",
-                "precision": "float32",
-                "noise_level": 0.01,
-                "sparsity": 0.0,
-            },
-            {
-                "type": "neuromorphic",
-                "precision": "float16",
-                "noise_level": 0.0,
-                "sparsity": 0.95,
-            },
-            {
-                "type": "optical",
-                "precision": "float32",
-                "noise_level": 0.0,
-                "sparsity": 0.0,
-            },
-            {
-                "type": "quantum",
-                "precision": "complex64",
-                "noise_level": 0.0,
-                "sparsity": 0.0,
-            },
-            {
-                "type": "sparse",
-                "precision": "float32",
-                "noise_level": 0.0,
-                "sparsity": 0.8,
-            },
-            {
-                "type": "ternary",
-                "precision": "float32",
-                "noise_level": 0.0,
-                "sparsity": 0.0,
-            },
+                "substrate": sub,
+                "geometry": geom,
+                "dynamics": dyn,
+                "plasticity": plas,
+                "credit": cred,
+                "update": upd,
+            }
+            for sub, geom, dyn, plas, cred, upd in product(
+                _SUBSTRATES,
+                _GEOMETRIES,
+                _DYNAMICS_OPTIONS,
+                _PLASTICITIES,
+                _CREDITS,
+                _UPDATES,
+            )
+            if cls._is_valid_combination(sub, geom, dyn, cred)
         ]
-
-        # Geometry types
-        geometries = [
-            {
-                "topology_type": "feedforward",
-                "input_dim": 784,
-                "output_dim": 10,
-                "hidden_dims": [256, 128],
-            },
-            {
-                "topology_type": "recurrent",
-                "input_dim": 784,
-                "output_dim": 10,
-                "hidden_dims": [256],
-            },
-            {
-                "topology_type": "tile_mesh",
-                "input_dim": 784,
-                "output_dim": 10,
-                "num_layers": 4,
-                "neurons_per_tile": 64,
-                "tiles_per_layer": 4,
-            },
-        ]
-
-        # Dynamics types
-        dynamics_options = [
-            {"dynamics_type": "energy_minimization", "max_steps": 20, "beta": 0.5},
-            {"dynamics_type": "predictive_settling", "max_steps": 20, "beta": 0.5},
-            {"dynamics_type": "spike_integration", "max_steps": 50, "beta": 0.5},
-            {"dynamics_type": "instantaneous", "max_steps": 1, "beta": 0.5},
-            {"dynamics_type": "diffusion", "max_steps": 100, "beta": 0.5},
-        ]
-
-        # Plasticity types
-        plasticities = [
-            {"type": "null"},
-            {"type": "routing", "gate_dim": 64},
-            {
-                "type": "fast_weights",
-                "fast_weight_dim": 512,
-                "decay": 0.9,
-                "learning_rate": 0.1,
-            },
-            {"type": "substrate_coupled"},
-        ]
-
-        # Credit types
-        credits = [
-            {"credit_type": "thermodynamic_contrast", "beta": 0.5},
-            {"credit_type": "random_projections", "beta": 0.5},
-            {"credit_type": "local_goodness", "beta": 0.5},
-            {"credit_type": "temporal_trace", "beta": 0.5},
-            {"credit_type": "target_inversion", "beta": 0.5},
-            {"credit_type": "gradient", "beta": 0.5},
-        ]
-
-        # Update types
-        updates = [
-            {"update_type": "euclidean", "step_size": 0.01},
-            {"update_type": "adam", "step_size": 0.001},
-            {"update_type": "ortho_adam", "step_size": 0.001, "ortho_lr": 0.003},
-            {"update_type": "lion", "step_size": 0.003},
-            {"update_type": "riemannian_orthogonal", "step_size": 0.01},
-            {"update_type": "spectral_constrained", "step_size": 0.01},
-            {"update_type": "mean_norm", "step_size": 0.01},
-            {"update_type": "elastic_consolidation", "step_size": 0.01},
-        ]
-
-        # Generate combinations and validate
-        for sub in substrates:  # ruff: ignore[too-many-nested-blocks]
-            for geom in geometries:
-                for dyn in dynamics_options:
-                    for plas in plasticities:
-                        for cred in credits:
-                            for upd in updates:
-                                coord = {
-                                    "substrate": sub,
-                                    "geometry": geom,
-                                    "dynamics": dyn,
-                                    "plasticity": plas,
-                                    "credit": cred,
-                                    "update": upd,
-                                }
-                                # Quick validation: skip known invalid combos
-                                # Recurrent geometry requires energy_minimization
-                                if geom["topology_type"] in (  # ruff: ignore[literal-membership, collapsible-if]
-                                    "recurrent",
-                                    "recurrent_attractor",
-                                ):
-                                    if dyn["dynamics_type"] != "energy_minimization":
-                                        continue
-                                # Thermodynamic contrast requires energy_minimization
-                                if cred["credit_type"] in (  # ruff: ignore[literal-membership, collapsible-if]
-                                    "thermodynamic_contrast",
-                                    "equilibrium",
-                                ):
-                                    if dyn["dynamics_type"] != "energy_minimization":
-                                        continue
-                                # Spike integration requires temporal trace or target inversion credit
-                                if dyn["dynamics_type"] == "spike_integration":  # ruff: ignore[collapsible-if]
-                                    if cred["credit_type"] not in (  # ruff: ignore[literal-membership]
-                                        "temporal_trace",
-                                        "target_inversion",
-                                        "target_prop",
-                                    ):
-                                        continue
-                                # Tile mesh requires compatible dynamics
-                                if geom["topology_type"] in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership, collapsible-if]
-                                    if dyn["dynamics_type"] not in (  # ruff: ignore[literal-membership]
-                                        "energy_minimization",
-                                        "instantaneous",
-                                    ):
-                                        continue
-                                # Quantum substrate requires compatible dynamics
-                                if sub["precision"] == "complex64":  # ruff: ignore[collapsible-if]
-                                    if dyn["dynamics_type"] not in (  # ruff: ignore[literal-membership]
-                                        "energy_minimization",
-                                        "instantaneous",
-                                        "diffusion",
-                                    ):
-                                        continue
-                                # Predictive settling requires compatible credit
-                                if dyn["dynamics_type"] == "predictive_settling":  # ruff: ignore[collapsible-if]
-                                    if cred["credit_type"] not in (  # ruff: ignore[literal-membership]
-                                        "thermodynamic_contrast",
-                                        "equilibrium",
-                                        "local_goodness",
-                                        "forward_only",
-                                    ):
-                                        continue
-
-                                combinations.append(coord)
 
         return combinations
+
+    @classmethod
+    def _is_valid_combination(
+        cls,
+        substrate: dict[str, object],
+        geometry: dict[str, object],
+        dynamics: dict[str, object],
+        credit: dict[str, object],
+    ) -> bool:
+        """Check if a combination passes all hard validation rules.
+
+        This mirrors the validation logic in SystemConfig.validate() but
+        operates on raw config dicts for fast filtering during AutoScientist
+        candidate generation.
+        """
+        geo_type = geometry["topology_type"]
+        dyn_type = dynamics["dynamics_type"]
+        cred_type = credit["credit_type"]
+        sub_precision = substrate["precision"]
+
+        validators: list[tuple[bool, bool]] = [
+            # (condition, should_pass)
+            (geo_type in ("recurrent", "recurrent_attractor"), dyn_type in _RECURRENT_DYNAMICS),
+            (cred_type in ("thermodynamic_contrast", "equilibrium"), dyn_type in _THERMO_CREDIT_DYNAMICS),
+            (dyn_type == "spike_integration", cred_type in _SPIKE_INTEGRATION_CREDITS),
+            (geo_type in ("tile_mesh", "tile"), dyn_type in _TILE_MESH_DYNAMICS),
+            (sub_precision == "complex64", dyn_type in _QUANTUM_DYNAMICS),
+            (dyn_type == "predictive_settling", cred_type in _PREDICTIVE_SETTLING_CREDITS),
+        ]
+
+        return all(not condition or should_pass for condition, should_pass in validators)
 
 
 # ============================================================

@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from computronium.ontology.depth import DepthMetric
+    from computronium.ontology.dynamics._dynamics import ForwardOp
     from computronium.ontology.substrate import Substrate
 
 _DEFAULT_INIT_SCALE = 0.1
@@ -1169,48 +1170,62 @@ class TileGeometry(nn.Module):
         params.update({f"tile_weight.{k}": v for k, v in self._tile_weights.items()})
         return params
 
-    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:  # ruff: ignore[complex-structure]
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
         """Route input through the tile mesh using substrate's forward operator."""
-        if substrate is None:
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            substrate = DigitalSubstrate()
+        substrate = self._get_substrate(substrate)
         op = substrate.get_forward_operator()
 
         # Project input to tile space
         h = self._input_projection(x)
 
         # Set input tile activities
+        self._set_input_activities(h)
+
+        # Forward propagate through layers
+        self._propagate_layers(op)
+
+        # Collect and project output
+        return self._collect_output(x)
+
+    def _get_substrate(self, substrate: Substrate | None) -> Substrate:
+        """Get substrate, defaulting to DigitalSubstrate."""
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+            substrate = DigitalSubstrate()
+        return substrate
+
+    def _set_input_activities(self, h: Tensor) -> None:
+        """Set input tile activities from projected input."""
         offset = 0
         for tid in self._graph.input_tile_ids:
             n = self._graph.tiles[tid].neurons
             self._graph.tiles[tid].activity = h[:, offset : offset + n]
             offset += n
 
-        # Forward propagate through layers (skip input layer)
+    def _propagate_layers(self, op: ForwardOp) -> None:
+        """Forward propagate through all non-input layers."""
         for layer_tiles in self._graph.layer_ids[1:]:
             for tid in layer_tiles:
-                tile = self._graph.tiles[tid]
-                # Compute weighted sum of incoming activities + bias
-                acc: Tensor | None = None
-                for src_id in tile.bwd_neighbors:
-                    src_act = self._graph.tiles[src_id].activity
-                    if src_act is None:
-                        continue
-                    w = self._tile_weights[self._weight_key(src_id, tid)]
-                    contrib = op(src_act, w)
-                    acc = contrib if acc is None else acc + contrib
-                if acc is not None:
-                    acc += (
-                        self
-                        ._tile_biases[str(tid)]
-                        .unsqueeze(0)
-                        .expand(acc.shape[0], -1)
-                    )
-                    tile.activity = acc
-                    tile.prediction = acc
+                self._propagate_tile(tid, op)
 
-        # Collect output tile activities
+    def _propagate_tile(self, tid: int, op: ForwardOp) -> None:
+        """Propagate a single tile."""
+        tile = self._graph.tiles[tid]
+        acc: Tensor | None = None
+        for src_id in tile.bwd_neighbors:
+            src_act = self._graph.tiles[src_id].activity
+            if src_act is None:
+                continue
+            w = self._tile_weights[self._weight_key(src_id, tid)]
+            contrib = op(src_act, w)
+            acc = contrib if acc is None else acc + contrib
+        if acc is not None:
+            acc += self._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
+            tile.activity = acc
+            tile.prediction = acc
+
+    def _collect_output(self, x: Tensor) -> Tensor:
+        """Collect output tile activities and apply output projection."""
         out_acts: list[Tensor] = []
         for tid in self._graph.output_tile_ids:
             act = self._graph.tiles[tid].activity
@@ -1299,32 +1314,31 @@ class TileGeometry(nn.Module):
                     acts.append(act)
         return torch.cat(acts, dim=1) if acts else torch.empty(1, 0)
 
-    def update_params(self, new_params: dict[str, Tensor]) -> None:  # ruff: ignore[complex-structure]
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
         """Update geometry parameters in-place from ParameterUpdate output."""
+        handlers = {
+            "input_proj.": (self._input_projection, lambda n: n.replace("input_proj.", "")),
+            "output_proj.": (self._output_projection, lambda n: n.replace("output_proj.", "")),
+            "tile_bias.": (self._tile_biases, lambda n: n.replace("tile_bias.", "")),
+            "tile_weight.": (self._tile_weights, lambda n: n.replace("tile_weight.", "")),
+        }
+
         for name, param in new_params.items():
-            if name.startswith("input_proj.") and self._input_projection is not None:
-                pname = name.replace("input_proj.", "")
-                if hasattr(self._input_projection, pname):
-                    getattr(self._input_projection, pname).data.copy_(param)
-            elif (
-                name.startswith("output_proj.") and self._output_projection is not None
-            ):
-                pname = name.replace("output_proj.", "")
-                if hasattr(self._output_projection, pname):
-                    getattr(self._output_projection, pname).data.copy_(param)
-            elif name.startswith("tile_bias."):
-                key = name.replace("tile_bias.", "")
-                if key in self._tile_biases:
-                    self._tile_biases[key].data.copy_(param)
-            elif name.startswith("tile_weight."):
-                key = name.replace("tile_weight.", "")
-                if key in self._tile_weights:
-                    self._tile_weights[key].data.copy_(param)
-            # Try direct match for backward compatibility
-            elif name in self._tile_weights:
-                self._tile_weights[name].data.copy_(param)
-            elif name in self._tile_biases:
-                self._tile_biases[name].data.copy_(param)
+            handled = False
+            for prefix, (target, key_fn) in handlers.items():
+                if name.startswith(prefix):
+                    key = key_fn(name)
+                    if hasattr(target, key):
+                        getattr(target, key).data.copy_(param)
+                    handled = True
+                    break
+
+            if not handled:
+                # Direct match for backward compatibility
+                if name in self._tile_weights:
+                    self._tile_weights[name].data.copy_(param)
+                elif name in self._tile_biases:
+                    self._tile_biases[name].data.copy_(param)
 
     def _validate_shapes(self) -> None:
         """Validate that projection dimensions match tile graph structure.
@@ -1376,14 +1390,11 @@ class TileGeometry(nn.Module):
         """
         return self._graph.get_boundary_tiles(device_map)
 
-    def forward_with_intermediates(  # ruff: ignore[complex-structure]
+    def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""
-        if substrate is None:
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            substrate = DigitalSubstrate()
+        substrate = self._get_substrate(substrate)
         op = substrate.get_forward_operator()
 
         # Project input to tile space
@@ -1391,33 +1402,10 @@ class TileGeometry(nn.Module):
         acts = [h]  # Input projection output
 
         # Set input tile activities
-        offset = 0
-        for tid in self._graph.input_tile_ids:
-            n = self._graph.tiles[tid].neurons
-            self._graph.tiles[tid].activity = h[:, offset : offset + n]
-            offset += n
+        self._set_input_activities(h)
 
-        # Forward propagate through layers (skip input layer)
-        for layer_tiles in self._graph.layer_ids[1:]:
-            for tid in layer_tiles:
-                tile = self._graph.tiles[tid]
-                acc: Tensor | None = None
-                for src_id in tile.bwd_neighbors:
-                    src_act = self._graph.tiles[src_id].activity
-                    if src_act is None:
-                        continue
-                    w = self._tile_weights[self._weight_key(src_id, tid)]
-                    contrib = op(src_act, w)
-                    acc = contrib if acc is None else acc + contrib
-                if acc is not None:
-                    acc += (
-                        self
-                        ._tile_biases[str(tid)]
-                        .unsqueeze(0)
-                        .expand(acc.shape[0], -1)
-                    )
-                    tile.activity = acc
-                    tile.prediction = acc
+        # Forward propagate through layers
+        self._propagate_layers(op)
 
         # Collect output tile activities
         out_acts: list[Tensor] = []
@@ -2857,38 +2845,60 @@ class NtmGeometry(nn.Module):
 # Geometry Dispatch
 # ============================================================
 
+# Dispatch table for geometry constructors
+_GEOMETRY_DISPATCH: dict[str, Callable[[GeometryConfig], Geometry]] = {
+    "ntm": NtmGeometry,
+    "recurrent": RecurrentGeometry,
+    "recurrent_attractor": RecurrentGeometry,
+    "tile_mesh": TileGeometry,
+    "tile": TileGeometry,
+    "conv": ConvGeometry,
+    "graph": GraphGeometry,
+    "attention": AttentionGeometry,
+    "spatial_lattice": SpatialLattice3DGeometry,
+    "nca": NcaGeometry,
+    "causal_transformer": TransformerGeometry,
+    "feedforward": FeedforwardGeometry,
+}
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[complex-structure, too-many-return-statements] - dispatch table
+
+def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
+    """Create RecurrentGeometry with optional recurrent_weight."""
+    hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
+    recurrent_weight = None
+    if config.recurrent_weight is not None:
+        recurrent_weight = torch.tensor(config.recurrent_weight)
+    return RecurrentGeometry(config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight)
+
+
+def _make_tile_geometry(config: GeometryConfig) -> TileGeometry:
+    """Create TileGeometry with tile parameters."""
+    return TileGeometry(
+        config,
+        neurons_per_tile=config.neurons_per_tile,
+        tiles_per_layer=config.tiles_per_layer,
+    )
+
+
+# Extended dispatch table for geometries requiring special construction
+_GEOMETRY_FACTORIES: dict[str, Callable[[GeometryConfig], Geometry]] = {
+    "recurrent": _make_recurrent_geometry,
+    "recurrent_attractor": _make_recurrent_geometry,
+    "tile_mesh": _make_tile_geometry,
+    "tile": _make_tile_geometry,
+}
+
+
+def geometry_from_config(config: GeometryConfig) -> Geometry:
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
-    if topology_type == "ntm":
-        return NtmGeometry(config)
-    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
-        hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
-        recurrent_weight = None
-        if config.recurrent_weight is not None:
-            recurrent_weight = torch.tensor(config.recurrent_weight)
-        return RecurrentGeometry(
-            config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
-        )
-    if topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
-        return TileGeometry(
-            config,
-            neurons_per_tile=config.neurons_per_tile,
-            tiles_per_layer=config.tiles_per_layer,
-        )
-    if topology_type == "conv":
-        return ConvGeometry(config)
-    if topology_type == "graph":
-        return GraphGeometry(config)
-    if topology_type == "attention":
-        return AttentionGeometry(config)
-    if topology_type == "spatial_lattice":
-        return SpatialLattice3DGeometry(config)
-    if topology_type == "nca":
-        return NcaGeometry(config)
-    if topology_type == "causal_transformer":
-        return TransformerGeometry(config)
-    if topology_type == "feedforward":
-        return FeedforwardGeometry(config)
+
+    # Try factory first (for geometries requiring special construction)
+    if topology_type in _GEOMETRY_FACTORIES:
+        return _GEOMETRY_FACTORIES[topology_type](config)
+
+    # Try direct class dispatch
+    if topology_type in _GEOMETRY_DISPATCH:
+        return _GEOMETRY_DISPATCH[topology_type](config)
+
     raise ValueError(f"Unknown topology_type: {topology_type!r}")
