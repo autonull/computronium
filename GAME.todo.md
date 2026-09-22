@@ -63,17 +63,27 @@ comp daemon    ... same flags ... --port 8940
 
 ### M0 — Foundations (≈2 weeks) — **P0 BLOCKERS**
 
-| ID | Task | Acceptance | Owner |
-|----|------|------------|-------|
-| **M0.1** | Create `ui/glossary.json` from GAME.md §5.3 master term table (both registers) | File exists, all 29+ terms mapped, loads without error | |
-| **M0.2** | Build `GlossaryService` (string service): lookup by key, register-aware, i18n-ready | `service.get("pareto_optimal", register="explorer") → "Best trade-off"` | |
-| **M0.3** | Design tokens: colorblind-safe palettes (viridis/cividis), type scale, icon set with shape redundancy, focus styles | Token file + Storybook/visual regression baseline | |
-| **M0.4** | Mode toggle scaffold: Explorer/Lab switch, persists to localStorage, wires GlossaryService into all existing panels (copy behind flag) | Toggle works, no reload, all panel text routes through service | |
-| **M0.5** | A11y baseline audit of current dashboard (axe-core + manual keyboard crawl) | Report with 0 critical/serious or triaged fixes | |
-| **M0.6** | Fix critical keyboard/contrast issues from audit | `axe-core` clean on shell routes | |
-| **M0.7** | Verify harnesses: UX-L3 (glossary totality), UX-L5 (a11y) green on scaffold | CI gates pass | |
+| ID | Task | Acceptance | Owner | Status |
+|----|------|------------|-------|--------|
+| **M0.1** | Create `ui/glossary.json` from GAME.md §5.3 master term table (both registers) | File exists, all 29+ terms mapped, loads without error | | ✅ **DONE** |
+| **M0.2** | Build `GlossaryService` (string service): lookup by key, register-aware, i18n-ready | `service.get("pareto_optimal", register="explorer") → "Best trade-off"` | | ✅ **DONE** |
+| **M0.3** | Design tokens: colorblind-safe palettes (viridis/cividis), type scale, icon set with shape redundancy, focus styles | Token file + Storybook/visual regression baseline | | ✅ **DONE** |
+| **M0.4** | Mode toggle scaffold: Explorer/Lab switch, persists to localStorage, wires GlossaryService into all existing panels (copy behind flag) | Toggle works, no reload, all panel text routes through service | | ✅ **DONE** |
+| **M0.5** | A11y baseline audit of current dashboard (axe-core + manual keyboard crawl) | Report with 0 critical/serious or triaged fixes | | 🔄 **IN PROGRESS** (audit.py scaffold ready) |
+| **M0.6** | Fix critical keyboard/contrast issues from audit | `axe-core` clean on shell routes | | ⏳ **PENDING** |
+| **M0.7** | Verify harnesses: UX-L3 (glossary totality), UX-L5 (a11y) green on scaffold | CI gates pass | | 🔄 **IN PROGRESS** (UX-L3 test scaffold ready) |
 
 **Exit M0:** UX-L3/L5 harnesses green; mode toggle ships dark; glossary is single source of truth.
+
+**Progress Summary (M0):**
+- ✅ `computronium/ui/glossary.json` — 151 terms with Explorer/Lab registers
+- ✅ `computronium/ui/glossary_service.py` — `GlossaryService`, `tr()`, `tr_both()` functions
+- ✅ `computronium/ui/design_tokens.py` — CVD-safe palettes (viridis/cividis), type scale, 73 shape-redundant icons, focus styles, CSS custom properties generator, reduced-motion/high-contrast media queries
+- ✅ `computronium/ui/mode_toggle.py` — `get_mode()`, `set_mode()`, `initialize_mode()`, `mode_toggle_button()`, `mode_toggle_select()`, `GlossaryAware` mixin, `BasePanel` with "What am I looking at?" drawer
+- ✅ `computronium/ui/a11y/tokens.py` — WCAG 2.2 AA contrast validation, focus indicators, motion tokens, touch targets, text spacing, ARIA live region config, a11y CSS generator
+- ✅ `computronium/ui/a11y/audit.py` — axe-core CLI wrapper, keyboard crawl checklist, CI integration
+- ✅ Package exports in `computronium/ui/__init__.py`, `computronium/ui/a11y/__init__.py`
+- ✅ All ruff/pyright checks pass; dev-env smoke test passes
 
 ---
 
