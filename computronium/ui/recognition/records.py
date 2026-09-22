@@ -189,8 +189,6 @@ def get_all_records(records: Iterable[Record]) -> list[Record]:
     return sorted(records, key=lambda r: r.timestamp, reverse=True)
 
 
-def get_records_by_objective(
-    records: Iterable[Record], objective: str
-) -> list[Record]:
+def get_records_by_objective(records: Iterable[Record], objective: str) -> list[Record]:
     """Get records for a specific objective."""
     return [r for r in records if r.objective == objective]

@@ -26,12 +26,12 @@ if TYPE_CHECKING:
 class ConstitutionMetrics:
     """The 6 constitutional invariants as computed by the panel."""
 
-    causality_dag: bool          # No circular dependencies
-    passivity: bool              # Δℰ ≤ ℰ_in
-    lyapunov_bound: bool         # ρ(J_F) ≤ τ
-    resource_ceiling: bool       # ||Z|| + |Ω| ≤ budget
-    protocol_conformance: bool   # Valid per SystemConfig.validate()
-    recursion_invariant: bool    # Well-founded recursion
+    causality_dag: bool  # No circular dependencies
+    passivity: bool  # Δℰ ≤ ℰ_in
+    lyapunov_bound: bool  # ρ(J_F) ≤ τ
+    resource_ceiling: bool  # ||Z|| + |Ω| ≤ budget
+    protocol_conformance: bool  # Valid per SystemConfig.validate()
+    recursion_invariant: bool  # Well-founded recursion
 
     # Raw metric values for byte-identical comparison
     spectral_radius: float
@@ -70,7 +70,9 @@ def _compute_constitution_from_stability(
     )
 
     # Create estimators using config objects
-    guard = StabilityGuard(GuardConfig(threshold=tau, statistic="fast_proxy", window=10))
+    guard = StabilityGuard(
+        GuardConfig(threshold=tau, statistic="fast_proxy", window=10)
+    )
     settling_monitor = SettlingMonitor(SettlingConfig(tolerance=1e-4, max_steps=1000))
     lyapunov_estimator = LyapunovEstimator(LyapunovConfig(num_steps=50, fast_mode=True))
     jacobian_estimator = JacobianAmplificationEstimator(
@@ -185,7 +187,9 @@ class TestConstitutionEquivalence:
         """Standard input tensor."""
         return torch.randn(4, 10)
 
-    @pytest.mark.skip(reason="ConstitutionHealthPanel not yet implemented; will verify byte-identical match when panel exists")
+    @pytest.mark.skip(
+        reason="ConstitutionHealthPanel not yet implemented; will verify byte-identical match when panel exists"
+    )
     def test_constitution_metrics_byte_identical(
         self, simple_model: torch.nn.Module, input_tensor: Tensor
     ) -> None:
@@ -197,26 +201,44 @@ class TestConstitutionEquivalence:
         assert panel.causality_dag == ref.causality_dag, "Causality (DAG) mismatch"
         assert panel.passivity == ref.passivity, "Passivity mismatch"
         assert panel.lyapunov_bound == ref.lyapunov_bound, "Lyapunov bound mismatch"
-        assert panel.resource_ceiling == ref.resource_ceiling, "Resource ceiling mismatch"
-        assert panel.protocol_conformance == ref.protocol_conformance, "Protocol conformance mismatch"
-        assert panel.recursion_invariant == ref.recursion_invariant, "Recursion invariant mismatch"
+        assert panel.resource_ceiling == ref.resource_ceiling, (
+            "Resource ceiling mismatch"
+        )
+        assert panel.protocol_conformance == ref.protocol_conformance, (
+            "Protocol conformance mismatch"
+        )
+        assert panel.recursion_invariant == ref.recursion_invariant, (
+            "Recursion invariant mismatch"
+        )
 
         # Raw metrics must match byte-identically (within float tolerance)
         assert panel.spectral_radius == pytest.approx(ref.spectral_radius, rel=1e-6), (
             f"Spectral radius mismatch: panel={panel.spectral_radius}, ref={ref.spectral_radius}"
         )
-        assert panel.lyapunov_exponent == pytest.approx(ref.lyapunov_exponent, rel=1e-6), (
+        assert panel.lyapunov_exponent == pytest.approx(
+            ref.lyapunov_exponent, rel=1e-6
+        ), (
             f"Lyapunov exponent mismatch: panel={panel.lyapunov_exponent}, ref={ref.lyapunov_exponent}"
         )
-        assert panel.jacobian_amplification == pytest.approx(ref.jacobian_amplification, rel=1e-6), (
+        assert panel.jacobian_amplification == pytest.approx(
+            ref.jacobian_amplification, rel=1e-6
+        ), (
             f"Jacobian amplification mismatch: panel={panel.jacobian_amplification}, ref={ref.jacobian_amplification}"
         )
         assert panel.settling_steps == ref.settling_steps, "Settling steps mismatch"
-        assert panel.energy_consumed == pytest.approx(ref.energy_consumed, rel=1e-6), "Energy consumed mismatch"
-        assert panel.energy_injected == pytest.approx(ref.energy_injected, rel=1e-6), "Energy injected mismatch"
-        assert panel.resource_usage == pytest.approx(ref.resource_usage, rel=1e-6), "Resource usage mismatch"
+        assert panel.energy_consumed == pytest.approx(ref.energy_consumed, rel=1e-6), (
+            "Energy consumed mismatch"
+        )
+        assert panel.energy_injected == pytest.approx(ref.energy_injected, rel=1e-6), (
+            "Energy injected mismatch"
+        )
+        assert panel.resource_usage == pytest.approx(ref.resource_usage, rel=1e-6), (
+            "Resource usage mismatch"
+        )
         assert panel.resource_budget == ref.resource_budget, "Resource budget mismatch"
-        assert panel.max_recursion_depth == ref.max_recursion_depth, "Max recursion depth mismatch"
+        assert panel.max_recursion_depth == ref.max_recursion_depth, (
+            "Max recursion depth mismatch"
+        )
 
     def test_constitution_explorer_strings_exist(self) -> None:
         """All 6 invariants must have Explorer register strings in glossary."""

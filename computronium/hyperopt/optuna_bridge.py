@@ -14,7 +14,11 @@ from optuna.samplers import NSGAIISampler, TPESampler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from .hyperparameter_metamodel import HyperparamSpec, ModelSpecProtocol, HyperparameterMetamodel
+    from .hyperparameter_metamodel import (
+        HyperparamSpec,
+        ModelSpecProtocol,
+        HyperparameterMetamodel,
+    )
 
 
 class EvaluationConfigProtocol(Protocol):
@@ -170,7 +174,9 @@ def create_optuna_space(
                 param_name, spec, constraints, min_val, max_val
             )
 
-        config[param_name] = _sample_parameter(trial, param_name, spec, min_val, max_val)
+        config[param_name] = _sample_parameter(
+            trial, param_name, spec, min_val, max_val
+        )
 
     _validate_config(HYPERPARAM_METAMODEL, model_spec, config)
 
@@ -308,7 +314,9 @@ def _constrain_num_layers(
                 max_val = min(max_val, float(max_layers))
             elif spec.choices:
                 # Filter to numeric choices only
-                numeric_choices = [c for c in spec.choices if isinstance(c, (int, float))]
+                numeric_choices = [
+                    c for c in spec.choices if isinstance(c, (int, float))
+                ]
                 spec.choices = [c for c in numeric_choices if c <= max_layers]
     return min_val, max_val
 
@@ -338,7 +346,9 @@ def _sample_parameter(
     if spec.param_type == "continuous":
         if min_val is not None and max_val is not None:
             lo = min(min_val, max_val)
-            return trial.suggest_float(param_name, lo, max_val, log=(spec.scale == "log"))
+            return trial.suggest_float(
+                param_name, lo, max_val, log=(spec.scale == "log")
+            )
 
     elif spec.param_type == "discrete":
         if spec.choices:
@@ -355,7 +365,9 @@ def _sample_parameter(
 
 
 def _validate_config(
-    metamodel: HyperparameterMetamodel, model_spec: ModelSpecProtocol, config: dict[str, object]
+    metamodel: HyperparameterMetamodel,
+    model_spec: ModelSpecProtocol,
+    config: dict[str, object],
 ) -> None:
     """Validate final config and log warnings for errors."""
     errors = metamodel.validate_config(model_spec, config)

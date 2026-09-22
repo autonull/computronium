@@ -29,7 +29,9 @@ class _HasComponents(Protocol):
     update: Any
 
 
-def _masked_task_loss(state: SystemState, local_y: Tensor, task_start: int, task_end: int) -> Tensor:
+def _masked_task_loss(
+    state: SystemState, local_y: Tensor, task_start: int, task_end: int
+) -> Tensor:
     """Compute cross-entropy loss only on task-relevant logits."""
     acts = state.activations
     if acts is None:
@@ -147,7 +149,9 @@ def _step_plasticity(
 
 def _compute_metrics(output: SystemState) -> dict[str, float]:
     """Compute metrics from settled output."""
-    loss_val = output.loss.item() if isinstance(output.loss, Tensor) else float(output.loss)  # type: ignore[return-value]
+    loss_val = (
+        output.loss.item() if isinstance(output.loss, Tensor) else float(output.loss)
+    )  # type: ignore[return-value]
     energy_val = (
         output.energy.item()
         if isinstance(output.energy, Tensor)
@@ -269,7 +273,11 @@ def _continual_step(
     # Combine task loss with extra loss
     loss = output.loss
     if not isinstance(loss, Tensor):
-        loss = torch.as_tensor(loss) if loss is not None else torch.tensor(0.0, device=x.device)
+        loss = (
+            torch.as_tensor(loss)
+            if loss is not None
+            else torch.tensor(0.0, device=x.device)
+        )
     extra = extra_loss_fn(model, output, task_id)
     total_loss: Tensor = loss if extra is None else loss + extra
 
@@ -288,7 +296,9 @@ def _continual_step(
     model._psi = psi  # type: ignore[attr-defined]
 
     # Compute metrics
-    loss_val = total_loss.item() if isinstance(total_loss, Tensor) else float(total_loss)
+    loss_val = (
+        total_loss.item() if isinstance(total_loss, Tensor) else float(total_loss)
+    )
     energy_val = (
         output.energy.item()
         if isinstance(output.energy, Tensor)
@@ -326,7 +336,9 @@ def _lwf_train_step(
 
     model.train()  # type: ignore[attr-defined]
 
-    def extra_loss_fn(_model: _HasComponents, output: SystemState, tid: int) -> Tensor | None:
+    def extra_loss_fn(
+        _model: _HasComponents, output: SystemState, tid: int
+    ) -> Tensor | None:
         if prev_logits is None:
             return None
         logits = (
@@ -349,7 +361,9 @@ def _si_train_step(
     """SI training step: task loss + importance-weighted consolidation penalty."""
     model.train()  # type: ignore[attr-defined]
 
-    def extra_loss_fn(_model: _HasComponents, _output: SystemState, _tid: int) -> Tensor:
+    def extra_loss_fn(
+        _model: _HasComponents, _output: SystemState, _tid: int
+    ) -> Tensor:
         return si_tracker.regularization_loss()  # type: ignore[attr-defined]
 
     return _continual_step(model, x, y, task_id, extra_loss_fn, si_tracker=si_tracker)

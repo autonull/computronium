@@ -519,14 +519,19 @@ class AblationStudy:
 
         if sobol:
             fig = self.plot_sobol_indices(sobol)
-            fig.savefig(
-                output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight"
-            )
+            fig.savefig(output_dir / "sobol_indices.png", dpi=150, bbox_inches="tight")
             plt.close(fig)
             report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
 
     def _generate_formatted_reports(
-        self, output_dir: Path, summary: dict, df, loo_results, sobol, format: str, report_paths: dict
+        self,
+        output_dir: Path,
+        summary: dict,
+        df,
+        loo_results,
+        sobol,
+        format: str,
+        report_paths: dict,
     ):
         """Generate HTML and/or Markdown reports."""
         if format in ("html", "all"):

@@ -13,14 +13,18 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 if TYPE_CHECKING:
-    from computronium.ui.components.lineage_viewer import LineageGraph, build_lineage_graph
+    from computronium.ui.components.lineage_viewer import (
+        LineageGraph,
+        build_lineage_graph,
+    )
 
 
 @dataclass(frozen=True, slots=True)
 class LineageNode:
     """A node in the lineage graph (a genome)."""
+
     genome_id: str
-    tier: int          # 1=structural, 2=algorithmic, 3=meta
+    tier: int  # 1=structural, 2=algorithmic, 3=meta
     fitness: float
     episode: int
     parent_id: str | None
@@ -29,6 +33,7 @@ class LineageNode:
 @dataclass(frozen=True, slots=True)
 class LineageEdge:
     """An edge in the lineage graph (a mutation)."""
+
     from_genome: str
     to_genome: str
     mutation_type: str  # "DuplicateAndPerturb" | "SpliceOperator" | "CoordinateSwap"
@@ -39,11 +44,13 @@ class LineageEdge:
 @dataclass(frozen=True, slots=True)
 class LineageGraph:
     """Complete lineage graph."""
+
     nodes: tuple[LineageNode, ...]
     edges: tuple[LineageEdge, ...]
 
 
 # Hypothesis strategies for generating test data
+
 
 @st.composite
 def genome_id_strategy(draw: st.DrawFn) -> str:
@@ -71,16 +78,26 @@ def lineage_edge_strategy(draw: st.DrawFn, nodes: list[LineageNode]) -> LineageE
         return LineageEdge(
             from_genome=nodes[0].genome_id if nodes else "genome_001",
             to_genome=nodes[1].genome_id if len(nodes) > 1 else "genome_002",
-            mutation_type=draw(st.sampled_from(["DuplicateAndPerturb", "SpliceOperator", "CoordinateSwap"])),
+            mutation_type=draw(
+                st.sampled_from([
+                    "DuplicateAndPerturb",
+                    "SpliceOperator",
+                    "CoordinateSwap",
+                ])
+            ),
             slope=draw(st.floats(min_value=-1.0, max_value=1.0, allow_nan=False)),
             accepted=draw(st.booleans()),
         )
     from_node = draw(st.sampled_from(nodes))
-    to_node = draw(st.sampled_from([n for n in nodes if n.genome_id != from_node.genome_id]))
+    to_node = draw(
+        st.sampled_from([n for n in nodes if n.genome_id != from_node.genome_id])
+    )
     return LineageEdge(
         from_genome=from_node.genome_id,
         to_genome=to_node.genome_id,
-        mutation_type=draw(st.sampled_from(["DuplicateAndPerturb", "SpliceOperator", "CoordinateSwap"])),
+        mutation_type=draw(
+            st.sampled_from(["DuplicateAndPerturb", "SpliceOperator", "CoordinateSwap"])
+        ),
         slope=draw(st.floats(min_value=-1.0, max_value=1.0, allow_nan=False)),
         accepted=draw(st.booleans()),
     )
@@ -195,6 +212,7 @@ def _graph_from_events(events: list[dict]) -> LineageGraph:
 def _graph_from_events_shuffled(events: list[dict]) -> LineageGraph:
     """Build lineage graph from shuffled event log (should be identical)."""
     import random
+
     shuffled = events.copy()
     random.shuffle(shuffled)
     return _graph_from_events(shuffled)
@@ -203,6 +221,7 @@ def _graph_from_events_shuffled(events: list[dict]) -> LineageGraph:
 def _graph_from_events_with_duplicates(events: list[dict]) -> LineageGraph:
     """Build lineage graph from event log with duplicates (should be idempotent)."""
     import random
+
     # Add some duplicate events
     duplicated = events + random.sample(events, min(3, len(events)))
     random.shuffle(duplicated)
@@ -226,7 +245,9 @@ class TestLineageReplay:
                 "fitness": node.fitness,
                 "episode": node.episode,
                 "parent_id": node.parent_id,
-                "mutation_type": "Initial" if node.parent_id is None else "DuplicateAndPerturb",
+                "mutation_type": "Initial"
+                if node.parent_id is None
+                else "DuplicateAndPerturb",
                 "slope": 0.0,
                 "accepted": True,
             })

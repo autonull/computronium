@@ -318,12 +318,17 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     return issues
 
 
-def _check_dynamics_inplace_ops(dynamics, class_name: str, method_name: str = "settle") -> list[tuple[str, str]]:
+def _check_dynamics_inplace_ops(
+    dynamics, class_name: str, method_name: str = "settle"
+) -> list[tuple[str, str]]:
     """Check a dynamics class for in-place operations in its settle/step method."""
     issues = []
     try:
         import inspect
-        method = getattr(dynamics, method_name, None) or getattr(dynamics, "_settle_step", None)
+
+        method = getattr(dynamics, method_name, None) or getattr(
+            dynamics, "_settle_step", None
+        )
         if method is None:
             return issues
         source = inspect.getsource(method)
@@ -350,7 +355,7 @@ def _check_dynamics_inplace_ops(dynamics, class_name: str, method_name: str = "s
                     f"{class_name}.{method_name}:{i + 1}",
                     f"In-place op: {stripped[:80]}",
                 ))
-    except (OSError, TypeError):
+    except OSError, TypeError:
         pass
     return issues
 
@@ -425,20 +430,33 @@ def test_inplace_op_audit() -> dict[str, Any]:
 
     # Test dynamics classes
     dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
-    issues.extend(_check_dynamics_inplace_ops(dynamics, "EnergyMinimizationDynamics", "_settle_step"))
+    issues.extend(
+        _check_dynamics_inplace_ops(
+            dynamics, "EnergyMinimizationDynamics", "_settle_step"
+        )
+    )
 
-    pred_dynamics = PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling())
-    issues.extend(_check_dynamics_inplace_ops(pred_dynamics, "PredictiveSettlingDynamics"))
+    pred_dynamics = PredictiveSettlingDynamics(
+        StateDynamicsConfig.predictive_settling()
+    )
+    issues.extend(
+        _check_dynamics_inplace_ops(pred_dynamics, "PredictiveSettlingDynamics")
+    )
 
     from computronium.ontology import SpikeIntegrationDynamics
+
     spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
-    issues.extend(_check_dynamics_inplace_ops(spike_dynamics, "SpikeIntegrationDynamics"))
+    issues.extend(
+        _check_dynamics_inplace_ops(spike_dynamics, "SpikeIntegrationDynamics")
+    )
 
     from computronium.ontology import LazyStateDynamics
+
     lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
     issues.extend(_check_dynamics_inplace_ops(lazy_dynamics, "LazyStateDynamics"))
 
     from computronium.ontology import DiffusionDynamics
+
     diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
     issues.extend(_check_dynamics_inplace_ops(diff_dynamics, "DiffusionDynamics"))
 
@@ -462,7 +480,16 @@ def test_inplace_op_audit() -> dict[str, Any]:
     }
 
 
-def _run_device_consistency_test(device_cpu, device_cuda, geometry_factory, dynamics_factory, substrate_factory, x_factory, y_factory, run_fn):
+def _run_device_consistency_test(
+    device_cpu,
+    device_cuda,
+    geometry_factory,
+    dynamics_factory,
+    substrate_factory,
+    x_factory,
+    y_factory,
+    run_fn,
+):
     """Run a model on both CPU and CUDA and compare outputs."""
     # Create on CPU with fixed seed
     torch.manual_seed(42)
@@ -502,6 +529,7 @@ def _run_device_consistency_test(device_cpu, device_cuda, geometry_factory, dyna
 
 def _test_em_dynamics(device_cpu, device_cuda):
     """Test EnergyMinimizationDynamics device consistency."""
+
     def make_em_geometry():
         return RecurrentGeometry(
             GeometryConfig.recurrent(
@@ -546,9 +574,14 @@ def _test_em_dynamics(device_cpu, device_cuda):
         return settled[-1] if isinstance(settled, list) else settled
 
     out_cpu, out_cuda = _run_device_consistency_test(
-        device_cpu, device_cuda,
-        make_em_geometry, make_em_dynamics, make_em_substrate,
-        make_em_x, make_em_y, run_em_settle
+        device_cpu,
+        device_cuda,
+        make_em_geometry,
+        make_em_dynamics,
+        make_em_substrate,
+        make_em_x,
+        make_em_y,
+        run_em_settle,
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
@@ -562,6 +595,7 @@ def _test_em_dynamics(device_cpu, device_cuda):
 
 def _test_inst_dynamics(device_cpu, device_cuda):
     """Test InstantaneousDynamics device consistency."""
+
     def make_inst_geometry():
         return FeedforwardGeometry(
             GeometryConfig.feedforward(
@@ -591,9 +625,14 @@ def _test_inst_dynamics(device_cpu, device_cuda):
         )
 
     out_cpu, out_cuda = _run_device_consistency_test(
-        device_cpu, device_cuda,
-        make_inst_geometry, make_inst_dynamics, make_inst_substrate,
-        make_inst_x, None, run_inst_settle
+        device_cpu,
+        device_cuda,
+        make_inst_geometry,
+        make_inst_dynamics,
+        make_inst_substrate,
+        make_inst_x,
+        None,
+        run_inst_settle,
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
@@ -607,6 +646,7 @@ def _test_inst_dynamics(device_cpu, device_cuda):
 
 def _test_pred_dynamics(device_cpu, device_cuda):
     """Test PredictiveSettlingDynamics device consistency."""
+
     def make_pred_geometry():
         return FeedforwardGeometry(
             GeometryConfig.feedforward(
@@ -648,9 +688,14 @@ def _test_pred_dynamics(device_cpu, device_cuda):
         return settled[-1] if isinstance(settled, list) else settled
 
     out_cpu, out_cuda = _run_device_consistency_test(
-        device_cpu, device_cuda,
-        make_pred_geometry, make_pred_dynamics, make_pred_substrate,
-        make_pred_x, make_pred_y, run_pred_settle
+        device_cpu,
+        device_cuda,
+        make_pred_geometry,
+        make_pred_dynamics,
+        make_pred_substrate,
+        make_pred_x,
+        make_pred_y,
+        run_pred_settle,
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)

@@ -17,23 +17,23 @@ from typing import Literal
 SEMANTIC = {
     "success": "#1e7e34",  # darker green - 5.1:1 on white
     "warning": "#8b6914",  # dark amber - 5.1:1 on white
-    "danger": "#c82333",   # darker red - 5.6:1 on white
-    "info": "#0d6efd",     # bootstrap primary blue - 4.5:1 on white
+    "danger": "#c82333",  # darker red - 5.6:1 on white
+    "info": "#0d6efd",  # bootstrap primary blue - 4.5:1 on white
     "neutral": "#495057",  # darker grey - 8.2:1 on white
 }
 
 # Outcome badges (from live_atlas.OutcomeStyle) — CVD-safe with shape redundancy
 # Colors meet 3:1 UI contrast on light mode (white background)
 OUTCOME_COLORS = {
-    "LEARNED": "#1e7e34",    # darker green - 5.1:1 on white
-    "MARGINAL": "#8b6914",   # dark amber - 5.1:1 on white
-    "CHANCE": "#495057",     # darker grey - 8.2:1 on white
-    "DIVERGED": "#c82333",   # darker red - 5.6:1 on white
-    "DEFECT": "#212529",     # very dark - 15:1 on white
-    "VOID": "#6c757d",       # grey - 4.5:1 on white (void = empty/unknown)
+    "LEARNED": "#1e7e34",  # darker green - 5.1:1 on white
+    "MARGINAL": "#8b6914",  # dark amber - 5.1:1 on white
+    "CHANCE": "#495057",  # darker grey - 8.2:1 on white
+    "DIVERGED": "#c82333",  # darker red - 5.6:1 on white
+    "DEFECT": "#212529",  # very dark - 15:1 on white
+    "VOID": "#6c757d",  # grey - 4.5:1 on white (void = empty/unknown)
     "PARETO_OPTIMAL": "#8b6914",  # dark amber - 5.1:1 on white
-    "PARETO_NEAR": "#987800",     # dark gold - 4.2:1 on white
-    "DOMINATED": "#495057",       # darker grey - 8.2:1 on white
+    "PARETO_NEAR": "#987800",  # dark gold - 4.2:1 on white
+    "DOMINATED": "#495057",  # darker grey - 8.2:1 on white
 }
 
 # Event kinds - UI contrast compliant (3:1) on both backgrounds

@@ -48,13 +48,25 @@ DYNAMICS_CLASSES = [
 
 # Config factories for each dynamics type
 DYNAMICS_CONFIGS = {
-    EnergyMinimizationDynamics: lambda: StateDynamicsConfig.energy_minimization(max_steps=5, step_size=0.1, beta=0.5),
-    PredictiveSettlingDynamics: lambda: StateDynamicsConfig.predictive_settling(max_steps=5, step_size=0.1),
-    ErrorPredictiveCodingDynamics: lambda: StateDynamicsConfig.error_predictive_coding(max_steps=5, step_size=0.1),
-    PCALMDynamics: lambda: StateDynamicsConfig.pc_alm(max_steps=5, step_size=0.1, rho=1.0),
-    SpikeIntegrationDynamics: lambda: StateDynamicsConfig.spike_integration(max_steps=5, step_size=0.1, threshold=1.0),
+    EnergyMinimizationDynamics: lambda: StateDynamicsConfig.energy_minimization(
+        max_steps=5, step_size=0.1, beta=0.5
+    ),
+    PredictiveSettlingDynamics: lambda: StateDynamicsConfig.predictive_settling(
+        max_steps=5, step_size=0.1
+    ),
+    ErrorPredictiveCodingDynamics: lambda: StateDynamicsConfig.error_predictive_coding(
+        max_steps=5, step_size=0.1
+    ),
+    PCALMDynamics: lambda: StateDynamicsConfig.pc_alm(
+        max_steps=5, step_size=0.1, rho=1.0
+    ),
+    SpikeIntegrationDynamics: lambda: StateDynamicsConfig.spike_integration(
+        max_steps=5, step_size=0.1, threshold=1.0
+    ),
     InstantaneousDynamics: StateDynamicsConfig.instantaneous,
-    DiffusionDynamics: lambda: StateDynamicsConfig.diffusion(max_steps=5, step_size=0.1),
+    DiffusionDynamics: lambda: StateDynamicsConfig.diffusion(
+        max_steps=5, step_size=0.1
+    ),
     LazyStateDynamics: lambda: StateDynamicsConfig.lazy(max_steps=5),
 }
 
@@ -129,14 +141,20 @@ class TestActivationLayout:
         state = _make_state(x)
 
         with torch.no_grad():
-            free_state = dynamics.settle(state.clone(), geometry, substrate, target=None)
-            nudged_state = dynamics.settle(state.clone(), geometry, substrate, target=target)
+            free_state = dynamics.settle(
+                state.clone(), geometry, substrate, target=None
+            )
+            nudged_state = dynamics.settle(
+                state.clone(), geometry, substrate, target=target
+            )
 
         free_acts = free_state.activations
         nudged_acts = nudged_state.activations
 
         assert free_acts is not None and nudged_acts is not None
-        assert len(free_acts) == len(nudged_acts), "Free and nudged should have same depth"
+        assert len(free_acts) == len(nudged_acts), (
+            "Free and nudged should have same depth"
+        )
 
         for f, n in zip(free_acts, nudged_acts):
             assert f.shape == n.shape, "Corresponding layers should have same shape"
@@ -160,7 +178,10 @@ class TestPhaseLoopAndEnergyTiming:
         assert settled.free_state is not None, "Free state should be populated"
         assert settled.activations is not None, "Activations should be populated"
         # free_state and activations should be the same object (or equal)
-        assert settled.free_state is settled.activations or settled.free_state == settled.activations
+        assert (
+            settled.free_state is settled.activations
+            or settled.free_state == settled.activations
+        )
 
     @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
     def test_nudged_phase_writes_nudged_state(self, dynamics_cls):
@@ -177,7 +198,10 @@ class TestPhaseLoopAndEnergyTiming:
 
         assert settled.nudged_state is not None, "Nudged state should be populated"
         assert settled.activations is not None, "Activations should be populated"
-        assert settled.nudged_state is settled.activations or settled.nudged_state == settled.activations
+        assert (
+            settled.nudged_state is settled.activations
+            or settled.nudged_state == settled.activations
+        )
 
     @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
     def test_compute_energy_called_after_settle(self, dynamics_cls):
@@ -231,7 +255,9 @@ class TestAutogradContext:
 
         assert settled.activations is not None
         for act in settled.activations:
-            assert not act.requires_grad, "Activations should not require grad under no_grad"
+            assert not act.requires_grad, (
+                "Activations should not require grad under no_grad"
+            )
 
     @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
     def test_settle_preserves_grad_when_enabled(self, dynamics_cls):
@@ -397,7 +423,9 @@ class TestComputeEnergyContract:
         # State with only nudged_state
         state_nudge = _make_state(x)
         with torch.no_grad():
-            settled_nudge = dynamics.settle(state_nudge, geometry, substrate, target=target)
+            settled_nudge = dynamics.settle(
+                state_nudge, geometry, substrate, target=target
+            )
             energy_nudge = dynamics.compute_energy(settled_nudge, geometry)
         assert torch.isfinite(energy_nudge)
 
@@ -437,7 +465,9 @@ class TestOnStepCallback:
 class TestDeterminism:
     """Test deterministic behavior under fixed seed."""
 
-    @pytest.mark.parametrize("dynamics_cls", [c for c in DYNAMICS_CLASSES if c != DiffusionDynamics])
+    @pytest.mark.parametrize(
+        "dynamics_cls", [c for c in DYNAMICS_CLASSES if c != DiffusionDynamics]
+    )
     @given(st.integers(min_value=0, max_value=1000))
     @settings(max_examples=5, deadline=None)
     def test_deterministic_under_fixed_seed(self, dynamics_cls, seed):
@@ -461,7 +491,9 @@ class TestDeterminism:
             settled2 = dynamics2.settle(state2, geometry2, substrate2, target=None)
 
         for a1, a2 in zip(settled1.activations, settled2.activations):
-            assert torch.allclose(a1, a2), f"Non-deterministic output for {dynamics_cls.__name__}"
+            assert torch.allclose(a1, a2), (
+                f"Non-deterministic output for {dynamics_cls.__name__}"
+            )
 
 
 class TestFiniteOutputs:

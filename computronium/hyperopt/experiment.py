@@ -119,7 +119,9 @@ class TrialRunner:
             model, trainer = self._create_model_and_trainer(trial, tracker)
 
             # 2. Setup Training (Schedule, Monitoring, Checkpointing)
-            schedule, monitor, checkpoint_manager = self._setup_training_components(trial_id)
+            schedule, monitor, checkpoint_manager = self._setup_training_components(
+                trial_id
+            )
 
             # 3. Define Callbacks
             epoch_times = []
@@ -134,7 +136,13 @@ class TrialRunner:
 
             # 4. Execute Training Loop
             trajectory = self._execute_training_loop(
-                schedule, monitor, trainer, trial_id, trial, on_epoch_end_callback, wrapped_pruning_callback
+                schedule,
+                monitor,
+                trainer,
+                trial_id,
+                trial,
+                on_epoch_end_callback,
+                wrapped_pruning_callback,
             )
 
             # 5. Finalize and Save
@@ -184,8 +192,11 @@ class TrialRunner:
 
         return schedule, monitor, checkpoint_manager
 
-    def _create_epoch_callback(self, trial_id: int, epoch_times: list, start_time: float, checkpoint_manager):
+    def _create_epoch_callback(
+        self, trial_id: int, epoch_times: list, start_time: float, checkpoint_manager
+    ):
         """Create the epoch end callback."""
+
         def on_epoch_end_callback(epoch, metrics):
             # Timeout Check
             if time.time() - start_time > self.timeout:
@@ -213,6 +224,7 @@ class TrialRunner:
 
     def _create_pruning_callback(self, trial_id: int, pruning_callback, monitor):
         """Create the wrapped pruning callback."""
+
         def wrapped_pruning_callback(tid, epoch, m):
             if pruning_callback and pruning_callback(tid, epoch, m):
                 self.storage.update_trial(trial_id, status="pruned")
@@ -223,7 +235,16 @@ class TrialRunner:
 
         return wrapped_pruning_callback
 
-    def _execute_training_loop(self, schedule, monitor, trainer, trial_id: int, trial, on_epoch_end_callback, wrapped_pruning_callback):
+    def _execute_training_loop(
+        self,
+        schedule,
+        monitor,
+        trainer,
+        trial_id: int,
+        trial,
+        on_epoch_end_callback,
+        wrapped_pruning_callback,
+    ):
         """Execute the training loop."""
         if monitor:
             monitor.start()
@@ -268,7 +289,9 @@ class TrialRunner:
             raise ValueError(f"No model class provided for {trial.model_name!r}")
 
         # Build model
-        model = self._build_model(model_cls, config, hidden_dim, num_layers, trial.model_name)
+        model = self._build_model(
+            model_cls, config, hidden_dim, num_layers, trial.model_name
+        )
 
         # Extract training parameters
         lr = config.get("lr", 1e-3)
@@ -296,11 +319,15 @@ class TrialRunner:
             model.optimizer = trainer.optimizer  # type: ignore[attr-defined]
 
         # Update model config with trial-specific parameters
-        self._update_model_config(model, config_obj=getattr(model, "config", None), beta=beta, steps=steps)
+        self._update_model_config(
+            model, config_obj=getattr(model, "config", None), beta=beta, steps=steps
+        )
 
         return model, trainer
 
-    def _build_model(self, model_cls, config, hidden_dim, num_layers, model_name) -> torch.nn.Module:
+    def _build_model(
+        self, model_cls, config, hidden_dim, num_layers, model_name
+    ) -> torch.nn.Module:
         """Build the model using construct_model."""
         build_config = dict(config)
         build_config.setdefault("hidden_dim", hidden_dim)
@@ -373,7 +400,7 @@ class TrialRunner:
             if config_obj is not None and hasattr(config_obj, "beta"):
                 try:
                     object.__setattr__(config_obj, "beta", beta)
-                except (AttributeError, TypeError):
+                except AttributeError, TypeError:
                     pass
             if hasattr(model, "beta"):
                 if isinstance(model.beta, torch.Tensor):
@@ -483,7 +510,9 @@ def run_single_trial_task(
 
         # Create runner
         timeout_raw = config.get("timeout", 3600.0)
-        timeout_val: float = float(timeout_raw) if isinstance(timeout_raw, (int, float)) else 3600.0
+        timeout_val: float = (
+            float(timeout_raw) if isinstance(timeout_raw, (int, float)) else 3600.0
+        )
         runner = TrialRunner(
             storage=storage,
             device="auto",
@@ -573,7 +602,11 @@ def _run_training(runner: TrialRunner, trial_id: int, verbose: bool) -> bool:
 
 
 def _collect_success_metrics(
-    storage: HyperoptStorage, trial_id: int, model_name: str, task: str, config: dict[str, object]
+    storage: HyperoptStorage,
+    trial_id: int,
+    model_name: str,
+    task: str,
+    config: dict[str, object],
 ) -> dict[str, float]:
     """Collect metrics from successful trial."""
     trial = storage.get_trial(trial_id)
@@ -600,7 +633,9 @@ def _handle_trial_failure(
     _sink_failure(model_name, task, config, "failed", trial_id=trial_id)
 
 
-def _cleanup_trial(storage: HyperoptStorage | None, temp_dir: str | None, verbose: bool) -> None:
+def _cleanup_trial(
+    storage: HyperoptStorage | None, temp_dir: str | None, verbose: bool
+) -> None:
     """Cleanup trial resources."""
     if storage:
         storage.close()
@@ -679,7 +714,11 @@ def _sink_failure(
             extra["error"] = error
         epochs_raw = config.get("epochs")
         job_id_raw = config.get("job_id")
-        seed_val: int | None = int(job_id_raw) if job_id_raw is not None else (trial_id if trial_id is not None else None)  # type: ignore[arg-type]
+        seed_val: int | None = (
+            int(job_id_raw)
+            if job_id_raw is not None
+            else (trial_id if trial_id is not None else None)
+        )  # type: ignore[arg-type]
         record_experiment_result(
             model=model_name,
             task=task,

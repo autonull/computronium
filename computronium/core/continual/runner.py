@@ -207,7 +207,9 @@ def _run_replay_training(
             model.train_step(rx, ry, task_id=replay_task_id)
 
 
-def _update_arm_importance(arm_name: str, model: "ContinualJointSystem", extra: _ArmExtra) -> None:
+def _update_arm_importance(
+    arm_name: str, model: "ContinualJointSystem", extra: _ArmExtra
+) -> None:
     """Update importance weights for EWC/SI at end of task."""
     if arm_name == "ewc":
         update = extra.get("update")
@@ -359,7 +361,9 @@ def _run_task_free_protocol(
         if batch_idx % (total_batches // CL_NUM_TASKS) == 0:
             eval_task = batch_idx // (total_batches // CL_NUM_TASKS)
             if eval_task < CL_NUM_TASKS:
-                _evaluate_periodic_tasks(model, test_loaders, eval_task, device, accuracy_matrix)
+                _evaluate_periodic_tasks(
+                    model, test_loaders, eval_task, device, accuracy_matrix
+                )
 
 
 def _finalize_metrics(

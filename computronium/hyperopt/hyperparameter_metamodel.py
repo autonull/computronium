@@ -300,11 +300,15 @@ class HyperparameterMetamodel:
         search_space = self._apply_activation_constraints(model_spec, search_space)
         search_space = self._apply_eqprop_constraints(model_spec, search_space)
         search_space = self._apply_small_task_constraints(task_name, search_space)
-        search_space = self._apply_vision_model_constraints(model_spec, search_space, task_name)
+        search_space = self._apply_vision_model_constraints(
+            model_spec, search_space, task_name
+        )
         search_space = self._apply_rl_constraints(model_spec, search_space)
         return search_space
 
-    def _determine_applicable_scopes(self, model_spec: ModelSpecProtocol) -> set[HyperparamScope]:
+    def _determine_applicable_scopes(
+        self, model_spec: ModelSpecProtocol
+    ) -> set[HyperparamScope]:
         """Determine which hyperparameter scopes apply to a model."""
         applicable_scopes = {HyperparamScope.UNIVERSAL}
         family = model_spec.family.lower()
@@ -339,7 +343,9 @@ class HyperparameterMetamodel:
 
         return applicable_scopes
 
-    def _add_hybrid_scopes(self, model_type: str, applicable_scopes: set[HyperparamScope]) -> None:
+    def _add_hybrid_scopes(
+        self, model_type: str, applicable_scopes: set[HyperparamScope]
+    ) -> None:
         """Add scopes for hybrid model types."""
         if "fa" in model_type or "alignment" in model_type:
             applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
@@ -349,7 +355,9 @@ class HyperparameterMetamodel:
             applicable_scopes.add(HyperparamScope.HEBBIAN)
         applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
 
-    def _add_fallback_scopes(self, model_spec: ModelSpecProtocol, applicable_scopes: set[HyperparamScope]) -> None:
+    def _add_fallback_scopes(
+        self, model_spec: ModelSpecProtocol, applicable_scopes: set[HyperparamScope]
+    ) -> None:
         """Add scopes based on credit_assignment_type when family not recognized."""
         cat = model_spec.credit_assignment_type.lower()
         match cat:
@@ -368,7 +376,9 @@ class HyperparameterMetamodel:
             case "gradient":
                 applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
 
-    def _filter_specs_by_scopes(self, applicable_scopes: set[HyperparamScope]) -> dict[str, HyperparamSpec]:
+    def _filter_specs_by_scopes(
+        self, applicable_scopes: set[HyperparamScope]
+    ) -> dict[str, HyperparamSpec]:
         """Filter hyperparameter specs by applicable scopes."""
         search_space = {}
         for spec in self.all_specs:
@@ -383,7 +393,10 @@ class HyperparameterMetamodel:
         model_type = getattr(model_spec, "model_type", "") or ""
         if "transformer" in model_type.lower():
             for spec in self.all_specs:
-                if spec.scope == HyperparamScope.TRANSFORMER and spec.name not in search_space:
+                if (
+                    spec.scope == HyperparamScope.TRANSFORMER
+                    and spec.name not in search_space
+                ):
                     search_space[spec.name] = spec
         return search_space
 
@@ -436,7 +449,9 @@ class HyperparameterMetamodel:
 
         if "hidden_dim" in search_space:
             hd_spec = search_space["hidden_dim"]
-            hd_choices: list[int] = [c for c in (hd_spec.choices or []) if isinstance(c, int)]
+            hd_choices: list[int] = [
+                c for c in (hd_spec.choices or []) if isinstance(c, int)
+            ]
             constrained_hd = HyperparamSpec(
                 name=hd_spec.name,
                 scope=hd_spec.scope,
@@ -460,7 +475,10 @@ class HyperparameterMetamodel:
         return search_space
 
     def _apply_vision_model_constraints(
-        self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec], task_name: str | None
+        self,
+        model_spec: ModelSpecProtocol,
+        search_space: dict[str, HyperparamSpec],
+        task_name: str | None,
     ) -> dict[str, HyperparamSpec]:
         """Apply vision model heuristics (wider layers for non-small tasks)."""
         is_small_task = task_name and task_name in {
@@ -476,7 +494,9 @@ class HyperparameterMetamodel:
         )
         if is_vision_model and "hidden_dim" in search_space and not is_small_task:
             hd_spec = search_space["hidden_dim"]
-            hd_choices: list[int] = [c for c in (hd_spec.choices or []) if isinstance(c, int)]
+            hd_choices: list[int] = [
+                c for c in (hd_spec.choices or []) if isinstance(c, int)
+            ]
             constrained_hd = HyperparamSpec(
                 name=hd_spec.name,
                 scope=hd_spec.scope,

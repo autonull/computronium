@@ -134,8 +134,13 @@ class TestUXL7ImportLock:
                             "stability."
                         ):
                             pytest.fail(f"{py_file}: imports 'stability' (forbidden)")
-                elif isinstance(node, ast.ImportFrom) and node.module and (
-                    node.module == "stability" or node.module.startswith("stability.")
+                elif (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and (
+                        node.module == "stability"
+                        or node.module.startswith("stability.")
+                    )
                 ):
                     pytest.fail(f"{py_file}: imports from 'stability' (forbidden)")
 

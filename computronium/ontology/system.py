@@ -218,8 +218,18 @@ FAMILY_TOLERANCES: dict[str, tuple[float, float]] = {
 
 _SUBSTRATES: list[dict[str, object]] = [
     {"type": "digital", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
-    {"type": "memristive", "precision": "float32", "noise_level": 0.01, "sparsity": 0.0},
-    {"type": "neuromorphic", "precision": "float16", "noise_level": 0.0, "sparsity": 0.95},
+    {
+        "type": "memristive",
+        "precision": "float32",
+        "noise_level": 0.01,
+        "sparsity": 0.0,
+    },
+    {
+        "type": "neuromorphic",
+        "precision": "float16",
+        "noise_level": 0.0,
+        "sparsity": 0.95,
+    },
     {"type": "optical", "precision": "float32", "noise_level": 0.0, "sparsity": 0.0},
     {"type": "quantum", "precision": "complex64", "noise_level": 0.0, "sparsity": 0.0},
     {"type": "sparse", "precision": "float32", "noise_level": 0.0, "sparsity": 0.8},
@@ -227,8 +237,18 @@ _SUBSTRATES: list[dict[str, object]] = [
 ]
 
 _GEOMETRIES: list[dict[str, object]] = [
-    {"topology_type": "feedforward", "input_dim": 784, "output_dim": 10, "hidden_dims": [256, 128]},
-    {"topology_type": "recurrent", "input_dim": 784, "output_dim": 10, "hidden_dims": [256]},
+    {
+        "topology_type": "feedforward",
+        "input_dim": 784,
+        "output_dim": 10,
+        "hidden_dims": [256, 128],
+    },
+    {
+        "topology_type": "recurrent",
+        "input_dim": 784,
+        "output_dim": 10,
+        "hidden_dims": [256],
+    },
     {
         "topology_type": "tile_mesh",
         "input_dim": 784,
@@ -250,7 +270,12 @@ _DYNAMICS_OPTIONS: list[dict[str, object]] = [
 _PLASTICITIES: list[dict[str, object]] = [
     {"type": "null"},
     {"type": "routing", "gate_dim": 64},
-    {"type": "fast_weights", "fast_weight_dim": 512, "decay": 0.9, "learning_rate": 0.1},
+    {
+        "type": "fast_weights",
+        "fast_weight_dim": 512,
+        "decay": 0.9,
+        "learning_rate": 0.1,
+    },
     {"type": "substrate_coupled"},
 ]
 
@@ -280,7 +305,12 @@ _THERMO_CREDIT_DYNAMICS = {"energy_minimization"}
 _SPIKE_INTEGRATION_CREDITS = {"temporal_trace", "target_inversion", "target_prop"}
 _TILE_MESH_DYNAMICS = {"energy_minimization", "instantaneous"}
 _QUANTUM_DYNAMICS = {"energy_minimization", "instantaneous", "diffusion"}
-_PREDICTIVE_SETTLING_CREDITS = {"thermodynamic_contrast", "equilibrium", "local_goodness", "forward_only"}
+_PREDICTIVE_SETTLING_CREDITS = {
+    "thermodynamic_contrast",
+    "equilibrium",
+    "local_goodness",
+    "forward_only",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,7 +514,10 @@ class SystemConfig:
 
     def _validate_residual_connections(self) -> None:
         """Residual connections only supported on feedforward geometry."""
-        if getattr(self.geometry, "residual", False) and self.geometry.topology_type != "feedforward":
+        if (
+            getattr(self.geometry, "residual", False)
+            and self.geometry.topology_type != "feedforward"
+        ):
             raise ValueError(
                 f"Residual connections (residual=True) require feedforward geometry, "
                 f"got topology_type={self.geometry.topology_type!r}"
@@ -560,7 +593,9 @@ class SystemConfig:
 
     def _validate_complex_substrate_credit(self) -> None:
         """Complex substrate works best with thermodynamic contrast or backprop."""
-        if self.substrate.precision == "float32" and getattr(self.substrate, "_complex_emulated", False):
+        if self.substrate.precision == "float32" and getattr(
+            self.substrate, "_complex_emulated", False
+        ):
             if self.credit.credit_type not in (
                 "thermodynamic_contrast",
                 "equilibrium",
@@ -660,7 +695,10 @@ class SystemConfig:
 
     def _validate_tile_mesh_sparse_substrate(self) -> None:
         """Tile mesh with sparse substrate warns about structured sparsity."""
-        if self.geometry.topology_type in ("tile_mesh", "tile") and self.substrate.sparsity > 0.5:
+        if (
+            self.geometry.topology_type in ("tile_mesh", "tile")
+            and self.substrate.sparsity > 0.5
+        ):
             warnings.warn(
                 f"Sparse substrate (sparsity={self.substrate.sparsity}) "
                 f"with tile mesh geometry may benefit from structured sparsity (N:M or block) "
@@ -673,7 +711,10 @@ class SystemConfig:
 
     def _validate_gradient_credit_beta_clamp(self) -> None:
         """Gradient/backprop credit with beta >= 1.0 has zero pseudo-gradient."""
-        if self.credit.credit_type in {"gradient", "backprop"} and self.credit.beta >= 1.0:
+        if (
+            self.credit.credit_type in {"gradient", "backprop"}
+            and self.credit.beta >= 1.0
+        ):
             raise ValueError(
                 f"credit_type={self.credit.credit_type!r} with beta={self.credit.beta} "
                 f"has an exactly-zero pseudo-gradient (the nudged output is fully "
@@ -764,15 +805,26 @@ class SystemConfig:
 
         validators: list[tuple[bool, bool]] = [
             # (condition, should_pass)
-            (geo_type in ("recurrent", "recurrent_attractor"), dyn_type in _RECURRENT_DYNAMICS),
-            (cred_type in ("thermodynamic_contrast", "equilibrium"), dyn_type in _THERMO_CREDIT_DYNAMICS),
+            (
+                geo_type in ("recurrent", "recurrent_attractor"),
+                dyn_type in _RECURRENT_DYNAMICS,
+            ),
+            (
+                cred_type in ("thermodynamic_contrast", "equilibrium"),
+                dyn_type in _THERMO_CREDIT_DYNAMICS,
+            ),
             (dyn_type == "spike_integration", cred_type in _SPIKE_INTEGRATION_CREDITS),
             (geo_type in ("tile_mesh", "tile"), dyn_type in _TILE_MESH_DYNAMICS),
             (sub_precision == "complex64", dyn_type in _QUANTUM_DYNAMICS),
-            (dyn_type == "predictive_settling", cred_type in _PREDICTIVE_SETTLING_CREDITS),
+            (
+                dyn_type == "predictive_settling",
+                cred_type in _PREDICTIVE_SETTLING_CREDITS,
+            ),
         ]
 
-        return all(not condition or should_pass for condition, should_pass in validators)
+        return all(
+            not condition or should_pass for condition, should_pass in validators
+        )
 
 
 # ============================================================

@@ -146,9 +146,16 @@ def update_quest_progress(  # noqa: C901
     elif event_kind == "campaign_complete":
         # Check various completion conditions
         for q in quests_dict.values():
-            if q.opted_in and not q.completed and (  # noqa: PLR0916
-                (q.id == "send_to_careful_recheck" and payload.get("l2_requested"))
-                or (q.id == "forecast_and_check" and payload.get("forecast_verified"))
+            if (
+                q.opted_in
+                and not q.completed
+                and (  # noqa: PLR0916
+                    (q.id == "send_to_careful_recheck" and payload.get("l2_requested"))
+                    or (
+                        q.id == "forecast_and_check"
+                        and payload.get("forecast_verified")
+                    )
+                )
             ):
                 yield Quest(**{
                     **q.__dict__,

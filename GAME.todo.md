@@ -136,19 +136,19 @@ comp daemon    ... same flags ... --port 8940
 | **M2.7** | Field Reports tray + Progress panel (left rail) with quests/badges/records | Lab mode hides recognition chrome by default | | ✅ **DONE** |
 | **M2.8** | Kill switches: `--gamify off` / `COMPUTRONIUM_NO_GAMIFY=1`, Lab mode hides chrome | Recognition visibility never changes measurement/promotion/claim logic (UX-L7) | | ✅ **DONE** |
 | **M2.9** | Integrity locks: UX-L2 (replay property test via Hypothesis), UX-L7 (static import lock: projector zero imports from campaign/gate mutation paths) | Both locks green in CI | | ✅ **DONE** |
-| **M2.10** | Anti-Goodhart audit: quarterly correlation (badge/quest actions vs. CEEC gate-rejection rate) | Report generator exists, runnable | | 🔄 **DEFERRED** (M3+) |
-| **M2.11** | **Probe Analytics Panel** (AUTOTILE.md §3.2): show probe batches, current vs proposed slope, acceptance/rejection, forked-copy hygiene | Probe batches never touch production training data (UX-L11) | | 🔄 **DEFERRED** (M3) |
-| **M2.12** | **Stagnation Dashboard** (AUTOTILE.md §2.4): per-campaign stagnation status (WindowedMean/EMA/StatTest/VetoRate), detector config, history | Campaign event log, `SystemContext` | | 🔄 **DEFERRED** (M3) |
-| **M2.13** | **Genome Health Tracker** (AUTOTILE.md §5.4): |Ω| vs fitness, ontological cancer risk (GenomeSizePenalty λ), Resource Ceiling headroom | Campaign event log, `ResourceUsage` | | 🔄 **DEFERRED** (M3) |
-| **M2.14** | **Mutation Explorer** (AUTOTILE.md §2.3): from current Ω, show valid `DuplicateAndPerturb`, `SpliceOperator`, `CoordinateSwap` proposals with Constitution pre-check | Registry, `SystemConfig.validate()`, `StabilityMonitor` fast-proxy | | 🔄 **DEFERRED** (M3) |
-| **M2.15** | **Veto Log** (AUTOTILE.md §3.5): vetoed mutations with reason (Lyapunov fast-proxy fail, Passivity fail, Protocol conformance fail), veto rate trend | Campaign event log (veto events) | | 🔄 **DEFERRED** (M3) |
+| **M2.10** | Anti-Goodhart audit: quarterly correlation (badge/quest actions vs. CEEC gate-rejection rate) | Report generator exists, runnable | | ✅ **DONE** (M3) |
+| **M2.11** | **Probe Analytics Panel** (AUTOTILE.md §3.2): show probe batches, current vs proposed slope, acceptance/rejection, forked-copy hygiene | Probe batches never touch production training data (UX-L11) | | ✅ **DONE** (M3) |
+| **M2.12** | **Stagnation Dashboard** (AUTOTILE.md §2.4): per-campaign stagnation status (WindowedMean/EMA/StatTest/VetoRate), detector config, history | Campaign event log, `SystemContext` | | ✅ **DONE** (M3) |
+| **M2.13** | **Genome Health Tracker** (AUTOTILE.md §5.4): |Ω| vs fitness, ontological cancer risk (GenomeSizePenalty λ), Resource Ceiling headroom | Campaign event log, `ResourceUsage` | | ✅ **DONE** (M3) |
+| **M2.14** | **Mutation Explorer** (AUTOTILE.md §2.3): from current Ω, show valid `DuplicateAndPerturb`, `SpliceOperator`, `CoordinateSwap` proposals with Constitution pre-check | Registry, `SystemConfig.validate()`, `StabilityMonitor` fast-proxy | | ✅ **DONE** (M3) |
+| **M2.15** | **Veto Log** (AUTOTILE.md §3.5): vetoed mutations with reason (Lyapunov fast-proxy fail, Passivity fail, Protocol conformance fail), veto rate trend | Campaign event log (veto events) | | ✅ **DONE** (M3) |
 
 **Exit M2:** Replay property lock green on 100k synthetic events; opt-in pilot with 2 internal teams; UX-L11 green. No XP anywhere in the codebase.
 
 **Progress Summary (M2 Core — Completed):**
 - ✅ `computronium/ui/recognition/projector.py` — Pure fold function with two-pass design for order-independence
 - ✅ `computronium/ui/recognition/state_store.py` — Append-only SQLite sidecar (`ui_state.sqlite`) with rebuild capability
-- ✅ `computronium/ui/recognition/badges.py` — 9 ledger-linked badges (First Steps, Mapmaker, Double-Checker, Gold Standard, Honest Broker, Repair Crew, Steady Hand, Cartographer, Open Book)
+- ✅ `computtronium/ui/recognition/badges.py` — 9 ledger-linked badges (First Steps, Mapmaker, Double-Checker, Gold Standard, Honest Broker, Repair Crew, Steady Hand, Cartographer, Open Book)
 - ✅ `computronium/ui/recognition/quests.py` — 6 opt-in quests (Chart 100 Regions, Double-Check 3 Candidates, Send to Careful Re-check, Clear Repair Bench, Compare Goals, Forecast & Check)
 - ✅ `computronium/ui/recognition/records.py` — Personal best records per objective with deterministic tiebreaker
 - ✅ `computronium/ui/recognition/fog.py` — Fog-of-war from KB coverage (derivable from KB alone)
@@ -159,29 +159,45 @@ comp daemon    ... same flags ... --port 8940
 - ✅ All glossary terms registered for new recognition concepts
 - ✅ All ruff/pyright checks pass; UX-L2 and UX-L7 tests green
 
-**Deferred to M3 (per adjusted phasing):**
-- M2.10 Anti-Goodhart audit report generator
-- M2.11 Probe Analytics Panel (UX-L11)
-- M2.12 Stagnation Dashboard
-- M2.13 Genome Health Tracker
-- M2.14 Mutation Explorer
-- M2.15 Veto Log
+**Deferred to M3 (per adjusted phasing) — NOW COMPLETED:**
+- ✅ M2.10 Anti-Goodhart audit report generator (`computronium/ui/anti_goodhart.py`)
+- ✅ M2.11 Probe Analytics Panel — `computronium/ui/components/probe_analytics.py` (UX-L11)
+- ✅ M2.12 Stagnation Dashboard — `computronium/ui/components/stagnation_dashboard.py`
+- ✅ M2.13 Genome Health Tracker — `computronium/ui/components/genome_health.py`
+- ✅ M2.14 Mutation Explorer — `computronium/ui/components/mutation_explorer.py`
+- ✅ M2.15 Veto Log — `computronium/ui/components/veto_log.py`
 
 ---
 
 ### M3 — Onboarding, Teams, i18n Hooks, Auto-Evolve Preview (≈2 weeks) — **P1 POLISH**
 
-| ID | Task | Acceptance | Owner |
-|----|------|------------|-------|
-| **M3.1** | Guided tour (3 steps, skippable, resumable), comfort quiz (3 questions, sets default mode/tour depth only) | Tour completes, quiz only affects defaults, never restricts features | |
-| **M3.2** | Region naming: propose plain names for map regions, metadata-only, versioned, revertible | Names stored as presentation metadata, never in measurement records | |
-| **M3.3** | Cooperative team wall (opt-in per team), no individual leaderboards | Team progress = cooperative totals only | |
-| **M3.4** | i18n string freeze + extraction audit: all simple-register strings in resource files, no concatenation | `i18n` CLI extracts 100% of Explorer strings | |
-| **M3.5** | Final a11y certification (axe + manual), SUS study round 2, docs refresh (`docs/platform/`, gallery manifests) | All §12 targets met or explicitly waived with CEEC-tracked rationale | |
-| **M3.6** | **Preview Shelf component** (Auto-Evolve per GAME.md §5.9 / §11): clearly labeled shelf for unimplemented proposals, each entry states proposal, status "Proposed — not implemented", falsification plan in plain language | No live UI, no metrics, no creatures; Auto-Evolve entry present with its §8 kill criterion | |
-| **M3.7** | Gallery/demo lock compatibility: existing `comp gallery` artifacts remain renderable | UX-L8 regression test passes | |
+| ID | Task | Acceptance | Owner | Status |
+|----|------|------------|-------|--------|
+| **M3.1** | Guided tour (3 steps, skippable, resumable), comfort quiz (3 questions, sets default mode/tour depth only) | Tour completes, quiz only affects defaults, never restricts features | | ✅ **DONE** |
+| **M3.2** | Region naming: propose plain names for map regions, metadata-only, versioned, revertible | Names stored as presentation metadata, never in measurement records | | ✅ **DONE** |
+| **M3.3** | Cooperative team wall (opt-in per team), no individual leaderboards | Team progress = cooperative totals only | | ✅ **DONE** |
+| **M3.4** | i18n string freeze + extraction audit: all simple-register strings in resource files, no concatenation | `i18n` CLI extracts 100% of Explorer strings | | ✅ **DONE** |
+| **M3.5** | Final a11y certification (axe + manual), SUS study round 2, docs refresh (`docs/platform/`, gallery manifests) | All §12 targets met or explicitly waived with CEEC-tracked rationale | | 🔄 **IN PROGRESS** |
+| **M3.6** | **Preview Shelf component** (Auto-Evolve per GAME.md §5.9 / §11): clearly labeled shelf for unimplemented proposals, each entry states proposal, status "Proposed — not implemented", falsification plan in plain language | No live UI, no metrics, no creatures; Auto-Evolve entry present with its §8 kill criterion | | ✅ **DONE** |
+| **M3.7** | Gallery/demo lock compatibility: existing `comp gallery` artifacts remain renderable | UX-L8 regression test passes | | ✅ **DONE** |
 
 **Exit M3:** All §12 success metrics met or waived; Preview Shelf ships with Auto-Evolve entry.
+
+**Progress Summary (M3 — Completed):**
+- ✅ `computronium/ui/onboarding/tour.py` — GuidedTour (3 steps, skippable, resumable, localStorage persistence)
+- ✅ `computronium/ui/onboarding/quiz.py` — ComfortQuiz (3 questions, sets default mode/tour depth only)
+- ✅ `computronium/ui/components/region_naming.py` — RegionNaming (metadata-only, versioned, revertible)
+- ✅ `computronium/ui/components/team_wall.py` — TeamWall (cooperative, opt-in, no leaderboards)
+- ✅ `scripts/i18n_extract.py` — i18n extraction audit CLI (100% Explorer strings, no concatenation)
+- ✅ `computronium/ui/components/preview_shelf.py` — PreviewShelf with Auto-Evolve entry (falsification plan visible)
+- ✅ `tests/integration/test_ux_l8_gallery_compat.py` — UX-L8 Gallery compatibility regression test
+- ✅ All new components integrated via `computronium/ui/components/__init__.py`
+- ✅ All glossary terms registered for new M3 concepts
+
+**Remaining (M3.5 — Final Polish):**
+- Final a11y certification (axe + manual)
+- SUS study round 2
+- Docs refresh (`docs/platform/`, gallery manifests)
 
 ---
 

@@ -814,7 +814,9 @@ def _get_sorted_weight_names(geometry: Geometry) -> list[str]:
         if "weight" in n and params[n].ndim == 2 and not n.startswith("recurrent")
     ]
     weight_names.sort(
-        key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+        key=lambda x: (
+            int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+        )
     )
     return weight_names
 
@@ -828,7 +830,9 @@ def _get_sorted_bias_names(geometry: Geometry) -> list[str]:
         if "bias" in n and params[n].ndim == 1 and not n.startswith("recurrent")
     ]
     bias_names.sort(
-        key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+        key=lambda x: (
+            int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+        )
     )
     return bias_names
 
@@ -944,9 +948,13 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         if use_compiled:
             all_acts = self._settle_compiled(all_acts, kernel, beta, target)
         elif use_checkpointing:
-            all_acts = self._settle_checkpointed(all_acts, kernel, beta, target, geometry, on_step)
+            all_acts = self._settle_checkpointed(
+                all_acts, kernel, beta, target, geometry, on_step
+            )
         else:
-            all_acts = self._settle_eager(all_acts, kernel, beta, target, geometry, on_step)
+            all_acts = self._settle_eager(
+                all_acts, kernel, beta, target, geometry, on_step
+            )
 
         # Finalize state
         return self._finalize_settle(state, all_acts, target)
@@ -971,9 +979,13 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         if x is None:
             return None, None, 0.0, False, False
         if callable(block_builder):
-            all_acts: list[Tensor] = list(cast("list[Tensor]", block_builder(x, substrate)))
+            all_acts: list[Tensor] = list(
+                cast("list[Tensor]", block_builder(x, substrate))
+            )
         else:
-            all_acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(x, substrate)))
+            all_acts = list(
+                cast("list[Tensor]", geometry.forward_with_intermediates(x, substrate))
+            )
         if not all_acts:
             return None, None, 0.0, False, False
 
@@ -992,13 +1004,17 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         # Initialize velocity for momentum
         num_hidden = len(all_acts) - 2
         if self.config.momentum > 0:
-            self._velocity = [torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)]
+            self._velocity = [
+                torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)
+            ]
         else:
             self._velocity = None
 
         # Initialize free energy history
         if self.config.track_free_energy_per_iter:
-            self._free_energy_history = [_compute_hopfield_energy(all_acts, geometry).item()]
+            self._free_energy_history = [
+                _compute_hopfield_energy(all_acts, geometry).item()
+            ]
         else:
             self._free_energy_history = None
 
@@ -1020,7 +1036,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
         return all_acts, kernel, beta, use_checkpointing, use_compiled
 
-    def _determine_checkpointing(self, all_acts: list[Tensor], geometry: Geometry) -> bool:
+    def _determine_checkpointing(
+        self, all_acts: list[Tensor], geometry: Geometry
+    ) -> bool:
         """Auto-detect gradient checkpointing strategy."""
         device = all_acts[0].device
         use_checkpointing = self.config.gradient_checkpointing
@@ -1281,7 +1299,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                 prediction = prediction[..., : h.shape[-1]]
             else:
                 pad_size = h.shape[-1] - prediction.shape[-1]
-                prediction = torch.nn.functional.pad(prediction, (0, pad_size)).to(prediction.device)
+                prediction = torch.nn.functional.pad(prediction, (0, pad_size)).to(
+                    prediction.device
+                )
         return prediction
 
     def _track_free_energy_recurrent(
@@ -1291,7 +1311,10 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None,
     ) -> None:
         """Track free energy for recurrent settling."""
-        if self.config.track_free_energy_per_iter and self._free_energy_history is not None:
+        if (
+            self.config.track_free_energy_per_iter
+            and self._free_energy_history is not None
+        ):
             fe = error.pow(2).sum().item()
             self._free_energy_history.append(fe)
             if on_step is not None:
@@ -1324,7 +1347,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         )
         if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
             # Use feedforward activations as initial states
-            acts: list[Tensor] = list(init_acts)  # [input, hidden1, hidden2, ..., output]
+            acts: list[Tensor] = list(
+                init_acts
+            )  # [input, hidden1, hidden2, ..., output]
         else:
             # Fallback: initialize with zeros of correct shape
             h = substrate.initial_state(x)
@@ -1759,7 +1784,9 @@ class PCALMDynamics(_SettleTelemetry):
                 acts, dual_vars, layered, target, current_rho
             )
         else:
-            acts = self._eager_relaxation(acts, dual_vars, layered, op, target, current_rho)
+            acts = self._eager_relaxation(
+                acts, dual_vars, layered, op, target, current_rho
+            )
 
         # Finalize
         return self._finalize_pcalm_settle(state, acts, dual_vars, target)
@@ -1770,14 +1797,17 @@ class PCALMDynamics(_SettleTelemetry):
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
-    ) -> tuple[
-        list[Tensor],
-        list[Tensor],
-        LayeredParams,
-        ForwardOp,
-        float,
-        bool,
-    ] | None:
+    ) -> (
+        tuple[
+            list[Tensor],
+            list[Tensor],
+            LayeredParams,
+            ForwardOp,
+            float,
+            bool,
+        ]
+        | None
+    ):
         """Common setup for PC-ALM settling paths."""
         x = state.x
         if x is None:
@@ -1879,7 +1909,9 @@ class PCALMDynamics(_SettleTelemetry):
         if target is None:
             state.free_state = acts
             if _is_composite_state(state):
-                cast("CompositeState", state).set_activity("dual_vars_free", dual_vars_for_state)
+                cast("CompositeState", state).set_activity(
+                    "dual_vars_free", dual_vars_for_state
+                )
             else:
                 state.metrics = state.metrics or {}
                 state.metrics["dual_vars_free"] = len(dual_vars_for_state)
@@ -1888,8 +1920,12 @@ class PCALMDynamics(_SettleTelemetry):
             if hasattr(state, "dual_vars"):
                 setattr(state, "dual_vars", dual_vars_for_state)
             if _is_composite_state(state):
-                cast("CompositeState", state).set_activity("dual_vars", dual_vars_for_state)
-                cast("CompositeState", state).set_activity("dual_vars_nudged", dual_vars_for_state)
+                cast("CompositeState", state).set_activity(
+                    "dual_vars", dual_vars_for_state
+                )
+                cast("CompositeState", state).set_activity(
+                    "dual_vars_nudged", dual_vars_for_state
+                )
             else:
                 state.metrics = state.metrics or {}
                 state.metrics["dual_vars"] = len(dual_vars_for_state)
@@ -1914,24 +1950,41 @@ class PCALMDynamics(_SettleTelemetry):
 
         # Determine checkpointing strategy
         use_checkpointing = self.config.gradient_checkpointing
-        checkpoint_every = max(1, self.config.max_steps // 4) if use_checkpointing else 0
+        checkpoint_every = (
+            max(1, self.config.max_steps // 4) if use_checkpointing else 0
+        )
 
         def _relaxation_step(
             acts_step: list[Tensor], dual_vars_step: list[Tensor], step_idx: int
         ) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
             """Single relaxation step: compute constraints, update duals, update primals."""
             constraints = self._compute_constraints(acts_step, layered, op, num_layers)
-            dual_vars_step = self._dual_update(dual_vars_step, constraints, step_size, alpha, num_layers)
+            dual_vars_step = self._dual_update(
+                dual_vars_step, constraints, step_size, alpha, num_layers
+            )
             new_acts = self._primal_update(
-                acts_step, constraints, dual_vars_step, layered, op, current_rho, step_size, num_layers
+                acts_step,
+                constraints,
+                dual_vars_step,
+                layered,
+                op,
+                current_rho,
+                step_size,
+                num_layers,
             )
             new_acts = self._apply_nudge(new_acts, target)
             return new_acts, dual_vars_step, constraints
 
         # Run relaxation loop (checkpointed or eager)
         acts = self._run_relaxation_loop(
-            acts, dual_vars, _relaxation_step, use_checkpointing, checkpoint_every,
-            layered, op, current_rho
+            acts,
+            dual_vars,
+            _relaxation_step,
+            use_checkpointing,
+            checkpoint_every,
+            layered,
+            op,
+            current_rho,
         )
         return acts
 
@@ -1975,7 +2028,9 @@ class PCALMDynamics(_SettleTelemetry):
     ) -> list[Tensor]:
         """Dual update: λ_l ← λ_l + step_size * (c_l + alpha * λ_l)."""
         for i in range(num_layers):
-            dual_vars[i] = dual_vars[i] + step_size * (constraints[i] + alpha * dual_vars[i])
+            dual_vars[i] = dual_vars[i] + step_size * (
+                constraints[i] + alpha * dual_vars[i]
+            )
         return dual_vars
 
     def _primal_update(
@@ -1996,7 +2051,11 @@ class PCALMDynamics(_SettleTelemetry):
 
             if i < num_layers - 1:
                 # Top-down coupling from layer i+1
-                v = constraints[i + 1] + dual_vars[i + 1] + current_rho * constraints[i + 1]
+                v = (
+                    constraints[i + 1]
+                    + dual_vars[i + 1]
+                    + current_rho * constraints[i + 1]
+                )
                 pre = acts[i + 1]
                 weight = layered.weights[i + 1]
                 bias = layered.biases[i + 1]
@@ -2024,7 +2083,10 @@ class PCALMDynamics(_SettleTelemetry):
         self,
         acts: list[Tensor],
         dual_vars: list[Tensor],
-        step_fn: Callable[[list[Tensor], list[Tensor], int], tuple[list[Tensor], list[Tensor], list[Tensor]]],
+        step_fn: Callable[
+            [list[Tensor], list[Tensor], int],
+            tuple[list[Tensor], list[Tensor], list[Tensor]],
+        ],
         use_checkpointing: bool,
         checkpoint_every: int,
         layered: LayeredParams,
@@ -2149,8 +2211,12 @@ class PCALMDynamics(_SettleTelemetry):
         dual_vars: list[Tensor] | None = None
         if _is_composite_state(state):
             activity = cast("CompositeState", state).activity
-            dual_vars_raw = activity.get("dual_vars") or activity.get("dual_vars_nudged")
-            if isinstance(dual_vars_raw, list) and all(isinstance(t, Tensor) for t in dual_vars_raw):
+            dual_vars_raw = activity.get("dual_vars") or activity.get(
+                "dual_vars_nudged"
+            )
+            if isinstance(dual_vars_raw, list) and all(
+                isinstance(t, Tensor) for t in dual_vars_raw
+            ):
                 dual_vars = dual_vars_raw
 
         if dual_vars is None and self._dual_vars is not None:
@@ -2360,7 +2426,12 @@ class InstantaneousDynamics(_SettleTelemetry):
                         + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
                     ]
             else:
-                acts = list(cast("list[Tensor]", geometry.forward_with_intermediates(state.x, substrate)))
+                acts = list(
+                    cast(
+                        "list[Tensor]",
+                        geometry.forward_with_intermediates(state.x, substrate),
+                    )
+                )
                 if target is not None and acts:
                     # Nudge the output activation toward the target
                     acts = [
@@ -2602,7 +2673,9 @@ class LazyStateDynamics(_SettleTelemetry):
 
         self._note_settle_start()
         for sweep in range(self.config.max_steps):
-            max_delta = self._run_sweep(acts, weights, biases, activations, params, op, beta, target)
+            max_delta = self._run_sweep(
+                acts, weights, biases, activations, params, op, beta, target
+            )
             if on_step is not None:
                 on_step(sweep, max_delta)
             if sweep >= self.config.convergence_start:
@@ -2638,7 +2711,9 @@ class LazyStateDynamics(_SettleTelemetry):
             h_new = self._update_hidden_layer(
                 i, acts, weights, biases, activations, params, op
             )
-            max_delta = max(max_delta, torch.dist(h_new, acts[i + 1], p=float("inf")).item())
+            max_delta = max(
+                max_delta, torch.dist(h_new, acts[i + 1], p=float("inf")).item()
+            )
             acts[i + 1] = h_new
 
         # Update output layer

@@ -45,7 +45,7 @@ class ActivityFeed(BasePanel):
                 "Reverse-chronological event stream from /ws/events. "
                 f"Rate-limited to {LIVE_REGION_CONFIG.min_interval_ms}ms for aria-live=polite. "
                 "Pausable toggle. Batch summary mode groups events by type. "
-                "Expandable to raw JSON. Max {max_events} visible."
+                f"Expandable to raw JSON. Max {max_events} visible."
             ),
             docs_url="https://computronium.readthedocs.io/en/latest/dashboard/activity.html",
         )

@@ -75,7 +75,9 @@ def relative_error(
     return errors
 
 
-def _create_linear_geometry(device) -> tuple[FeedforwardGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
+def _create_linear_geometry(
+    device,
+) -> tuple[FeedforwardGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
     """Create linear geometry and associated components."""
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
@@ -111,7 +113,9 @@ def _create_credits() -> tuple[ThermodynamicContrast, BackpropCredit]:
     return thermo_credit, backprop_credit
 
 
-def _run_batch_linear(geometry, substrate, dynamics, x, y, device) -> tuple[SystemState, SystemState]:
+def _run_batch_linear(
+    geometry, substrate, dynamics, x, y, device
+) -> tuple[SystemState, SystemState]:
     """Run free and nudged phases for a batch."""
     initial_acts = get_activations(geometry, substrate, x)
     free_state = SystemState(x=x, y=y.squeeze(-1))
@@ -147,7 +151,9 @@ def _compute_true_grads_linear(geometry, substrate, x, y, device) -> list[torch.
     return true_grads
 
 
-def _compute_thermo_grads(thermo_credit, states, nudged_state, y, geometry) -> list[torch.Tensor]:
+def _compute_thermo_grads(
+    thermo_credit, states, nudged_state, y, geometry
+) -> list[torch.Tensor]:
     """Compute ThermodynamicContrast pseudo-gradients."""
     nudged_logits = (
         nudged_state.activations[-1]
@@ -158,7 +164,9 @@ def _compute_thermo_grads(thermo_credit, states, nudged_state, y, geometry) -> l
     return thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
 
 
-def _collect_grad_comparisons(cosines: list, rel_errors: list, thermo_grads, true_grads):
+def _collect_grad_comparisons(
+    cosines: list, rel_errors: list, thermo_grads, true_grads
+):
     """Collect cosine similarity and relative error between gradients."""
     if thermo_grads and true_grads:
         cos = cosine_similarity(thermo_grads, true_grads)
@@ -186,11 +194,15 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
         W_true = torch.randn(20, 1, device=device)
         y = x @ W_true + 0.01 * torch.randn(32, 1, device=device)
 
-        free_state, nudged_state = _run_batch_linear(geometry, substrate, dynamics, x, y, device)
+        free_state, nudged_state = _run_batch_linear(
+            geometry, substrate, dynamics, x, y, device
+        )
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
         true_grads = _compute_true_grads_linear(geometry, substrate, x, y, device)
-        thermo_grads = _compute_thermo_grads(thermo_credit, states, nudged_state, y, geometry)
+        thermo_grads = _compute_thermo_grads(
+            thermo_credit, states, nudged_state, y, geometry
+        )
 
         _collect_grad_comparisons(cosines, rel_errors, thermo_grads, true_grads)
 
@@ -222,7 +234,9 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
     }
 
 
-def _create_mlp_geometry(device) -> tuple[RecurrentGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
+def _create_mlp_geometry(
+    device,
+) -> tuple[RecurrentGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
     """Create MLP geometry and associated components."""
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(
@@ -250,7 +264,9 @@ def _create_mlp_geometry(device) -> tuple[RecurrentGeometry, DigitalSubstrate, E
     return geometry, substrate, dynamics
 
 
-def _run_batch_mlp(geometry, substrate, dynamics, x, y) -> tuple[SystemState, SystemState]:
+def _run_batch_mlp(
+    geometry, substrate, dynamics, x, y
+) -> tuple[SystemState, SystemState]:
     """Run free and nudged phases for a batch."""
     initial_acts = get_activations(geometry, substrate, x)
     free_state = SystemState(x=x, y=y)
@@ -286,7 +302,9 @@ def _compute_true_grads_mlp(geometry, substrate, x, y) -> list[torch.Tensor]:
     return true_grads
 
 
-def _compute_thermo_grads_mlp(thermo_credit, states, nudged_state, y, geometry) -> list[torch.Tensor]:
+def _compute_thermo_grads_mlp(
+    thermo_credit, states, nudged_state, y, geometry
+) -> list[torch.Tensor]:
     """Compute ThermodynamicContrast pseudo-gradients for MLP."""
     nudged_logits = (
         nudged_state.activations[-1]
@@ -297,8 +315,14 @@ def _compute_thermo_grads_mlp(thermo_credit, states, nudged_state, y, geometry) 
     return thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
 
 
-def _collect_mlp_comparisons(cosines: list, rel_errors: list, same_sign_count: int, total_params: int,
-                             thermo_grads, true_grads) -> tuple[int, int]:
+def _collect_mlp_comparisons(
+    cosines: list,
+    rel_errors: list,
+    same_sign_count: int,
+    total_params: int,
+    thermo_grads,
+    true_grads,
+) -> tuple[int, int]:
     """Collect cosine similarity, relative error, and same-sign stats."""
     if thermo_grads and true_grads:
         cos = cosine_similarity(thermo_grads, true_grads)
@@ -341,7 +365,9 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
         true_grads = _compute_true_grads_mlp(geometry, substrate, x, y)
-        thermo_grads = _compute_thermo_grads_mlp(thermo_credit, states, nudged_state, y, geometry)
+        thermo_grads = _compute_thermo_grads_mlp(
+            thermo_credit, states, nudged_state, y, geometry
+        )
 
         same_sign_count, total_params = _collect_mlp_comparisons(
             cosines, rel_errors, same_sign_count, total_params, thermo_grads, true_grads
@@ -412,7 +438,9 @@ def _compute_true_grads_fa(geometry, substrate, x, y) -> list[torch.Tensor]:
     return torch.autograd.grad(true_loss, params, retain_graph=False)
 
 
-def _compute_theoretical_fa_grads(fb_weights, nudged_state, free_state, true_grads, y) -> list[torch.Tensor]:
+def _compute_theoretical_fa_grads(
+    fb_weights, nudged_state, free_state, true_grads, y
+) -> list[torch.Tensor]:
     """Compute theoretical FA gradients."""
     if isinstance(nudged_state.activations, list):
         logits_n = nudged_state.activations[-1]
@@ -529,7 +557,9 @@ def _create_dfa_credit(device, geometry) -> RandomProjectionsCredit:
     return credit
 
 
-def _compute_theoretical_dfa_grads(fb_weights, nudged_state, free_state, true_grads, y) -> list[torch.Tensor]:
+def _compute_theoretical_dfa_grads(
+    fb_weights, nudged_state, free_state, true_grads, y
+) -> list[torch.Tensor]:
     """Compute theoretical DFA gradients."""
     if isinstance(nudged_state.activations, list):
         logits_n = nudged_state.activations[-1]

@@ -31,7 +31,11 @@ class _EqPropModel(Protocol):
     """Protocol for models compatible with EqPropFunction."""
 
     def settle(
-        self, input: Tensor, target: Tensor | None = None, beta: float = 0.5, steps: int = 30
+        self,
+        input: Tensor,
+        target: Tensor | None = None,
+        beta: float = 0.5,
+        steps: int = 30,
     ) -> Tensor: ...
 
     def get_activations(self) -> list[Tensor]: ...

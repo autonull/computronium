@@ -120,6 +120,7 @@ class TestA11yAutomated:
     def dashboard_url(self) -> str:
         """Base URL for dashboard (set via env or default)."""
         import os
+
         return os.environ.get("DASHBOARD_URL", "http://localhost:8088")
 
     def test_axe_no_critical_or_serious(self, dashboard_url: str) -> None:
@@ -134,7 +135,9 @@ class TestA11yAutomated:
 
         assert critical_count == 0, (
             f"{critical_count} critical axe violations:\n"
-            + "\n".join(f"  [{v['id']}] {v['description']}" for v in grouped["critical"])
+            + "\n".join(
+                f"  [{v['id']}] {v['description']}" for v in grouped["critical"]
+            )
         )
         assert serious_count == 0, (
             f"{serious_count} serious axe violations:\n"
@@ -144,7 +147,7 @@ class TestA11yAutomated:
     def test_axe_no_violations_on_shell_routes(self, dashboard_url: str) -> None:
         """Test key dashboard routes for a11y regressions."""
         routes = [
-            "/",           # Main dashboard
+            "/",  # Main dashboard
             "/?mode=lab",  # Lab mode
         ]
 
@@ -183,6 +186,7 @@ class TestA11yTokens:
         # Dark mode colors would be defined separately in a real implementation
         # For now, test that high contrast mode colors work
         from computronium.ui.a11y.tokens import meets_aa
+
         dark_colors = {
             "success": "#4cd964",
             "warning": "#ffdf00",
@@ -244,10 +248,13 @@ class TestA11yKeyboardCrawl:
         Usage: pytest tests/a11y/test_ux_l5_a11y.py::TestA11yKeyboardCrawl::test_keyboard_crawl_checklist -s
         """
         import os
+
         url = os.environ.get("DASHBOARD_URL", "http://localhost:8088")
 
         print(f"\nManual keyboard crawl for: {url}")
-        print("Navigate using ONLY keyboard (Tab, Shift+Tab, Enter, Space, Arrows, Esc)")
+        print(
+            "Navigate using ONLY keyboard (Tab, Shift+Tab, Enter, Space, Arrows, Esc)"
+        )
         print("Record results for each check below.\n")
 
         results = []
@@ -266,7 +273,11 @@ class TestA11yKeyboardCrawl:
         total = len(results)
         print(f"\nKeyboard crawl complete: {passed_count}/{total} passed")
 
-        failed = [(cid, notes) for cid, passed, notes in results if not passed and notes != "Skipped"]
+        failed = [
+            (cid, notes)
+            for cid, passed, notes in results
+            if not passed and notes != "Skipped"
+        ]
         if failed:
             pytest.fail(
                 f"Keyboard crawl failures:\n"
@@ -276,6 +287,7 @@ class TestA11yKeyboardCrawl:
     def test_skip_link_exists_in_a11y_css(self) -> None:
         """Skip link CSS must be present in a11y tokens."""
         from computronium.ui.a11y.tokens import SKIP_LINK_CSS
+
         assert ".skip-link" in SKIP_LINK_CSS
         assert "position: absolute" in SKIP_LINK_CSS
         assert "top: -100%" in SKIP_LINK_CSS
@@ -284,6 +296,7 @@ class TestA11yKeyboardCrawl:
     def test_sr_only_exists_in_a11y_css(self) -> None:
         """Screen reader only CSS must be present."""
         from computronium.ui.a11y.tokens import SR_ONLY_CSS
+
         assert ".sr-only" in SR_ONLY_CSS
         assert "position: absolute" in SR_ONLY_CSS
         assert "width: 1px" in SR_ONLY_CSS
@@ -292,12 +305,14 @@ class TestA11yKeyboardCrawl:
     def test_focus_visible_polyfill_exists(self) -> None:
         """Focus visible polyfill CSS must be present."""
         from computronium.ui.a11y.tokens import FOCUS_VISIBLE_CSS
+
         assert ":focus-visible" in FOCUS_VISIBLE_CSS
         assert "outline" in FOCUS_VISIBLE_CSS
 
     def test_reduced_motion_media_query_exists(self) -> None:
         """Reduced motion media query must be in design tokens."""
         from computronium.ui.design_tokens import REDUCED_MOTION_CSS
+
         assert "prefers-reduced-motion: reduce" in REDUCED_MOTION_CSS
         assert "animation-duration: 0.01ms" in REDUCED_MOTION_CSS
         assert "transition-duration: 0.01ms" in REDUCED_MOTION_CSS
@@ -305,24 +320,31 @@ class TestA11yKeyboardCrawl:
     def test_high_contrast_media_query_exists(self) -> None:
         """High contrast media query must be in design tokens."""
         from computronium.ui.design_tokens import HIGH_CONTRAST_CSS
+
         assert "prefers-contrast: high" in HIGH_CONTRAST_CSS
 
     def test_live_region_config(self) -> None:
         """Live region config must have polite politeness and rate limiting."""
         from computronium.ui.a11y.tokens import LIVE_REGION_CONFIG
+
         assert LIVE_REGION_CONFIG.politeness == "polite"
         assert LIVE_REGION_CONFIG.atomic is True
         assert LIVE_REGION_CONFIG.min_interval_ms >= 500
 
     def test_touch_target_sizes(self) -> None:
         """Touch target constants must meet WCAG minimums."""
-        from computronium.ui.a11y.tokens import MIN_TOUCH_TARGET, RECOMMENDED_TOUCH_TARGET
+        from computronium.ui.a11y.tokens import (
+            MIN_TOUCH_TARGET,
+            RECOMMENDED_TOUCH_TARGET,
+        )
+
         assert MIN_TOUCH_TARGET == "44px"
         assert RECOMMENDED_TOUCH_TARGET == "48px"
 
     def test_text_spacing_tokens(self) -> None:
         """Text spacing tokens must meet WCAG 1.4.12."""
         from computronium.ui.a11y.tokens import TEXT_SPACING
+
         assert TEXT_SPACING.line_height >= 1.5
         assert TEXT_SPACING.paragraph_spacing >= 2.0
         assert TEXT_SPACING.letter_spacing >= 0.12

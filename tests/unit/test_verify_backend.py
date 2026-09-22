@@ -6,6 +6,7 @@ def _check_torch() -> bool:
     """Check Torch import and version."""
     try:
         import torch
+
         print(f"Torch version: {torch.__version__}")
         print(f"Torch file: {torch.__file__}")
         return True
@@ -25,6 +26,7 @@ def _check_kernel_import() -> tuple[bool, object]:
     """Import kernel module and check CUDA_PATH after import."""
     try:
         from computronium.acceleration import kernels as kernel
+
         print("Successfully imported computronium.acceleration.kernels")
         cuda_path_after = os.environ.get("CUDA_PATH")
         print(f"CUDA_PATH (after import): {cuda_path_after}")
@@ -54,6 +56,7 @@ def _check_cupy(kernel) -> bool:
     print(f"HAS_CUPY: {kernel.HAS_CUPY}")
     if kernel.HAS_CUPY:
         import cupy
+
         print(f"CuPy version: {cupy.__version__}")
         try:
             cupy.array([1, 2, 3])
@@ -70,6 +73,7 @@ def _check_triton() -> bool:
     print("\n[Checking Triton]...")
     try:
         from computronium.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
+
         print(f"HAS_TRITON: {HAS_TRITON}")
         print(f"TritonEqPropOps.is_available(): {TritonEqPropOps.is_available()}")
 
@@ -82,6 +86,7 @@ def _check_triton() -> bool:
             elif not os.environ.get("CUDA_PATH"):
                 print("⚠️ CUDA might be missing or torch.cuda.is_available() is False")
             import torch
+
             print(f"PyTorch CUDA available: {torch.cuda.is_available()}")
             return True
     except ImportError as e:

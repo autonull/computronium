@@ -75,7 +75,11 @@ def _compute_multi_state_delta(
     for k, (s_new, s_old) in enumerate(zip(state_new, state_old)):
         abs_delta = torch.dist(s_new, s_old, p=norm).item()
         if relative:
-            denom = layer_norms[k] if layer_norms is not None else (s_old.norm(p=norm).item() + 1e-8)
+            denom = (
+                layer_norms[k]
+                if layer_norms is not None
+                else (s_old.norm(p=norm).item() + 1e-8)
+            )
             rel_delta = abs_delta / denom
         else:
             rel_delta = abs_delta
@@ -409,7 +413,9 @@ def _execute_settle_loop(
     config: SettleConfig,
     *,
     return_trajectory: bool,
-) -> tuple[torch.Tensor | list[torch.Tensor], int, bool, list[float], list[object] | None]:
+) -> tuple[
+    torch.Tensor | list[torch.Tensor], int, bool, list[float], list[object] | None
+]:
     """Execute the core settle loop with convergence checking and telemetry.
 
     Returns: (final_state, steps_taken, converged, deltas, trajectory)
@@ -566,14 +572,13 @@ def _energy_gradient_descent_step(
 
         if torch.isnan(E) or torch.isinf(E):
             raise RuntimeError(
-                f"Energy diverged: E={E.item()}. "
-                f"Try reducing settle_lr or beta."
+                f"Energy diverged: E={E.item()}. Try reducing settle_lr or beta."
             )
 
         current_energy = float(E.item())
-        grads: list[torch.Tensor | None] = list(torch.autograd.grad(
-            E, states, retain_graph=False, allow_unused=True
-        ))
+        grads: list[torch.Tensor | None] = list(
+            torch.autograd.grad(E, states, retain_graph=False, allow_unused=True)
+        )
 
     # SGD with momentum
     with torch.no_grad():
@@ -861,13 +866,27 @@ def settle_single_state(
     def warmup() -> None:
         nonlocal h, traj_idx, remaining, steps_taken
         h, remaining, steps_taken, traj_idx = _run_single_state_warmup(
-            step_fn, h, h_0, deltas=deltas, trajectory=trajectory, traj_idx=traj_idx, steps_taken=steps_taken, remaining=remaining
+            step_fn,
+            h,
+            h_0,
+            deltas=deltas,
+            trajectory=trajectory,
+            traj_idx=traj_idx,
+            steps_taken=steps_taken,
+            remaining=remaining,
         )
 
     def main_loop() -> None:
         nonlocal h, traj_idx, remaining, steps_taken, converged
         h, steps_taken, traj_idx, remaining, converged = _run_single_state_main_loop(
-            step_fn, h, deltas=deltas, trajectory=trajectory, traj_idx=traj_idx, steps_taken=steps_taken, remaining=remaining, converged=converged
+            step_fn,
+            h,
+            deltas=deltas,
+            trajectory=trajectory,
+            traj_idx=traj_idx,
+            steps_taken=steps_taken,
+            remaining=remaining,
+            converged=converged,
         )
 
     if model is not None:
@@ -1258,7 +1277,11 @@ class EquilibriumFunction(autograd.Function):
 
         try:
             delta = _run_adjoint_iteration(
-                model, h_star, x_transformed, grad_output, max_steps=int(getattr(model, "max_steps", 30))
+                model,
+                h_star,
+                x_transformed,
+                grad_output,
+                max_steps=int(getattr(model, "max_steps", 30)),
             )
 
             grads_params_list, grad_x = _compute_parameter_gradients(

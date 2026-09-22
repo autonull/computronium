@@ -251,7 +251,9 @@ def _run_lwf_task0(model, lwf_loss, x, y, device) -> torch.Tensor:
     return lwf_loss(logits0, y, task_id=0)
 
 
-def _run_lwf_task1(model, lwf_loss, x, y, prev_model, device) -> tuple[torch.Tensor, torch.Tensor]:
+def _run_lwf_task1(
+    model, lwf_loss, x, y, prev_model, device
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Run LwF task 1 with distillation."""
     model.set_task(1)
     logits1 = model(x, task_id=1)
@@ -261,16 +263,22 @@ def _run_lwf_task1(model, lwf_loss, x, y, prev_model, device) -> tuple[torch.Ten
     return loss1, distill
 
 
-def _check_distillation_active(loss0: torch.Tensor, loss1: torch.Tensor, all_passed: bool) -> bool:
+def _check_distillation_active(
+    loss0: torch.Tensor, loss1: torch.Tensor, all_passed: bool
+) -> bool:
     """Verify distillation changes the loss."""
     if torch.allclose(loss0, loss1):
         print(f"  FAIL: Loss unchanged with distillation: {loss0.item():.4f}")
         return False
-    print(f"  PASS: Task 0 loss={loss0.item():.4f}, Task 1 loss (with distill)={loss1.item():.4f}")
+    print(
+        f"  PASS: Task 0 loss={loss0.item():.4f}, Task 1 loss (with distill)={loss1.item():.4f}"
+    )
     return all_passed
 
 
-def _check_distill_only(distill: torch.Tensor | None, all_passed: bool) -> tuple[bool, float]:
+def _check_distill_only(
+    distill: torch.Tensor | None, all_passed: bool
+) -> tuple[bool, float]:
     """Verify distill_only returns positive value."""
     if distill is None:
         print("  FAIL: distill_only returned None")
@@ -353,7 +361,9 @@ def test_lwf_distillation() -> dict[str, Any]:
     all_passed, distill_value = _check_distill_only(distill, all_passed)
 
     # Test that distillation affects θ
-    params_changed = _check_params_change_with_distillation(model, x, y, lwf_loss, device)
+    params_changed = _check_params_change_with_distillation(
+        model, x, y, lwf_loss, device
+    )
     if not params_changed:
         all_passed = False
 

@@ -188,7 +188,9 @@ class ResearchSynthesizer:
         """
         return pd.read_sql(query, conn)
 
-    def _fetch_hyperparameters(self, conn: sqlite3.Connection, df: pd.DataFrame) -> pd.DataFrame:
+    def _fetch_hyperparameters(
+        self, conn: sqlite3.Connection, df: pd.DataFrame
+    ) -> pd.DataFrame:
         """Fetch and pivot hyperparameters."""
         params_query = "SELECT trial_id, param_name, param_value FROM trial_params"
         params_df = pd.read_sql(params_query, conn)
@@ -253,7 +255,7 @@ class ResearchSynthesizer:
         try:
             p_val = float(p)
             return int(p_val * 1_000_000) if p_val < 500 else int(p_val)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return self._estimate_param_count(row)
 
     def _estimate_param_count(self, row: pd.Series) -> int:
@@ -263,7 +265,7 @@ class ResearchSynthesizer:
         try:
             h_int = int(h) if pd.notnull(h) else 32  # type: ignore[arg-type]
             l_int = int(n_layers) if pd.notnull(n_layers) else 1  # type: ignore[arg-type]
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             h_int = 32
             l_int = 1
 
@@ -346,7 +348,9 @@ class ResearchSynthesizer:
                 model_accs[model] = accs
         return model_accs
 
-    def _compute_pairwise_significance(self, model_accs: dict[str, list[float]]) -> list[dict[str, str | float]]:
+    def _compute_pairwise_significance(
+        self, model_accs: dict[str, list[float]]
+    ) -> list[dict[str, str | float]]:
         """Compute pairwise significance tests between models."""
         from scipy import stats
 
@@ -482,7 +486,9 @@ class ResearchSynthesizer:
         if df_valid.empty:
             return None
 
-        df_valid["param_efficiency"] = df_valid["accuracy"] / (df_valid["param_count"] / 1e6)
+        df_valid["param_efficiency"] = df_valid["accuracy"] / (
+            df_valid["param_count"] / 1e6
+        )
         top_param = df_valid.nlargest(5, "param_efficiency")  # type: ignore[call-overload]
         top_param = top_param[
             ["model_name", "accuracy", "param_count", "param_efficiency"]
@@ -496,7 +502,10 @@ class ResearchSynthesizer:
         analysis = {}
 
         trial_epochs = (
-            convergence_df.groupby("trial_id")["epoch"].max().reset_index(name="actual_epochs")  # type: ignore[union-attr]
+            convergence_df
+            .groupby("trial_id")["epoch"]
+            .max()
+            .reset_index(name="actual_epochs")  # type: ignore[union-attr]
         )
 
         trial_samples = self._compute_trial_samples(convergence_df)
@@ -513,7 +522,9 @@ class ResearchSynthesizer:
             df_epoch.get("num_epochs", 10)
         )
 
-        df_epoch["epoch_efficiency"] = df_epoch["accuracy"] / df_epoch["actual_epochs"].replace(0, 1)
+        df_epoch["epoch_efficiency"] = df_epoch["accuracy"] / df_epoch[
+            "actual_epochs"
+        ].replace(0, 1)
 
         top_epoch = df_epoch.nlargest(5, "epoch_efficiency")[
             [
@@ -543,7 +554,10 @@ class ResearchSynthesizer:
             return pd.DataFrame(columns=["trial_id", "total_samples"])
 
         trial_samples = (
-            convergence_df.groupby("trial_id")["samples_seen"].max().reset_index(name="total_samples")  # type: ignore[union-attr]
+            convergence_df
+            .groupby("trial_id")["samples_seen"]
+            .max()
+            .reset_index(name="total_samples")  # type: ignore[union-attr]
         )
         trial_samples = trial_samples.rename(columns={"samples_seen": "total_samples"})
         return trial_samples
@@ -558,7 +572,10 @@ class ResearchSynthesizer:
             reached = t_data[t_data["val_acc"] >= target]["epoch"].min()
             if isinstance(reached, float) and pd.isna(reached):
                 reached = t_data["epoch"].max()
-            fast_convergence.append({"trial_id": trial_id, "epochs_to_90": int(reached)})  # type: ignore[arg-type]
+            fast_convergence.append({
+                "trial_id": trial_id,
+                "epochs_to_90": int(reached),
+            })  # type: ignore[arg-type]
         return fast_convergence
 
     def _compute_sample_efficiency(self, df_epoch: pd.DataFrame) -> list[dict] | None:
@@ -655,7 +672,9 @@ class ResearchSynthesizer:
             return []
 
         nan_fails = failures[
-            failures["failure_type"].astype(str).str.contains("nan", case=False, na=False)
+            failures["failure_type"]
+            .astype(str)
+            .str.contains("nan", case=False, na=False)
         ]
         if len(nan_fails) > 5:
             return [
@@ -700,7 +719,11 @@ class ResearchSynthesizer:
         tier_counts = trials["tier"].value_counts()
         smoke_count = tier_counts.get("smoke", 0)
         shallow_count = tier_counts.get("shallow", 0)
-        if isinstance(smoke_count, int) and isinstance(shallow_count, int) and smoke_count > shallow_count * 2:
+        if (
+            isinstance(smoke_count, int)
+            and isinstance(shallow_count, int)
+            and smoke_count > shallow_count * 2
+        ):
             return [
                 "[TIP]  Heavy smoke testing detected."
                 " Consider promoting successful configs"
@@ -714,7 +737,9 @@ class ResearchSynthesizer:
             return []
 
         model_counts = trials["model_name"].value_counts()
-        underexplored = [str(m) for m, c in model_counts.items() if isinstance(c, int) and c < 5]
+        underexplored = [
+            str(m) for m, c in model_counts.items() if isinstance(c, int) and c < 5
+        ]
         if underexplored:
             return [
                 f"[DATA]  Underexplored models:"
@@ -775,7 +800,9 @@ class ResearchSynthesizer:
 
         baseline_df = df[df["model_name"] == BACKPROP_NAME]  # type: ignore[assignment]
         if baseline_df.empty:
-            result["summary"]["baseline_status"] = "No Backprop Baseline experiments found"
+            result["summary"]["baseline_status"] = (
+                "No Backprop Baseline experiments found"
+            )
             return result
 
         baseline_by_task = self._get_baseline_by_task(baseline_df)  # type: ignore[arg-type]
@@ -795,19 +822,26 @@ class ResearchSynthesizer:
         return result.to_dict()  # type: ignore[return-value]
 
     def _compute_model_gaps(
-        self, result: dict, other_models: pd.DataFrame, baseline_by_task: dict[str, float]
+        self,
+        result: dict,
+        other_models: pd.DataFrame,
+        baseline_by_task: dict[str, float],
     ) -> None:
         """Compute gaps for each model vs baseline."""
         for model_name in other_models["model_name"].unique():
             model_df = other_models[other_models["model_name"] == model_name]
-            model_best_by_task = model_df.groupby("task_name")["accuracy"].max().to_dict()  # type: ignore[assignment]
+            model_best_by_task = (
+                model_df.groupby("task_name")["accuracy"].max().to_dict()
+            )  # type: ignore[assignment]
 
             gaps, wins, total_comparisons = self._compare_model_to_baseline(
                 model_best_by_task, baseline_by_task
             )
 
             if gaps:
-                self._record_model_gaps(result, model_name, gaps, wins, total_comparisons)
+                self._record_model_gaps(
+                    result, model_name, gaps, wins, total_comparisons
+                )
 
     def _compare_model_to_baseline(
         self, model_best_by_task: dict[str, float], baseline_by_task: dict[str, float]
@@ -837,13 +871,20 @@ class ResearchSynthesizer:
         return gaps, wins, total_comparisons
 
     def _record_model_gaps(
-        self, result: dict, model_name: str, gaps: list[dict], wins: int, total_comparisons: int
+        self,
+        result: dict,
+        model_name: str,
+        gaps: list[dict],
+        wins: int,
+        total_comparisons: int,
     ) -> None:
         """Record gap analysis for a model."""
         avg_gap = sum(g["gap"] for g in gaps) / len(gaps)
         result["gaps_by_model"][model_name] = {
             "avg_gap": float(avg_gap),
-            "win_rate": float(wins / total_comparisons) if total_comparisons > 0 else 0.0,
+            "win_rate": float(wins / total_comparisons)
+            if total_comparisons > 0
+            else 0.0,
             "comparisons": gaps,
         }
 
@@ -851,7 +892,9 @@ class ResearchSynthesizer:
             result["winning_models"].append({
                 "model": model_name,
                 "avg_advantage": float(avg_gap),
-                "win_rate": float(wins / total_comparisons) if total_comparisons > 0 else 0.0,
+                "win_rate": float(wins / total_comparisons)
+                if total_comparisons > 0
+                else 0.0,
             })
 
     def _compute_task_advantages(
@@ -884,7 +927,9 @@ class ResearchSynthesizer:
                 "bio_wins": bool(gap > 0),
             }
 
-    def _get_task_baseline_acc(self, task_df: pd.DataFrame, baseline_name: str) -> float:
+    def _get_task_baseline_acc(
+        self, task_df: pd.DataFrame, baseline_name: str
+    ) -> float:
         """Get baseline accuracy for a task."""
         vals = task_df[task_df["model_name"] == baseline_name]["accuracy"]
         max_val = vals.max()
@@ -903,7 +948,9 @@ class ResearchSynthesizer:
     def _finalize_results(self, result: dict) -> None:
         """Finalize results with sorting and summary."""
         if result["winning_models"]:
-            result["winning_models"].sort(key=lambda x: x["avg_advantage"], reverse=True)
+            result["winning_models"].sort(
+                key=lambda x: x["avg_advantage"], reverse=True
+            )
 
         total_bio_wins = sum(
             1 for t in result["task_advantages"].values() if t["bio_wins"]

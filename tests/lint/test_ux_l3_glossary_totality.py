@@ -43,16 +43,27 @@ def _extract_tr_calls(source: str) -> list[str]:
             # Only catch glossary service functions: tr(), tr_both(), svc.get()
             if func_name in ("tr", "tr_both") and node.args:
                 first_arg = node.args[0]
-                if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                if isinstance(first_arg, ast.Constant) and isinstance(
+                    first_arg.value, str
+                ):
                     keys.append(first_arg.value)
             elif func_name == "get" and node.args:
                 # Check if this is a call on a glossary service instance
-                if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                if isinstance(node.func, ast.Attribute) and isinstance(
+                    node.func.value, ast.Name
+                ):
                     var_name = node.func.value.id
                     # Common glossary service variable names
-                    if var_name in ("svc", "service", "glossary", "get_glossary_service()"):
+                    if var_name in (
+                        "svc",
+                        "service",
+                        "glossary",
+                        "get_glossary_service()",
+                    ):
                         first_arg = node.args[0]
-                        if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                        if isinstance(first_arg, ast.Constant) and isinstance(
+                            first_arg.value, str
+                        ):
                             keys.append(first_arg.value)
 
     return keys
@@ -86,7 +97,9 @@ class TestGlossaryTotality:
     def ui_tr_calls(self) -> dict[str, list[str]]:
         return _scan_ui_modules()
 
-    def test_all_tr_keys_exist_in_glossary(self, glossary_keys: set[str], ui_tr_calls: dict[str, list[str]]) -> None:
+    def test_all_tr_keys_exist_in_glossary(
+        self, glossary_keys: set[str], ui_tr_calls: dict[str, list[str]]
+    ) -> None:
         """Every tr() key must be registered in glossary.json."""
         missing: dict[str, list[str]] = {}
 
@@ -95,12 +108,13 @@ class TestGlossaryTotality:
                 if key not in glossary_keys:
                     missing.setdefault(file, []).append(key)
 
-        assert not missing, (
-            "Unregistered glossary keys found:\n"
-            + "\n".join(f"  {f}: {', '.join(ks)}" for f, ks in missing.items())
+        assert not missing, "Unregistered glossary keys found:\n" + "\n".join(
+            f"  {f}: {', '.join(ks)}" for f, ks in missing.items()
         )
 
-    def test_glossary_has_no_unused_keys(self, glossary_keys: set[str], ui_tr_calls: dict[str, list[str]]) -> None:
+    def test_glossary_has_no_unused_keys(
+        self, glossary_keys: set[str], ui_tr_calls: dict[str, list[str]]
+    ) -> None:
         """Warn about glossary keys never used in UI code (informational)."""
         used_keys = set()
         for keys in ui_tr_calls.values():
@@ -124,35 +138,135 @@ class TestGlossaryTotality:
 
         # Known technical terms that must be glossaried (whole word match)
         technical_terms = {
-            "pareto", "spectral", "lyapunov", "backprop", "gradient",
-            "epoch", "batch", "accuracy", "loss", "deficit", "void",
-            "quarantine", "diverged", "flops", "latency",
-            "throughput", "walltime", "parameter", "seed",
-            "ruler", "credit", "dynamics", "update",
-            "topology", "geometry", "plasticity", "substrate",
-            "consolidation", "settle", "horizon",
-            "energy_minimization", "predictive", "instantaneous",
-            "spike", "diffusion", "thermodynamic",
-            "local_goodness", "target_inversion", "temporal_trace",
-            "homeostatic", "euclidean", "riemannian", "natural_gradient",
-            "elastic", "memristive", "neuromorphic", "photonic", "quantum",
-            "feedforward", "recurrent", "attractor", "tile", "mesh",
-            "fabric", "spatial", "lattice", "ntm", "nca",
-            "routing", "fast_weight", "rule_state", "closed_form",
-            "temporal_psi", "cell", "burst", "campaign", "knowledge",
-            "structural", "runtime", "defect", "unquarantine",
-            "maturity", "ceec", "experiment", "evidence", "belief",
-            "gate", "decision", "stability", "plasticity", "ratio",
-            "efficiency", "fog", "coverage", "badge", "quest", "record",
-            "constitution", "causality", "dag", "passivity", "bound",
-            "resource", "ceiling", "protocol", "conformance", "recursion",
-            "invariant", "lineage", "probe", "stagnation", "genome",
-            "mutation", "veto", "episode", "auto_evolve", "preview",
-            "falsification", "ontology", "axis", "primitive", "system",
-            "coordinate", "compatibility", "diversity", "novelty",
-            "stratum", "repeat", "pressure", "cost", "projection",
-            "projected", "remaining", "liveness", "heartbeat",
-            "daemon", "continuous", "discovery", "broad",
+            "pareto",
+            "spectral",
+            "lyapunov",
+            "backprop",
+            "gradient",
+            "epoch",
+            "batch",
+            "accuracy",
+            "loss",
+            "deficit",
+            "void",
+            "quarantine",
+            "diverged",
+            "flops",
+            "latency",
+            "throughput",
+            "walltime",
+            "parameter",
+            "seed",
+            "ruler",
+            "credit",
+            "dynamics",
+            "update",
+            "topology",
+            "geometry",
+            "plasticity",
+            "substrate",
+            "consolidation",
+            "settle",
+            "horizon",
+            "energy_minimization",
+            "predictive",
+            "instantaneous",
+            "spike",
+            "diffusion",
+            "thermodynamic",
+            "local_goodness",
+            "target_inversion",
+            "temporal_trace",
+            "homeostatic",
+            "euclidean",
+            "riemannian",
+            "natural_gradient",
+            "elastic",
+            "memristive",
+            "neuromorphic",
+            "photonic",
+            "quantum",
+            "feedforward",
+            "recurrent",
+            "attractor",
+            "tile",
+            "mesh",
+            "fabric",
+            "spatial",
+            "lattice",
+            "ntm",
+            "nca",
+            "routing",
+            "fast_weight",
+            "rule_state",
+            "closed_form",
+            "temporal_psi",
+            "cell",
+            "burst",
+            "campaign",
+            "knowledge",
+            "structural",
+            "runtime",
+            "defect",
+            "unquarantine",
+            "maturity",
+            "ceec",
+            "experiment",
+            "evidence",
+            "belief",
+            "gate",
+            "decision",
+            "stability",
+            "plasticity",
+            "ratio",
+            "efficiency",
+            "fog",
+            "coverage",
+            "badge",
+            "quest",
+            "record",
+            "constitution",
+            "causality",
+            "dag",
+            "passivity",
+            "bound",
+            "resource",
+            "ceiling",
+            "protocol",
+            "conformance",
+            "recursion",
+            "invariant",
+            "lineage",
+            "probe",
+            "stagnation",
+            "genome",
+            "mutation",
+            "veto",
+            "episode",
+            "auto_evolve",
+            "preview",
+            "falsification",
+            "ontology",
+            "axis",
+            "primitive",
+            "system",
+            "coordinate",
+            "compatibility",
+            "diversity",
+            "novelty",
+            "stratum",
+            "repeat",
+            "pressure",
+            "cost",
+            "projection",
+            "projected",
+            "remaining",
+            "liveness",
+            "heartbeat",
+            "daemon",
+            "continuous",
+            "discovery",
+            "broad",
         }
 
         glossary_keys_lower = {k.lower() for k in terms}
@@ -172,6 +286,7 @@ class TestGlossaryTotality:
                     continue
                 # Whole word match using word boundaries
                 import re
+
                 if re.search(rf"\b{re.escape(term)}\b", explorer):
                     violations.append((key, entry.get("explorer", ""), term))
 

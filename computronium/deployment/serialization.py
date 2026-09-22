@@ -965,7 +965,7 @@ class _AppState:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
             await self.server.start()
-            yield  
+            yield
             await self.server.stop()
 
         self.app = FastAPI(

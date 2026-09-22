@@ -112,9 +112,7 @@ class ConstitutionHealthPanel(BasePanel):
             if self.is_explorer:
                 ui.label(f"{self.tr('value')}: {inv.value}").classes("text-body")
             elif inv.threshold is not None:
-                ui.label(f"{inv.value} / {inv.threshold}").classes(
-                    "font-mono text-sm"
-                )
+                ui.label(f"{inv.value} / {inv.threshold}").classes("font-mono text-sm")
             else:
                 ui.label(f"{inv.value}").classes("font-mono text-sm")
 

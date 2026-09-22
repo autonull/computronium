@@ -1191,6 +1191,7 @@ class TileGeometry(nn.Module):
         """Get substrate, defaulting to DigitalSubstrate."""
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
+
             substrate = DigitalSubstrate()
         return substrate
 
@@ -1317,10 +1318,19 @@ class TileGeometry(nn.Module):
     def update_params(self, new_params: dict[str, Tensor]) -> None:
         """Update geometry parameters in-place from ParameterUpdate output."""
         handlers = {
-            "input_proj.": (self._input_projection, lambda n: n.replace("input_proj.", "")),
-            "output_proj.": (self._output_projection, lambda n: n.replace("output_proj.", "")),
+            "input_proj.": (
+                self._input_projection,
+                lambda n: n.replace("input_proj.", ""),
+            ),
+            "output_proj.": (
+                self._output_projection,
+                lambda n: n.replace("output_proj.", ""),
+            ),
             "tile_bias.": (self._tile_biases, lambda n: n.replace("tile_bias.", "")),
-            "tile_weight.": (self._tile_weights, lambda n: n.replace("tile_weight.", "")),
+            "tile_weight.": (
+                self._tile_weights,
+                lambda n: n.replace("tile_weight.", ""),
+            ),
         }
 
         for name, param in new_params.items():
@@ -2868,7 +2878,9 @@ def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
     recurrent_weight = None
     if config.recurrent_weight is not None:
         recurrent_weight = torch.tensor(config.recurrent_weight)
-    return RecurrentGeometry(config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight)
+    return RecurrentGeometry(
+        config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
+    )
 
 
 def _make_tile_geometry(config: GeometryConfig) -> TileGeometry:

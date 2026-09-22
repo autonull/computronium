@@ -119,7 +119,9 @@ FINITE_INVARIANTS = {
 
 
 def _has_deterministic_invariant(spec) -> bool:
-    return any("deterministic under fixed seed" in inv.lower() for inv in spec.invariants)
+    return any(
+        "deterministic under fixed seed" in inv.lower() for inv in spec.invariants
+    )
 
 
 def _has_finite_invariant(spec) -> bool:
@@ -129,7 +131,9 @@ def _has_finite_invariant(spec) -> bool:
     )
 
 
-def _generate_test_file(spec, output_dir: pathlib.Path, dry_run: bool = False) -> pathlib.Path | None:
+def _generate_test_file(
+    spec, output_dir: pathlib.Path, dry_run: bool = False
+) -> pathlib.Path | None:
     """Generate a property test file for a spec."""
     import re
 
@@ -165,9 +169,9 @@ def _generate_test_file(spec, output_dir: pathlib.Path, dry_run: bool = False) -
         f"SPEC_ID = {spec.id!r}",
         "",
         "",
-        "@pytest.fixture(scope=\"module\")",
+        '@pytest.fixture(scope="module")',
         "def spec():",
-        f'    return get({spec.id!r})',
+        f"    return get({spec.id!r})",
         "",
     ]
 
@@ -237,7 +241,9 @@ def _generate_test_file(spec, output_dir: pathlib.Path, dry_run: bool = False) -
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate property tests from invariants")
+    parser = argparse.ArgumentParser(
+        description="Generate property tests from invariants"
+    )
     parser.add_argument(
         "--all",
         action="store_true",

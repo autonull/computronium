@@ -257,7 +257,9 @@ class TPKernelBackend:
             out_opt.step()
         return out, loss
 
-    def _compute_target(self, h: Tensor, out_layer, y: Tensor, criterion, target_lr: float) -> Tensor:
+    def _compute_target(
+        self, h: Tensor, out_layer, y: Tensor, criterion, target_lr: float
+    ) -> Tensor:
         """Compute difference target for output layer."""
         t = h.clone().detach().requires_grad_(True)
         with torch.enable_grad():
@@ -267,7 +269,9 @@ class TPKernelBackend:
         with torch.no_grad():
             return h - target_lr * grad_t
 
-    def _propagate_targets(self, layers, hs: list[Tensor], t_target: Tensor) -> list[Tensor]:
+    def _propagate_targets(
+        self, layers, hs: list[Tensor], t_target: Tensor
+    ) -> list[Tensor]:
         """Propagate targets backward through inverse nets."""
         targets: list[Tensor] = [t_target]
         for i in reversed(range(len(layers))):

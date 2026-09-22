@@ -80,11 +80,6 @@ class HealthPanel(BasePanel):
             "needs_attention": self.tr("needs_attention"),
             "unstable": self.tr("unstable"),
         }
-        status_colors = {
-            "running_smoothly": "positive",
-            "needs_attention": "warning",
-            "unstable": "negative",
-        }
 
         with ui.row().classes("w-full gap-4 flex-wrap"):
             # Overall status
