@@ -75,25 +75,13 @@ def relative_error(
     return errors
 
 
-def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
-    """Test ThermodynamicContrast vs BackpropCredit on linear regression (known θ)."""
-    print("\n" + "=" * 60)
-    print("Test: ThermodynamicContrast vs BackpropCredit (Linear Regression)")
-    print("=" * 60)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Linear regression: y = X @ W_true + noise
-    input_dim = 20
-    output_dim = 1
-    batch_size = 32
-
-    # Create a linear geometry (no hidden layers)
+def _create_linear_geometry(device) -> tuple[FeedforwardGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
+    """Create linear geometry and associated components."""
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            hidden_dims=(),  # No hidden layers = linear
+            input_dim=20,
+            output_dim=1,
+            hidden_dims=(),
             init_scale=0.1,
         )
     )
@@ -111,83 +99,100 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:  # ruff: ignore[t
             gradient_checkpointing=False,
         )
     )
+    return geometry, substrate, dynamics
 
+
+def _create_credits() -> tuple[ThermodynamicContrast, BackpropCredit]:
+    """Create credit assignment primitives."""
     thermo_credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
     backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
+    return thermo_credit, backprop_credit
 
-    # Run multiple random batches
+
+def _run_batch_linear(geometry, substrate, dynamics, x, y, device) -> tuple[SystemState, SystemState]:
+    """Run free and nudged phases for a batch."""
+    initial_acts = get_activations(geometry, substrate, x)
+    free_state = SystemState(x=x, y=y.squeeze(-1))
+    free_state.activations = initial_acts
+    free_state = dynamics.settle(free_state, geometry, substrate, target=None)
+
+    nudged_state = SystemState(x=x, y=y.squeeze(-1))
+    nudged_state.activations = initial_acts
+    nudged_state = dynamics.settle(nudged_state, geometry, substrate, target=y)
+    return free_state, nudged_state
+
+
+def _compute_true_grads_linear(geometry, substrate, x, y, device) -> list[torch.Tensor]:
+    """Compute true gradients via autograd for linear regression."""
+    logits = geometry.forward(x, substrate)
+    true_loss = 0.5 * F.mse_loss(logits, y)
+    params = [p for p in geometry.parameters() if p.requires_grad]
+    true_grads_all = torch.autograd.grad(true_loss, params, retain_graph=False)
+
+    weight_names = _learnable_weight_names(geometry.params)
+    true_grads = []
+    param_idx = 0
+    for n, p in geometry.named_parameters():
+        if p.requires_grad:
+            if "weight" in n and p.ndim == 2:
+                parts = n.split(".")
+                if len(parts) >= 3 and parts[0] == "_layers" and parts[1].isdigit():
+                    layer_idx = int(parts[1])
+                    param_key = f"{layer_idx}.weight"
+                    if param_key in weight_names:
+                        true_grads.append(true_grads_all[param_idx])
+            param_idx += 1
+    return true_grads
+
+
+def _compute_thermo_grads(thermo_credit, states, nudged_state, y, geometry) -> list[torch.Tensor]:
+    """Compute ThermodynamicContrast pseudo-gradients."""
+    nudged_logits = (
+        nudged_state.activations[-1]
+        if isinstance(nudged_state.activations, list)
+        else nudged_state.activations
+    )
+    dyn_loss = 0.5 * F.mse_loss(nudged_logits, y)
+    return thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
+
+
+def _collect_grad_comparisons(cosines: list, rel_errors: list, thermo_grads, true_grads):
+    """Collect cosine similarity and relative error between gradients."""
+    if thermo_grads and true_grads:
+        cos = cosine_similarity(thermo_grads, true_grads)
+        rel = relative_error(thermo_grads, true_grads)
+        cosines.extend(cos)
+        rel_errors.extend(rel)
+
+
+def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
+    """Test ThermodynamicContrast vs BackpropCredit on linear regression (known θ)."""
+    print("\n" + "=" * 60)
+    print("Test: ThermodynamicContrast vs BackpropCredit (Linear Regression)")
+    print("=" * 60)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    geometry, substrate, dynamics = _create_linear_geometry(device)
+    thermo_credit, backprop_credit = _create_credits()
+
     cosines = []
     rel_errors = []
 
-    for batch_idx in range(50):  # ruff: ignore[too-many-nested-blocks]
-        x = torch.randn(batch_size, input_dim, device=device)
-        # Linear target
-        W_true = torch.randn(input_dim, output_dim, device=device)
-        y = x @ W_true + 0.01 * torch.randn(
-            batch_size, output_dim, device=device
-        )  # (batch, 1)
+    for batch_idx in range(50):
+        x = torch.randn(32, 20, device=device)
+        W_true = torch.randn(20, 1, device=device)
+        y = x @ W_true + 0.01 * torch.randn(32, 1, device=device)
 
-        # Free phase
-        initial_acts = get_activations(geometry, substrate, x)
-        free_state = SystemState(x=x, y=y.squeeze(-1))
-        free_state.activations = initial_acts
-        free_state = dynamics.settle(free_state, geometry, substrate, target=None)
-
-        # Nudged phase
-        nudged_state = SystemState(x=x, y=y.squeeze(-1))
-        nudged_state.activations = initial_acts
-        nudged_state = dynamics.settle(nudged_state, geometry, substrate, target=y)
-
+        free_state, nudged_state = _run_batch_linear(geometry, substrate, dynamics, x, y, device)
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
-        # Compute TRUE gradient via autograd on geometry.forward (preserves graph)
-        # Use 0.5 * MSE so gradient matches ThermodynamicContrast (energy gradient)
-        logits = geometry.forward(x, substrate)
-        true_loss = 0.5 * F.mse_loss(logits, y)
-        params = [p for p in geometry.parameters() if p.requires_grad]
-        true_grads_all = torch.autograd.grad(true_loss, params, retain_graph=False)
-        # Filter to only weight gradients (matching ThermodynamicContrast)
-        # geometry.params uses keys like "0.weight", "2.weight" etc.
-        weight_names = _learnable_weight_names(geometry.params)
-        # Map from params list index to weight_names
-        true_grads = []
-        param_idx = 0
-        for n, p in geometry.named_parameters():
-            if p.requires_grad:
-                # Check if this parameter is a weight matrix in geometry.params
-                # geometry.params keys are like "0.weight", "2.weight"
-                # named_parameters keys are like "_layers.0.weight", "_layers.0.bias"
-                # We need to match by the layer index
-                if "weight" in n and p.ndim == 2:
-                    # Extract layer index from named_parameters key
-                    # "_layers.0.weight" -> 0
-                    parts = n.split(".")
-                    if len(parts) >= 3 and parts[0] == "_layers" and parts[1].isdigit():
-                        layer_idx = int(parts[1])
-                        param_key = f"{layer_idx}.weight"
-                        if param_key in weight_names:
-                            true_grads.append(true_grads_all[param_idx])
-                param_idx += 1
+        true_grads = _compute_true_grads_linear(geometry, substrate, x, y, device)
+        thermo_grads = _compute_thermo_grads(thermo_credit, states, nudged_state, y, geometry)
 
-        # ThermodynamicContrast pseudo-gradients (uses free/nudged states from dynamics)
-        nudged_logits = (
-            nudged_state.activations[-1]
-            if isinstance(nudged_state.activations, list)
-            else nudged_state.activations
-        )
-        dyn_loss = 0.5 * F.mse_loss(nudged_logits, y)
-        thermo_grads = thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
-
-        # BackpropCredit pseudo-gradients (uses same dyn_loss)
-        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)  # ruff: ignore[unused-variable]
-
-        if thermo_grads and true_grads:
-            cos = cosine_similarity(thermo_grads, true_grads)
-            rel = relative_error(thermo_grads, true_grads)
-            cosines.extend(cos)
-            rel_errors.extend(rel)
+        _collect_grad_comparisons(cosines, rel_errors, thermo_grads, true_grads)
 
     mean_cos = np.mean(cosines) if cosines else 0.0
     min_cos = np.min(cosines) if cosines else 0.0
@@ -217,20 +222,13 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:  # ruff: ignore[t
     }
 
 
-def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
-    """Test ThermodynamicContrast vs BackpropCredit on MLP (small)."""
-    print("\n" + "=" * 60)
-    print("Test: ThermodynamicContrast vs BackpropCredit (MLP)")
-    print("=" * 60)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # MLP with hidden layers - use RecurrentGeometry for better settling
+def _create_mlp_geometry(device) -> tuple[RecurrentGeometry, DigitalSubstrate, EnergyMinimizationDynamics]:
+    """Create MLP geometry and associated components."""
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(
             input_dim=784,
             output_dim=10,
-            hidden_dims=(128,),  # Smaller network for better convergence
+            hidden_dims=(128,),
             init_scale=0.1,
         ),
         hidden_dim=128,
@@ -244,12 +242,86 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:  # ruff: ignore[too-
             convergence_threshold=1e-5,
             convergence_start=10,
             step_size=0.01,
-            beta=0.1,  # Much smaller beta for better gradient approximation
+            beta=0.1,
             track_free_energy_per_iter=True,
             gradient_checkpointing=False,
         )
     )
+    return geometry, substrate, dynamics
 
+
+def _run_batch_mlp(geometry, substrate, dynamics, x, y) -> tuple[SystemState, SystemState]:
+    """Run free and nudged phases for a batch."""
+    initial_acts = get_activations(geometry, substrate, x)
+    free_state = SystemState(x=x, y=y)
+    free_state.activations = initial_acts
+    free_state = dynamics.settle(free_state, geometry, substrate, target=None)
+
+    nudged_state = SystemState(x=x, y=y)
+    nudged_state.activations = initial_acts
+    nudged_state = dynamics.settle(nudged_state, geometry, substrate, target=y)
+    return free_state, nudged_state
+
+
+def _compute_true_grads_mlp(geometry, substrate, x, y) -> list[torch.Tensor]:
+    """Compute true gradients via autograd for MLP."""
+    logits = geometry.forward(x, substrate)
+    true_loss = F.cross_entropy(logits, y)
+    params = [p for p in geometry.parameters() if p.requires_grad]
+    true_grads_all = torch.autograd.grad(true_loss, params, retain_graph=False)
+
+    weight_names = _learnable_weight_names(geometry.params)
+    true_grads = []
+    param_idx = 0
+    for n, p in geometry.named_parameters():
+        if p.requires_grad:
+            if "weight" in n and p.ndim == 2:
+                parts = n.split(".")
+                if len(parts) >= 3 and parts[0] == "_layers" and parts[1].isdigit():
+                    layer_idx = int(parts[1])
+                    param_key = f"{layer_idx}.weight"
+                    if param_key in weight_names:
+                        true_grads.append(true_grads_all[param_idx])
+            param_idx += 1
+    return true_grads
+
+
+def _compute_thermo_grads_mlp(thermo_credit, states, nudged_state, y, geometry) -> list[torch.Tensor]:
+    """Compute ThermodynamicContrast pseudo-gradients for MLP."""
+    nudged_logits = (
+        nudged_state.activations[-1]
+        if isinstance(nudged_state.activations, list)
+        else nudged_state.activations
+    )
+    dyn_loss = F.cross_entropy(nudged_logits, y)
+    return thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
+
+
+def _collect_mlp_comparisons(cosines: list, rel_errors: list, same_sign_count: int, total_params: int,
+                             thermo_grads, true_grads) -> tuple[int, int]:
+    """Collect cosine similarity, relative error, and same-sign stats."""
+    if thermo_grads and true_grads:
+        cos = cosine_similarity(thermo_grads, true_grads)
+        rel = relative_error(thermo_grads, true_grads)
+        cosines.extend(cos)
+        rel_errors.extend(rel)
+
+        for g1, g2 in zip(thermo_grads, true_grads):
+            same_sign = ((g1 * g2) > 0).float().mean().item()
+            same_sign_count += int(same_sign * g1.numel())
+            total_params += g1.numel()
+    return same_sign_count, total_params
+
+
+def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
+    """Test ThermodynamicContrast vs BackpropCredit on MLP (small)."""
+    print("\n" + "=" * 60)
+    print("Test: ThermodynamicContrast vs BackpropCredit (MLP)")
+    print("=" * 60)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    geometry, substrate, dynamics = _create_mlp_geometry(device)
     thermo_credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
@@ -260,72 +332,24 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:  # ruff: ignore[too-
     same_sign_count = 0
     total_params = 0
 
-    for batch_idx in range(20):  # ruff: ignore[too-many-nested-blocks]
-        # Fixed seed for reproducibility
+    for batch_idx in range(20):
         torch.manual_seed(42 + batch_idx)
         x = torch.randn(4, 784, device=device)
         y = torch.randint(0, 10, (4,), device=device)
 
-        initial_acts = get_activations(geometry, substrate, x)
-        free_state = SystemState(x=x, y=y)
-        free_state.activations = initial_acts
-        free_state = dynamics.settle(free_state, geometry, substrate, target=None)
-
-        nudged_state = SystemState(x=x, y=y)
-        nudged_state.activations = initial_acts
-        nudged_state = dynamics.settle(nudged_state, geometry, substrate, target=y)
-
+        free_state, nudged_state = _run_batch_mlp(geometry, substrate, dynamics, x, y)
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
-        # TRUE gradient via autograd - filter to only weight gradients
-        logits = geometry.forward(x, substrate)
-        true_loss = F.cross_entropy(logits, y)
-        params = [p for p in geometry.parameters() if p.requires_grad]
-        true_grads_all = torch.autograd.grad(true_loss, params, retain_graph=False)
-        # Filter to only weight gradients (matching ThermodynamicContrast)
-        weight_names = _learnable_weight_names(geometry.params)
-        true_grads = []
-        param_idx = 0
-        for n, p in geometry.named_parameters():
-            if p.requires_grad:
-                if "weight" in n and p.ndim == 2:
-                    parts = n.split(".")
-                    if len(parts) >= 3 and parts[0] == "_layers" and parts[1].isdigit():
-                        layer_idx = int(parts[1])
-                        param_key = f"{layer_idx}.weight"
-                        if param_key in weight_names:
-                            true_grads.append(true_grads_all[param_idx])
-                param_idx += 1
+        true_grads = _compute_true_grads_mlp(geometry, substrate, x, y)
+        thermo_grads = _compute_thermo_grads_mlp(thermo_credit, states, nudged_state, y, geometry)
 
-        # ThermodynamicContrast
-        nudged_logits = (
-            nudged_state.activations[-1]
-            if isinstance(nudged_state.activations, list)
-            else nudged_state.activations
+        same_sign_count, total_params = _collect_mlp_comparisons(
+            cosines, rel_errors, same_sign_count, total_params, thermo_grads, true_grads
         )
-        dyn_loss = F.cross_entropy(nudged_logits, y)
-        thermo_grads = thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
-
-        # BackpropCredit
-        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)  # ruff: ignore[unused-variable]
-
-        if thermo_grads and true_grads:
-            cos = cosine_similarity(thermo_grads, true_grads)
-            rel = relative_error(thermo_grads, true_grads)
-            cosines.extend(cos)
-            rel_errors.extend(rel)
-
-            # Check same sign
-            for g1, g2 in zip(thermo_grads, true_grads):
-                same_sign = ((g1 * g2) > 0).float().mean().item()
-                same_sign_count += int(same_sign * g1.numel())
-                total_params += g1.numel()
 
     mean_cos = np.mean(cosines) if cosines else 0.0
     same_sign_pct = same_sign_count / total_params if total_params > 0 else 0.0
 
-    # Note: EqProp approximation for non-linear networks has inherent error with finite beta/steps
-    # Current implementation achieves ~0.62-0.74 cosine and ~66-69% same-sign across seeds
     passed = mean_cos >= 0.62 and same_sign_pct >= 0.65
 
     print(f"Cosine similarity vs true grad: mean={mean_cos:.4f} (threshold: ≥0.62)")
@@ -342,14 +366,8 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:  # ruff: ignore[too-
     }
 
 
-def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
-    """Test RandomProjectionsCredit (FA) vs theoretical expectation."""
-    print("\n" + "=" * 60)
-    print("Test: RandomProjectionsCredit (FA) vs Theoretical")
-    print("=" * 60)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+def _create_fa_geometry(device) -> tuple[FeedforwardGeometry, DigitalSubstrate]:
+    """Create FA geometry and substrate."""
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
             input_dim=784,
@@ -359,9 +377,12 @@ def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, to
         )
     )
     geometry.to(device)
-
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
+    return geometry, substrate
 
+
+def _create_fa_credit(device, geometry) -> RandomProjectionsCredit:
+    """Create and initialize FA credit."""
     credit = RandomProjectionsCredit(
         CreditAssignmentConfig.random_projections(
             beta=0.5,
@@ -369,10 +390,71 @@ def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, to
         )
     )
     credit._init_feedback_weights(geometry, device)
-    assert credit._feedback_weights is not None  # ruff: ignore[assert]
-    fb_weights = credit._feedback_weights
+    assert credit._feedback_weights is not None
+    return credit
 
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())  # ruff: ignore[unused-variable]
+
+def _run_batch_fa(geometry, substrate, x, y) -> tuple[SystemState, SystemState]:
+    """Run free and nudged phases for FA."""
+    initial_acts = get_activations(geometry, substrate, x)
+    free_state = SystemState(x=x, y=y)
+    free_state.activations = initial_acts
+    nudged_state = SystemState(x=x, y=y)
+    nudged_state.activations = initial_acts
+    return free_state, nudged_state
+
+
+def _compute_true_grads_fa(geometry, substrate, x, y) -> list[torch.Tensor]:
+    """Compute true gradients via autograd for FA."""
+    logits = geometry.forward(x, substrate)
+    true_loss = F.cross_entropy(logits, y)
+    params = [p for p in geometry.parameters() if p.requires_grad]
+    return torch.autograd.grad(true_loss, params, retain_graph=False)
+
+
+def _compute_theoretical_fa_grads(fb_weights, nudged_state, free_state, true_grads, y) -> list[torch.Tensor]:
+    """Compute theoretical FA gradients."""
+    if isinstance(nudged_state.activations, list):
+        logits_n = nudged_state.activations[-1]
+        hidden_acts = nudged_state.activations[1:-1]
+    else:
+        logits_n = nudged_state.activations
+        hidden_acts = []
+
+    probs = torch.softmax(logits_n, dim=-1)
+    target = torch.zeros_like(probs)
+    target.scatter_(-1, y.unsqueeze(-1), 1.0)
+    output_error = probs - target
+
+    theoretical_grads = []
+
+    if "layer_0" in fb_weights:
+        fb = fb_weights["layer_0"]
+        hidden_error = output_error @ fb.T
+        if hidden_acts:
+            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+        pre_act = free_state.x
+        if pre_act is not None:
+            theoretical_grads.append(hidden_error.T @ pre_act)
+
+    if len(true_grads) >= 2:
+        theoretical_grads.append(true_grads[-1])
+
+    return theoretical_grads
+
+
+def test_fa_theoretical() -> dict[str, Any]:
+    """Test RandomProjectionsCredit (FA) vs theoretical expectation."""
+    print("\n" + "=" * 60)
+    print("Test: RandomProjectionsCredit (FA) vs Theoretical")
+    print("=" * 60)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    geometry, substrate = _create_fa_geometry(device)
+    credit = _create_fa_credit(device, geometry)
+    fb_weights = credit._feedback_weights
+    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     rel_errors = []
 
@@ -380,50 +462,19 @@ def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, to
         x = torch.randn(4, 784, device=device)
         y = torch.randint(0, 10, (4,), device=device)
 
-        initial_acts = get_activations(geometry, substrate, x)
-
-        free_state = SystemState(x=x, y=y)
-        free_state.activations = initial_acts
-        nudged_state = SystemState(x=x, y=y)
-        nudged_state.activations = initial_acts
-
+        free_state, nudged_state = _run_batch_fa(geometry, substrate, x, y)
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
-        # TRUE gradient via autograd
+        # Compute true loss for FA pseudo-gradients
         logits = geometry.forward(x, substrate)
         true_loss = F.cross_entropy(logits, y)
-        params = [p for p in geometry.parameters() if p.requires_grad]
-        true_grads = torch.autograd.grad(true_loss, params, retain_graph=False)
 
-        # FA pseudo-gradients
+        true_grads = _compute_true_grads_fa(geometry, substrate, x, y)
         fa_grads = credit.compute_pseudo_gradient(states, true_loss, geometry)
 
-        # Theoretical FA gradients using same feedback weights
-        if isinstance(nudged_state.activations, list):
-            logits_n = nudged_state.activations[-1]
-            hidden_acts = nudged_state.activations[1:-1]
-        else:
-            logits_n = nudged_state.activations
-            hidden_acts = []
-
-        probs = torch.softmax(logits_n, dim=-1)
-        target = torch.zeros_like(probs)
-        target.scatter_(-1, y.unsqueeze(-1), 1.0)
-        output_error = probs - target
-
-        theoretical_grads = []
-
-        if "layer_0" in fb_weights:
-            fb = fb_weights["layer_0"]
-            hidden_error = output_error @ fb.T
-            if hidden_acts:
-                hidden_error = hidden_error * (hidden_acts[0] > 0).float()  # ruff: ignore[non-augmented-assignment]
-            pre_act = free_state.x
-            if pre_act is not None:
-                theoretical_grads.append(hidden_error.T @ pre_act)
-
-        if len(true_grads) >= 2:
-            theoretical_grads.append(true_grads[-1])
+        theoretical_grads = _compute_theoretical_fa_grads(
+            fb_weights, nudged_state, free_state, true_grads, y
+        )
 
         if theoretical_grads and fa_grads:
             rel = relative_error(fa_grads, theoretical_grads)
@@ -447,14 +498,8 @@ def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, to
     }
 
 
-def test_dfa_theoretical() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
-    """Test RandomProjectionsCredit (DFA) vs theoretical expectation."""
-    print("\n" + "=" * 60)
-    print("Test: RandomProjectionsCredit (DFA) vs Theoretical")
-    print("=" * 60)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+def _create_dfa_geometry(device) -> tuple[FeedforwardGeometry, DigitalSubstrate]:
+    """Create DFA geometry and substrate."""
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
             input_dim=784,
@@ -464,9 +509,12 @@ def test_dfa_theoretical() -> dict[str, Any]:  # ruff: ignore[complex-structure,
         )
     )
     geometry.to(device)
-
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
+    return geometry, substrate
 
+
+def _create_dfa_credit(device, geometry) -> RandomProjectionsCredit:
+    """Create and initialize DFA credit."""
     config = CreditAssignmentConfig(
         credit_type="direct_feedback_alignment",
         beta=0.5,
@@ -477,10 +525,62 @@ def test_dfa_theoretical() -> dict[str, Any]:  # ruff: ignore[complex-structure,
     )
     credit = RandomProjectionsCredit(config)
     credit._init_feedback_weights(geometry, device)
-    assert credit._feedback_weights is not None  # ruff: ignore[assert]
-    fb_weights = credit._feedback_weights
+    assert credit._feedback_weights is not None
+    return credit
 
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())  # ruff: ignore[unused-variable]
+
+def _compute_theoretical_dfa_grads(fb_weights, nudged_state, free_state, true_grads, y) -> list[torch.Tensor]:
+    """Compute theoretical DFA gradients."""
+    if isinstance(nudged_state.activations, list):
+        logits_n = nudged_state.activations[-1]
+        hidden_acts = nudged_state.activations[1:-1]
+    else:
+        logits_n = nudged_state.activations
+        hidden_acts = []
+
+    probs = torch.softmax(logits_n, dim=-1)
+    target = torch.zeros_like(probs)
+    target.scatter_(-1, y.unsqueeze(-1), 1.0)
+    output_error = probs - target
+
+    theoretical_grads = []
+
+    if "layer_0" in fb_weights:
+        fb = fb_weights["layer_0"]
+        hidden_error = output_error @ fb.T
+        if len(hidden_acts) > 0:
+            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+        pre_act = free_state.x
+        if pre_act is not None:
+            theoretical_grads.append(hidden_error.T @ pre_act)
+
+    if "layer_1" in fb_weights:
+        fb = fb_weights["layer_1"]
+        hidden_error = output_error @ fb.T
+        if len(hidden_acts) > 1:
+            hidden_error = hidden_error * (hidden_acts[1] > 0).float()
+        pre_act = hidden_acts[0] if len(hidden_acts) > 0 else free_state.x
+        if pre_act is not None:
+            theoretical_grads.append(hidden_error.T @ pre_act)
+
+    if len(true_grads) >= 3:
+        theoretical_grads.append(true_grads[-1])
+
+    return theoretical_grads
+
+
+def test_dfa_theoretical() -> dict[str, Any]:
+    """Test RandomProjectionsCredit (DFA) vs theoretical expectation."""
+    print("\n" + "=" * 60)
+    print("Test: RandomProjectionsCredit (DFA) vs Theoretical")
+    print("=" * 60)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    geometry, substrate = _create_dfa_geometry(device)
+    credit = _create_dfa_credit(device, geometry)
+    fb_weights = credit._feedback_weights
+    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     rel_errors = []
 
@@ -506,41 +606,9 @@ def test_dfa_theoretical() -> dict[str, Any]:  # ruff: ignore[complex-structure,
         # DFA pseudo-gradients
         dfa_grads = credit.compute_pseudo_gradient(states, true_loss, geometry)
 
-        # Theoretical DFA gradients
-        if isinstance(nudged_state.activations, list):
-            logits_n = nudged_state.activations[-1]
-            hidden_acts = nudged_state.activations[1:-1]
-        else:
-            logits_n = nudged_state.activations
-            hidden_acts = []
-
-        probs = torch.softmax(logits_n, dim=-1)
-        target = torch.zeros_like(probs)
-        target.scatter_(-1, y.unsqueeze(-1), 1.0)
-        output_error = probs - target
-
-        theoretical_grads = []
-
-        if "layer_0" in fb_weights:
-            fb = fb_weights["layer_0"]
-            hidden_error = output_error @ fb.T
-            if len(hidden_acts) > 0:
-                hidden_error = hidden_error * (hidden_acts[0] > 0).float()  # ruff: ignore[non-augmented-assignment]
-            pre_act = free_state.x
-            if pre_act is not None:
-                theoretical_grads.append(hidden_error.T @ pre_act)
-
-        if "layer_1" in fb_weights:
-            fb = fb_weights["layer_1"]
-            hidden_error = output_error @ fb.T
-            if len(hidden_acts) > 1:
-                hidden_error = hidden_error * (hidden_acts[1] > 0).float()  # ruff: ignore[non-augmented-assignment]
-            pre_act = hidden_acts[0] if len(hidden_acts) > 0 else free_state.x
-            if pre_act is not None:
-                theoretical_grads.append(hidden_error.T @ pre_act)
-
-        if len(true_grads) >= 3:
-            theoretical_grads.append(true_grads[-1])
+        theoretical_grads = _compute_theoretical_dfa_grads(
+            fb_weights, nudged_state, free_state, true_grads, y
+        )
 
         if theoretical_grads and dfa_grads:
             rel = relative_error(dfa_grads, theoretical_grads)

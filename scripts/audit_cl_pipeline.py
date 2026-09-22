@@ -239,7 +239,76 @@ def test_replay_training() -> dict[str, Any]:
     }
 
 
-def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+def _check_prev_model_frozen(prev_model: torch.nn.Module) -> bool:
+    """Verify all parameters in prev_model are frozen."""
+    return all(not p.requires_grad for p in prev_model.parameters())
+
+
+def _run_lwf_task0(model, lwf_loss, x, y, device) -> torch.Tensor:
+    """Run LwF task 0 (no distillation)."""
+    model.set_task(0)
+    logits0 = model(x, task_id=0)
+    return lwf_loss(logits0, y, task_id=0)
+
+
+def _run_lwf_task1(model, lwf_loss, x, y, prev_model, device) -> tuple[torch.Tensor, torch.Tensor]:
+    """Run LwF task 1 with distillation."""
+    model.set_task(1)
+    logits1 = model(x, task_id=1)
+    prev_logits = prev_model(x, task_id=1)
+    loss1 = lwf_loss(logits1, y, task_id=1, prev_logits=prev_logits)
+    distill = lwf_loss.distill_only(logits1, task_id=1, prev_logits=prev_logits)
+    return loss1, distill
+
+
+def _check_distillation_active(loss0: torch.Tensor, loss1: torch.Tensor, all_passed: bool) -> bool:
+    """Verify distillation changes the loss."""
+    if torch.allclose(loss0, loss1):
+        print(f"  FAIL: Loss unchanged with distillation: {loss0.item():.4f}")
+        return False
+    print(f"  PASS: Task 0 loss={loss0.item():.4f}, Task 1 loss (with distill)={loss1.item():.4f}")
+    return all_passed
+
+
+def _check_distill_only(distill: torch.Tensor | None, all_passed: bool) -> tuple[bool, float]:
+    """Verify distill_only returns positive value."""
+    if distill is None:
+        print("  FAIL: distill_only returned None")
+        return False, 0.0
+    if distill.item() <= 0:
+        print(f"  FAIL: distill_only returned {distill.item():.6f} (expected > 0)")
+        return False, float(distill.item())
+    print(f"  PASS: distill_only = {distill.item():.6f} > 0")
+    return all_passed, float(distill.item())
+
+
+def _check_params_change_with_distillation(model, x, y, lwf_loss, device) -> bool:
+    """Train with distillation and verify parameters change."""
+    model.train()
+    model.set_task(1)
+
+    initial_params = {
+        n: p.clone() for n, p in model.named_parameters() if p.requires_grad
+    }
+
+    for _ in range(3):
+        _lwf_train_step(model, x, y, task_id=1, lwf_loss_fn=lwf_loss)
+
+    params_changed = False
+    for n, p in model.named_parameters():
+        if p.requires_grad and n in initial_params:
+            if not torch.allclose(p, initial_params[n]):
+                params_changed = True
+                break
+
+    if not params_changed:
+        print("  FAIL: Parameters did not change with distillation")
+    else:
+        print("  PASS: Parameters changed with distillation (affects θ)")
+    return params_changed
+
+
+def test_lwf_distillation() -> dict[str, Any]:
     """Test LwF distillation: prev_model frozen; distillation loss added; affects θ."""
     print("\n" + "=" * 60)
     print("Test: LwF Distillation")
@@ -255,7 +324,7 @@ def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure
     lwf_loss.set_prev_model(prev_model)
 
     # Verify prev_model is frozen
-    frozen = all(not p.requires_grad for p in prev_model.parameters())
+    frozen = _check_prev_model_frozen(prev_model)
     if not frozen:
         all_passed = False
         print("  FAIL: prev_model not frozen")
@@ -267,8 +336,7 @@ def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure
     y = torch.tensor([0, 1, 0, 1], device=device)
 
     # Task 0: no distillation (no previous model yet for task 0)
-    logits0 = model(x, task_id=0)
-    loss0 = lwf_loss(logits0, y, task_id=0)
+    loss0 = _run_lwf_task0(model, lwf_loss, x, y, device)
 
     # Modify model slightly so distillation is non-zero
     with torch.no_grad():
@@ -276,57 +344,18 @@ def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure
             p.add_(torch.randn_like(p) * 0.1)
 
     # Task 1: with distillation
-    logits1 = model(x, task_id=1)
-    loss1 = lwf_loss(logits1, y, task_id=1, prev_logits=prev_model(x, task_id=1))
+    loss1, distill = _run_lwf_task1(model, lwf_loss, x, y, prev_model, device)
 
-    # Task 1 loss should be different (includes distillation)
-    if torch.allclose(loss0, loss1):
-        all_passed = False
-        print(f"  FAIL: Loss unchanged with distillation: {loss0.item():.4f}")
-    else:
-        print(
-            f"  PASS: Task 0 loss={loss0.item():.4f}, Task 1 loss (with distill)={loss1.item():.4f}"
-        )
+    # Verify distillation is active
+    all_passed = _check_distillation_active(loss0, loss1, all_passed)
 
     # Test distill_only method
-    distill = lwf_loss.distill_only(
-        logits1, task_id=1, prev_logits=prev_model(x, task_id=1)
-    )
-    if distill is None:
-        all_passed = False
-        print("  FAIL: distill_only returned None")
-    elif distill.item() <= 0:
-        all_passed = False
-        print(f"  FAIL: distill_only returned {distill.item():.6f} (expected > 0)")
-    else:
-        print(f"  PASS: distill_only = {distill.item():.6f} > 0")
+    all_passed, distill_value = _check_distill_only(distill, all_passed)
 
-    # Test that distillation affects θ (parameters change when distillation is present)
-    model.train()
-    model.set_task(1)
-
-    # Get initial params
-    initial_params = {
-        n: p.clone() for n, p in model.named_parameters() if p.requires_grad
-    }
-
-    # Train with distillation
-    for _ in range(3):
-        metrics = _lwf_train_step(model, x, y, task_id=1, lwf_loss_fn=lwf_loss)  # ruff: ignore[unused-variable]
-
-    # Check params changed
-    params_changed = False
-    for n, p in model.named_parameters():
-        if p.requires_grad and n in initial_params:  # ruff: ignore[collapsible-if]
-            if not torch.allclose(p, initial_params[n]):
-                params_changed = True
-                break
-
+    # Test that distillation affects θ
+    params_changed = _check_params_change_with_distillation(model, x, y, lwf_loss, device)
     if not params_changed:
         all_passed = False
-        print("  FAIL: Parameters did not change with distillation")
-    else:
-        print("  PASS: Parameters changed with distillation (affects θ)")
 
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
 
@@ -335,7 +364,7 @@ def test_lwf_distillation() -> dict[str, Any]:  # ruff: ignore[complex-structure
         "passed": all_passed,
         "prev_model_frozen": frozen,
         "distillation_active": not torch.allclose(loss0, loss1),
-        "distill_value": float(distill.item()) if distill is not None else 0.0,
+        "distill_value": distill_value,
         "params_changed": params_changed,
     }
 
@@ -408,7 +437,56 @@ def test_si_importance() -> dict[str, Any]:
     }
 
 
-def test_ewc_consolidation() -> dict[str, Any]:  # ruff: ignore[too-many-branches]
+def _check_fisher_computed(update) -> tuple[bool, float]:
+    """Verify Fisher diagonal is computed and non-zero."""
+    if (
+        not hasattr(update, "_importance")
+        or update._importance is None
+        or len(update._importance) == 0
+    ):
+        print("  FAIL: Fisher (importance) not computed")
+        return False, 0.0
+    fisher_norm = sum(v.abs().sum().item() for v in update._importance.values())
+    if fisher_norm == 0:
+        print("  FAIL: Fisher diagonal is zero")
+        return False, 0.0
+    print(f"  PASS: Fisher diagonal norm = {fisher_norm:.6f}")
+    return True, fisher_norm
+
+
+def _check_opt_params_stored(update) -> bool:
+    """Verify optimal parameters are stored."""
+    if (
+        not hasattr(update, "_old_params")
+        or update._old_params is None
+        or len(update._old_params) == 0
+    ):
+        print("  FAIL: Optimal parameters not stored")
+        return False
+    print(f"  PASS: Optimal parameters stored for {len(update._old_params)} params")
+    return True
+
+
+def _train_task1_with_ewc(model, x1, y1, initial_params) -> bool:
+    """Train on task 1 with EWC penalty and verify params change."""
+    for _ in range(3):
+        model.train_step(x1, y1, task_id=1)
+
+    params_changed = False
+    for n, p in model.geometry.named_parameters():
+        if p.requires_grad and n in initial_params:
+            if not torch.allclose(p, initial_params[n]):
+                params_changed = True
+                break
+
+    if not params_changed:
+        print("  FAIL: Parameters didn't change on task 1")
+    else:
+        print("  PASS: Parameters updated on task 1 (with EWC penalty)")
+    return params_changed
+
+
+def test_ewc_consolidation() -> dict[str, Any]:
     """Test EWC consolidation: Fisher computed at task boundary; penalty applied in subsequent tasks."""
     print("\n" + "=" * 60)
     print("Test: EWC Consolidation")
@@ -430,78 +508,35 @@ def test_ewc_consolidation() -> dict[str, Any]:  # ruff: ignore[too-many-branche
     # Consolidate at task boundary
     update.consolidate(model.geometry.params)
 
-    # Check Fisher diagonal is non-zero (stored in _importance)
-    if (
-        not hasattr(update, "_importance")
-        or update._importance is None
-        or len(update._importance) == 0
-    ):
-        all_passed = False
-        print("  FAIL: Fisher (importance) not computed")
-    else:
-        fisher_norm = sum(v.abs().sum().item() for v in update._importance.values())
-        if fisher_norm == 0:
-            all_passed = False
-            print("  FAIL: Fisher diagonal is zero")
-        else:
-            print(f"  PASS: Fisher diagonal norm = {fisher_norm:.6f}")
+    # Check Fisher diagonal is non-zero
+    fisher_ok, fisher_norm = _check_fisher_computed(update)
+    all_passed = all_passed and fisher_ok
 
     # Check that update has stored optimal parameters
-    if (
-        not hasattr(update, "_old_params")
-        or update._old_params is None
-        or len(update._old_params) == 0
-    ):
-        all_passed = False
-        print("  FAIL: Optimal parameters not stored")
-    else:
-        print(f"  PASS: Optimal parameters stored for {len(update._old_params)} params")
+    opt_params_ok = _check_opt_params_stored(update)
+    all_passed = all_passed and opt_params_ok
 
     # Train on task 1 - EWC penalty should be applied
     model.set_task(1)
     y1 = torch.ones(8, device=device, dtype=torch.long)
     x1 = torch.randn(8, 784, device=device)
 
-    # Get loss with EWC penalty
     model.train()
     initial_params = {
         n: p.clone() for n, p in model.geometry.named_parameters() if p.requires_grad
     }
 
-    for _ in range(3):
-        model.train_step(x1, y1, task_id=1)
-
-    # Check params moved (they should, but with penalty)
-    params_changed = False
-    for n, p in model.geometry.named_parameters():
-        if p.requires_grad and n in initial_params:  # ruff: ignore[collapsible-if]
-            if not torch.allclose(p, initial_params[n]):
-                params_changed = True
-                break
-
-    if not params_changed:
-        all_passed = False
-        print("  FAIL: Parameters didn't change on task 1")
-    else:
-        print("  PASS: Parameters updated on task 1 (with EWC penalty)")
+    params_changed = _train_task1_with_ewc(model, x1, y1, initial_params)
+    all_passed = all_passed and params_changed
 
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
 
     return {
         "test": "ewc_consolidation",
         "passed": all_passed,
-        "fisher_computed": hasattr(update, "_importance")
-        and update._importance is not None
-        and len(update._importance) > 0,
-        "fisher_non_zero": sum(
-            v.abs().sum().item() for v in update._importance.values()
-        )
-        > 0
-        if hasattr(update, "_importance") and update._importance
-        else 0,
-        "opt_params_stored": hasattr(update, "_old_params")
-        and update._old_params is not None
-        and len(update._old_params) > 0,
+        "fisher_computed": fisher_ok,
+        "fisher_non_zero": fisher_norm > 0,
+        "opt_params_stored": opt_params_ok,
         "params_changed_task1": params_changed,
     }
 

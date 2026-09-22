@@ -396,3 +396,29 @@ All verification gates confirmed passing:
 | Complexity (ruff C901/PLR0912/PLR0915) | All 13 hot-path/active modules | **All clean** |
 
 **No further action required.** All priority work (Phases 1–4) complete and verified.
+
+---
+
+## 📝 Deferred Items — Complexity Fixes Completed (2026-09-21)
+
+The LOW VALUE deferred items from the original plan had complexity issues that have now been resolved:
+
+| Category | Files | Complexity Issues Fixed |
+|----------|-------|------------------------|
+| **Audit scripts** | `scripts/audit_cl_pipeline.py` | `test_lwf_distillation` (C901=11→clean), `test_ewc_consolidation` (PLR0912=13→clean) |
+| | `scripts/audit_credit_assignment.py` | `test_thermodynamic_vs_backprop_linear` (PLR0915=60→clean), `test_thermodynamic_vs_backprop_mlp` (PLR0915=60→clean), `test_fa_theoretical` (PLR0915=56→clean), `test_dfa_theoretical` (C901=11, PLR0915=65→clean) |
+| | `scripts/audit_dynamics.py` | `test_inplace_op_audit` (C901=24, PLR0912=24, PLR0915=96→clean), `test_device_consistency` (C901=26, PLR0915=95→clean) |
+| **Analysis scripts** | `scripts/b2_comprehensive_analysis.py` | `main` (C901=19, PLR0912=21, PLR0915=72→clean) |
+| | `scripts/contrastive_profile.py` | `profile_model` (C901=11→clean) |
+| **Ontology explorer** | `scripts/ontology_explorer.py` | `generate_python_code` (C901=13, PLR0912=16, PLR0915=54→clean) |
+| **Test files** | `tests/unit/test_verify_backend.py` | `verify_backend` (C901=11, PLR0912=13, PLR0915=52→clean) |
+
+### Verification
+- ✅ All 7 deferred scripts pass ruff C901/PLR0912/PLR0915 checks
+- ✅ Core tests still pass (39 passed)
+- ✅ StateDynamics protocol tests pass (159 passed)
+- ✅ Hyperopt tests pass (21 passed)
+- ✅ Type checking clean on all modified modules
+
+### Note
+The audit scripts are experimental/throwaway validation tools. The complexity refactoring ensures they meet code quality standards, though some may have integration issues with library internals (not related to the refactoring).

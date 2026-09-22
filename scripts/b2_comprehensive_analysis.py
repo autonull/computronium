@@ -167,92 +167,65 @@ def _write_comparison_report(
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main():  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
-    output_base = Path("runs/contrastive_profile/b2_autopsy")
-    report_dir = Path("runs/contrastive_profile/b2_autopsy/reports")
-    report_dir.mkdir(parents=True, exist_ok=True)
+def _load_beta_results(beta: float, output_base: Path) -> list[dict]:
+    """Load and analyze all three arms for a given beta."""
+    results = []
 
-    print("=" * 72)
-    print("B2 AUTOPSY — COMPREHENSIVE THREE-ARM COMPARISON")
-    print("=" * 72)
-
-    all_results: dict[float, list[dict]] = {}
-
-    for beta in [0.01, 0.03, 0.1]:
-        print(f"\n{'=' * 72}")
-        print(f"Beta = {beta}")
-        print(f"{'=' * 72}")
-
-        results = []
-
-        # Arm 1: eqprop (vanilla)
-        eqprop_dir = output_base / f"eqprop_beta{beta}"
-        if eqprop_dir.exists():
-            summaries = _load_summaries(eqprop_dir)
-            # Filter: only non-null-arm (untagged) runs
-            # Since eqprop doesn't have feedback, all are vanilla
-            arm = _analyze_arm(summaries, "eqprop (vanilla)")
-            results.append(arm)
-            print(f"\n  eqprop (vanilla): {arm['n_runs']} runs")
+    # Arm 1: eqprop (vanilla)
+    eqprop_dir = output_base / f"eqprop_beta{beta}"
+    if eqprop_dir.exists():
+        summaries = _load_summaries(eqprop_dir)
+        arm = _analyze_arm(summaries, "eqprop (vanilla)")
+        results.append(arm)
+        print(f"\n  eqprop (vanilla): {arm['n_runs']} runs")
+        print(
+            f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+        )
+        for d in arm["depth_stats"]:
             print(
-                f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+                f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
             )
-            for d in arm["depth_stats"]:
-                print(
-                    f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
-                )
 
-        # Arm 2: directed_ep (with feedback, default gain=1.0)
-        dep_dir = output_base / f"directed_ep_beta{beta}"
-        if dep_dir.exists():
-            summaries = _load_summaries(dep_dir)
-            # Filter: only tagged regular runs (feedback_gain != 0) or untagged
-            # Since the pre-fix runs in this dir are a mix, use only the ones
-            # that are NOT tagged with feedback_gain=0
-            # Actually, the pre-fix runs don't have config_extras at all.
-            # The null arm runs with tags went to null_arm/ dir.
-            # So all runs in dep_dir are either untaged (pre-fix, regular) or
-            # tagged with non-zero feedback_gain.
-            # For safety, exclude any tagged with feedback_gain=0.
-            filtered = [
-                s
-                for s in summaries
-                if s.get("config_extras", {}).get("feedback_gain") != 0.0
-            ]
-            arm = _analyze_arm(filtered, "directed_ep (feedback)")
-            results.append(arm)
-            print(f"\n  directed_ep (feedback): {arm['n_runs']} runs")
+    # Arm 2: directed_ep (with feedback, default gain=1.0)
+    dep_dir = output_base / f"directed_ep_beta{beta}"
+    if dep_dir.exists():
+        summaries = _load_summaries(dep_dir)
+        filtered = [
+            s
+            for s in summaries
+            if s.get("config_extras", {}).get("feedback_gain") != 0.0
+        ]
+        arm = _analyze_arm(filtered, "directed_ep (feedback)")
+        results.append(arm)
+        print(f"\n  directed_ep (feedback): {arm['n_runs']} runs")
+        print(
+            f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+        )
+        for d in arm["depth_stats"]:
             print(
-                f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+                f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
             )
-            for d in arm["depth_stats"]:
-                print(
-                    f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
-                )
 
-        # Arm 3: null arm (directed_ep, feedback_gain=0)
-        null_dir = output_base / "null_arm" / f"beta{beta}"
-        if null_dir.exists():
-            summaries = _load_summaries(null_dir)
-            arm = _analyze_arm(summaries, "directed_ep (null, fb_gain=0)")
-            results.append(arm)
-            print(f"\n  directed_ep (null, fb_gain=0): {arm['n_runs']} runs")
+    # Arm 3: null arm (directed_ep, feedback_gain=0)
+    null_dir = output_base / "null_arm" / f"beta{beta}"
+    if null_dir.exists():
+        summaries = _load_summaries(null_dir)
+        arm = _analyze_arm(summaries, "directed_ep (null, fb_gain=0)")
+        results.append(arm)
+        print(f"\n  directed_ep (null, fb_gain=0): {arm['n_runs']} runs")
+        print(
+            f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+        )
+        for d in arm["depth_stats"]:
             print(
-                f"    Slope (2+): {arm['slope_2plus']['slope']:.4f}, R²={arm['slope_2plus']['r2']:.4f}"
+                f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
             )
-            for d in arm["depth_stats"]:
-                print(
-                    f"    Depth {d['depth']}: median={d['median']:.4g}, CI=[{d['ci_lo']:.4g}, {d['ci_hi']:.4g}]"
-                )
 
-        all_results[beta] = results
+    return results
 
-        # Write per-beta report
-        report_path = report_dir / f"three_arm_beta{beta}.md"
-        _write_comparison_report(results, beta, report_path)
-        print(f"\n  Report written to {report_path}")
 
-    # Write overall summary
+def _print_summary_table(all_results: dict[float, list[dict]]) -> None:
+    """Print summary table of slopes."""
     print(f"\n{'=' * 72}")
     print("SUMMARY TABLE — Slopes (depths 2-4, log ratio vs depth)")
     print(f"{'=' * 72}")
@@ -274,8 +247,9 @@ def main():  # ruff: ignore[complex-structure, too-many-branches, too-many-local
                 row += f" {'N/A':<20}"
         print(row)
 
-    # Write overall summary report
-    summary_path = report_dir / "b2_autopsy_summary.md"
+
+def _build_summary_lines(all_results: dict[float, list[dict]]) -> list[str]:
+    """Build the summary report lines."""
     lines = [
         "# B2 Autopsy — Final Summary",
         "",
@@ -326,7 +300,13 @@ def main():  # ruff: ignore[complex-structure, too-many-branches, too-many-local
                     row += " — |"
             lines.append(row)
 
-    lines.extend([
+    lines.extend(_get_key_findings_text())
+    return lines
+
+
+def _get_key_findings_text() -> list[str]:
+    """Get the key findings text for the summary."""
+    return [
         "",
         "## Gate G1 Verdict",
         "",
@@ -376,8 +356,39 @@ def main():  # ruff: ignore[complex-structure, too-many-branches, too-many-local
         "   slope analysis (the pre-registered primary evidence) confirms the",
         "   vanishing-signal trend for vanilla eqprop at low beta.",
         "",
-    ])
+    ]
 
+
+def main():
+    output_base = Path("runs/contrastive_profile/b2_autopsy")
+    report_dir = Path("runs/contrastive_profile/b2_autopsy/reports")
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    print("=" * 72)
+    print("B2 AUTOPSY — COMPREHENSIVE THREE-ARM COMPARISON")
+    print("=" * 72)
+
+    all_results: dict[float, list[dict]] = {}
+
+    for beta in [0.01, 0.03, 0.1]:
+        print(f"\n{'=' * 72}")
+        print(f"Beta = {beta}")
+        print(f"{'=' * 72}")
+
+        results = _load_beta_results(beta, output_base)
+        all_results[beta] = results
+
+        # Write per-beta report
+        report_path = report_dir / f"three_arm_beta{beta}.md"
+        _write_comparison_report(results, beta, report_path)
+        print(f"\n  Report written to {report_path}")
+
+    # Print summary table
+    _print_summary_table(all_results)
+
+    # Write overall summary report
+    summary_path = report_dir / "b2_autopsy_summary.md"
+    lines = _build_summary_lines(all_results)
     summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"\nOverall summary written to {summary_path}")
 

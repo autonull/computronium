@@ -338,45 +338,9 @@ def validate_combination(selection: dict[str, str]) -> list[str]:
 # ----------------------------------------------------------------------
 
 
-def generate_python_code(selection: dict[str, str]) -> str:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
-    """Generate Python code for the selected 6-D coordinate."""
-    coord_str = "/".join([
-        selection["substrate"],
-        selection["geometry"],
-        selection["dynamics"],
-        selection["plasticity"],
-        selection["credit"],
-        selection["update"],
-    ])
-
-    # Map credit names
-    credit_map = {  # ruff: ignore[unused-variable]
-        "backprop": "BackpropCredit",
-        "thermo": "ThermodynamicContrast",
-        "random_projections": "RandomProjectionsCredit",
-        "local_goodness": "LocalGoodnessCredit",
-        "temporal_trace": "TemporalTraceCredit",
-    }
-
-    # Map update names
-    update_map = {  # ruff: ignore[unused-variable]
-        "euclidean": "EuclideanUpdate",
-        "riemannian_orthogonal": "RiemannianOrthogonalUpdate",
-        "spectral_constrained": "SpectralConstrainedUpdate",
-        "mean_norm": "MeanNormUpdate",
-        "elastic_consolidation": "ElasticConsolidationUpdate",
-    }
-
-    # Map plasticity
-    plasticity_map = {  # ruff: ignore[unused-variable]
-        "null": "NullPlasticity",
-        "routing": "RoutingPlasticity",
-        "fast_weights": "FastWeightPlasticity",
-        "substrate_coupled": "SubstrateCoupledPlasticity",
-        "rule_state": "RuleStatePlasticity",
-    }
-
-    code = f'''"""
+def _build_base_code(coord_str: str) -> str:
+    """Build the base Python code template."""
+    return f'''"""
 Generated 6-D Joint System Configuration
 Coordinate: {coord_str}
 """
@@ -400,10 +364,12 @@ substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
 
 '''
 
-    # Geometry
+
+def _build_geometry_code(selection: dict[str, str]) -> str:
+    """Generate geometry code based on selection."""
     geom = ONTOLOGY["geometry"]["options"][selection["geometry"]]
     if selection["geometry"] == "feedforward":
-        code += f"""geometry = FeedforwardGeometry(
+        return f"""geometry = FeedforwardGeometry(
     GeometryConfig.feedforward(
         input_dim=784,
         output_dim=10,
@@ -413,7 +379,7 @@ substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
 )
 """
     elif selection["geometry"] == "recurrent":
-        code += f"""geometry = RecurrentGeometry(
+        return f"""geometry = RecurrentGeometry(
     GeometryConfig.recurrent(
         input_dim=784,
         output_dim=10,
@@ -424,63 +390,70 @@ substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
 )
 """
     else:
-        code += """# Tile mesh geometry not shown for brevity
+        return """# Tile mesh geometry not shown for brevity
 geometry = FeedforwardGeometry(
     GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=[256, 128])
 )
 """
 
-    # Dynamics
+
+def _build_dynamics_code(selection: dict[str, str]) -> str:
+    """Generate dynamics code based on selection."""
     dyn = ONTOLOGY["dynamics"]["options"][selection["dynamics"]]
     if selection["dynamics"] == "instantaneous":
-        code += (
-            "dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())\n"
-        )
+        return "dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())\n"
     elif selection["dynamics"] == "energy_minimization":
         params = dyn["params"]
-        code += f"dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps={params.get('max_steps', 20)}, beta={params.get('beta', 0.5)}, step_size=0.1))\n"
+        return f"dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps={params.get('max_steps', 20)}, beta={params.get('beta', 0.5)}, step_size=0.1))\n"
     elif selection["dynamics"] == "predictive_settling":
         params = dyn["params"]
-        code += f"dynamics = PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling(max_steps={params.get('max_steps', 20)}, step_size=0.1))\n"
+        return f"dynamics = PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling(max_steps={params.get('max_steps', 20)}, step_size=0.1))\n"
+    return "# Unknown dynamics\n"
 
-    # Plasticity
+
+def _build_plasticity_code(selection: dict[str, str]) -> str:
+    """Generate plasticity code based on selection."""
     plas = ONTOLOGY["plasticity"]["options"][selection["plasticity"]]
     if selection["plasticity"] == "null":
-        code += "plasticity = NullPlasticity()\n"
+        return "plasticity = NullPlasticity()\n"
     elif selection["plasticity"] == "routing":
         params = plas["params"]
-        code += f"plasticity = RoutingPlasticity(gate_dim={params.get('gate_dim', 64)}, temperature={params.get('temperature', 1.0)})\n"
+        return f"plasticity = RoutingPlasticity(gate_dim={params.get('gate_dim', 64)}, temperature={params.get('temperature', 1.0)})\n"
     elif selection["plasticity"] == "fast_weights":
         params = plas["params"]
-        code += f"plasticity = FastWeightPlasticity(fast_weight_dim={params.get('fast_weight_dim', 512)})\n"
+        return f"plasticity = FastWeightPlasticity(fast_weight_dim={params.get('fast_weight_dim', 512)})\n"
     else:
-        code += f"# {selection['plasticity']} plasticity - see docs\n"
-        code += "plasticity = NullPlasticity()  # placeholder\n"
+        return f"# {selection['plasticity']} plasticity - see docs\nplasticity = NullPlasticity()  # placeholder\n"
 
-    # Credit
+
+def _build_credit_code(selection: dict[str, str]) -> str:
+    """Generate credit code based on selection."""
     cred = ONTOLOGY["credit"]["options"][selection["credit"]]
     if selection["credit"] == "backprop":
-        code += "credit = BackpropCredit(CreditAssignmentConfig.gradient())\n"
+        return "credit = BackpropCredit(CreditAssignmentConfig.gradient())\n"
     elif selection["credit"] == "thermo":
         params = cred["params"]
-        code += f"credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta={params.get('beta', 0.5)}))\n"
+        return f"credit = ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta={params.get('beta', 0.5)}))\n"
     elif selection["credit"] == "random_projections":
         params = cred["params"]
-        code += f"credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections(feedback_scale={params.get('feedback_scale', 0.01)}))\n"
+        return f"credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections(feedback_scale={params.get('feedback_scale', 0.01)}))\n"
     else:
-        code += f"# {selection['credit']} credit - see docs\n"
-        code += "credit = BackpropCredit(CreditAssignmentConfig.gradient())  # placeholder\n"
+        return f"# {selection['credit']} credit - see docs\ncredit = BackpropCredit(CreditAssignmentConfig.gradient())  # placeholder\n"
 
-    # Update
+
+def _build_update_code(selection: dict[str, str]) -> str:
+    """Generate update code based on selection."""
     upd = ONTOLOGY["update"]["options"][selection["update"]]
     if selection["update"] == "euclidean":
         params = upd["params"]
-        code += f"update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size={params.get('step_size', 0.01)}))\n"
+        return f"update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size={params.get('step_size', 0.01)}))\n"
     else:
-        code += f"# {selection['update']} update - see docs\n"
-        code += "update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))  # placeholder\n"
+        return f"# {selection['update']} update - see docs\nupdate = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))  # placeholder\n"
 
-    code += """
+
+def _build_footer_code() -> str:
+    """Build the footer code."""
+    return """
 # Compose joint system
 system = compose_joint_system(
     substrate=substrate,
@@ -495,8 +468,28 @@ system = compose_joint_system(
 x = torch.randn(32, 784)
 y = torch.randint(0, 10, (32,))
 metrics = system.train_step(x, y)
-print(f"Loss: {metrics['loss']:.4f}, Energy: {metrics['energy']:.4f}")
+print(f"Loss: {{metrics['loss']:.4f}}, Energy: {{metrics['energy']:.4f}}")
 """
+
+
+def generate_python_code(selection: dict[str, str]) -> str:
+    """Generate Python code for the selected 6-D coordinate."""
+    coord_str = "/".join([
+        selection["substrate"],
+        selection["geometry"],
+        selection["dynamics"],
+        selection["plasticity"],
+        selection["credit"],
+        selection["update"],
+    ])
+
+    code = _build_base_code(coord_str)
+    code += _build_geometry_code(selection)
+    code += _build_dynamics_code(selection)
+    code += _build_plasticity_code(selection)
+    code += _build_credit_code(selection)
+    code += _build_update_code(selection)
+    code += _build_footer_code()
     return code
 
 

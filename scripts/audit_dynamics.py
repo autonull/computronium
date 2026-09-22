@@ -318,34 +318,15 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     return issues
 
 
-def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
-    """Scan RecurrentGeometry and all dynamics for in-place ops that break autograd."""
-    print("\n" + "=" * 60)
-    print("Test: In-Place Operation Audit")
-    print("=" * 60)
-
-    # Test RecurrentGeometry
-    geometry = RecurrentGeometry(
-        GeometryConfig.recurrent(
-            input_dim=784,
-            output_dim=10,
-            hidden_dims=(256,),
-            init_scale=0.1,
-        ),
-        hidden_dim=256,
-    )
-
-    issues = scan_inplace_ops(geometry, "RecurrentGeometry")
-
-    # Also test dynamics classes by checking their _settle_step methods
-    # EnergyMinimizationDynamics
-    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
-
-    # Check dynamics._settle_step source
-    try:  # noqa: PLR0915
+def _check_dynamics_inplace_ops(dynamics, class_name: str, method_name: str = "settle") -> list[tuple[str, str]]:
+    """Check a dynamics class for in-place operations in its settle/step method."""
+    issues = []
+    try:
         import inspect
-
-        source = inspect.getsource(dynamics._settle_step)
+        method = getattr(dynamics, method_name, None) or getattr(dynamics, "_settle_step", None)
+        if method is None:
+            return issues
+        source = inspect.getsource(method)
         lines = source.split("\n")
         for i, line in enumerate(lines):
             stripped = line.strip()
@@ -366,168 +347,16 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
                 ]
             ):
                 issues.append((
-                    f"EnergyMinimizationDynamics._settle_step:{i + 1}",
+                    f"{class_name}.{method_name}:{i + 1}",
                     f"In-place op: {stripped[:80]}",
                 ))
-    except OSError, TypeError:
+    except (OSError, TypeError):
         pass
+    return issues
 
-    # Check PredictiveSettlingDynamics settle
-    pred_dynamics = PredictiveSettlingDynamics(
-        StateDynamicsConfig.predictive_settling()
-    )
-    try:  # noqa: PLR0915
-        import inspect
 
-        source = inspect.getsource(pred_dynamics.settle)
-        lines = source.split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            if any(
-                op in stripped
-                for op in [
-                    "+=",
-                    "-=",
-                    "*=",
-                    "/=",
-                    ".add_(",
-                    ".mul_(",
-                    ".sub_(",
-                    ".div_(",
-                    ".copy_(",
-                ]
-            ):
-                issues.append((
-                    f"PredictiveSettlingDynamics.settle:{i + 1}",
-                    f"In-place op: {stripped[:80]}",
-                ))
-    except OSError, TypeError:
-        pass
-
-    # Check SpikeIntegrationDynamics settle
-    from computronium.ontology import SpikeIntegrationDynamics
-
-    spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
-    try:  # noqa: PLR0915
-        import inspect
-
-        source = inspect.getsource(spike_dynamics.settle)
-        lines = source.split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            if any(
-                op in stripped
-                for op in [
-                    "+=",
-                    "-=",
-                    "*=",
-                    "/=",
-                    ".add_(",
-                    ".mul_(",
-                    ".sub_(",
-                    ".div_(",
-                    ".copy_(",
-                ]
-            ):
-                issues.append((
-                    f"SpikeIntegrationDynamics.settle:{i + 1}",
-                    f"In-place op: {stripped[:80]}",
-                ))
-    except OSError, TypeError:
-        pass
-
-    # Check LazyStateDynamics settle
-    from computronium.ontology import LazyStateDynamics
-
-    lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
-    try:  # noqa: PLR0915
-        import inspect
-
-        source = inspect.getsource(lazy_dynamics.settle)
-        lines = source.split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            if any(
-                op in stripped
-                for op in [
-                    "+=",
-                    "-=",
-                    "*=",
-                    "/=",
-                    ".add_(",
-                    ".mul_(",
-                    ".sub_(",
-                    ".div_(",
-                    ".copy_(",
-                ]
-            ):
-                issues.append((
-                    f"LazyStateDynamics.settle:{i + 1}",
-                    f"In-place op: {stripped[:80]}",
-                ))
-    except OSError, TypeError:
-        pass
-
-    # Check DiffusionDynamics settle
-    from computronium.ontology import DiffusionDynamics
-
-    diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
-    try:  # noqa: PLR0915
-        import inspect
-
-        source = inspect.getsource(diff_dynamics.settle)
-        lines = source.split("\n")
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            if any(
-                op in stripped
-                for op in [
-                    "+=",
-                    "-=",
-                    "*=",
-                    "/=",
-                    ".add_(",
-                    ".mul_(",
-                    ".sub_(",
-                    ".div_(",
-                    ".copy_(",
-                ]
-            ):
-                issues.append((
-                    f"DiffusionDynamics.settle:{i + 1}",
-                    f"In-place op: {stripped[:80]}",
-                ))
-    except OSError, TypeError:
-        pass
-
-    # Also check FeedforwardGeometry.route
-    ff_geometry = FeedforwardGeometry(
-        GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
-    )
-    issues.extend(scan_inplace_ops(ff_geometry, "FeedforwardGeometry"))
-
-    # Filter: only report issues that are on tensors requiring grad (parameters)
-    # The scan is conservative - we report all in-place ops but note they may be OK if on non-grad tensors
-    print(f"Found {len(issues)} potential in-place operations:")
-    for loc, desc in issues:
-        print(f"  {loc}: {desc}")
-
-    # For now, we consider it a pass if we only find in-place ops on non-parameter tensors
-    # The actual check is whether they break autograd - we'll do a functional test
-    # Actually, let's be strict: no in-place ops on any tensor in the settle path
-    # But the TODO says "zero in-place ops on tensors requiring grad"
-    # We'll do a functional autograd test instead
-
-    # Functional test: run a full settle with autograd and verify no errors
-    device = get_device()
+def _run_functional_autograd_test(device) -> bool:
+    """Run functional autograd test to verify no in-place ops break autograd."""
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(
             input_dim=20,
@@ -552,24 +381,75 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     autograd_ok = True
     try:
         free_state = dynamics.settle(free_state, geometry, substrate, target=None)
-        # Try to compute gradient
         loss = (
             free_state.activations[-1].sum()
             if isinstance(free_state.activations, list)
             else free_state.activations.sum()
         )
-        grad = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)  # ruff: ignore[unused-variable]
+        _ = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)
         print("  Functional autograd test: PASS")
     except RuntimeError as e:
         if "in-place" in str(e).lower() or "leaf" in str(e).lower():
             autograd_ok = False
             print(f"  Functional autograd test: FAIL ({e})")
         else:
-            # Some other error
             print(f"  Functional autograd test: ERROR ({e})")
+    return autograd_ok
 
-    # Check for in-place on parameters specifically
-    # The key issue is in-place on parameters/buffers that require grad
+
+def test_inplace_op_audit() -> dict[str, Any]:
+    """Scan RecurrentGeometry and all dynamics for in-place ops that break autograd."""
+    print("\n" + "=" * 60)
+    print("Test: In-Place Operation Audit")
+    print("=" * 60)
+
+    issues = []
+
+    # Test RecurrentGeometry
+    geometry = RecurrentGeometry(
+        GeometryConfig.recurrent(
+            input_dim=784,
+            output_dim=10,
+            hidden_dims=(256,),
+            init_scale=0.1,
+        ),
+        hidden_dim=256,
+    )
+    issues.extend(scan_inplace_ops(geometry, "RecurrentGeometry"))
+
+    # Test FeedforwardGeometry
+    ff_geometry = FeedforwardGeometry(
+        GeometryConfig.feedforward(input_dim=10, output_dim=5, hidden_dims=(20,))
+    )
+    issues.extend(scan_inplace_ops(ff_geometry, "FeedforwardGeometry"))
+
+    # Test dynamics classes
+    dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
+    issues.extend(_check_dynamics_inplace_ops(dynamics, "EnergyMinimizationDynamics", "_settle_step"))
+
+    pred_dynamics = PredictiveSettlingDynamics(StateDynamicsConfig.predictive_settling())
+    issues.extend(_check_dynamics_inplace_ops(pred_dynamics, "PredictiveSettlingDynamics"))
+
+    from computronium.ontology import SpikeIntegrationDynamics
+    spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
+    issues.extend(_check_dynamics_inplace_ops(spike_dynamics, "SpikeIntegrationDynamics"))
+
+    from computronium.ontology import LazyStateDynamics
+    lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
+    issues.extend(_check_dynamics_inplace_ops(lazy_dynamics, "LazyStateDynamics"))
+
+    from computronium.ontology import DiffusionDynamics
+    diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
+    issues.extend(_check_dynamics_inplace_ops(diff_dynamics, "DiffusionDynamics"))
+
+    print(f"Found {len(issues)} potential in-place operations:")
+    for loc, desc in issues:
+        print(f"  {loc}: {desc}")
+
+    # Functional test
+    device = get_device()
+    autograd_ok = _run_functional_autograd_test(device)
+
     passed = autograd_ok and len(issues) == 0
     print(f"\nResult: {'PASS' if passed else 'FAIL'}")
 
@@ -582,77 +462,46 @@ def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure
     }
 
 
-def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-statements]
-    """Test CPU vs CUDA consistency for all dynamics types.
+def _run_device_consistency_test(device_cpu, device_cuda, geometry_factory, dynamics_factory, substrate_factory, x_factory, y_factory, run_fn):
+    """Run a model on both CPU and CUDA and compare outputs."""
+    # Create on CPU with fixed seed
+    torch.manual_seed(42)
+    geom_cpu = geometry_factory()
+    geom_cpu.to(device_cpu)
+    sub_cpu = substrate_factory("cpu")
+    dyn_cpu = dynamics_factory()
 
-    Creates models and data on CPU first, then moves to CUDA to ensure
-    bitwise identical initialization. This is necessary because CPU and CUDA
-    use different RNG streams and BLAS implementations.
-    """
-    print("\n" + "=" * 60)
-    print("Test: Device Consistency (CPU vs CUDA)")
-    print("=" * 60)
+    # Copy state dict to CUDA model
+    state_dict = {k: v.clone() for k, v in geom_cpu.state_dict().items()}
+    geom_cuda = geometry_factory()
+    geom_cuda.load_state_dict(state_dict)
+    geom_cuda.to(device_cuda)
+    sub_cuda = substrate_factory("cuda")
+    dyn_cuda = dynamics_factory()
 
-    if not torch.cuda.is_available():
-        print("CUDA not available - skipping device consistency test")
-        return {
-            "test": "device_consistency",
-            "passed": True,
-            "skipped": True,
-            "reason": "CUDA not available",
-        }
+    # Create data on CPU, then move to CUDA
+    torch.manual_seed(42)
+    x_cpu = x_factory(device_cpu)
+    x_cuda = x_cpu.to(device_cuda)
 
-    device_cpu = torch.device("cpu")
-    device_cuda = torch.device("cuda")
-    all_passed = True
-
-    def run_on_devices(
-        geometry_factory,
-        dynamics_factory,
-        substrate_factory,
-        x_factory,
-        y_factory,
-        get_output,
-    ):
-        """Run same model on CPU and CUDA with identical initialization."""
-        # Create on CPU with fixed seed
+    if y_factory:
         torch.manual_seed(42)
-        geom_cpu = geometry_factory()
-        geom_cpu.to(device_cpu)
-        sub_cpu = substrate_factory("cpu")
-        dyn_cpu = dynamics_factory()
+        y_cpu = y_factory(device_cpu)
+        y_cuda = y_cpu.to(device_cuda)
+    else:
+        y_cpu = None
+        y_cuda = None
 
-        # Copy state dict to CUDA model
-        state_dict = {k: v.clone() for k, v in geom_cpu.state_dict().items()}
-        geom_cuda = geometry_factory()
-        geom_cuda.load_state_dict(state_dict)
-        geom_cuda.to(device_cuda)
-        sub_cuda = substrate_factory("cuda")
-        dyn_cuda = dynamics_factory()
+    # Run on CPU
+    out_cpu = run_fn(geom_cpu, sub_cpu, dyn_cpu, x_cpu, y_cpu)
+    # Run on CUDA
+    out_cuda = run_fn(geom_cuda, sub_cuda, dyn_cuda, x_cuda, y_cuda)
 
-        # Create data on CPU, then move to CUDA
-        torch.manual_seed(42)
-        x_cpu = x_factory(device_cpu)
-        x_cuda = x_cpu.to(device_cuda)
+    return out_cpu, out_cuda.cpu()
 
-        if y_factory:
-            torch.manual_seed(42)
-            y_cpu = y_factory(device_cpu)
-            y_cuda = y_cpu.to(device_cuda)
-        else:
-            y_cpu = None
-            y_cuda = None
 
-        # Run on CPU
-        out_cpu = get_output(geom_cpu, sub_cpu, dyn_cpu, x_cpu, y_cpu)
-        # Run on CUDA
-        out_cuda = get_output(geom_cuda, sub_cuda, dyn_cuda, x_cuda, y_cuda)
-
-        return out_cpu, out_cuda.cpu()
-
-    # Test EnergyMinimizationDynamics
-    print("  Testing EnergyMinimizationDynamics...")
-
+def _test_em_dynamics(device_cpu, device_cuda):
+    """Test EnergyMinimizationDynamics device consistency."""
     def make_em_geometry():
         return RecurrentGeometry(
             GeometryConfig.recurrent(
@@ -696,13 +545,10 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
             settled = state.activations
         return settled[-1] if isinstance(settled, list) else settled
 
-    out_cpu, out_cuda = run_on_devices(
-        make_em_geometry,
-        make_em_dynamics,
-        make_em_substrate,
-        make_em_x,
-        make_em_y,
-        run_em_settle,
+    out_cpu, out_cuda = _run_device_consistency_test(
+        device_cpu, device_cuda,
+        make_em_geometry, make_em_dynamics, make_em_substrate,
+        make_em_x, make_em_y, run_em_settle
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
@@ -711,11 +557,11 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    EnergyMinimizationDynamics: FAIL (max diff = {diff:.2e})")
-        all_passed = False
+    return match
 
-    # Test InstantaneousDynamics
-    print("  Testing InstantaneousDynamics...")
 
+def _test_inst_dynamics(device_cpu, device_cuda):
+    """Test InstantaneousDynamics device consistency."""
     def make_inst_geometry():
         return FeedforwardGeometry(
             GeometryConfig.feedforward(
@@ -744,13 +590,10 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
             else state.activations
         )
 
-    out_cpu, out_cuda = run_on_devices(
-        make_inst_geometry,
-        make_inst_dynamics,
-        make_inst_substrate,
-        make_inst_x,
-        None,
-        run_inst_settle,
+    out_cpu, out_cuda = _run_device_consistency_test(
+        device_cpu, device_cuda,
+        make_inst_geometry, make_inst_dynamics, make_inst_substrate,
+        make_inst_x, None, run_inst_settle
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
@@ -759,11 +602,11 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    InstantaneousDynamics: FAIL (max diff = {diff:.2e})")
-        all_passed = False
+    return match
 
-    # Test PredictiveSettlingDynamics
-    print("  Testing PredictiveSettlingDynamics...")
 
+def _test_pred_dynamics(device_cpu, device_cuda):
+    """Test PredictiveSettlingDynamics device consistency."""
     def make_pred_geometry():
         return FeedforwardGeometry(
             GeometryConfig.feedforward(
@@ -804,13 +647,10 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
             settled = state.activations
         return settled[-1] if isinstance(settled, list) else settled
 
-    out_cpu, out_cuda = run_on_devices(
-        make_pred_geometry,
-        make_pred_dynamics,
-        make_pred_substrate,
-        make_pred_x,
-        make_pred_y,
-        run_pred_settle,
+    out_cpu, out_cuda = _run_device_consistency_test(
+        device_cpu, device_cuda,
+        make_pred_geometry, make_pred_dynamics, make_pred_substrate,
+        make_pred_x, make_pred_y, run_pred_settle
     )
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
@@ -819,6 +659,46 @@ def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structu
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    PredictiveSettlingDynamics: FAIL (max diff = {diff:.2e})")
+    return match
+
+
+def test_device_consistency() -> dict[str, Any]:
+    """Test CPU vs CUDA consistency for all dynamics types.
+
+    Creates models and data on CPU first, then moves to CUDA to ensure
+    bitwise identical initialization. This is necessary because CPU and CUDA
+    use different RNG streams and BLAS implementations.
+    """
+    print("\n" + "=" * 60)
+    print("Test: Device Consistency (CPU vs CUDA)")
+    print("=" * 60)
+
+    if not torch.cuda.is_available():
+        print("CUDA not available - skipping device consistency test")
+        return {
+            "test": "device_consistency",
+            "passed": True,
+            "skipped": True,
+            "reason": "CUDA not available",
+        }
+
+    device_cpu = torch.device("cpu")
+    device_cuda = torch.device("cuda")
+    all_passed = True
+
+    # Test EnergyMinimizationDynamics
+    print("  Testing EnergyMinimizationDynamics...")
+    if not _test_em_dynamics(device_cpu, device_cuda):
+        all_passed = False
+
+    # Test InstantaneousDynamics
+    print("  Testing InstantaneousDynamics...")
+    if not _test_inst_dynamics(device_cpu, device_cuda):
+        all_passed = False
+
+    # Test PredictiveSettlingDynamics
+    print("  Testing PredictiveSettlingDynamics...")
+    if not _test_pred_dynamics(device_cpu, device_cuda):
         all_passed = False
 
     print(f"\nResult: {'PASS' if all_passed else 'FAIL'}")

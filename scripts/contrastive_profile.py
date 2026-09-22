@@ -183,23 +183,9 @@ def _write_summary(summary: dict, model_dir: Path) -> None:
     write_report(summary, model_dir / "summary.md")
 
 
-def profile_model(args: _ProfileArgs) -> dict:  # ruff: ignore[complex-structure, too-many-locals]
-    """Profile a single model and write diagnostics."""
-    torch.manual_seed(args.seed)
-
-    # Load data
-    dataset = get_vision_dataset(args.task, flatten=True)
-    train_data = dataset[0] if isinstance(dataset, tuple) else dataset
-    train_loader = DataLoader(
-        train_data, batch_size=args.batch_size, shuffle=True, num_workers=0
-    )
-
-    input_dim, output_dim = _resolve_dims(train_data)
-    model = _build_model(args, input_dim, output_dim)
-
-    all_diagnostics: list[dict] = []
+def _run_profiling_loop(model, train_loader, args, all_diagnostics):
+    """Run the profiling loop over epochs and batches."""
     step = 0
-
     for epoch in range(args.epochs):
         for batch_idx, batch in enumerate(train_loader):
             x, y = (t.to(args.device) for t in batch)
@@ -225,13 +211,11 @@ def profile_model(args: _ProfileArgs) -> dict:  # ruff: ignore[complex-structure
                 break
         if step >= _PROFILE_STEPS:
             break
+    return step
 
-    # Check Gate G1: Vanishing Signal
-    g1_triggered = _check_gate_g1(all_diagnostics, args.num_layers)
-    # Per-step early/output ratios: the depth-scaling evidence record.
-    signal_ratios = _per_step_signal_ratios(all_diagnostics, args.num_layers)
 
-    # Summary
+def _build_config_extras(args):
+    """Build config_extras dict from args."""
     config_extras: dict[str, object] = {}
     if args.feedback_gain is not None:
         config_extras["feedback_gain"] = args.feedback_gain
@@ -241,8 +225,12 @@ def profile_model(args: _ProfileArgs) -> dict:  # ruff: ignore[complex-structure
         config_extras["update_scale"] = args.update_scale
     if args.update_scale_by_depth is not None:
         config_extras["update_scale_by_depth"] = args.update_scale_by_depth
+    return config_extras
 
-    summary = {
+
+def _build_summary(args, step, g1_triggered, signal_ratios, all_diagnostics):
+    """Build the summary dict."""
+    return {
         "model": args.model_name,
         "task": args.task,
         "num_layers": args.num_layers,
@@ -258,8 +246,34 @@ def profile_model(args: _ProfileArgs) -> dict:  # ruff: ignore[complex-structure
         "signal_ratios": signal_ratios,
         "diagnostics": all_diagnostics,
         "provenance": _env_provenance(),
-        "config_extras": config_extras,
+        "config_extras": _build_config_extras(args),
     }
+
+
+def profile_model(args: _ProfileArgs) -> dict:
+    """Profile a single model and write diagnostics."""
+    torch.manual_seed(args.seed)
+
+    # Load data
+    dataset = get_vision_dataset(args.task, flatten=True)
+    train_data = dataset[0] if isinstance(dataset, tuple) else dataset
+    train_loader = DataLoader(
+        train_data, batch_size=args.batch_size, shuffle=True, num_workers=0
+    )
+
+    input_dim, output_dim = _resolve_dims(train_data)
+    model = _build_model(args, input_dim, output_dim)
+
+    all_diagnostics: list[dict] = []
+
+    step = _run_profiling_loop(model, train_loader, args, all_diagnostics)
+
+    # Check Gate G1: Vanishing Signal
+    g1_triggered = _check_gate_g1(all_diagnostics, args.num_layers)
+    # Per-step early/output ratios: the depth-scaling evidence record.
+    signal_ratios = _per_step_signal_ratios(all_diagnostics, args.num_layers)
+
+    summary = _build_summary(args, step, g1_triggered, signal_ratios, all_diagnostics)
 
     _write_summary(
         summary,
