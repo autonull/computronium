@@ -26,6 +26,7 @@ from computronium.ui.components.lineage_viewer import (
     LineageViewer,
     create_lineage_from_phylogeny,
 )
+from computronium.ui.components.progress_panel import ProgressData, ProgressPanel
 from computronium.ui.components.repair_bench import (
     DefectRow,
     RepairBench,
@@ -56,6 +57,8 @@ __all__ = [
     "MapRegion",
     "MapSpecimen",
     "ParetoCell",
+    "ProgressData",
+    "ProgressPanel",
     "RepairBench",
     "TradeoffsPanel",
     "create_discovery_map_from_atlas",

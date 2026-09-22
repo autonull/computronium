@@ -833,6 +833,110 @@
     "current": {
       "explorer": "Current",
       "lab": "Current"
+    },
+    "progress": {
+      "explorer": "Your Journey",
+      "lab": "Progress"
+    },
+    "badges": {
+      "explorer": "Achievements",
+      "lab": "Badges"
+    },
+    "quests": {
+      "explorer": "Quests",
+      "lab": "Quests"
+    },
+    "records": {
+      "explorer": "Personal Bests",
+      "lab": "Records"
+    },
+    "no_badges_yet": {
+      "explorer": "No achievements yet — run experiments to earn them",
+      "lab": "No badges earned"
+    },
+    "no_quests_yet": {
+      "explorer": "No quests started — opt in to begin",
+      "lab": "No active quests"
+    },
+    "no_records_yet": {
+      "explorer": "No personal bests yet — run measurements",
+      "lab": "No records set"
+    },
+    "active_quests": {
+      "explorer": "Active Quests",
+      "lab": "Active Quests"
+    },
+    "available_quests": {
+      "explorer": "Available Quests",
+      "lab": "Available Quests"
+    },
+    "opt_in_quest": {
+      "explorer": "Start Quest",
+      "lab": "Opt In"
+    },
+    "opt_in": {
+      "explorer": "Start",
+      "lab": "Opt In"
+    },
+    "choose_quest": {
+      "explorer": "Choose a quest to start",
+      "lab": "Select quest"
+    },
+    "quests_completed": {
+      "explorer": "Quests Completed",
+      "lab": "Quests Completed"
+    },
+    "gamify_disabled": {
+      "explorer": "Recognition layer is disabled",
+      "lab": "Gamification disabled"
+    },
+    "first_steps": {
+      "explorer": "First Steps",
+      "lab": "First Steps"
+    },
+    "mapmaker": {
+      "explorer": "Mapmaker",
+      "lab": "Mapmaker"
+    },
+    "double_checker": {
+      "explorer": "Double-Checker",
+      "lab": "Double-Checker"
+    },
+    "gold_standard": {
+      "explorer": "Gold Standard",
+      "lab": "Gold Standard"
+    },
+    "honest_broker": {
+      "explorer": "Honest Broker",
+      "lab": "Honest Broker"
+    },
+    "repair_crew": {
+      "explorer": "Repair Crew",
+      "lab": "Repair Crew"
+    },
+    "steady_hand": {
+      "explorer": "Steady Hand",
+      "lab": "Steady Hand"
+    },
+    "cartographer": {
+      "explorer": "Cartographer",
+      "lab": "Cartographer"
+    },
+    "open_book": {
+      "explorer": "Open Book",
+      "lab": "Open Book"
+    },
+    "fog_of_war": {
+      "explorer": "Unexplored Territory",
+      "lab": "Fog of War"
+    },
+    "coverage": {
+      "explorer": "Charted",
+      "lab": "Coverage"
+    },
+    "regions_charted": {
+      "explorer": "Regions charted",
+      "lab": "Regions charted"
     }
   }
 }

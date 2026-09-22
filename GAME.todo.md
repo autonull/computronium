@@ -127,23 +127,45 @@ comp daemon    ... same flags ... --port 8940
 
 | ID | Task | Acceptance | Owner |
 |----|------|------------|-------|
-| **M2.1** | Event projector: pure function `fold(event_log) → recognition_state` emitting `recognition.badge_awarded`, `recognition.quest_progress`, `recognition.record_set`, `recognition.region_named` | Deterministic: identical state across shuffle-safe replays; idempotent on duplicates (UX-L2) | |
-| **M2.2** | `ui_state.sqlite` sidecar (append-only, rebuildable via `comp dashboard --rebuild-ui-state`) | Replay from events reconstructs identical badges/quests/records | |
-| **M2.3** | **Badges** (8, ledger-linked per GAME.md §8.3): First Steps, Mapmaker, Double-Checker, Gold Standard, Honest Broker, Repair Crew, Steady Hand, Cartographer, Open Book | Each badge resolves to CEEC/KB record with "see evidence" link | |
-| **M2.4** | **Quests** (6, opt-in per §8.4): Chart 100 regions, Double-check 3 candidates, Send to careful re-check, Clear repair bench, Compare goals, Forecast & check | Quest completion copy states what was learned/verified | |
-| **M2.5** | **Records** (personal bests): breakthrough alerts on any objective improvement, scoped ("New best correctness among similar size") | Derived from Pareto front + CEEC gates; no XP | |
-| **M2.6** | Fog-of-war on Map: coverage % from KB, "You've charted X% of planned regions" | Derivable from KB alone (no new measurement) | |
-| **M2.7** | Field Reports tray + Progress panel (left rail) with quests/badges/records | Lab mode hides recognition chrome by default | |
-| **M2.8** | Kill switches: `--gamify off` / `COMPUTRONIUM_NO_GAMIFY=1`, Lab mode hides chrome | Recognition visibility never changes measurement/promotion/claim logic (UX-L7) | |
-| **M2.9** | Integrity locks: UX-L2 (replay property test via Hypothesis), UX-L7 (static import lock: projector zero imports from campaign/gate mutation paths) | Both locks green in CI | |
-| **M2.10** | Anti-Goodhart audit: quarterly correlation (badge/quest actions vs. CEEC gate-rejection rate) | Report generator exists, runnable | |
-| **M2.11** | **Probe Analytics Panel** (AUTOTILE.md §3.2): show probe batches, current vs proposed slope, acceptance/rejection, forked-copy hygiene | Probe batches never touch production training data (UX-L11) | |
-| **M2.12** | **Stagnation Dashboard** (AUTOTILE.md §2.4): per-campaign stagnation status (WindowedMean/EMA/StatTest/VetoRate), detector config, history | Campaign event log, `SystemContext` | |
-| **M2.13** | **Genome Health Tracker** (AUTOTILE.md §5.4): |Ω| vs fitness, ontological cancer risk (GenomeSizePenalty λ), Resource Ceiling headroom | Campaign event log, `ResourceUsage` | |
-| **M2.14** | **Mutation Explorer** (AUTOTILE.md §2.3): from current Ω, show valid `DuplicateAndPerturb`, `SpliceOperator`, `CoordinateSwap` proposals with Constitution pre-check | Registry, `SystemConfig.validate()`, `StabilityMonitor` fast-proxy | |
-| **M2.15** | **Veto Log** (AUTOTILE.md §3.5): vetoed mutations with reason (Lyapunov fast-proxy fail, Passivity fail, Protocol conformance fail), veto rate trend | Campaign event log (veto events) | |
+| **M2.1** | Event projector: pure function `fold(event_log) → recognition_state` emitting `recognition.badge_awarded`, `recognition.quest_progress`, `recognition.record_set`, `recognition.region_named` | Deterministic: identical state across shuffle-safe replays; idempotent on duplicates (UX-L2) | | ✅ **DONE** |
+| **M2.2** | `ui_state.sqlite` sidecar (append-only, rebuildable via `comp dashboard --rebuild-ui-state`) | Replay from events reconstructs identical badges/quests/records | | ✅ **DONE** |
+| **M2.3** | **Badges** (9, ledger-linked per GAME.md §8.3): First Steps, Mapmaker, Double-Checker, Gold Standard, Honest Broker, Repair Crew, Steady Hand, Cartographer, Open Book | Each badge resolves to CEEC/KB record with "see evidence" link | | ✅ **DONE** |
+| **M2.4** | **Quests** (6, opt-in per §8.4): Chart 100 regions, Double-check 3 candidates, Send to careful re-check, Clear repair bench, Compare goals, Forecast & check | Quest completion copy states what was learned/verified | | ✅ **DONE** |
+| **M2.5** | **Records** (personal bests): breakthrough alerts on any objective improvement, scoped ("New best correctness among similar size") | Derived from Pareto front + CEEC gates; no XP | | ✅ **DONE** |
+| **M2.6** | Fog-of-war on Map: coverage % from KB, "You've charted X% of planned regions" | Derivable from KB alone (no new measurement) | | ✅ **DONE** |
+| **M2.7** | Field Reports tray + Progress panel (left rail) with quests/badges/records | Lab mode hides recognition chrome by default | | ✅ **DONE** |
+| **M2.8** | Kill switches: `--gamify off` / `COMPUTRONIUM_NO_GAMIFY=1`, Lab mode hides chrome | Recognition visibility never changes measurement/promotion/claim logic (UX-L7) | | ✅ **DONE** |
+| **M2.9** | Integrity locks: UX-L2 (replay property test via Hypothesis), UX-L7 (static import lock: projector zero imports from campaign/gate mutation paths) | Both locks green in CI | | ✅ **DONE** |
+| **M2.10** | Anti-Goodhart audit: quarterly correlation (badge/quest actions vs. CEEC gate-rejection rate) | Report generator exists, runnable | | 🔄 **DEFERRED** (M3+) |
+| **M2.11** | **Probe Analytics Panel** (AUTOTILE.md §3.2): show probe batches, current vs proposed slope, acceptance/rejection, forked-copy hygiene | Probe batches never touch production training data (UX-L11) | | 🔄 **DEFERRED** (M3) |
+| **M2.12** | **Stagnation Dashboard** (AUTOTILE.md §2.4): per-campaign stagnation status (WindowedMean/EMA/StatTest/VetoRate), detector config, history | Campaign event log, `SystemContext` | | 🔄 **DEFERRED** (M3) |
+| **M2.13** | **Genome Health Tracker** (AUTOTILE.md §5.4): |Ω| vs fitness, ontological cancer risk (GenomeSizePenalty λ), Resource Ceiling headroom | Campaign event log, `ResourceUsage` | | 🔄 **DEFERRED** (M3) |
+| **M2.14** | **Mutation Explorer** (AUTOTILE.md §2.3): from current Ω, show valid `DuplicateAndPerturb`, `SpliceOperator`, `CoordinateSwap` proposals with Constitution pre-check | Registry, `SystemConfig.validate()`, `StabilityMonitor` fast-proxy | | 🔄 **DEFERRED** (M3) |
+| **M2.15** | **Veto Log** (AUTOTILE.md §3.5): vetoed mutations with reason (Lyapunov fast-proxy fail, Passivity fail, Protocol conformance fail), veto rate trend | Campaign event log (veto events) | | 🔄 **DEFERRED** (M3) |
 
 **Exit M2:** Replay property lock green on 100k synthetic events; opt-in pilot with 2 internal teams; UX-L11 green. No XP anywhere in the codebase.
+
+**Progress Summary (M2 Core — Completed):**
+- ✅ `computronium/ui/recognition/projector.py` — Pure fold function with two-pass design for order-independence
+- ✅ `computronium/ui/recognition/state_store.py` — Append-only SQLite sidecar (`ui_state.sqlite`) with rebuild capability
+- ✅ `computronium/ui/recognition/badges.py` — 9 ledger-linked badges (First Steps, Mapmaker, Double-Checker, Gold Standard, Honest Broker, Repair Crew, Steady Hand, Cartographer, Open Book)
+- ✅ `computronium/ui/recognition/quests.py` — 6 opt-in quests (Chart 100 Regions, Double-Check 3 Candidates, Send to Careful Re-check, Clear Repair Bench, Compare Goals, Forecast & Check)
+- ✅ `computronium/ui/recognition/records.py` — Personal best records per objective with deterministic tiebreaker
+- ✅ `computronium/ui/recognition/fog.py` — Fog-of-war from KB coverage (derivable from KB alone)
+- ✅ `computronium/ui/components/progress_panel.py` — Progress Panel component with register-aware copy, Lab mode hides chrome
+- ✅ Kill switches: `--gamify off` / `COMPUTRONIUM_NO_GAMIFY=1` respected in ProgressPanel
+- ✅ `tests/property/test_ux_l2_replay.py` — UX-L2 deterministic replay property test (Hypothesis-based)
+- ✅ `tests/lint/test_ux_l7_import_lock.py` — UX-L7 static import lock test
+- ✅ All glossary terms registered for new recognition concepts
+- ✅ All ruff/pyright checks pass; UX-L2 and UX-L7 tests green
+
+**Deferred to M3 (per adjusted phasing):**
+- M2.10 Anti-Goodhart audit report generator
+- M2.11 Probe Analytics Panel (UX-L11)
+- M2.12 Stagnation Dashboard
+- M2.13 Genome Health Tracker
+- M2.14 Mutation Explorer
+- M2.15 Veto Log
 
 ---
 
