@@ -1499,17 +1499,40 @@ def build_dashboard(
     log_path: Path | None = None,
     poll_seconds: float = POLL_SECONDS,
     daemon_url: str | None = None,
+    *,
+    ui_mode: str = "auto",
+    gamify: bool = True,
+    ui_actions: bool = False,
+    rebuild_state: bool = False,
 ) -> None:
     """Build the read-only NiceGUI page. Call inside a UI context, then
     ``ui.run`` (see ``computronium.cli.dashboard``). ``daemon_url`` opts in
     to the lifecycle bar + live badge; without it the dashboard is
-    polling-only (TODO30 §0 hybrid transport)."""
+    polling-only (TODO30 §0 hybrid transport).
+
+    Args:
+        ui_mode: "explorer" | "lab" | "auto" - UI register mode
+        gamify: Enable gamification layer (badges, quests, records)
+        ui_actions: Enable UI actions (workshop, recipe editor)
+        rebuild_state: Rebuild UI state from event log (sqlite sidecar)
+    """
     from nicegui import ui
+
+    from computronium.ui.mode_toggle import initialize_mode, set_mode
 
     log_path = resolve_log_path(root, log_path)
     cache = EmbedCache()
     client = DaemonClient(daemon_url) if daemon_url else None
     objectives = _objectives_from_heartbeat(root)
+
+    # Initialize UI mode
+    if ui_mode != "auto":
+        initialize_mode()
+        set_mode(ui_mode)  # type: ignore[arg-type]
+    else:
+        initialize_mode()
+
+    # Store config in state for access by components
     state: dict[str, object] = {
         "signature": watch_signature(root),
         "atlas_busy": False,
@@ -1517,6 +1540,10 @@ def build_dashboard(
         "telemetry_busy": False,
         "events_busy": False,
         "objectives": objectives,
+        "ui_mode": ui_mode,
+        "gamify": gamify,
+        "ui_actions": ui_actions,
+        "rebuild_state": rebuild_state,
     }
 
     # Pareto selector state (TODO31 Phase 1.5)

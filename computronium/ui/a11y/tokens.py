@@ -86,9 +86,9 @@ class FocusStyle:
     outline_width: str = "3px"
     outline_style: str = "solid"
     outline_offset: str = "2px"
-    outline_color: str = "#17a2b8"  # Semantic info color - high contrast on light/dark
+    outline_color: str = "#0d6efd"  # SEMANTIC["info"] - high contrast on light/dark
     box_shadow: str = (
-        "0 0 0 3px #17a2b8"  # Fallback for elements where outline doesn't work
+        "0 0 0 3px #0d6efd"  # Fallback for elements where outline doesn't work
     )
 
 
@@ -207,7 +207,7 @@ SKIP_LINK_CSS = """
 }
 .skip-link:focus {
   top: 0;
-  outline: 3px solid #17a2b8;
+  outline: 3px solid #0d6efd;
   outline-offset: 2px;
 }
 """
@@ -243,7 +243,7 @@ FOCUS_VISIBLE_CSS = """
   outline: none;
 }
 :focus-visible {
-  outline: var(--focus-ring-width, 3px) solid var(--focus-ring-color, #17a2b8);
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring-color, #0d6efd);
   outline-offset: var(--focus-ring-offset, 2px);
 }
 """
@@ -277,7 +277,7 @@ def a11y_css() -> str:
         "    --color-success: #006400;",
         "    --color-warning: #b8860b;",
         "    --color-danger: #8b0000;",
-        "    --color-info: #006464;",
+        "    --color-info: #0056d2;",
         "  }",
         "}",
     ])

@@ -234,6 +234,10 @@
       "explorer": "A batch of measurements",
       "lab": "Burst"
     },
+    "batch": {
+      "explorer": "A group of measurements run together",
+      "lab": "Batch"
+    },
     "campaign": {
       "explorer": "A coordinated exploration",
       "lab": "Campaign"
@@ -261,6 +265,18 @@
     "nan_loss": {
       "explorer": "Diverged (NaN loss)",
       "lab": "NaN loss"
+    },
+    "diverged": {
+      "explorer": "Training diverged (NaN loss)",
+      "lab": "Diverged"
+    },
+    "seed": {
+      "explorer": "Random seed for reproducibility",
+      "lab": "Seed"
+    },
+    "epoch": {
+      "explorer": "One full pass through the data",
+      "lab": "Epoch"
     },
     "maturity_l0": {
       "explorer": "Quick map (1 epoch, 1 seed)",
@@ -301,6 +317,10 @@
     "walltime": {
       "explorer": "Wall-clock time",
       "lab": "Walltime"
+    },
+    "parameter": {
+      "explorer": "A learnable weight",
+      "lab": "Parameter"
     },
     "param_count": {
       "explorer": "Parameter count",
@@ -605,6 +625,214 @@
     "broad_map": {
       "explorer": "Broad map",
       "lab": "Broad map"
+    },
+    "dynamics": {
+      "explorer": "Learning dynamics",
+      "lab": "Dynamics"
+    },
+    "credit": {
+      "explorer": "Credit assignment",
+      "lab": "Credit"
+    },
+    "update": {
+      "explorer": "Parameter update",
+      "lab": "Update"
+    },
+    "topology": {
+      "explorer": "Network topology",
+      "lab": "Topology"
+    },
+    "accuracy": {
+      "explorer": "Accuracy",
+      "lab": "Accuracy"
+    },
+    "outcome": {
+      "explorer": "Outcome",
+      "lab": "Outcome"
+    },
+    "no_data": {
+      "explorer": "No data available",
+      "lab": "No data"
+    },
+    "atlas_pending": {
+      "explorer": "Map loading...",
+      "lab": "Atlas pending"
+    },
+    "view": {
+      "explorer": "View",
+      "lab": "View"
+    },
+    "pareto_optimal_explainer": {
+      "explorer": "Best trade-off recipes",
+      "lab": "Pareto optimal explanation"
+    },
+    "guided_reading": {
+      "explorer": "Guided reading",
+      "lab": "Guided reading"
+    },
+    "reference_anchors": {
+      "explorer": "Reference anchors",
+      "lab": "Reference anchors"
+    },
+    "ruler": {
+      "explorer": "baseline",
+      "lab": "ruler baseline"
+    },
+    "close": {
+      "explorer": "Close",
+      "lab": "Close"
+    },
+    "no_pareto_data": {
+      "explorer": "No trade-off data yet",
+      "lab": "No Pareto data"
+    },
+    "arrived": {
+      "explorer": "Arrived",
+      "lab": "Arrived"
+    },
+    "diagnosed": {
+      "explorer": "Diagnosed",
+      "lab": "Diagnosed"
+    },
+    "back_in_service": {
+      "explorer": "Back in service",
+      "lab": "Back in service"
+    },
+    "copy_unquarantine_cmd": {
+      "explorer": "Copy unquarantine command",
+      "lab": "Copy unquarantine command"
+    },
+    "mark_fixed": {
+      "explorer": "Mark as fixed",
+      "lab": "Mark as fixed"
+    },
+    "mark_back_in_service": {
+      "explorer": "Mark as back in service",
+      "lab": "Mark as back in service"
+    },
+    "no_defects": {
+      "explorer": "No defects on the bench",
+      "lab": "No defects"
+    },
+    "copy": {
+      "explorer": "Copy",
+      "lab": "Copy"
+    },
+    "running_smoothly": {
+      "explorer": "Running smoothly",
+      "lab": "Running smoothly"
+    },
+    "needs_attention": {
+      "explorer": "Needs attention",
+      "lab": "Needs attention"
+    },
+    "unstable": {
+      "explorer": "Unstable",
+      "lab": "Unstable"
+    },
+    "overall_status": {
+      "explorer": "Overall status",
+      "lab": "Overall status"
+    },
+    "diverged_runs": {
+      "explorer": "Diverged runs",
+      "lab": "Diverged runs"
+    },
+    "last_burst": {
+      "explorer": "Last burst",
+      "lab": "Last burst"
+    },
+    "no_burst_yet": {
+      "explorer": "No burst yet",
+      "lab": "No burst yet"
+    },
+    "paused": {
+      "explorer": "Paused",
+      "lab": "Paused"
+    },
+    "batch_summary": {
+      "explorer": "Batch summary",
+      "lab": "Batch summary"
+    },
+    "no_events": {
+      "explorer": "No events yet",
+      "lab": "No events yet"
+    },
+    "live_region": {
+      "explorer": "Live updates",
+      "lab": "Live region"
+    },
+    "no_field_reports": {
+      "explorer": "No field reports",
+      "lab": "No field reports"
+    },
+    "see_evidence": {
+      "explorer": "See evidence",
+      "lab": "See evidence"
+    },
+    "all_checks_passed": {
+      "explorer": "All stability checks passed",
+      "lab": "All checks passed"
+    },
+    "checks_failed": {
+      "explorer": "Some checks failed",
+      "lab": "Checks failed"
+    },
+    "value": {
+      "explorer": "Value",
+      "lab": "Value"
+    },
+    "no_lineage_data": {
+      "explorer": "No lineage data yet",
+      "lab": "No lineage data"
+    },
+    "phylogeny_table": {
+      "explorer": "Family tree table",
+      "lab": "Phylogeny table"
+    },
+    "genome_id": {
+      "explorer": "Recipe ID",
+      "lab": "Genome ID"
+    },
+    "tier": {
+      "explorer": "Change type",
+      "lab": "Tier"
+    },
+    "fitness": {
+      "explorer": "Fitness",
+      "lab": "Fitness"
+    },
+    "episode": {
+      "explorer": "Episode",
+      "lab": "Episode"
+    },
+    "parent": {
+      "explorer": "Parent",
+      "lab": "Parent"
+    },
+    "mutation_type": {
+      "explorer": "Mutation type",
+      "lab": "Mutation type"
+    },
+    "slope": {
+      "explorer": "Learning speed",
+      "lab": "Slope"
+    },
+    "current_episode": {
+      "explorer": "Current episode",
+      "lab": "Current episode"
+    },
+    "morphology_at_boundaries": {
+      "explorer": "Recipe changes only at sleep/wake boundaries",
+      "lab": "Morphology only at boundaries"
+    },
+    "no_episode_data": {
+      "explorer": "No episode data yet",
+      "lab": "No episode data"
+    },
+    "current": {
+      "explorer": "Current",
+      "lab": "Current"
     }
   }
 }

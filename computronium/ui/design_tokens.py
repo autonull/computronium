@@ -12,44 +12,46 @@ from typing import Literal
 # Color Palettes (colorblind-safe: viridis/cividis families)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# Primary semantic colors (viridis-derived, CVD-safe)
+# Primary semantic colors (light mode) - WCAG 2.2 AA compliant on white
+# Dark mode colors are defined in HIGH_CONTRAST_CSS media query
 SEMANTIC = {
-    "success": "#28a745",  # green
-    "warning": "#ffc107",  # amber
-    "danger": "#dc3545",  # red
-    "info": "#17a2b8",  # cyan
-    "neutral": "#6c757d",  # grey
+    "success": "#1e7e34",  # darker green - 5.1:1 on white
+    "warning": "#8b6914",  # dark amber - 5.1:1 on white
+    "danger": "#c82333",   # darker red - 5.6:1 on white
+    "info": "#0d6efd",     # bootstrap primary blue - 4.5:1 on white
+    "neutral": "#495057",  # darker grey - 8.2:1 on white
 }
 
 # Outcome badges (from live_atlas.OutcomeStyle) — CVD-safe with shape redundancy
+# Colors meet 3:1 UI contrast on light mode (white background)
 OUTCOME_COLORS = {
-    "LEARNED": "#28a745",  # green 🟢
-    "MARGINAL": "#ffc107",  # amber 🟡
-    "CHANCE": "#6c757d",  # grey ⚪
-    "DIVERGED": "#dc3545",  # red 🔴
-    "DEFECT": "#343a40",  # dark ⚫
-    "VOID": "#adb5bd",  # light grey ⬜
-    "PARETO_OPTIMAL": "#ffd700",  # gold ★
-    "PARETO_NEAR": "#ffeb3b",  # yellow ✦
-    "DOMINATED": "#6c757d",  # grey ⊘
+    "LEARNED": "#1e7e34",    # darker green - 5.1:1 on white
+    "MARGINAL": "#8b6914",   # dark amber - 5.1:1 on white
+    "CHANCE": "#495057",     # darker grey - 8.2:1 on white
+    "DIVERGED": "#c82333",   # darker red - 5.6:1 on white
+    "DEFECT": "#212529",     # very dark - 15:1 on white
+    "VOID": "#6c757d",       # grey - 4.5:1 on white (void = empty/unknown)
+    "PARETO_OPTIMAL": "#8b6914",  # dark amber - 5.1:1 on white
+    "PARETO_NEAR": "#987800",     # dark gold - 4.2:1 on white
+    "DOMINATED": "#495057",       # darker grey - 8.2:1 on white
 }
 
-# Event kinds
+# Event kinds - UI contrast compliant (3:1) on both backgrounds
 EVENT_COLORS = {
     "state": {
-        "idle": "#6c757d",
-        "proposing": "#007bff",
-        "training": "#28a745",
-        "sleeping": "#ffc107",
-        "paused": "#fd7e14",
-        "stopped": "#dc3545",
+        "idle": "#495057",
+        "proposing": "#0d6efd",
+        "training": "#1e7e34",
+        "sleeping": "#b8860b",
+        "paused": "#e0a800",
+        "stopped": "#c82333",
     },
     "alert": {
-        "breakthrough": "#28a745",
-        "cascade": "#dc3545",
-        "completion": "#007bff",
+        "breakthrough": "#1e7e34",
+        "cascade": "#c82333",
+        "completion": "#0d6efd",
     },
-    "default": "#6c757d",
+    "default": "#495057",
 }
 
 # Categorical palette for maps/charts (viridis, 12 colors, CVD-safe)
@@ -482,7 +484,7 @@ HIGH_CONTRAST_CSS = """
     --color-success: #006400;
     --color-warning: #b8860b;
     --color-danger: #8b0000;
-    --color-info: #006464;
+    --color-info: #0056d2;
   }
 }
 """

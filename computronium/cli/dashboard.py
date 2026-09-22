@@ -5,13 +5,13 @@ re-renders on change only. No execution, no ledger writes.
 
 Usage::
 
-    uv run comp dashboard --root artifacts/broad_map --port 8088
-    uv run comp dashboard --root artifacts/broad_map --log-path logs/continuous_500.log
+    uv run comp dashboard --root artifacts/broad_map --port 8088 [--ui-mode explorer|lab|auto] [--gamify on|off] [--ui-actions on|off] [--rebuild-ui-state]
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 POLL_SECONDS = 2.0
@@ -46,6 +46,30 @@ def main() -> int:
         action="store_true",
         help="do not open a browser tab (headless/server use)",
     )
+    # New flags per GAME.todo.md
+    parser.add_argument(
+        "--ui-mode",
+        choices=["explorer", "lab", "auto"],
+        default=os.environ.get("COMPUTRONIUM_UI_MODE", "auto"),
+        help="UI register: explorer (plain), lab (technical), auto (default)",
+    )
+    parser.add_argument(
+        "--gamify",
+        choices=["on", "off"],
+        default=os.environ.get("COMPUTRONIUM_GAMIFY", "on"),
+        help="Enable gamification layer (badges, quests, records)",
+    )
+    parser.add_argument(
+        "--ui-actions",
+        choices=["on", "off"],
+        default=os.environ.get("COMPUTRONIUM_UI_ACTIONS", "off"),
+        help="Enable UI actions (workshop, recipe editor)",
+    )
+    parser.add_argument(
+        "--rebuild-ui-state",
+        action="store_true",
+        help="Rebuild UI state from event log (sqlite sidecar)",
+    )
     args = parser.parse_args()
 
     from nicegui import ui
@@ -56,7 +80,16 @@ def main() -> int:
     # re-execution fails under a console-script entry point.
     @ui.page("/")
     def _dashboard_page() -> None:
-        build_dashboard(args.root, args.log_path, args.poll, args.daemon_url)
+        build_dashboard(
+            args.root,
+            args.log_path,
+            args.poll,
+            args.daemon_url,
+            ui_mode=args.ui_mode,
+            gamify=args.gamify == "on",
+            ui_actions=args.ui_actions == "on",
+            rebuild_state=args.rebuild_ui_state,
+        )
 
     ui.run(
         title="Computronium — Live Broad Map",
