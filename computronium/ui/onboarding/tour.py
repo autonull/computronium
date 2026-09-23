@@ -248,23 +248,25 @@ class GuidedTour(BasePanel):
                 completed = False
 
             if not completed:
-                with ui.card().classes("w-full").props("flat bordered"):
-                    with ui.row().classes("w-full items-center gap-4"):
-                        ui.icon(ICONS["map"]).classes("text-3xl text-primary")
-                        with ui.column().classes("flex-1"):
-                            ui.label("Welcome to Computronium!").classes("text-h5")
-                            ui.label(
-                                "Take a quick 3-step tour to learn the basics."
-                            ).classes("text-body text-grey")
-                        ui.button(
-                            "Start Tour",
-                            on_click=self.start,
-                            icon="play_arrow",
-                        ).props("color=primary")
-                        ui.button(
-                            "Skip",
-                            on_click=self.skip,
-                        ).props("flat").classes("text-grey")
+                with (
+                    ui.card().classes("w-full").props("flat bordered"),
+                    ui.row().classes("w-full items-center gap-4"),
+                ):
+                    ui.icon(ICONS["map"]).classes("text-3xl text-primary")
+                    with ui.column().classes("flex-1"):
+                        ui.label("Welcome to Computronium!").classes("text-h5")
+                        ui.label(
+                            "Take a quick 3-step tour to learn the basics."
+                        ).classes("text-body text-grey")
+                    ui.button(
+                        "Start Tour",
+                        on_click=self.start,
+                        icon="play_arrow",
+                    ).props("color=primary")
+                    ui.button(
+                        "Skip",
+                        on_click=self.skip,
+                    ).props("flat").classes("text-grey")
 
         return panel
 

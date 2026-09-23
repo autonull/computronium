@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from nicegui import ui
 
@@ -37,12 +38,12 @@ class LineageEdge:
 class LineageViewer(BasePanel):
     """Lineage Viewer: visualize Ω phylogeny from comp scientist phylogeny."""
 
-    TIER_COLORS = {
+    TIER_COLORS: ClassVar[dict[int, str]] = {
         1: "#1f77b4",  # structural - blue
         2: "#ff7f0e",  # algorithmic - orange
         3: "#2ca02c",  # meta - green
     }
-    TIER_LABELS = {
+    TIER_LABELS: ClassVar[dict[int, str]] = {
         1: "Structural",
         2: "Algorithmic",
         3: "Meta",
@@ -86,8 +87,8 @@ class LineageViewer(BasePanel):
             with ui.row().classes("w-full gap-4 flex-wrap"):
                 for tier in [1, 2, 3]:
                     with ui.row().classes("items-center gap-1"):
-                        ui.icon(ICONS["circle"]).classes(
-                            "text-sm", style=f"color: {self.TIER_COLORS[tier]}"
+                        ui.icon(ICONS["circle"]).classes("text-sm").style(
+                            f"color: {self.TIER_COLORS[tier]}"
                         )
                         ui.label(self.TIER_LABELS[tier]).classes("text-sm text-grey")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from nicegui import ui
 
@@ -25,7 +26,7 @@ class ConstitutionInvariant:
 class ConstitutionHealthPanel(BasePanel):
     """Constitution Health Panel: 6 invariants with plain + expert registers."""
 
-    INVARIANT_KEYS = [
+    INVARIANT_KEYS: ClassVar[list[str]] = [
         "causality_dag",
         "passivity",
         "lyapunov_bound",

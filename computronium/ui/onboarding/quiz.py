@@ -153,11 +153,13 @@ class ComfortQuiz(BasePanel):
                         color="primary",
                     )
                 else:
-                    ui.button(
+                    next_btn = ui.button(
                         "Next",
                         on_click=self._next_question,
                         color="primary",
-                    ).props("disable", disable=question.key not in self._answers)
+                    )
+                    if question.key not in self._answers:
+                        next_btn.props("disable")
 
                 ui.button(
                     "Skip quiz",
@@ -240,8 +242,9 @@ class ComfortQuiz(BasePanel):
                 completed = False
 
             if not completed:
-                with ui.card().classes("w-full").props("flat bordered"), ui.row().classes(
-                    "w-full items-center gap-4"
+                with (
+                    ui.card().classes("w-full").props("flat bordered"),
+                    ui.row().classes("w-full items-center gap-4"),
                 ):
                     ui.icon(ICONS["settings"]).classes("text-3xl text-primary")
                     with ui.column().classes("flex-1"):
@@ -266,8 +269,8 @@ class ComfortQuiz(BasePanel):
 
 
 def create_comfort_quiz(
-    on_complete: callable | None = None,
-    on_skip: callable | None = None,
+    on_complete: Callable[[], None] | None = None,
+    on_skip: Callable[[], None] | None = None,
 ) -> ComfortQuiz:
     """Create the comfort quiz instance."""
     return ComfortQuiz(on_complete=on_complete, on_skip=on_skip)

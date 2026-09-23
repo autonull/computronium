@@ -48,60 +48,193 @@ class AxisOption:
 
 # Axis option registries for DialComposer
 SUBSTRATE_OPTIONS: tuple[AxisOption, ...] = (
-    AxisOption("digital", "Digital", "Standard digital compute", "SubstrateConfig.digital"),
-    AxisOption("memristive", "Memristive", "Conductance with IR-drop", "SubstrateConfig.memristive"),
-    AxisOption("neuromorphic", "Neuromorphic", "Spike-based async", "SubstrateConfig.neuromorphic"),
-    AxisOption("optical", "Photonic", "Phase/amplitude optical", "SubstrateConfig.optical"),
-    AxisOption("quantum", "Quantum", "Unitary gate simulation", "SubstrateConfig.quantum"),
+    AxisOption(
+        "digital", "Digital", "Standard digital compute", "SubstrateConfig.digital"
+    ),
+    AxisOption(
+        "memristive",
+        "Memristive",
+        "Conductance with IR-drop",
+        "SubstrateConfig.memristive",
+    ),
+    AxisOption(
+        "neuromorphic",
+        "Neuromorphic",
+        "Spike-based async",
+        "SubstrateConfig.neuromorphic",
+    ),
+    AxisOption(
+        "optical", "Photonic", "Phase/amplitude optical", "SubstrateConfig.optical"
+    ),
+    AxisOption(
+        "quantum", "Quantum", "Unitary gate simulation", "SubstrateConfig.quantum"
+    ),
     AxisOption("sparse", "Sparse", "Structured sparsity", "SubstrateConfig.sparse"),
-    AxisOption("ternary", "Ternary", "Ternary weights {-α,0,+α}", "SubstrateConfig.ternary"),
+    AxisOption(
+        "ternary", "Ternary", "Ternary weights {-α,0,+α}", "SubstrateConfig.ternary"
+    ),
 )
 
 GEOMETRY_OPTIONS: tuple[AxisOption, ...] = (
-    AxisOption("feedforward", "Feedforward", "MLP/CNN (DAG)", "GeometryConfig.feedforward"),
-    AxisOption("recurrent", "Recurrent Attractor", "Hopfield/EqProp", "GeometryConfig.recurrent"),
+    AxisOption(
+        "feedforward", "Feedforward", "MLP/CNN (DAG)", "GeometryConfig.feedforward"
+    ),
+    AxisOption(
+        "recurrent",
+        "Recurrent Attractor",
+        "Hopfield/EqProp",
+        "GeometryConfig.recurrent",
+    ),
     AxisOption("tile_mesh", "Tile Mesh", "Modular TileNet", "GeometryConfig.tile_mesh"),
     AxisOption("graph", "Graph", "Arbitrary node-edge", "GeometryConfig.graph"),
-    AxisOption("spatial_lattice", "3D Neural Cube", "Spatial lattice", "GeometryConfig.spatial_lattice"),
+    AxisOption(
+        "spatial_lattice",
+        "3D Neural Cube",
+        "Spatial lattice",
+        "GeometryConfig.spatial_lattice",
+    ),
     AxisOption("ntm", "NTM", "External memory tape", "GeometryConfig.ntm"),
     AxisOption("nca", "NCA", "Neural cellular automaton", "GeometryConfig.nca"),
 )
 
 DYNAMICS_OPTIONS: tuple[AxisOption, ...] = (
-    AxisOption("energy_minimization", "Energy Minimization", "EqProp settling", "StateDynamicsConfig.energy_minimization"),
-    AxisOption("predictive_settling", "Predictive Settling", "Predictive Coding", "StateDynamicsConfig.predictive_settling"),
-    AxisOption("spike_integration", "Spike Integration", "LIF/Izhikevich", "StateDynamicsConfig.spike_integration"),
-    AxisOption("instantaneous", "Instantaneous Pass", "Single forward", "StateDynamicsConfig.instantaneous"),
-    AxisOption("diffusion", "Diffusion", "Continuous diffusion", "StateDynamicsConfig.diffusion"),
-    AxisOption("lazy", "Lazy (On-Demand)", "On-demand activation", "StateDynamicsConfig.lazy"),
+    AxisOption(
+        "energy_minimization",
+        "Energy Minimization",
+        "EqProp settling",
+        "StateDynamicsConfig.energy_minimization",
+    ),
+    AxisOption(
+        "predictive_settling",
+        "Predictive Settling",
+        "Predictive Coding",
+        "StateDynamicsConfig.predictive_settling",
+    ),
+    AxisOption(
+        "spike_integration",
+        "Spike Integration",
+        "LIF/Izhikevich",
+        "StateDynamicsConfig.spike_integration",
+    ),
+    AxisOption(
+        "instantaneous",
+        "Instantaneous Pass",
+        "Single forward",
+        "StateDynamicsConfig.instantaneous",
+    ),
+    AxisOption(
+        "diffusion",
+        "Diffusion",
+        "Continuous diffusion",
+        "StateDynamicsConfig.diffusion",
+    ),
+    AxisOption(
+        "lazy", "Lazy (On-Demand)", "On-demand activation", "StateDynamicsConfig.lazy"
+    ),
 )
 
 PLASTICITY_OPTIONS: tuple[AxisOption, ...] = (
     AxisOption("null", "Fixed Recipe", "No plasticity (5-D)", "PlasticityConfig.null"),
-    AxisOption("routing", "Routing", "State-dependent gating", "PlasticityConfig.routing"),
-    AxisOption("fast_weights", "Fast Weights", "Episode-local memory", "PlasticityConfig.fast_weights"),
-    AxisOption("substrate_coupled", "Substrate Coupled", "Physical plasticity", "PlasticityConfig.substrate_coupled"),
-    AxisOption("rule_state", "Rule State (Z3)", "Rule selection", "PlasticityConfig.rule_state"),
-    AxisOption("temporal_psi", "Temporal ψ", "Trace-decayed supervised", "PlasticityConfig.temporal_psi"),
-    AxisOption("conflict_adaptive", "Conflict Adaptive", "Self-switching trace decay", "PlasticityConfig.conflict_adaptive"),
+    AxisOption(
+        "routing", "Routing", "State-dependent gating", "PlasticityConfig.routing"
+    ),
+    AxisOption(
+        "fast_weights",
+        "Fast Weights",
+        "Episode-local memory",
+        "PlasticityConfig.fast_weights",
+    ),
+    AxisOption(
+        "substrate_coupled",
+        "Substrate Coupled",
+        "Physical plasticity",
+        "PlasticityConfig.substrate_coupled",
+    ),
+    AxisOption(
+        "rule_state", "Rule State (Z3)", "Rule selection", "PlasticityConfig.rule_state"
+    ),
+    AxisOption(
+        "temporal_psi",
+        "Temporal ψ",
+        "Trace-decayed supervised",
+        "PlasticityConfig.temporal_psi",
+    ),
+    AxisOption(
+        "conflict_adaptive",
+        "Conflict Adaptive",
+        "Self-switching trace decay",
+        "PlasticityConfig.conflict_adaptive",
+    ),
 )
 
 CREDIT_OPTIONS: tuple[AxisOption, ...] = (
-    AxisOption("thermodynamic_contrast", "Thermodynamic Contrast", "EqProp free/nudged", "CreditAssignmentConfig.thermodynamic_contrast"),
-    AxisOption("random_projections", "Random Projections", "FA/DFA fixed feedback", "CreditAssignmentConfig.random_projections"),
-    AxisOption("local_goodness", "Local Goodness", "FF/PEPITA layer-local", "CreditAssignmentConfig.local_goodness"),
-    AxisOption("temporal_trace", "Temporal Trace", "STDP spike timing", "CreditAssignmentConfig.temporal_trace"),
-    AxisOption("target_inversion", "Target Inversion", "Target Prop", "CreditAssignmentConfig.target_inversion"),
-    AxisOption("gradient", "Gradient", "Standard backprop", "CreditAssignmentConfig.gradient"),
-    AxisOption("homeostatic", "Homeostatic", "Autonomous Lipschitz", "CreditAssignmentConfig.homeostatic"),
+    AxisOption(
+        "thermodynamic_contrast",
+        "Thermodynamic Contrast",
+        "EqProp free/nudged",
+        "CreditAssignmentConfig.thermodynamic_contrast",
+    ),
+    AxisOption(
+        "random_projections",
+        "Random Projections",
+        "FA/DFA fixed feedback",
+        "CreditAssignmentConfig.random_projections",
+    ),
+    AxisOption(
+        "local_goodness",
+        "Local Goodness",
+        "FF/PEPITA layer-local",
+        "CreditAssignmentConfig.local_goodness",
+    ),
+    AxisOption(
+        "temporal_trace",
+        "Temporal Trace",
+        "STDP spike timing",
+        "CreditAssignmentConfig.temporal_trace",
+    ),
+    AxisOption(
+        "target_inversion",
+        "Target Inversion",
+        "Target Prop",
+        "CreditAssignmentConfig.target_inversion",
+    ),
+    AxisOption(
+        "gradient", "Gradient", "Standard backprop", "CreditAssignmentConfig.gradient"
+    ),
+    AxisOption(
+        "homeostatic",
+        "Homeostatic",
+        "Autonomous Lipschitz",
+        "CreditAssignmentConfig.homeostatic",
+    ),
 )
 
 UPDATE_OPTIONS: tuple[AxisOption, ...] = (
     AxisOption("euclidean", "Euclidean", "SGD/Adam", "ParameterUpdateConfig.euclidean"),
-    AxisOption("riemannian_orthogonal", "Riemannian Orthogonal", "Muon", "ParameterUpdateConfig.riemannian_orthogonal"),
-    AxisOption("spectral_constrained", "Spectral Constrained", "SpectralConstrainedUpdate", "ParameterUpdateConfig.spectral_constrained"),
-    AxisOption("natural_gradient", "Natural Gradient", "Fisher", "ParameterUpdateConfig.natural_gradient"),
-    AxisOption("elastic_consolidation", "Elastic Consolidation", "EWC", "ParameterUpdateConfig.elastic_consolidation"),
+    AxisOption(
+        "riemannian_orthogonal",
+        "Riemannian Orthogonal",
+        "Muon",
+        "ParameterUpdateConfig.riemannian_orthogonal",
+    ),
+    AxisOption(
+        "spectral_constrained",
+        "Spectral Constrained",
+        "SpectralConstrainedUpdate",
+        "ParameterUpdateConfig.spectral_constrained",
+    ),
+    AxisOption(
+        "natural_gradient",
+        "Natural Gradient",
+        "Fisher",
+        "ParameterUpdateConfig.natural_gradient",
+    ),
+    AxisOption(
+        "elastic_consolidation",
+        "Elastic Consolidation",
+        "EWC",
+        "ParameterUpdateConfig.elastic_consolidation",
+    ),
 )
 
 
@@ -117,23 +250,44 @@ _SUBSTRATE_FACTORIES: dict[str, Any] = {
 }
 
 _GEOMETRY_FACTORIES: dict[str, Any] = {
-    "feedforward": lambda: GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)),
-    "recurrent": lambda: GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(256,)),
+    "feedforward": lambda: GeometryConfig.feedforward(
+        input_dim=784, output_dim=10, hidden_dims=(256, 128)
+    ),
+    "recurrent": lambda: GeometryConfig.recurrent(
+        input_dim=784, output_dim=10, hidden_dims=(256,)
+    ),
     "tile_mesh": lambda: GeometryConfig.tile_mesh(
-        input_dim=784, output_dim=10, num_layers=4, neurons_per_tile=64, tiles_per_layer=4
+        input_dim=784,
+        output_dim=10,
+        num_layers=4,
+        neurons_per_tile=64,
+        tiles_per_layer=4,
     ),
     "graph": lambda: GeometryConfig.graph(
-        input_dim=784, output_dim=10, edge_index=[[i, i + 1] for i in range(9)], hidden_dims=(256,)
+        input_dim=784,
+        output_dim=10,
+        edge_index=[[i, i + 1] for i in range(9)],
+        hidden_dims=(256,),
     ),
-    "spatial_lattice": lambda: GeometryConfig.spatial_lattice(input_dim=784, output_dim=10, lattice_dims=(8, 8, 8)),
-    "ntm": lambda: GeometryConfig.ntm(input_dim=784, output_dim=10, hidden=32, mem_slots=16, mem_width=16),
+    "spatial_lattice": lambda: GeometryConfig.spatial_lattice(
+        input_dim=784, output_dim=10, lattice_dims=(8, 8, 8)
+    ),
+    "ntm": lambda: GeometryConfig.ntm(
+        input_dim=784, output_dim=10, hidden=32, mem_slots=16, mem_width=16
+    ),
     "nca": lambda: GeometryConfig.nca(channels=32, hidden=32, grid_hw=(16, 16)),
 }
 
 _DYNAMICS_FACTORIES: dict[str, Any] = {
-    "energy_minimization": lambda: StateDynamicsConfig.energy_minimization(max_steps=20, beta=0.5),
-    "predictive_settling": lambda: StateDynamicsConfig.predictive_settling(max_steps=20, beta=0.5),
-    "spike_integration": lambda: StateDynamicsConfig.spike_integration(max_steps=50, beta=0.5),
+    "energy_minimization": lambda: StateDynamicsConfig.energy_minimization(
+        max_steps=20, beta=0.5
+    ),
+    "predictive_settling": lambda: StateDynamicsConfig.predictive_settling(
+        max_steps=20, beta=0.5
+    ),
+    "spike_integration": lambda: StateDynamicsConfig.spike_integration(
+        max_steps=50, beta=0.5
+    ),
     "instantaneous": StateDynamicsConfig.instantaneous,  # noqa: PLW0108
     "diffusion": lambda: StateDynamicsConfig.diffusion(max_steps=100, beta=0.5),
     "lazy": lambda: StateDynamicsConfig.lazy(max_steps=10),
@@ -142,15 +296,21 @@ _DYNAMICS_FACTORIES: dict[str, Any] = {
 _PLASTICITY_FACTORIES: dict[str, Any] = {
     "null": PlasticityConfig.null,  # noqa: PLW0108
     "routing": lambda: PlasticityConfig.routing(gate_dim=64),
-    "fast_weights": lambda: PlasticityConfig.fast_weights(fast_weight_dim=512, decay=0.9, learning_rate=0.1),
+    "fast_weights": lambda: PlasticityConfig.fast_weights(
+        fast_weight_dim=512, decay=0.9, learning_rate=0.1
+    ),
     "substrate_coupled": PlasticityConfig.substrate_coupled,  # noqa: PLW0108
     "rule_state": lambda: PlasticityConfig.rule_state(num_operators=4),
     "temporal_psi": lambda: PlasticityConfig.temporal_psi(trace_decay=0.9),
-    "conflict_adaptive": lambda: PlasticityConfig.conflict_adaptive(conflict_threshold=0.65),
+    "conflict_adaptive": lambda: PlasticityConfig.conflict_adaptive(
+        conflict_threshold=0.65
+    ),
 }
 
 _CREDIT_FACTORIES: dict[str, Any] = {
-    "thermodynamic_contrast": lambda: CreditAssignmentConfig.thermodynamic_contrast(beta=0.5),
+    "thermodynamic_contrast": lambda: CreditAssignmentConfig.thermodynamic_contrast(
+        beta=0.5
+    ),
     "random_projections": lambda: CreditAssignmentConfig.random_projections(beta=0.5),
     "local_goodness": lambda: CreditAssignmentConfig.local_goodness(beta=0.5),
     "temporal_trace": lambda: CreditAssignmentConfig.temporal_trace(beta=0.5),
@@ -161,10 +321,16 @@ _CREDIT_FACTORIES: dict[str, Any] = {
 
 _UPDATE_FACTORIES: dict[str, Any] = {
     "euclidean": lambda: ParameterUpdateConfig.euclidean(step_size=0.01),
-    "riemannian_orthogonal": lambda: ParameterUpdateConfig.riemannian_orthogonal(step_size=0.01),
-    "spectral_constrained": lambda: ParameterUpdateConfig.spectral_constrained(step_size=0.01),
+    "riemannian_orthogonal": lambda: ParameterUpdateConfig.riemannian_orthogonal(
+        step_size=0.01
+    ),
+    "spectral_constrained": lambda: ParameterUpdateConfig.spectral_constrained(
+        step_size=0.01
+    ),
     "natural_gradient": lambda: ParameterUpdateConfig.natural_gradient(step_size=0.01),
-    "elastic_consolidation": lambda: ParameterUpdateConfig.elastic_consolidation(step_size=0.01),
+    "elastic_consolidation": lambda: ParameterUpdateConfig.elastic_consolidation(
+        step_size=0.01
+    ),
 }
 
 
@@ -216,12 +382,21 @@ class DialComposer:
         """Render a single axis selector."""
         with ui.column().classes("gap-1"):
             ui.label(f"{icon} {axis.title()}").classes("text-bold text-sm")
-            select = ui.select(
-                options={opt.key: f"{opt.label} — {opt.description}" for opt in options},
-                value=self._selections[axis],
-                on_change=lambda e, a=axis: self._on_change(a, e.value),
-            ).props("dense outlined").classes("w-full")
-            select.tooltip("\n".join(f"{opt.key}: {opt.description}" for opt in options))
+            select = (
+                ui
+                .select(
+                    options={
+                        opt.key: f"{opt.label} — {opt.description}" for opt in options
+                    },
+                    value=self._selections[axis],
+                    on_change=lambda e, a=axis: self._on_change(a, e.value),
+                )
+                .props("dense outlined")
+                .classes("w-full")
+            )
+            select.tooltip(
+                "\n".join(f"{opt.key}: {opt.description}" for opt in options)
+            )
 
     def _on_change(self, axis: str, value: str) -> None:
         """Handle axis selection change."""
@@ -237,7 +412,9 @@ class DialComposer:
             self._status_label.classes(remove="text-negative", add="text-positive")
             self._detail_container.clear()
             with self._detail_container:
-                ui.label("All cross-axis constraints satisfied").classes("text-positive text-sm")
+                ui.label("All cross-axis constraints satisfied").classes(
+                    "text-positive text-sm"
+                )
         except ValueError as e:
             self._status_label.set_text(tr("invalid_combination"))
             self._status_label.classes(remove="text-positive", add="text-negative")
@@ -312,17 +489,25 @@ class RecipeCardPanel:
 
         with ui.card().classes("w-64"):
             ui.label(f"{family} × {update}").classes("text-bold")
-            ui.badge(recipe.status.replace("_", " ").title(), color=color).classes("mb-2")
+            ui.badge(recipe.status.replace("_", " ").title(), color=color).classes(
+                "mb-2"
+            )
 
             if recipe.parity is not None:
                 ui.label(f"BP Parity: {recipe.parity:.1%}").classes("text-sm")
             if recipe.delta is not None:
                 delta_color = "text-positive" if recipe.delta > 0 else "text-negative"
-                ui.label(f"Δ vs BP: {recipe.delta:+.2f}").classes(f"text-sm {delta_color}")
+                ui.label(f"Δ vs BP: {recipe.delta:+.2f}").classes(
+                    f"text-sm {delta_color}"
+                )
             if recipe.mechanism:
-                ui.label(f"Mechanism: {recipe.mechanism}").classes("text-caption text-grey")
+                ui.label(f"Mechanism: {recipe.mechanism}").classes(
+                    "text-caption text-grey"
+                )
             if recipe.geometries:
-                ui.label(f"Geometries: {', '.join(recipe.geometries)}").classes("text-caption text-grey")
+                ui.label(f"Geometries: {', '.join(recipe.geometries)}").classes(
+                    "text-caption text-grey"
+                )
             if recipe.edge:
                 ui.label(f"Edge: {recipe.edge}").classes("text-caption text-grey")
 
@@ -335,10 +520,15 @@ class P2PToggle:
 
     def render(self) -> ui.element:
         """Render the P2P toggle."""
-        with ui.card().classes("w-full") as card, ui.row().classes("w-full items-center justify-between"):
+        with (
+            ui.card().classes("w-full") as card,
+            ui.row().classes("w-full items-center justify-between"),
+        ):
             with ui.column().classes("gap-1"):
                 ui.label(tr("donate_compute")).classes("text-h6")
-                ui.label("Run a P2P worker to contribute compute to the network").classes("text-body text-grey")
+                ui.label(
+                    "Run a P2P worker to contribute compute to the network"
+                ).classes("text-body text-grey")
 
             ui.switch(
                 "Run worker",

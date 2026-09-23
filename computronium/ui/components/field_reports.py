@@ -51,7 +51,7 @@ class FieldReports(BasePanel):
         self.reports = reports or []
         self.max_reports = max_reports
         self._tray_container: ui.element = ui.column().classes("w-full")
-        self._badge_label: ui.label | None = None
+        self._badge_label: ui.badge | None = None
 
     def render(self) -> ui.element:
         """Render the Field Reports panel."""
@@ -85,25 +85,25 @@ class FieldReports(BasePanel):
                 return
 
             for report in self.reports[-self.max_reports :]:
-                with ui.card().classes("w-full").props("flat"):
-                    with ui.row().classes("w-full items-start gap-3"):
-                        # Unread indicator
-                        if report.unread:
-                            ui.icon(ICONS["circle"]).classes(
-                                "text-primary text-sm mt-1"
-                            )
+                with (
+                    ui.card().classes("w-full").props("flat"),
+                    ui.row().classes("w-full items-start gap-3"),
+                ):
+                    # Unread indicator
+                    if report.unread:
+                        ui.icon(ICONS["circle"]).classes("text-primary text-sm mt-1")
 
-                        # Icon
-                        ui.label(report.icon).classes("text-lg")
+                    # Icon
+                    ui.label(report.icon).classes("text-lg")
 
-                        # Sentence + deep link
-                        with ui.column().classes("flex-1 gap-1"):
-                            ui.label(report.sentence).classes("text-body")
-                            if report.deep_link:
-                                ui.link(
-                                    self.tr("see_evidence"),
-                                    report.deep_link,
-                                ).props("target=_blank").classes("text-primary text-sm")
+                    # Sentence + deep link
+                    with ui.column().classes("flex-1 gap-1"):
+                        ui.label(report.sentence).classes("text-body")
+                        if report.deep_link:
+                            ui.link(
+                                self.tr("see_evidence"),
+                                report.deep_link,
+                            ).props("target=_blank").classes("text-primary text-sm")
 
     def add_report(self, report: FieldReport) -> None:
         """Add a field report."""

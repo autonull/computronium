@@ -101,36 +101,36 @@ class PreviewShelf(BasePanel):
 
     def _render_entry(self, entry: PreviewEntry) -> None:
         """Render a single preview entry."""
-        with ui.card().classes("w-full").props("flat bordered"):
-            with ui.row().classes("w-full items-start gap-4"):
-                ui.icon(ICONS["preview"]).classes("text-3xl text-primary shrink-0")
+        with (
+            ui.card().classes("w-full").props("flat bordered"),
+            ui.row().classes("w-full items-start gap-4"),
+        ):
+            ui.icon(ICONS["preview"]).classes("text-3xl text-primary shrink-0")
 
-                with ui.column().classes("flex-1 gap-2"):
-                    # Title + status
-                    with ui.row().classes("items-center gap-2 flex-wrap"):
-                        ui.label(entry.title).classes("text-h5")
-                        ui.badge(entry.status, color="warning").props("outline")
+            with ui.column().classes("flex-1 gap-2"):
+                # Title + status
+                with ui.row().classes("items-center gap-2 flex-wrap"):
+                    ui.label(entry.title).classes("text-h5")
+                    ui.badge(entry.status, color="warning").props("outline")
 
-                    # Proposal
-                    with ui.expansion("What this proposes", value=True).classes(
-                        "w-full"
-                    ):
-                        ui.label(entry.proposal).classes("text-body")
+                # Proposal
+                with ui.expansion("What this proposes", value=True).classes("w-full"):
+                    ui.label(entry.proposal).classes("text-body")
 
-                    # Falsification plan (always visible in explorer)
-                    with ui.expansion("How we'd prove this wrong", value=True).classes(
-                        "w-full"
-                    ):
-                        ui.label(entry.falsification_plan).classes(
-                            "text-body text-negative"
-                        )
+                # Falsification plan (always visible in explorer)
+                with ui.expansion("How we'd prove this wrong", value=True).classes(
+                    "w-full"
+                ):
+                    ui.label(entry.falsification_plan).classes(
+                        "text-body text-negative"
+                    )
 
-                    # Docs link
-                    if entry.docs_url:
-                        ui.separator().classes("my-2")
-                        ui.link("Read the full specification", entry.docs_url).props(
-                            "target=_blank"
-                        ).classes("text-primary")
+                # Docs link
+                if entry.docs_url:
+                    ui.separator().classes("my-2")
+                    ui.link("Read the full specification", entry.docs_url).props(
+                        "target=_blank"
+                    ).classes("text-primary")
 
     def _refresh(self) -> None:
         """Refresh on mode change."""

@@ -188,14 +188,14 @@ class VetoLog(BasePanel):
         with ui.row().classes("w-full gap-4 flex-wrap"):
             for reason, count in reason_counts.most_common():
                 label = REASON_LABELS.get(reason, reason)
-                with ui.card().classes("flex-1 min-w-[200px]").props("flat bordered"):
-                    with ui.row().classes("w-full items-center gap-2 justify-center"):
-                        ui.icon(ICONS["veto"]).classes("text-2xl text-negative")
-                        with ui.column().classes("items-center"):
-                            ui.label(str(count)).classes(
-                                "text-h4 text-bold text-negative"
-                            )
-                            ui.label(label).classes("text-caption text-center")
+                with (
+                    ui.card().classes("flex-1 min-w-[200px]").props("flat bordered"),
+                    ui.row().classes("w-full items-center gap-2 justify-center"),
+                ):
+                    ui.icon(ICONS["veto"]).classes("text-2xl text-negative")
+                    with ui.column().classes("items-center"):
+                        ui.label(str(count)).classes("text-h4 text-bold text-negative")
+                        ui.label(label).classes("text-caption text-center")
 
     def _format_time(self, timestamp: float) -> str:
         import time

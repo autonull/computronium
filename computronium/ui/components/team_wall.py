@@ -170,17 +170,19 @@ class TeamWall(BasePanel):
             return
 
         # Team header
-        with ui.card().classes("w-full").props("flat bordered"):
-            with ui.row().classes("w-full items-center gap-4"):
-                ui.icon(ICONS["badge"]).classes("text-3xl text-primary")
-                with ui.column().classes("flex-1"):
-                    ui.label(self.team.team_name).classes("text-h5")
-                    ui.label(f"Team ID: {self.team.team_id}").classes(
-                        "text-caption text-grey"
-                    )
-                    ui.label(f"{len(self.team.members)} members").classes(
-                        "text-caption text-grey"
-                    )
+        with (
+            ui.card().classes("w-full").props("flat bordered"),
+            ui.row().classes("w-full items-center gap-4"),
+        ):
+            ui.icon(ICONS["badge"]).classes("text-3xl text-primary")
+            with ui.column().classes("flex-1"):
+                ui.label(self.team.team_name).classes("text-h5")
+                ui.label(f"Team ID: {self.team.team_id}").classes(
+                    "text-caption text-grey"
+                )
+                ui.label(f"{len(self.team.members)} members").classes(
+                    "text-caption text-grey"
+                )
 
         # Cooperative progress metrics
         ui.label("Cooperative Progress").classes("text-h6")

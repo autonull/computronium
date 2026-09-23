@@ -110,7 +110,7 @@ class RepairBench(BasePanel):
                     ui.button(
                         self.tr("copy"),
                         icon=ICONS["copy"],
-                        on_click=lambda c=cmd: ui.clipboard.write(c),
+                        on_click=lambda _=None, c=cmd: ui.clipboard.write(c),
                     ).props("flat dense size=sm").tooltip(
                         self.tr("copy_unquarantine_cmd")
                     )
@@ -119,12 +119,12 @@ class RepairBench(BasePanel):
                 if is_open:
                     ui.button(
                         self.tr("mark_fixed"),
-                        on_click=lambda r=row: self._update_status(r, "fixed"),
+                        on_click=lambda _=None, r=row: self._update_status(r, "fixed"),
                     ).props("flat dense size=sm color=warning")
                 elif is_fixed:
                     ui.button(
                         self.tr("mark_back_in_service"),
-                        on_click=lambda r=row: self._update_status(
+                        on_click=lambda _=None, r=row: self._update_status(
                             r, "back_in_service"
                         ),
                     ).props("flat dense size=sm color=positive")

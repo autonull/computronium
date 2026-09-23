@@ -104,7 +104,11 @@ class RegionNaming(BasePanel):
                 ).props("flat")
 
                 def _save() -> None:
-                    name = self._name_input.value.strip() if self._name_input else ""
+                    name = (
+                        self._name_input.value.strip()
+                        if self._name_input and self._name_input.value
+                        else ""
+                    )
                     if name:
                         self._save_name(region_id, name)
                     dialog.close()
@@ -182,41 +186,44 @@ class RegionNaming(BasePanel):
 
             with ui.row().classes("w-full gap-4 flex-wrap"):
                 for region in self.regions:
-                    region_id = str(region.get("region_id", region.get("id", "")))
-                    if not region_id:
-                        continue
-
-                    existing_name = self._names.get(region_id)
-                    display_name = (
-                        existing_name.name
-                        if existing_name and not existing_name.reverted
-                        else "Unnamed"
-                    )
-                    is_named = existing_name is not None and not existing_name.reverted
-
-                    with (
-                        ui.card().classes("flex-1 min-w-[250px]").props("flat bordered")
-                    ):
-                        with ui.row().classes("w-full items-center gap-2"):
-                            ui.icon(ICONS["region"]).classes("text-xl text-primary")
-                            ui.label(display_name).classes(
-                                "text-bold flex-1"
-                                + (" text-grey" if not is_named else "")
-                            )
-                            if is_named:
-                                ui.badge(
-                                    f"v{existing_name.version}", color="primary"
-                                ).props("outline").classes("text-xs")
-
-                        ui.separator()
-
-                        with ui.row().classes("w-full justify-end gap-2"):
-                            ui.button(
-                                "Rename" if is_named else "Name",
-                                on_click=lambda rid=region_id: self._propose_name(rid),
-                            ).props("flat dense color=primary").classes("text-sm")
+                    self._render_region_card(region)
 
         return panel
+
+    def _render_region_card(self, region: dict[str, object]) -> None:
+        """Render a single region card."""
+        region_id = str(region.get("region_id", region.get("id", "")))
+        if not region_id:
+            return
+
+        existing_name = self._names.get(region_id)
+        display_name = (
+            existing_name.name
+            if existing_name and not existing_name.reverted
+            else "Unnamed"
+        )
+        is_named = existing_name is not None and not existing_name.reverted
+
+        with (
+            ui.card().classes("flex-1 min-w-[250px]").props("flat bordered"),
+            ui.row().classes("w-full items-center gap-2"),
+        ):
+            ui.icon(ICONS["region"]).classes("text-xl text-primary")
+            ui.label(display_name).classes(
+                "text-bold flex-1" + (" text-grey" if not is_named else "")
+            )
+            if is_named and existing_name:
+                ui.badge(f"v{existing_name.version}", color="primary").props(
+                    "outline"
+                ).classes("text-xs")
+
+        ui.separator()
+
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button(
+                "Rename" if is_named else "Name",
+                on_click=lambda _=None, rid=region_id: self._propose_name(rid),
+            ).props("flat dense color=primary").classes("text-sm")
 
     def _refresh(self) -> None:
         """Refresh on mode change."""

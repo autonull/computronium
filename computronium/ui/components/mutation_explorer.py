@@ -133,54 +133,61 @@ class MutationExplorer(BasePanel):
             .classes("w-full")
             .props(
                 f"flat bordered style=border-left: 4px solid var(--color-{border_color})"
-            )
+            ),
+            ui.row().classes("w-full items-start gap-4"),
         ):
-            with ui.row().classes("w-full items-start gap-4"):
-                # Mutation type icon
-                tier_icon = (
-                    ICONS["mutation"] if proposal.tier == 1 else ICONS["constitution"]
-                )
-                ui.icon(tier_icon).classes("text-2xl text-primary shrink-0")
+            self._render_proposal_header(proposal, all_passed)
+            self._render_proposal_body(proposal, all_passed)
 
-                with ui.column().classes("flex-1 gap-2"):
-                    # Header
-                    with ui.row().classes("w-full items-center gap-2 flex-wrap"):
-                        ui.label(proposal.mutation_type).classes("text-bold")
-                        ui.badge(
-                            f"Tier {proposal.tier}",
-                            color="primary" if proposal.tier == 1 else "secondary",
-                        ).props("outline")
-                        ui.badge(
-                            "✓ All Pass" if all_passed else "⚠ Some Fail",
-                            color="positive" if all_passed else "warning",
-                        ).props("outline")
+    def _render_proposal_header(
+        self, proposal: MutationProposal, all_passed: bool
+    ) -> None:
+        """Render proposal header with icon and badges."""
+        tier_icon = ICONS["mutation"] if proposal.tier == 1 else ICONS["constitution"]
+        ui.icon(tier_icon).classes("text-2xl text-primary shrink-0")
 
-                    ui.label(proposal.description).classes("text-body text-grey")
+        with ui.column().classes("flex-1 gap-2"):
+            with ui.row().classes("w-full items-center gap-2 flex-wrap"):
+                ui.label(proposal.mutation_type).classes("text-bold")
+                ui.badge(
+                    f"Tier {proposal.tier}",
+                    color="primary" if proposal.tier == 1 else "secondary",
+                ).props("outline")
+                ui.badge(
+                    "✓ All Pass" if all_passed else "⚠ Some Fail",
+                    color="positive" if all_passed else "warning",
+                ).props("outline")
 
-                    # Constitution checks
-                    ui.label("Constitution Pre-Check:").classes(
-                        "text-bold text-sm mt-2"
-                    )
-                    with ui.row().classes("w-full gap-2 flex-wrap"):
-                        for check_name, passed in proposal.constitution_checks.items():
-                            check_icon = ICONS["success"] if passed else ICONS["error"]
-                            check_color = "positive" if passed else "negative"
-                            with ui.row().classes("items-center gap-1"):
-                                ui.icon(check_icon).classes(
-                                    f"text-{check_color} text-sm"
-                                )
-                                ui.label(check_name.replace("_", " ").title()).classes(
-                                    f"text-caption text-{check_color}"
-                                )
+            ui.label(proposal.description).classes("text-body text-grey")
 
-                    # Estimates
-                    with ui.row().classes("w-full gap-4 mt-2"):
-                        ui.label(
-                            f"Est. Slope: {proposal.estimated_slope:+.4f}"
-                        ).classes("font-mono text-sm")
-                        ui.label(
-                            f"Est. Δ Resources: {proposal.estimated_resource_delta:+.0f}"
-                        ).classes("font-mono text-sm")
+    def _render_proposal_body(
+        self, proposal: MutationProposal, all_passed: bool
+    ) -> None:
+        """Render proposal constitution checks and estimates."""
+        # Constitution checks
+        ui.label("Constitution Pre-Check:").classes("text-bold text-sm mt-2")
+        with ui.row().classes("w-full gap-2 flex-wrap"):
+            for check_name, passed in proposal.constitution_checks.items():
+                self._render_check_item(check_name, passed)
+
+        # Estimates
+        with ui.row().classes("w-full gap-4 mt-2"):
+            ui.label(f"Est. Slope: {proposal.estimated_slope:+.4f}").classes(
+                "font-mono text-sm"
+            )
+            ui.label(
+                f"Est. Δ Resources: {proposal.estimated_resource_delta:+.0f}"
+            ).classes("font-mono text-sm")
+
+    def _render_check_item(self, check_name: str, passed: bool) -> None:
+        """Render a single constitution check item."""
+        check_icon = ICONS["success"] if passed else ICONS["error"]
+        check_color = "positive" if passed else "negative"
+        with ui.row().classes("items-center gap-1"):
+            ui.icon(check_icon).classes(f"text-{check_color} text-sm")
+            ui.label(check_name.replace("_", " ").title()).classes(
+                f"text-caption text-{check_color}"
+            )
 
     def _stat_card(self, label: str, value: Any, icon: str) -> ui.element:
         with ui.card().classes("flex-1 min-w-[150px]").props("flat bordered") as card:

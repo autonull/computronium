@@ -124,15 +124,17 @@ class GenomeHealthTracker(BasePanel):
                 else "positive"
             )
 
-            with ui.card().classes("w-full mb-4").props("flat bordered"):
-                with ui.row().classes("w-full items-center gap-4"):
-                    ui.icon(ICONS["mutation"]).classes("text-2xl text-primary")
-                    with ui.column().classes("flex-1"):
-                        ui.label("Oncological Cancer Risk").classes("text-h6")
-                        ui.label(
-                            f"GenomeSizePenalty λ={self.genome_size_penalty_lambda}: "
-                            f"|Ω|×λ = {penalty:.3f} (fitness={latest.fitness:.3f})"
-                        ).classes("text-body")
+            with (
+                ui.card().classes("w-full mb-4").props("flat bordered"),
+                ui.row().classes("w-full items-center gap-4"),
+            ):
+                ui.icon(ICONS["mutation"]).classes("text-2xl text-primary")
+                with ui.column().classes("flex-1"):
+                    ui.label("Oncological Cancer Risk").classes("text-h6")
+                    ui.label(
+                        f"GenomeSizePenalty λ={self.genome_size_penalty_lambda}: "
+                        f"|Ω|×λ = {penalty:.3f} (fitness={latest.fitness:.3f})"
+                    ).classes("text-body")
                     ui.badge(risk_level, color=risk_color).classes("text-caption")
 
             # Fitness vs Genome Size chart (using echart)

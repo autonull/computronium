@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
+from typing import ClassVar
 
 from nicegui import ui
 
@@ -27,14 +29,14 @@ class EpisodeEvent:
 class EpisodeTimeline(BasePanel):
     """Episode Timeline: visualize sleep/wake boundaries and consolidation events."""
 
-    EVENT_ICONS = {
+    EVENT_ICONS: ClassVar[dict[str, str]] = {
         "sleep": "🌙",
         "wake": "🌅",
         "consolidation": "🔄",
         "genome_change": "🧬",
         "probe_batch": "🔬",
     }
-    EVENT_LABELS = {
+    EVENT_LABELS: ClassVar[dict[str, str]] = {
         "sleep": "Sleep",
         "wake": "Wake",
         "consolidation": "Consolidation",
@@ -105,55 +107,56 @@ class EpisodeTimeline(BasePanel):
                 return
 
             # Group by episode
-            from collections import defaultdict
-
-            by_episode = defaultdict(list)
-            for event in self.events:
-                by_episode[event.episode].append(event)
+            by_episode = self._group_by_episode()
 
             for episode in sorted(by_episode.keys(), reverse=True):
                 ep_events = by_episode[episode]
                 is_current = episode == self.current_episode
 
                 with ui.card().classes("w-full").props("flat bordered"):
-                    # Episode header
-                    with ui.row().classes("w-full items-center justify-between"):
-                        with ui.row().classes("items-center gap-2"):
-                            if is_current:
-                                ui.badge(self.tr("current"), color="primary").classes(
-                                    "text-xs"
-                                )
-                            ui.label(f"{self.tr('episode')} {episode}").classes(
-                                "text-bold"
-                            )
+                    self._render_episode_header(ep_events, is_current)
+                    self._render_episode_events(ep_events)
 
-                        # Episode duration
-                        if len(ep_events) >= 2:
-                            duration = ep_events[-1].timestamp - ep_events[0].timestamp
-                            ui.label(f"{duration:.1f}s").classes(
-                                "text-sm text-grey font-mono"
-                            )
+    def _group_by_episode(self) -> defaultdict[int, list[EpisodeEvent]]:
+        """Group events by episode number."""
+        by_episode: defaultdict[int, list[EpisodeEvent]] = defaultdict(list)
+        for event in self.events:
+            by_episode[event.episode].append(event)
+        return by_episode
 
-                    # Events in this episode
-                    for event in ep_events:
-                        icon = self.EVENT_ICONS.get(event.event_type, "📋")
-                        label = self.EVENT_LABELS.get(
-                            event.event_type, event.event_type
-                        )
-                        time_str = self._format_time(event.timestamp)
+    def _render_episode_header(
+        self, ep_events: list[EpisodeEvent], is_current: bool
+    ) -> None:
+        """Render episode header with badge and duration."""
+        with ui.row().classes("w-full items-center justify-between"):
+            with ui.row().classes("items-center gap-2"):
+                if is_current:
+                    ui.badge(self.tr("current"), color="primary").classes("text-xs")
+                ui.label(f"{self.tr('episode')} {ep_events[0].episode}").classes(
+                    "text-bold"
+                )
 
-                        with ui.row().classes("w-full items-center gap-2 pl-4 py-1"):
-                            ui.label(time_str).classes(
-                                "font-mono text-xs text-grey w-16"
-                            )
-                            ui.label(icon).classes("text-base")
-                            ui.label(label).classes("text-sm text-grey")
-                            ui.label(event.detail).classes("text-sm font-mono flex-1")
+            if len(ep_events) >= 2:
+                duration = ep_events[-1].timestamp - ep_events[0].timestamp
+                ui.label(f"{duration:.1f}s").classes("text-sm text-grey font-mono")
 
-                            if event.genome_before and event.genome_after:
-                                ui.label(
-                                    f"{event.genome_before[:16]} → {event.genome_after[:16]}"
-                                ).classes("text-xs text-primary font-mono")
+    def _render_episode_events(self, ep_events: list[EpisodeEvent]) -> None:
+        """Render events within an episode."""
+        for event in ep_events:
+            icon = self.EVENT_ICONS.get(event.event_type, "📋")
+            label = self.EVENT_LABELS.get(event.event_type, event.event_type)
+            time_str = self._format_time(event.timestamp)
+
+            with ui.row().classes("w-full items-center gap-2 pl-4 py-1"):
+                ui.label(time_str).classes("font-mono text-xs text-grey w-16")
+                ui.label(icon).classes("text-base")
+                ui.label(label).classes("text-sm text-grey")
+                ui.label(event.detail).classes("text-sm font-mono flex-1")
+
+                if event.genome_before and event.genome_after:
+                    ui.label(
+                        f"{event.genome_before[:16]} → {event.genome_after[:16]}"
+                    ).classes("text-xs text-primary font-mono")
 
     def _format_time(self, timestamp: float) -> str:
         """Format timestamp as HH:MM:SS."""

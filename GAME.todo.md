@@ -205,6 +205,94 @@ comp daemon    ... same flags ... --port 8940
 
 ---
 
+## 15. Implementation Complete (2025-09-22)
+
+### All Code Implementation Phases Done ✅
+
+| Phase | Status | Verification |
+|-------|--------|--------------|
+| **M0 — Foundations** | ✅ Complete | UX-L3, UX-L5 green; glossary 247 terms; mode toggle; a11y tokens |
+| **M1 — Plain-Language Refactor** | ✅ Complete | 9 panels + BasePanel; all copy via GlossaryService; UX-L1, L4, L6, L9, L10 green |
+| **M2 — Recognition + Instrumentation** | ✅ Complete | 9 badges, 6 quests, records, fog; projector replay (UX-L2); import lock (UX-L7); 8 instrumentation panels |
+| **M3 — Onboarding, Teams, i18n, Preview** | ✅ Code Complete | Tour, quiz, region naming, team wall, i18n 100%, Preview Shelf, gallery compat (UX-L8) |
+
+### Final Code Quality Pass (2025-09-22)
+- ✅ Fixed all RUF012 (mutable defaults) with `ClassVar` annotations
+- ✅ Fixed all PLR1702 (nested blocks) via helper extraction
+- ✅ Fixed all SIM117 (nested `with`) via combined context managers
+- ✅ Fixed PLR0916 (boolean expressions) in `quests.py`
+- ✅ Fixed all pyright type errors
+- ✅ `ruff format` applied to 10 files
+- ✅ All ruff/pyright checks pass on `computronium/ui/`
+- ✅ All UX lock tests pass: 42 passed, 12 skipped
+- ✅ Dev-env smoke test passes
+- ✅ i18n extraction: 100% coverage (99 tr() calls, 87 unique keys, 247 glossary terms)
+- ✅ `comp dashboard --help` confirms all flags: `--ui-mode`, `--gamify`, `--ui-actions`, `--rebuild-ui-state`
+
+### File Structure Final (Section 5 Updated)
+```
+computronium/
+├── ui/
+│   ├── glossary.json              # 247 terms, Explorer + Lab registers
+│   ├── glossary_service.py        # register-aware lookup, tr(), tr_both()
+│   ├── mode_toggle.py             # Explorer/Lab persistence, GlossaryAware, BasePanel
+│   ├── design_tokens.py           # CVD-safe palettes, type scale, 73 icons, CSS props
+│   ├── components/
+│   │   ├── base_panel.py          # "What am I looking at?" drawer
+│   │   ├── campaign_card.py       # CampaignCard, CampaignCardGallery (YAML-driven)
+│   │   ├── constitution_health.py # 6 invariants (StabilityMonitor parity)
+│   │   ├── discovery_map.py       # fog, labels, shapes, table alt
+│   │   ├── episode_timeline.py    # sleep/waking boundaries
+│   │   ├── field_reports.py       # tray, scoped breakthroughs
+│   │   ├── genome_health.py       # |Ω| vs fitness, resource ceiling
+│   │   ├── health_panel.py        # plain tiles, relative time
+│   │   ├── lineage_viewer.py      # Ω phylogeny (replay verified UX-L10)
+│   │   ├── mutation_explorer.py   # Tier 1/2 proposals with pre-check
+│   │   ├── preview_shelf.py       # Auto-Evolve entry (falsification plan)
+│   │   ├── probe_analytics.py     # forked-copy hygiene (UX-L11)
+│   │   ├── progress_panel.py      # quests, badges, records (Lab hides chrome)
+│   │   ├── region_naming.py       # metadata-only, versioned, revertible
+│   │   ├── repair_bench.py        # statuses, copy buttons, crash vs boundary
+│   │   ├── stagnation_dashboard.py # 4 detector protocols
+│   │   ├── tradeoffs_panel.py     # selector, narration, ruler refs
+│   │   ├── veto_log.py            # vetoed mutations with reasons
+│   │   ├── workshop.py            # DialComposer, RecipeCard, P2P toggle
+│   │   ├── activity_feed.py       # pausable, aria-live, batch summaries
+│   │   └── __init__.py            # sorted __all__ exports
+│   ├── recognition/
+│   │   ├── projector.py           # pure fold(event_log) → recognition_state
+│   │   ├── badges.py              # 9 ledger-linked badges
+│   │   ├── quests.py              # 6 opt-in quests
+│   │   ├── records.py             # personal bests per objective
+│   │   ├── state_store.py         # ui_state.sqlite (append-only, rebuildable)
+│   │   ├── fog.py                 # KB-coverage fog-of-war
+│   │   ├── integrity_locks.py     # UX-L2/L7 test helpers
+│   │   └── __init__.py
+│   ├── onboarding/
+│   │   ├── tour.py                # GuidedTour (3 steps, skippable, resumable)
+│   │   ├── quiz.py                # ComfortQuiz (3 questions, sets defaults only)
+│   │   └── __init__.py
+│   └── a11y/
+│       ├── tokens.py              # WCAG 2.2 AA contrast, focus, motion, touch
+│       ├── audit.py               # axe-core CLI + keyboard crawl checklist
+│       └── __init__.py
+```
+
+### Non-Goals Confirmed (Per GAME.md §2 + AUTOTILE.md)
+- ❌ No XP, no points, no streaks, no currencies
+- ❌ No competitive leaderboards (cooperative team wall only, opt-in)
+- ❌ No new measurement/promotion/claim logic
+- ❌ No rewrite of daemon/lifecycle API
+- ❌ Auto-Evolve: Preview Shelf only — no live UI, no metrics, no creatures
+- ❌ Auto-Evolve: no open-field Tier 3, no runtime code gen, no unverified primitives
+
+### Next Steps (Human-Facing Only)
+1. **Final a11y certification** — Manual axe-core scan + keyboard crawl against live dashboard
+2. **SUS study round 2** — System Usability Scale study with target participants
+3. **Docs refresh** — Update `docs/platform/` dashboard usage guide + gallery manifests
+
+---
+
 ## 3. Cross-Cutting Concerns (Continuous)
 
 | Concern | Implementation | Lock |

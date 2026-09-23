@@ -108,6 +108,7 @@ class CampaignCard(BasePanel):
                 with ui.row().classes("w-full flex-wrap gap-2"):
                     for label, command in self._manifest.entry_points.items():
                         if self._clickable:
+
                             def make_handler(cmd: str):
                                 return lambda _: self._run_entry_point(cmd)
 
@@ -133,11 +134,19 @@ class CampaignCard(BasePanel):
 
     def _get_title(self) -> str:
         """Get title in current register."""
-        return self.tr(self._manifest.title_explorer) if self.is_explorer else self._manifest.title_lab
+        return (
+            self.tr(self._manifest.title_explorer)
+            if self.is_explorer
+            else self._manifest.title_lab
+        )
 
     def _get_description(self) -> str:
         """Get description in current register."""
-        return self.tr(self._manifest.description_explorer) if self.is_explorer else self._manifest.description_lab
+        return (
+            self.tr(self._manifest.description_explorer)
+            if self.is_explorer
+            else self._manifest.description_lab
+        )
 
     def _render_status_badge(self) -> None:
         """Render status badge with register-aware label."""
@@ -148,8 +157,14 @@ class CampaignCard(BasePanel):
             "completed": ("blue", "completed"),
             "archived": ("grey", "archived"),
         }
-        color, default_label = status_colors.get(self._manifest.status, ("grey", "unknown"))
-        label = self.tr(f"status_{default_label}") if self.is_explorer else self._manifest.status.title()
+        color, default_label = status_colors.get(
+            self._manifest.status, ("grey", "unknown")
+        )
+        label = (
+            self.tr(f"status_{default_label}")
+            if self.is_explorer
+            else self._manifest.status.title()
+        )
         ui.badge(label, color=color).props("outline")
 
     def _run_entry_point(self, command: str) -> None:
@@ -190,7 +205,9 @@ class CampaignCardGallery:
         return container
 
 
-def create_campaign_card(manifest_path: Path | str, *, clickable: bool = True) -> CampaignCard:
+def create_campaign_card(
+    manifest_path: Path | str, *, clickable: bool = True
+) -> CampaignCard:
     """Factory function for CampaignCard."""
     return CampaignCard(manifest_path, clickable=clickable)
 
