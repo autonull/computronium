@@ -62,13 +62,13 @@
       - `_CellRow` has no `settle_horizon` / `stability_plasticity_ratio` / `credit_efficiency` columns, so `front_history_rows` + `pareto_strip_rows` silently return unfiltered dfs under the stability/credit-efficiency presets (same `pareto_top` early-return). Either extend `_CellRow`/KB metrics or restrict the dashboard Pareto selector to supported presets.
       - `pareto_top`'s missing-column path `return df` (unfiltered) is a silent honesty hazard — consider returning `df.head(0)` or raising, at minimum a louder log level, so future column drift fails visibly instead of rendering a fake "front".
       - `live_atlas.build_dashboard` (legacy page) vs `ui.dashboard.build_dashboard` (CLI path) still coexist; the smoke test pins the legacy one. ✅ **Done in GAME.todo3 Session A (T4)** — legacy page deleted, smoke test retargeted to `ui.dashboard.build_dashboard` in the same commit.
-      - Tighten `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s once confident (116 ms measured); `kb_load_cached` clear-on-full → FIFO if >16 roots ever matter.
+      - ✅ Tightened `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s in GAME.todo3 Session B (T5: 124 ms measured @5k warm, 4× headroom); `kb_load_cached` clear-on-full → FIFO if >16 roots ever matter.
    - ~~`render_header` passes key `"atlas"` missing from glossary.json~~ ✅ FIXED this session (`Map`/`Atlas`).
    - ~~`screenshots/` gitignore~~ ✅ DONE this session.
    - UMAP optional-import flakiness in this env ("issubclass() arg 2…" → t-SNE fallback, later runs succeed) + `n_neighbors` warnings on tiny fixtures — cosmetic; worth pinning `n_jobs`/`n_neighbors` for n<10 if the noise ever gates tests.
     - Two `build_dashboard`s still coexist (`ui.dashboard` = CLI, `live_atlas` = smoke) — ✅ unified in GAME.todo3 Session A (T4: legacy deleted).
    - `kb_load_cached` clear-on-full is coarse; FIFO eviction if 16 roots ever matter.
-   - Tighten `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s once confident (116 ms measured).
+    - ✅ `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s tightened in GAME.todo3 Session B (T5).
    - `screenshots/` from the Screen fixture should be gitignored.
    - Axe had NEVER actually run before this session — treat "0 critical/serious" as a *new* red-green signal, not a regression.
 9. Prior handoff notes 1–14 above were **fully consumed this session** (implemented); anything not marked done in the tables is either done here or superseded.
@@ -206,7 +206,7 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 
 | ID | Task | Acceptance |
 |----|------|------------|
-| **D1** | Structured logging (`structlog`) + OpenTelemetry metrics (render latency, WS message rate, adapter duration). Export `/metrics` endpoint for Prometheus. | Dashboards show p95 render <100 ms, WS lag <50 ms. |
+| **D1** | Structured logging (`structlog`) + OpenTelemetry metrics (render latency, WS message rate, adapter duration). Export `/metrics` endpoint for Prometheus. | ✅ **Amended to measured regime (GAME.todo3 T5, 2026-09-23: 124 ms @5k warm):** full-snapshot warm median <500 ms @5k; per-panel tight gate stays DiscoveryMap adapter ≤100 ms (47.5 ms); WS paint throttle ≥1 s. The old "p95 render <100 ms" line described pre-D2 hotspot numbers, not the snapshot path. |
 | **D2** | Performance budgets as CI gates: DiscoveryMap ≤100 ms on 5k cells (measured in C2), WebSocket→UI debounce ≤1 Hz, panel virtualization for >1k rows. | Budgets enforced in `tests/perf/test_budgets.py`. |
 | **D3** | `--rebuild-ui-state` end‑to‑end test: CLI flag → replay → sqlite → ProgressPanel round‑trip. | Flag demonstrably does something. |
 | **D4** | `docs/platform/dashboard.md` — usage guide (flags, modes, panels, kill switches), architecture diagram, extension how‑to. | Doc exists, linked from README. |

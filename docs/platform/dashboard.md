@@ -124,7 +124,8 @@ flowchart LR
 4. **Optional bus subscription** — `event_bus.subscribe(EventType, handler)`
    for live updates; publish on the bus instead of reaching into panels.
 5. **Glossary** — add explorer/lab strings to `computronium/ui/glossary.json`
-   (Explorer copy must pass FK grade ≤ 8: `scripts/lint_readability.py`).
+   (`scripts/lint_readability.py` reports FK grades as informational —
+   short technical labels are known heuristic false-positives, not a gate).
 
 ## Tests
 

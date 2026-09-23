@@ -527,7 +527,7 @@ class BroadMappingCampaign(AutoScientistCampaign):
     ) -> dict[str, object]:
         try:
             return super()._execute_proposal(proposal, dry_run)
-        except Exception as e:  # noqa: BLE001 (base class contracts broad failure)
+        except Exception as e:  # ruff: ignore[blind-except] (base class contracts broad failure)
             if not dry_run and self.defects_path is not None:
                 self._record_defect(proposal, e)
             raise

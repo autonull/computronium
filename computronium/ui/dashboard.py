@@ -66,6 +66,8 @@ from computronium.visualization.live_atlas import (
 )
 
 if TYPE_CHECKING:
+    from plotly.graph_objects import Figure
+
     from computronium.autoscientist.objectives import ObjectiveSpec
     from computronium.visualization.live_atlas import DashboardSnapshot
 
@@ -782,13 +784,21 @@ class DashboardApp:
 
         try:
             result = await run.io_bound(_atlas_data, self.root, self.cache)
-            figure, _, _ = result  # type: ignore[misc]
-            if self.current_panel == "discovery_map":
-                self._panel_data.pop("discovery_map", None)
-                panel = self._get_panel("discovery_map")
-                self._push_data(panel, None, atlas_figure=figure)
+            if result is None:
+                return
+            self._apply_atlas_result(result)
         except Exception as e:
             logger.warning("Atlas load failed: %s", e)
+
+    def _apply_atlas_result(
+        self, result: tuple[Figure | None, str | None, list[str]]
+    ) -> None:
+        """Push a loaded atlas figure into the DiscoveryMap panel."""
+        figure, _, _ = result  # type: ignore[misc]
+        if self.current_panel == "discovery_map":
+            self._panel_data.pop("discovery_map", None)
+            panel = self._get_panel("discovery_map")
+            self._push_data(panel, None, atlas_figure=figure)
 
     def _config_signature_of(self) -> tuple[tuple[int, int], ...]:
         """(mtime_ns, size) stamps for campaign.yaml + heartbeat.json (X5)."""
@@ -862,20 +872,22 @@ class DashboardApp:
             try:
                 async with websockets.connect(ws_url) as ws:
                     async for message in ws:
-                        record = json.loads(message)
-                        loss = record.get("train_loss", record.get("loss"))
-                        if isinstance(loss, int | float):
-                            self.loss_history.append(float(loss))
-                            if len(self.loss_history) > 60:
-                                self.loss_history.pop(0)
-                            # Publish telemetry event
-                            event_bus.publish(
-                                WebSocketEvent(topic="telemetry", payload=record)
-                            )
+                        self._record_telemetry(json.loads(message))
             except OSError:
                 pass
 
         return _consume()
+
+    def _record_telemetry(self, record: dict[str, Any]) -> None:
+        """Append one telemetry record to the loss history + bus."""
+        loss = record.get("train_loss", record.get("loss"))
+        if not isinstance(loss, int | float):
+            return
+        self.loss_history.append(float(loss))
+        if len(self.loss_history) > 60:
+            self.loss_history.pop(0)
+        # Publish telemetry event
+        event_bus.publish(WebSocketEvent(topic="telemetry", payload=record))
 
     def _events_consumer(self) -> Any:
         """Events WebSocket consumer."""

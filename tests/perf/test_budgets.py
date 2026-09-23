@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 N_CELLS = 5000
 ADAPTER_BUDGET_S = 0.100  # DiscoveryMap adapter, warm, median-of-3 @5k
-SNAPSHOT_BUDGET_S = 3.0  # render_snapshot (no atlas), warm, median-of-3 @5k
+SNAPSHOT_BUDGET_S = 0.5  # render_snapshot (no atlas), warm, median-of-3 @5k
 
 _DYNAMICS = (
     "energy_minimization",

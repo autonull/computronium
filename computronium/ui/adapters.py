@@ -625,7 +625,12 @@ class WorkshopData:
 
 
 def adapt_workshop_panel(snapshot: DashboardSnapshot, root: Path) -> WorkshopData:
-    """Adapt snapshot to WorkshopPanel data."""
+    """Adapt snapshot to WorkshopPanel data.
+
+    Intentionally empty: probe batches, stagnation snapshots, genome
+    points, mutation proposals, and veto entries would come from the
+    Auto-Evolve event log, which no producer writes yet.
+    """
     return WorkshopData(
         probe_batches=[],
         stagnation_snapshots=[],
@@ -780,7 +785,11 @@ class ProbeAnalyticsData:
 def adapt_probe_analytics(
     snapshot: DashboardSnapshot, root: Path
 ) -> ProbeAnalyticsData:
-    """Adapt snapshot to ProbeAnalytics data."""
+    """Adapt snapshot to ProbeAnalytics data.
+
+    Intentionally empty: probe batches would come from the Auto-Evolve
+    event log (probe-batch records), which no producer writes yet.
+    """
     return ProbeAnalyticsData(probes=[], metrics_history=[])
 
 
@@ -820,7 +829,12 @@ class GenomeHealthData:
 
 
 def adapt_genome_health(snapshot: DashboardSnapshot, root: Path) -> GenomeHealthData:
-    """Adapt snapshot to GenomeHealthTracker data."""
+    """Adapt snapshot to GenomeHealthTracker data.
+
+    Intentionally empty: genome fitness history would come from the
+    Auto-Evolve event log (per-generation records), which no producer
+    writes yet.
+    """
     return GenomeHealthData(history=[])
 
 
@@ -839,7 +853,11 @@ class MutationExplorerData:
 def adapt_mutation_explorer(
     snapshot: DashboardSnapshot, root: Path
 ) -> MutationExplorerData:
-    """Adapt snapshot to MutationExplorer data."""
+    """Adapt snapshot to MutationExplorer data.
+
+    Intentionally empty: mutation proposals would come from the
+    Auto-Evolve event log, which no producer writes yet.
+    """
     return MutationExplorerData(proposals=[])
 
 
@@ -856,7 +874,11 @@ class VetoLogData:
 
 
 def adapt_veto_log(snapshot: DashboardSnapshot, root: Path) -> VetoLogData:
-    """Adapt snapshot to VetoLog data."""
+    """Adapt snapshot to VetoLog data.
+
+    Intentionally empty: veto entries would come from the Auto-Evolve
+    event log (veto events), which no producer writes yet.
+    """
     return VetoLogData(entries=[])
 
 

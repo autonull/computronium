@@ -932,7 +932,7 @@ def _atlas_data(
     """Islands figure + layout note, never raising (bad artifacts become notes)."""
     try:
         return (*_load_atlas(root, cache), [])
-    except Exception as error:  # noqa: BLE001 (dashboard must survive bad artifacts)
+    except Exception as error:  # ruff: ignore[blind-except] (dashboard must survive bad artifacts)
         return None, None, [f"atlas: {error}"]
 
 
@@ -1010,19 +1010,16 @@ def _toast_for_alert(event: DashboardEvent) -> None:
     alert_kind = event.payload.get("alert_kind", "?")
     title = event.payload.get("title", alert_kind)
     body = event.payload.get("body", "")
+    text = f"{title} — {body}" if body else str(title)
+    timeout_ms = TOAST_DURATION_S * 1000
 
-    if alert_kind == "breakthrough":
-        ui.notify(
-            f"★ {title}", message=body, type="positive", timeout=TOAST_DURATION_S * 1000
-        )
-    elif alert_kind == "cascade":
-        ui.notify(
-            f"⚠️ {title}", message=body, type="negative", timeout=TOAST_DURATION_S * 1000
-        )
-    elif alert_kind == "completion":
-        ui.notify(
-            f"🏁 {title}", message=body, type="info", timeout=TOAST_DURATION_S * 1000
-        )
+    match alert_kind:
+        case "breakthrough":
+            ui.notify(f"★ {text}", type="positive", timeout=timeout_ms)
+        case "cascade":
+            ui.notify(f"⚠️ {text}", type="negative", timeout=timeout_ms)
+        case "completion":
+            ui.notify(f"🏁 {text}", type="info", timeout=timeout_ms)
 
 
 def _objectives_from_heartbeat(root: Path) -> tuple[ObjectiveSpec, ...]:
