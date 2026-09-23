@@ -1,12 +1,16 @@
 # GAME.todo2.md — Remaining Work: Full Integration & Usability (TODO-UX2 "Summit")
 
-**Status:** In progress — Phase A + **X1–X5** + Phase B code complete; Phase C: **C1/C2/C3/C4/C5/C7 done (C4 axe 0 critical/serious in both registers)**, **C6 green** (static marker-redundancy + behavioral grayscale 6.10 > 5.0 floor); **D1–D4 code complete (D2 budgets still green)**, D5 gallery-compat green + figure-lock verdict recorded (pre-existing environmental drift, deliberately not re-pinned).
+**Status:** In progress — Phase A + **X1–X5** + Phase B code complete; Phase C: **C1/C2/C3/C4/C5/C7 done (C4 axe 0 critical/serious in both registers)**, **C6 green** (static marker-redundancy + behavioral grayscale 6.10 > 5.0 floor); **D1–D4 code complete (D2 budgets still green)**, D5 gallery-compat green + figure-lock verdict recorded (pre-existing environmental drift, deliberately not re-pinned). **2026-09-23: front-history objective-column log spam fixed** (`walltime`→`walltime_s` + `param_count` from `param_budget`; 0 spam on default/3-obj/full-cost presets).
 **Scope:** `computronium/ui/dashboard.py`, `computronium/visualization/live_atlas.py`, UI test automation, extensibility layer
 **Predecessor:** GAME.todo.md (M0–M3 code complete; this plan closes the integration gap and lays foundation for ambitious evolution)
 **Verification posture:** All new locks at L4 (property/sampled numerical) per repo taxonomy.
 **Test philosophy (user directive 2026-09-23):** "Don't make overly brittle tests. We need agile flexible development." → no pixel-baseline screenshot locks; behavioral/property checks with generous tolerances only.
 
 ## Progress Log
+
+**Done (2026-09-23: front-history objective alignment):**
+- **`front_history_rows` objective-column spam ✅ FIXED** (`live_atlas.py`): the `pareto_top` df used column `"walltime"` but `DEFAULT_OBJECTIVES` wants `"walltime_s"` → `pareto_top` logged `"Objective column walltime_s not in DataFrame; skipping"` and returned the unfiltered df on every `render_snapshot` (5 cutpoints/render). Renamed to `"walltime_s"` + added `"param_count"` from `_CellRow.param_budget` (covers the accuracy+walltime+params preset; flops/memory_mb were already present so full-cost is clean too). Verified: 0 spam on default / 3-obj / full-cost presets, `test_dashboard_smoke -k "landscape or snapshot_render"` 2 passed. Note: `_CellRow` still lacks `settle_horizon`/`stability_plasticity_ratio`/`credit_efficiency` fields — presets using those still early-return unfiltered (same pre-existing `pareto_top` behavior, no crash).
+- **Verification (this session):** dev-env smoke OK; `ruff format` clean; `ruff check` 2 findings + `pyright` 4 errors on `live_atlas.py` all verified identical on HEAD via `git stash` (Register C hygiene, not this round); targeted smoke 2 passed (21.7 s); no full-suite run per energy directive.
 
 **Done (checkpoint: C4 green + C6 green + D5 verdict):**
 - **C4 ✅ axe 0 critical/serious in BOTH registers** (explorer + lab), teardown clean:
@@ -53,7 +57,12 @@
 6. **NiceGUI Screen mechanics (learned the hard way):** register `@ui.page` **inside the test** (the plugin's `nicegui_reset_globals` wipes routes before each test); `main_file=""` ini is required; driver implicit wait is 4 s — use the `_wait_for_page_source` poller (30 s) for atlas-dependent text; session-scoped shared Chrome; teardown auto-fails the test on console SEVERE/ERROR and saves `screenshots/<pid>/<test>.failed.png`.
 7. **Cache gotcha:** `kb_load_cached` key must stay namespaced per loader family (`("cells", task)` / `("measured", task)`) — a shared key returns the wrong type.
 8. **Opportunities found this session (not blocking):**
-   - `front_history_rows` builds a df with column `walltime` but DEFAULT objectives want `walltime_s` → `pareto_top` logs "Objective column walltime_s not in DataFrame; skipping" **on every `render_snapshot`** (5×/render). Align the column name (or rename the objective there) — cheap win, removes log spam + makes front-history actually objective-filtered. STILL OPEN.
+    - ~~`front_history_rows` builds a df with column `walltime` but DEFAULT objectives want `walltime_s` → `pareto_top` logs "Objective column walltime_s not in DataFrame; skipping" **on every `render_snapshot`** (5×/render). Align the column name (or rename the objective there) — cheap win, removes log spam + makes front-history actually objective-filtered. STILL OPEN.~~ ✅ FIXED 2026-09-23 (`walltime_s` + `param_count` from `param_budget`; 0 spam on default/3-obj/full-cost presets).
+    - **New opportunities (2026-09-23 triage — none blocking, all small):**
+      - `_CellRow` has no `settle_horizon` / `stability_plasticity_ratio` / `credit_efficiency` columns, so `front_history_rows` + `pareto_strip_rows` silently return unfiltered dfs under the stability/credit-efficiency presets (same `pareto_top` early-return). Either extend `_CellRow`/KB metrics or restrict the dashboard Pareto selector to supported presets.
+      - `pareto_top`'s missing-column path `return df` (unfiltered) is a silent honesty hazard — consider returning `df.head(0)` or raising, at minimum a louder log level, so future column drift fails visibly instead of rendering a fake "front".
+      - `live_atlas.build_dashboard` (legacy page) vs `ui.dashboard.build_dashboard` (CLI path) still coexist; the smoke test pins the legacy one. Unify by making the legacy a thin deprecated alias — but that re-baselines `test_build_dashboard_headless`, so do it with the test update in one commit.
+      - Tighten `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s once confident (116 ms measured); `kb_load_cached` clear-on-full → FIFO if >16 roots ever matter.
    - ~~`render_header` passes key `"atlas"` missing from glossary.json~~ ✅ FIXED this session (`Map`/`Atlas`).
    - ~~`screenshots/` gitignore~~ ✅ DONE this session.
    - UMAP optional-import flakiness in this env ("issubclass() arg 2…" → t-SNE fallback, later runs succeed) + `n_neighbors` warnings on tiny fixtures — cosmetic; worth pinning `n_jobs`/`n_neighbors` for n<10 if the noise ever gates tests.

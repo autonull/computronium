@@ -666,7 +666,8 @@ def front_history_rows(
             {
                 "key": row.key,
                 "accuracy": row.accuracy,
-                "walltime": row.walltime,
+                "walltime_s": row.walltime,
+                "param_count": float(getattr(row, "param_budget", 0)),
                 "bp_deficit": getattr(row, "bp_deficit", 0.0),
                 "flops": getattr(row, "flops", 0.0),
                 "memory_mb": getattr(row, "memory_mb", 0.0),
