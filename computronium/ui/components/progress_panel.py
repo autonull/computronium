@@ -268,7 +268,7 @@ class ProgressPanel(BasePanel):
                 break
         self._render_quests()
 
-    def update_data(self, *, data: ProgressData | None = None) -> None:
+    def update_data(self, data: ProgressData | None = None) -> None:
         """Update progress data."""
         if data is not None:
             self.data = data

@@ -91,7 +91,7 @@ class FieldReports(BasePanel):
                 ):
                     # Unread indicator
                     if report.unread:
-                        ui.icon(ICONS["circle"]).classes("text-primary text-sm mt-1")
+                        ui.icon(ICONS["info"]).classes("text-primary text-sm mt-1")
 
                     # Icon
                     ui.label(report.icon).classes("text-lg")

@@ -7,13 +7,29 @@ DashboardApp builds nav and panel map from registry.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from nicegui import ui
+
     from computronium.ui.data_adapters import DataAdapter
-    from computronium.ui.mode_toggle import BasePanel
+
+
+type PanelFactory = Callable[..., PanelLike]
+
+
+class PanelLike(Protocol):
+    """Structural surface every registered panel must satisfy.
+
+    ``update_data`` is duck-typed (data-driven panels override it with typed
+    keyword arguments, so it can't be part of the structural contract).
+    """
+
+    def render(self) -> ui.element:
+        """Render the panel."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +39,7 @@ class PanelSpec:
     key: str
     label_key: str
     icon: str
-    factory: Callable[..., BasePanel]
+    factory: PanelFactory
     visible_predicate: Callable[[dict[str, Any]], bool] = field(default=lambda _: True)
     order: int = 0
     adapter: DataAdapter | None = field(default=None, repr=False)
@@ -41,32 +57,32 @@ class PanelRegistry:
         key: str,
         label_key: str,
         icon: str,
-        factory: Callable[..., BasePanel],
+        factory: PanelFactory,
         *,
         visible_predicate: Callable[[dict[str, Any]], bool] | None = None,
         order: int | None = None,
         adapter: DataAdapter | None = None,
-    ) -> Callable[..., BasePanel]:
-        """Register a panel factory.
-
-        Usage:
-            @panel_registry.register("my_panel", "my_panel", "icon", MyPanel)
-            class MyPanel(BasePanel): ...
-        """
-        if key in self._specs:
-            raise ValueError(f"Panel already registered: {key}")
-
+    ) -> PanelFactory:
+        """Register a panel factory; re-registration updates the existing spec
+        in place (preserving its order unless overridden)."""
         spec = PanelSpec(
             key=key,
             label_key=label_key,
             icon=icon,
             factory=factory,
             visible_predicate=visible_predicate or (lambda _: True),
-            order=order if order is not None else self._order_counter,
+            order=(
+                order
+                if order is not None
+                else self._specs[key].order
+                if key in self._specs
+                else self._order_counter
+            ),
             adapter=adapter,
         )
+        if key not in self._specs:
+            self._order_counter += 1
         self._specs[key] = spec
-        self._order_counter += 1
         return factory
 
     def get(self, key: str) -> PanelSpec | None:
@@ -99,7 +115,7 @@ def register_panel(
     visible_predicate: Callable[[dict[str, Any]], bool] | None = None,
     order: int | None = None,
     adapter: DataAdapter | None = None,
-) -> Callable[[type[BasePanel]], type[BasePanel]]:
+) -> Callable[[type[PanelLike]], type[PanelLike]]:
     """Class decorator to register a panel.
 
     Usage:
@@ -107,7 +123,7 @@ def register_panel(
         class MyPanel(BasePanel): ...
     """
 
-    def decorator(cls: type[BasePanel]) -> type[BasePanel]:
+    def decorator(cls: type[PanelLike]) -> type[PanelLike]:
         panel_registry.register(
             key=key,
             label_key=label_key,

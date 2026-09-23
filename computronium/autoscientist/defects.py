@@ -18,7 +18,7 @@ import logging
 import re
 import time
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,7 +75,15 @@ def read_defects(path: Path) -> list[DefectRecord]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        rows.append(DefectRecord(**json.loads(line)))
+        try:
+            payload: dict[str, Any] = json.loads(line)
+        except json.JSONDecodeError:
+            logger.warning("Skipping malformed defect line in %s", path)
+            continue
+        if not isinstance(payload, dict):
+            logger.warning("Skipping non-object defect line in %s", path)
+            continue
+        rows.append(DefectRecord(**payload))
     return rows
 
 

@@ -87,7 +87,7 @@ class LineageViewer(BasePanel):
             with ui.row().classes("w-full gap-4 flex-wrap"):
                 for tier in [1, 2, 3]:
                     with ui.row().classes("items-center gap-1"):
-                        ui.icon(ICONS["circle"]).classes("text-sm").style(
+                        ui.icon(ICONS["info"]).classes("text-sm").style(
                             f"color: {self.TIER_COLORS[tier]}"
                         )
                         ui.label(self.TIER_LABELS[tier]).classes("text-sm text-grey")
@@ -179,11 +179,15 @@ class LineageViewer(BasePanel):
 
     def update_data(
         self,
+        data: object | None = None,
         *,
         nodes: list[LineageNode] | None = None,
         edges: list[LineageEdge] | None = None,
     ) -> None:
         """Update lineage data."""
+        if nodes is None and data is not None:
+            nodes = list(data.nodes)  # type: ignore[attr-defined]
+            edges = list(data.edges)  # type: ignore[attr-defined]
         if nodes is not None:
             self.nodes = nodes
         if edges is not None:

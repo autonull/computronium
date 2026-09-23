@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import numpy as np
 import pandas as pd
@@ -146,11 +146,17 @@ def load_voids(voids_path: Path) -> pd.DataFrame:
     """Structural voids: coordinates the dry-run gate rejected."""
     if not voids_path.exists():
         return pd.DataFrame()
-    rows = [
-        json.loads(line)
-        for line in voids_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows: list[dict[str, Any]] = []
+    for line in voids_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            logger.warning("Skipping malformed void line in %s", voids_path)
+            continue
+        if isinstance(payload, dict):
+            rows.append(payload)
     df = pd.DataFrame(rows)
     logger.info("Loaded %d structural voids", len(df))
     return df

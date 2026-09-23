@@ -12,7 +12,7 @@ import contextlib
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,21 +69,21 @@ class WebSocketEvents(Event):
     events: list[dict[str, Any]]
 
 
-type EventHandler = Callable[[Event], Any]
-type AsyncEventHandler = Callable[[Event], Any]  # Returns awaitable
+type EventHandler[E: Event] = Callable[[E], Any]
+type AsyncEventHandler[E: Event] = Callable[[E], Any]  # Returns awaitable
 
 
 class EventBus:
     """Lightweight publish/subscribe event bus for dashboard events.
 
-    Uses asyncio for async handlers. Sync handlers are run in thread pool.
+    Handlers are keyed by exact event type at publish time. Internal storage
+    is deliberately loose (``object``) because ``EventHandler`` is contravariant
+    in its argument; the type is recovered at the dispatch boundary.
     """
 
     def __init__(self) -> None:
-        self._handlers: dict[type[Event], list[EventHandler]] = defaultdict(list)
-        self._async_handlers: dict[type[Event], list[AsyncEventHandler]] = defaultdict(
-            list
-        )
+        self._handlers: dict[type[Event], list[object]] = defaultdict(list)
+        self._async_handlers: dict[type[Event], list[object]] = defaultdict(list)
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def _get_loop(self) -> asyncio.AbstractEventLoop:
@@ -95,10 +95,10 @@ class EventBus:
             asyncio.set_event_loop(loop)
             return loop
 
-    def subscribe(
+    def subscribe[E: Event](
         self,
-        event_type: type[Event],
-        handler: EventHandler,
+        event_type: type[E],
+        handler: EventHandler[E],
     ) -> Callable[[], None]:
         """Subscribe to an event type. Returns unsubscribe function."""
         self._handlers[event_type].append(handler)
@@ -108,10 +108,10 @@ class EventBus:
 
         return unsubscribe
 
-    def subscribe_async(
+    def subscribe_async[E: Event](
         self,
-        event_type: type[Event],
-        handler: AsyncEventHandler,
+        event_type: type[E],
+        handler: AsyncEventHandler[E],
     ) -> Callable[[], None]:
         """Subscribe to an event type with async handler. Returns unsubscribe function."""
         self._async_handlers[event_type].append(handler)
@@ -126,25 +126,24 @@ class EventBus:
         # Sync handlers
         for handler in self._handlers[type(event)]:
             with contextlib.suppress(Exception):
-                handler(event)
+                cast("EventHandler[Event]", handler)(event)
 
         # Async handlers - schedule on event loop
         loop = self._get_loop()
         for handler in self._async_handlers[type(event)]:
             with contextlib.suppress(Exception):
-                loop.create_task(handler(event))
+                loop.create_task(cast("AsyncEventHandler[Event]", handler)(event))
 
     async def publish_async(self, event: Event) -> None:
         """Publish an event to all subscribers (async)."""
         # Sync handlers
         for handler in self._handlers[type(event)]:
             with contextlib.suppress(Exception):
-                handler(event)
+                cast("EventHandler[Event]", handler)(event)
 
         # Async handlers
         for handler in self._async_handlers[type(event)]:
-            with contextlib.suppress(Exception):
-                await handler(event)
+            await cast("AsyncEventHandler[Event]", handler)(event)
 
     def clear(self) -> None:
         """Clear all subscriptions (for testing)."""

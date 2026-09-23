@@ -2,281 +2,505 @@
   "version": "1.0",
   "description": "Single source of truth for all UI terminology. Two registers: 'explorer' (plain language, ≤FK grade 8) and 'lab' (technical precision).",
   "terms": {
-    "pareto_optimal": {
-      "explorer": "Best trade-off",
-      "lab": "Pareto optimal"
+    "accessibility": {
+      "explorer": "Accessibility",
+      "lab": "Accessibility (WCAG 2.2 AA)"
     },
-    "pareto_near": {
-      "explorer": "Near best trade-off",
-      "lab": "Pareto near"
+    "accuracy": {
+      "explorer": "Accuracy",
+      "lab": "Accuracy"
     },
-    "pareto_dominated": {
-      "explorer": "Outperformed by another recipe",
-      "lab": "Pareto dominated"
+    "active_quests": {
+      "explorer": "Active Quests",
+      "lab": "Active Quests"
     },
-    "pareto_front": {
-      "explorer": "Best trade-offs",
-      "lab": "Pareto front"
+    "activity_feed": {
+      "explorer": "Activity Feed",
+      "lab": "Activity Feed"
     },
-    "pareto_front_history": {
-      "explorer": "How the best trade-offs changed over time",
-      "lab": "Pareto front history"
+    "all_checks_passed": {
+      "explorer": "All stability checks passed",
+      "lab": "All checks passed"
     },
-    "objective_pair": {
-      "explorer": "Compare two goals",
-      "lab": "Objective pair selector"
+    "aria_live": {
+      "explorer": "Live announcements",
+      "lab": "aria-live"
     },
-    "bp_deficit": {
-      "explorer": "Gap vs. backprop baseline",
-      "lab": "Backprop deficit"
+    "arrived": {
+      "explorer": "Arrived",
+      "lab": "Arrived"
     },
-    "ruler_walltime_ratio": {
-      "explorer": "Speed vs. baseline",
-      "lab": "Ruler walltime ratio"
+    "atlas_pending": {
+      "explorer": "Map loading...",
+      "lab": "Atlas pending"
     },
-    "ruler_energy_ratio": {
-      "explorer": "Energy vs. baseline",
-      "lab": "Ruler energy ratio"
+    "auto_evolve": {
+      "explorer": "Auto-Evolve (proposed)",
+      "lab": "Auto-Evolve"
     },
-    "credit_alignment": {
-      "explorer": "How well the learning signal matches the true gradient",
-      "lab": "Credit alignment"
+    "available_quests": {
+      "explorer": "Available Quests",
+      "lab": "Available Quests"
     },
-    "feedback_path_length": {
-      "explorer": "How far the learning signal travels",
-      "lab": "Feedback path length"
+    "axis": {
+      "explorer": "One dimension of the map",
+      "lab": "Axis"
     },
-    "trace_variance": {
-      "explorer": "Variability in the learning signal",
-      "lab": "Trace variance"
-    },
-    "spectral_radius": {
-      "explorer": "Stability margin (lower = more stable)",
-      "lab": "Spectral radius ρ(J_F)"
-    },
-    "lyapunov_exponent": {
-      "explorer": "Rate of divergence (lower = more stable)",
-      "lab": "Lyapunov exponent"
-    },
-    "max_singular_value": {
-      "explorer": "Transient amplification bound",
-      "lab": "Max singular value σ_max(J_F)"
-    },
-    "psi_capacity": {
-      "explorer": "Plastic state capacity",
-      "lab": "ψ capacity"
-    },
-    "consolidation_cost": {
-      "explorer": "Cost to make changes permanent",
-      "lab": "Consolidation cost"
-    },
-    "rewrite_rate": {
-      "explorer": "How often the recipe changes",
-      "lab": "Rewrite rate"
-    },
-    "settle_horizon": {
-      "explorer": "Settling steps",
-      "lab": "Settle horizon"
-    },
-    "free_energy": {
-      "explorer": "Energy during settling",
-      "lab": "Free energy"
-    },
-    "energy_minimization": {
-      "explorer": "Settle by lowering energy",
-      "lab": "EnergyMinimization dynamics"
-    },
-    "predictive_settling": {
-      "explorer": "Settle by predicting forward",
-      "lab": "PredictiveSettling dynamics"
-    },
-    "instantaneous_pass": {
-      "explorer": "Single forward pass",
-      "lab": "InstantaneousPass dynamics"
-    },
-    "spike_integration": {
-      "explorer": "Accumulate spikes over time",
-      "lab": "SpikeIntegration dynamics"
-    },
-    "diffusion": {
-      "explorer": "Continuous diffusion",
-      "lab": "Diffusion dynamics"
+    "back_in_service": {
+      "explorer": "Back in service",
+      "lab": "Back in service"
     },
     "backprop": {
       "explorer": "Standard backpropagation",
       "lab": "Backprop credit"
     },
-    "thermodynamic_contrast": {
-      "explorer": "Energy-based local contrast",
-      "lab": "ThermodynamicContrast credit"
+    "badge_cartographer": {
+      "explorer": "Cartographer",
+      "lab": "Cartographer"
     },
-    "random_projections": {
-      "explorer": "Fixed random feedback",
-      "lab": "RandomProjections credit"
+    "badge_double_checker": {
+      "explorer": "Double-Checker",
+      "lab": "Double-Checker"
     },
-    "local_goodness": {
-      "explorer": "Layer-local goodness objective",
-      "lab": "LocalGoodness credit"
+    "badge_first_steps": {
+      "explorer": "First Steps",
+      "lab": "First Steps"
     },
-    "target_inversion": {
-      "explorer": "Learn inverse mappings",
-      "lab": "TargetInversion credit"
+    "badge_gold_standard": {
+      "explorer": "Gold Standard",
+      "lab": "Gold Standard"
     },
-    "temporal_trace": {
-      "explorer": "Spike-timing correlation",
-      "lab": "TemporalTrace credit"
+    "badge_honest_broker": {
+      "explorer": "Honest Broker",
+      "lab": "Honest Broker"
     },
-    "homeostatic": {
-      "explorer": "Self-stabilizing scaling",
-      "lab": "Homeostatic credit"
+    "badge_mapmaker": {
+      "explorer": "Mapmaker",
+      "lab": "Mapmaker"
     },
-    "euclidean_update": {
-      "explorer": "Standard gradient step",
-      "lab": "EuclideanUpdate"
+    "badge_open_book": {
+      "explorer": "Open Book",
+      "lab": "Open Book"
     },
-    "riemannian_orthogonal": {
-      "explorer": "Orthogonal step (Muon)",
-      "lab": "RiemannianOrthogonalUpdate"
+    "badge_repair_crew": {
+      "explorer": "Repair Crew",
+      "lab": "Repair Crew"
     },
-    "spectral_constrained": {
-      "explorer": "Spectral-constrained step",
-      "lab": "SpectralConstrainedUpdate"
+    "badge_steady_hand": {
+      "explorer": "Steady Hand",
+      "lab": "Steady Hand"
     },
-    "natural_gradient": {
-      "explorer": "Fisher-scaled step",
-      "lab": "NaturalGradientUpdate"
-    },
-    "elastic_consolidation": {
-      "explorer": "Elastic weight consolidation",
-      "lab": "ElasticConsolidationUpdate"
-    },
-    "digital_substrate": {
-      "explorer": "Standard digital compute",
-      "lab": "DigitalSubstrate"
-    },
-    "memristive_substrate": {
-      "explorer": "Memristive (conductance, IR-drop)",
-      "lab": "MemristiveSubstrate"
-    },
-    "neuromorphic_substrate": {
-      "explorer": "Spike-based async compute",
-      "lab": "NeuromorphicSubstrate"
-    },
-    "photonic_substrate": {
-      "explorer": "Phase/amplitude optical",
-      "lab": "PhotonicSubstrate"
-    },
-    "quantum_substrate": {
-      "explorer": "Unitary gate simulation",
-      "lab": "QuantumSubstrate"
-    },
-    "feedforward_dag": {
-      "explorer": "Feedforward (MLP/CNN)",
-      "lab": "FeedforwardDAG geometry"
-    },
-    "recurrent_attractor": {
-      "explorer": "Recurrent attractor (Hopfield/EqProp)",
-      "lab": "RecurrentAttractor geometry"
-    },
-    "tile_mesh": {
-      "explorer": "Modular tile architecture",
-      "lab": "TileMesh geometry"
-    },
-    "fabric_pc": {
-      "explorer": "Arbitrary node-edge fabric",
-      "lab": "FabricPC geometry"
-    },
-    "spatial_lattice_3d": {
-      "explorer": "3D neural cube",
-      "lab": "SpatialLattice3D geometry"
-    },
-    "ntm_geometry": {
-      "explorer": "External memory tape",
-      "lab": "NTM geometry"
-    },
-    "nca_geometry": {
-      "explorer": "Neural cellular automaton",
-      "lab": "NCA geometry"
-    },
-    "null_plasticity": {
-      "explorer": "Fixed recipe (no plasticity)",
-      "lab": "NullPlasticity"
-    },
-    "routing_plasticity": {
-      "explorer": "State-dependent gating",
-      "lab": "RoutingPlasticity"
-    },
-    "fast_weight_plasticity": {
-      "explorer": "Episode-local memory",
-      "lab": "FastWeightPlasticity"
-    },
-    "substrate_coupled_plasticity": {
-      "explorer": "Physical substrate plasticity",
-      "lab": "SubstrateCoupledPlasticity"
-    },
-    "rule_state_plasticity": {
-      "explorer": "Rule selection (Z3)",
-      "lab": "RuleStatePlasticity"
-    },
-    "closed_form_ridge_plasticity": {
-      "explorer": "Supervised ψ computed",
-      "lab": "ClosedFormRidgePlasticity"
-    },
-    "temporal_psi_plasticity": {
-      "explorer": "Trace-decayed supervised ψ",
-      "lab": "TemporalPsiPlasticity"
-    },
-    "cell": {
-      "explorer": "One measured recipe",
-      "lab": "Cell"
-    },
-    "burst": {
-      "explorer": "A batch of measurements",
-      "lab": "Burst"
+    "badges": {
+      "explorer": "Achievements",
+      "lab": "Badges"
     },
     "batch": {
       "explorer": "A group of measurements run together",
       "lab": "Batch"
     },
+    "batch_summary": {
+      "explorer": "Batch summary",
+      "lab": "Batch summary"
+    },
+    "belief": {
+      "explorer": "What we currently think",
+      "lab": "Belief (CEEC)"
+    },
+    "bp_deficit": {
+      "explorer": "Gap vs. backprop baseline",
+      "lab": "Backprop deficit"
+    },
+    "broad_map": {
+      "explorer": "Broad map",
+      "lab": "Broad map"
+    },
+    "burst": {
+      "explorer": "A batch of measurements",
+      "lab": "Burst"
+    },
     "campaign": {
       "explorer": "A coordinated exploration",
       "lab": "Campaign"
     },
-    "knowledge_base": {
-      "explorer": "What we've measured (KB)",
-      "lab": "Knowledge base (KB)"
+    "campaign_card": {
+      "explorer": "Campaign",
+      "lab": "Campaign Card"
     },
-    "structural_void": {
-      "explorer": "Ontology boundary (not a bug)",
-      "lab": "Structural void"
+    "campaign_description": {
+      "explorer": "Description",
+      "lab": "Description"
     },
-    "runtime_defect": {
-      "explorer": "A crash we can fix",
-      "lab": "Runtime defect"
+    "campaign_entry_points": {
+      "explorer": "Entry points",
+      "lab": "Entry points"
     },
-    "quarantine": {
-      "explorer": "Paused until fixed",
-      "lab": "Quarantine"
+    "campaign_objectives": {
+      "explorer": "Goals",
+      "lab": "Objectives"
     },
-    "unquarantine": {
-      "explorer": "Release after fix",
-      "lab": "Unquarantine"
+    "campaign_status": {
+      "explorer": "Status",
+      "lab": "Status"
     },
-    "nan_loss": {
-      "explorer": "Diverged (NaN loss)",
-      "lab": "NaN loss"
+    "campaign_title": {
+      "explorer": "Title",
+      "lab": "Title"
+    },
+    "cartographer": {
+      "explorer": "Cartographer",
+      "lab": "Cartographer"
+    },
+    "causality_dag": {
+      "explorer": "No circular dependencies",
+      "lab": "Causality (DAG)"
+    },
+    "ceec": {
+      "explorer": "Evidence ledger",
+      "lab": "CEEC (Claim-Evidence-Evaluation Chain)"
+    },
+    "cell": {
+      "explorer": "One measured recipe",
+      "lab": "Cell"
+    },
+    "checks_failed": {
+      "explorer": "Some checks failed",
+      "lab": "Checks failed"
+    },
+    "choose_quest": {
+      "explorer": "Choose a quest to start",
+      "lab": "Select quest"
+    },
+    "close": {
+      "explorer": "Close",
+      "lab": "Close"
+    },
+    "closed_form_ridge_plasticity": {
+      "explorer": "Supervised ψ computed",
+      "lab": "ClosedFormRidgePlasticity"
+    },
+    "compatibility": {
+      "explorer": "Valid combination",
+      "lab": "Compatibility (SystemConfig.validate)"
+    },
+    "compatibility_check": {
+      "explorer": "Compatibility check",
+      "lab": "SystemConfig.validate()"
+    },
+    "consolidation_cost": {
+      "explorer": "Cost to make changes permanent",
+      "lab": "Consolidation cost"
+    },
+    "constitution_health": {
+      "explorer": "Stability check",
+      "lab": "Constitution Health"
+    },
+    "continuous_discovery": {
+      "explorer": "Continuous discovery",
+      "lab": "Continuous discovery"
+    },
+    "contrast": {
+      "explorer": "Contrast",
+      "lab": "Contrast ratio"
+    },
+    "copy": {
+      "explorer": "Copy",
+      "lab": "Copy"
+    },
+    "copy_unquarantine_cmd": {
+      "explorer": "Copy unquarantine command",
+      "lab": "Copy unquarantine command"
+    },
+    "cost_projection": {
+      "explorer": "Time to finish",
+      "lab": "Cost projection"
+    },
+    "coverage": {
+      "explorer": "Charted",
+      "lab": "Coverage"
+    },
+    "credit": {
+      "explorer": "Credit assignment",
+      "lab": "Credit"
+    },
+    "credit_alignment": {
+      "explorer": "How well the learning signal matches the true gradient",
+      "lab": "Credit alignment"
+    },
+    "credit_efficiency": {
+      "explorer": "Credit alignment per FLOP",
+      "lab": "Credit efficiency"
+    },
+    "current": {
+      "explorer": "Current",
+      "lab": "Current"
+    },
+    "current_episode": {
+      "explorer": "Current episode",
+      "lab": "Current episode"
+    },
+    "daemon": {
+      "explorer": "Background engine",
+      "lab": "Daemon"
+    },
+    "decision": {
+      "explorer": "A recorded choice",
+      "lab": "Decision (CEEC)"
+    },
+    "diagnosed": {
+      "explorer": "Diagnosed",
+      "lab": "Diagnosed"
+    },
+    "dial_composer": {
+      "explorer": "Build your own recipe",
+      "lab": "DialComposer"
+    },
+    "diffusion": {
+      "explorer": "Continuous diffusion",
+      "lab": "Diffusion dynamics"
+    },
+    "digital_substrate": {
+      "explorer": "Standard digital compute",
+      "lab": "DigitalSubstrate"
+    },
+    "discovery_map": {
+      "explorer": "Map",
+      "lab": "Discovery Map"
     },
     "diverged": {
       "explorer": "Training diverged (NaN loss)",
       "lab": "Diverged"
     },
-    "seed": {
-      "explorer": "Random seed for reproducibility",
-      "lab": "Seed"
+    "diverged_runs": {
+      "explorer": "Diverged runs",
+      "lab": "Diverged runs"
+    },
+    "diversity_monitor": {
+      "explorer": "Exploration health",
+      "lab": "Diversity monitor"
+    },
+    "donate_compute": {
+      "explorer": "Donate computer",
+      "lab": "P2P worker toggle"
+    },
+    "double_checker": {
+      "explorer": "Double-Checker",
+      "lab": "Double-Checker"
+    },
+    "dynamics": {
+      "explorer": "Learning dynamics",
+      "lab": "Dynamics"
+    },
+    "elastic_consolidation": {
+      "explorer": "Elastic weight consolidation",
+      "lab": "ElasticConsolidationUpdate"
+    },
+    "energy_minimization": {
+      "explorer": "Settle by lowering energy",
+      "lab": "EnergyMinimization dynamics"
+    },
+    "energy_per_step": {
+      "explorer": "Energy per step",
+      "lab": "Energy per step"
+    },
+    "episode": {
+      "explorer": "Episode",
+      "lab": "Episode"
+    },
+    "episode_timeline": {
+      "explorer": "Sleep/wake boundaries",
+      "lab": "Episode Timeline"
     },
     "epoch": {
       "explorer": "One full pass through the data",
       "lab": "Epoch"
+    },
+    "euclidean_update": {
+      "explorer": "Standard gradient step",
+      "lab": "EuclideanUpdate"
+    },
+    "evidence": {
+      "explorer": "The data behind a claim",
+      "lab": "Evidence (CEEC)"
+    },
+    "experiment": {
+      "explorer": "A registered measurement",
+      "lab": "Experiment (CEEC)"
+    },
+    "expert_detail": {
+      "explorer": "Expert detail",
+      "lab": "Expert detail"
+    },
+    "explorer_mode": {
+      "explorer": "Explorer",
+      "lab": "Explorer"
+    },
+    "fabric_pc": {
+      "explorer": "Arbitrary node-edge fabric",
+      "lab": "FabricPC geometry"
+    },
+    "falsification_plan": {
+      "explorer": "How we'd prove this wrong",
+      "lab": "Falsification plan"
+    },
+    "fast_weight_plasticity": {
+      "explorer": "Episode-local memory",
+      "lab": "FastWeightPlasticity"
+    },
+    "feedback_path_length": {
+      "explorer": "How far the learning signal travels",
+      "lab": "Feedback path length"
+    },
+    "feedforward_dag": {
+      "explorer": "Feedforward (MLP/CNN)",
+      "lab": "FeedforwardDAG geometry"
+    },
+    "field_reports": {
+      "explorer": "Field Reports",
+      "lab": "Field Reports"
+    },
+    "first_steps": {
+      "explorer": "First Steps",
+      "lab": "First Steps"
+    },
+    "fitness": {
+      "explorer": "Fitness",
+      "lab": "Fitness"
+    },
+    "fix_crash": {
+      "explorer": "Fix a crash",
+      "lab": "Fix a crash"
+    },
+    "flops": {
+      "explorer": "Floating-point operations",
+      "lab": "FLOPs"
+    },
+    "focus_indicator": {
+      "explorer": "Focus indicator",
+      "lab": "Focus indicator"
+    },
+    "fog_of_war": {
+      "explorer": "Unexplored Territory",
+      "lab": "Fog of War"
+    },
+    "free_energy": {
+      "explorer": "Energy during settling",
+      "lab": "Free energy"
+    },
+    "gamify_disabled": {
+      "explorer": "Recognition layer is disabled",
+      "lab": "Gamification disabled"
+    },
+    "gate": {
+      "explorer": "A quality check",
+      "lab": "Gate (CEEC)"
+    },
+    "genome_health": {
+      "explorer": "Recipe size vs. fitness",
+      "lab": "Genome Health"
+    },
+    "genome_id": {
+      "explorer": "Recipe ID",
+      "lab": "Genome ID"
+    },
+    "glossary_drawer": {
+      "explorer": "Term definitions",
+      "lab": "Glossary drawer"
+    },
+    "gold_standard": {
+      "explorer": "Gold Standard",
+      "lab": "Gold Standard"
+    },
+    "guided_reading": {
+      "explorer": "Guided reading",
+      "lab": "Guided reading"
+    },
+    "health": {
+      "explorer": "Health",
+      "lab": "Health"
+    },
+    "heartbeat": {
+      "explorer": "Heartbeat",
+      "lab": "Heartbeat"
+    },
+    "homeostatic": {
+      "explorer": "Self-stabilizing scaling",
+      "lab": "Homeostatic credit"
+    },
+    "honest_broker": {
+      "explorer": "Honest Broker",
+      "lab": "Honest Broker"
+    },
+    "instantaneous_pass": {
+      "explorer": "Single forward pass",
+      "lab": "InstantaneousPass dynamics"
+    },
+    "invalid_combination": {
+      "explorer": "Invalid combination",
+      "lab": "Invalid combination"
+    },
+    "keyboard_navigation": {
+      "explorer": "Keyboard navigation",
+      "lab": "Keyboard navigation"
+    },
+    "knowledge_base": {
+      "explorer": "What we've measured (KB)",
+      "lab": "Knowledge base (KB)"
+    },
+    "knowledge_coverage": {
+      "explorer": "How much we've mapped",
+      "lab": "Knowledge coverage"
+    },
+    "lab_mode": {
+      "explorer": "Lab",
+      "lab": "Lab"
+    },
+    "last_burst": {
+      "explorer": "Last burst",
+      "lab": "Last burst"
+    },
+    "latency_ms": {
+      "explorer": "Latency (ms)",
+      "lab": "Latency (ms)"
+    },
+    "lineage_viewer": {
+      "explorer": "Recipe family tree",
+      "lab": "Lineage Viewer"
+    },
+    "live_region": {
+      "explorer": "Live updates",
+      "lab": "Live region"
+    },
+    "liveness": {
+      "explorer": "Connection status",
+      "lab": "Liveness"
+    },
+    "local_goodness": {
+      "explorer": "Layer-local goodness objective",
+      "lab": "LocalGoodness credit"
+    },
+    "loss_curve": {
+      "explorer": "Live training loss",
+      "lab": "train_loss history from /ws/telemetry (last 60 points)"
+    },
+    "lyapunov_bound": {
+      "explorer": "Stability margin within limit",
+      "lab": "Lyapunov Bound (ρ(J_F)≤τ)"
+    },
+    "lyapunov_exponent": {
+      "explorer": "Rate of divergence (lower = more stable)",
+      "lab": "Lyapunov exponent"
+    },
+    "mapmaker": {
+      "explorer": "Mapmaker",
+      "lab": "Mapmaker"
+    },
+    "mark_back_in_service": {
+      "explorer": "Mark as back in service",
+      "lab": "Mark as back in service"
+    },
+    "mark_fixed": {
+      "explorer": "Mark as fixed",
+      "lab": "Mark as fixed"
     },
     "maturity_l0": {
       "explorer": "Quick map (1 epoch, 1 seed)",
@@ -290,569 +514,89 @@
       "explorer": "Claim-grade (10 epochs, 3 seeds)",
       "lab": "maturity:l2"
     },
-    "ceec": {
-      "explorer": "Evidence ledger",
-      "lab": "CEEC (Claim-Evidence-Evaluation Chain)"
-    },
-    "experiment": {
-      "explorer": "A registered measurement",
-      "lab": "Experiment (CEEC)"
-    },
-    "evidence": {
-      "explorer": "The data behind a claim",
-      "lab": "Evidence (CEEC)"
-    },
-    "belief": {
-      "explorer": "What we currently think",
-      "lab": "Belief (CEEC)"
-    },
-    "gate": {
-      "explorer": "A quality check",
-      "lab": "Gate (CEEC)"
-    },
-    "decision": {
-      "explorer": "A recorded choice",
-      "lab": "Decision (CEEC)"
-    },
-    "walltime": {
-      "explorer": "Wall-clock time",
-      "lab": "Walltime"
-    },
-    "parameter": {
-      "explorer": "A learnable weight",
-      "lab": "Parameter"
-    },
-    "param_count": {
-      "explorer": "Parameter count",
-      "lab": "Parameter count"
-    },
-    "flops": {
-      "explorer": "Floating-point operations",
-      "lab": "FLOPs"
-    },
-    "memory_mb": {
-      "explorer": "Memory (MB)",
-      "lab": "Memory (MB)"
-    },
-    "energy_per_step": {
-      "explorer": "Energy per step",
-      "lab": "Energy per step"
-    },
-    "latency_ms": {
-      "explorer": "Latency (ms)",
-      "lab": "Latency (ms)"
-    },
-    "stability_plasticity_ratio": {
-      "explorer": "Stability vs. plasticity balance",
-      "lab": "Stability-plasticity ratio"
-    },
-    "credit_efficiency": {
-      "explorer": "Credit alignment per FLOP",
-      "lab": "Credit efficiency"
-    },
-    "fog_of_war": {
-      "explorer": "Unexplored regions",
-      "lab": "Fog of war (KB coverage)"
-    },
-    "region_charted": {
-      "explorer": "Charted",
-      "lab": "Region charted"
-    },
-    "badge_first_steps": {
-      "explorer": "First Steps",
-      "lab": "First Steps"
-    },
-    "badge_mapmaker": {
-      "explorer": "Mapmaker",
-      "lab": "Mapmaker"
-    },
-    "badge_double_checker": {
-      "explorer": "Double-Checker",
-      "lab": "Double-Checker"
-    },
-    "badge_gold_standard": {
-      "explorer": "Gold Standard",
-      "lab": "Gold Standard"
-    },
-    "badge_honest_broker": {
-      "explorer": "Honest Broker",
-      "lab": "Honest Broker"
-    },
-    "badge_repair_crew": {
-      "explorer": "Repair Crew",
-      "lab": "Repair Crew"
-    },
-    "badge_steady_hand": {
-      "explorer": "Steady Hand",
-      "lab": "Steady Hand"
-    },
-    "badge_cartographer": {
-      "explorer": "Cartographer",
-      "lab": "Cartographer"
-    },
-    "badge_open_book": {
-      "explorer": "Open Book",
-      "lab": "Open Book"
-    },
-    "quest_chart_regions": {
-      "explorer": "Chart 100 regions",
-      "lab": "Quest: Chart 100 regions"
-    },
-    "quest_double_check": {
-      "explorer": "Double-check 3 candidates",
-      "lab": "Quest: Double-check 3 candidates"
-    },
-    "quest_send_recheck": {
-      "explorer": "Send to careful re-check",
-      "lab": "Quest: Send to careful re-check"
-    },
-    "quest_clear_bench": {
-      "explorer": "Clear repair bench",
-      "lab": "Quest: Clear repair bench"
-    },
-    "quest_compare_goals": {
-      "explorer": "Compare two goals",
-      "lab": "Quest: Compare goals"
-    },
-    "quest_forecast_check": {
-      "explorer": "Forecast and check",
-      "lab": "Quest: Forecast & check"
-    },
-    "record_breakthrough": {
-      "explorer": "Personal best",
-      "lab": "Record: Personal best"
-    },
-    "constitution_health": {
-      "explorer": "Stability check",
-      "lab": "Constitution Health"
-    },
-    "causality_dag": {
-      "explorer": "No circular dependencies",
-      "lab": "Causality (DAG)"
-    },
-    "passivity": {
-      "explorer": "Energy in ≥ Energy out",
-      "lab": "Passivity (Δℰ≤ℰ_in)"
-    },
-    "lyapunov_bound": {
-      "explorer": "Stability margin within limit",
-      "lab": "Lyapunov Bound (ρ(J_F)≤τ)"
-    },
-    "resource_ceiling": {
-      "explorer": "Within resource budget",
-      "lab": "Resource Ceiling (||Z||+|Ω|)"
-    },
-    "protocol_conformance": {
-      "explorer": "Follows the protocol",
-      "lab": "Protocol Conformance"
-    },
-    "recursion_invariant": {
-      "explorer": "Recursion well-founded",
-      "lab": "Recursion Invariant"
-    },
-    "lineage_viewer": {
-      "explorer": "Recipe family tree",
-      "lab": "Lineage Viewer"
-    },
-    "probe_analytics": {
-      "explorer": "Learning speed comparison",
-      "lab": "Probe Analytics"
-    },
-    "stagnation_dashboard": {
-      "explorer": "Progress monitor",
-      "lab": "Stagnation Dashboard"
-    },
-    "genome_health": {
-      "explorer": "Recipe size vs. fitness",
-      "lab": "Genome Health"
-    },
-    "mutation_explorer": {
-      "explorer": "What could change next",
-      "lab": "Mutation Explorer"
-    },
-    "veto_log": {
-      "explorer": "Rejected changes with reasons",
-      "lab": "Veto Log"
-    },
-    "episode_timeline": {
-      "explorer": "Sleep/wake boundaries",
-      "lab": "Episode Timeline"
-    },
-    "auto_evolve": {
-      "explorer": "Auto-Evolve (proposed)",
-      "lab": "Auto-Evolve"
-    },
-    "preview_shelf": {
-      "explorer": "Preview shelf",
-      "lab": "Preview Shelf"
-    },
-    "proposed_not_implemented": {
-      "explorer": "Proposed — not implemented",
-      "lab": "Proposed — not implemented"
-    },
-    "falsification_plan": {
-      "explorer": "How we'd prove this wrong",
-      "lab": "Falsification plan"
-    },
-    "what_am_i_looking_at": {
-      "explorer": "What am I looking at?",
-      "lab": "What am I looking at?"
-    },
-    "plain_language": {
-      "explorer": "Plain language",
-      "lab": "Plain language"
-    },
-    "why_this_matters": {
-      "explorer": "Why this matters",
-      "lab": "Why this matters"
-    },
-    "expert_detail": {
-      "explorer": "Expert detail",
-      "lab": "Expert detail"
-    },
-    "explorer_mode": {
-      "explorer": "Explorer",
-      "lab": "Explorer"
-    },
-    "lab_mode": {
-      "explorer": "Lab",
-      "lab": "Lab"
-    },
-    "toggle_mode": {
-      "explorer": "Switch view",
-      "lab": "Toggle Explorer/Lab"
-    },
-    "glossary_drawer": {
-      "explorer": "Term definitions",
-      "lab": "Glossary drawer"
-    },
-    "reduced_motion": {
-      "explorer": "Reduced motion",
-      "lab": "prefers-reduced-motion"
-    },
-    "accessibility": {
-      "explorer": "Accessibility",
-      "lab": "Accessibility (WCAG 2.2 AA)"
-    },
-    "keyboard_navigation": {
-      "explorer": "Keyboard navigation",
-      "lab": "Keyboard navigation"
-    },
-    "screen_reader": {
-      "explorer": "Screen reader",
-      "lab": "Screen reader"
-    },
-    "contrast": {
-      "explorer": "Contrast",
-      "lab": "Contrast ratio"
-    },
-    "focus_indicator": {
-      "explorer": "Focus indicator",
-      "lab": "Focus indicator"
-    },
-    "aria_live": {
-      "explorer": "Live announcements",
-      "lab": "aria-live"
-    },
-    "ontology": {
-      "explorer": "The 6-axis map",
-      "lab": "Ontology (S×G×D×P×C×U)"
-    },
-    "axis": {
-      "explorer": "One dimension of the map",
-      "lab": "Axis"
-    },
-    "primitive": {
-      "explorer": "A building block",
-      "lab": "Primitive"
-    },
-    "system_coordinate": {
-      "explorer": "A complete recipe",
-      "lab": "System coordinate"
-    },
-    "compatibility": {
-      "explorer": "Valid combination",
-      "lab": "Compatibility (SystemConfig.validate)"
-    },
-    "knowledge_coverage": {
-      "explorer": "How much we've mapped",
-      "lab": "Knowledge coverage"
-    },
-    "diversity_monitor": {
-      "explorer": "Exploration health",
-      "lab": "Diversity monitor"
-    },
-    "novelty_rate": {
-      "explorer": "New territory rate",
-      "lab": "Novelty rate"
-    },
-    "stratum_repeat_rate": {
-      "explorer": "Re-measuring rate",
-      "lab": "Stratum repeat rate"
-    },
-    "quarantine_pressure": {
-      "explorer": "Defect starvation risk",
-      "lab": "Quarantine pressure"
-    },
-    "cost_projection": {
-      "explorer": "Time to finish",
-      "lab": "Cost projection"
+    "max_singular_value": {
+      "explorer": "Transient amplification bound",
+      "lab": "Max singular value σ_max(J_F)"
     },
     "mean_walltime": {
       "explorer": "Average time per recipe",
       "lab": "Mean walltime"
     },
-    "projected_remaining": {
-      "explorer": "Estimated time left",
-      "lab": "Projected remaining"
+    "memory_mb": {
+      "explorer": "Memory (MB)",
+      "lab": "Memory (MB)"
     },
-    "liveness": {
-      "explorer": "Connection status",
-      "lab": "Liveness"
-    },
-    "heartbeat": {
-      "explorer": "Heartbeat",
-      "lab": "Heartbeat"
-    },
-    "daemon": {
-      "explorer": "Background engine",
-      "lab": "Daemon"
-    },
-    "continuous_discovery": {
-      "explorer": "Continuous discovery",
-      "lab": "Continuous discovery"
-    },
-    "broad_map": {
-      "explorer": "Broad map",
-      "lab": "Broad map"
-    },
-    "dynamics": {
-      "explorer": "Learning dynamics",
-      "lab": "Dynamics"
-    },
-    "credit": {
-      "explorer": "Credit assignment",
-      "lab": "Credit"
-    },
-    "update": {
-      "explorer": "Parameter update",
-      "lab": "Update"
-    },
-    "topology": {
-      "explorer": "Network topology",
-      "lab": "Topology"
-    },
-    "accuracy": {
-      "explorer": "Accuracy",
-      "lab": "Accuracy"
-    },
-    "outcome": {
-      "explorer": "Outcome",
-      "lab": "Outcome"
-    },
-    "no_data": {
-      "explorer": "No data available",
-      "lab": "No data"
-    },
-    "atlas_pending": {
-      "explorer": "Map loading...",
-      "lab": "Atlas pending"
-    },
-    "view": {
-      "explorer": "View",
-      "lab": "View"
-    },
-    "pareto_optimal_explainer": {
-      "explorer": "Best trade-off recipes",
-      "lab": "Pareto optimal explanation"
-    },
-    "guided_reading": {
-      "explorer": "Guided reading",
-      "lab": "Guided reading"
-    },
-    "reference_anchors": {
-      "explorer": "Reference anchors",
-      "lab": "Reference anchors"
-    },
-    "ruler": {
-      "explorer": "baseline",
-      "lab": "ruler baseline"
-    },
-    "close": {
-      "explorer": "Close",
-      "lab": "Close"
-    },
-    "no_pareto_data": {
-      "explorer": "No trade-off data yet",
-      "lab": "No Pareto data"
-    },
-    "arrived": {
-      "explorer": "Arrived",
-      "lab": "Arrived"
-    },
-    "diagnosed": {
-      "explorer": "Diagnosed",
-      "lab": "Diagnosed"
-    },
-    "back_in_service": {
-      "explorer": "Back in service",
-      "lab": "Back in service"
-    },
-    "copy_unquarantine_cmd": {
-      "explorer": "Copy unquarantine command",
-      "lab": "Copy unquarantine command"
-    },
-    "mark_fixed": {
-      "explorer": "Mark as fixed",
-      "lab": "Mark as fixed"
-    },
-    "mark_back_in_service": {
-      "explorer": "Mark as back in service",
-      "lab": "Mark as back in service"
-    },
-    "no_defects": {
-      "explorer": "No defects on the bench",
-      "lab": "No defects"
-    },
-    "copy": {
-      "explorer": "Copy",
-      "lab": "Copy"
-    },
-    "running_smoothly": {
-      "explorer": "Running smoothly",
-      "lab": "Running smoothly"
-    },
-    "needs_attention": {
-      "explorer": "Needs attention",
-      "lab": "Needs attention"
-    },
-    "unstable": {
-      "explorer": "Unstable",
-      "lab": "Unstable"
-    },
-    "overall_status": {
-      "explorer": "Overall status",
-      "lab": "Overall status"
-    },
-    "diverged_runs": {
-      "explorer": "Diverged runs",
-      "lab": "Diverged runs"
-    },
-    "last_burst": {
-      "explorer": "Last burst",
-      "lab": "Last burst"
-    },
-    "no_burst_yet": {
-      "explorer": "No burst yet",
-      "lab": "No burst yet"
-    },
-    "paused": {
-      "explorer": "Paused",
-      "lab": "Paused"
-    },
-    "batch_summary": {
-      "explorer": "Batch summary",
-      "lab": "Batch summary"
-    },
-    "no_events": {
-      "explorer": "No events yet",
-      "lab": "No events yet"
-    },
-    "live_region": {
-      "explorer": "Live updates",
-      "lab": "Live region"
-    },
-    "no_field_reports": {
-      "explorer": "No field reports",
-      "lab": "No field reports"
-    },
-    "see_evidence": {
-      "explorer": "See evidence",
-      "lab": "See evidence"
-    },
-    "all_checks_passed": {
-      "explorer": "All stability checks passed",
-      "lab": "All checks passed"
-    },
-    "checks_failed": {
-      "explorer": "Some checks failed",
-      "lab": "Checks failed"
-    },
-    "value": {
-      "explorer": "Value",
-      "lab": "Value"
-    },
-    "no_lineage_data": {
-      "explorer": "No lineage data yet",
-      "lab": "No lineage data"
-    },
-    "phylogeny_table": {
-      "explorer": "Family tree table",
-      "lab": "Phylogeny table"
-    },
-    "genome_id": {
-      "explorer": "Recipe ID",
-      "lab": "Genome ID"
-    },
-    "tier": {
-      "explorer": "Change type",
-      "lab": "Tier"
-    },
-    "fitness": {
-      "explorer": "Fitness",
-      "lab": "Fitness"
-    },
-    "episode": {
-      "explorer": "Episode",
-      "lab": "Episode"
-    },
-    "parent": {
-      "explorer": "Parent",
-      "lab": "Parent"
-    },
-    "mutation_type": {
-      "explorer": "Mutation type",
-      "lab": "Mutation type"
-    },
-    "slope": {
-      "explorer": "Learning speed",
-      "lab": "Slope"
-    },
-    "current_episode": {
-      "explorer": "Current episode",
-      "lab": "Current episode"
+    "memristive_substrate": {
+      "explorer": "Memristive (conductance, IR-drop)",
+      "lab": "MemristiveSubstrate"
     },
     "morphology_at_boundaries": {
       "explorer": "Recipe changes only at sleep/wake boundaries",
       "lab": "Morphology only at boundaries"
     },
-    "no_episode_data": {
-      "explorer": "No episode data yet",
-      "lab": "No episode data"
+    "mutation_explorer": {
+      "explorer": "What could change next",
+      "lab": "Mutation Explorer"
     },
-    "current": {
-      "explorer": "Current",
-      "lab": "Current"
+    "mutation_type": {
+      "explorer": "Mutation type",
+      "lab": "Mutation type"
     },
-    "progress": {
-      "explorer": "Your Journey",
-      "lab": "Progress"
+    "nan_loss": {
+      "explorer": "Diverged (NaN loss)",
+      "lab": "NaN loss"
     },
-    "badges": {
-      "explorer": "Achievements",
-      "lab": "Badges"
+    "natural_gradient": {
+      "explorer": "Fisher-scaled step",
+      "lab": "NaturalGradientUpdate"
     },
-    "quests": {
-      "explorer": "Quests",
-      "lab": "Quests"
+    "nca_geometry": {
+      "explorer": "Neural cellular automaton",
+      "lab": "NCA geometry"
     },
-    "records": {
-      "explorer": "Personal Bests",
-      "lab": "Records"
+    "needs_attention": {
+      "explorer": "Needs attention",
+      "lab": "Needs attention"
+    },
+    "neuromorphic_substrate": {
+      "explorer": "Spike-based async compute",
+      "lab": "NeuromorphicSubstrate"
     },
     "no_badges_yet": {
       "explorer": "No achievements yet — run experiments to earn them",
       "lab": "No badges earned"
+    },
+    "no_burst_yet": {
+      "explorer": "No burst yet",
+      "lab": "No burst yet"
+    },
+    "no_data": {
+      "explorer": "No data available",
+      "lab": "No data"
+    },
+    "no_defects": {
+      "explorer": "No defects on the bench",
+      "lab": "No defects"
+    },
+    "no_episode_data": {
+      "explorer": "No episode data yet",
+      "lab": "No episode data"
+    },
+    "no_events": {
+      "explorer": "No events yet",
+      "lab": "No events yet"
+    },
+    "no_field_reports": {
+      "explorer": "No field reports",
+      "lab": "No field reports"
+    },
+    "no_lineage_data": {
+      "explorer": "No lineage data yet",
+      "lab": "No lineage data"
+    },
+    "no_pareto_data": {
+      "explorer": "No trade-off data yet",
+      "lab": "No Pareto data"
     },
     "no_quests_yet": {
       "explorer": "No quests started — opt in to begin",
@@ -862,169 +606,425 @@
       "explorer": "No personal bests yet — run measurements",
       "lab": "No records set"
     },
-    "active_quests": {
-      "explorer": "Active Quests",
-      "lab": "Active Quests"
+    "novelty_rate": {
+      "explorer": "New territory rate",
+      "lab": "Novelty rate"
     },
-    "available_quests": {
-      "explorer": "Available Quests",
-      "lab": "Available Quests"
+    "ntm_geometry": {
+      "explorer": "External memory tape",
+      "lab": "NTM geometry"
     },
-    "opt_in_quest": {
-      "explorer": "Start Quest",
-      "lab": "Opt In"
+    "null_plasticity": {
+      "explorer": "Fixed recipe (no plasticity)",
+      "lab": "NullPlasticity"
     },
-    "opt_in": {
-      "explorer": "Start",
-      "lab": "Opt In"
+    "objective_pair": {
+      "explorer": "Compare two goals",
+      "lab": "Objective pair selector"
     },
-    "choose_quest": {
-      "explorer": "Choose a quest to start",
-      "lab": "Select quest"
-    },
-    "quests_completed": {
-      "explorer": "Quests Completed",
-      "lab": "Quests Completed"
-    },
-    "gamify_disabled": {
-      "explorer": "Recognition layer is disabled",
-      "lab": "Gamification disabled"
-    },
-    "first_steps": {
-      "explorer": "First Steps",
-      "lab": "First Steps"
-    },
-    "mapmaker": {
-      "explorer": "Mapmaker",
-      "lab": "Mapmaker"
-    },
-    "double_checker": {
-      "explorer": "Double-Checker",
-      "lab": "Double-Checker"
-    },
-    "gold_standard": {
-      "explorer": "Gold Standard",
-      "lab": "Gold Standard"
-    },
-    "honest_broker": {
-      "explorer": "Honest Broker",
-      "lab": "Honest Broker"
-    },
-    "repair_crew": {
-      "explorer": "Repair Crew",
-      "lab": "Repair Crew"
-    },
-    "steady_hand": {
-      "explorer": "Steady Hand",
-      "lab": "Steady Hand"
-    },
-    "cartographer": {
-      "explorer": "Cartographer",
-      "lab": "Cartographer"
+    "ontology": {
+      "explorer": "The 6-axis map",
+      "lab": "Ontology (S×G×D×P×C×U)"
     },
     "open_book": {
       "explorer": "Open Book",
       "lab": "Open Book"
     },
-    "fog_of_war": {
-      "explorer": "Unexplored Territory",
-      "lab": "Fog of War"
+    "opt_in": {
+      "explorer": "Start",
+      "lab": "Opt In"
     },
-    "coverage": {
-      "explorer": "Charted",
-      "lab": "Coverage"
+    "opt_in_quest": {
+      "explorer": "Start Quest",
+      "lab": "Opt In"
     },
-    "regions_charted": {
-      "explorer": "Regions charted",
-      "lab": "Regions charted"
+    "outcome": {
+      "explorer": "Outcome",
+      "lab": "Outcome"
     },
-    "workshop": {
-      "explorer": "Workshop",
-      "lab": "Workshop"
+    "overall_status": {
+      "explorer": "Overall status",
+      "lab": "Overall status"
     },
-    "dial_composer": {
-      "explorer": "Build your own recipe",
-      "lab": "DialComposer"
+    "param_count": {
+      "explorer": "Parameter count",
+      "lab": "Parameter count"
+    },
+    "parameter": {
+      "explorer": "A learnable weight",
+      "lab": "Parameter"
+    },
+    "parent": {
+      "explorer": "Parent",
+      "lab": "Parent"
+    },
+    "pareto_dominated": {
+      "explorer": "Outperformed by another recipe",
+      "lab": "Pareto dominated"
+    },
+    "pareto_front": {
+      "explorer": "Best trade-offs",
+      "lab": "Pareto front"
+    },
+    "pareto_front_history": {
+      "explorer": "How the best trade-offs changed over time",
+      "lab": "Pareto front history"
+    },
+    "pareto_near": {
+      "explorer": "Near best trade-off",
+      "lab": "Pareto near"
+    },
+    "pareto_optimal": {
+      "explorer": "Best trade-off",
+      "lab": "Pareto optimal"
+    },
+    "pareto_optimal_explainer": {
+      "explorer": "Best trade-off recipes",
+      "lab": "Pareto optimal explanation"
+    },
+    "passivity": {
+      "explorer": "Energy in ≥ Energy out",
+      "lab": "Passivity (Δℰ≤ℰ_in)"
+    },
+    "paused": {
+      "explorer": "Paused",
+      "lab": "Paused"
+    },
+    "photonic_substrate": {
+      "explorer": "Phase/amplitude optical",
+      "lab": "PhotonicSubstrate"
+    },
+    "phylogeny_table": {
+      "explorer": "Family tree table",
+      "lab": "Phylogeny table"
+    },
+    "plain_language": {
+      "explorer": "Plain language",
+      "lab": "Plain language"
+    },
+    "predictive_settling": {
+      "explorer": "Settle by predicting forward",
+      "lab": "PredictiveSettling dynamics"
+    },
+    "preview_shelf": {
+      "explorer": "Preview shelf",
+      "lab": "Preview Shelf"
+    },
+    "primitive": {
+      "explorer": "A building block",
+      "lab": "Primitive"
+    },
+    "probe_analytics": {
+      "explorer": "Learning speed comparison",
+      "lab": "Probe Analytics"
+    },
+    "progress": {
+      "explorer": "Your Journey",
+      "lab": "Progress"
+    },
+    "projected_remaining": {
+      "explorer": "Estimated time left",
+      "lab": "Projected remaining"
+    },
+    "proposed_not_implemented": {
+      "explorer": "Proposed — not implemented",
+      "lab": "Proposed — not implemented"
+    },
+    "protocol_conformance": {
+      "explorer": "Follows the protocol",
+      "lab": "Protocol Conformance"
+    },
+    "psi_capacity": {
+      "explorer": "Plastic state capacity",
+      "lab": "ψ capacity"
+    },
+    "quantum_substrate": {
+      "explorer": "Unitary gate simulation",
+      "lab": "QuantumSubstrate"
+    },
+    "quarantine": {
+      "explorer": "Paused until fixed",
+      "lab": "Quarantine"
+    },
+    "quarantine_pressure": {
+      "explorer": "Defect starvation risk",
+      "lab": "Quarantine pressure"
+    },
+    "quest_chart_regions": {
+      "explorer": "Chart 100 regions",
+      "lab": "Quest: Chart 100 regions"
+    },
+    "quest_clear_bench": {
+      "explorer": "Clear repair bench",
+      "lab": "Quest: Clear repair bench"
+    },
+    "quest_compare_goals": {
+      "explorer": "Compare two goals",
+      "lab": "Quest: Compare goals"
+    },
+    "quest_double_check": {
+      "explorer": "Double-check 3 candidates",
+      "lab": "Quest: Double-check 3 candidates"
+    },
+    "quest_forecast_check": {
+      "explorer": "Forecast and check",
+      "lab": "Quest: Forecast & check"
+    },
+    "quest_send_recheck": {
+      "explorer": "Send to careful re-check",
+      "lab": "Quest: Send to careful re-check"
+    },
+    "quests": {
+      "explorer": "Quests",
+      "lab": "Quests"
+    },
+    "quests_completed": {
+      "explorer": "Quests Completed",
+      "lab": "Quests Completed"
+    },
+    "random_projections": {
+      "explorer": "Fixed random feedback",
+      "lab": "RandomProjections credit"
     },
     "recipe_card": {
       "explorer": "Try a known recipe",
       "lab": "RecipeCard"
     },
-    "fix_crash": {
-      "explorer": "Fix a crash",
-      "lab": "Fix a crash"
+    "record_breakthrough": {
+      "explorer": "Personal best",
+      "lab": "Record: Personal best"
     },
-    "donate_compute": {
-      "explorer": "Donate computer",
-      "lab": "P2P worker toggle"
+    "records": {
+      "explorer": "Personal Bests",
+      "lab": "Records"
     },
-    "campaign_card": {
-      "explorer": "Campaign",
-      "lab": "Campaign Card"
+    "recurrent_attractor": {
+      "explorer": "Recurrent attractor (Hopfield/EqProp)",
+      "lab": "RecurrentAttractor geometry"
     },
-    "campaign_title": {
-      "explorer": "Title",
-      "lab": "Title"
+    "recursion_invariant": {
+      "explorer": "Recursion well-founded",
+      "lab": "Recursion Invariant"
     },
-    "campaign_description": {
-      "explorer": "Description",
-      "lab": "Description"
+    "reduced_motion": {
+      "explorer": "Reduced motion",
+      "lab": "prefers-reduced-motion"
     },
-    "campaign_objectives": {
-      "explorer": "Goals",
-      "lab": "Objectives"
+    "reference_anchors": {
+      "explorer": "Reference anchors",
+      "lab": "Reference anchors"
     },
-    "campaign_status": {
-      "explorer": "Status",
-      "lab": "Status"
-    },
-    "campaign_entry_points": {
-      "explorer": "Entry points",
-      "lab": "Entry points"
-    },
-    "compatibility_check": {
-      "explorer": "Compatibility check",
-      "lab": "SystemConfig.validate()"
-    },
-    "valid_combination": {
-      "explorer": "Valid combination",
-      "lab": "Valid combination"
-    },
-    "invalid_combination": {
-      "explorer": "Invalid combination",
-      "lab": "Invalid combination"
-    },
-    "discovery_map": {
-      "explorer": "Map",
-      "lab": "Discovery Map"
-    },
-    "tradeoffs": {
-      "explorer": "Trade-offs",
-      "lab": "Trade-offs"
-    },
-    "repair_bench": {
-      "explorer": "Repair Bench",
-      "lab": "Repair Bench"
-    },
-    "health": {
-      "explorer": "Health",
-      "lab": "Health"
+    "region_charted": {
+      "explorer": "Charted",
+      "lab": "Region charted"
     },
     "region_naming": {
       "explorer": "Region Names",
       "lab": "Region Naming"
     },
+    "regions_charted": {
+      "explorer": "Regions charted",
+      "lab": "Regions charted"
+    },
+    "repair_bench": {
+      "explorer": "Repair Bench",
+      "lab": "Repair Bench"
+    },
+    "repair_crew": {
+      "explorer": "Repair Crew",
+      "lab": "Repair Crew"
+    },
+    "resource_ceiling": {
+      "explorer": "Within resource budget",
+      "lab": "Resource Ceiling (||Z||+|Ω|)"
+    },
+    "rewrite_rate": {
+      "explorer": "How often the recipe changes",
+      "lab": "Rewrite rate"
+    },
+    "riemannian_orthogonal": {
+      "explorer": "Orthogonal step (Muon)",
+      "lab": "RiemannianOrthogonalUpdate"
+    },
+    "routing_plasticity": {
+      "explorer": "State-dependent gating",
+      "lab": "RoutingPlasticity"
+    },
+    "rule_state_plasticity": {
+      "explorer": "Rule selection (Z3)",
+      "lab": "RuleStatePlasticity"
+    },
+    "ruler": {
+      "explorer": "baseline",
+      "lab": "ruler baseline"
+    },
+    "ruler_energy_ratio": {
+      "explorer": "Energy vs. baseline",
+      "lab": "Ruler energy ratio"
+    },
+    "ruler_walltime_ratio": {
+      "explorer": "Speed vs. baseline",
+      "lab": "Ruler walltime ratio"
+    },
+    "running_smoothly": {
+      "explorer": "Running smoothly",
+      "lab": "Running smoothly"
+    },
+    "runtime_defect": {
+      "explorer": "A crash we can fix",
+      "lab": "Runtime defect"
+    },
+    "screen_reader": {
+      "explorer": "Screen reader",
+      "lab": "Screen reader"
+    },
+    "see_evidence": {
+      "explorer": "See evidence",
+      "lab": "See evidence"
+    },
+    "seed": {
+      "explorer": "Random seed for reproducibility",
+      "lab": "Seed"
+    },
+    "settle_horizon": {
+      "explorer": "Settling steps",
+      "lab": "Settle horizon"
+    },
+    "slope": {
+      "explorer": "Learning speed",
+      "lab": "Slope"
+    },
+    "spatial_lattice_3d": {
+      "explorer": "3D neural cube",
+      "lab": "SpatialLattice3D geometry"
+    },
+    "spectral_constrained": {
+      "explorer": "Spectral-constrained step",
+      "lab": "SpectralConstrainedUpdate"
+    },
+    "spectral_radius": {
+      "explorer": "Stability margin (lower = more stable)",
+      "lab": "Spectral radius ρ(J_F)"
+    },
+    "spike_integration": {
+      "explorer": "Accumulate spikes over time",
+      "lab": "SpikeIntegration dynamics"
+    },
+    "stability_plasticity_ratio": {
+      "explorer": "Stability vs. plasticity balance",
+      "lab": "Stability-plasticity ratio"
+    },
+    "stagnation_dashboard": {
+      "explorer": "Progress monitor",
+      "lab": "Stagnation Dashboard"
+    },
+    "steady_hand": {
+      "explorer": "Steady Hand",
+      "lab": "Steady Hand"
+    },
+    "stratum_repeat_rate": {
+      "explorer": "Re-measuring rate",
+      "lab": "Stratum repeat rate"
+    },
+    "structural_void": {
+      "explorer": "Ontology boundary (not a bug)",
+      "lab": "Structural void"
+    },
+    "substrate_coupled_plasticity": {
+      "explorer": "Physical substrate plasticity",
+      "lab": "SubstrateCoupledPlasticity"
+    },
+    "system_coordinate": {
+      "explorer": "A complete recipe",
+      "lab": "System coordinate"
+    },
+    "target_inversion": {
+      "explorer": "Learn inverse mappings",
+      "lab": "TargetInversion credit"
+    },
     "team_wall": {
       "explorer": "Team",
       "lab": "Team Wall"
     },
-    "activity_feed": {
-      "explorer": "Activity Feed",
-      "lab": "Activity Feed"
+    "temporal_psi_plasticity": {
+      "explorer": "Trace-decayed supervised ψ",
+      "lab": "TemporalPsiPlasticity"
     },
-    "field_reports": {
-      "explorer": "Field Reports",
-      "lab": "Field Reports"
+    "temporal_trace": {
+      "explorer": "Spike-timing correlation",
+      "lab": "TemporalTrace credit"
+    },
+    "thermodynamic_contrast": {
+      "explorer": "Energy-based local contrast",
+      "lab": "ThermodynamicContrast credit"
+    },
+    "tier": {
+      "explorer": "Change type",
+      "lab": "Tier"
+    },
+    "tile_mesh": {
+      "explorer": "Modular tile architecture",
+      "lab": "TileMesh geometry"
+    },
+    "toggle_mode": {
+      "explorer": "Switch view",
+      "lab": "Toggle Explorer/Lab"
+    },
+    "topology": {
+      "explorer": "Network topology",
+      "lab": "Topology"
+    },
+    "trace_variance": {
+      "explorer": "Variability in the learning signal",
+      "lab": "Trace variance"
+    },
+    "tradeoffs": {
+      "explorer": "Trade-offs",
+      "lab": "Trade-offs"
+    },
+    "unquarantine": {
+      "explorer": "Release after fix",
+      "lab": "Unquarantine"
+    },
+    "unstable": {
+      "explorer": "Unstable",
+      "lab": "Unstable"
+    },
+    "update": {
+      "explorer": "Parameter update",
+      "lab": "Update"
+    },
+    "valid_combination": {
+      "explorer": "Valid combination",
+      "lab": "Valid combination"
+    },
+    "value": {
+      "explorer": "Value",
+      "lab": "Value"
+    },
+    "veto_log": {
+      "explorer": "Rejected changes with reasons",
+      "lab": "Veto Log"
+    },
+    "view": {
+      "explorer": "View",
+      "lab": "View"
+    },
+    "walltime": {
+      "explorer": "Wall-clock time",
+      "lab": "Walltime"
+    },
+    "what_am_i_looking_at": {
+      "explorer": "What am I looking at?",
+      "lab": "What am I looking at?"
+    },
+    "why_this_matters": {
+      "explorer": "Why this matters",
+      "lab": "Why this matters"
+    },
+    "workshop": {
+      "explorer": "Workshop",
+      "lab": "Workshop"
     }
   }
 }

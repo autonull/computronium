@@ -166,11 +166,14 @@ class EpisodeTimeline(BasePanel):
 
     def update_data(
         self,
+        data: object | None = None,
         *,
         events: list[EpisodeEvent] | None = None,
         current_episode: int | None = None,
     ) -> None:
         """Update timeline data."""
+        if events is None and data is not None:
+            events = list(data.episodes)  # type: ignore[attr-defined]
         if events is not None:
             self.events = events
         if current_episode is not None:

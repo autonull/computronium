@@ -546,7 +546,11 @@ def void_summary_rows(root: Path) -> list[dict[str, object]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        record = json.loads(line)
+        try:
+            record: dict[str, Any] = json.loads(line)
+        except json.JSONDecodeError:
+            logger.warning("Skipping malformed void line in %s", path)
+            continue
         by_category.setdefault(str(record.get("category", "unknown")), []).append(
             str(record.get("dynamics", "?"))
             + " × "
@@ -652,7 +656,8 @@ def front_history_rows(
         cumulative = [
             row
             for row in cells
-            if (bursts_list := list(row.bursts) if hasattr(row, "bursts") else []) and min(bursts_list) <= cutoff  # type: ignore[attr-defined]
+            if (bursts_list := list(row.bursts) if hasattr(row, "bursts") else [])
+            and min(bursts_list) <= cutoff  # type: ignore[attr-defined]
         ]
         if not cumulative:
             continue

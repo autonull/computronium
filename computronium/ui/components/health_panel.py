@@ -53,6 +53,7 @@ class HealthPanel(BasePanel):
         self.divergence_count = divergence_count
         self.last_burst = last_burst
         self.last_burst_walltime = last_burst_walltime
+        self.loss_history: list[float] = []
 
     def render(self) -> ui.element:
         """Render the Health Panel."""
@@ -64,7 +65,27 @@ class HealthPanel(BasePanel):
             else:
                 self._render_tiles()
 
+            if self.loss_history:
+                self._render_loss_curve()
+
         return panel
+
+    def _render_loss_curve(self) -> None:
+        """Render live loss history as an echart (B2)."""
+        with ui.card().classes("w-full").props("flat"):
+            ui.label(self.tr("loss_curve")).classes("text-h6")
+            ui.echart({
+                "xAxis": {"type": "category", "show": False},
+                "yAxis": {"type": "value", "scale": True},
+                "series": [
+                    {
+                        "type": "line",
+                        "data": self.loss_history,
+                        "showSymbol": False,
+                    }
+                ],
+                "grid": {"left": 40, "top": 10, "right": 10, "bottom": 20},
+            }).classes("w-full h-40")
 
     def _render_default_tiles(self) -> None:
         """Render default health tiles from raw data."""
@@ -125,13 +146,17 @@ class HealthPanel(BasePanel):
 
     def update_data(
         self,
+        data: list[HealthTile] | None = None,
         *,
         tiles: list[HealthTile] | None = None,
         divergence_count: int | None = None,
         last_burst: str | None = None,
         last_burst_walltime: float | None = None,
+        loss_history: list[float] | None = None,
     ) -> None:
-        """Update panel data."""
+        """Update panel data; positional data is the tile list."""
+        if tiles is None and data is not None:
+            tiles = data
         if tiles is not None:
             self.tiles = tiles
         if divergence_count is not None:
@@ -140,6 +165,8 @@ class HealthPanel(BasePanel):
             self.last_burst = last_burst
         if last_burst_walltime is not None:
             self.last_burst_walltime = last_burst_walltime
+        if loss_history is not None:
+            self.loss_history = loss_history
 
     def _refresh(self) -> None:
         """Refresh on mode change."""

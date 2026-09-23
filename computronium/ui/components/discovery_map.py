@@ -15,6 +15,8 @@ from computronium.ui.mode_toggle import BasePanel
 if TYPE_CHECKING:
     from plotly.graph_objects import Figure as go_Figure
 
+    from computronium.ui.adapters import DiscoveryMapData
+
 
 @dataclass(frozen=True, slots=True)
 class MapSpecimen:
@@ -254,6 +256,7 @@ class DiscoveryMap(BasePanel):
 
     def update_data(
         self,
+        data: DiscoveryMapData | None = None,
         *,
         specimens: list[MapSpecimen] | None = None,
         regions: list[MapRegion] | None = None,
@@ -261,6 +264,11 @@ class DiscoveryMap(BasePanel):
         atlas_figure: go_Figure | None = None,
     ) -> None:
         """Update panel data and re-render."""
+        if data is not None:
+            specimens = data.specimens
+            regions = data.regions
+            fog_coverage_pct = data.fog_coverage_pct
+            atlas_figure = data.atlas_figure
         if specimens is not None:
             self.specimens = specimens
         if regions is not None:
@@ -338,11 +346,12 @@ def _generate_regions(df, voids_df) -> list[MapRegion]:
 
     x_vals = df["x"].values
     y_vals = df["y"].values
+    eps = 1e-6  # degenerate bounds (all points coincide) still form one region
     bounds = (
-        float(x_vals.min()),
-        float(x_vals.max()),
-        float(y_vals.min()),
-        float(y_vals.max()),
+        float(x_vals.min()) - eps,
+        float(x_vals.max()) + eps,
+        float(y_vals.min()) - eps,
+        float(y_vals.max()) + eps,
     )
     total = len(df)
 

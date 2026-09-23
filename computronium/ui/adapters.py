@@ -31,6 +31,35 @@ class DiscoveryMapData:
     atlas_figure: go_Figure | None
 
 
+def _with_layout(df: Any) -> Any:
+    """Attach deterministic 2-D coordinates derived from the cell identity.
+
+    Pure stand-in for the UMAP atlas layout: coordinates are a stable hash
+    of the cell's primitive tuple, so the map never depends on a refit.
+    """
+    import hashlib
+
+    if df.empty or "x" in df.columns:
+        return df
+
+    def _coord(label: str, salt: bytes) -> float:
+        digest = hashlib.blake2b(label.encode(), key=salt, digest_size=8).digest()
+        return int.from_bytes(digest) / 2**64
+
+    def _label(row: Any) -> str:
+        parts = [
+            str(row.get(c, "?"))
+            for c in ("dynamics", "credit", "update", "topology", "task")
+        ]
+        return "|".join(parts)
+
+    labels = [_label(row) for _, row in df.iterrows()]
+    return df.assign(
+        x=[_coord(label, b"x") for label in labels],
+        y=[_coord(label, b"y") for label in labels],
+    )
+
+
 def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMapData:
     """Adapt snapshot to DiscoveryMap data."""
     from computronium.ui.components.discovery_map import (
@@ -46,6 +75,8 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
     # Load cells and voids for the atlas
     cells_df = load_cells(root / "kb.sqlite")
     voids_df = align_void_columns(load_voids(root / "structural_voids.jsonl"))
+    cells_df = _with_layout(cells_df)
+    voids_df = _with_layout(voids_df)
 
     # Get Pareto front keys
     pareto_keys: set[str] = set()
@@ -53,6 +84,13 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
         from computronium.autoscientist.objectives import DEFAULT_OBJECTIVES
 
         top = pareto_top(cells_df, k=len(cells_df), objectives=DEFAULT_OBJECTIVES)
+        if "key" not in top.columns:
+            top = top.assign(
+                key=[
+                    f"{row['dynamics']}|{row['credit']}|{row['update']}"
+                    for _, row in top.iterrows()
+                ]
+            )
         pareto_keys = set(top["key"].tolist())
 
     # Create specimens and regions using existing helper

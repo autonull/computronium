@@ -57,10 +57,13 @@ def get_mode() -> Register:
 
 
 def set_mode(register: Register, persist: bool = True) -> None:
-    """Switch register and notify all listeners."""
+    """Switch register, notify all listeners, and publish ModeChanged on the bus."""
     if _current_mode.register == register:
         return
     _current_mode.notify(register)
+    from computronium.ui.event_bus import ModeChanged, event_bus
+
+    event_bus.publish(ModeChanged(mode=register))
     if persist:
         _persist(register)
 
@@ -333,3 +336,10 @@ class BasePanel(GlossaryAware):
     # Subclasses must implement
     def render(self) -> ui.element:
         raise NotImplementedError
+
+    def update_data(self, data: object | None = None, **kwargs: object) -> None:
+        """Push fresh data into the panel; no-op by default.
+
+        Data-driven panels override this, accepting the panel's typed data
+        object positionally plus component-specific keyword arguments.
+        """

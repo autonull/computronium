@@ -1,11 +1,33 @@
 # GAME.todo2.md — Remaining Work: Full Integration & Usability (TODO-UX2 "Summit")
 
-**Status:** In progress — Phase A + X1–X3 code complete (2026-09-23); Phase B/C/D remaining.
+**Status:** In progress — Phase A + X1–X3 + Phase B code complete (2026-09-23); Phase C partial, D/X4–X5 remaining.
 **Scope:** `computronium/ui/dashboard.py`, `computronium/visualization/live_atlas.py`, UI test automation, extensibility layer
 **Predecessor:** GAME.todo.md (M0–M3 code complete; this plan closes the integration gap and lays foundation for ambitious evolution)
 **Verification posture:** All new locks at L4 (property/sampled numerical) per repo taxonomy.
 
 ## Progress Log
+
+**Done (commit: Phase B + C locks + integration fixes):**
+- **B1 ✅** `DashboardApp._route_ws_events` — `/ws/events` payloads flow bus → classified `DashboardEvent` → `ActivityFeed.add_event` + `FieldReports.add_report` + `_toast_for_alert`. WS consumers slimmed to raw publish (dedupe: routing now lives in one handler).
+- **B2 ✅** Telemetry → `loss_history` (capped 60) → `HealthPanel.update_data(loss_history=...)`; new `_render_loss_curve` echart on HealthPanel. Paint throttled ≤1/2s via `_last_ws_paint` (`_WS_PAINT_INTERVAL_S`).
+- **B3 ✅** Glossary header action (`_open_glossary`): searchable dialog over `GlossaryService.all_entries()`, both registers shown. `loss_curve` glossary key added.
+- **B4 ✅** `set_mode` publishes `ModeChanged` on the bus (lazy import avoids cycle); `DashboardApp._on_mode_changed` rebuilds drawer + re-renders. Coverage: `tests/ui/test_dashboard_interactions.py::test_mode_toggle_publishes_and_rerenders`.
+- **C2 ✅ (partial)** `tests/ui/` created: `test_dashboard_render.py` (UX-L13: all 20 panels render populated AND on empty root; registry totality; explorer nav hiding; panel switch). Found & fixed real integration bugs (see Fixes below).
+- **C3 ✅ (partial)** `tests/ui/test_dashboard_interactions.py`: mode toggle publish/re-render, WS fan-out to feed+reports, telemetry throttle, bus→dashboard delivery, glossary keys.
+- **UX-L12 ✅** `tests/property/test_ux_l12_snapshot_totality.py` (Hypothesis, 25 examples): malformed defect/void lines, missing files, malformed heartbeat → `render_snapshot` never raises.
+- **UX-L15 ✅** `tests/property/test_ux_l15_adapter_equivalence.py`: repair-bench↔funnel_rows, health tiles↔health dict, discovery-map specimens↔cells, tradeoffs accuracies⊆pareto front.
+- **UX-L16 ✅** `tests/property/test_ux_l16_eventbus_delivery.py`: sync/async delivery, type isolation, unsubscribe, handler isolation.
+- **Progress adapter smell fixed (X2 note #5):** `_get_panel_data` now wraps `adapt_progress_panel` with `functools.partial(recognition_store=...)` — the 3-arg `FunctionAdapter.adapt` call (a latent TypeError) is gone.
+- **Fixes surfaced by the new tests (proof C-suite earns its keep):**
+  - `Register(ui_mode)` — instantiating `typing.Literal` raised TypeError whenever `--ui-mode lab|explorer` (pre-existing); replaced with `set_mode(ui_mode)`.
+  - `spec.adapter.adapt(snapshot, root, store)` 3-arg call → partial (above).
+  - `CampaignCardGallery` registered as bare class (returns class, not instance) and not a `BasePanel` — registry now types factories as `PanelLike` Protocol (render-only); `PanelRegistry.register` is upsert; root-dependent campaigns factory re-registered in `DashboardApp.__init__`.
+  - `adapt_discovery_map` crashed: `pareto_top` output has no `key` column (now synthesized 3-part key) and `cells_df` lacks `x`/`y` (`_with_layout` adds deterministic blake2b-hash coordinates — pure stand-in for UMAP).
+  - `_generate_regions` degenerate bounds (all cells same primitives) yielded zero regions — epsilon padding added.
+  - Missing ICONS keys (`circle`, `award`, `flag`, `history`, `trending_up`) crashed FieldReports/LineageViewer/ProgressPanel renders — added to `design_tokens.ICONS`.
+  - `read_defects` / `load_voids` / `void_summary_rows` now skip malformed JSONL lines (UX-L12 totality).
+  - `EventBus` handler types generalized (PEP 695 generic `EventHandler[E]`, loose internal storage, cast at dispatch) — fixes contravariance errors for subscribed panel-specific handlers.
+  - `BasePanel.update_data(data=None, **kwargs)` no-op hook + all 5 data panels accept their typed data positionally; `DashboardApp._push_data` duck-typed push replaces hasattr probes.
 
 **Done (commit: Phase A + X1–X3):**
 - **X1** ✅ `computronium/ui/panel_registry.py` — `PanelSpec`/`PanelRegistry` with `register`, `get`, `all_specs`, `visible_specs(context)`, `keys`; global `panel_registry` instance. Dashboard registers all 20 panels at module import (`_register_panels()` in dashboard.py). Note: `register_panel` class-decorator exists but DashboardApp uses `panel_registry.register(...)` directly (factory is an arg, not the decorated class).
