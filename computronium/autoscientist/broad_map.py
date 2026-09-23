@@ -922,11 +922,14 @@ def next_burst_tag(kb_path: Path) -> str:
 def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRow]:
     """Measured cells with their maturity/burst provenance (KB entries)."""
     from computronium.knowledge import KnowledgeBase
+    from computronium.visualization.atlas import UNBOUNDED_ROWS
 
     rows: list[_CellRow] = []
     if not kb_path.exists():
         return rows
-    for entry in KnowledgeBase(kb_path).query():
+    # auto_embed=False + unbounded limit: full-campaign read without vector init;
+    # query() defaults to the newest 100 rows, which truncated dashboard stats.
+    for entry in KnowledgeBase(kb_path, auto_embed=False).query(limit=UNBOUNDED_ROWS):
         topic = str(entry.topic)
         if not topic.startswith("experiment:"):
             continue

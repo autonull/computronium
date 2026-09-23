@@ -31,6 +31,9 @@ from computronium.autoscientist.objectives import (
 )
 
 logger = logging.getLogger("atlas")
+
+# Read-all sentinel for dashboard/atlas loaders (SQLite treats a huge LIMIT as unbounded).
+UNBOUNDED_ROWS = 1_000_000_000
 if TYPE_CHECKING:
     import argparse
     from pathlib import Path
@@ -87,9 +90,13 @@ def load_cells(kb_path: Path, task: str | None = None) -> pd.DataFrame:
     """
     from computronium.knowledge import KnowledgeBase
 
-    kb = KnowledgeBase(kb_path)
+    if not kb_path.exists():
+        return pd.DataFrame()
+    # auto_embed=False: read-only load must not pay vector-store init;
+    # explicit limit: query()'s default (100) silently truncated campaigns.
+    kb = KnowledgeBase(kb_path, auto_embed=False)
     rows: list[AtlasRow] = []
-    for entry in kb.query():
+    for entry in kb.query(limit=UNBOUNDED_ROWS):
         hp = entry.hyperparameters
         topic = str(entry.topic)
         if not topic.startswith("experiment:"):
@@ -284,40 +291,74 @@ def pareto_top(
             logger.warning("Objective column %s not in DataFrame; skipping", name)
             return df
 
-    pts = df[obj_names].to_numpy()
-    dominated = np.zeros(len(df), dtype=bool)
+    pts = df[obj_names].to_numpy(dtype=float)
+    signs = np.where([d == "maximize" for d in directions], 1.0, -1.0)
+    oriented = pts * signs  # larger is better on every axis
+    has_nan = bool(np.isnan(oriented).any())
 
-    for i, row_vals in enumerate(pts):
-        # A point is dominated if another point is >= in all maximize objectives
-        # and <= in all minimize objectives, with at least one strict
-        for j, other_vals in enumerate(pts):
-            if i == j:
-                continue
-            dominates = True
-            strict = False
-            for val_i, val_j, direction in zip(
-                row_vals, other_vals, directions, strict=False
-            ):
-                if direction == "maximize":
-                    if val_j < val_i:
-                        dominates = False
-                        break
-                    if val_j > val_i:
-                        strict = True
-                else:  # minimize
-                    if val_j > val_i:
-                        dominates = False
-                        break
-                    if val_j < val_i:
-                        strict = True
-            if dominates and strict:
-                dominated[i] = True
-                break
+    if len(obj_names) == 2 and not has_nan:
+        dominated = _dominated_2d(oriented)
+    else:
+        dominated = _dominated_vectorized(oriented)
 
     front = df.loc[np.flatnonzero(~dominated)].sort_values(
         obj_names[0], ascending=(directions[0] == "minimize")
     )
     return front.head(k)
+
+
+def _dominated_2d(oriented: np.ndarray) -> np.ndarray:
+    """Dominance mask for two all-maximize objectives via sort + sweep (O(n log n)).
+
+    Points are processed best-first on axis 0; a point survives iff its axis-1
+    value beats every earlier point, ties on both axes (exact duplicates)
+    survive together — matching the strict pairwise definition.
+    """
+    o0 = oriented[:, 0]
+    o1 = oriented[:, 1]
+    order = np.lexsort((-o1, -o0))  # o0 desc, then o1 desc
+    dominated = np.zeros(len(o0), dtype=bool)
+    max_o1 = -np.inf
+    o0_at_max_o1 = -np.inf
+    for idx in order:
+        v0, v1 = o0[idx], o1[idx]
+        if v1 > max_o1:
+            max_o1 = v1
+            o0_at_max_o1 = v0
+        elif v1 < max_o1 or v0 < o0_at_max_o1:
+            dominated[idx] = True
+        # v1 == max_o1 and v0 == o0_at_max_o1 → exact duplicate of a survivor
+    return dominated
+
+
+def _dominated_vectorized(oriented: np.ndarray) -> np.ndarray:
+    """Dominance mask via chunked broadcast; preserves NaN-as-equal semantics.
+
+    A NaN objective neither fails the >= test nor contributes strictness —
+    matching the original pairwise loop (`NaN < x` and `NaN > x` are both
+    False). Chunks bound memory at ``_CHUNK × n`` booleans for large n.
+    """
+    n = len(oriented)
+    dominated = np.zeros(n, dtype=bool)
+    chunk = max(1, min(1024, _DOMINANCE_CHUNK // max(n, 1)))
+    for start in range(0, n, chunk):
+        block = oriented[start : start + chunk]  # (c, d)
+        nan_block = np.isnan(block)[:, None, :]
+        nan_all = np.isnan(oriented)[None, :, :]
+        ge = (block[:, None, :] <= oriented[None, :, :]) | nan_block | nan_all
+        ge_all = ge.all(axis=2)
+        strict = (
+            (block[:, None, :] < oriented[None, :, :]) & ~nan_block & ~nan_all
+        ).any(axis=2)
+        dom = ge_all & strict
+        rows = np.arange(start, start + len(block))
+        dom[np.arange(len(block)), rows] = False  # exclude self
+        dominated[start : start + len(block)] = dom.any(axis=1)
+    return dominated
+
+
+# Boolean-work budget per broadcast: chunk_rows × n ≤ this (≈8 MB per temp).
+_DOMINANCE_CHUNK = 8_000_000
 
 
 def _islands_figure(
