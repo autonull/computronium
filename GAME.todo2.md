@@ -1,12 +1,25 @@
 # GAME.todo2.md — Remaining Work: Full Integration & Usability (TODO-UX2 "Summit")
 
-**Status:** In progress — Phase A + **X1–X5** + Phase B code complete; Phase C: C2/C3/C5/C7 done, **C1 fixed**, C4 scan live but **RED** (real a11y violations), C6 static lock green / behavioral grayscale written-not-yet-green; **D1–D4 code complete (D2 budgets green)**, D5 gallery verify pending.
+**Status:** In progress — Phase A + **X1–X5** + Phase B code complete; Phase C: **C1/C2/C3/C4/C5/C7 done (C4 axe 0 critical/serious in both registers)**, **C6 green** (static marker-redundancy + behavioral grayscale 6.10 > 5.0 floor); **D1–D4 code complete (D2 budgets still green)**, D5 gallery-compat green + figure-lock verdict recorded (pre-existing environmental drift, deliberately not re-pinned).
 **Scope:** `computronium/ui/dashboard.py`, `computronium/visualization/live_atlas.py`, UI test automation, extensibility layer
 **Predecessor:** GAME.todo.md (M0–M3 code complete; this plan closes the integration gap and lays foundation for ambitious evolution)
 **Verification posture:** All new locks at L4 (property/sampled numerical) per repo taxonomy.
 **Test philosophy (user directive 2026-09-23):** "Don't make overly brittle tests. We need agile flexible development." → no pixel-baseline screenshot locks; behavioral/property checks with generous tolerances only.
 
 ## Progress Log
+
+**Done (checkpoint: C4 green + C6 green + D5 verdict):**
+- **C4 ✅ axe 0 critical/serious in BOTH registers** (explorer + lab), teardown clean:
+  (a) `aria-label` on 3 header icon buttons (glossary/tour/quiz) + DiscoveryMap view switch (dynamic `tr("view")`); `language="en"` on `cli/dashboard.py`, `autoscientist/dashboard.py`, a11y + grayscale test pages.
+  (b) **Page-load timeout 4 s → 30 s** in both Screen tests — NiceGUI's session driver default; dashboard first render (glossary + atlas + UMAP) exceeds 4 s. Flaky `Timed out receiving message from renderer` retries are gone.
+  (c) **Contrast fixes:** `PRIMARY = "#1a5fa8"` + `SECONDARY = "#1c7d74"` in `design_tokens.py`, applied via `ui.colors()` in `DashboardApp.build()` (NiceGUI defaults #5898d4 3.06:1 / teal 2.99:1 both fail); `text-grey` → `text-grey-8` (#616161, 6.19:1) on the 3 flagged discovery_map captions + atlas_pending empty state; `.q-header .ellipsis` white CSS + `mode_toggle_select().style("color: white;")` for dark-text-on-primary selects.
+  (d) Teardown noise allowlisted via `screen.allowed_js_errors`: `lang/en.umd.prod.js` 404 (English is built-in — NiceGUI ships no bundle for it).
+  (e) **Drive-by fix:** `ui/__init__.py` `__all__` was missing 6 entries (`BasePanel`, `GlossaryAware`, `GlossaryService`, `Register`, `get_glossary_service`, `get_mode`) while the imports existed — restored in RUF022 sort order. **Watch out:** `ruff check` on `ui/__init__.py` is the canary; bare `pyright` reports phantom missing-imports (wrong interpreter) — always `uv run pyright`.
+  (f) **Glossary `"atlas"` key added** (`Map`/`Atlas`) — `render_header("atlas")` warned on every render.
+- **C6 ✅ behavioral grayscale green:** mean-abs-diff **6.10 > 5.0** floor (populated vs empty); Plotly `Resize must be passed a displayed plot div` teardown noise allowlisted (hidden containers at teardown — external).
+- **D5 verdict:** gallery-compat **10/10 green** (`--root` comma-split intact, dashboard imports with gallery); `test_figure_lock` RED on `compose_6axis` — **pre-existing environmental drift, deliberately NOT re-pinned:** demo file + manifest unchanged since emit record (`19c84ebd`), UI changes cannot affect MNIST training numerics, and the dirty `run_records/*.json` predates this session. Re-pinning training figures masks real drift — needs a maintainer decision + deliberate demo re-run.
+- **`screenshots/` gitignored** (Screen-fixture output; was untracked noise).
+- **Verification (this checkpoint):** `ruff format`+`check` clean; `uv run pyright` **0 errors**; UI tier **21 passed**; a11y file **13 passed + 1 skipped (manual crawl) + axe green**; UX property (L1/L4/L12/L15/L16 + L6 markers) **23 passed**; perf budgets **3 passed** (D2 still green). Full property suite: 4 failed, all verified unrelated + pre-existing (axis certs, geometry wiring lock, memory-budget thermo, positive-control ceiling — none touch UI paths).
 
 **Done (checkpoint: D2 close-out + X4/X5 + D1/D3/D4 + C1/C4-harness):**
 - **D2 ✅ all five hotspots closed:**
@@ -32,16 +45,17 @@
 
 **Handoff notes for next session (implement, don't re-explore):**
 1. **C4 remaining (ordered):** (a) add `aria-label` props to the 3 header icon buttons in `dashboard.py:_build_header` (glossary `menu_book`, tour `help_outline`, quiz `psychology`) — glossary keys? plain English OK if no key; (b) `aria-label` on DiscoveryMap view switch (`discovery_map.py` `ui.switch(value=self._show_table…)` — `.props('aria-label="…"')` reaches Quasar root/role); (c) re-run axe — the enhanced mapping now prints `targets`/`summary` per violation → fix the 8 `color-contrast` nodes (suspects: `text-white/80` subtitle, `text-grey` captions — adjust classes to tokens that pass; `meets_aa` helpers in `ui/a11y.tokens`); (d) same `language="en"` for `cli/dashboard.py` `@ui.page("/")` **and** the grayscale test page; (e) capture the teardown console-error text (run with `-s` / check `caplog`); if it's external noise (fonts/socket), whitelist via `screen.allowed_js_errors` — if it's ours, fix;    (f) re-run until 0 critical/serious in BOTH registers (the test scans explorer then lab).
-   → DONE (this session): (a) aria-labels added to glossary/tour/quiz buttons; (b) aria-label on DiscoveryMap view switch (dynamic, uses `tr("view")`); (c) `language="en"` added to `cli/dashboard.py` + `autoscientist/dashboard.py` `@ui.page` + grayscale test page; (d) color-contrast scan + teardown console capture still pending.
-2. **C6 remaining:** first green run of `tests/ui/test_ux_l6_grayscale.py` — diagnose the earlier fixture error (likely the same console-error teardown fail or `ui.page` registered after a failed prior run); page needs `language="en"`? (cosmetic for diff — optional). Floor is generous (5.0); populated side waits for "recomputed embedding" caption (atlas fit ≤30 s via `_wait_for_source`).
-3. **D5 verify-no-op:** run `uv run python -m pytest tests/integration/test_gallery_lock.py tests/integration/test_gallery_lock_declared.py` — no dashboard DEMOS row exists → should pass unchanged.
-4. **Also run before commit/close:** `tests/integration/test_ux_l8_gallery_compat.py` (asserts `comp dashboard --help` — new `--root` is type=str now) and the UX-L5 token/keyboard CSS classes in the same a11y file (they passed earlier).
+   → ✅ FULLY DONE (this session): (a–b) aria-labels done; (c) contrast fixed via `PRIMARY #1a5fa8` + `SECONDARY #1c7d74` (`ui.colors`), `text-grey-8` captions, white `.ellipsis` CSS; (d) `language="en"` on all pages; (e) teardown noise allowlisted (`lang/en.umd.prod.js` 404); (f) **axe 0 critical/serious in BOTH registers, teardown clean**. Added: page-load timeout 4 s→30 s in both Screen tests (first render exceeds driver default).
+2. **C6 ✅ DONE this session:** grayscale green (mean-abs-diff 6.10 > 5.0 floor); Plotly resize teardown noise allowlisted. Static marker-redundancy lock was already green.
+3. **D5 verdict recorded:** gallery-compat 10/10 green; `test_figure_lock` RED on `compose_6axis` = pre-existing environmental drift (demo unchanged since emit `19c84ebd`) — deliberately NOT re-pinned.
+4. **Also run before commit/close:** ✅ done — `test_ux_l8_gallery_compat.py` green, UX-L5 token/keyboard CSS classes green (13 passed + 1 manual skip), UI tier 21 passed, perf budgets 3 passed, `uv run pyright` 0 errors.
 5. **Stage ONLY my files** (35 pre-existing dirty are NOT mine — continual/hyperopt/deployments/ceec/scripts/run_records + pre-existing noqa migrations). Mine: `conftest.py pyproject.toml uv.lock README.md GAME.todo2.md docs/platform/dashboard.md computronium/{cli,ui,visualization,autoscientist}/…` (exact list in commit) + `tests/{a11y,property,ui,perf}/…`. `tests/a11y/test_ux_l5_a11y.py` was pre-existing-dirty but was **rewritten this session** → stage it. Never stage `docs/figures/run_records/*.json` or `screenshots/` (screen-fixture output; consider gitignoring `screenshots/`).
 6. **NiceGUI Screen mechanics (learned the hard way):** register `@ui.page` **inside the test** (the plugin's `nicegui_reset_globals` wipes routes before each test); `main_file=""` ini is required; driver implicit wait is 4 s — use the `_wait_for_page_source` poller (30 s) for atlas-dependent text; session-scoped shared Chrome; teardown auto-fails the test on console SEVERE/ERROR and saves `screenshots/<pid>/<test>.failed.png`.
 7. **Cache gotcha:** `kb_load_cached` key must stay namespaced per loader family (`("cells", task)` / `("measured", task)`) — a shared key returns the wrong type.
 8. **Opportunities found this session (not blocking):**
-   - `front_history_rows` builds a df with column `walltime` but DEFAULT objectives want `walltime_s` → `pareto_top` logs "Objective column walltime_s not in DataFrame; skipping" **on every `render_snapshot`** (5×/render). Align the column name (or rename the objective there) — cheap win, removes log spam + makes front-history actually objective-filtered.
-   - `render_header` passes key `"atlas"` which is **missing from glossary.json** (`tr()` warns + falls back). Add the key or stop passing it.
+   - `front_history_rows` builds a df with column `walltime` but DEFAULT objectives want `walltime_s` → `pareto_top` logs "Objective column walltime_s not in DataFrame; skipping" **on every `render_snapshot`** (5×/render). Align the column name (or rename the objective there) — cheap win, removes log spam + makes front-history actually objective-filtered. STILL OPEN.
+   - ~~`render_header` passes key `"atlas"` missing from glossary.json~~ ✅ FIXED this session (`Map`/`Atlas`).
+   - ~~`screenshots/` gitignore~~ ✅ DONE this session.
    - UMAP optional-import flakiness in this env ("issubclass() arg 2…" → t-SNE fallback, later runs succeed) + `n_neighbors` warnings on tiny fixtures — cosmetic; worth pinning `n_jobs`/`n_neighbors` for n<10 if the noise ever gates tests.
    - Two `build_dashboard`s still coexist (`ui.dashboard` = CLI, `live_atlas` = smoke) — unify (carried from previous handoff).
    - `kb_load_cached` clear-on-full is coarse; FIFO eviction if 16 roots ever matter.
@@ -174,9 +188,9 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 | **C1** | Add `nicegui[testing]` to dev deps; adopt NiceGUI `@ui_test` / `Screenshot` fixtures (or Playwright harness). | ⚠️ dep added; **extra missing on 3.16.0** — C2/C3 don't need it. |
 | **C2** | `tests/ui/test_dashboard_render.py` — headless render of every panel against synthetic root fixture (tiny KB sqlite + one defect row + one void row + empty‑root variants). Assert: no exception, panel content non‑empty where data exists, correct empty‑state copy where it doesn't. | 18 panels × {empty, populated} roots = deterministic pass. |
 | **C3** | `tests/ui/test_dashboard_interactions.py` — click‑through: panel switch, mode toggle re‑render, table/map view toggle (DiscoveryMap), pause feed, "What am I looking at?" drawer opens. | Every interactive element reachable & functional headless. |
-| **C4** | Replace skipped UX‑L5 axe tests with real Playwright+axe scan against running dashboard on synthetic fixture; keep manual crawl checklist for cert only. | `test_axe_no_critical_or_serious` runs in CI, not skipped. **Remaining.** |
+| **C4** | Replace skipped UX‑L5 axe tests with real Playwright+axe scan against running dashboard on synthetic fixture; keep manual crawl checklist for cert only. | `test_axe_no_critical_or_serious` runs in CI, not skipped. ✅ **Done — 0 critical/serious in both registers.** |
 | **C5** | Unskip UX‑L9 `test_panel_renders_all_six_invariants` and UX‑L10 component‑integration tests using headless render from C2. | ✅ 0 skips in UX-L9/L10 (was 7 skipped). |
-| **C6** | Screenshot regression baseline (reduced‑motion + grayscale per UX‑L6): capture all panels, store under `tests/ui/baselines/`, compare on CI. | UX‑L6 snapshot test implemented. **Remaining.** |
+| **C6** | Screenshot regression baseline (reduced‑motion + grayscale per UX‑L6): capture all panels, store under `tests/ui/baselines/`, compare on CI. | UX‑L6 snapshot test implemented. ✅ **Done — grayscale behavioral green (6.10 > 5.0 floor), no brittle pixel baselines per user directive.** |
 | **C7** | UX‑L1 (Pareto equivalence) & UX‑L4 (readability script `scripts/lint_readability.py`) — referenced in GAME.todo.md §6 but no test files; create them. | ✅ All 11 UX locks have real test files; 0 dead references. |
 
 ### D — Observability, Performance & Polish (P1/P2)
@@ -187,7 +201,7 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 | **D2** | Performance budgets as CI gates: DiscoveryMap ≤100 ms on 5k cells (measured in C2), WebSocket→UI debounce ≤1 Hz, panel virtualization for >1k rows. | Budgets enforced in `tests/perf/test_budgets.py`. |
 | **D3** | `--rebuild-ui-state` end‑to‑end test: CLI flag → replay → sqlite → ProgressPanel round‑trip. | Flag demonstrably does something. |
 | **D4** | `docs/platform/dashboard.md` — usage guide (flags, modes, panels, kill switches), architecture diagram, extension how‑to. | Doc exists, linked from README. |
-| **D5** | Demo/gallery manifest: add one dashboard demo figure if gallery lock requires it (check `comp gallery` manifest rules). | UX‑L8 green with any new figure. |
+| **D5** | Demo/gallery manifest: add one dashboard demo figure if gallery lock requires it (check `comp gallery` manifest rules). | UX‑L8 green (10/10 compat green, no DEMOS row needed). `test_figure_lock` RED on `compose_6axis` = pre-existing environmental drift — deliberately not re-pinned. |
 
 ---
 
@@ -203,7 +217,7 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 | UX‑L15 (new) | Adapter output fields match source schema (L4 equivalence) | `tests/property/test_ux_l15_adapter_equivalence.py` |
 | UX‑L16 (new) | EventBus delivers every WS message to subscribed panels within 2 poll cycles | `tests/property/test_ux_l16_eventbus_delivery.py` |
 
-Existing UX‑L1..L16 all have real test files. Remaining C4 (axe) + C6 (screenshots) convert the last UX‑L5/L6 skips.
+Existing UX‑L1..L16 all have real test files. C4 (axe) + C6 (grayscale) are green — no UX‑L5/L6 skips remain (only the intentional manual keyboard crawl).
 
 ---
 
@@ -233,7 +247,7 @@ Existing UX‑L1..L16 all have real test files. Remaining C4 (axe) + C6 (screens
 3. **A2 + A3 + A4** (adapters + wiring) — core integration.
 4. **C2** (headless render test proves A2/A3).
 5. **B1‑B4** (live streams + nav completeness).
-6. **C1 + C3 + C4 + C5** (automation expands to interactions + unskips). — C3/C5 done; C1 dep-only; **C4 remaining**
+6. **C1 + C3 + C4 + C5** (automation expands to interactions + unskips). — ✅ all done (C4 axe green both registers)
 7. **C6 + C7** (L1/L4/L6 locks). — **C7 done**; **C6 remaining**
 8. **A5 + D3** (recognition wiring + rebuild flag test).
 9. **X4‑X5** (multi‑root, config hot‑reload) — incremental, behind flags.

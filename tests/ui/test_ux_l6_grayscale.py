@@ -56,6 +56,15 @@ def test_populated_vs_empty_distinguishable_in_grayscale(
     from computronium.ui.dashboard import build_dashboard
     from tests.ui.fixture import seed_campaign_root
 
+    # NiceGUI's session driver defaults to a 4 s page-load timeout; the
+    # dashboard's first render (glossary + atlas + UMAP) can exceed it.
+    screen.selenium.set_page_load_timeout(30)
+    # language="en" requests a locale bundle NiceGUI doesn't ship for English.
+    # Plotly throws resize error on hidden containers at teardown — external noise.
+    screen.allowed_js_errors.extend([
+        "lang/en.umd.prod.js",
+        "Resize must be passed a displayed plot div",
+    ])
     populated = tmp_path / "populated"
     seed_campaign_root(populated)
     empty = tmp_path / "empty"

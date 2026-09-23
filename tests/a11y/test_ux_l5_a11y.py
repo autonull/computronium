@@ -159,6 +159,12 @@ class TestA11yAutomated:
         from tests.ui.fixture import seed_campaign_root
 
         assert AXE_SOURCE_PATH.is_file(), f"vendored axe missing: {AXE_SOURCE_PATH}"
+        # NiceGUI's session driver defaults to a 4 s page-load timeout; the
+        # dashboard's first render (glossary + atlas + UMAP) can exceed it.
+        screen.selenium.set_page_load_timeout(30)
+        # language="en" makes NiceGUI request a locale bundle that isn't
+        # shipped for English (built-in) — external 404 noise, not our bug.
+        screen.allowed_js_errors.append("lang/en.umd.prod.js")
         root = tmp_path / "a11y_root"
         seed_campaign_root(root)
         holder = {"ui_mode": "explorer"}

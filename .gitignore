@@ -28,6 +28,7 @@ scratch/
 *.db-*
 artifacts/
 reports/
+screenshots/
 checkpoints/
 lightning_logs/
 runs

@@ -35,7 +35,7 @@ from computronium.ui.components.tradeoffs_panel import TradeoffsPanel
 from computronium.ui.components.veto_log import VetoLog
 from computronium.ui.components.workshop import WorkshopPanel
 from computronium.ui.data_adapters import AdapterContext
-from computronium.ui.design_tokens import css_custom_properties
+from computronium.ui.design_tokens import PRIMARY, SECONDARY, css_custom_properties
 from computronium.ui.event_bus import (
     ArtifactChanged,
     ConfigChanged,
@@ -575,7 +575,7 @@ class DashboardApp:
 
             with ui.row().classes("items-center gap-4"):
                 # Mode toggle
-                mode_toggle_select()
+                mode_toggle_select().style("color: white;")
                 # Gamify toggle
                 if self.gamify:
                     ui.switch("Gamify", value=True).props("color=white").classes(
@@ -908,6 +908,8 @@ class DashboardApp:
 
     def build(self) -> None:
         """Build the complete dashboard UI."""
+        # AA-compliant colors (NiceGUI defaults fail axe contrast)
+        ui.colors(primary=PRIMARY, secondary=SECONDARY)
         # Inject design tokens and a11y CSS
         ui.add_head_html(f"<style>{css_custom_properties()}</style>")
         ui.add_head_html(f"<style>{a11y_css()}</style>")

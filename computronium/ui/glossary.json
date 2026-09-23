@@ -30,6 +30,10 @@
       "explorer": "Arrived",
       "lab": "Arrived"
     },
+    "atlas": {
+      "explorer": "Map",
+      "lab": "Atlas"
+    },
     "atlas_pending": {
       "explorer": "Map loading...",
       "lab": "Atlas pending"

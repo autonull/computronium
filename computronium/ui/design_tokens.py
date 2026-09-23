@@ -23,7 +23,16 @@ SEMANTIC = {
     "danger": "#c82333",  # darker red - 5.6:1 on white
     "info": "#0d6efd",  # bootstrap primary blue - 4.5:1 on white
     "neutral": "#495057",  # darker grey - 8.2:1 on white
+    "secondary": "#1c7d74",  # darker teal - 4.96:1 on white (was #26a69a)
 }
+
+# Quasar/NiceGUI primary — AA in both directions (white-on-primary ≥4.5,
+# primary-on-white ≥4.5, white/80–90 header captions ≥4.5). NiceGUI's
+# default #5898d4 only reaches 3.06:1 and fails axe color-contrast.
+PRIMARY = "#1a5fa8"
+
+# Quasar/NiceGUI secondary — AA on white (≥4.5). NiceGUI's default teal fails.
+SECONDARY = "#1c7d74"
 
 # Outcome badges (from live_atlas.OutcomeStyle) — CVD-safe with shape redundancy
 # Colors meet 3:1 UI contrast on light mode (white background)

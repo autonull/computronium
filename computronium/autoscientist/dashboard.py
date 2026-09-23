@@ -235,7 +235,7 @@ async def _run_nicegui_dashboard(state: DashboardState, config: DashboardConfig)
     """Run dashboard with NiceGUI."""
     from nicegui import app, ui
 
-    @ui.page("/")
+    @ui.page("/", language="en")
     async def index(client: Client):
         """Main dashboard page."""
         ui.colors(

@@ -107,13 +107,13 @@ class DiscoveryMap(BasePanel):
                 if self.fog_coverage_pct < 100:
                     ui.label(
                         f"({100 - self.fog_coverage_pct:.0f}% {self.tr('fog_of_war')})"
-                    ).classes("text-caption text-grey")
+                    ).classes("text-caption text-grey-8")
 
             # View toggle: Map / Table
             with ui.row().classes("w-full items-center justify-between"):
                 ui.label().classes("flex-1")  # Spacer
                 with ui.row().classes("items-center gap-2"):
-                    ui.label(self.tr("view")).classes("text-sm text-grey")
+                    ui.label(self.tr("view")).classes("text-sm text-grey-8")
                     ui.switch(
                         value=self._show_table,
                         on_change=lambda e: self._toggle_view(bool(e.value)),
@@ -157,11 +157,11 @@ class DiscoveryMap(BasePanel):
             ui.label(
                 "UMAP layout: recomputed embedding, not a trajectory. "
                 "Markers use shape encoding (never color-only)."
-            ).classes("text-caption text-grey mt-1")
+            ).classes("text-caption text-grey-8 mt-1")
         else:
             with ui.card().classes("w-full p-8 items-center"):
-                ui.icon(ICONS["map"]).classes("text-6xl text-grey")
-                ui.label(self.tr("atlas_pending")).classes("text-grey")
+                ui.icon(ICONS["map"]).classes("text-6xl text-grey-8")
+                ui.label(self.tr("atlas_pending")).classes("text-grey-8")
 
     def _table_rows(self) -> list[dict[str, str]]:
         """Table rows for the current specimens, capped at MAX_RENDERED_ROWS."""
