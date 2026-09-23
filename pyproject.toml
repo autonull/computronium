@@ -92,6 +92,7 @@ dev = [
     "onnxruntime",
     "datasets",
     "nicegui>=3.16.0",
+    "nicegui[testing]>=3.16.0",
     "plotly>=6.9.0",
     "umap-learn>=0.5.9",
     "cryptography==50.0.0",
@@ -125,7 +126,7 @@ export = ["onnx", "onnxscript", "onnxruntime"]
 p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
 # --- Desktop UI ---
-ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0"]
+ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0", "nicegui[testing]>=3.16.0"]
 
 # --- System monitoring ---
 monitoring = ["psutil"]

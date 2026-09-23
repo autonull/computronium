@@ -173,7 +173,18 @@ class EpisodeTimeline(BasePanel):
     ) -> None:
         """Update timeline data."""
         if events is None and data is not None:
-            events = list(data.episodes)  # type: ignore[attr-defined]
+            # Adapter EpisodeEvent: timestamp/event_type/cell_key/details (no episode)
+            events = [
+                EpisodeEvent(
+                    episode=int(e.metrics.get("episode", 0))
+                    if isinstance(getattr(e, "metrics", None), dict)
+                    else 0,
+                    timestamp=e.timestamp,
+                    event_type=e.event_type,
+                    detail=getattr(e, "details", ""),
+                )
+                for e in data.episodes  # type: ignore[attr-defined]
+            ]
         if events is not None:
             self.events = events
         if current_episode is not None:

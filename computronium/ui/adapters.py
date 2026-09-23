@@ -10,8 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from computronium.ui.components.constitution_health import (
+    ConstitutionHealthData,
+    create_invariants_from_monitor,
+)
 from computronium.ui.components.discovery_map import MapRegion, MapSpecimen
+from computronium.ui.components.lineage_viewer import LineageEdge, LineageNode
 from computronium.ui.data_adapters import make_adapter
+from computronium.ui.recognition import Badge, Quest, Record
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,6 +64,16 @@ def _with_layout(df: Any) -> Any:
         x=[_coord(label, b"x") for label in labels],
         y=[_coord(label, b"y") for label in labels],
     )
+
+
+def _coerce_float(mapping: dict[str, object], key: str, default: float = 0.0) -> float:
+    value = mapping.get(key, default)
+    return value if isinstance(value, int | float) else default
+
+
+def _coerce_str(mapping: dict[str, object], key: str, default: str = "") -> str:
+    value = mapping.get(key, default)
+    return value if isinstance(value, str) else default
 
 
 def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMapData:
@@ -121,9 +137,11 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
     atlas_figure = snapshot.atlas
 
     # Calculate fog coverage from strata
-    total_triples = (
-        int(snapshot.strata_rows[0]["triples"]) if snapshot.strata_rows else 0
-    )
+    if snapshot.strata_rows:
+        triples = snapshot.strata_rows[0].get("triples", 0)
+        total_triples = int(triples) if isinstance(triples, int | float) else 0
+    else:
+        total_triples = 0
     fog_coverage_pct = min(100.0, float(total_triples) * 10.0)  # rough heuristic
 
     return DiscoveryMapData(
@@ -152,13 +170,13 @@ class HealthTile:
 def adapt_health_panel(snapshot: DashboardSnapshot, root: Path) -> list[HealthTile]:
     """Adapt snapshot to HealthPanel tiles."""
     health = snapshot.health
-    open_defects = int(health.get("open_defects", 0))
-    resolved_defects = int(health.get("resolved_defects", 0))
-    measured_cells = int(health.get("measured_cells", 0))
-    nan_cells = int(health.get("nan_cells", 0))
-    cells_per_burst = float(health.get("cells_per_burst", 0.0))
+    open_defects = int(_coerce_float(health, "open_defects"))
+    resolved_defects = int(_coerce_float(health, "resolved_defects"))
+    measured_cells = int(_coerce_float(health, "measured_cells"))
+    nan_cells = int(_coerce_float(health, "nan_cells"))
+    cells_per_burst = _coerce_float(health, "cells_per_burst")
     last_burst_walltime = health.get("last_burst_walltime_s")
-    last_burst = health.get("last_burst", "N/A")
+    last_burst = _coerce_str(health, "last_burst", "N/A")
 
     tiles = [
         HealthTile(
@@ -197,8 +215,8 @@ def adapt_health_panel(snapshot: DashboardSnapshot, root: Path) -> list[HealthTi
         ),
         HealthTile(
             label="Last Burst Walltime",
-            value=f"{float(last_burst_walltime):.1f}s"
-            if last_burst_walltime is not None
+            value=f"{last_burst_walltime:.1f}s"
+            if isinstance(last_burst_walltime, int | float)
             else "—",
             status="running_smoothly",
             detail=f"Burst {last_burst}",
@@ -239,32 +257,34 @@ class TradeoffsData:
 
 
 def adapt_tradeoffs_panel(snapshot: DashboardSnapshot, root: Path) -> TradeoffsData:
-    """Adapt snapshot to TradeoffsPanel data."""
-    from computronium.autoscientist.objectives import DEFAULT_OBJECTIVES
-    from computronium.visualization.live_atlas import pareto_strip_rows
+    """Adapt snapshot to TradeoffsPanel data (membership from snapshot.pareto_rows)."""
+    from computronium.autoscientist.objectives import objective_names
 
-    pareto_rows = pareto_strip_rows(root, objectives=DEFAULT_OBJECTIVES)
     pareto_cells = [
         ParetoCell(
             key=str(row.get("label", "")),
             label=str(row.get("label", "")),
-            accuracy=float(row.get("accuracy", 0.0)),
-            bp_deficit=float(row.get("bp_deficit", 0.0)),
-            credit_alignment=float(row.get("credit_alignment", 0.0)),
-            settle_horizon=float(row.get("settle_horizon", 0.0)),
-            walltime_s=float(row.get("walltime_s", 0.0)),
+            accuracy=_coerce_float(row, "accuracy"),
+            bp_deficit=_coerce_float(row, "bp_deficit"),
+            credit_alignment=_coerce_float(row, "credit_alignment"),
+            settle_horizon=_coerce_float(row, "settle_horizon"),
+            walltime_s=_coerce_float(row, "walltime_s"),
             dynamics="",
             credit="",
             update="",
             topology="",
         )
-        for row in pareto_rows
+        for row in snapshot.pareto_rows
     ]
 
     return TradeoffsData(
         pareto_cells=pareto_cells,
-        objectives=[obj.name for obj in DEFAULT_OBJECTIVES],
-        selected_objective="accuracy",
+        objectives=list(objective_names(snapshot.objectives))
+        if snapshot.objectives
+        else [],
+        selected_objective=snapshot.objectives[0].name.value
+        if snapshot.objectives
+        else "accuracy",
     )
 
 
@@ -298,11 +318,11 @@ def adapt_repair_bench(snapshot: DashboardSnapshot, root: Path) -> RepairBenchDa
     defects = [
         DefectRow(
             defect_id=str(row.get("defect_id", "")),
-            count=int(row.get("count", 0)),
-            cells=int(row.get("cells", 0)),
+            count=int(_coerce_float(row, "count")),
+            cells=int(_coerce_float(row, "cells")),
             status=str(row.get("status", "")),
             error_class=str(row.get("error_class", "")),
-            last_seen=float(row.get("last_seen", 0.0)),
+            last_seen=_coerce_float(row, "last_seen"),
             message=str(row.get("message", "")),
         )
         for row in snapshot.funnel_rows
@@ -315,102 +335,28 @@ def adapt_repair_bench(snapshot: DashboardSnapshot, root: Path) -> RepairBenchDa
 # ============================================================================
 
 
-@dataclass(frozen=True, slots=True)
-class ConstitutionInvariant:
-    """A constitution invariant check."""
-
-    name: str
-    passed: bool
-    value: float
-    threshold: float
-    detail: str
-
-
-@dataclass(frozen=True, slots=True)
-class ConstitutionHealthData:
-    """Data for ConstitutionHealthPanel."""
-
-    invariants: list[ConstitutionInvariant]
-
-
 def adapt_constitution_health(
     snapshot: DashboardSnapshot, root: Path
 ) -> ConstitutionHealthData:
     """Adapt snapshot to ConstitutionHealthPanel data."""
-    # Placeholder - would read from constitution checks
-    invariants = [
-        ConstitutionInvariant(
-            name="Gradient Flow",
-            passed=True,
-            value=0.95,
-            threshold=0.9,
-            detail="Gradient norm within bounds",
-        ),
-        ConstitutionInvariant(
-            name="Stability Margin",
-            passed=True,
-            value=1.2,
-            threshold=1.0,
-            detail="Spectral radius < 1",
-        ),
-        ConstitutionInvariant(
-            name="Credit Alignment",
-            passed=True,
-            value=0.85,
-            threshold=0.7,
-            detail="Credit assignment aligned",
-        ),
-        ConstitutionInvariant(
-            name="Energy Decrease",
-            passed=True,
-            value=0.99,
-            threshold=0.95,
-            detail="Free energy decreasing",
-        ),
-        ConstitutionInvariant(
-            name="Bounded Activations",
-            passed=True,
-            value=0.0,
-            threshold=1.0,
-            detail="No exploding activations",
-        ),
-        ConstitutionInvariant(
-            name="Dale's Law",
-            passed=True,
-            value=1.0,
-            threshold=1.0,
-            detail="Excitatory/inhibitory separation",
-        ),
-    ]
-    return ConstitutionHealthData(invariants=invariants)
+    health = snapshot.health
+    return ConstitutionHealthData(
+        invariants=create_invariants_from_monitor(
+            spectral_radius=_coerce_float(health, "spectral_radius", 0.85),
+            lyapunov_exponent=_coerce_float(health, "lyapunov_exponent", 0.1),
+            energy_injected=_coerce_float(health, "energy_injected", 1.0),
+            energy_consumed=_coerce_float(health, "energy_consumed", 0.5),
+            resource_usage=_coerce_float(health, "resource_usage", 1e6),
+            resource_budget=_coerce_float(health, "resource_budget", 1e9),
+            max_recursion_depth=int(_coerce_float(health, "max_recursion_depth", 10)),
+            tau=_coerce_float(health, "tau", 1.029),
+        )
+    )
 
 
 # ============================================================================
 # LineageViewer Adapter
 # ============================================================================
-
-
-@dataclass(frozen=True, slots=True)
-class LineageNode:
-    """A node in the lineage graph."""
-
-    id: str
-    label: str
-    x: float
-    y: float
-    color: str
-    size: float
-    metadata: dict[str, str]
-
-
-@dataclass(frozen=True, slots=True)
-class LineageEdge:
-    """An edge in the lineage graph."""
-
-    source: str
-    target: str
-    weight: float
-    style: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -421,10 +367,84 @@ class LineageData:
     edges: list[LineageEdge]
 
 
+def _build_lineage_from_events(
+    events: list[dict],
+) -> tuple[list[LineageNode], list[LineageEdge]]:
+    """Build lineage graph from event log (reference implementation from UX-L10)."""
+    nodes: dict[str, LineageNode] = {}
+    edges: dict[tuple[str, str], LineageEdge] = {}
+
+    for event in events:
+        kind = event.get("kind", "")
+
+        if kind == "genome_created":
+            genome_id = event.get("genome_id", "")
+            tier = event.get("tier", 1)
+            fitness = event.get("fitness", 0.0)
+            episode = event.get("episode", 0)
+            parent_id = event.get("parent_id")
+            mutation_type = event.get("mutation_type", "Unknown")
+            slope = event.get("slope", 0.0)
+            accepted = event.get("accepted", True)
+
+            # Create or update node
+            if genome_id in nodes:
+                old = nodes[genome_id]
+                nodes[genome_id] = LineageNode(
+                    genome_id=old.genome_id,
+                    tier=tier,
+                    fitness=fitness,
+                    episode=episode,
+                    parent_id=parent_id,
+                    mutation_type=mutation_type,
+                    slope=slope,
+                )
+            else:
+                nodes[genome_id] = LineageNode(
+                    genome_id=genome_id,
+                    tier=tier,
+                    fitness=fitness,
+                    episode=episode,
+                    parent_id=parent_id,
+                    mutation_type=mutation_type,
+                    slope=slope,
+                )
+
+            # Add edge if parent exists
+            if parent_id:
+                edge_key = (parent_id, genome_id)
+                if edge_key not in edges:  # Idempotent: first event wins
+                    edges[edge_key] = LineageEdge(
+                        from_genome=parent_id,
+                        to_genome=genome_id,
+                        mutation_type=mutation_type,
+                        slope=slope,
+                        accepted=accepted,
+                    )
+
+        elif kind == "genome_fitness_updated":
+            genome_id = event.get("genome_id", "")
+            if genome_id in nodes:
+                old = nodes[genome_id]
+                nodes[genome_id] = LineageNode(
+                    genome_id=old.genome_id,
+                    tier=old.tier,
+                    fitness=event.get("fitness", old.fitness),
+                    episode=old.episode,
+                    parent_id=old.parent_id,
+                    mutation_type=old.mutation_type,
+                    slope=old.slope,
+                )
+
+    return list(nodes.values()), list(edges.values())
+
+
 def adapt_lineage_viewer(snapshot: DashboardSnapshot, root: Path) -> LineageData:
     """Adapt snapshot to LineageViewer data."""
-    # Placeholder - would build from actual lineage data
-    return LineageData(nodes=[], edges=[])
+    # Build lineage from event history in snapshot (or from a lineage file)
+    events = getattr(snapshot, "event_history", [])
+    nodes, edges = _build_lineage_from_events(events)
+    return LineageData(nodes=nodes, edges=edges)
 
 
 # ============================================================================
@@ -454,16 +474,15 @@ def adapt_episode_timeline(
     snapshot: DashboardSnapshot, root: Path
 ) -> EpisodeTimelineData:
     """Adapt snapshot to EpisodeTimeline data."""
-    # Convert event history to episode events
     episodes = [
         EpisodeEvent(
-            timestamp=ev.timestamp,
-            event_type=ev.kind,
-            cell_key=ev.payload.get("cell", ""),
+            timestamp=_coerce_float(ev, "timestamp"),
+            event_type=str(ev.get("kind", "")),
+            cell_key=str(ev.get("cell", "")),
             metrics={},
-            details=ev.summary,
+            details=str(ev.get("summary", "")),
         )
-        for ev in []  # Would come from event history
+        for ev in snapshot.event_history
     ]
     return EpisodeTimelineData(episodes=episodes)
 
@@ -471,52 +490,6 @@ def adapt_episode_timeline(
 # ============================================================================
 # ProgressPanel Adapter
 # ============================================================================
-
-
-@dataclass(frozen=True, slots=True)
-class Badge:
-    """A badge."""
-
-    id: str
-    name: str
-    description: str
-    icon: str
-    evidence_kind: str
-    evidence_query: str
-    register_explorer: str
-    register_lab: str
-
-
-@dataclass(frozen=True, slots=True)
-class Quest:
-    """A quest."""
-
-    id: str
-    name: str
-    description: str
-    icon: str
-    objective: str
-    completion_message_explorer: str
-    completion_message_lab: str
-    progress_current: int
-    progress_target: int
-    completed: bool
-    opted_in: bool
-    completed_at: float | None
-
-
-@dataclass(frozen=True, slots=True)
-class Record:
-    """A personal best record."""
-
-    id: str
-    objective: str
-    value: float
-    cell_key: str
-    timestamp: float
-    scope: str
-    register_explorer: str
-    register_lab: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,11 +508,8 @@ def adapt_progress_panel(
     if recognition_store is None:
         return ProgressData(badges=[], quests=[], records=[])
 
-    from computronium.ui.recognition import Badge, Quest, Record
-
     state = recognition_store.rebuild_from_events()
 
-    # Convert RecognitionState to ProgressData types
     badges = [
         Badge(
             id=b.id,
@@ -917,8 +887,18 @@ class ActivityFeedData:
 
 
 def adapt_activity_feed(snapshot: DashboardSnapshot, root: Path) -> ActivityFeedData:
-    """Adapt snapshot to ActivityFeed data."""
-    return ActivityFeedData(events=[])
+    """Adapt snapshot event history to ActivityFeed data."""
+    events = [
+        FeedEvent(
+            timestamp=_coerce_float(ev, "timestamp"),
+            kind=str(ev.get("kind", "")),
+            icon=str(ev.get("icon", "ℹ️")),
+            color=str(ev.get("color", "primary")),
+            summary=str(ev.get("summary", "")),
+        )
+        for ev in snapshot.event_history
+    ]
+    return ActivityFeedData(events=events)
 
 
 # ============================================================================
@@ -944,8 +924,18 @@ class FieldReportsData:
 
 
 def adapt_field_reports(snapshot: DashboardSnapshot, root: Path) -> FieldReportsData:
-    """Adapt snapshot to FieldReports data."""
-    return FieldReportsData(reports=[])
+    """Adapt snapshot event history to FieldReports data (alerts only)."""
+    reports = [
+        FieldReport(
+            timestamp=_coerce_float(ev, "timestamp"),
+            title=str(ev.get("kind", "")),
+            content=str(ev.get("summary", "")),
+            severity=str(ev.get("color", "info")),
+        )
+        for ev in snapshot.event_history
+        if str(ev.get("color", "")) in {"negative", "warning", "positive"}
+    ]
+    return FieldReportsData(reports=reports)
 
 
 # ============================================================================

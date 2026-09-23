@@ -660,6 +660,8 @@ requires-dist = [
     { name = "nicegui", specifier = ">=3.16.0" },
     { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.16.0" },
     { name = "nicegui", marker = "extra == 'ui'", specifier = ">=3.16.0" },
+    { name = "nicegui", extras = ["testing"], marker = "extra == 'dev'", specifier = ">=3.16.0" },
+    { name = "nicegui", extras = ["testing"], marker = "extra == 'ui'", specifier = ">=3.16.0" },
     { name = "numpy" },
     { name = "omegaconf", specifier = ">=2.3" },
     { name = "onnx", marker = "extra == 'export'" },

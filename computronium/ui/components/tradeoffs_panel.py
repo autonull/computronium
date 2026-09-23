@@ -207,6 +207,40 @@ class TradeoffsPanel(BasePanel):
         self.cells = cells
         self._render_strip()
 
+    def update_data(
+        self,
+        data: object | None = None,
+        *,
+        cells: list[ParetoCell] | None = None,
+        objectives: list[str] | None = None,
+    ) -> None:
+        """Push adapter TradeoffsData (or explicit cells) into the panel."""
+        if cells is None and data is not None:
+            cells = [
+                ParetoCell(
+                    label=c.label,
+                    dynamics=c.dynamics,
+                    credit=c.credit,
+                    update=c.update,
+                    topology=c.topology,
+                    metrics={
+                        "accuracy": c.accuracy,
+                        "bp_deficit": c.bp_deficit,
+                        "credit_alignment": c.credit_alignment,
+                        "settle_horizon": c.settle_horizon,
+                        "walltime_s": c.walltime_s,
+                    },
+                )
+                for c in data.pareto_cells  # type: ignore[attr-defined]
+            ]
+            objs = getattr(data, "objectives", None)
+            if objs and len(objs) >= 2:
+                objectives = objs[:2]
+        if cells is not None:
+            self.cells = cells
+        if objectives is not None:
+            self.objectives = objectives
+
     def _refresh(self) -> None:
         """Refresh on mode change."""
         self._render_strip()

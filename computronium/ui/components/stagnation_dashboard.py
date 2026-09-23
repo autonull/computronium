@@ -72,6 +72,11 @@ class StagnationDashboard(BasePanel):
         self.snapshots = snapshots
         self._refresh()
 
+    def update_data(self, data: object | None = None, **kwargs: object) -> None:
+        """Accept adapter StagnationDashboardData (diversity/alerts pass-through)."""
+        # Snapshot carries diversity/alerts; detector snapshots come from
+        # campaign event logs not yet part of DashboardSnapshot — keep current.
+
     def render(self) -> ui.element:
         """Render the stagnation dashboard."""
         with ui.column().classes("w-full gap-4") as panel:

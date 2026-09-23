@@ -112,6 +112,24 @@ class FieldReports(BasePanel):
             self.reports = self.reports[-self.max_reports :]
         self._render_tray()
 
+    def update_data(
+        self, data: object | None = None, *, reports: list[FieldReport] | None = None
+    ) -> None:
+        """Push adapter FieldReportsData (or explicit reports) into the panel."""
+        if reports is None and data is not None:
+            reports = [
+                FieldReport(
+                    icon=getattr(r, "icon", "ℹ️"),
+                    color=getattr(r, "color", "primary"),
+                    sentence=getattr(r, "sentence", getattr(r, "title", "")),
+                    deep_link=getattr(r, "deep_link", None),
+                    unread=getattr(r, "unread", False),
+                )
+                for r in data.reports  # type: ignore[attr-defined]
+            ]
+        if reports is not None:
+            self.reports = reports
+
     def _refresh(self) -> None:
         """Refresh on mode change."""
         self._render_tray()

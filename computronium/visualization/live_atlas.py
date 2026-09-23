@@ -918,6 +918,8 @@ class DashboardSnapshot:
     costs: dict[str, object] = field(default_factory=dict)
     cost_breakdown: list[dict[str, object]] = field(default_factory=list)
     maturation: list[dict[str, object]] = field(default_factory=list)
+    event_history: list[dict[str, object]] = field(default_factory=list)
+    objectives: tuple[ObjectiveSpec, ...] = ()
 
 
 def _atlas_data(
@@ -962,6 +964,7 @@ def render_snapshot(
     objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
     *,
     with_atlas: bool = True,
+    event_history: list[dict[str, object]] | None = None,
 ) -> DashboardSnapshot:
     """Compute all panel payloads in one pass (no UI, no live loop).
     ``with_atlas=False`` skips the UMAP fit (the slow part) for the fast
@@ -989,6 +992,8 @@ def render_snapshot(
         costs=cost_stats(root),
         cost_breakdown=cost_breakdown_rows(root),
         maturation=maturation_rows(root),
+        event_history=event_history or [],
+        objectives=objectives,
     )
 
 

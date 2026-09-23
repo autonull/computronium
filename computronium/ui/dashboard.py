@@ -446,6 +446,7 @@ class DashboardApp:
             self.cache,
             objectives=self.pareto_state["objectives"],
             with_atlas=(key == "discovery_map"),
+            event_history=list(self.event_history),
         )
         # Store-aware progress adapter (X2: context passed via partial, not
         # a non-protocol 3rd argument).

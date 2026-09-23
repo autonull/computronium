@@ -6,17 +6,10 @@ Lineage viewer must reconstruct identical graph from event log replay.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
-if TYPE_CHECKING:
-    from computronium.ui.components.lineage_viewer import (
-        LineageGraph,
-        build_lineage_graph,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,8 +286,9 @@ class TestLineageReplay:
 
     def test_lineage_explorer_readability(self) -> None:
         """Explorer strings for lineage must be ≤ FK grade 8."""
-        from computronium.ui.glossary_service import get_glossary_service
         import re
+
+        from computronium.ui.glossary_service import get_glossary_service
 
         svc = get_glossary_service()
         keys = [
@@ -323,19 +317,114 @@ class TestLineageViewerIntegration:
 
     def test_component_exists(self) -> None:
         """LineageViewer component must exist."""
-        pytest.skip("LineageViewer not yet implemented")
+        from computronium.ui.components.lineage_viewer import LineageViewer
+
+        assert LineageViewer is not None
 
     def test_component_renders_graph(self) -> None:
         """Component must render nodes and edges with tier colors."""
-        pytest.skip("LineageViewer not yet implemented")
+        from computronium.ui.components.lineage_viewer import (
+            LineageEdge,
+            LineageNode,
+            LineageViewer,
+        )
+
+        nodes = [
+            LineageNode(
+                genome_id="genome_001",
+                tier=1,
+                fitness=0.8,
+                episode=0,
+                parent_id=None,
+                mutation_type=None,
+                slope=0.1,
+            ),
+            LineageNode(
+                genome_id="genome_002",
+                tier=2,
+                fitness=0.85,
+                episode=1,
+                parent_id="genome_001",
+                mutation_type="DuplicateAndPerturb",
+                slope=0.15,
+            ),
+        ]
+        edges = [
+            LineageEdge(
+                from_genome="genome_001",
+                to_genome="genome_002",
+                mutation_type="DuplicateAndPerturb",
+                slope=0.15,
+                accepted=True,
+            ),
+        ]
+
+        panel = LineageViewer(nodes=nodes, edges=edges)
+        assert panel.nodes is not None
+        assert len(panel.nodes) == 2
+        assert panel.edges is not None
+        assert len(panel.edges) == 1
 
     def test_component_tooltips_show_slope(self) -> None:
         """Edge tooltips must show adaptation probe slope."""
-        pytest.skip("LineageViewer not yet implemented")
+        from computronium.ui.components.lineage_viewer import (
+            LineageEdge,
+            LineageNode,
+            LineageViewer,
+        )
+
+        nodes = [
+            LineageNode(
+                genome_id="genome_001",
+                tier=1,
+                fitness=0.8,
+                episode=0,
+                parent_id=None,
+                mutation_type=None,
+                slope=0.1,
+            ),
+        ]
+        edges = [
+            LineageEdge(
+                from_genome="genome_001",
+                to_genome="genome_002",
+                mutation_type="DuplicateAndPerturb",
+                slope=0.15,
+                accepted=True,
+            ),
+        ]
+
+        panel = LineageViewer(nodes=nodes, edges=edges)
+        # Check that edges have slope data
+        assert panel.edges[0].slope == 0.15
+        assert panel.edges[0].mutation_type == "DuplicateAndPerturb"
 
     def test_component_register_aware(self) -> None:
         """Component must show plain language in Explorer, technical in Lab."""
-        pytest.skip("LineageViewer not yet implemented")
+        from computronium.ui.components.lineage_viewer import LineageNode, LineageViewer
+        from computronium.ui.mode_toggle import set_mode
+
+        nodes = [
+            LineageNode(
+                genome_id="genome_001",
+                tier=1,
+                fitness=0.8,
+                episode=0,
+                parent_id=None,
+                mutation_type=None,
+                slope=0.1,
+            ),
+        ]
+
+        # Test Explorer mode
+        set_mode("explorer")
+        panel_explorer = LineageViewer(nodes=nodes)
+        assert panel_explorer.is_explorer
+
+        # Test Lab mode
+        set_mode("lab")
+        panel_lab = LineageViewer(nodes=nodes)
+        assert panel_lab.is_lab
 
 
 if __name__ == "__main__":

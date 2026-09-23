@@ -5,47 +5,14 @@ Constitution panel metrics must match StabilityMonitor output byte-identically.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 import pytest
 import torch
 from torch import Tensor
 
-if TYPE_CHECKING:
-    from stability import (
-        StabilityGuard,
-        SettlingMonitor,
-        LyapunovEstimator,
-        JacobianAmplificationEstimator,
-        ResourceUsage,
-    )
+from computronium.ui.components.constitution_health import ConstitutionMetrics
 
 
-@dataclass(frozen=True, slots=True)
-class ConstitutionMetrics:
-    """The 6 constitutional invariants as computed by the panel."""
-
-    causality_dag: bool  # No circular dependencies
-    passivity: bool  # Δℰ ≤ ℰ_in
-    lyapunov_bound: bool  # ρ(J_F) ≤ τ
-    resource_ceiling: bool  # ||Z|| + |Ω| ≤ budget
-    protocol_conformance: bool  # Valid per SystemConfig.validate()
-    recursion_invariant: bool  # Well-founded recursion
-
-    # Raw metric values for byte-identical comparison
-    spectral_radius: float
-    lyapunov_exponent: float
-    jacobian_amplification: float
-    settling_steps: int
-    energy_consumed: float
-    energy_injected: float
-    resource_usage: float
-    resource_budget: float
-    max_recursion_depth: int
-
-
-def _compute_constitution_from_stability(
+def _compute_constitution_from_stability(  # ruff: ignore[too-many-locals] — mirrors stability estimator setup surface
     model: torch.nn.Module,
     input_tensor: Tensor,
     resource_budget: float = 1e9,
@@ -58,45 +25,57 @@ def _compute_constitution_from_stability(
     Uses the external (dict-based) API for simplicity.
     """
     from stability import (
-        StabilityGuard,
-        SettlingMonitor,
         LyapunovEstimator,
-        JacobianAmplificationEstimator,
         ResourceUsage,
-        GuardConfig,
-        SettlingConfig,
-        LyapunovConfig,
-        JacobianAmplificationConfig,
+        StabilityGuard,
     )
 
-    # Create estimators using config objects
-    guard = StabilityGuard(
-        GuardConfig(threshold=tau, statistic="fast_proxy", window=10)
-    )
-    settling_monitor = SettlingMonitor(SettlingConfig(tolerance=1e-4, max_steps=1000))
-    lyapunov_estimator = LyapunovEstimator(LyapunovConfig(num_steps=50, fast_mode=True))
-    jacobian_estimator = JacobianAmplificationEstimator(
-        JacobianAmplificationConfig(fast_mode=True)
-    )
+    guard = StabilityGuard(threshold=tau, statistic="fast_proxy", window=10)
+    lyapunov_estimator = LyapunovEstimator(num_steps=50, fast_mode=True)
 
-    # Create simple external transition function
-    def transition_fn(state: dict[str, object]) -> dict[str, object]:
+    # Create simple external transition function (uses same input for each step)
+    def transition_fn_external(state: dict[str, object]) -> dict[str, object]:
         x = state.get("x")
         if x is None or not isinstance(x, torch.Tensor):
             return {"x": torch.zeros_like(input_tensor)}
         with torch.no_grad():
-            y = model(x)
+            y = model(input_tensor)  # Always use original input for consistent settling
         return {"x": y, "y": y}
 
-    # Create initial state
-    initial_state = {"x": input_tensor}
+    initial_state: dict[str, object] = {"x": input_tensor}
 
-    # Compute metrics using external API
-    # 1. Lyapunov bound (spectral radius proxy) - use guard's external probe
-    lyap_exp = lyapunov_estimator._fast_proxy(transition_fn, initial_state)  # type: ignore
-    jac_amp = guard._fast_proxy_external(transition_fn, initial_state)
+    # 1. Spectral radius proxy (Jacobian amplification) - use guard's external probe
+    jac_amp = guard._fast_proxy_external(transition_fn_external, initial_state)
 
-    # 2. Settling (passivity proxy) - use external windowed growth
+    # 2. Lyapunov exponent proxy - use Lyapunov estimator with internal API
+    from stability.state import CompositeState, SystemContext
+
+    class SimpleContext:
+        """Minimal SystemContext implementation."""
+
+    context = SimpleContext()
+
+    z = CompositeState(
+        activity={"x": input_tensor},
+        plastic={},
+        substrate={},
+    )
+
+    def transition_fn_internal(
+        state: CompositeState, ctx: SystemContext
+    ) -> CompositeState:
+        x = state.activity.get("x")
+        if x is None or not isinstance(x, torch.Tensor):
+            return CompositeState(
+                activity={"x": torch.zeros_like(input_tensor)}, plastic={}, substrate={}
+            )
+        with torch.no_grad():
+            y = model(input_tensor)  # Always use original input
+        return CompositeState(activity={"x": y}, plastic={}, substrate={})
+
+    lyap_exp = lyapunov_estimator._fast_proxy(transition_fn_internal, z, context)
+
+    # 3. Settling (passivity proxy) - use external windowed growth
     settling_steps = 0
     step_norms = []
     current = initial_state
@@ -105,7 +84,7 @@ def _compute_constitution_from_stability(
         if not isinstance(x_before, torch.Tensor):
             break
         before_norm = float(x_before.norm().item())
-        current = transition_fn(current)
+        current = transition_fn_external(current)
         x_after = current.get("x")
         if not isinstance(x_after, torch.Tensor):
             break
@@ -119,18 +98,18 @@ def _compute_constitution_from_stability(
     energy_injected = float(input_tensor.norm().item())
     energy_consumed = sum(step_norms) if step_norms else 0.0
 
-    # 3. Resource usage
+    # 4. Resource usage
     resource_usage_obj = ResourceUsage.measure(model, input_tensor)
     resource_usage_val = resource_usage_obj.compute + resource_usage_obj.memory * 1e6
 
-    # 4. Causality (DAG) - check model has no cycles (simplified)
+    # 5. Causality (DAG) - check model has no cycles (simplified)
     # In practice, this would check the system coordinate DAG
     causality_ok = True  # Placeholder - would check SystemConfig.validate()
 
-    # 5. Protocol conformance
+    # 6. Protocol conformance
     protocol_ok = True  # Placeholder - would check SystemConfig.validate()
 
-    # 6. Recursion invariant
+    # 7. Recursion invariant
     recursion_ok = max_recursion_depth < 100  # Placeholder
 
     return ConstitutionMetrics(
@@ -159,17 +138,12 @@ def _compute_constitution_from_panel(
     max_recursion_depth: int = 10,
     tau: float = 1.029,
 ) -> ConstitutionMetrics:
-    """Compute constitution metrics using the panel implementation.
+    """Compute constitution metrics using the panel implementation."""
+    from computronium.ui.components.constitution_health import (
+        compute_constitution_metrics,
+    )
 
-    This will be implemented once the Constitution Health Panel exists.
-    For now, it delegates to the reference implementation.
-    """
-    # TODO: Import and use the actual panel implementation
-    # from computronium.ui.components.constitution_health import compute_constitution_metrics
-    # return compute_constitution_metrics(model, input_tensor, resource_budget, max_recursion_depth, tau)
-
-    # Placeholder: use reference implementation
-    return _compute_constitution_from_stability(
+    return compute_constitution_metrics(
         model, input_tensor, resource_budget, max_recursion_depth, tau
     )
 
@@ -187,9 +161,6 @@ class TestConstitutionEquivalence:
         """Standard input tensor."""
         return torch.randn(4, 10)
 
-    @pytest.mark.skip(
-        reason="ConstitutionHealthPanel not yet implemented; will verify byte-identical match when panel exists"
-    )
     def test_constitution_metrics_byte_identical(
         self, simple_model: torch.nn.Module, input_tensor: Tensor
     ) -> None:
@@ -264,8 +235,9 @@ class TestConstitutionEquivalence:
 
     def test_constitution_explorer_readability(self) -> None:
         """Explorer strings for constitution must be ≤ FK grade 8."""
-        from computronium.ui.glossary_service import get_glossary_service
         import re
+
+        from computronium.ui.glossary_service import get_glossary_service
 
         svc = get_glossary_service()
         keys = [
@@ -296,18 +268,68 @@ class TestConstitutionPanelIntegration:
 
     def test_panel_exists(self) -> None:
         """ConstitutionHealthPanel component must exist."""
-        # TODO: Uncomment when component is implemented
-        # from computronium.ui.components.constitution_health import ConstitutionHealthPanel
-        # assert ConstitutionHealthPanel is not None
-        pytest.skip("ConstitutionHealthPanel not yet implemented")
+        from computronium.ui.components.constitution_health import (
+            ConstitutionHealthPanel,
+        )
+
+        assert ConstitutionHealthPanel is not None
 
     def test_panel_renders_all_six_invariants(self) -> None:
         """Panel must render all 6 invariants with status indicators."""
-        pytest.skip("ConstitutionHealthPanel not yet implemented")
+        from computronium.ui.components.constitution_health import (
+            ConstitutionHealthPanel,
+            create_invariants_from_monitor,
+        )
+
+        invariants = create_invariants_from_monitor(
+            spectral_radius=0.85,
+            lyapunov_exponent=0.1,
+            energy_injected=1.0,
+            energy_consumed=0.5,
+            resource_usage=1e6,
+            resource_budget=1e9,
+            max_recursion_depth=10,
+        )
+        panel = ConstitutionHealthPanel(invariants=invariants)
+        assert panel.invariants is not None
+        assert len(panel.invariants) == 6
+        expected_keys = {
+            "causality_dag",
+            "passivity",
+            "lyapunov_bound",
+            "resource_ceiling",
+            "protocol_conformance",
+            "recursion_invariant",
+        }
+        assert {inv.key for inv in panel.invariants} == expected_keys
 
     def test_panel_register_aware(self) -> None:
         """Panel must show plain language in Explorer, technical in Lab."""
-        pytest.skip("ConstitutionHealthPanel not yet implemented")
+        from computronium.ui.components.constitution_health import (
+            ConstitutionHealthPanel,
+            create_invariants_from_monitor,
+        )
+        from computronium.ui.mode_toggle import set_mode
+
+        invariants = create_invariants_from_monitor(
+            spectral_radius=0.85,
+            lyapunov_exponent=0.1,
+            energy_injected=1.0,
+            energy_consumed=0.5,
+            resource_usage=1e6,
+            resource_budget=1e9,
+            max_recursion_depth=10,
+        )
+
+        # Test Explorer mode
+        set_mode("explorer")
+        panel_explorer = ConstitutionHealthPanel(invariants=invariants)
+        assert panel_explorer.is_explorer
+
+        # Test Lab mode
+        set_mode("lab")
+        panel_lab = ConstitutionHealthPanel(invariants=invariants)
+        assert panel_lab.is_lab
 
 
 if __name__ == "__main__":

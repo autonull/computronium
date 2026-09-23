@@ -75,7 +75,7 @@ class RepairBench(BasePanel):
         is_fixed = row.status == "fixed"
         is_back = row.status == "back_in_service"
 
-        with ui.card().classes("w-full").props("flat bordered"):  # noqa: SIM117
+        with ui.card().classes("w-full").props("flat bordered"):  # ruff: ignore[multiple-with-statements]
             with ui.row().classes("w-full items-center gap-4"):
                 # Status badge
                 status_labels = {
@@ -148,6 +148,15 @@ class RepairBench(BasePanel):
     def update_rows(self, rows: list[DefectRow]) -> None:
         """Update rows and re-render."""
         self.rows = rows
+
+    def update_data(
+        self, data: object | None = None, *, rows: list[DefectRow] | None = None
+    ) -> None:
+        """Push adapter RepairBenchData (or explicit rows) into the panel."""
+        if rows is None and data is not None:
+            rows = list(data.defects)  # type: ignore[attr-defined]
+        if rows is not None:
+            self.rows = rows
 
     def _refresh(self) -> None:
         """Refresh on mode change."""

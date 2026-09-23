@@ -125,6 +125,24 @@ class ActivityFeed(BasePanel):
                 self.events = self.events[-self.max_events :]
             self._render_feed()
 
+    def update_data(
+        self, data: object | None = None, *, events: list[FeedEvent] | None = None
+    ) -> None:
+        """Push adapter ActivityFeedData (or explicit events) into the panel."""
+        if events is None and data is not None:
+            events = [
+                FeedEvent(
+                    timestamp=e.timestamp,
+                    icon=e.icon,
+                    color=e.color,
+                    summary=e.summary,
+                    raw=getattr(e, "raw", ""),
+                )
+                for e in data.events  # type: ignore[attr-defined]
+            ]
+        if events is not None:
+            self.events = events
+
     def _refresh(self) -> None:
         """Refresh on mode change."""
         self._render_feed()

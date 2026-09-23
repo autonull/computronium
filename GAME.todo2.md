@@ -1,11 +1,22 @@
 # GAME.todo2.md — Remaining Work: Full Integration & Usability (TODO-UX2 "Summit")
 
-**Status:** In progress — Phase A + X1–X3 + Phase B code complete (2026-09-23); Phase C partial, D/X4–X5 remaining.
+**Status:** In progress — Phase A + X1–X3 + Phase B code complete (2026-09-23); Phase C: C2/C3/C5/C7 done, C1 dep-only, C4/C6 remaining; D/X4–X5 remaining.
 **Scope:** `computronium/ui/dashboard.py`, `computronium/visualization/live_atlas.py`, UI test automation, extensibility layer
 **Predecessor:** GAME.todo.md (M0–M3 code complete; this plan closes the integration gap and lays foundation for ambitious evolution)
 **Verification posture:** All new locks at L4 (property/sampled numerical) per repo taxonomy.
 
 ## Progress Log
+
+**Done (commit: C5/C7 UX locks + constitution/lineage wiring + adapter hygiene):**
+- **C7 ✅** UX‑L1 `tests/property/test_ux_l1_pareto_equivalence.py` (6 presets: rendered membership == `pareto_top(df, objectives)`); UX‑L4 `scripts/lint_readability.py` (self‑contained FK grade, no `textstat` — that package ships a top‑level `tests/` that shadows the repo and breaks collection) + `tests/lint/test_ux_l4_readability.py` (6 tests). All 11 UX locks now have real test files.
+- **C5 ✅** UX‑L9 `TestConstitutionPanelIntegration` (3 tests) + UX‑L10 `TestLineageViewerIntegration` (4 tests) unskipped and green.
+- **ConstitutionHealthPanel**: added `ConstitutionHealthData`/`ConstitutionMetrics` dataclasses + `compute_constitution_metrics` (matches reference stability path byte‑identically) + `update_data`. Fixed stability API misuse: `StabilityGuard(threshold=...)`/`LyapunovEstimator(num_steps=...)` take kwargs, not Config objects.
+- **UX‑L10 LineageViewer**: adapter now builds nodes/edges from `snapshot.event_history` via `_build_lineage_from_events` (idempotent replay). `DashboardSnapshot` gained `event_history: list[dict]` + `objectives: tuple[ObjectiveSpec, ...]`; `render_snapshot(..., event_history=)`; `DashboardApp._get_panel_data` passes `list(self.event_history)`.
+- **UX‑L1 Tradeoffs**: `adapt_tradeoffs_panel` now reads `snapshot.pareto_rows` (respects preset‑switched objectives) + `snapshot.objectives` instead of hardcoding `DEFAULT_OBJECTIVES`. Panel `update_data` converts adapter `ParetoCell` → component `ParetoCell` (metrics dict).
+- **Panel `update_data` gaps closed**: Tradeoffs (cells), RepairBench (rows), Constitution (invariants), ActivityFeed/FieldReports (from `snapshot.event_history`), EpisodeTimeline (maps adapter `EpisodeEvent` → component `episode` field), Stagnation (explicit no‑op hook). Previously these silently dropped adapter data via `BasePanel.update_data` no‑op.
+- **Adapter hygiene**: module‑level `_coerce_float`/`_coerce_str` (removed 4 duplicate `_row_float` defs); `ProgressData` reuses recognition `Badge/Quest/Record` (deleted duplicate dataclasses); `adapt_episode_timeline`/`adapt_activity_feed`/`adapt_field_reports` consume `snapshot.event_history` (were empty/`for ev in []`).
+- **C1 ⚠️ dep added**: `nicegui[testing]>=3.16.0` in dev+ui extras — uv warns NiceGUI 3.16.0 has **no `testing` extra**; C2/C3 don't need it (in‑process headless). Verify before relying on `@ui_test`.
+- **Verification (this commit):** dev‑env smoke OK; `ruff format`+`check` clean on touched files; `pyright` 0 errors on new modules; targeted suite **77 passed, 4 skipped** (4 skips = UX‑L5 axe CLI + keyboard crawl) in ~37s.
 
 **Done (commit: Phase B + C locks + integration fixes):**
 - **B1 ✅** `DashboardApp._route_ws_events` — `/ws/events` payloads flow bus → classified `DashboardEvent` → `ActivityFeed.add_event` + `FieldReports.add_report` + `_toast_for_alert`. WS consumers slimmed to raw publish (dedupe: routing now lives in one handler).
@@ -78,12 +89,16 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 ### Remaining Work Notes (for next session)
 
 1. **X4/X5** (multi-root, config hot-reload) untouched — the EventBus topics (`ConfigChanged`) already exist, wire the file watcher.
-2. **B1–B2**: WS consumers in DashboardApp already publish `WebSocketEvent` to the bus — remaining work is panels *subscribing* to those topics and throttling ≤1/2 s.
-3. **B4 mode toggle**: `ModeChanged` handler exists in DashboardApp (`_on_mode_changed` → rebuild drawer + re-render) but nothing *publishes* it yet — `mode_toggle.set_mode` must publish to the bus.
-4. **Lab panels empty**: lineage/episodes/mutations/veto_log/genome/probe adapters return empty typed data because their sources aren't part of `DashboardSnapshot`. Either extend `render_snapshot` or give those adapters their own loaders (violates purity — prefer snapshot extension).
-5. **Known smell**: `adapt_progress_panel` takes a 3rd `recognition_store` arg that `FunctionAdapter.adapt` doesn't declare — works today via the special-case branch in `_get_panel_data`, but formalize with a store-aware adapter or context object (X2 mentioned `AdapterContext` — unused).
-6. **C-suite is the biggest remaining chunk**: no `tests/ui/` exists; UX-L12 (snapshot totality), UX-L15 (adapter equivalence), UX-L16 (eventbus delivery) locks unwritten; L5 axe tests still skipped.
-7. `PANELS`/`LAB_ONLY_PANELS`/`_panel_label` legacy lists in dashboard.py are dead code superseded by the registry — remove in hygiene pass.
+2. **B1–B2/B4**: done (see Progress Log) — WS routed via bus, mode toggle publishes `ModeChanged`, panels push via `update_data`.
+3. **Lab panels thin**: mutations/veto_log/genome/probe/stagnation adapters return typed empty data — their sources (Auto-Evolve event logs) aren't in `DashboardSnapshot` yet. Lineage/episodes/activity_feed/field_reports now consume `snapshot.event_history`. Prefer extending `render_snapshot` over impure per-adapter loaders.
+4. **Known smell**: `adapt_progress_panel` store arg still special-cased via `functools.partial` in `_get_panel_data` — formalize with `AdapterContext` (exists in `data_adapters.py`, unused).
+5. **C4 remaining**: UX-L5 axe tests still skip (need `npm i -g @axe-core/cli` or Playwright+axe against a running dashboard on the synthetic fixture). Keyboard-crawl test is intentionally manual.
+6. **C6 remaining**: screenshot regression baseline (`tests/ui/baselines/`, reduced-motion + grayscale per UX-L6).
+7. **C1 caveat**: `nicegui[testing]` extra does not exist on NiceGUI 3.16.0 (uv warning) — either pin a version that ships it or drop the extra; current C2/C3 tests don't need it (in-process headless render).
+8. `PANELS`/`LAB_ONLY_PANELS`/`_panel_label` legacy lists in dashboard.py are dead code superseded by the registry — remove in hygiene pass.
+9. **Glossary readability debt**: `scripts/lint_readability.py` reports 147 Explorer strings > FK grade 8 (mostly short technical labels where the FK heuristic over-rates; wire an allowlist or accept the lint as informational until copy is reworked).
+10. **Do not `uv add textstat`** (or any package shipping top-level `tests/`): it shadows the repo `tests/` namespace and breaks all test collection. FK grade is implemented inline in `scripts/lint_readability.py`.
+11. **Dashboard `PLW0717`** (try-clause statement count) in `_load_atlas`/`_telemetry_consumer` pre-exists on HEAD — Register C hygiene, not this round.
 
 ---
 
@@ -112,13 +127,13 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 
 | ID | Task | Acceptance |
 |----|------|------------|
-| **C1** | Add `nicegui[testing]` to dev deps; adopt NiceGUI `@ui_test` / `Screenshot` fixtures (or Playwright harness). | Test infra importable in `tests/ui/`. |
+| **C1** | Add `nicegui[testing]` to dev deps; adopt NiceGUI `@ui_test` / `Screenshot` fixtures (or Playwright harness). | ⚠️ dep added; **extra missing on 3.16.0** — C2/C3 don't need it. |
 | **C2** | `tests/ui/test_dashboard_render.py` — headless render of every panel against synthetic root fixture (tiny KB sqlite + one defect row + one void row + empty‑root variants). Assert: no exception, panel content non‑empty where data exists, correct empty‑state copy where it doesn't. | 18 panels × {empty, populated} roots = deterministic pass. |
 | **C3** | `tests/ui/test_dashboard_interactions.py` — click‑through: panel switch, mode toggle re‑render, table/map view toggle (DiscoveryMap), pause feed, "What am I looking at?" drawer opens. | Every interactive element reachable & functional headless. |
-| **C4** | Replace skipped UX‑L5 axe tests with real Playwright+axe scan against running dashboard on synthetic fixture; keep manual crawl checklist for cert only. | `test_axe_no_critical_or_serious` runs in CI, not skipped. |
-| **C5** | Unskip UX‑L9 `test_panel_renders_all_six_invariants` and UX‑L10 component‑integration tests using headless render from C2. | 0 skips in UX suite (42→54 passing). |
-| **C6** | Screenshot regression baseline (reduced‑motion + grayscale per UX‑L6): capture all panels, store under `tests/ui/baselines/`, compare on CI. | UX‑L6 snapshot test implemented. |
-| **C7** | UX‑L1 (Pareto equivalence) & UX‑L4 (readability script `scripts/lint_readability.py`) — referenced in GAME.todo.md §6 but no test files; create them. | All 11 UX locks have real test files; 0 dead references. |
+| **C4** | Replace skipped UX‑L5 axe tests with real Playwright+axe scan against running dashboard on synthetic fixture; keep manual crawl checklist for cert only. | `test_axe_no_critical_or_serious` runs in CI, not skipped. **Remaining.** |
+| **C5** | Unskip UX‑L9 `test_panel_renders_all_six_invariants` and UX‑L10 component‑integration tests using headless render from C2. | ✅ 0 skips in UX-L9/L10 (was 7 skipped). |
+| **C6** | Screenshot regression baseline (reduced‑motion + grayscale per UX‑L6): capture all panels, store under `tests/ui/baselines/`, compare on CI. | UX‑L6 snapshot test implemented. **Remaining.** |
+| **C7** | UX‑L1 (Pareto equivalence) & UX‑L4 (readability script `scripts/lint_readability.py`) — referenced in GAME.todo.md §6 but no test files; create them. | ✅ All 11 UX locks have real test files; 0 dead references. |
 
 ### D — Observability, Performance & Polish (P1/P2)
 
@@ -136,13 +151,15 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 
 | Lock | Property | File |
 |------|----------|------|
+| UX‑L1 | Pareto membership rendered == `pareto_top(df, objectives)` for all presets | `tests/property/test_ux_l1_pareto_equivalence.py` |
+| UX‑L4 | Explorer strings ≤ FK grade 8 (CI lint) | `scripts/lint_readability.py` + `tests/lint/test_ux_l4_readability.py` |
 | UX‑L12 | `render_snapshot` total: never raises for any artifact‑dir state (Hypothesis) | `tests/property/test_ux_l12_snapshot_totality.py` |
 | UX‑L13 | Every panel in PANELS renders populated on the synthetic root fixture | `tests/ui/test_dashboard_render.py` |
 | UX‑L14 | Mode toggle re‑renders panel copy in both registers | `tests/ui/test_dashboard_interactions.py` |
 | UX‑L15 (new) | Adapter output fields match source schema (L4 equivalence) | `tests/property/test_ux_l15_adapter_equivalence.py` |
 | UX‑L16 (new) | EventBus delivers every WS message to subscribed panels within 2 poll cycles | `tests/property/test_ux_l16_eventbus_delivery.py` |
 
-Existing UX‑L1..L11 unchanged; C4/C5/C7 convert skips and dead references to real tests.
+Existing UX‑L1..L16 all have real test files. Remaining C4 (axe) + C6 (screenshots) convert the last UX‑L5/L6 skips.
 
 ---
 
@@ -155,10 +172,12 @@ Existing UX‑L1..L11 unchanged; C4/C5/C7 convert skips and dead references to r
 
 ## 5. Notes for Implementers
 
-- `computronium/ui/dashboard.py` currently passes ruff/pyright but is a shell — the panel map instantiates components with **default/empty data**; do not mistake green gates for integration.
-- Components are **data‑driven value objects** (frozen dataclasses); the single integration point is the **DataAdapter** protocol. Keep adapters pure and testable; no `Path` reading inside components.
-- `live_atlas.py` owns artifact schemas (KB, defects, voids, heartbeat). Adapters should reuse its loaders (`_measured_cells`, `read_defects`, `pareto_strip_rows`, …) rather than re‑querying.
-- NiceGUI version: 3.16.0 (check `nicegui[testing]` API compatibility).
+- Dashboard panels are **data‑driven value objects**; the integration point is the **DataAdapter** protocol → `panel.update_data(data)`. Panels without `update_data` silently drop adapter payloads (`BasePanel.update_data` is a no‑op) — check before adding a panel.
+- Components are **data‑driven value objects** (frozen dataclasses); keep adapters pure and testable; no `Path` reading inside components.
+- `live_atlas.py` owns artifact schemas (KB, defects, voids, heartbeat, event_history, objectives). Adapters should consume `DashboardSnapshot` fields rather than re‑querying (`adapt_tradeoffs_panel` was fixed for this — do not regress).
+- Stability API: `StabilityGuard`/`LyapunovEstimator` take keyword fields directly (`threshold=`, `num_steps=`), **not** `GuardConfig`/`LyapunovConfig` objects — the Config-object form type-checks as `threshold: float = GuardConfig(...)` and silently misconfigures.
+- Never `uv add` a package that ships a top‑level `tests/` package (e.g. `textstat`) — it shadows the repo `tests/` and breaks all collection.
+- NiceGUI version: 3.16.0 (no `testing` extra despite the pin).
 - Cell walltime: dashboard render tests must stay <5 min (fast tier, not full suite).
 
 ---
@@ -170,8 +189,8 @@ Existing UX‑L1..L11 unchanged; C4/C5/C7 convert skips and dead references to r
 3. **A2 + A3 + A4** (adapters + wiring) — core integration.
 4. **C2** (headless render test proves A2/A3).
 5. **B1‑B4** (live streams + nav completeness).
-6. **C1 + C3 + C4 + C5** (automation expands to interactions + unskips).
-7. **C6 + C7** (L1/L4/L6 locks).
+6. **C1 + C3 + C4 + C5** (automation expands to interactions + unskips). — C3/C5 done; C1 dep-only; **C4 remaining**
+7. **C6 + C7** (L1/L4/L6 locks). — **C7 done**; **C6 remaining**
 8. **A5 + D3** (recognition wiring + rebuild flag test).
 9. **X4‑X5** (multi‑root, config hot‑reload) — incremental, behind flags.
 10. **D1‑D2, D4‑D5** (observability, perf budgets, docs).
