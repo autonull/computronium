@@ -6,6 +6,7 @@ re-renders on change only. No execution, no ledger writes.
 Usage::
 
     uv run comp dashboard --root artifacts/broad_map --port 8088 [--ui-mode explorer|lab|auto] [--gamify on|off] [--ui-actions on|off] [--rebuild-ui-state]
+    uv run comp dashboard --root artifacts/broad_map,artifacts/other   # multi-root selector
 """
 
 from __future__ import annotations
@@ -17,9 +18,20 @@ from pathlib import Path
 POLL_SECONDS = 2.0
 
 
+def parse_roots(spec: str) -> tuple[Path, ...]:
+    """Split a comma-separated ``--root`` spec into non-empty paths."""
+    roots = tuple(Path(part.strip()) for part in spec.split(",") if part.strip())
+    return roots or (Path("artifacts/broad_map"),)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="comp dashboard", description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
+    parser.add_argument(
+        "--root",
+        type=str,
+        default="artifacts/broad_map",
+        help="campaign root(s); comma-separated paths enable the header root selector",
+    )
     parser.add_argument("--port", type=int, default=8088)
     parser.add_argument(
         "--log-path",
@@ -46,7 +58,6 @@ def main() -> int:
         action="store_true",
         help="do not open a browser tab (headless/server use)",
     )
-    # New flags per GAME.todo.md
     parser.add_argument(
         "--ui-mode",
         choices=["explorer", "lab", "auto"],
@@ -76,12 +87,14 @@ def main() -> int:
 
     from computronium.ui.dashboard import build_dashboard
 
+    roots = parse_roots(args.root)
+
     # An explicit page (not NiceGUI's auto-index) — script-mode
     # re-execution fails under a console-script entry point.
     @ui.page("/")
     def _dashboard_page() -> None:
         build_dashboard(
-            args.root,
+            roots[0],
             args.log_path,
             args.poll,
             args.daemon_url,
@@ -89,6 +102,7 @@ def main() -> int:
             gamify=args.gamify == "on",
             ui_actions=args.ui_actions == "on",
             rebuild_state=args.rebuild_ui_state,
+            roots=roots,
         )
 
     ui.run(

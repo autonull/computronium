@@ -8,6 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+# Row virtualization cap for unbounded table paths (D2 / UX-L4)
+MAX_RENDERED_ROWS = 1000
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Color Palettes (colorblind-safe: viridis/cividis families)
 # ──────────────────────────────────────────────────────────────────────────────

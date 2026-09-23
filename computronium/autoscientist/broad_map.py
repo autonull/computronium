@@ -920,7 +920,18 @@ def next_burst_tag(kb_path: Path) -> str:
 
 
 def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRow]:
-    """Measured cells with their maturity/burst provenance (KB entries)."""
+    """Measured cells with their maturity/burst provenance (mtime-cached)."""
+    from computronium.visualization.atlas import kb_load_cached
+
+    return kb_load_cached(
+        kb_path,
+        lambda: _load_measured_cells_uncached(kb_path, task),
+        list,
+        key_extra=("measured", task),
+    )
+
+
+def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_CellRow]:
     from computronium.knowledge import KnowledgeBase
     from computronium.visualization.atlas import UNBOUNDED_ROWS
 

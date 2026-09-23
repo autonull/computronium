@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import logging
 import time
-from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
@@ -35,14 +34,16 @@ from computronium.ui.components.team_wall import TeamWall
 from computronium.ui.components.tradeoffs_panel import TradeoffsPanel
 from computronium.ui.components.veto_log import VetoLog
 from computronium.ui.components.workshop import WorkshopPanel
-from computronium.ui.data_adapters import make_adapter
+from computronium.ui.data_adapters import AdapterContext
 from computronium.ui.design_tokens import css_custom_properties
 from computronium.ui.event_bus import (
     ArtifactChanged,
+    ConfigChanged,
     ModeChanged,
     WebSocketEvent,
     event_bus,
 )
+from computronium.ui.metrics import metrics
 from computronium.ui.mode_toggle import (
     get_mode,
     initialize_mode,
@@ -60,8 +61,13 @@ from computronium.visualization.live_atlas import (
     _atlas_data,
     _objectives_from_heartbeat,
     render_snapshot,
+    resolve_log_path,
     watch_signature,
 )
+
+if TYPE_CHECKING:
+    from computronium.autoscientist.objectives import ObjectiveSpec
+    from computronium.visualization.live_atlas import DashboardSnapshot
 
 logger = logging.getLogger("computronium.ui.dashboard")
 
@@ -271,6 +277,8 @@ _register_panels()
 class DashboardApp:
     """Main dashboard application with panel routing."""
 
+    _CONFIG_WATCHED = ("campaign.yaml", "heartbeat.json")
+
     def __init__(
         self,
         root: Path,
@@ -281,15 +289,20 @@ class DashboardApp:
         gamify: bool,
         ui_actions: bool,
         rebuild_state: bool,
+        *,
+        roots: tuple[Path, ...] | None = None,
     ):
+        self.roots: tuple[Path, ...] = roots or (root,)
         self.root = root
-        self.log_path = log_path
+        self._explicit_log_path = log_path
+        self.log_path = resolve_log_path(root, log_path)
         self.poll_seconds = poll_seconds
         self.daemon_url = daemon_url
         self.gamify = gamify
         self.ui_actions = ui_actions
         self.rebuild_state = rebuild_state
         _register_root_panels(root)
+        _register_metrics_route()
 
         # Initialize mode
         initialize_mode()
@@ -317,19 +330,31 @@ class DashboardApp:
         }
 
         # Recognition state store (for progress panel)
-        self.recognition_store = None
+        self.recognition_store: RecognitionStateStore | None = None
         if gamify:
             self.recognition_store = RecognitionStateStore(
                 db_path=root / "ui_state.sqlite"
             )
             if rebuild_state:
-                self.recognition_store.rebuild_from_events()
+                # D3: persist the replay — previously the fold result was discarded.
+                self.recognition_store.persist_state(
+                    self.recognition_store.rebuild_from_events()
+                )
 
         # Stream state
         self.loss_history: list[float] = []
         self.event_history: list[Any] = []
         self.last_signature = watch_signature(root)
         self._last_ws_paint = 0.0
+
+        # One render_snapshot per refresh cycle (D2): lazily built, invalidated
+        # by _clear_panel_data().
+        self._snapshot: DashboardSnapshot | None = None
+        self._snapshot_has_atlas = False
+
+        # X5: campaign config signature for hot-reload
+        self._config_signature = self._config_signature_of()
+        self._last_config_signature = self._config_signature
 
         # Panel instances (lazy-loaded)
         self._panels: dict[str, PanelLike] = {}
@@ -340,6 +365,7 @@ class DashboardApp:
         self.main_content: Any = None
         self.header: Any = None
         self.pareto_selector: Any = None
+        self.root_selector: Any = None
 
         # Subscribe to event bus
         self._unsubscribe_artifact = event_bus.subscribe(
@@ -347,9 +373,14 @@ class DashboardApp:
         )
         self._unsubscribe_mode = event_bus.subscribe(ModeChanged, self._on_mode_changed)
         self._unsubscribe_ws = event_bus.subscribe(WebSocketEvent, self._on_ws_event)
+        self._unsubscribe_config = event_bus.subscribe(
+            ConfigChanged, self._on_config_changed
+        )
 
     def _on_artifact_changed(self, event: ArtifactChanged) -> None:
-        """Handle artifact change event."""
+        """Handle artifact change event (ignore foreign roots — X4)."""
+        if event.root != self.root:
+            return
         self.last_signature = event.signature
         self._refresh_cheap()
 
@@ -358,10 +389,26 @@ class DashboardApp:
         self._rebuild_left_drawer()
         self._render_current_panel()
 
+    def _on_config_changed(self, event: ConfigChanged) -> None:
+        """X5: campaign objectives changed — recompute panels once."""
+        from computronium.autoscientist.objectives import parse_objectives
+
+        try:
+            objectives = parse_objectives(",".join(event.objectives))
+        except ValueError:
+            logger.warning("Ignoring unparsable ConfigChanged: %s", event.objectives)
+            return
+        if objectives == self.pareto_state["objectives"]:
+            return
+        self.pareto_state["objectives"] = objectives
+        self._clear_panel_data()
+        self._render_current_panel()
+
     _WS_PAINT_INTERVAL_S = 2.0
 
     def _on_ws_event(self, event: WebSocketEvent) -> None:
         """Route WebSocket events to panels with ≤1/2s paint throttling (UX-L5)."""
+        metrics.inc("dashboard_ws_events_total", labels={"topic": event.topic})
         now = time.time()
         match event.topic:
             case "events":
@@ -430,8 +477,25 @@ class DashboardApp:
         panel = self._panels.get(key)
         return panel if isinstance(panel, typ) else None
 
+    def _snapshot_for(self, *, with_atlas: bool) -> DashboardSnapshot:
+        """One render_snapshot per refresh cycle; recompute only when the atlas
+        pass is needed and missing (D2)."""
+        if self._snapshot is None or (with_atlas and not self._snapshot_has_atlas):
+            start = time.perf_counter()
+            self._snapshot = render_snapshot(
+                self.root,
+                self.log_path,
+                self.cache,
+                objectives=self.pareto_state["objectives"],
+                with_atlas=with_atlas,
+                event_history=list(self.event_history),
+            )
+            metrics.observe_seconds("dashboard_snapshot", time.perf_counter() - start)
+            self._snapshot_has_atlas = with_atlas
+        return self._snapshot
+
     def _get_panel_data(self, key: str) -> Any:
-        """Get or compute panel data using adapter."""
+        """Get or compute panel data using the panel's adapter."""
         if key in self._panel_data:
             return self._panel_data[key]
 
@@ -439,32 +503,24 @@ class DashboardApp:
         if spec is None or spec.adapter is None:
             return None
 
-        # Get snapshot and adapt
-        snapshot = render_snapshot(
-            self.root,
-            self.log_path,
-            self.cache,
-            objectives=self.pareto_state["objectives"],
-            with_atlas=(key == "discovery_map"),
-            event_history=list(self.event_history),
+        snapshot = self._snapshot_for(with_atlas=key == "discovery_map")
+        ctx = AdapterContext(
+            root=self.root,
+            snapshot=snapshot,
+            recognition_store=self.recognition_store,
         )
-        # Store-aware progress adapter (X2: context passed via partial, not
-        # a non-protocol 3rd argument).
-        adapter = spec.adapter
-        if key == "progress" and self.recognition_store is not None:
-            from computronium.ui.adapters import adapt_progress_panel
-
-            adapter = make_adapter(
-                partial(adapt_progress_panel, recognition_store=self.recognition_store)
-            )
-        data = adapter.adapt(snapshot, self.root)
+        start = time.perf_counter()
+        data = spec.adapter.adapt(ctx)
+        metrics.observe_seconds("dashboard_adapter", time.perf_counter() - start)
         self._panel_data[key] = data
         return data
 
     def _clear_panel_data(self, key: str | None = None) -> None:
-        """Clear cached panel data."""
+        """Clear cached panel data and the cycle snapshot."""
         if key is None:
             self._panel_data.clear()
+            self._snapshot = None
+            self._snapshot_has_atlas = False
         else:
             self._panel_data.pop(key, None)
 
@@ -478,7 +534,7 @@ class DashboardApp:
         return spec.visible_predicate(context)
 
     def _build_header(self) -> None:
-        """Build the top header with mode toggle and pareto selector."""
+        """Build the top header with root selector, mode toggle, pareto selector."""
         with ui.header().classes(
             "items-center justify-between bg-primary text-white"
         ) as self.header:
@@ -486,6 +542,21 @@ class DashboardApp:
                 ui.label("Computronium").classes("text-h6 q-mb-none")
                 ui.label("Live Broad Map").classes("text-caption text-white/80")
                 ui.separator().props("vertical").classes("mx-2")
+
+                # X4: root selector when multiple campaign roots were passed
+                if len(self.roots) > 1:
+                    self.root_selector = (
+                        ui
+                        .select(
+                            options=[str(p) for p in self.roots],
+                            value=str(self.root),
+                            on_change=self._on_root_change,  # type: ignore[arg-type]
+                        )
+                        .props("dense outlined")
+                        .classes("w-56")
+                        .style("color: white;")
+                    )
+                    ui.separator().props("vertical").classes("mx-2")
 
                 # Pareto objective selector
                 with ui.row().classes("items-center gap-2"):
@@ -523,11 +594,42 @@ class DashboardApp:
                     "flat round color=white"
                 ).classes("text-white")
 
+    def _on_root_change(self, value: str) -> None:  # type: ignore[arg-type]
+        """X4: header root selector handler."""
+        self.switch_root(Path(str(value)))
+
+    def switch_root(self, root: Path) -> None:
+        """Switch the active campaign root (X4): reset per-root caches/state."""
+        if root == self.root or root not in self.roots:
+            return
+        self.root = root
+        self.log_path = resolve_log_path(root, self._explicit_log_path)
+        self.cache = EmbedCache()
+        self.objectives = _objectives_from_heartbeat(root)
+        self.pareto_state["objectives"] = self.objectives
+        if self.gamify:
+            self.recognition_store = RecognitionStateStore(
+                db_path=root / "ui_state.sqlite"
+            )
+        self.loss_history.clear()
+        self.event_history.clear()
+        self.last_signature = watch_signature(root)
+        self._config_signature = self._config_signature_of()
+        self._last_config_signature = self._config_signature
+        self._panels.clear()
+        self._clear_panel_data()
+        _register_root_panels(root)
+        self._rebuild_left_drawer()
+        self._render_current_panel()
+
     def _build_left_drawer(self) -> None:
-        """Build left navigation drawer with panel list."""
-        self.left_drawer = ui.left_drawer(value=True).classes(
-            "bg-grey-1 dark:bg-grey-9"
-        )
+        """(Re)build left navigation drawer contents without nesting drawers."""
+        if self.left_drawer is None:
+            self.left_drawer = ui.left_drawer(value=True).classes(
+                "bg-grey-1 dark:bg-grey-9"
+            )
+        else:
+            self.left_drawer.clear()
         with self.left_drawer:
             ui.label("Navigation").classes("text-h6 q-mb-md px-4")
 
@@ -562,11 +664,9 @@ class DashboardApp:
                         ui.label(spec.label_key)
 
     def _rebuild_left_drawer(self) -> None:
-        """Rebuild left drawer on mode change."""
+        """Rebuild left drawer on mode change / root switch."""
         if self.left_drawer:
-            self.left_drawer.clear()
-            with self.left_drawer:
-                self._build_left_drawer()
+            self._build_left_drawer()
 
     def _switch_panel(self, key: str) -> None:
         """Switch to a different panel."""
@@ -586,6 +686,7 @@ class DashboardApp:
 
     def _render_current_panel(self) -> None:
         """Render the currently selected panel."""
+        start = time.perf_counter()
         self.main_content.clear()
         with self.main_content:
             panel = self._get_panel(self.current_panel)
@@ -593,6 +694,7 @@ class DashboardApp:
             if data is not None:
                 self._push_data(panel, data)
             panel.render()
+        metrics.observe_seconds("dashboard_render_panel", time.perf_counter() - start)
 
     def _on_pareto_change(self, value: str) -> None:  # type: ignore[arg-type]
         """Handle Pareto objective selector change."""
@@ -650,26 +752,19 @@ class DashboardApp:
         quiz.start()
 
     def _refresh_cheap(self) -> None:
-        """Fast paint: everything except UMAP fit."""
-        render_snapshot(
-            self.root,
-            self.log_path,
-            self.cache,
-            objectives=self.pareto_state["objectives"],
-            with_atlas=False,
-        )
+        """Fast paint: everything except UMAP fit (D2: shared cycle snapshot)."""
+        self._clear_panel_data()
 
         # Update panels that need live data
-        for key in {
+        for key in (
             "discovery_map",
             "tradeoffs",
             "repair_bench",
             "health",
             "activity_feed",
             "field_reports",
-        }:
+        ):
             if key in self._panels:
-                self._panel_data.pop(key, None)
                 data = self._get_panel_data(key)
                 if data is not None:
                     self._push_data(self._panels[key], data)
@@ -695,14 +790,63 @@ class DashboardApp:
         except Exception as e:
             logger.warning("Atlas load failed: %s", e)
 
+    def _config_signature_of(self) -> tuple[tuple[int, int], ...]:
+        """(mtime_ns, size) stamps for campaign.yaml + heartbeat.json (X5)."""
+        stamps: list[tuple[int, int]] = []
+        for name in self._CONFIG_WATCHED:
+            try:
+                stat = (self.root / name).stat()
+            except OSError:
+                continue
+            stamps.append((stat.st_mtime_ns, stat.st_size))
+        return tuple(stamps)
+
+    def _reload_objectives(self) -> tuple[ObjectiveSpec, ...] | None:
+        """X5: re-parse objectives from campaign.yaml, else heartbeat.
+
+        Returns None when the current objectives must be kept (invalid config).
+        """
+        import yaml
+
+        from computronium.autoscientist.objectives import parse_objectives
+
+        path = self.root / "campaign.yaml"
+        if path.exists():
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                raw = (data.get("hpo") or {}).get("objectives")
+                if isinstance(raw, list):
+                    raw = ",".join(str(item) for item in raw)
+                if isinstance(raw, str) and raw:
+                    return parse_objectives(raw)
+            except (ValueError, OSError, yaml.YAMLError) as error:
+                logger.warning("campaign.yaml objectives reload failed: %s", error)
+                return None
+        return _objectives_from_heartbeat(self.root)
+
+    def _maybe_reload_objectives(self) -> None:
+        """Publish ConfigChanged only when objectives actually changed (X5)."""
+        from computronium.autoscientist.objectives import objective_names
+
+        new = self._reload_objectives()
+        if new is None or objective_names(new) == objective_names(
+            self.pareto_state["objectives"]
+        ):
+            return
+        event_bus.publish(ConfigChanged(objectives=objective_names(new)))
+
     def _poll(self) -> None:
-        """Poll for artifact changes."""
+        """Poll for artifact + campaign-config changes (X5)."""
         new_sig = watch_signature(self.root)
         if new_sig != self.last_signature:
             self.last_signature = new_sig
             # Publish artifact changed event
             event_bus.publish(ArtifactChanged(signature=new_sig, root=self.root))
             self._refresh_cheap()
+        config_sig = self._config_signature_of()
+        if config_sig != self._last_config_signature:
+            self._last_config_signature = config_sig
+            self._maybe_reload_objectives()
 
     def _telemetry_consumer(self) -> Any:
         """Telemetry WebSocket consumer."""
@@ -794,6 +938,22 @@ class DashboardApp:
             self._start_stream_timers()
 
 
+def _register_metrics_route() -> None:
+    """D1: expose the stdlib metrics registry at /metrics (idempotent)."""
+    from fastapi.responses import PlainTextResponse
+    from nicegui import app
+
+    if any(getattr(route, "path", None) == "/metrics" for route in app.routes):
+        return
+
+    @app.get("/metrics")
+    def _metrics_endpoint() -> PlainTextResponse:
+        return PlainTextResponse(
+            metrics.render_prometheus(),
+            media_type="text/plain; version=0.0.4",
+        )
+
+
 def build_dashboard(
     root: Path,
     log_path: Path | None = None,
@@ -804,6 +964,7 @@ def build_dashboard(
     gamify: bool = True,
     ui_actions: bool = False,
     rebuild_state: bool = False,
+    roots: tuple[Path, ...] | None = None,
 ) -> None:
     """Build the new integrated Computronium dashboard.
 
@@ -818,5 +979,6 @@ def build_dashboard(
         gamify=gamify,
         ui_actions=ui_actions,
         rebuild_state=rebuild_state,
+        roots=roots,
     )
     app.build()

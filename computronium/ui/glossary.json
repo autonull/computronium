@@ -887,8 +887,12 @@
       "lab": "Seed"
     },
     "settle_horizon": {
-      "explorer": "Settling steps",
+      "explorer": "Settle Horizon",
       "lab": "Settle horizon"
+    },
+    "showing_first": {
+      "explorer": "Showing first rows",
+      "lab": "Rendered row cap"
     },
     "slope": {
       "explorer": "Learning speed",

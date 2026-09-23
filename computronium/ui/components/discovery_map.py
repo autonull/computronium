@@ -9,6 +9,7 @@ from nicegui import ui
 
 from computronium.ui.design_tokens import (
     ICONS,
+    MAX_RENDERED_ROWS,
 )
 from computronium.ui.mode_toggle import BasePanel
 
@@ -162,10 +163,10 @@ class DiscoveryMap(BasePanel):
                 ui.icon(ICONS["map"]).classes("text-6xl text-grey")
                 ui.label(self.tr("atlas_pending")).classes("text-grey")
 
-    def _render_table(self) -> None:
-        """Render sortable table alternative (100% map info)."""
+    def _table_rows(self) -> list[dict[str, str]]:
+        """Table rows for the current specimens, capped at MAX_RENDERED_ROWS."""
         rows = []
-        for s in self.specimens:
+        for s in self.specimens[:MAX_RENDERED_ROWS]:
             rows.append({
                 "key": s.key[:30],
                 "dynamics": s.dynamics,
@@ -178,6 +179,12 @@ class DiscoveryMap(BasePanel):
                 "pareto": "★" if s.is_pareto else "",
                 "void": "✗" if s.is_void else "",
             })
+        return rows
+
+    def _render_table(self) -> None:
+        """Render sortable table alternative (100% map info, capped rows)."""
+        total = len(self.specimens)
+        rows = self._table_rows()
 
         if not rows:
             ui.label(self.tr("no_data")).classes("text-grey")
@@ -244,6 +251,10 @@ class DiscoveryMap(BasePanel):
         ui.table(rows=rows, columns=columns, row_key="key").classes("w-full").props(
             "dense flat bordered"
         )
+        if total > MAX_RENDERED_ROWS:
+            ui.label(f"{self.tr('showing_first')}: {len(rows)} / {total}").classes(
+                "text-caption text-grey"
+            )
 
     def _refresh(self) -> None:
         """Refresh panel on mode change."""
@@ -284,30 +295,46 @@ def create_discovery_map_from_atlas(
     df,  # pandas DataFrame from atlas.load_cells
     voids_df,  # pandas DataFrame from atlas.load_voids
     fog_coverage_pct: float = 0.0,
+    pareto_keys: set[str] | None = None,
 ) -> tuple[list[MapSpecimen], list[MapRegion]]:
-    """Create specimens and regions from atlas DataFrames.
+    """Create specimens and regions from atlas DataFrames (columnar, O(n)).
 
-    This is a helper for integrating with the existing atlas visualization.
+    ``pareto_keys`` marks front membership directly — avoids a second
+    specimen rebuild in the adapter.
     """
+    n = len(df)
+    if n == 0:
+        return [], _generate_regions(df, voids_df)
+
+    dyn = df["dynamics"].tolist()
+    cred = df["credit"].tolist()
+    upd = df["update"].tolist()
+    topo = df["topology"].tolist() if "topology" in df.columns else ["feedforward"] * n
+    acc = df["accuracy"].tolist() if "accuracy" in df.columns else [0.0] * n
+    bp = df["bp_deficit"].tolist() if "bp_deficit" in df.columns else [0.0] * n
+    xs = df["x"].tolist() if "x" in df.columns else [0.0] * n
+    ys = df["y"].tolist() if "y" in df.columns else [0.0] * n
+    void_flags = df["is_void"].tolist() if "is_void" in df.columns else [False] * n
+    nan_flags = df["nan_loss"].tolist() if "nan_loss" in df.columns else [False] * n
+    raw_keys = df["key"].tolist() if "key" in df.columns else [None] * n
 
     specimens = []
-    for _, row in df.iterrows():
+    for i in range(n):
+        key = str(raw_keys[i]) if raw_keys[i] else f"{dyn[i]}|{cred[i]}|{upd[i]}"
         specimens.append(
             MapSpecimen(
-                key=str(
-                    row.get("key", f"{row['dynamics']}|{row['credit']}|{row['update']}")
-                ),
-                x=float(row.get("x", 0.0)),
-                y=float(row.get("y", 0.0)),
-                dynamics=str(row["dynamics"]),
-                credit=str(row["credit"]),
-                update=str(row["update"]),
-                topology=str(row.get("topology", "feedforward")),
-                accuracy=float(row.get("accuracy", 0.0)),
-                bp_deficit=float(row.get("bp_deficit", 0.0)),
-                outcome=_outcome_label(row),
-                is_void=bool(row.get("is_void", False)),
-                is_pareto=_is_pareto(row, df),
+                key=key,
+                x=float(xs[i]),
+                y=float(ys[i]),
+                dynamics=str(dyn[i]),
+                credit=str(cred[i]),
+                update=str(upd[i]),
+                topology=str(topo[i]),
+                accuracy=float(acc[i]),
+                bp_deficit=float(bp[i]),
+                outcome=_outcome_from_values(void_flags[i], nan_flags[i], acc[i]),
+                is_void=bool(void_flags[i]),
+                is_pareto=bool(pareto_keys) and key in pareto_keys,
             )
         )
 
@@ -317,68 +344,52 @@ def create_discovery_map_from_atlas(
     return specimens, regions
 
 
-def _outcome_label(row) -> str:
-    """Generate plain-language outcome label."""
-    if row.get("is_void", False):
+def _outcome_from_values(is_void: object, nan_loss: object, accuracy: float) -> str:
+    """Generate plain-language outcome label from columnar cell values."""
+    if is_void:
         return "structural_void"
-    if row.get("nan_loss", False):
+    if nan_loss:
         return "diverged"
-    acc = row.get("accuracy", 0.0)
-    if acc >= 0.5:
+    if accuracy >= 0.5:
         return "learned"
-    elif acc >= 0.15:
+    if accuracy >= 0.15:
         return "marginal"
     return "chance"
 
 
-def _is_pareto(row, df) -> bool:
-    """Check if row is on Pareto front (simplified)."""
-    # This would use atlas.pareto_top in practice
-    return False
-
-
 def _generate_regions(df, voids_df) -> list[MapRegion]:
-    """Auto-generate region labels from dominant axes."""
+    """Auto-generate region labels from dominant axes (numpy masks)."""
     from collections import Counter
+
+    import numpy as np
 
     if df.empty:
         return []
 
-    x_vals = df["x"].values
-    y_vals = df["y"].values
+    x = np.asarray(df["x"], dtype=float)
+    y = np.asarray(df["y"], dtype=float)
+    dyn = np.asarray(df["dynamics"], dtype=object)
+    cred = np.asarray(df["credit"], dtype=object)
     eps = 1e-6  # degenerate bounds (all points coincide) still form one region
-    bounds = (
-        float(x_vals.min()) - eps,
-        float(x_vals.max()) + eps,
-        float(y_vals.min()) - eps,
-        float(y_vals.max()) + eps,
-    )
+    x_min, x_max = float(x.min()) - eps, float(x.max()) + eps
+    y_min, y_max = float(y.min()) - eps, float(y.max()) + eps
     total = len(df)
 
     def _cell_region(i: int, j: int, grid: int) -> MapRegion | None:
-        x_min, x_max, y_min, y_max = bounds
         rx_min = x_min + (x_max - x_min) * i / grid
         rx_max = x_min + (x_max - x_min) * (i + 1) / grid
         ry_min = y_min + (y_max - y_min) * j / grid
         ry_max = y_min + (y_max - y_min) * (j + 1) / grid
 
-        mask = (
-            (df["x"] >= rx_min)
-            & (df["x"] < rx_max)
-            & (df["y"] >= ry_min)
-            & (df["y"] < ry_max)
-        )
-        sub = df[mask]
-        if sub.empty:
+        mask = (x >= rx_min) & (x < rx_max) & (y >= ry_min) & (y < ry_max)
+        count = int(mask.sum())
+        if count == 0:
             return None
 
-        dyn_counter = Counter(sub["dynamics"])
-        credit_counter = Counter(sub["credit"])
-        dom_dyn = dyn_counter.most_common(1)[0][0] if dyn_counter else "unknown"
-        dom_credit = (
-            credit_counter.most_common(1)[0][0] if credit_counter else "unknown"
-        )
-        count = len(sub)
+        dyn_counter = Counter(dyn[mask])
+        credit_counter = Counter(cred[mask])
+        dom_dyn = dyn_counter.most_common(1)[0][0]
+        dom_credit = credit_counter.most_common(1)[0][0]
 
         return MapRegion(
             name=f"{dom_dyn} × {dom_credit}",

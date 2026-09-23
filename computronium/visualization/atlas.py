@@ -36,9 +36,41 @@ logger = logging.getLogger("atlas")
 UNBOUNDED_ROWS = 1_000_000_000
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Callable
     from pathlib import Path
 
     from plotly.graph_objects import Figure as go_Figure
+
+_KB_LOAD_CACHE: dict[tuple[str, int, int, object], object] = {}
+_KB_CACHE_MAX_ENTRIES = 16
+
+
+def kb_load_cached[T](
+    path: Path,
+    loader: Callable[[], T],
+    clone: Callable[[T], T],
+    *,
+    key_extra: object = (),
+) -> T:
+    """mtime-keyed memo for read-only KB loads; each caller gets ``clone()``.
+
+    Keyed on ``(path, mtime_ns, size, key_extra)`` so a campaign that grows
+    mid-run invalidates naturally. The cached value is canonical; callers
+    receive a clone (pandas CoW shallow copy / list copy) so mutation cannot
+    leak across call sites. Stale keys are dropped when the cache is full.
+    """
+    try:
+        stat = path.stat()
+    except OSError:
+        return loader()
+    key = (str(path), stat.st_mtime_ns, stat.st_size, key_extra)
+    hit = _KB_LOAD_CACHE.get(key)
+    if hit is None:
+        if len(_KB_LOAD_CACHE) >= _KB_CACHE_MAX_ENTRIES:
+            _KB_LOAD_CACHE.clear()
+        hit = loader()
+        _KB_LOAD_CACHE[key] = hit
+    return clone(hit)  # type: ignore[operator]
 
 
 class AtlasRow(TypedDict):
@@ -84,10 +116,19 @@ def _axis_values(df: pd.DataFrame, axis: str) -> tuple[str, ...]:
 
 
 def load_cells(kb_path: Path, task: str | None = None) -> pd.DataFrame:
-    """Measured cells from the KB's experiment entries.
+    """Measured cells from the KB's experiment entries (mtime-cached).
 
     If task is None, load all tasks and include a 'task' column.
     """
+    return kb_load_cached(
+        kb_path,
+        lambda: _load_cells_uncached(kb_path, task),
+        lambda df: df.copy(deep=False),
+        key_extra=("cells", task),
+    )
+
+
+def _load_cells_uncached(kb_path: Path, task: str | None) -> pd.DataFrame:
     from computronium.knowledge import KnowledgeBase
 
     if not kb_path.exists():

@@ -14,9 +14,12 @@ from computronium.ui.components.constitution_health import (
     ConstitutionHealthData,
     create_invariants_from_monitor,
 )
-from computronium.ui.components.discovery_map import MapRegion, MapSpecimen
 from computronium.ui.components.lineage_viewer import LineageEdge, LineageNode
-from computronium.ui.data_adapters import make_adapter
+from computronium.ui.data_adapters import (
+    AdapterContext,
+    make_adapter,
+    make_context_adapter,
+)
 from computronium.ui.recognition import Badge, Quest, Record
 
 if TYPE_CHECKING:
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
 
     from plotly.graph_objects import Figure as go_Figure
 
+    from computronium.ui.components.discovery_map import MapRegion, MapSpecimen
     from computronium.visualization.live_atlas import DashboardSnapshot
 
 
@@ -45,25 +49,27 @@ def _with_layout(df: Any) -> Any:
     """
     import hashlib
 
+    import pandas as pd
+
     if df.empty or "x" in df.columns:
         return df
 
-    def _coord(label: str, salt: bytes) -> float:
-        digest = hashlib.blake2b(label.encode(), key=salt, digest_size=8).digest()
-        return int.from_bytes(digest) / 2**64
+    def _coord_pair(label: str) -> tuple[float, float]:
+        digest = hashlib.blake2b(label.encode(), digest_size=16).digest()
+        return (
+            int.from_bytes(digest[:8]) / 2**64,
+            int.from_bytes(digest[8:]) / 2**64,
+        )
 
-    def _label(row: Any) -> str:
-        parts = [
-            str(row.get(c, "?"))
-            for c in ("dynamics", "credit", "update", "topology", "task")
-        ]
-        return "|".join(parts)
-
-    labels = [_label(row) for _, row in df.iterrows()]
-    return df.assign(
-        x=[_coord(label, b"x") for label in labels],
-        y=[_coord(label, b"y") for label in labels],
-    )
+    identity = ("dynamics", "credit", "update", "topology", "task")
+    missing = pd.Series("?", index=df.index, dtype=object)
+    parts = [df[col].astype(str) if col in df.columns else missing for col in identity]
+    labels = parts[0]
+    for part in parts[1:]:
+        labels = labels + "|" + part
+    coords = [_coord_pair(label) for label in labels]
+    xs, ys = zip(*coords, strict=True)
+    return df.assign(x=list(xs), y=list(ys))
 
 
 def _coerce_float(mapping: dict[str, object], key: str, default: float = 0.0) -> float:
@@ -102,36 +108,22 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
         top = pareto_top(cells_df, k=len(cells_df), objectives=DEFAULT_OBJECTIVES)
         if "key" not in top.columns:
             top = top.assign(
-                key=[
-                    f"{row['dynamics']}|{row['credit']}|{row['update']}"
-                    for _, row in top.iterrows()
-                ]
+                key=top["dynamics"].astype(str)
+                + "|"
+                + top["credit"].astype(str)
+                + "|"
+                + top["update"].astype(str)
             )
         pareto_keys = set(top["key"].tolist())
 
-    # Create specimens and regions using existing helper
+    # Create specimens and regions using existing helper; Pareto flags set
+    # directly (no second specimen rebuild).
     specimens, regions = create_discovery_map_from_atlas(
-        cells_df, voids_df, fog_coverage_pct=0.0
+        cells_df,
+        voids_df,
+        fog_coverage_pct=0.0,
+        pareto_keys=pareto_keys or None,
     )
-
-    # Update pareto flags
-    specimens = [
-        MapSpecimen(
-            key=s.key,
-            x=s.x,
-            y=s.y,
-            dynamics=s.dynamics,
-            credit=s.credit,
-            update=s.update,
-            topology=s.topology,
-            accuracy=s.accuracy,
-            bp_deficit=s.bp_deficit,
-            outcome=s.outcome,
-            is_void=s.is_void,
-            is_pareto=s.key in pareto_keys,
-        )
-        for s in specimens
-    ]
 
     # Get atlas figure from snapshot
     atlas_figure = snapshot.atlas
@@ -559,6 +551,11 @@ def adapt_progress_panel(
     return ProgressData(badges=badges, quests=quests, records=records)
 
 
+def _adapt_progress_from_ctx(ctx: AdapterContext) -> ProgressData:
+    """Context-aware progress adapter: recognition store rides AdapterContext."""
+    return adapt_progress_panel(ctx.snapshot, ctx.root, ctx.recognition_store)
+
+
 # ============================================================================
 # WorkshopPanel Adapter
 # ============================================================================
@@ -950,7 +947,7 @@ ADAPTERS = {
     "constitution": make_adapter(adapt_constitution_health),
     "lineage": make_adapter(adapt_lineage_viewer),
     "episodes": make_adapter(adapt_episode_timeline),
-    "progress": make_adapter(adapt_progress_panel),
+    "progress": make_context_adapter(_adapt_progress_from_ctx),
     "workshop": make_adapter(adapt_workshop_panel),
     "campaigns": make_adapter(adapt_campaign_gallery),
     "preview": make_adapter(adapt_preview_shelf),

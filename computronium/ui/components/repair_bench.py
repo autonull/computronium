@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import ui
 
-from computronium.ui.design_tokens import ICONS
+from computronium.ui.design_tokens import ICONS, MAX_RENDERED_ROWS
 from computronium.ui.mode_toggle import BasePanel
 
 if TYPE_CHECKING:
@@ -64,8 +64,13 @@ class RepairBench(BasePanel):
                 ui.label(self.tr("no_defects")).classes("text-grey text-center p-4")
                 return panel
 
-            for row in self.rows:
+            total = len(self.rows)
+            for row in self.rows[:MAX_RENDERED_ROWS]:
                 self._render_defect_row(row)
+            if total > MAX_RENDERED_ROWS:
+                ui.label(
+                    f"{self.tr('showing_first')}: {MAX_RENDERED_ROWS} / {total}"
+                ).classes("text-caption text-grey")
 
         return panel
 

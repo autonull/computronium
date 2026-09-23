@@ -165,6 +165,7 @@ def fold(events: Iterable[RecognitionEvent]) -> RecognitionState:  # noqa: C901,
         quests = _update_quests("campaign_complete", payload, quests)
 
     for payload in measurement_recorded_list:
+        _award_badges("measurement_recorded", payload, badges)
         _update_records("measurement_recorded", payload, records)
 
     # Build final state

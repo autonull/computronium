@@ -1,42 +1,63 @@
 """UX-L5: Accessibility (WCAG 2.2 AA) lock.
 
-Automated axe-core scan + manual keyboard crawl checklist.
+Selenium + vendored axe-core scan against an in-process dashboard (C4);
+manual keyboard crawl checklist for certification.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
+import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
+if TYPE_CHECKING:
+    from selenium.webdriver.remote.webdriver import WebDriver
 
-def _run_axe_scan(url: str, output_path: Path | None = None) -> dict:
-    """Run axe-core CLI against a URL.
+AXE_SOURCE_PATH = Path(__file__).parent / "fixtures" / "axe.min.js"
+AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]
 
-    Requires: npm install -g @axe-core/cli
-    """
-    try:
-        result = subprocess.run(
-            ["axe", url, "--json"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
-    except FileNotFoundError:
-        pytest.skip("axe CLI not found. Install with: npm install -g @axe-core/cli")
-    except subprocess.TimeoutExpired:
-        pytest.fail("axe scan timed out after 120s")
 
-    if result.returncode not in {0, 1, 2}:
-        pytest.fail(f"axe scan failed: {result.stderr}")
+def _wait_for_page_source(
+    driver: WebDriver, needle: str, timeout: float = 30.0
+) -> None:
+    """Poll page_source past the driver's 4 s implicit wait (atlas fit can exceed it)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if needle in driver.page_source:
+            return
+        time.sleep(0.25)
+    raise AssertionError(f'Page never contained "{needle}" within {timeout}s')
 
-    data = json.loads(result.stdout)
-    if output_path:
-        output_path.write_text(json.dumps(data, indent=2))
 
+def _run_axe_scan(driver: WebDriver) -> dict[str, Any]:
+    """Run vendored axe-core in-page; returns {"violations": [...]} or {"error": ...}."""
+    axe_source = AXE_SOURCE_PATH.read_text(encoding="utf-8")
+    driver.execute_script(axe_source)
+    payload = driver.execute_async_script(
+        """
+        const done = arguments[arguments.length - 1];
+        axe.run(document, {runOnly: {type: 'tag', values: arguments[0]}})
+            .then(r => done(JSON.stringify({violations: r.violations.map(v => ({
+                id: v.id,
+                impact: v.impact,
+                description: v.description,
+                nodes: (v.nodes || []).length,
+                targets: (v.nodes || []).slice(0, 10).map(n => ({
+                    target: n.target,
+                    html: (n.html || '').slice(0, 160),
+                    summary: (n.failureSummary || '').slice(0, 300),
+                })),
+            }))})))
+            .catch(e => done(JSON.stringify({error: String(e)})));
+        """,
+        AXE_TAGS,
+    )
+    data = json.loads(payload)
+    if "error" in data:
+        pytest.fail(f"axe.run failed: {data['error']}")
     return data
 
 
@@ -57,6 +78,20 @@ def _violations_by_severity(violations: list[dict]) -> dict[str, list[dict]]:
         if v["impact"] in grouped:
             grouped[v["impact"]].append(v)
     return grouped
+
+
+def _assert_no_critical_or_serious(violations: list[dict], label: str) -> None:
+    grouped = _violations_by_severity(violations)
+    critical_count = len(grouped["critical"])
+    serious_count = len(grouped["serious"])
+    assert critical_count == 0, (
+        f"{label}: {critical_count} critical axe violations:\n"
+        + json.dumps(grouped["critical"], indent=2)
+    )
+    assert serious_count == 0, (
+        f"{label}: {serious_count} serious axe violations:\n"
+        + json.dumps(grouped["serious"], indent=2)
+    )
 
 
 KEYBOARD_CHECKLIST = [
@@ -114,58 +149,40 @@ KEYBOARD_CHECKLIST = [
 
 
 class TestA11yAutomated:
-    """Automated axe-core accessibility tests."""
+    """Automated axe-core accessibility tests (C4: in-process + selenium)."""
 
-    @pytest.fixture(scope="class")
-    def dashboard_url(self) -> str:
-        """Base URL for dashboard (set via env or default)."""
-        import os
+    def test_axe_no_critical_or_serious(self, screen: Any, tmp_path: Path) -> None:
+        """axe-core scan must have 0 critical/serious violations in both registers."""
+        from nicegui import ui
 
-        return os.environ.get("DASHBOARD_URL", "http://localhost:8088")
+        from computronium.ui.dashboard import build_dashboard
+        from tests.ui.fixture import seed_campaign_root
 
-    def test_axe_no_critical_or_serious(self, dashboard_url: str) -> None:
-        """axe-core scan must have 0 critical/serious violations."""
-        data = _run_axe_scan(dashboard_url)
-        violations = data.get("violations", [])
+        assert AXE_SOURCE_PATH.is_file(), f"vendored axe missing: {AXE_SOURCE_PATH}"
+        root = tmp_path / "a11y_root"
+        seed_campaign_root(root)
+        holder = {"ui_mode": "explorer"}
 
-        grouped = _violations_by_severity(violations)
-
-        critical_count = len(grouped["critical"])
-        serious_count = len(grouped["serious"])
-
-        assert critical_count == 0, (
-            f"{critical_count} critical axe violations:\n"
-            + "\n".join(
-                f"  [{v['id']}] {v['description']}" for v in grouped["critical"]
+        @ui.page("/a11y_dashboard", language="en")
+        def _a11y_page() -> None:
+            build_dashboard(
+                root,
+                ui_mode=holder["ui_mode"],
+                gamify=False,
+                ui_actions=False,
             )
-        )
-        assert serious_count == 0, (
-            f"{serious_count} serious axe violations:\n"
-            + "\n".join(f"  [{v['id']}] {v['description']}" for v in grouped["serious"])
-        )
 
-    def test_axe_no_violations_on_shell_routes(self, dashboard_url: str) -> None:
-        """Test key dashboard routes for a11y regressions."""
-        routes = [
-            "/",  # Main dashboard
-            "/?mode=lab",  # Lab mode
-        ]
+        screen.open("/a11y_dashboard", timeout=30)
+        _wait_for_page_source(screen.selenium, "Computronium")
+        _wait_for_page_source(screen.selenium, "Navigation")
+        data = _run_axe_scan(screen.selenium)
+        _assert_no_critical_or_serious(data["violations"], "explorer")
 
-        for route in routes:
-            url = f"{dashboard_url}{route}"
-            data = _run_axe_scan(url)
-            violations = data.get("violations", [])
-
-            grouped = _violations_by_severity(violations)
-            critical_count = len(grouped["critical"])
-            serious_count = len(grouped["serious"])
-
-            assert critical_count == 0, (
-                f"Route {route}: {critical_count} critical axe violations"
-            )
-            assert serious_count == 0, (
-                f"Route {route}: {serious_count} serious axe violations"
-            )
+        holder["ui_mode"] = "lab"
+        screen.open("/a11y_dashboard", timeout=30)
+        _wait_for_page_source(screen.selenium, "Navigation")
+        data = _run_axe_scan(screen.selenium)
+        _assert_no_critical_or_serious(data["violations"], "lab")
 
 
 class TestA11yTokens:
@@ -173,8 +190,8 @@ class TestA11yTokens:
 
     def test_semantic_colors_meet_aa_on_white(self) -> None:
         """Semantic colors (light mode) must meet 4.5:1 on white background."""
-        from computronium.ui.design_tokens import SEMANTIC
         from computronium.ui.a11y.tokens import meets_aa
+        from computronium.ui.design_tokens import SEMANTIC
 
         for name, color in SEMANTIC.items():
             assert meets_aa(color, "#ffffff"), (
@@ -183,8 +200,6 @@ class TestA11yTokens:
 
     def test_semantic_colors_dark_mode_meet_aa_on_black(self) -> None:
         """Dark mode semantic colors must meet 4.5:1 on black background."""
-        # Dark mode colors would be defined separately in a real implementation
-        # For now, test that high contrast mode colors work
         from computronium.ui.a11y.tokens import meets_aa
 
         dark_colors = {
@@ -196,23 +211,23 @@ class TestA11yTokens:
         }
         for name, color in dark_colors.items():
             assert meets_aa(color, "#000000"), (
-                f"Dark mode color '{name}' ({color}) fails AA on black"
+                f"Dark color '{name}' ({color}) fails AA on black"
             )
 
     def test_outcome_colors_meet_ui_contrast(self) -> None:
         """Outcome colors (light mode) must meet 3:1 UI contrast on white."""
-        from computronium.ui.design_tokens import OUTCOME_COLORS
         from computronium.ui.a11y.tokens import meets_ui
+        from computronium.ui.design_tokens import OUTCOME_COLORS
 
         for name, color in OUTCOME_COLORS.items():
             assert meets_ui(color, "#ffffff"), (
                 f"Outcome color '{name}' ({color}) fails UI contrast on white"
             )
 
-    def test_focus_ring_meets_aa(self) -> None:
+    def test_focus_ring_meet_aa(self) -> None:
         """Focus ring color must meet 3:1 on both backgrounds."""
-        from computronium.ui.design_tokens import FOCUS_RING
         from computronium.ui.a11y.tokens import meets_ui
+        from computronium.ui.design_tokens import FOCUS_RING
 
         focus_color = FOCUS_RING["color"]
         assert meets_ui(focus_color, "#ffffff"), "Focus ring fails UI contrast on white"
@@ -220,17 +235,15 @@ class TestA11yTokens:
 
     def test_grayscale_contrast_ratios(self) -> None:
         """Key grayscale steps must have sufficient contrast on white."""
+        from computronium.ui.a11y.tokens import meets_aa
         from computronium.ui.design_tokens import GRAYSCALE
-        from computronium.ui.a11y.tokens import contrast_ratio, meets_aa
 
-        # Test text colors on white background
         text_colors = ["gray900", "gray800", "gray700", "gray600", "gray500"]
         for name in text_colors:
             assert meets_aa(GRAYSCALE[name], "#ffffff"), (
                 f"Gray '{name}' ({GRAYSCALE[name]}) fails AA on white"
             )
 
-        # Test background colors on black (for dark mode surfaces)
         bg_colors = ["gray100", "gray200", "gray300"]
         for name in bg_colors:
             assert meets_aa(GRAYSCALE[name], "#000000"), (
@@ -280,7 +293,7 @@ class TestA11yKeyboardCrawl:
         ]
         if failed:
             pytest.fail(
-                f"Keyboard crawl failures:\n"
+                "Keyboard crawl failures:\n"
                 + "\n".join(f"  {cid}: {notes}" for cid, notes in failed)
             )
 
@@ -307,7 +320,7 @@ class TestA11yKeyboardCrawl:
         from computronium.ui.a11y.tokens import FOCUS_VISIBLE_CSS
 
         assert ":focus-visible" in FOCUS_VISIBLE_CSS
-        assert "outline" in FOCUS_VISIBLE_CSS
+        assert "outline: none" in FOCUS_VISIBLE_CSS or "outline" in FOCUS_VISIBLE_CSS
 
     def test_reduced_motion_media_query_exists(self) -> None:
         """Reduced motion media query must be in design tokens."""

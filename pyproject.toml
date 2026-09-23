@@ -92,7 +92,6 @@ dev = [
     "onnxruntime",
     "datasets",
     "nicegui>=3.16.0",
-    "nicegui[testing]>=3.16.0",
     "plotly>=6.9.0",
     "umap-learn>=0.5.9",
     "cryptography==50.0.0",
@@ -126,7 +125,7 @@ export = ["onnx", "onnxscript", "onnxruntime"]
 p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
 # --- Desktop UI ---
-ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0", "nicegui[testing]>=3.16.0"]
+ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0"]
 
 # --- System monitoring ---
 monitoring = ["psutil"]
@@ -162,10 +161,14 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-timeout>=2.4.0",
+    "selenium>=4.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/property", "tests/primitives", "tests/algorithms", "tests/acceleration"]
+# NiceGUI Screen tests register pages in-test; no repo-root main.py (empty →
+# get_path_to_main_file returns None and the plugin's in-process ui.run path runs).
+main_file = ""
 markers = [
     "slow: marks tests as slow (e.g. MNIST full epoch)",
     "gpu: runs on CUDA device; skipped when GPU unavailable",
