@@ -937,6 +937,62 @@
     "regions_charted": {
       "explorer": "Regions charted",
       "lab": "Regions charted"
+    },
+    "workshop": {
+      "explorer": "Workshop",
+      "lab": "Workshop"
+    },
+    "dial_composer": {
+      "explorer": "Build your own recipe",
+      "lab": "DialComposer"
+    },
+    "recipe_card": {
+      "explorer": "Try a known recipe",
+      "lab": "RecipeCard"
+    },
+    "fix_crash": {
+      "explorer": "Fix a crash",
+      "lab": "Fix a crash"
+    },
+    "donate_compute": {
+      "explorer": "Donate computer",
+      "lab": "P2P worker toggle"
+    },
+    "campaign_card": {
+      "explorer": "Campaign",
+      "lab": "Campaign Card"
+    },
+    "campaign_title": {
+      "explorer": "Title",
+      "lab": "Title"
+    },
+    "campaign_description": {
+      "explorer": "Description",
+      "lab": "Description"
+    },
+    "campaign_objectives": {
+      "explorer": "Goals",
+      "lab": "Objectives"
+    },
+    "campaign_status": {
+      "explorer": "Status",
+      "lab": "Status"
+    },
+    "campaign_entry_points": {
+      "explorer": "Entry points",
+      "lab": "Entry points"
+    },
+    "compatibility_check": {
+      "explorer": "Compatibility check",
+      "lab": "SystemConfig.validate()"
+    },
+    "valid_combination": {
+      "explorer": "Valid combination",
+      "lab": "Valid combination"
+    },
+    "invalid_combination": {
+      "explorer": "Invalid combination",
+      "lab": "Invalid combination"
     }
   }
 }

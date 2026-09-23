@@ -308,6 +308,7 @@ computronium/
 │   ├── design_tokens.py           # M0.3 — palettes, type, icons, focus
 │   ├── components/
 │   │   ├── base_panel.py          # "What am I looking at?" mixin
+│   │   ├── campaign_card.py       # M3 (rec) — CampaignCard, CampaignCardGallery
 │   │   ├── discovery_map.py       # M1.4 — fog, labels, shapes, table alt
 │   │   ├── tradeoffs_panel.py     # M1.5 — selector, narration, refs
 │   │   ├── repair_bench.py        # M1.6 — statuses, copy buttons
@@ -324,7 +325,8 @@ computronium/
 │   │   ├── genome_health.py       # M2 — |Ω| vs fitness, resource ceiling (AUTOTILE.md §5.4)
 │   │   ├── mutation_explorer.py   # M2 — valid Tier 1/2 proposals (AUTOTILE.md §2.3)
 │   │   ├── veto_log.py            # M2 — Constitution vetoes (AUTOTILE.md §3.5)
-│   │   └── episode_timeline.py    # M1 — sleep/waking boundaries (AUTOTILE.md §3.1)
+│   │   ├── episode_timeline.py    # M1 — sleep/waking boundaries (AUTOTILE.md §3.1)
+│   │   └── workshop.py            # M3 (rec) — DialComposer, RecipeCard, P2P
 │   ├── recognition/
 │   │   ├── projector.py           # M2.1 — pure fold(event_log)
 │   │   ├── badges.py              # M2.3 — ledger-linked
@@ -487,6 +489,87 @@ uv run comp gallery --run
 This plan is the single source of truth for TODO-UX1 "Basecamp" implementation.*
 
 ---
+
+## 13. Recent Work (2025-09-22)
+
+### Code Quality Fixes — UI Components Lint & Type Cleanup
+
+**Completed:**
+- ✅ Fixed all RUF012 (mutable default values) — added `ClassVar` annotations to class attributes in `constitution_health.py`, `episode_timeline.py`, `lineage_viewer.py`
+- ✅ Fixed all PLR1702 (too many nested blocks) — extracted helper methods in `episode_timeline.py`, `mutation_explorer.py`, `region_naming.py`
+- ✅ Fixed all SIM117 (nested `with` statements) — combined context managers in `field_reports.py`, `genome_health.py`, `mutation_explorer.py`, `preview_shelf.py`, `team_wall.py`, `veto_log.py`, `tour.py`
+- ✅ Fixed PLR0916 (too many boolean expressions) — refactored quest completion logic in `quests.py`
+- ✅ Fixed pyright type errors — corrected `_badge_label` type in `field_reports.py`, fixed `Callable` import in `quiz.py`, fixed `disable` prop usage
+- ✅ All ruff checks pass on `computronium/ui/`
+- ✅ All pyright checks pass on `computronium/ui/`
+- ✅ All UX lock tests pass (42 passed, 12 skipped): UX-L2 (replay), UX-L3 (glossary), UX-L5 (a11y), UX-L7 (import lock), UX-L8 (gallery compat), UX-L9 (constitution), UX-L10 (lineage)
+- ✅ Dev-env smoke test passes: `import optuna, scipy, torchvision, pytest`
+- ✅ `comp dashboard --help` shows all expected flags: `--ui-mode`, `--gamify`, `--ui-actions`, `--rebuild-ui-state`
+
+**No functional changes** — purely code quality improvements maintaining existing behavior.
+
+---
+
+## 14. Workshop & Campaign Card Implementation (2025-09-22)
+
+### Implemented per Design Evaluation Recommendations (M3 High/Medium Priority)
+
+**✅ Workshop Panel (`computronium/ui/components/workshop.py`)**
+- **DialComposer**: 6-axis system composer (S×G×D×M×C×U) with live `SystemConfig.validate()` compatibility feedback
+  - All 7 substrates (Digital, Memristive, Neuromorphic, Photonic, Quantum, Sparse, Ternary)
+  - All 7 geometries (Feedforward, Recurrent, Tile Mesh, Graph, Spatial Lattice, NTM, NCA)
+  - All 6 dynamics (Energy Minimization, Predictive Settling, Spike Integration, Instantaneous, Diffusion, Lazy)
+  - All 7 plasticities (Null, Routing, Fast Weights, Substrate Coupled, Rule State, Temporal ψ, Conflict Adaptive)
+  - All 7 credits (Thermodynamic Contrast, Random Projections, Local Goodness, Temporal Trace, Target Inversion, Gradient, Homeostatic)
+  - All 5 updates (Euclidean, Riemannian Orthogonal, Spectral Constrained, Natural Gradient, Elastic Consolidation)
+  - Visual status: "Valid combination" (green) / "Invalid combination" (red) with detailed constraint violation messages
+- **RecipeCardPanel**: Displays measurement-backed verdicts from `computronium.analysis.recipe_cards` (I(C,U) ladder, TODO16 §0.3)
+  - Status badges: rescue (green), home (blue), harm (red), closed (grey), boundary/peak_collapse/depth_wall_d2 (amber)
+  - Shows BP parity, Δ vs BP, mechanism, geometries, edge conditions
+- **Fix a Crash**: Links directly to Repair Bench with deep link anchor
+- **Donate Computer (P2PToggle)**: P2P worker toggle for distributed compute contribution
+
+**✅ Campaign Card Component (`computronium/ui/components/campaign_card.py`)**
+- `CampaignCard`: Renders single campaign from YAML manifest with register-aware copy (Explorer/Lab)
+  - Title, description, objectives (as badges), status badge, entry points (clickable buttons)
+  - Collapsible metadata section
+- `CampaignCardGallery`: Grid view of all campaigns from a directory
+- Zero dashboard code per spec — reads YAML manifests only
+
+**✅ Glossary Updates (`computronium/ui/glossary.json`)**
+- Added 14 new terms: `workshop`, `dial_composer`, `recipe_card`, `fix_crash`, `donate_compute`, `campaign_card`, `campaign_title`, `campaign_description`, `campaign_objectives`, `campaign_status`, `campaign_entry_points`, `compatibility_check`, `valid_combination`, `invalid_combination`
+
+**✅ Integration**
+- Exported in `computronium/ui/components/__init__.py` with full `__all__` (sorted)
+- All ruff/pyright checks pass
+- All UX lock tests pass (42 passed, 12 skipped)
+- i18n extraction: 100% coverage, 99 tr() calls, 87 unique keys
+- `comp dashboard --help` confirms all flags present
+
+### Updated File Structure (Section 5)
+
+```
+computronium/
+├── ui/
+│   ├── components/
+│   │   ├── workshop.py              # NEW: DialComposer, RecipeCard, P2P toggle
+│   │   ├── campaign_card.py         # NEW: CampaignCard, CampaignCardGallery
+│   │   ├── ... (existing components)
+```
+
+### Remaining Work (M3.5 — Final Polish)
+- [ ] Final a11y certification (axe + manual)
+- [ ] SUS study round 2
+- [ ] Docs refresh (`docs/platform/`, gallery manifests)
+
+### Design Evaluation Status Update
+| Recommendation | Status |
+|----------------|--------|
+| Workshop panel (high) | ✅ DONE |
+| Campaign Card component (medium) | ✅ DONE |
+| 6-axis recipe editor read-only | ✅ DONE (DialComposer) |
+| Performance budget for new panels | ⏳ Deferred (needs profiling) |
+| Preview Shelf enhancement | ⏳ Deferred (low priority) |
 
 ## 12. Design Evaluation & Recommendations
 

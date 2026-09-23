@@ -1,6 +1,13 @@
 """UI components package."""
 
 from computronium.ui.components.activity_feed import ActivityFeed, FeedEvent
+from computronium.ui.components.campaign_card import (
+    CampaignCard,
+    CampaignCardGallery,
+    CampaignManifest,
+    create_campaign_card,
+    create_campaign_gallery,
+)
 from computronium.ui.components.constitution_health import (
     ConstitutionHealthPanel,
     ConstitutionInvariant,
@@ -75,12 +82,37 @@ from computronium.ui.components.tradeoffs_panel import (
     create_pareto_cells_from_atlas,
 )
 from computronium.ui.components.veto_log import VetoEntry, VetoLog, create_veto_log
+from computronium.ui.components.workshop import (
+    CREDIT_OPTIONS,
+    DYNAMICS_OPTIONS,
+    GEOMETRY_OPTIONS,
+    PLASTICITY_OPTIONS,
+    SUBSTRATE_OPTIONS,
+    UPDATE_OPTIONS,
+    AxisOption,
+    DialComposer,
+    P2PToggle,
+    RecipeCardPanel,
+    WorkshopPanel,
+    create_workshop_panel,
+)
 
 __all__ = [
+    "CREDIT_OPTIONS",
+    "DYNAMICS_OPTIONS",
+    "GEOMETRY_OPTIONS",
+    "PLASTICITY_OPTIONS",
+    "SUBSTRATE_OPTIONS",
+    "UPDATE_OPTIONS",
     "ActivityFeed",
+    "AxisOption",
+    "CampaignCard",
+    "CampaignCardGallery",
+    "CampaignManifest",
     "ConstitutionHealthPanel",
     "ConstitutionInvariant",
     "DefectRow",
+    "DialComposer",
     "DiscoveryMap",
     "EpisodeEvent",
     "EpisodeTimeline",
@@ -98,6 +130,7 @@ __all__ = [
     "MapSpecimen",
     "MutationExplorer",
     "MutationProposal",
+    "P2PToggle",
     "ParetoCell",
     "PreviewEntry",
     "PreviewShelf",
@@ -105,6 +138,7 @@ __all__ = [
     "ProbeBatch",
     "ProgressData",
     "ProgressPanel",
+    "RecipeCardPanel",
     "RegionName",
     "RegionNaming",
     "RepairBench",
@@ -117,7 +151,10 @@ __all__ = [
     "TradeoffsPanel",
     "VetoEntry",
     "VetoLog",
+    "WorkshopPanel",
     "create_auto_evolve_preview",
+    "create_campaign_card",
+    "create_campaign_gallery",
     "create_discovery_map_from_atlas",
     "create_genome_health_tracker",
     "create_invariants_from_monitor",
@@ -130,6 +167,7 @@ __all__ = [
     "create_stagnation_dashboard",
     "create_team_wall",
     "create_veto_log",
+    "create_workshop_panel",
     "get_dynamics_shape",
     "get_outcome_style",
 ]
