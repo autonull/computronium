@@ -13,7 +13,6 @@ import sys
 
 from computronium.acceleration.registry import all_specs
 
-
 DETERMINISTIC_INVARIANTS = {
     "deterministic under fixed seed",
     "deterministic under fixed seed",
@@ -135,7 +134,6 @@ def _generate_test_file(
     spec, output_dir: pathlib.Path, dry_run: bool = False
 ) -> pathlib.Path | None:
     """Generate a property test file for a spec."""
-    import re
 
     # Skip geometry and substrate primitives - they have different interfaces
     if spec.axis in {"geometry", "substrate"}:

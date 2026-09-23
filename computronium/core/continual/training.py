@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import nullcontext
-from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
@@ -13,9 +14,6 @@ from computronium.core.continual.constants import CL_CLASSES_PER_TASK
 from computronium.core.pipeline import forward_pass
 from computronium.ontology import Phase, SystemState
 from computronium.state import CompositeState
-
-if TYPE_CHECKING:
-    from computronium.core.continual.system import ContinualJointSystem
 
 
 @runtime_checkable

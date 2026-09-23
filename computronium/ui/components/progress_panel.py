@@ -140,7 +140,7 @@ class ProgressPanel(BasePanel):
 
     def _render_badge_card(self, badge: Badge) -> None:
         """Render a single badge card."""
-        with ui.card().classes("w-32 h-32").props("flat bordered"):  # noqa: SIM117
+        with ui.card().classes("w-32 h-32").props("flat bordered"):  # ruff: ignore[multiple-with-statements]
             with ui.column().classes("w-full items-center justify-center gap-1"):
                 ui.label(badge.icon).classes("text-4xl")
                 ui.label(self.tr(badge.id)).classes("text-bold text-center")
@@ -243,7 +243,7 @@ class ProgressPanel(BasePanel):
         with ui.dialog() as dialog, ui.card().classes("w-96"):
             ui.label(self.tr("choose_quest")).classes("text-h6 mb-4")
             for quest in available:
-                with ui.card().classes("w-full mb-2").props("flat"):  # noqa: SIM117
+                with ui.card().classes("w-full mb-2").props("flat"):  # ruff: ignore[multiple-with-statements]
                     with ui.row().classes("w-full items-center justify-between"):
                         with ui.row().classes("items-center gap-2"):
                             ui.label(quest.icon).classes("text-xl")

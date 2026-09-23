@@ -24,6 +24,7 @@ logger = get_logger()
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
     from torch import Tensor
 
 

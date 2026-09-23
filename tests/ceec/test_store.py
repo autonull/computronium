@@ -1,9 +1,9 @@
 import sqlite3
 
 import pytest
+from ceec.ids import validate_id
 
 from ceec import CEECStore, StoreError, models
-from ceec.ids import validate_id
 
 
 class TestArtifacts:

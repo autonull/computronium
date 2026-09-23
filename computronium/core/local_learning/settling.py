@@ -37,7 +37,7 @@ def _compute_single_state_delta(
     state_new: torch.Tensor,
     state_old: torch.Tensor,
     *,
-    norm: int | float = float("inf"),
+    norm: float = float("inf"),
 ) -> float:
     """Inf-norm distance between consecutive settle states (moved to CPU)."""
     return torch.dist(state_new, state_old, p=norm).item()  # type: ignore[reportUnknownMemberType]
@@ -58,7 +58,7 @@ def _compute_delta(
         )
     # Type narrowed to single Tensor
     return _compute_single_state_delta(
-        cast(torch.Tensor, state_new), cast(torch.Tensor, state_old), norm=norm
+        cast("torch.Tensor", state_new), cast("torch.Tensor", state_old), norm=norm
     )
 
 
@@ -120,7 +120,7 @@ def _check_convergence(
     *,
     threshold: float,
     start: int,
-    custom_check: "Callable[[object, object, int], bool] | None" = None,
+    custom_check: Callable[[object, object, int], bool] | None = None,
     state_new: object = None,
     state_old: object = None,
 ) -> bool:
@@ -137,9 +137,9 @@ def _check_convergence(
 
 def _run_with_sn_freeze(
     model: nn.Module,
-    fn: "Callable[[], None]",
+    fn: Callable[[], None],
     steps: int,
-    warmup_step: "Callable[[], None]",
+    warmup_step: Callable[[], None],
 ) -> None:
     """Run ``fn`` with spectral norm frozen if needed.
 
@@ -199,7 +199,7 @@ def _create_telemetry(
     state: torch.Tensor | list[torch.Tensor],
     hardware: str,
     backend: str,
-) -> "SettleTelemetry":
+) -> SettleTelemetry:
     """Create SettleTelemetry from settled state and convergence history."""
     from .settling import SettleTelemetry  # local import to avoid circular
 
@@ -560,7 +560,7 @@ def settle_universal(
 
 def _energy_gradient_descent_step(
     states: list[torch.Tensor],
-    energy_fn: "Callable[[list[torch.Tensor]], torch.Tensor]",
+    energy_fn: Callable[[list[torch.Tensor]], torch.Tensor],
     momentum_buffers: list[torch.Tensor],
     *,
     lr: float,
@@ -652,7 +652,7 @@ def _check_energy_convergence(
 
 def energy_gradient_descent(
     states: list[torch.Tensor],
-    energy_fn: "Callable[[list[torch.Tensor]], torch.Tensor]",
+    energy_fn: Callable[[list[torch.Tensor]], torch.Tensor],
     steps: int,
     *,
     lr: float = 0.15,
@@ -738,9 +738,9 @@ def energy_gradient_descent(
 
 
 def _create_single_state_step_fn(
-    forward_step: "Callable[[torch.Tensor, torch.Tensor], torch.Tensor]",
+    forward_step: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     x_transformed: torch.Tensor,
-) -> "Callable[[torch.Tensor], torch.Tensor]":
+) -> Callable[[torch.Tensor], torch.Tensor]:
     """Create step function with gradient checkpointing for single-state settling."""
 
     def _step(state: torch.Tensor) -> torch.Tensor:
@@ -752,7 +752,7 @@ def _create_single_state_step_fn(
 
 
 def _run_single_state_warmup(
-    step_fn: "Callable[[torch.Tensor], torch.Tensor]",
+    step_fn: Callable[[torch.Tensor], torch.Tensor],
     h: torch.Tensor,
     h_0: torch.Tensor,
     *,
@@ -775,7 +775,7 @@ def _run_single_state_warmup(
 
 
 def _run_single_state_main_loop(
-    step_fn: "Callable[[torch.Tensor], torch.Tensor]",
+    step_fn: Callable[[torch.Tensor], torch.Tensor],
     h: torch.Tensor,
     *,
     deltas: list[float] | None,
@@ -811,7 +811,7 @@ def _run_single_state_main_loop(
 
 def settle_single_state(
     h_0: torch.Tensor,
-    forward_step: "Callable[[torch.Tensor, torch.Tensor], torch.Tensor]",
+    forward_step: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     x_transformed: torch.Tensor,
     steps: int,
     *,
@@ -966,7 +966,9 @@ def _check_activations_convergence(
 
 def settle_activations_list(
     activations_0: list[torch.Tensor],
-    forward_dynamics: "Callable[[list[torch.Tensor], float, torch.Tensor | None], list[torch.Tensor]]",
+    forward_dynamics: Callable[
+        [list[torch.Tensor], float, torch.Tensor | None], list[torch.Tensor]
+    ],
     steps: int,
     beta: float = 0.0,
     target: torch.Tensor | None = None,

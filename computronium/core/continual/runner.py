@@ -7,7 +7,7 @@ import json
 import random
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import torch
 
@@ -82,7 +82,7 @@ def _create_task_loaders(config: CLConfig, device_str: str) -> tuple[list, list]
 
 def _create_arm(
     arm_name: str, config: CLConfig, device_str: str
-) -> tuple["ContinualJointSystem", _ArmExtra]:
+) -> tuple[ContinualJointSystem, _ArmExtra]:
     """Create continual learning arm model and extra components."""
     extra: _ArmExtra = {}
 
@@ -128,7 +128,7 @@ def _create_arm(
     return model, extra
 
 
-def _setup_stability_guard(config: CLConfig, model: "ContinualJointSystem"):
+def _setup_stability_guard(config: CLConfig, model: ContinualJointSystem):
     """Create stability guard and transition function."""
     guard = create_stability_guard(
         threshold=config.stability_threshold,
@@ -141,7 +141,7 @@ def _setup_stability_guard(config: CLConfig, model: "ContinualJointSystem"):
 
 
 def _apply_task_boundary_setup(
-    arm_name: str, model: "ContinualJointSystem", extra: _ArmExtra
+    arm_name: str, model: ContinualJointSystem, extra: _ArmExtra
 ) -> None:
     """Apply arm-specific setup at task boundary."""
     if arm_name == "fast_weights":
@@ -163,7 +163,7 @@ def _apply_task_boundary_setup(
 
 def _run_training_step(
     arm_name: str,
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     x: torch.Tensor,
     y: torch.Tensor,
     task_id: int,
@@ -193,7 +193,7 @@ def _update_replay_buffer(
 
 def _run_replay_training(
     arm_name: str,
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     extra: _ArmExtra,
     config: CLConfig,
 ) -> None:
@@ -208,7 +208,7 @@ def _run_replay_training(
 
 
 def _update_arm_importance(
-    arm_name: str, model: "ContinualJointSystem", extra: _ArmExtra
+    arm_name: str, model: ContinualJointSystem, extra: _ArmExtra
 ) -> None:
     """Update importance weights for EWC/SI at end of task."""
     if arm_name == "ewc":
@@ -222,7 +222,7 @@ def _update_arm_importance(
 
 
 def _evaluate_task(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     test_loader,
     eval_task_id: int,
     device: torch.device,
@@ -248,7 +248,7 @@ def _evaluate_task(
 
 
 def _evaluate_tasks_so_far(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     test_loaders: list,
     task_id: int,
     device: torch.device,
@@ -261,7 +261,7 @@ def _evaluate_tasks_so_far(
 
 
 def _evaluate_periodic_tasks(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     test_loaders: list,
     eval_task: int,
     device: torch.device,
@@ -274,7 +274,7 @@ def _evaluate_periodic_tasks(
 
 
 def _run_task_incremental_protocol(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     task_loaders: list,
     test_loaders: list,
     config: CLConfig,
@@ -318,7 +318,7 @@ def _run_task_incremental_protocol(
 
 
 def _run_task_free_protocol(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     task_loaders: list,
     test_loaders: list,
     config: CLConfig,
@@ -367,7 +367,7 @@ def _run_task_free_protocol(
 
 
 def _finalize_metrics(
-    model: "ContinualJointSystem",
+    model: ContinualJointSystem,
     test_loaders: list,
     accuracy_matrix: list[list[float]],
     stability_verdicts: list,

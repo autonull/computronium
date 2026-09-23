@@ -5,7 +5,6 @@ Maps model views and SearchSpace definitions to Optuna suggest_* calls.
 Replaces custom evolution code with Optuna's proven algorithms.
 """
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 import optuna
@@ -14,10 +13,11 @@ from optuna.samplers import NSGAIISampler, TPESampler
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
     from .hyperparameter_metamodel import (
+        HyperparameterMetamodel,
         HyperparamSpec,
         ModelSpecProtocol,
-        HyperparameterMetamodel,
     )
 
 
@@ -44,7 +44,7 @@ __all__ = [
 class _ModelView:
     """Duck-typed view of a model for the hyperparameter metamodel."""
 
-    __slots__ = ("_name", "_family", "_model_type", "_credit_assignment_type")
+    __slots__ = ("_credit_assignment_type", "_family", "_model_type", "_name")
 
     def __init__(
         self,

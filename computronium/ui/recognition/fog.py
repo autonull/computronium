@@ -96,7 +96,7 @@ def _get_dominant_primitives(row: object) -> dict[str, str]:
     return {axis: str(getattr(row, axis, "unknown")) for axis in axes}
 
 
-def compute_fog_of_war(root: Path) -> FogOfWar:  # noqa: C901
+def compute_fog_of_war(root: Path) -> FogOfWar:  # ruff: ignore[complex-structure]
     """Compute fog-of-war from KB (read-only).
 
     Args:

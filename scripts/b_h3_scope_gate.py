@@ -27,8 +27,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ceec import gates, models
 from ceec.store import CEECStore
+
+from ceec import gates, models
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BELIEF_ID = "B-H3-STABLE-TRANSIENT-AMPLIFICATION"

@@ -14,11 +14,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.core.utils.surrogate import surrogate_gradient
-
 from computronium.core.substrates.complex_substrate import ComplexSubstrate
 from computronium.core.substrates.sparse_substrate import SparseSubstrate
 from computronium.core.substrates.ternary_substrate import TernarySubstrate
+from computronium.core.utils.surrogate import surrogate_gradient
 from computronium.ontology import (
     AnalogSubstrate,
     DigitalSubstrate,

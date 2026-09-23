@@ -1,11 +1,11 @@
 import json
 
 import pytest
+from ceec.migrate import todo18_records
+from ceec.probe_adapter import ingest_verdict, record_probe_result
 from pydantic import ValidationError
 
 from ceec import StoreError, models
-from ceec.migrate import todo18_records
-from ceec.probe_adapter import ingest_verdict, record_probe_result
 
 
 class TestStructuredEvidence:

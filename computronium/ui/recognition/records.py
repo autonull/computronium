@@ -85,7 +85,7 @@ def _format_record_message(
     return f"Record {objective}={value:.6f} ({scope})"
 
 
-def update_records(  # noqa: C901, PLR0912
+def update_records(  # ruff: ignore[complex-structure, too-many-branches]
     event_kind: str, payload: dict, existing_records: Iterable[Record]
 ) -> Iterable[Record]:
     """Update personal best records based on an event.

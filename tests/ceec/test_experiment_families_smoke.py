@@ -1,9 +1,9 @@
 """Smoke test: the five pre-registered experiment families are CEEC-complete."""
 
 import pytest
+from ceec.store import CEECStore
 
 from ceec import audit, bootstrap
-from ceec.store import CEECStore
 
 
 @pytest.fixture(scope="module")

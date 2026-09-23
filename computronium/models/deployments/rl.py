@@ -24,7 +24,6 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 from torch import nn
 from torch.distributions import Categorical, Normal
 
-from computronium.models.deployments.config import ModelConfig
 from computronium.core.local_learning import (
     TaskHandler,
     TileAlgorithm,
@@ -34,6 +33,7 @@ from computronium.core.model import BioModel
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.models.deployments import _feature_extractors as _fe
 from computronium.models.deployments.base import RLDeploymentConfig
+from computronium.models.deployments.config import ModelConfig
 
 # Re-export the shared feature extractor under its historical usage.
 RLFeatureExtractor = _fe.RLFeatureExtractor

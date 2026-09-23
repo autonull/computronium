@@ -6,9 +6,9 @@ Provides automated and manual a11y testing helpers.
 from __future__ import annotations
 
 import json
-import subprocess  # noqa: S404
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 from dataclasses import dataclass
-from pathlib import Path  # noqa: TC003
+from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]
 from typing import Literal
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ def run_axe_scan(url: str, output_path: Path | None = None) -> AxeResult:
     """
     try:
         result = subprocess.run(  # noqa: S603,S607
-            ["axe", url, "--json"],  # noqa: S607
+            ["axe", url, "--json"],  # ruff: ignore[start-process-with-partial-path]
             capture_output=True,
             text=True,
             timeout=120,

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from ceec.schemas import emit_mechanism_schema
 
 from ceec import StoreError, models
-from ceec.schemas import emit_mechanism_schema
 
 
 @pytest.fixture

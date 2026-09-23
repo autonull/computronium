@@ -96,7 +96,7 @@ QUEST_SPECS: tuple[Quest, ...] = (
 )
 
 
-def update_quest_progress(  # noqa: C901
+def update_quest_progress(  # ruff: ignore[complex-structure]
     event_kind: str, payload: dict, existing_quests: Iterable[Quest]
 ) -> Iterable[Quest]:
     """Update quest progress based on an event.

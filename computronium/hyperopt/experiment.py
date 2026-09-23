@@ -645,6 +645,7 @@ def _cleanup_trial(
 
     # Explicitly break references
     import gc
+
     import torch
 
     gc.collect()

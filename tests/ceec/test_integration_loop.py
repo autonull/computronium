@@ -6,6 +6,8 @@ update belief -> evaluate gate -> record calibration -> run audit.
 """
 
 import pytest
+from ceec.probe_adapter import record_probe_result
+from ceec.store import CEECStore
 
 from ceec import (
     audit,
@@ -15,8 +17,6 @@ from ceec import (
     models,
     selection,
 )
-from ceec.probe_adapter import record_probe_result
-from ceec.store import CEECStore
 
 
 @pytest.fixture

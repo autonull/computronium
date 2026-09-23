@@ -33,4 +33,4 @@ def surrogate_gradient(
     return torch.ones_like(v)
 
 
-__all__ = ["surrogate_gradient", "SurrogateType"]
+__all__ = ["SurrogateType", "surrogate_gradient"]

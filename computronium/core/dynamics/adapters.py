@@ -11,7 +11,6 @@ import torch
 from torch import Tensor
 
 from computronium.core.utils.surrogate import surrogate_gradient
-
 from computronium.ontology import (
     EnergyMinimizationDynamics,
     Geometry,

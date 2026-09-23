@@ -22,13 +22,13 @@ from typing import TYPE_CHECKING, Literal
 import torch
 from torch import nn
 
-from computronium.models.deployments.config import ModelConfig
 from computronium.core.model import BioModel
 from computronium.models.deployments import _feature_extractors as _fe
 from computronium.models.deployments.base import (
     GraphDeploymentConfig,
     build_tile_head,
 )
+from computronium.models.deployments.config import ModelConfig
 
 # Re-export shared graph components under their historical names.
 GraphAttentionLayer = _fe.GraphAttentionLayer
