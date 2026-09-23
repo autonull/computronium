@@ -13,10 +13,12 @@ from typing import TYPE_CHECKING, Any
 from nicegui import ui
 
 from computronium.ui.a11y.tokens import a11y_css
+from computronium.ui.components.activity_feed import ActivityFeed
 from computronium.ui.components.campaign_card import CampaignCardGallery
 from computronium.ui.components.constitution_health import ConstitutionHealthPanel
 from computronium.ui.components.discovery_map import DiscoveryMap
 from computronium.ui.components.episode_timeline import EpisodeTimeline
+from computronium.ui.components.field_reports import FieldReports
 from computronium.ui.components.genome_health import GenomeHealthTracker
 from computronium.ui.components.health_panel import HealthPanel
 from computronium.ui.components.lineage_viewer import LineageViewer
@@ -28,16 +30,19 @@ from computronium.ui.components.region_naming import RegionNaming
 from computronium.ui.components.repair_bench import RepairBench
 from computronium.ui.components.stagnation_dashboard import StagnationDashboard
 from computronium.ui.components.team_wall import TeamWall
-
-if TYPE_CHECKING:
-    from pathlib import Path
 from computronium.ui.components.tradeoffs_panel import TradeoffsPanel
 from computronium.ui.components.veto_log import VetoLog
 from computronium.ui.components.workshop import WorkshopPanel
 from computronium.ui.design_tokens import css_custom_properties
-from computronium.ui.glossary_service import tr
+from computronium.ui.event_bus import (
+    ArtifactChanged,
+    ModeChanged,
+    WebSocketEvent,
+    event_bus,
+)
 from computronium.ui.mode_toggle import (
     BasePanel,
+    Register,
     get_mode,
     initialize_mode,
     mode_toggle_select,
@@ -45,6 +50,7 @@ from computronium.ui.mode_toggle import (
 )
 from computronium.ui.onboarding.quiz import ComfortQuiz
 from computronium.ui.onboarding.tour import GuidedTour
+from computronium.ui.panel_registry import panel_registry
 from computronium.ui.recognition.state_store import RecognitionStateStore
 from computronium.visualization.live_atlas import (
     POLL_SECONDS,
@@ -56,70 +62,197 @@ from computronium.visualization.live_atlas import (
     watch_signature,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+
 logger = logging.getLogger("computronium.ui.dashboard")
 
-# Panel definitions for left rail navigation
-PANELS = [
-    ("discovery_map", "discovery_map", "map", "Discovery Map"),
-    ("tradeoffs", "tradeoffs", "balance", "Trade-offs"),
-    ("repair_bench", "repair_bench", "build", "Repair Bench"),
-    ("health", "health", "favorite", "Health"),
-    ("constitution", "constitution", "shield", "Constitution"),
-    ("lineage", "lineage", "account_tree", "Lineage"),
-    ("episodes", "episodes", "event", "Episodes"),
-    ("progress", "progress", "emoji_events", "Progress"),
-    ("workshop", "workshop", "settings", "Workshop"),
-    ("campaigns", "campaigns", "description", "Campaigns"),
-    ("preview", "preview", "visibility", "Preview"),
-    ("region_naming", "region_naming", "label", "Region Names"),
-    ("team", "team", "groups", "Team"),
+
+# Register all panels with the panel registry
+def _register_panels() -> None:
+    """Register all panels with the panel registry."""
+    from computronium.ui.adapters import get_adapter
+
+    # Explorer panels (visible in both modes)
+    panel_registry.register(
+        "discovery_map",
+        "discovery_map",
+        "map",
+        factory=DiscoveryMap,
+        adapter=get_adapter("discovery_map"),
+        order=0,
+    )
+    panel_registry.register(
+        "tradeoffs",
+        "tradeoffs",
+        "balance",
+        factory=TradeoffsPanel,
+        adapter=get_adapter("tradeoffs"),
+        order=1,
+    )
+    panel_registry.register(
+        "repair_bench",
+        "repair_bench",
+        "build",
+        factory=RepairBench,
+        adapter=get_adapter("repair_bench"),
+        order=2,
+    )
+    panel_registry.register(
+        "health",
+        "health",
+        "favorite",
+        factory=HealthPanel,
+        adapter=get_adapter("health"),
+        order=3,
+    )
+    panel_registry.register(
+        "campaigns",
+        "campaign_card",
+        "description",
+        factory=lambda: CampaignCardGallery,
+        adapter=get_adapter("campaigns"),
+        order=4,
+        visible_predicate=lambda _: True,
+    )
+    panel_registry.register(
+        "preview",
+        "preview_shelf",
+        "visibility",
+        factory=PreviewShelf,
+        adapter=get_adapter("preview"),
+        order=5,
+    )
+    panel_registry.register(
+        "region_naming",
+        "region_naming",
+        "label",
+        factory=RegionNaming,
+        adapter=get_adapter("region_naming"),
+        order=6,
+    )
+    panel_registry.register(
+        "team",
+        "team_wall",
+        "groups",
+        factory=TeamWall,
+        adapter=get_adapter("team"),
+        order=7,
+    )
+    panel_registry.register(
+        "activity_feed",
+        "activity_feed",
+        "feed",
+        factory=ActivityFeed,
+        adapter=get_adapter("activity_feed"),
+        order=8,
+    )
+    panel_registry.register(
+        "field_reports",
+        "field_reports",
+        "article",
+        factory=FieldReports,
+        adapter=get_adapter("field_reports"),
+        order=9,
+    )
+
+    # Lab-only panels
+    panel_registry.register(
+        "constitution",
+        "constitution_health",
+        "shield",
+        factory=ConstitutionHealthPanel,
+        adapter=get_adapter("constitution"),
+        order=10,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "lineage",
+        "lineage_viewer",
+        "account_tree",
+        factory=LineageViewer,
+        adapter=get_adapter("lineage"),
+        order=11,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "episodes",
+        "episode_timeline",
+        "event",
+        factory=EpisodeTimeline,
+        adapter=get_adapter("episodes"),
+        order=12,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "progress",
+        "progress",
+        "emoji_events",
+        factory=lambda: ProgressPanel(gamify_enabled=True),
+        adapter=get_adapter("progress"),
+        order=13,
+        visible_predicate=lambda ctx: ctx.get("gamify", True),
+    )
+    panel_registry.register(
+        "workshop",
+        "workshop",
+        "settings",
+        factory=WorkshopPanel,
+        adapter=get_adapter("workshop"),
+        order=14,
+        visible_predicate=lambda ctx: ctx.get("ui_actions", False),
+    )
     # Auto-Evolve instrumentation (Lab mode)
-    ("probe_analytics", "probe_analytics", "biotech", "Probe Analytics"),
-    ("stagnation", "stagnation", "show_chart", "Stagnation"),
-    ("genome_health", "genome_health", "monitor_heart", "Genome Health"),
-    ("mutations", "mutations", "science", "Mutations"),
-    ("veto_log", "veto_log", "block", "Veto Log"),
-]
+    panel_registry.register(
+        "probe_analytics",
+        "probe_analytics",
+        "biotech",
+        factory=ProbeAnalytics,
+        adapter=get_adapter("probe_analytics"),
+        order=15,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "stagnation",
+        "stagnation_dashboard",
+        "show_chart",
+        factory=StagnationDashboard,
+        adapter=get_adapter("stagnation"),
+        order=16,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "genome_health",
+        "genome_health",
+        "monitor_heart",
+        factory=GenomeHealthTracker,
+        adapter=get_adapter("genome_health"),
+        order=17,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "mutations",
+        "mutations",
+        "science",
+        factory=MutationExplorer,
+        adapter=get_adapter("mutations"),
+        order=18,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
+    panel_registry.register(
+        "veto_log",
+        "veto_log",
+        "block",
+        factory=VetoLog,
+        adapter=get_adapter("veto_log"),
+        order=19,
+        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+    )
 
-# Panels that are Lab-mode only (hidden in Explorer by default)
-LAB_ONLY_PANELS = {
-    "constitution",
-    "lineage",
-    "episodes",
-    "probe_analytics",
-    "stagnation",
-    "genome_health",
-    "mutations",
-    "veto_log",
-}
 
-# Panels that require gamification enabled
-GAMIFY_PANELS = {"progress"}
-
-
-def _panel_label(key: str, gamify: bool) -> str:
-    """Get localized label for panel."""
-    labels = {
-        "discovery_map": tr("discovery_map"),
-        "tradeoffs": tr("tradeoffs"),
-        "repair_bench": tr("repair_bench"),
-        "health": tr("health"),
-        "constitution": tr("constitution_health"),
-        "lineage": tr("lineage_viewer"),
-        "episodes": tr("episode_timeline"),
-        "progress": tr("progress"),
-        "workshop": tr("workshop"),
-        "campaigns": tr("campaign_card"),
-        "preview": tr("preview_shelf"),
-        "region_naming": tr("region_naming"),
-        "team": tr("team_wall"),
-        "probe_analytics": tr("probe_analytics"),
-        "stagnation": tr("stagnation_dashboard"),
-        "genome_health": tr("genome_health"),
-        "mutations": tr("mutation_explorer"),
-        "veto_log": tr("veto_log"),
-    }
-    return labels.get(key, key.replace("_", " ").title())
+# Initialize panel registry
+_register_panels()
 
 
 class DashboardApp:
@@ -147,8 +280,6 @@ class DashboardApp:
         # Initialize mode
         if ui_mode != "auto":
             initialize_mode()
-            from computronium.ui.mode_toggle import Register
-
             set_mode(Register(ui_mode))  # type: ignore[arg-type]
         else:
             initialize_mode()
@@ -189,6 +320,7 @@ class DashboardApp:
 
         # Panel instances (lazy-loaded)
         self._panels: dict[str, BasePanel] = {}
+        self._panel_data: dict[str, Any] = {}
 
         # UI containers
         self.left_drawer: Any = None
@@ -196,51 +328,79 @@ class DashboardApp:
         self.header: Any = None
         self.pareto_selector: Any = None
 
+        # Subscribe to event bus
+        self._unsubscribe_artifact = event_bus.subscribe(
+            ArtifactChanged, self._on_artifact_changed
+        )
+        self._unsubscribe_mode = event_bus.subscribe(ModeChanged, self._on_mode_changed)
+
+    def _on_artifact_changed(self, event: ArtifactChanged) -> None:
+        """Handle artifact change event."""
+        self.last_signature = event.signature
+        self._refresh_cheap()
+
+    def _on_mode_changed(self, event: ModeChanged) -> None:
+        """Handle mode change event."""
+        self._rebuild_left_drawer()
+        self._render_current_panel()
+
     def _get_panel(self, key: str) -> BasePanel:
         """Lazy-load panel instance."""
         if key in self._panels:
             return self._panels[key]
 
-        panel_map = {
-            "discovery_map": DiscoveryMap,
-            "tradeoffs": TradeoffsPanel,
-            "repair_bench": RepairBench,
-            "health": HealthPanel,
-            "constitution": ConstitutionHealthPanel,
-            "lineage": LineageViewer,
-            "episodes": EpisodeTimeline,
-            "progress": lambda: ProgressPanel(gamify_enabled=self.gamify),
-            "workshop": WorkshopPanel,
-            "campaigns": lambda: CampaignCardGallery(self.root / "campaigns"),
-            "preview": PreviewShelf,
-            "region_naming": RegionNaming,
-            "team": TeamWall,
-            "probe_analytics": ProbeAnalytics,
-            "stagnation": StagnationDashboard,
-            "genome_health": GenomeHealthTracker,
-            "mutations": MutationExplorer,
-            "veto_log": VetoLog,
-        }
+        spec = panel_registry.get(key)
+        if spec is None:
+            raise ValueError(f"Unknown panel: {key}")
 
-        if key in panel_map:
-            factory = panel_map[key]
-            if callable(factory) and not isinstance(factory, type):
-                self._panels[key] = factory()  # type: ignore[assignment]
-            else:
-                self._panels[key] = factory()  # type: ignore[assignment]
-            return self._panels[key]
+        factory = spec.factory
+        if callable(factory) and not isinstance(factory, type):
+            # Handle lambda factories that need context
+            self._panels[key] = factory()
+        else:
+            self._panels[key] = factory()
+        return self._panels[key]
 
-        # Fallback - should not be reached
-        raise ValueError(f"Unknown panel: {key}")
+    def _get_panel_data(self, key: str) -> Any:
+        """Get or compute panel data using adapter."""
+        if key in self._panel_data:
+            return self._panel_data[key]
+
+        spec = panel_registry.get(key)
+        if spec is None or spec.adapter is None:
+            return None
+
+        # Get snapshot and adapt
+        snapshot = render_snapshot(
+            self.root,
+            self.log_path,
+            self.cache,
+            objectives=self.pareto_state["objectives"],
+            with_atlas=(key == "discovery_map"),
+        )
+        # Special handling for progress panel with recognition store
+        if key == "progress" and self.recognition_store is not None:
+            data = spec.adapter.adapt(snapshot, self.root, self.recognition_store)
+        else:
+            data = spec.adapter.adapt(snapshot, self.root)
+        self._panel_data[key] = data
+        return data
+
+    def _clear_panel_data(self, key: str | None = None) -> None:
+        """Clear cached panel data."""
+        if key is None:
+            self._panel_data.clear()
+        else:
+            self._panel_data.pop(key, None)
 
     def _is_panel_visible(self, key: str) -> bool:
         """Check if panel should be visible in current mode."""
         mode = get_mode()
-        if key in LAB_ONLY_PANELS and mode == "explorer":
+        context = {"mode": mode, "gamify": self.gamify, "ui_actions": self.ui_actions}
+        spec = panel_registry.get(key)
+        if spec is None:
             return False
-        if key in GAMIFY_PANELS and not self.gamify:
-            return False
-        return not (key == "workshop" and not self.ui_actions)
+        return spec.visible_predicate(context)
 
     def _build_header(self) -> None:
         """Build the top header with mode toggle and pareto selector."""
@@ -293,15 +453,17 @@ class DashboardApp:
             ui.label("Navigation").classes("text-h6 q-mb-md px-4")
 
             with ui.column().classes("w-full gap-1 px-2"):
-                for key, _, icon, _ in PANELS:
-                    if not self._is_panel_visible(key):
-                        continue
-
+                for spec in panel_registry.visible_specs({
+                    "mode": get_mode(),
+                    "gamify": self.gamify,
+                    "ui_actions": self.ui_actions,
+                }):
+                    key = spec.key
                     is_active = key == self.current_panel
                     btn = (
                         ui
                         .button(
-                            icon=icon,
+                            icon=spec.icon,
                             on_click=lambda _e, k=key: self._switch_panel(k),
                         )
                         .props(
@@ -317,8 +479,15 @@ class DashboardApp:
                         )
                     )
                     with btn:
-                        ui.icon(icon).classes("mr-2")
-                        ui.label(_panel_label(key, self.gamify))
+                        ui.icon(spec.icon).classes("mr-2")
+                        ui.label(spec.label_key)
+
+    def _rebuild_left_drawer(self) -> None:
+        """Rebuild left drawer on mode change."""
+        if self.left_drawer:
+            self.left_drawer.clear()
+            with self.left_drawer:
+                self._build_left_drawer()
 
     def _switch_panel(self, key: str) -> None:
         """Switch to a different panel."""
@@ -326,13 +495,17 @@ class DashboardApp:
             return
         self.current_panel = key
         self._render_current_panel()
-        self.left_drawer.update()
+        if self.left_drawer:
+            self.left_drawer.update()
 
     def _render_current_panel(self) -> None:
         """Render the currently selected panel."""
         self.main_content.clear()
         with self.main_content:
             panel = self._get_panel(self.current_panel)
+            data = self._get_panel_data(self.current_panel)
+            if data is not None and hasattr(panel, "update_data"):
+                panel.update_data(data)
             panel.render()
 
     def _on_pareto_change(self, value: str) -> None:  # type: ignore[arg-type]
@@ -344,6 +517,7 @@ class DashboardApp:
         )
 
         self.pareto_state["objectives"] = parse_objectives(",".join(obj_names))
+        self._clear_panel_data()
         self._render_current_panel()
 
     def _start_tour(self) -> None:
@@ -369,19 +543,28 @@ class DashboardApp:
             objectives=self.pareto_state["objectives"],
             with_atlas=False,
         )
+
         # Update panels that need live data
-        if self.current_panel in {
+        for key in {
             "discovery_map",
             "tradeoffs",
             "repair_bench",
             "health",
+            "activity_feed",
+            "field_reports",
         }:
-            self._render_current_panel()
+            if key in self._panels:
+                self._panel_data.pop(key, None)
+                if hasattr(self._panels[key], "update_data"):
+                    data = self._get_panel_data(key)
+                    if data is not None:
+                        self._panels[key].update_data(data)
 
-        # Check for artifact changes
+        # Check for artifact changes and publish event
         new_sig = watch_signature(self.root)
         if new_sig != self.last_signature:
             self.last_signature = new_sig
+            event_bus.publish(ArtifactChanged(signature=new_sig, root=self.root))
             self._render_current_panel()
 
     async def _load_atlas(self) -> None:
@@ -390,11 +573,13 @@ class DashboardApp:
 
         try:
             result = await run.io_bound(_atlas_data, self.root, self.cache)
-            figure, note, errors = result  # type: ignore[misc]
+            figure, _, _ = result  # type: ignore[misc]
             if self.current_panel == "discovery_map":
                 panel = self._get_panel("discovery_map")
-                if hasattr(panel, "update_atlas"):
-                    panel.update_atlas(figure, note, errors)  # type: ignore[attr-defined]
+                if hasattr(panel, "update_data"):
+                    panel.update_data(atlas_figure=figure)  # type: ignore[attr-defined]
+                # Also update cached data
+                self._panel_data.pop("discovery_map", None)
         except Exception as e:
             logger.warning("Atlas load failed: %s", e)
 
@@ -403,6 +588,8 @@ class DashboardApp:
         new_sig = watch_signature(self.root)
         if new_sig != self.last_signature:
             self.last_signature = new_sig
+            # Publish artifact changed event
+            event_bus.publish(ArtifactChanged(signature=new_sig, root=self.root))
             self._refresh_cheap()
 
     def _telemetry_consumer(self) -> Any:
@@ -425,6 +612,10 @@ class DashboardApp:
                             self.loss_history.append(float(loss))
                             if len(self.loss_history) > 60:
                                 self.loss_history.pop(0)
+                            # Publish telemetry event
+                            event_bus.publish(
+                                WebSocketEvent(topic="telemetry", payload=record)
+                            )
                             self._refresh_lifecycle()
             except OSError:
                 pass
@@ -457,6 +648,8 @@ class DashboardApp:
                         if len(self.event_history) > 100:
                             self.event_history.pop(0)
                         _toast_for_alert(ev)
+                        # Publish events event
+                        event_bus.publish(WebSocketEvent(topic="events", payload=raw))
                         self._refresh_lifecycle()
             except OSError:
                 pass

@@ -1017,6 +1017,14 @@
     "team_wall": {
       "explorer": "Team",
       "lab": "Team Wall"
+    },
+    "activity_feed": {
+      "explorer": "Activity Feed",
+      "lab": "Activity Feed"
+    },
+    "field_reports": {
+      "explorer": "Field Reports",
+      "lab": "Field Reports"
     }
   }
 }

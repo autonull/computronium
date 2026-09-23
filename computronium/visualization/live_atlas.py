@@ -582,8 +582,11 @@ def diversity_stats(root: Path, recent_bursts: int = 3) -> dict[str, float]:
     recent_triples: list[tuple[str, str, str]] = []
     for row in cells:  # type: ignore[attr-defined]
         triple = (str(row.dynamics), str(row.credit), str(row.update))
-        first_seen.setdefault(triple, min(row.bursts))
-        if window & set(row.bursts):
+        # Guard against empty bursts list
+        row_bursts = list(row.bursts) if hasattr(row, "bursts") else []  # type: ignore[attr-defined]
+        if row_bursts:
+            first_seen.setdefault(triple, min(row_bursts))
+        if window & set(row_bursts):
             recent_triples.append(triple)
     repeats = sum(1 for t in recent_triples if first_seen[t] not in window)
     repeat_rate = repeats / max(len(recent_triples), 1)
@@ -649,7 +652,7 @@ def front_history_rows(
         cumulative = [
             row
             for row in cells
-            if min(row.bursts) <= cutoff  # type: ignore[attr-defined]
+            if (bursts_list := list(row.bursts) if hasattr(row, "bursts") else []) and min(bursts_list) <= cutoff  # type: ignore[attr-defined]
         ]
         if not cumulative:
             continue

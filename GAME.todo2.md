@@ -1,9 +1,23 @@
 # GAME.todo2.md — Remaining Work: Full Integration & Usability (TODO-UX2 "Summit")
 
-**Status:** Draft for implementation
+**Status:** In progress — Phase A + X1–X3 code complete (2026-09-23); Phase B/C/D remaining.
 **Scope:** `computronium/ui/dashboard.py`, `computronium/visualization/live_atlas.py`, UI test automation, extensibility layer
 **Predecessor:** GAME.todo.md (M0–M3 code complete; this plan closes the integration gap and lays foundation for ambitious evolution)
 **Verification posture:** All new locks at L4 (property/sampled numerical) per repo taxonomy.
+
+## Progress Log
+
+**Done (commit: Phase A + X1–X3):**
+- **X1** ✅ `computronium/ui/panel_registry.py` — `PanelSpec`/`PanelRegistry` with `register`, `get`, `all_specs`, `visible_specs(context)`, `keys`; global `panel_registry` instance. Dashboard registers all 20 panels at module import (`_register_panels()` in dashboard.py). Note: `register_panel` class-decorator exists but DashboardApp uses `panel_registry.register(...)` directly (factory is an arg, not the decorated class).
+- **X2** ✅ `computronium/ui/data_adapters.py` — `DataAdapter[PanelDataT]` Protocol, `FunctionAdapter`, `make_adapter(fn)`. PEP 695 generics.
+- **X3** ✅ `computronium/ui/event_bus.py` — frozen dataclass events (`ArtifactChanged`, `ModeChanged`, `ConfigChanged`, `WebSocketEvent`, …); sync + async pub/sub with `contextlib.suppress` isolation; global `event_bus`.
+- **A1** ✅ `diversity_stats` guards empty `row.bursts` (hasattr + list guard); `front_history_rows` cumulative filter guarded via walrus. Sparse-artifact audit done — other loaders (health_stats, graveyard_rows, cost_stats, maturation_rows) already empty-safe.
+- **A2** ✅ `computronium/ui/adapters.py` — concrete adapters for all 20 panels; DiscoveryMap adapter reuses `create_discovery_map_from_atlas` + `pareto_top` (Pareto flags set properly); HealthPanel tiles derived from snapshot.health; stagnation uses snapshot.diversity/alerts. Lab-instrumentation panels (lineage/episodes/mutations/veto_log/genome/probe) return typed empty data — their sources aren't computed in `render_snapshot` yet (see Remaining Work notes).
+- **A3** ✅ DashboardApp rewritten on registry: `_get_panel` from spec factory; `_get_panel_data` runs adapter with cached results; nav built from `panel_registry.visible_specs`; ActivityFeed + FieldReports now registered and in nav (D7 partially done). Glossary keys `activity_feed`/`field_reports` added.
+- **A4** ✅ `_refresh_cheap` clears cached panel data + pushes via `update_data`; publishes `ArtifactChanged` on the bus; `_load_atlas` calls `panel.update_data(atlas_figure=...)` (DiscoveryMap has no `update_atlas` — `update_data` is the real API).
+- **A5** ✅ `adapt_progress_panel` accepts optional `recognition_store`; `_get_panel_data` passes `self.recognition_store` for the progress panel; store rebuilds via `projector.fold`. NOTE: `FunctionAdapter.adapt` signature is 2-arg — the 3-arg call works only because the adapter dict stores the raw function path; if this breaks, wrap progress adapter specially or add a store-aware adapter class.
+
+**Verification:** ruff clean on all touched files; 25 targeted tests pass (dashboard smoke ×9, UX-L2 ×7, UX-L3 ×6, UX-L7 ×4).
 
 ---
 
@@ -38,6 +52,16 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 | **X5** | **Campaign Config Hot‑Reload** — watch `campaign.yaml`; on change, re‑parse objectives, update Pareto presets, push `ConfigChanged` event. | Objective selector updates without dashboard restart. |
 
 *These are P0 enablers — implement X1‑X3 before A2/A3 so adapters plug into a stable surface.*
+
+### Remaining Work Notes (for next session)
+
+1. **X4/X5** (multi-root, config hot-reload) untouched — the EventBus topics (`ConfigChanged`) already exist, wire the file watcher.
+2. **B1–B2**: WS consumers in DashboardApp already publish `WebSocketEvent` to the bus — remaining work is panels *subscribing* to those topics and throttling ≤1/2 s.
+3. **B4 mode toggle**: `ModeChanged` handler exists in DashboardApp (`_on_mode_changed` → rebuild drawer + re-render) but nothing *publishes* it yet — `mode_toggle.set_mode` must publish to the bus.
+4. **Lab panels empty**: lineage/episodes/mutations/veto_log/genome/probe adapters return empty typed data because their sources aren't part of `DashboardSnapshot`. Either extend `render_snapshot` or give those adapters their own loaders (violates purity — prefer snapshot extension).
+5. **Known smell**: `adapt_progress_panel` takes a 3rd `recognition_store` arg that `FunctionAdapter.adapt` doesn't declare — works today via the special-case branch in `_get_panel_data`, but formalize with a store-aware adapter or context object (X2 mentioned `AdapterContext` — unused).
+6. **C-suite is the biggest remaining chunk**: no `tests/ui/` exists; UX-L12 (snapshot totality), UX-L15 (adapter equivalence), UX-L16 (eventbus delivery) locks unwritten; L5 axe tests still skipped.
+7. `PANELS`/`LAB_ONLY_PANELS`/`_panel_label` legacy lists in dashboard.py are dead code superseded by the registry — remove in hygiene pass.
 
 ---
 
