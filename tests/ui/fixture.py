@@ -44,6 +44,14 @@ def seed_campaign_root(root: Path) -> None:
                     "walltime_s": 1.5 + i * 0.1,
                     "settle_horizon": 4,
                     "credit_alignment": 0.4,
+                    "spectral_radius": 0.9 - i * 0.05,
+                    "psi_capacity": 1.0 + i,
+                    "stability_plasticity_ratio": (0.9 - i * 0.05) / (1.0 + i),
+                    # Non-monotonic so cell 3 is dominated on the full
+                    # credit preset — the strip renders top-3 (UX-L1).
+                    "credit_efficiency": (0.2, 0.35, 0.65, 0.3)[i],
+                    "feedback_path_length": 2.0 + i,
+                    "trace_variance": 0.1 * (i + 1),
                 },
                 hyperparameters=dict(_CELL_HP),
                 extra={},

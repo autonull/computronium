@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from computronium.ui.dashboard import build_dashboard
 from computronium.visualization.live_atlas import (
     EmbedCache,
-    build_dashboard,
     cost_stats,
     defect_funnel_rows,
     health_stats,
@@ -58,6 +58,14 @@ def _seed_fixture(root: Path) -> None:
                     "walltime_s": 1.5 + i * 0.1,
                     "settle_horizon": 4,
                     "credit_alignment": 0.4,
+                    "spectral_radius": 0.9 - i * 0.05,
+                    "psi_capacity": 1.0 + i,
+                    "stability_plasticity_ratio": (0.9 - i * 0.05) / (1.0 + i),
+                    # Mirrors tests/ui/fixture.py (non-monotonic efficiency
+                    # keeps the full-preset front at 3 cells for UX-L1).
+                    "credit_efficiency": (0.2, 0.35, 0.65, 0.3)[i],
+                    "feedback_path_length": 2.0 + i,
+                    "trace_variance": 0.1 * (i + 1),
                 },
                 hyperparameters=dict(_CELL_HP),
                 extra={},

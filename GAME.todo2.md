@@ -61,12 +61,12 @@
     - **New opportunities (2026-09-23 triage — none blocking, all small):**
       - `_CellRow` has no `settle_horizon` / `stability_plasticity_ratio` / `credit_efficiency` columns, so `front_history_rows` + `pareto_strip_rows` silently return unfiltered dfs under the stability/credit-efficiency presets (same `pareto_top` early-return). Either extend `_CellRow`/KB metrics or restrict the dashboard Pareto selector to supported presets.
       - `pareto_top`'s missing-column path `return df` (unfiltered) is a silent honesty hazard — consider returning `df.head(0)` or raising, at minimum a louder log level, so future column drift fails visibly instead of rendering a fake "front".
-      - `live_atlas.build_dashboard` (legacy page) vs `ui.dashboard.build_dashboard` (CLI path) still coexist; the smoke test pins the legacy one. Unify by making the legacy a thin deprecated alias — but that re-baselines `test_build_dashboard_headless`, so do it with the test update in one commit.
+      - `live_atlas.build_dashboard` (legacy page) vs `ui.dashboard.build_dashboard` (CLI path) still coexist; the smoke test pins the legacy one. ✅ **Done in GAME.todo3 Session A (T4)** — legacy page deleted, smoke test retargeted to `ui.dashboard.build_dashboard` in the same commit.
       - Tighten `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s once confident (116 ms measured); `kb_load_cached` clear-on-full → FIFO if >16 roots ever matter.
    - ~~`render_header` passes key `"atlas"` missing from glossary.json~~ ✅ FIXED this session (`Map`/`Atlas`).
    - ~~`screenshots/` gitignore~~ ✅ DONE this session.
    - UMAP optional-import flakiness in this env ("issubclass() arg 2…" → t-SNE fallback, later runs succeed) + `n_neighbors` warnings on tiny fixtures — cosmetic; worth pinning `n_jobs`/`n_neighbors` for n<10 if the noise ever gates tests.
-   - Two `build_dashboard`s still coexist (`ui.dashboard` = CLI, `live_atlas` = smoke) — unify (carried from previous handoff).
+    - Two `build_dashboard`s still coexist (`ui.dashboard` = CLI, `live_atlas` = smoke) — ✅ unified in GAME.todo3 Session A (T4: legacy deleted).
    - `kb_load_cached` clear-on-full is coarse; FIFO eviction if 16 roots ever matter.
    - Tighten `SNAPSHOT_BUDGET_S` 3.0 → 0.5 s once confident (116 ms measured).
    - `screenshots/` from the Screen fixture should be gitignored.
@@ -160,7 +160,7 @@ Before fixing the gaps, introduce a small, typed extension layer so the dashboar
 3. **Lab panels thin**: mutations/veto_log/genome/probe/stagnation adapters return typed empty data — their sources (Auto-Evolve event logs) aren't in `DashboardSnapshot` yet. Lineage/episodes/activity_feed/field_reports now consume `snapshot.event_history`. Prefer extending `render_snapshot` over impure per-adapter loaders.
 4. **Known smell**: `adapt_progress_panel` store arg still special-cased via `functools.partial` in `_get_panel_data` — formalize with `AdapterContext` (exists in `data_adapters.py`, unused).
 5. **C4 remaining**: UX-L5 axe tests still skip (need `npm i -g @axe-core/cli` or Playwright+axe against a running dashboard on the synthetic fixture). Keyboard-crawl test is intentionally manual.
-6. **C6 remaining**: screenshot regression baseline (`tests/ui/baselines/`, reduced-motion + grayscale per UX-L6).
+6. **C6 done**: grayscale behavioral green (6.10 > 5.0 floor), no brittle pixel baselines per user directive.
 7. **C1 caveat**: `nicegui[testing]` extra does not exist on NiceGUI 3.16.0 (uv warning) — either pin a version that ships it or drop the extra; current C2/C3 tests don't need it (in-process headless render).
 8. `PANELS`/`LAB_ONLY_PANELS`/`_panel_label` legacy lists in dashboard.py are dead code superseded by the registry — remove in hygiene pass.
 9. **Glossary readability debt**: `scripts/lint_readability.py` reports 147 Explorer strings > FK grade 8 (mostly short technical labels where the FK heuristic over-rates; wire an allowlist or accept the lint as informational until copy is reworked).
@@ -257,7 +257,7 @@ Existing UX‑L1..L16 all have real test files. C4 (axe) + C6 (grayscale) are gr
 4. **C2** (headless render test proves A2/A3).
 5. **B1‑B4** (live streams + nav completeness).
 6. **C1 + C3 + C4 + C5** (automation expands to interactions + unskips). — ✅ all done (C4 axe green both registers)
-7. **C6 + C7** (L1/L4/L6 locks). — **C7 done**; **C6 remaining**
+7. **C6 + C7** (L1/L4/L6 locks). — **C7 done**; **C6 done**
 8. **A5 + D3** (recognition wiring + rebuild flag test).
 9. **X4‑X5** (multi‑root, config hot‑reload) — incremental, behind flags.
 10. **D1‑D2, D4‑D5** (observability, perf budgets, docs).

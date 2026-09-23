@@ -10,9 +10,11 @@ from computronium.autoscientist.objectives import (
     DEFAULT_OBJECTIVES,
     PRESET_ACCURACY_WALLTIME_PARAMS,
     PRESET_CREDIT_EFFICIENCY,
+    PRESET_CREDIT_EFFICIENCY_FULL,
     PRESET_EFFICIENCY,
     PRESET_FULL_COST,
     PRESET_STABILITY_PLASTICITY,
+    PRESET_STABILITY_PLASTICITY_RATIO,
 )
 from computronium.ui.adapters import adapt_tradeoffs_panel
 from computronium.visualization.live_atlas import render_snapshot
@@ -29,7 +31,9 @@ _PRESETS: tuple[tuple[str, tuple[ObjectiveSpec, ...]], ...] = (
     ("full_cost", PRESET_FULL_COST),
     ("efficiency", PRESET_EFFICIENCY),
     ("stability_plasticity", PRESET_STABILITY_PLASTICITY),
+    ("stability_plasticity_ratio", PRESET_STABILITY_PLASTICITY_RATIO),
     ("credit_efficiency", PRESET_CREDIT_EFFICIENCY),
+    ("credit_efficiency_full", PRESET_CREDIT_EFFICIENCY_FULL),
 )
 
 

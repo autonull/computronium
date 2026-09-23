@@ -104,6 +104,8 @@ class AtlasRow(TypedDict):
     rewrite_rate: float
     feedback_path_length: float
     trace_variance: float
+    stability_plasticity_ratio: float
+    credit_efficiency: float
     free_energy_final: float
     nan_loss: bool
 
@@ -181,6 +183,10 @@ def _load_cells_uncached(kb_path: Path, task: str | None) -> pd.DataFrame:
             "rewrite_rate": float(metrics.get("rewrite_rate", 0.0)),
             "feedback_path_length": float(metrics.get("feedback_path_length", 0.0)),
             "trace_variance": float(metrics.get("trace_variance", 0.0)),
+            "stability_plasticity_ratio": float(
+                metrics.get("stability_plasticity_ratio", 0.0)
+            ),
+            "credit_efficiency": float(metrics.get("credit_efficiency", 0.0)),
             "free_energy_final": float(metrics.get("free_energy_final", 0.0)),
             "nan_loss": bool(metrics.get("nan_loss", False)),
             "is_void": False,
@@ -326,11 +332,14 @@ def pareto_top(
     obj_names = [o.name.value for o in objectives]
     directions = [o.direction for o in objectives]
 
-    # Check all objective columns exist
-    for name in obj_names:
-        if name not in df.columns:
-            logger.warning("Objective column %s not in DataFrame; skipping", name)
-            return df
+    # Unknown objectives fail loudly: silently returning the unfiltered
+    # frame rendered fake fronts (GAME.todo3 T2).
+    missing = [name for name in obj_names if name not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Unknown/unsupported objectives {missing}; "
+            f"available columns: {sorted(df.columns)}"
+        )
 
     pts = df[obj_names].to_numpy(dtype=float)
     signs = np.where([d == "maximize" for d in directions], 1.0, -1.0)

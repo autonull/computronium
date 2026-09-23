@@ -13,7 +13,11 @@ from computronium.ui.mode_toggle import BasePanel
 
 @dataclass(frozen=True, slots=True)
 class ProbeBatch:
-    """One adaptation probe batch."""
+    """One adaptation probe batch.
+
+    Forked-copy hygiene is structural: a batch cannot exist in a
+    non-forked state, so probe batches never touch production data.
+    """
 
     batch_id: str
     timestamp: float
@@ -21,8 +25,12 @@ class ProbeBatch:
     proposed_slope: float
     accepted: bool
     statistical_significance: float
-    forked_copy: bool = True  # Always true per UX-L11
+    forked_copy: bool = True
     metadata: dict[str, Any] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.forked_copy is not True:
+            raise ValueError("ProbeBatch requires forked_copy=True (UX-L11)")
 
 
 class ProbeAnalytics(BasePanel):

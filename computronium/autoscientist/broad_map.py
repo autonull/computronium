@@ -880,6 +880,9 @@ class _CellRow:
     # Settle
     settle_steps_used: int = 0
     free_energy_final: float = 0.0
+    settle_horizon: float = 0.0
+    stability_plasticity_ratio: float = 0.0
+    credit_efficiency: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1001,6 +1004,13 @@ def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_Cell
                 rewrite_rate=float(metrics.get("rewrite_rate", 0.0)),
                 settle_steps_used=int(metrics.get("settle_steps_used", 0)),
                 free_energy_final=float(metrics.get("free_energy_final", 0.0)),
+                settle_horizon=float(
+                    metrics.get("settle_horizon", metrics.get("settle_steps_used", 0))
+                ),
+                stability_plasticity_ratio=float(
+                    metrics.get("stability_plasticity_ratio", 0.0)
+                ),
+                credit_efficiency=float(metrics.get("credit_efficiency", 0.0)),
             )
         )
     return rows
