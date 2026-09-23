@@ -74,7 +74,7 @@ def main() -> int:
 
     from nicegui import ui
 
-    from computronium.visualization.live_atlas import build_dashboard
+    from computronium.ui.dashboard import build_dashboard
 
     # An explicit page (not NiceGUI's auto-index) — script-mode
     # re-execution fails under a console-script entry point.

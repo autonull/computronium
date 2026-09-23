@@ -993,6 +993,30 @@
     "invalid_combination": {
       "explorer": "Invalid combination",
       "lab": "Invalid combination"
+    },
+    "discovery_map": {
+      "explorer": "Map",
+      "lab": "Discovery Map"
+    },
+    "tradeoffs": {
+      "explorer": "Trade-offs",
+      "lab": "Trade-offs"
+    },
+    "repair_bench": {
+      "explorer": "Repair Bench",
+      "lab": "Repair Bench"
+    },
+    "health": {
+      "explorer": "Health",
+      "lab": "Health"
+    },
+    "region_naming": {
+      "explorer": "Region Names",
+      "lab": "Region Naming"
+    },
+    "team_wall": {
+      "explorer": "Team",
+      "lab": "Team Wall"
     }
   }
 }
