@@ -62,7 +62,7 @@ def test_populated_vs_empty_distinguishable_in_grayscale(
     empty.mkdir()
     holder = {"root": populated}
 
-    @ui.page("/ux_l6_pair")
+    @ui.page("/ux_l6_pair", language="en")
     def _pair_page() -> None:
         build_dashboard(
             holder["root"],

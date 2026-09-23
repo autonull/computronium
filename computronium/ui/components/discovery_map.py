@@ -117,7 +117,7 @@ class DiscoveryMap(BasePanel):
                     ui.switch(
                         value=self._show_table,
                         on_change=lambda e: self._toggle_view(bool(e.value)),
-                    ).props('size="sm"')
+                    ).props(f'size="sm" aria-label="{self.tr("view")}"')
 
             # Map view
             self._figure_container.classes(

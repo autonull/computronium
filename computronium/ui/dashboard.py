@@ -583,16 +583,16 @@ class DashboardApp:
                     )
                 # Glossary button
                 ui.button(icon="menu_book", on_click=self._open_glossary).props(
-                    "flat round color=white"
+                    'flat round color=white aria-label="Glossary"'
                 ).classes("text-white").tooltip("Glossary")
                 # Tour button
                 ui.button(icon="help_outline", on_click=self._start_tour).props(
-                    "flat round color=white"
-                ).classes("text-white")
+                    'flat round color=white aria-label="Tour"'
+                ).classes("text-white").tooltip("Tour")
                 # Quiz button
                 ui.button(icon="psychology", on_click=self._start_quiz).props(
-                    "flat round color=white"
-                ).classes("text-white")
+                    'flat round color=white aria-label="Quiz"'
+                ).classes("text-white").tooltip("Quiz")
 
     def _on_root_change(self, value: str) -> None:  # type: ignore[arg-type]
         """X4: header root selector handler."""

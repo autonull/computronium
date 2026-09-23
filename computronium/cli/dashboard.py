@@ -91,7 +91,7 @@ def main() -> int:
 
     # An explicit page (not NiceGUI's auto-index) — script-mode
     # re-execution fails under a console-script entry point.
-    @ui.page("/")
+    @ui.page("/", language="en")
     def _dashboard_page() -> None:
         build_dashboard(
             roots[0],
