@@ -66,17 +66,17 @@ class DiscoveryMap(BasePanel):
         super().__init__(
             panel_key="discovery_map",
             plain_explanation=(
-                "This map shows all measured recipes as dots. Similar recipes are "
-                "close together. The fog shows unexplored areas."
+                "This map shows all measured configurations as dots. Similar configurations "
+                "are close together. Grey areas show unmeasured regions."
             ),
             why_explanation=(
-                "The map helps you see patterns: which recipes work well, which "
-                "areas are empty, and where to explore next."
+                "The map reveals patterns: which configurations work well, which "
+                "regions are unmeasured, and where to explore next."
             ),
             expert_explanation=(
                 "UMAP embedding of one-hot encoded ontology axes (S×G×D×P) "
                 "concatenated with physics metrics (accuracy, bp_deficit). "
-                "Fog coverage = KB coverage of planned regions. "
+                "Grey area coverage = KB coverage of planned regions. "
                 "Markers: shape=dynamics family, color=BP-deficit (viridis). "
                 "Voids shown as grey X markers (gate-rejected, not failures)."
             ),

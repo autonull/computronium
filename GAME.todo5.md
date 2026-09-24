@@ -1,13 +1,13 @@
 # GAME.todo5.md — One surface: the work is the reward (rev 8 — final)
 
-**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults. **Session C in progress** — C2 accessibility fixes applied.
+**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults. **Session C in progress** — C1 copy pass complete, C2 accessibility fixes applied.
 **Scope:** `computronium/ui/dashboard.py`, `panel_registry.py`, `adapters.py`, `recognition/` (dissolution), `lenses/`, `ui/components/`, CLI flags, `docs/platform/dashboard.md`, UI tests.
 **Constraint (binding):** solo builder only. Validation: structured solo protocol, n=1 bounds.
 **Boundary:** Full Computronium system access — compose, configure, launch, monitor, analyze, audit, browse, compare. No separate plans. Ledger, gallery, benchmark, history are **lenses**, not panels.
 **No XP, no points, no streaks, no leaderboards, no fantasy vocabulary. Backwards compatibility: NONE.**
 **Verification:** L4 property/behavioral + L5 solo-empirical.
 
-**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on all UI files, pyright clean on all UI files.
+**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on all UI files, pyright clean on all UI files. C1 human copy pass complete.
 
 ---
 
@@ -299,8 +299,13 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 - Verified pyright clean on all UI modules (0 errors, 0 warnings)
 - Verified ruff format clean on all UI modules
 
+### Improvements This Session (2026-09-24) — C1 Human Copy Pass
+- Updated all panel explanations (Map, Repair, Console, Composer, Record) for plain, technical, zero-metaphor language
+- Replaced metaphorical terms: "fog of war" → "unmeasured regions", "repair bench" → "panel", "vitals" → "metrics", "recipe cards" → "configurations", "memory/ledger/lessons" → "history/evidence chains/failed configurations", "trust requires traceability" → "traceability requires evidence"
+- Updated command palette descriptions: "Fix & mature" → "Fix defects & track maturation", "Trust & remember" → "History, evidence chains, failed configurations", "Build (recipes...)" → "Build (configurations...)"
+
 ### Remaining Work (Sessions C–E)
-- **C1:** Human copy pass (plain, technical, zero metaphor)
+- **C1:** Human copy pass (plain, technical, zero metaphor) — ✅ Done
 - **C2 (remaining):** orca + Chromium crawl (palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast) — cert recording
 - **C3:** Fault injection (kill daemon, empty root, corrupt JSONL, slow UMAP); chip transitions correct; regression tests
 - **C4:** Aesthetic spec applied (monospace data, 4px grid, semantic color, ≤150ms motion, `--quiet` density); V4 conformance

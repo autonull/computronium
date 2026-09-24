@@ -18,10 +18,10 @@ def _build_palette_items(current_panel: str) -> list[dict[str, str]]:
 
     panel_items = {
         PanelLenses.MAP: ("Map", "Explore & compare (UMAP, Pareto, Gallery)"),
-        PanelLenses.REPAIR: ("Repair", "Fix & mature (Defects, Maturation)"),
+        PanelLenses.REPAIR: ("Repair", "Fix defects & track maturation (Defects, Maturation)"),
         PanelLenses.CONSOLE: ("Console", "Run & monitor (live stream, controls)"),
-        PanelLenses.COMPOSER: ("Composer", "Build (recipes, dial composer)"),
-        PanelLenses.RECORD: ("Record", "Trust & remember (History, Ledger, Lessons)"),
+        PanelLenses.COMPOSER: ("Composer", "Build (configurations, dial composer)"),
+        PanelLenses.RECORD: ("Record", "History, evidence chains, failed configurations (History, Ledger, Lessons)"),
     }
 
     for idx, (key, (label, desc)) in enumerate(panel_items.items(), 1):
@@ -46,7 +46,7 @@ def _build_palette_items(current_panel: str) -> list[dict[str, str]]:
         PanelLenses.RECORD: [
             ("record:history", "History", "Timeline of milestones and cells"),
             ("record:ledger", "Ledger", "Experiment → belief → evidence chains"),
-            ("record:lessons", "Lessons", "Negative results, one-line summaries"),
+            ("record:lessons", "Lessons", "Failed configurations, one-line summaries"),
         ],
     }
 

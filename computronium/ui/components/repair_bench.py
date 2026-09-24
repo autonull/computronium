@@ -38,8 +38,8 @@ class RepairBench(BasePanel):
         super().__init__(
             panel_key="repair_bench",
             plain_explanation=(
-                "This is the repair bench. It shows crashes that need fixing. "
-                "Each row is a unique defect. Click 'Copy' to get the unquarantine command."
+                "This panel shows crashes that need fixing. Each row is a unique defect. "
+                "Click 'Copy' to get the unquarantine command."
             ),
             why_explanation=(
                 "Defects are crashes we can fix (not ontology boundaries). "
@@ -47,7 +47,7 @@ class RepairBench(BasePanel):
             ),
             expert_explanation=(
                 "Defect funnel from live_atlas.defect_funnel_rows(). "
-                "Statuses: Arrived (open) → Diagnosed (fixed) → Back in service. "
+                "Statuses: open → fixed → back_in_service. "
                 "Structural voids (gate-rejected) never appear here. "
                 "Copy button generates: `comp unquarantine --root ROOT --defect-id ID`"
             ),

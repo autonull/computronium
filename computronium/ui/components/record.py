@@ -78,13 +78,13 @@ class Record(BasePanel):
         super().__init__(
             panel_key="record",
             plain_explanation=(
-                "The Record is your campaign's memory. History shows what "
+                "The Record stores campaign history. History shows what "
                 "happened when. Ledger shows the evidence chain for every "
-                "claim. Lessons captures what didn't work so you don't repeat it."
+                "claim. Lessons captures failed configurations so you don't repeat them."
             ),
             why_explanation=(
-                "Trust requires traceability. The ledger links every claim "
-                "to its evidence. Lessons prevent repeating failed approaches."
+                "Traceability requires evidence. The ledger links every claim "
+                "to its evidence. Failed configurations prevent repeating failed approaches."
             ),
             expert_explanation=(
                 "History = timeline from event_history + front_history_rows. "

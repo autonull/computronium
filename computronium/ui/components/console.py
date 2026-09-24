@@ -76,15 +76,15 @@ class Console(BasePanel):
         super().__init__(
             panel_key="console",
             plain_explanation=(
-                "The Console shows the live campaign. Pick a campaign, "
-                "see its vitals, and watch cells complete in real time."
+                "The Console shows the live campaign. Select a campaign, "
+                "see its status, and watch cells complete in real time."
             ),
             why_explanation=(
-                "Monitoring the live run lets you see when the driver "
+                "Monitoring the live run shows when the driver "
                 "proposes new cells, when bursts finish, and if defects appear."
             ),
             expert_explanation=(
-                "Status strip: liveness (heartbeat + API), vitals from "
+                "Status strip: liveness (heartbeat + API), metrics from "
                 "health_stats(), loss curve from /ws/telemetry. Driver "
                 "intent parsed from proposal_batch events (n_proposals, "
                 "strategy primitives). Session delta = counts since page "

@@ -42,17 +42,17 @@ class Composer(BasePanel):
             panel_key="composer",
             plain_explanation=(
                 "The Composer is where you build learning systems. Start with a "
-                "proven recipe card, or compose your own from the 6-axis menu "
+                "proven configuration, or compose your own from the 6-axis menu "
                 "with live compatibility checking."
             ),
             why_explanation=(
-                "Recipe cards show measurement-backed verdicts from the "
-                "I(C,U) ladder. The DialComposer lets you explore the full "
+                "Configuration cards show measurement-backed results from the "
+                "I(C,U) analysis. The DialComposer lets you explore the full "
                 "S×G×D×M×C×U space with SystemConfig.validate() ensuring "
                 "only valid combinations are buildable."
             ),
             expert_explanation=(
-                "Recipes from computronium.analysis.recipe_cards (M3). "
+                "Configurations from computronium.analysis.recipe_cards (M3). "
                 "DialComposer uses config factories from workshop.py. "
                 "Validation = SystemConfig.validate() cross-axis constraints. "
                 "Submit = copy `comp campaign run` command or POST to "
