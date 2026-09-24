@@ -186,7 +186,14 @@ class DashboardApp:
         # Initialize mode
         initialize_mode()
         if ui_mode != "auto":
-            set_mode(ui_mode)  # type: ignore[arg-type]
+            # Set internal mode without publishing event (UI not built yet)
+            from computronium.ui.mode_toggle import _current_mode
+            _current_mode._register = ui_mode  # type: ignore[assignment]
+            from computronium.ui.glossary_service import get_glossary_service
+            get_glossary_service()  # ensure loaded with correct register
+        self._current_mode_applied = get_mode()
+        self._last_hash = ""
+        self._hash_polling_enabled = False
 
         # State
         self.current_panel: str = PanelLenses.MAP
@@ -260,6 +267,9 @@ class DashboardApp:
 
     def _on_mode_changed(self, event: ModeChanged) -> None:
         """Handle mode change event."""
+        if event.mode == getattr(self, "_current_mode_applied", None):
+            return  # Already applied this mode
+        self._current_mode_applied = event.mode
         self._render_header()
         self._render_current_panel()
 
@@ -612,7 +622,7 @@ class DashboardApp:
             pass
 
     def _restore_url_state(self) -> None:
-        """Restore panel/lens from URL hash on load."""
+        """Restore panel/lens from URL hash on load and on hash changes."""
         # Only works with active client context (not in headless tests)
 
         async def _restore() -> None:
@@ -624,9 +634,50 @@ class DashboardApp:
         with suppress(AssertionError, RuntimeError):
             ui.timer(0.1, _restore, once=True)
 
+        # Also poll for hash changes to support deep linking (hash navigation)
+        # This handles cases where screen.open() changes the hash without page reload
+        # Skip in headless tests where ui.run_javascript will fail
+        self._last_hash = ""
+        self._hash_polling_enabled = False
+
+        async def _check_and_start_polling() -> None:
+            """Check if we have a valid JS context, then start polling."""
+            try:
+                await ui.run_javascript("return true;")
+                self._hash_polling_enabled = True
+                logger.debug("Hash polling enabled")
+            except Exception:
+                logger.debug("Headless context detected, hash polling disabled")
+                return
+
+            async def _poll_hash() -> None:
+                if not self._hash_polling_enabled:
+                    return
+                try:
+                    if self.main_content is None:
+                        return
+                    hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
+                    if hash_str and hash_str != self._last_hash:
+                        self._last_hash = hash_str
+                        logger.debug("Hash changed to: %s", hash_str)
+                        await self._apply_hash_from_js()
+                except Exception as exc:
+                    logger.debug("Hash poll error: %s", exc)
+
+            with suppress(AssertionError, RuntimeError):
+                ui.timer(1.0, _poll_hash)
+
+        with suppress(AssertionError, RuntimeError):
+            ui.timer(0.2, _check_and_start_polling, once=True)
+
     async def _apply_hash_from_js(self) -> None:
         """Extract and apply panel/lens from window.location.hash."""
-        hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
+        if self.main_content is None:
+            return
+        try:
+            hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
+        except Exception:
+            return
         if not hash_str:
             return
         parts = hash_str.split(":", 1)
@@ -1038,6 +1089,11 @@ class DashboardApp:
 
         # Initial render
         self._render_current_panel()
+
+        # Publish mode change event now that UI is built
+        if get_mode() != "explorer":  # only if non-default
+            from computronium.ui.event_bus import ModeChanged, event_bus
+            event_bus.publish(ModeChanged(mode=get_mode()))
 
         # Set up timers
         ui.timer(0.5, self._load_atlas, once=True)

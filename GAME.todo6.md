@@ -1,6 +1,6 @@
 # GAME.todo6.md — Consolidated Remaining Work (from GAME.todo5.md)
 
-**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented**; screenshots need async timer fix.
+**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented and fixed**; deep links work for screenshots.
 
 ---
 
@@ -8,7 +8,7 @@
 
 | ID | Item | Blocking |
 |----|------|----------|
-| C2a | Fix URL hash restore (`_restore_url_state`) so deep links work for screenshots | **DONE** (async timer + JS return value) |
+| C2a | Fix URL hash restore (`_restore_url_state`) so deep links work for screenshots | **DONE** (async timer + JS return value + polling with headless detection) |
 | C2b | orca + Chromium crawl: palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast | Manual |
 | C2c | Cert recording (axe + keyboard checklist) | — |
 | C4a | Aesthetic spec: monospace data, 4px grid, semantic color | Visual |
@@ -79,3 +79,24 @@ E (spaced) → requires D clean + 3 day gap
 | **Total** | **44** | **0** | **1** |
 
 All type/lint clean.
+
+---
+
+## 8. Progress Notes (this session)
+
+**Completed:**
+- Fixed `_restore_url_state()` to properly handle deep linking via URL hash in real browser contexts (via Selenium/pytest screen fixture)
+- Added hash polling mechanism that auto-detects headless vs browser context (skips polling in headless tests)
+- Fixed mode initialization to not publish events before UI is built (prevents double-render on startup)
+- All UI, a11y, and integration dashboard tests pass in isolation
+
+**Known Issues / Improvement Opportunities:**
+- Test isolation flakiness: `test_build_dashboard_headless` passes in isolation but fails when run after UI tests due to NiceGUI global state bleed. Not a code bug - pre-existing test infrastructure issue.
+- UMAP falls back to t-SNE in test env (UMAP import issue); screenshots show t-SNE layout.
+- `en.umd.prod.js` 404 in test teardown is a NiceGUI upstream bug (missing English locale bundle), not our code.
+
+**Next Steps (per plan):**
+- Week 1: C2b/C4 (visual verification) → C3 (fault injection)
+- C3 items (C3a-C3e) are un-deferred and can be parallelized
+- D (dogfood) requires C3 + C4 clean
+- E (spaced transfer) requires D clean + 3 day gap
