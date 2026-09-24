@@ -1,7 +1,7 @@
 """Shared test fixtures and configuration."""
 
 import os
-from typing import cast
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -35,6 +35,27 @@ for _scripts_dir in ("scripts", "scripts/probes"):
     _probe_path = _REPO_ROOT / _scripts_dir
     if _probe_path.is_dir() and str(_probe_path) not in sys.path:
         sys.path.insert(0, str(_probe_path))
+
+
+def pytest_addoption(parser: Any) -> None:
+    parser.addoption(
+        "--capture-screenshots",
+        action="store_true",
+        default=False,
+        help="Enable screenshot capture for visual verification",
+    )
+
+
+def pytest_configure(config: Any) -> None:
+    config.addinivalue_line(
+        "markers", "screenshots: mark test as capturing screenshots"
+    )
+
+
+@pytest.fixture
+def capture_screenshots(request: Any) -> bool:
+    """Check if screenshot capture is enabled."""
+    return request.config.getoption("--capture-screenshots")
 
 
 def lm_train_step(

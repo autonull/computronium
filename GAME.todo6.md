@@ -1,6 +1,6 @@
 # GAME.todo6.md — Consolidated Remaining Work (from GAME.todo5.md)
 
-**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented and fixed**; deep links work for screenshots. **C3 (Fault Injection & Regression) complete** — all 5 items implemented and tested.
+**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented and fixed**; deep links work for screenshots. **C3 (Fault Injection & Regression) complete** — all 5 items implemented and tested. **C2b/C4 visual verification infrastructure complete** — screenshot capture + design token validation implemented.
 
 ---
 
@@ -9,11 +9,11 @@
 | ID | Item | Blocking |
 |----|------|----------|
 | C2a | Fix URL hash restore (`_restore_url_state`) so deep links work for screenshots | **DONE** (async timer + JS return value + polling with headless detection) |
-| C2b | orca + Chromium crawl: palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast | Manual |
-| C2c | Cert recording (axe + keyboard checklist) | — |
-| C4a | Aesthetic spec: monospace data, 4px grid, semantic color | Visual |
-| C4b | Motion ≤150ms, `--quiet` density | Visual |
-| C4c | V4 conformance checklist | — |
+| C2b | orca + Chromium crawl: palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast | **INFRASTRUCTURE DONE** — screenshot capture + automated visual validation implemented; manual crawl remaining |
+| C2c | Cert recording (axe + keyboard checklist) | **AUTOMATED** — axe-core passes 0 critical/serious; keyboard checklist in test file |
+| C4a | Aesthetic spec: monospace data, 4px grid, semantic color | **DONE** — validated in `TestVisualVerification` |
+| C4b | Motion ≤150ms, `--quiet` density | **DONE** — validated in `TestVisualVerification` |
+| C4c | V4 conformance checklist | **PARTIAL** — automated checks pass; manual verification remaining |
 
 ---
 
@@ -52,7 +52,7 @@
 ## 5. Implementation Priority
 
 ```
-Week 1: C2b/C4 (visual) → C3 (faults)  ← C3 COMPLETE
+Week 1: C2b/C4 (visual) → C3 (faults)  ← C3 COMPLETE, C2b/C4 INFRASTRUCTURE DONE
 Week 2: D1–D5 (dogfood + perf)
 Week 3: E1 (spaced run)
 ```
@@ -63,6 +63,7 @@ Week 3: E1 (spaced run)
 
 ```
 C3 (faults) → **COMPLETE** — independent, can parallelize
+C2b/C4 (visual infra) → **COMPLETE** — automated validation + screenshot capture
 D (dogfood) → requires C3 + C4 clean
 E (spaced) → requires D clean + 3 day gap
 ```
@@ -77,7 +78,8 @@ E (spaced) → requires D clean + 3 day gap
 | A11y | 14 | 0 | 1 |
 | Integration | 8 | 0 | 0 |
 | **Dashboard Fault Injection** | **20** | **0** | **0** |
-| **Total** | **64** | **0** | **1** |
+| **Visual Verification (new)** | **12** | **0** | **0** |
+| **Total** | **76** | **0** | **1** |
 
 All type/lint clean.
 
@@ -103,12 +105,29 @@ All type/lint clean.
   - `_load_cells_uncached()` (atlas.py) — catches corrupt KB, returns empty DataFrame
 - All new tests pass; existing dashboard smoke tests and UI tests continue to pass
 
+**Visual Verification Infrastructure Added (C2b/C4):**
+- Created `tests/ui/test_dashboard_screenshots.py` with comprehensive visual verification:
+  - `TestDashboardScreenshots`: Screenshot capture for all 5 panels × 3/2/1 lenses × 2 registers × 2 states (20 combos) via `--capture-screenshots` flag
+  - `TestVisualVerification`: Automated design token validation (7 tests):
+    - 4px grid spacing validation
+    - Monospace font stack tokens (14px/12px)
+    - Semantic colors defined (success/warning/danger/info/neutral/secondary)
+    - Fast transition ≤150ms
+    - Reduced-motion media query disables transitions
+    - High-contrast media query overrides colors
+    - Quiet mode density (explorer=comfortable, lab=compact)
+  - `TestDashboardLensRendering`: Headless lens rendering for all panels/lenses (5 tests)
+- Added pytest `--capture-screenshots` option to `tests/conftest.py`
+- Captured reference screenshots: map panel (map/tradeoffs/gallery lenses) in explorer register, populated + empty states
+- axe-core accessibility scan: 0 critical/serious violations in both registers
+
 **Known Issues / Improvement Opportunities:**
 - Test isolation flakiness: `test_build_dashboard_headless` passes in isolation but fails when run after UI tests due to NiceGUI global state bleed. Not a code bug - pre-existing test infrastructure issue.
 - UMAP falls back to t-SNE in test env (UMAP import issue); screenshots show t-SNE layout.
 - `en.umd.prod.js` 404 in test teardown is a NiceGUI upstream bug (missing English locale bundle), not our code.
+- Full 20-combo screenshot capture takes ~25 min; CI should run subset (overview + key lenses)
 
 **Next Steps (per plan):**
-- Week 1: C2b/C4 (visual verification) 
+- Week 1: C2b/C4 (visual verification) — **INFRASTRUCTURE COMPLETE**, manual orca crawl + V4 checklist remaining
 - Week 2: D1–D5 (dogfood + perf)
 - Week 3: E1 (spaced transfer)
