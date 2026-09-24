@@ -456,7 +456,10 @@ def _measured_cells(root: Path) -> list[Any]:
     schema; the dashboard only reads)."""
     from computronium.autoscientist.broad_map import _load_measured_cells
 
-    return _load_measured_cells(root / "kb.sqlite")
+    try:
+        return _load_measured_cells(root / "kb.sqlite")
+    except Exception:  # Corrupt or missing KB -> empty, not crash
+        return []
 
 
 def coverage_by_axis(root: Path) -> list[dict[str, object]]:
@@ -785,7 +788,6 @@ def maturation_rows(root: Path) -> list[dict[str, object]]:
 
 def health_stats(root: Path) -> dict[str, object]:
     """Open/resolved defects, cells-per-burst rate, last-burst mean walltime."""
-    from computronium.autoscientist.broad_map import _load_measured_cells
     from computronium.autoscientist.defects import read_defects
 
     records = read_defects(root / "runtime_defects.jsonl")
@@ -794,7 +796,7 @@ def health_stats(root: Path) -> dict[str, object]:
         last_status[record.defect_id] = record.status
     open_defects = sum(1 for status in last_status.values() if status == "open")
 
-    rows = _load_measured_cells(root / "kb.sqlite")
+    rows = _measured_cells(root)
     bursts = {b for r in rows for b in r.bursts}
     last_burst = max(bursts) if bursts else None
     last_walltimes = [
@@ -829,7 +831,10 @@ def pareto_strip_rows(
     )
 
     ruler_table = root / "ruler_table.json"
-    df = load_cells(root / "kb.sqlite")
+    try:
+        df = load_cells(root / "kb.sqlite")
+    except Exception:  # Corrupt KB -> empty Pareto front
+        return []
     if df.empty:
         return []
     df = apply_bp_deficit(df, ruler_table, None)

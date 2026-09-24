@@ -137,7 +137,10 @@ def _load_cells_uncached(kb_path: Path, task: str | None) -> pd.DataFrame:
         return pd.DataFrame()
     # auto_embed=False: read-only load must not pay vector-store init;
     # explicit limit: query()'s default (100) silently truncated campaigns.
-    kb = KnowledgeBase(kb_path, auto_embed=False)
+    try:
+        kb = KnowledgeBase(kb_path, auto_embed=False)
+    except Exception:  # Corrupt DB -> empty
+        return pd.DataFrame()
     rows: list[AtlasRow] = []
     for entry in kb.query(limit=UNBOUNDED_ROWS):
         hp = entry.hyperparameters
