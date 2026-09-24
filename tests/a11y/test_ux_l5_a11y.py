@@ -169,24 +169,23 @@ class TestA11yAutomated:
         seed_campaign_root(root)
         holder = {"ui_mode": "explorer"}
 
-        @ui.page("/a11y_dashboard", language="en")
+        @ui.page("/a11y_dashboard", language="en-US")
         def _a11y_page() -> None:
             build_dashboard(
                 root,
                 ui_mode=holder["ui_mode"],
-                gamify=False,
                 ui_actions=False,
             )
 
         screen.open("/a11y_dashboard", timeout=30)
         _wait_for_page_source(screen.selenium, "Computronium")
-        _wait_for_page_source(screen.selenium, "Navigation")
+        _wait_for_page_source(screen.selenium, "Map")
         data = _run_axe_scan(screen.selenium)
         _assert_no_critical_or_serious(data["violations"], "explorer")
 
         holder["ui_mode"] = "lab"
         screen.open("/a11y_dashboard", timeout=30)
-        _wait_for_page_source(screen.selenium, "Navigation")
+        _wait_for_page_source(screen.selenium, "Map")
         data = _run_axe_scan(screen.selenium)
         _assert_no_critical_or_serious(data["violations"], "lab")
 

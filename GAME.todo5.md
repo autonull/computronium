@@ -1,13 +1,13 @@
 # GAME.todo5.md — One surface: the work is the reward (rev 8 — final)
 
-**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults.
+**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults. **Session C in progress** — C2 accessibility fixes applied.
 **Scope:** `computronium/ui/dashboard.py`, `panel_registry.py`, `adapters.py`, `recognition/` (dissolution), `lenses/`, `ui/components/`, CLI flags, `docs/platform/dashboard.md`, UI tests.
 **Constraint (binding):** solo builder only. Validation: structured solo protocol, n=1 bounds.
 **Boundary:** Full Computronium system access — compose, configure, launch, monitor, analyze, audit, browse, compare. No separate plans. Ledger, gallery, benchmark, history are **lenses**, not panels.
 **No XP, no points, no streaks, no leaderboards, no fantasy vocabulary. Backwards compatibility: NONE.**
 **Verification:** L4 property/behavioral + L5 solo-empirical.
 
-**Last updated:** 2026-09-24 — All UI tests passing (18/18), integration tests passing (8/8), ruff clean, pyright clean.
+**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on changed files, pyright clean on changed files.
 
 ---
 
@@ -142,7 +142,7 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 | ID | Item |
 |---|---|
 | C1 | Human copy pass: plain, technical, zero metaphor. FK tripwire. |
-| C2 | **orca + Firefox crawl:** palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast. Cert recorded. |
+| C2 | **orca + Chromium crawl:** palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast. Cert recorded. |
 | C3 | Fault injection: kill daemon, empty root, corrupt JSONL, slow UMAP. Chip transitions correct. Regression tests. |
 | C4 | **Aesthetic spec applied:** monospace data, 4px grid, semantic color, ≤150ms motion, `--quiet` density. V4 conformance. |
 
@@ -287,7 +287,16 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 - Updated test files to match new 5-panel API (removed `gamify`, `rebuild_state` parameters)
 - Fixed test assertions: console panel has no adapter (uses live WS), so `expect_data` only checks panels with adapters
 
+### Improvements This Session (2026-09-24) — Session C (Partial)
+- **C2 (accessibility):** Fixed a11y test compatibility with 5-panel API (removed deprecated `gamify` param)
+- **C2 (accessibility):** Fixed status chip color contrast — idle state "warning" badge now uses custom CSS class with WCAG AA-compliant `--color-warning` (#8b6914) instead of Quasar built-in (#f2c037, 1.69:1)
+- **C2 (accessibility):** Fixed pyright type error in a11y test (language="en-US" vs "en")
+- axe-core scan passes with 0 critical/serious violations in isolation
+
 ### Remaining Work (Sessions C–E)
-- **C1–C4:** Copy pass, accessibility crawl (orca + Firefox), fault injection, aesthetic spec
+- **C1:** Human copy pass (plain, technical, zero metaphor)
+- **C2 (remaining):** orca + Chromium crawl (palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast) — cert recording
+- **C3:** Fault injection (kill daemon, empty root, corrupt JSONL, slow UMAP); chip transitions correct; regression tests
+- **C4:** Aesthetic spec applied (monospace data, 4px grid, semantic color, ≤150ms motion, `--quiet` density); V4 conformance
 - **D:** Dogfood validation (V1, V3–V5), performance benchmarks (P1), documentation
 - **E:** Spaced transfer run (V2) — ≥3 days after D

@@ -155,18 +155,19 @@ class StatusChip:
     def _render_chip(self) -> None:
         """Render the full chip with clickable segments."""
         # State badge with aria-live on transition
-        state_colors = {
-            "running": "positive",
-            "idle": "warning",
-            "dead": "negative",
+        # Use custom CSS classes for WCAG AA contrast (Quasar built-ins fail)
+        state_classes = {
+            "running": "bg-positive text-white",
+            "idle": "bg-warning-custom text-white",
+            "dead": "bg-negative text-white",
         }
-        state_color = state_colors.get(self.data.state, "primary")
+        state_class = state_classes.get(self.data.state, "bg-primary text-white")
 
         # Check for state transition
         aria_live = "polite" if self.data.state != self._prev_state else "off"
         self._prev_state = self.data.state
 
-        ui.badge(self.data.state.upper(), color=state_color).props(
+        ui.badge(self.data.state.upper()).classes(state_class).props(
             f'aria-live="{aria_live}"'
         )
 

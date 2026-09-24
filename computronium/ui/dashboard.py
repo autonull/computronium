@@ -987,6 +987,13 @@ class DashboardApp:
         # Inject design tokens and a11y CSS
         ui.add_head_html(f"<style>{css_custom_properties()}</style>")
         ui.add_head_html(f"<style>{a11y_css()}</style>")
+        # Custom badge colors for WCAG AA contrast (Quasar built-ins fail)
+        ui.add_head_html("""
+        <style>
+        .bg-warning-custom { background-color: var(--color-warning) !important; }
+        .text-warning-custom { color: var(--color-warning) !important; }
+        </style>
+        """)
 
         # Page title
         ui.page_title("Computronium — Live Broad Map")
