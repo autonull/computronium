@@ -7,7 +7,7 @@ the new dashboard components.
 from __future__ import annotations
 
 import json
-import subprocess  # noqa: S404 (fixed arg list, no shell)
+import subprocess  # ruff: ignore[suspicious-subprocess-import] (fixed arg list, no shell)
 from pathlib import Path
 
 import pytest

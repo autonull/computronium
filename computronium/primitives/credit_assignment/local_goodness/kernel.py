@@ -71,7 +71,7 @@ def _build_covariate_stream(
     return stream, offset
 
 
-def _lemma_backward_triton(  # noqa: PLR0914
+def _lemma_backward_triton(  # ruff: ignore[too-many-locals]
     free_activations: list[torch.Tensor],
     nudged_activations: list[torch.Tensor],
     weights: list[torch.Tensor],

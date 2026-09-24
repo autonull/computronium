@@ -250,7 +250,7 @@ def _rollout_states(
             _, delta, _logits = _cell_forward(p, states, labels)
         delta_grid = _unflatten(delta, targets.size(0), *targets.shape[1:])
         # non-augmented: states enters the autograd graph mid-rollout
-        states = states + delta_grid * mask.unsqueeze(1)  # noqa: PLR6104
+        states = states + delta_grid * mask.unsqueeze(1)  # ruff: ignore[non-augmented-assignment]
         if grad:
             step_losses.append((states - target_states).pow(2).mean())
     return states, step_losses
@@ -304,7 +304,7 @@ def _distill_init(  # noqa: PLR0914 - probe harness; locals are orthogonal modes
                 X.append(teacher)
             mask = (torch.rand(targets.shape, generator=gen) < 0.5).float()
             # non-augmented: teacher enters the autograd-free distill set
-            teacher = teacher + (target_states - teacher).clamp(  # noqa: PLR6104
+            teacher = teacher + (target_states - teacher).clamp(  # ruff: ignore[non-augmented-assignment]
                 -DELTA_SCALE, DELTA_SCALE
             ) * mask.unsqueeze(1)
     else:

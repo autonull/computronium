@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -188,8 +189,8 @@ class DashboardApp:
             set_mode(ui_mode)  # type: ignore[arg-type]
 
         # State
-        self.current_panel = PanelLenses.MAP
-        self.current_lens = MapLens.MAP
+        self.current_panel: str = PanelLenses.MAP
+        self.current_lens: str = MapLens.MAP
         self.cache = EmbedCache()
         self.client = DaemonClient(daemon_url) if daemon_url else None
         self.objectives = _objectives_from_heartbeat(root)
@@ -612,7 +613,35 @@ class DashboardApp:
 
     def _restore_url_state(self) -> None:
         """Restore panel/lens from URL hash on load."""
-        # This would be called on initial load to parse window.location.hash
+        # Only works with active client context (not in headless tests)
+
+        async def _restore() -> None:
+            try:
+                await self._apply_hash_from_js()
+            except Exception as exc:
+                logger.debug("URL hash restore failed: %s", exc)
+
+        with suppress(AssertionError, RuntimeError):
+            ui.timer(0.1, _restore, once=True)
+
+    async def _apply_hash_from_js(self) -> None:
+        """Extract and apply panel/lens from window.location.hash."""
+        hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
+        if not hash_str:
+            return
+        parts = hash_str.split(":", 1)
+        panel = parts[0]
+        lens = parts[1] if len(parts) > 1 else None
+        if panel not in {s.key for s in panel_registry.all_specs()}:
+            return
+        self.current_panel = panel
+        if lens and panel in _LENS_PANELS:
+            self.current_lens = lens
+        else:
+            spec = panel_registry.get(panel)
+            self.current_lens = spec.default_lens if spec and spec.default_lens else ""
+        self._render_current_panel()
+        self._update_url_state()
 
     @staticmethod
     def _push_data(panel: Any, data: object, /, **kwargs: object) -> None:
@@ -1003,6 +1032,9 @@ class DashboardApp:
 
         # Main content area
         self._build_main_content()
+
+        # Restore panel/lens from URL hash
+        self._restore_url_state()
 
         # Initial render
         self._render_current_panel()

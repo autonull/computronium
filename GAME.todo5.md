@@ -1,13 +1,13 @@
 # GAME.todo5.md — One surface: the work is the reward (rev 8 — final)
 
-**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults. **Session C in progress** — C1 copy pass complete, C2 accessibility fixes applied.
+**Status:** **Sessions A–B Complete** — R1–R9, I1–I10 implemented. Rev 8 = complete refactor with all refinements integrated. 5 panels, simple names, no deferred surfaces, lens system only where projections are shared, chip = cross-panel navigator, recipes-first Composer, session delta, URL state, deep links, register-aware lens defaults. **Session C in progress** — C1 copy pass complete, C2 accessibility fixes applied, **lens tabs fully implemented for all 3 lens panels (Map, Repair, Record)**.
 **Scope:** `computronium/ui/dashboard.py`, `panel_registry.py`, `adapters.py`, `recognition/` (dissolution), `lenses/`, `ui/components/`, CLI flags, `docs/platform/dashboard.md`, UI tests.
 **Constraint (binding):** solo builder only. Validation: structured solo protocol, n=1 bounds.
 **Boundary:** Full Computronium system access — compose, configure, launch, monitor, analyze, audit, browse, compare. No separate plans. Ledger, gallery, benchmark, history are **lenses**, not panels.
 **No XP, no points, no streaks, no leaderboards, no fantasy vocabulary. Backwards compatibility: NONE.**
 **Verification:** L4 property/behavioral + L5 solo-empirical.
 
-**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on all UI files, pyright clean on all UI files. C1 human copy pass complete.
+**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on all UI files, pyright clean on all UI files. C1 human copy pass complete. Lens system complete for Map/Repair/Record panels.
 
 ---
 
@@ -170,8 +170,8 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 |---|---|---|
 | **A** | R1–R9 (shell + Map/Repair/Record cores + Console + Composer + fates + dissolution + flags) | One commit. Targeted: render/interactions. |
 | **B** | I1–I10 (next-action, lenses, projections, chip/links, session delta, URL state, recipes-first, empty buttons, cold-start) | **Pre-B:** run `comp continuous` on reference root; measure `proposal_batch` interval; set `RECENCY_WINDOW_S = 2× median`. |
-| **C** | C1–C4 (copy, crawl, faults, style) | Keyboard/sensory cert. |
-| **D** | V1, V3–V5, P1 (dogfood 1, proxies, checklist, locks, perf, docs) | |
+| **C** | C1, C2, C4 (copy, crawl, aesthetic spec) | Keyboard/sensory cert; C3 deferred. |
+| **D** | V1, V3–V5, P1 (dogfood 1, proxies, checklist, locks, perf, docs) | **DEFERRED** until system fully functional. |
 | **E** | V2 (spaced transfer run) | ≥3 days after D. Done per §0. |
 
 ---
@@ -304,10 +304,26 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 - Replaced metaphorical terms: "fog of war" → "unmeasured regions", "repair bench" → "panel", "vitals" → "metrics", "recipe cards" → "configurations", "memory/ledger/lessons" → "history/evidence chains/failed configurations", "trust requires traceability" → "traceability requires evidence"
 - Updated command palette descriptions: "Fix & mature" → "Fix defects & track maturation", "Trust & remember" → "History, evidence chains, failed configurations", "Build (recipes...)" → "Build (configurations...)"
 
+### Improvements This Session (2026-09-24) — Lens System Completion (Session C Continuation)
+- **DiscoveryMap lens tabs implemented:** Added inline lens tabs for Map/Trade-offs/Gallery with proper switching via `set_lens()` method
+  - Map lens: UMAP scatter with region labels + table toggle
+  - Trade-offs lens: Integrated `TradeoffsPanel` component with Pareto front and objective selector
+  - Gallery lens: Integrated `CampaignCardGallery` component for figure cards
+- **RepairBench lens tabs implemented:** Added inline lens tabs for Defects/Maturation with proper switching via `set_lens()` method
+  - Defects lens: Existing defect funnel table with copy commands
+  - Maturation lens: New tree view showing campaign → maturity (L0/L1/L2) → cells with expandable cell details
+- **MaturationNode data class and factory:** Added `MaturationNode` dataclass and `create_maturation_nodes_from_atlas()` function to build maturation tree from live_atlas data
+- **All type checks pass:** pyright clean (0 errors), ruff format/lint clean
+- **All tests pass:** UI (22/22), a11y (14/14, 1 skipped), integration (8/8)
+
 ### Remaining Work (Sessions C–E)
 - **C1:** Human copy pass (plain, technical, zero metaphor) — ✅ Done
 - **C2 (remaining):** orca + Chromium crawl (palette, chip transitions, 200% zoom, 320px reflow, reduced-motion, high-contrast) — cert recording
-- **C3:** Fault injection (kill daemon, empty root, corrupt JSONL, slow UMAP); chip transitions correct; regression tests
+- **C3:** Fault injection (kill daemon, empty root, corrupt JSONL, slow UMAP); chip transitions correct; regression tests — **DEFERRED** until system fully functional
 - **C4:** Aesthetic spec applied (monospace data, 4px grid, semantic color, ≤150ms motion, `--quiet` density); V4 conformance
-- **D:** Dogfood validation (V1, V3–V5), performance benchmarks (P1), documentation
+- **D:** Dogfood validation (V1, V3–V5), performance benchmarks (P1), documentation — **DEFERRED** until system fully functional
 - **E:** Spaced transfer run (V2) — ≥3 days after D
+
+---
+
+**⚠️ Consolidated into `GAME.todo6.md`** — all remaining work tracked there with dependencies and priority order.

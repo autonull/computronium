@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Mapping  # noqa: TC003 (used at runtime for isinstance)
+from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import] (used at runtime for isinstance)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 

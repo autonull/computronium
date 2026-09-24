@@ -14,7 +14,7 @@ from typing import Any
 
 import torch
 
-# ruff: file-ignore[S404,S607] (subprocess import/run with fixed args is intentional for git SHA detection)
+# ruff: file-ignore[suspicious-subprocess-import,start-process-with-partial-path] (subprocess import/run with fixed args is intentional for git SHA detection)
 
 
 def _get_git_sha() -> str | None:

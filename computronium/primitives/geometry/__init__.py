@@ -11,7 +11,7 @@ import importlib
 from typing import Any
 
 # Primitive modules that can be directly accessed
-_PRIMITIVES: dict[str, str] = {  # noqa: RUF067
+_PRIMITIVES: dict[str, str] = {  # ruff: ignore[non-empty-init-module]
     "tile_mesh": "tile_mesh",
     "feedforward_dag": "feedforward_dag",
     "recurrent_attractor": "recurrent_attractor",
@@ -45,4 +45,4 @@ def __dir__() -> list[str]:
     ])
 
 
-__all__: list[str] = sorted([*_PRIMITIVES.keys()])  # noqa: PLE0605
+__all__: list[str] = sorted([*_PRIMITIVES.keys()])  # ruff: ignore[invalid-all-format]

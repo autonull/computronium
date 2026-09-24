@@ -8,7 +8,7 @@ Usage:
     uv run python scripts/generate_docs.py --id primitive.state_dynamics.energy_minimization --output docs/generated/
 """
 
-# ruff: noqa: S404,S607
+# ruff: file-ignore[suspicious-subprocess-import, start-process-with-partial-path]
 import argparse
 import pathlib
 import subprocess  # needed for git SHA and matrix.py invocation

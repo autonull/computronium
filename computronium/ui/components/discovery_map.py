@@ -1,12 +1,18 @@
-"""Discovery Map component (M1.4) — UMAP atlas with fog-of-war, region labels, shape encoding."""
+"""Discovery Map component (M1.4) — UMAP atlas with fog-of-war, region labels, shape encoding.
+
+Lenses: Map (UMAP scatter), Trade-offs (Pareto front), Gallery (figure cards).
+"""
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
+from computronium.ui.components.campaign_card import CampaignCardGallery
+from computronium.ui.components.tradeoffs_panel import TradeoffsPanel
 from computronium.ui.design_tokens import (
     ICONS,
     MAX_RENDERED_ROWS,
@@ -14,6 +20,8 @@ from computronium.ui.design_tokens import (
 from computronium.ui.mode_toggle import BasePanel
 
 if TYPE_CHECKING:
+    from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]
+
     from plotly.graph_objects import Figure as go_Figure
 
     from computronium.ui.adapters import DiscoveryMapData
@@ -53,7 +61,13 @@ class MapRegion:
 
 
 class DiscoveryMap(BasePanel):
-    """Discovery Map panel with fog-of-war, region labels, and shape-redundant markers."""
+    """Discovery Map panel with fog-of-war, region labels, and shape-redundant markers.
+
+    Lenses:
+    - Map: UMAP scatter with region labels, shape = outcome
+    - Trade-offs: Pareto front + dominated points, objective selector
+    - Gallery: Figure cards (thumbnail + metadata)
+    """
 
     def __init__(
         self,
@@ -62,6 +76,11 @@ class DiscoveryMap(BasePanel):
         regions: list[MapRegion] | None = None,
         fog_coverage_pct: float = 0.0,
         atlas_figure: go_Figure | None = None,
+        # Trade-offs data
+        pareto_cells: list | None = None,
+        ruler_metrics: dict[str, float] | None = None,
+        # Gallery data
+        campaigns_dir: Path | str | None = None,
     ) -> None:
         super().__init__(
             panel_key="discovery_map",
@@ -87,55 +106,122 @@ class DiscoveryMap(BasePanel):
         self.regions = regions or []
         self.fog_coverage_pct = fog_coverage_pct
         self.atlas_figure = atlas_figure
-        self._figure_container: ui.element = ui.column().classes("w-full hidden")
+
+        # Lens state
+        self._active_lens = "map"  # "map" | "tradeoffs" | "gallery"
+        self._lens_containers: dict[str, ui.element] = {}
+        self._lens_tabs: Any = None
+        self._tab_map: Any = None
+        self._tab_tradeoffs: Any = None
+        self._tab_gallery: Any = None
+
+        # Trade-offs data
+        self._tradeoffs_panel = TradeoffsPanel(
+            cells=pareto_cells or [],
+            ruler_metrics=ruler_metrics or {},
+        )
+
+        # Gallery data
+        self._gallery = CampaignCardGallery(campaigns_dir) if campaigns_dir else None
+
+        # Map view containers (for Map lens)
+        self._figure_container: ui.element = ui.column().classes("w-full")
         self._table_container: ui.element = ui.column().classes("w-full hidden")
         self._show_table = False
 
     def render(self) -> ui.element:
-        """Render the Discovery Map panel."""
+        """Render the Discovery Map panel with lens tabs."""
         with ui.column().classes("w-full gap-4") as panel:
-            # Header with title, mode badge, and "What am I looking at?" button
             self.render_header("atlas")
 
-            # Fog-of-war banner
-            with ui.row().classes("w-full items-center gap-2"):
-                ui.icon(ICONS["fog"]).classes("text-2xl")
-                ui.label(
-                    f"{self.tr('fog_of_war')}: "
-                    f"{self.tr('region_charted')} {self.fog_coverage_pct:.0f}%"
-                ).classes("text-body")
-                if self.fog_coverage_pct < 100:
-                    ui.label(
-                        f"({100 - self.fog_coverage_pct:.0f}% {self.tr('fog_of_war')})"
-                    ).classes("text-caption text-grey-8")
+            # Lens tabs
+            with ui.tabs().classes("w-full") as tabs:
+                self._tab_map = ui.tab("Map", icon=ICONS.get("map", "map"))
+                self._tab_tradeoffs = ui.tab(
+                    "Trade-offs", icon=ICONS.get("tradeoffs", "balance")
+                )
+                self._tab_gallery = ui.tab(
+                    "Gallery", icon=ICONS.get("gallery", "photo_library")
+                )
 
-            # View toggle: Map / Table
-            with ui.row().classes("w-full items-center justify-between"):
-                ui.label().classes("flex-1")  # Spacer
-                with ui.row().classes("items-center gap-2"):
-                    ui.label(self.tr("view")).classes("text-sm text-grey-8")
-                    ui.switch(
-                        value=self._show_table,
-                        on_change=lambda e: self._toggle_view(bool(e.value)),
-                    ).props(f'size="sm" aria-label="{self.tr("view")}"')
+            self._lens_tabs = tabs
 
-            # Map view
-            self._figure_container.classes(
-                remove="hidden" if not self._show_table else "",
-                add="hidden" if self._show_table else "",
-            )
-            with self._figure_container:
-                self._render_map()
+            with ui.tab_panels(
+                tabs, value=self._get_tab_for_lens(self._active_lens)
+            ).classes("w-full"):
+                # Map lens
+                with ui.tab_panel(self._tab_map):
+                    self._lens_containers["map"] = ui.column().classes("w-full")
+                    with self._lens_containers["map"]:
+                        self._render_map_lens()
 
-            # Table view
-            self._table_container.classes(
-                remove="hidden" if self._show_table else "",
-                add="hidden" if not self._show_table else "",
-            )
-            with self._table_container:
-                self._render_table()
+                # Trade-offs lens
+                with ui.tab_panel(self._tab_tradeoffs):
+                    self._lens_containers["tradeoffs"] = ui.column().classes("w-full")
+                    with self._lens_containers["tradeoffs"]:
+                        self._tradeoffs_panel.render()
+
+                # Gallery lens
+                with ui.tab_panel(self._tab_gallery):
+                    self._lens_containers["gallery"] = ui.column().classes("w-full")
+                    with self._lens_containers["gallery"]:
+                        if self._gallery:
+                            self._gallery.render()
+                        else:
+                            ui.label("No campaign gallery available.").classes(
+                                "text-grey text-center p-8"
+                            )
 
         return panel
+
+    def _get_tab_for_lens(self, lens: str) -> Any:
+        """Get the tab element for a lens."""
+        tab_map = {
+            "map": getattr(self, "_tab_map", None),
+            "tradeoffs": getattr(self, "_tab_tradeoffs", None),
+            "gallery": getattr(self, "_tab_gallery", None),
+        }
+        return tab_map.get(lens)
+
+    def _render_map_lens(self) -> None:
+        """Render the Map lens (UMAP + table toggle)."""
+        # Fog-of-war banner
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon(ICONS["fog"]).classes("text-2xl")
+            ui.label(
+                f"{self.tr('fog_of_war')}: "
+                f"{self.tr('region_charted')} {self.fog_coverage_pct:.0f}%"
+            ).classes("text-body")
+            if self.fog_coverage_pct < 100:
+                ui.label(
+                    f"({100 - self.fog_coverage_pct:.0f}% {self.tr('fog_of_war')})"
+                ).classes("text-caption text-grey-8")
+
+        # View toggle: Map / Table
+        with ui.row().classes("w-full items-center justify-between"):
+            ui.label().classes("flex-1")  # Spacer
+            with ui.row().classes("items-center gap-2"):
+                ui.label(self.tr("view")).classes("text-sm text-grey-8")
+                ui.switch(
+                    value=self._show_table,
+                    on_change=lambda e: self._toggle_view(bool(e.value)),
+                ).props(f'size="sm" aria-label="{self.tr("view")}"')
+
+        # Map view
+        self._figure_container.classes(
+            remove="hidden" if not self._show_table else "",
+            add="hidden" if self._show_table else "",
+        )
+        with self._figure_container:
+            self._render_map()
+
+        # Table view
+        self._table_container.classes(
+            remove="hidden" if self._show_table else "",
+            add="hidden" if not self._show_table else "",
+        )
+        with self._table_container:
+            self._render_table()
 
     def _toggle_view(self, show_table: bool) -> None:
         """Toggle between map and table view."""
@@ -259,19 +345,21 @@ class DiscoveryMap(BasePanel):
     def _refresh(self) -> None:
         """Refresh panel on mode change."""
         # Guard against deleted containers (headless test cleanup)
-        try:
+        with suppress(AssertionError, RuntimeError):
             if self._figure_container:
                 self._figure_container.clear()
                 with self._figure_container:
                     self._render_map()
-        except AssertionError, RuntimeError:
-            pass
-        try:
+        with suppress(AssertionError, RuntimeError):
             if self._table_container:
                 self._table_container.clear()
                 with self._table_container:
                     self._render_table()
-        except AssertionError, RuntimeError:
+        # Refresh tradeoffs panel
+        with suppress(AssertionError, RuntimeError, AttributeError):
+            self._tradeoffs_panel._refresh()
+        # Refresh gallery (no _refresh method, static)
+        with suppress(AssertionError, RuntimeError):
             pass
 
     def update_data(
@@ -282,6 +370,11 @@ class DiscoveryMap(BasePanel):
         regions: list[MapRegion] | None = None,
         fog_coverage_pct: float | None = None,
         atlas_figure: go_Figure | None = None,
+        # Trade-offs data
+        pareto_cells: list | None = None,
+        ruler_metrics: dict[str, float] | None = None,
+        # Gallery data
+        campaigns_dir: Path | str | None = None,
     ) -> None:
         """Update panel data and re-render."""
         if data is not None:
@@ -289,6 +382,9 @@ class DiscoveryMap(BasePanel):
             regions = data.regions
             fog_coverage_pct = data.fog_coverage_pct
             atlas_figure = data.atlas_figure
+            pareto_cells = getattr(data, "pareto_cells", None)
+            ruler_metrics = getattr(data, "ruler_metrics", None)
+            campaigns_dir = getattr(data, "campaigns_dir", None)
         if specimens is not None:
             self.specimens = specimens
         if regions is not None:
@@ -297,12 +393,23 @@ class DiscoveryMap(BasePanel):
             self.fog_coverage_pct = fog_coverage_pct
         if atlas_figure is not None:
             self.atlas_figure = atlas_figure
+        if pareto_cells is not None:
+            self._tradeoffs_panel.update_cells(pareto_cells)
+        if ruler_metrics is not None:
+            self._tradeoffs_panel.ruler_metrics = ruler_metrics
+        if campaigns_dir is not None and self._gallery:
+            self._gallery = CampaignCardGallery(campaigns_dir)
         self._refresh()
 
     def set_lens(self, lens: str) -> None:
         """Set active lens (Map/Trade-offs/Gallery)."""
-        # DiscoveryMap handles view toggle internally
-        # Could switch between map/table view based on lens
+        if lens not in {"map", "tradeoffs", "gallery"}:
+            lens = "map"
+        self._active_lens = lens
+        if self._lens_tabs:
+            tab = self._get_tab_for_lens(lens)
+            if tab:
+                self._lens_tabs.value = tab
 
 
 def create_discovery_map_from_atlas(

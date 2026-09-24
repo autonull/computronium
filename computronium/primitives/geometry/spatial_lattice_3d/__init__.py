@@ -20,7 +20,7 @@ from .kernel import is_available
 from .reference import forward as reference_forward
 from .spec import SPEC
 
-_register(SPEC)  # noqa: RUF067
+_register(SPEC)  # ruff: ignore[non-empty-init-module]
 
 __all__ = [
     "SPEC",

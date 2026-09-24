@@ -22,4 +22,4 @@ __all__ = [
 ]
 
 # Register this primitive's spec
-_register(SPEC)  # noqa: RUF067
+_register(SPEC)  # ruff: ignore[non-empty-init-module]

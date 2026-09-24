@@ -153,7 +153,7 @@ def _quantify_disagreement(
     return reports
 
 
-def calibrate_demo_harvest(  # noqa: PLR0913
+def calibrate_demo_harvest(  # ruff: ignore[too-many-arguments]
     *,
     input_dim: int = 784,
     hidden_dims: tuple[int, ...] = (32,),

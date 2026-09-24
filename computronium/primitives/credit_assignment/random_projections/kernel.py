@@ -27,7 +27,7 @@ def is_available() -> bool:
     return kernel_available(KERNEL_TECHNOLOGY) and HAS_TRITON_FA
 
 
-def step(case: Any) -> list[Any]:  # noqa: PLR0914
+def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
     """Execute one accelerated step using Triton-accelerated FA backward pass."""
     if not is_available():
         from .reference import step as reference_step

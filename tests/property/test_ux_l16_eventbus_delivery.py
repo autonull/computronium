@@ -47,7 +47,7 @@ def test_async_delivery_publish_async() -> None:
         bus = EventBus()
         received: list[str] = []
 
-        async def handler(event: WebSocketEvent) -> None:  # noqa: RUF029
+        async def handler(event: WebSocketEvent) -> None:  # ruff: ignore[unused-async]
             received.append(event.topic)
 
         bus.subscribe_async(WebSocketEvent, handler)

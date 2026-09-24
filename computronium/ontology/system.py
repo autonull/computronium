@@ -481,18 +481,17 @@ class SystemConfig:
         if self.dynamics.dynamics_type in (
             "predictive_settling",
             "error_predictive_coding",
+        ) and self.credit.credit_type not in (
+            "thermodynamic_contrast",
+            "equilibrium",
+            "local_goodness",
+            "forward_only",
         ):
-            if self.credit.credit_type not in (
-                "thermodynamic_contrast",
-                "equilibrium",
-                "local_goodness",
-                "forward_only",
-            ):
-                raise ValueError(
-                    f"{self.dynamics.dynamics_type} dynamics requires "
-                    f"thermodynamic_contrast, local_goodness, or forward_only credit, "
-                    f"got {self.credit.credit_type!r}"
-                )
+            raise ValueError(
+                f"{self.dynamics.dynamics_type} dynamics requires "
+                f"thermodynamic_contrast, local_goodness, or forward_only credit, "
+                f"got {self.credit.credit_type!r}"
+            )
 
     def _validate_pc_alm_dynamics(self) -> None:
         """PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast) and layered geometry."""
@@ -593,22 +592,24 @@ class SystemConfig:
 
     def _validate_complex_substrate_credit(self) -> None:
         """Complex substrate works best with thermodynamic contrast or backprop."""
-        if self.substrate.precision == "float32" and getattr(
-            self.substrate, "_complex_emulated", False
-        ):
-            if self.credit.credit_type not in (
+        if (
+            self.substrate.precision == "float32"
+            and getattr(self.substrate, "_complex_emulated", False)
+            and self.credit.credit_type
+            not in (
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
                 "backprop",
-            ):
-                warnings.warn(
-                    f"Complex substrate used with {self.credit.credit_type!r} credit. "
-                    f"Best results with thermodynamic_contrast (holomorphic EqProp) "
-                    f"or gradient (holomorphic backprop).",
-                    UserWarning,
-                    stacklevel=2,
-                )
+            )
+        ):
+            warnings.warn(
+                f"Complex substrate used with {self.credit.credit_type!r} credit. "
+                f"Best results with thermodynamic_contrast (holomorphic EqProp) "
+                f"or gradient (holomorphic backprop).",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def _validate_quantum_substrate_dynamics(self) -> None:
         """Quantum substrate requires compatible dynamics and beta matching."""
@@ -650,20 +651,19 @@ class SystemConfig:
             self.substrate.precision == "float32"
             and self.substrate.sparsity == 0.0
             and self.substrate.weight_bounds == (-1.0, 1.0)
+        ) and self.credit.credit_type not in (
+            "thermodynamic_contrast",
+            "equilibrium",
+            "gradient",
+            "backprop",
         ):
-            if self.credit.credit_type not in (
-                "thermodynamic_contrast",
-                "equilibrium",
-                "gradient",
-                "backprop",
-            ):
-                warnings.warn(
-                    f"Ternary-like substrate used with {self.credit.credit_type!r} credit. "
-                    f"Best results with thermodynamic_contrast (Ternary EqProp) "
-                    f"or gradient (Ternary backprop with STE).",
-                    UserWarning,
-                    stacklevel=2,
-                )
+            warnings.warn(
+                f"Ternary-like substrate used with {self.credit.credit_type!r} credit. "
+                f"Best results with thermodynamic_contrast (Ternary EqProp) "
+                f"or gradient (Ternary backprop with STE).",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def _validate_diffusion_substrate_noise(self) -> None:
         """Diffusion dynamics requires substrate noise_level > 0."""
