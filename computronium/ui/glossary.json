@@ -190,6 +190,14 @@
       "explorer": "Compatibility check",
       "lab": "SystemConfig.validate()"
     },
+    "composer": {
+      "explorer": "Composer",
+      "lab": "Composer"
+    },
+    "console": {
+      "explorer": "Console",
+      "lab": "Console"
+    },
     "consolidation_cost": {
       "explorer": "Cost to make changes permanent",
       "lab": "Consolidation cost"
@@ -269,6 +277,10 @@
     "discovery_map": {
       "explorer": "Map",
       "lab": "Discovery Map"
+    },
+    "map": {
+      "explorer": "Map",
+      "lab": "Map"
     },
     "diverged": {
       "explorer": "Training diverged (NaN loss)",
@@ -802,6 +814,10 @@
       "explorer": "Personal Bests",
       "lab": "Records"
     },
+    "record": {
+      "explorer": "Record",
+      "lab": "Record"
+    },
     "recurrent_attractor": {
       "explorer": "Recurrent attractor (Hopfield/EqProp)",
       "lab": "RecurrentAttractor geometry"
@@ -833,6 +849,10 @@
     "repair_bench": {
       "explorer": "Repair Bench",
       "lab": "Repair Bench"
+    },
+    "repair": {
+      "explorer": "Repair",
+      "lab": "Repair"
     },
     "repair_crew": {
       "explorer": "Repair Crew",
@@ -965,6 +985,10 @@
     "thermodynamic_contrast": {
       "explorer": "Energy-based local contrast",
       "lab": "ThermodynamicContrast credit"
+    },
+    "ticker": {
+      "explorer": "Ticker",
+      "lab": "Ticker"
     },
     "tier": {
       "explorer": "Change type",

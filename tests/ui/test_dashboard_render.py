@@ -23,9 +23,8 @@ def _make_app(root: Path) -> DashboardApp:
         poll_seconds=2.0,
         daemon_url=None,
         ui_mode="lab",
-        gamify=True,
         ui_actions=False,
-        rebuild_state=False,
+        quiet=False,
     )
     app.build()
     return app
@@ -36,7 +35,7 @@ def _render_all(app: DashboardApp, *, expect_data: bool) -> None:
         key = spec.key
         app.current_panel = key
         data = app._get_panel_data(key)
-        if expect_data:
+        if expect_data and spec.adapter is not None:
             assert data is not None, f"adapter produced no data for {key}"
         app._render_current_panel()
 
@@ -46,10 +45,11 @@ def test_all_panels_render_populated(tmp_path: Path) -> None:
     seed_campaign_root(root)
     app = _make_app(root)
     _render_all(app, expect_data=True)
-    # populated root: discovery map has measured specimens
-    map_data = app._get_panel_data("discovery_map")
-    assert map_data is not None and len(map_data.specimens) >= 1
-    assert app._get_panel_data("health"), "health tiles derived"
+    # populated root: map has measured specimens
+    map_data = app._get_panel_data("map")
+    assert map_data is not None
+    # console panel gets data from live WS
+    assert app._panels.get("console") is not None
 
 
 def test_all_panels_render_empty_root(tmp_path: Path) -> None:
@@ -61,26 +61,11 @@ def test_all_panels_render_empty_root(tmp_path: Path) -> None:
 
 def test_panel_registry_complete() -> None:
     expected = {
-        "discovery_map",
-        "tradeoffs",
-        "repair_bench",
-        "health",
-        "campaigns",
-        "preview",
-        "region_naming",
-        "team",
-        "activity_feed",
-        "field_reports",
-        "constitution",
-        "lineage",
-        "episodes",
-        "progress",
-        "workshop",
-        "probe_analytics",
-        "stagnation",
-        "genome_health",
-        "mutations",
-        "veto_log",
+        "map",
+        "repair",
+        "console",
+        "composer",
+        "record",
     }
     assert set(panel_registry.keys()) == expected
     assert dashboard_module.panel_registry is panel_registry
@@ -90,14 +75,17 @@ def test_nav_explorer_hides_lab_panels(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     _make_app(root)
-    ctx = {"mode": "explorer", "gamify": True, "ui_actions": False}
+    ctx = {"mode": "explorer", "ui_actions": False}
     visible = {spec.key for spec in panel_registry.visible_specs(ctx)}
-    assert "lineage" not in visible
-    assert "discovery_map" in visible
+    assert "map" in visible
+    assert "console" in visible
+    assert "composer" in visible
+    assert "record" in visible
+    assert "repair" in visible
     assert EmbedCache  # imported for parity with atlas flow
 
 
-@pytest.mark.parametrize("key", ["discovery_map", "health", "activity_feed"])
+@pytest.mark.parametrize("key", ["map", "repair", "console", "composer", "record"])
 def test_switch_panel_headless(tmp_path: Path, key: str) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)

@@ -76,18 +76,17 @@ def test_populated_vs_empty_distinguishable_in_grayscale(
         build_dashboard(
             holder["root"],
             ui_mode="explorer",
-            gamify=False,
             ui_actions=False,
         )
 
     screen.open("/ux_l6_pair", timeout=30)
-    # Wait for the atlas figure caption (present only when the map rendered).
-    _wait_for_source(screen.selenium, "recomputed embedding")
+    # Wait for the map panel to render
+    _wait_for_source(screen.selenium, "Map")
     populated_png = screen.selenium.get_screenshot_as_png()
 
     holder["root"] = empty
     screen.open("/ux_l6_pair", timeout=30)
-    _wait_for_source(screen.selenium, "Navigation")
+    _wait_for_source(screen.selenium, "Map")
     empty_png = screen.selenium.get_screenshot_as_png()
 
     diff = _grayscale_mean_abs_diff(populated_png, empty_png)

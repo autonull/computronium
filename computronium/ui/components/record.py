@@ -110,28 +110,28 @@ class Record(BasePanel):
 
             # Lens tabs
             with ui.tabs().classes("w-full") as tabs:
-                tab_history = ui.tab("History", icon=ICONS.get("history", "history"))
-                tab_ledger = ui.tab("Ledger", icon=ICONS.get("ledger", "receipt_long"))
-                tab_lessons = ui.tab("Lessons", icon=ICONS.get("lessons", "school"))
+                self._tab_history = ui.tab("History", icon=ICONS.get("history", "history"))
+                self._tab_ledger = ui.tab("Ledger", icon=ICONS.get("ledger", "receipt_long"))
+                self._tab_lessons = ui.tab("Lessons", icon=ICONS.get("lessons", "school"))
 
             self._lens_tabs = tabs
 
             with ui.tab_panels(
                 tabs, value=self._get_tab_for_lens(self._active_lens)
             ).classes("w-full"):
-                with ui.tab_panel(tab_history):
+                with ui.tab_panel(self._tab_history):
                     self._lens_panels[RecordLens.HISTORY] = ui.column().classes(
                         "w-full"
                     )
                     with self._lens_panels[RecordLens.HISTORY]:
                         self._render_history()
 
-                with ui.tab_panel(tab_ledger):
+                with ui.tab_panel(self._tab_ledger):
                     self._lens_panels[RecordLens.LEDGER] = ui.column().classes("w-full")
                     with self._lens_panels[RecordLens.LEDGER]:
                         self._render_ledger()
 
-                with ui.tab_panel(tab_lessons):
+                with ui.tab_panel(self._tab_lessons):
                     self._lens_panels[RecordLens.LESSONS] = ui.column().classes(
                         "w-full"
                     )
@@ -142,10 +142,13 @@ class Record(BasePanel):
 
     def _get_tab_for_lens(self, lens: RecordLens) -> Any:
         """Get the tab element for a lens."""
-        # This would need to store tab references; for now return first
-        if hasattr(self._lens_tabs, "_props"):
-            return next(iter(self._lens_tabs._props["value"]))
-        return None
+        # Return the appropriate tab element based on lens
+        tab_map = {
+            RecordLens.HISTORY: getattr(self, "_tab_history", None),
+            RecordLens.LEDGER: getattr(self, "_tab_ledger", None),
+            RecordLens.LESSONS: getattr(self, "_tab_lessons", None),
+        }
+        return tab_map.get(lens)
 
     def _render_history(self) -> None:
         """Render the History lens (timeline/tree)."""

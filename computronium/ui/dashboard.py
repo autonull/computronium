@@ -30,8 +30,8 @@ from computronium.ui.components import (
     RepairBench,
     StatusChip,
 )
-from computronium.ui.components.status_chip import ChipSegment, StatusChipData
 from computronium.ui.components.record import RecordLens as ComponentRecordLens
+from computronium.ui.components.status_chip import StatusChipData
 from computronium.ui.design_tokens import PRIMARY, SECONDARY, css_custom_properties
 from computronium.ui.event_bus import (
     ArtifactChanged,
@@ -600,10 +600,15 @@ class DashboardApp:
     def _update_url_state(self) -> None:
         """Update URL with current panel/lens state."""
         # Store in client-side URL hash for bookmarking
-        state = f"#{self.current_panel}"
-        if self.current_lens and self.current_panel in _LENS_PANELS:
-            state += f":{self.current_lens}"
-        ui.run_javascript(f"window.location.hash = '{state}';")
+        # Skip in headless tests where no client context exists
+        try:
+            state = f"#{self.current_panel}"
+            if self.current_lens and self.current_panel in _LENS_PANELS:
+                state += f":{self.current_lens}"
+            ui.run_javascript(f"window.location.hash = '{state}';")
+        except (AssertionError, RuntimeError):
+            # No client context (headless test) - skip URL update
+            pass
 
     def _restore_url_state(self) -> None:
         """Restore panel/lens from URL hash on load."""

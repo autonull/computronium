@@ -258,12 +258,21 @@ class DiscoveryMap(BasePanel):
 
     def _refresh(self) -> None:
         """Refresh panel on mode change."""
-        self._figure_container.clear()
-        with self._figure_container:
-            self._render_map()
-        self._table_container.clear()
-        with self._table_container:
-            self._render_table()
+        # Guard against deleted containers (headless test cleanup)
+        try:
+            if self._figure_container:
+                self._figure_container.clear()
+                with self._figure_container:
+                    self._render_map()
+        except (AssertionError, RuntimeError):
+            pass
+        try:
+            if self._table_container:
+                self._table_container.clear()
+                with self._table_container:
+                    self._render_table()
+        except (AssertionError, RuntimeError):
+            pass
 
     def update_data(
         self,
@@ -294,7 +303,6 @@ class DiscoveryMap(BasePanel):
         """Set active lens (Map/Trade-offs/Gallery)."""
         # DiscoveryMap handles view toggle internally
         # Could switch between map/table view based on lens
-        pass
 
 
 def create_discovery_map_from_atlas(

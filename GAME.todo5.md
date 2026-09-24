@@ -7,6 +7,8 @@
 **No XP, no points, no streaks, no leaderboards, no fantasy vocabulary. Backwards compatibility: NONE.**
 **Verification:** L4 property/behavioral + L5 solo-empirical.
 
+**Last updated:** 2026-09-24 — All UI tests passing (18/18), integration tests passing (8/8), ruff clean, pyright clean.
+
 ---
 
 ## 0. The standard (unchanged)
@@ -273,9 +275,19 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 - ✅ `uv run ruff check` — all lint checks pass
 - ✅ `uv run pyright` — zero type errors on changed files
 - ✅ `uv run pytest tests/ui/test_dashboard_interactions.py` — 5/5 tests pass
+- ✅ `uv run pytest tests/ui/test_dashboard_render.py` — 5/5 tests pass
+- ✅ `uv run pytest tests/ui/test_dashboard_state.py` — 5/5 tests pass
 - ✅ `uv run pytest tests/integration/test_ux_l8_gallery_compat.py` — 8/8 tests pass
 
+### Improvements This Session (2026-09-24)
+- Fixed headless test compatibility: `_update_url_state` now guards against missing NiceGUI client context
+- Fixed `Record._get_tab_for_lens` to properly store and return tab references
+- Fixed `DiscoveryMap._refresh` to handle deleted containers gracefully in headless tests
+- Added missing glossary entries for new panel names: `map`, `repair`, `console`, `composer`, `record`, `ticker`
+- Updated test files to match new 5-panel API (removed `gamify`, `rebuild_state` parameters)
+- Fixed test assertions: console panel has no adapter (uses live WS), so `expect_data` only checks panels with adapters
+
 ### Remaining Work (Sessions C–E)
-- **C1–C4:** Copy pass, accessibility crawl, fault injection, aesthetic spec
+- **C1–C4:** Copy pass, accessibility crawl (orca + Firefox), fault injection, aesthetic spec
 - **D:** Dogfood validation (V1, V3–V5), performance benchmarks (P1), documentation
 - **E:** Spaced transfer run (V2) — ≥3 days after D

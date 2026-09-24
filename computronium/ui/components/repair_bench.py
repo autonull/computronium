@@ -167,7 +167,6 @@ class RepairBench(BasePanel):
         """Set active lens (Defects/Maturation)."""
         # RepairBench currently only shows defects
         # Maturation lens would need a different view
-        pass
 
     def _refresh(self) -> None:
         """Refresh on mode change."""
