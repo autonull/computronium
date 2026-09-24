@@ -264,14 +264,14 @@ class DiscoveryMap(BasePanel):
                 self._figure_container.clear()
                 with self._figure_container:
                     self._render_map()
-        except (AssertionError, RuntimeError):
+        except AssertionError, RuntimeError:
             pass
         try:
             if self._table_container:
                 self._table_container.clear()
                 with self._table_container:
                     self._render_table()
-        except (AssertionError, RuntimeError):
+        except AssertionError, RuntimeError:
             pass
 
     def update_data(

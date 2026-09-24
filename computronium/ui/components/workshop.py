@@ -288,18 +288,18 @@ _DYNAMICS_FACTORIES: dict[str, Any] = {
     "spike_integration": lambda: StateDynamicsConfig.spike_integration(
         max_steps=50, beta=0.5
     ),
-    "instantaneous": StateDynamicsConfig.instantaneous,  # noqa: PLW0108
+    "instantaneous": StateDynamicsConfig.instantaneous,  # ruff: ignore[unnecessary-lambda]
     "diffusion": lambda: StateDynamicsConfig.diffusion(max_steps=100, beta=0.5),
     "lazy": lambda: StateDynamicsConfig.lazy(max_steps=10),
 }
 
 _PLASTICITY_FACTORIES: dict[str, Any] = {
-    "null": PlasticityConfig.null,  # noqa: PLW0108
+    "null": PlasticityConfig.null,  # ruff: ignore[unnecessary-lambda]
     "routing": lambda: PlasticityConfig.routing(gate_dim=64),
     "fast_weights": lambda: PlasticityConfig.fast_weights(
         fast_weight_dim=512, decay=0.9, learning_rate=0.1
     ),
-    "substrate_coupled": PlasticityConfig.substrate_coupled,  # noqa: PLW0108
+    "substrate_coupled": PlasticityConfig.substrate_coupled,  # ruff: ignore[unnecessary-lambda]
     "rule_state": lambda: PlasticityConfig.rule_state(num_operators=4),
     "temporal_psi": lambda: PlasticityConfig.temporal_psi(trace_decay=0.9),
     "conflict_adaptive": lambda: PlasticityConfig.conflict_adaptive(
@@ -405,28 +405,31 @@ class DialComposer:
 
     def _validate(self) -> None:
         """Run SystemConfig.validate() and display results."""
+        config = self._build_config()
         try:
-            config = self._build_config()
             config.validate()
-            self._status_label.set_text(tr("valid_combination"))
-            self._status_label.classes(remove="text-negative", add="text-positive")
-            self._detail_container.clear()
-            with self._detail_container:
-                ui.label("All cross-axis constraints satisfied").classes(
-                    "text-positive text-sm"
-                )
         except ValueError as e:
             self._status_label.set_text(tr("invalid_combination"))
             self._status_label.classes(remove="text-positive", add="text-negative")
             self._detail_container.clear()
             with self._detail_container:
                 ui.label(str(e)).classes("text-negative text-sm font-mono")
-        except Exception as e:  # noqa: BLE001
+            return
+        except Exception as e:  # ruff: ignore[blind-except]
             self._status_label.set_text("Validation error")
             self._status_label.classes(remove="text-positive", add="text-warning")
             self._detail_container.clear()
             with self._detail_container:
                 ui.label(f"Unexpected error: {e}").classes("text-warning text-sm")
+            return
+
+        self._status_label.set_text(tr("valid_combination"))
+        self._status_label.classes(remove="text-negative", add="text-positive")
+        self._detail_container.clear()
+        with self._detail_container:
+            ui.label("All cross-axis constraints satisfied").classes(
+                "text-positive text-sm"
+            )
 
     def _build_config(self) -> SystemConfig:
         """Build a SystemConfig from current selections."""

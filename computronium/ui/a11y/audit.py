@@ -61,13 +61,13 @@ def run_axe_scan(url: str, output_path: Path | None = None) -> AxeResult:
         Parsed AxeResult with violations
     """
     try:
-        result = subprocess.run(  # noqa: S603,S607
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true,start-process-with-partial-path]
             ["axe", url, "--json"],  # ruff: ignore[start-process-with-partial-path]
             capture_output=True,
             text=True,
             timeout=120,
             check=False,
-        )  # noqa: S607
+        )
     except FileNotFoundError:
         raise RuntimeError(
             "axe CLI not found. Install with: npm install -g @axe-core/cli"

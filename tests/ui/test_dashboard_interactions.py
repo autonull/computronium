@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from computronium.ui.dashboard import DashboardApp
 from computronium.ui.event_bus import ModeChanged, WebSocketEvent, event_bus
@@ -12,9 +12,6 @@ from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from computronium.ui.components.activity_feed import ActivityFeed
-    from computronium.ui.components.field_reports import FieldReports
 
 
 def _make_app(root: Path) -> DashboardApp:
@@ -58,7 +55,12 @@ def test_ws_events_route_to_feed_and_reports(tmp_path: Path) -> None:
     # instantiate the console panel (contains activity feed and field reports)
     console = app._get_panel("console")
 
-    raw = {"kind": "alert", "alert_kind": "breakthrough", "title": "Test", "body": "Test alert"}
+    raw = {
+        "kind": "alert",
+        "alert_kind": "breakthrough",
+        "title": "Test",
+        "body": "Test alert",
+    }
     app._route_ws_events(raw, now=1234.0)
     assert len(app.event_history) == 1
 

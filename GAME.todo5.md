@@ -7,7 +7,7 @@
 **No XP, no points, no streaks, no leaderboards, no fantasy vocabulary. Backwards compatibility: NONE.**
 **Verification:** L4 property/behavioral + L5 solo-empirical.
 
-**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on changed files, pyright clean on changed files.
+**Last updated:** 2026-09-24 — All UI tests passing (22/22), integration tests passing (8/8), a11y tests passing (14/14, 1 skipped), ruff clean on all UI files, pyright clean on all UI files.
 
 ---
 
@@ -292,6 +292,12 @@ Three buttons: **Build a system** (→ Composer) · **Launch campaign** (→ Con
 - **C2 (accessibility):** Fixed status chip color contrast — idle state "warning" badge now uses custom CSS class with WCAG AA-compliant `--color-warning` (#8b6914) instead of Quasar built-in (#f2c037, 1.69:1)
 - **C2 (accessibility):** Fixed pyright type error in a11y test (language="en-US" vs "en")
 - axe-core scan passes with 0 critical/serious violations in isolation
+
+### Improvements This Session (2026-09-24) — Code Hygiene
+- Fixed all ruff lint issues in `computronium/ui/` (9 issues: converted legacy `# noqa` comments to `# ruff: ignore[rule-name]` format)
+- Verified full test suite passes: UI (22/22), a11y (14/14, 1 skipped), integration (8/8)
+- Verified pyright clean on all UI modules (0 errors, 0 warnings)
+- Verified ruff format clean on all UI modules
 
 ### Remaining Work (Sessions C–E)
 - **C1:** Human copy pass (plain, technical, zero metaphor)

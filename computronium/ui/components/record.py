@@ -110,9 +110,15 @@ class Record(BasePanel):
 
             # Lens tabs
             with ui.tabs().classes("w-full") as tabs:
-                self._tab_history = ui.tab("History", icon=ICONS.get("history", "history"))
-                self._tab_ledger = ui.tab("Ledger", icon=ICONS.get("ledger", "receipt_long"))
-                self._tab_lessons = ui.tab("Lessons", icon=ICONS.get("lessons", "school"))
+                self._tab_history = ui.tab(
+                    "History", icon=ICONS.get("history", "history")
+                )
+                self._tab_ledger = ui.tab(
+                    "Ledger", icon=ICONS.get("ledger", "receipt_long")
+                )
+                self._tab_lessons = ui.tab(
+                    "Lessons", icon=ICONS.get("lessons", "school")
+                )
 
             self._lens_tabs = tabs
 

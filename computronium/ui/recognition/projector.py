@@ -82,7 +82,7 @@ def _event_hash(event: RecognitionEvent) -> str:
     return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
-def fold(events: Iterable[RecognitionEvent]) -> RecognitionState:  # noqa: C901, PLR0912, PLR0914
+def fold(events: Iterable[RecognitionEvent]) -> RecognitionState:  # ruff: ignore[complex-structure,too-many-branches,too-many-locals]
     """Pure fold: process events to build recognition state.
 
     Properties:

@@ -606,7 +606,7 @@ class DashboardApp:
             if self.current_lens and self.current_panel in _LENS_PANELS:
                 state += f":{self.current_lens}"
             ui.run_javascript(f"window.location.hash = '{state}';")
-        except (AssertionError, RuntimeError):
+        except AssertionError, RuntimeError:
             # No client context (headless test) - skip URL update
             pass
 

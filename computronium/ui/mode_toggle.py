@@ -309,8 +309,9 @@ class BasePanel(GlossaryAware):
     def _create_drawer(self) -> None:
         """Create the 'What am I looking at?' drawer."""
         self._drawer = ui.right_drawer(value=False).props("width=480")
-        with self._drawer, ui.card().classes("w-full p-4"):  # noqa: SIM117
-            ui.label(self.tr("what_am_i_looking_at")).classes("text-h6 mb-4")
+        with self._drawer:
+            with ui.card().classes("w-full p-4"):
+                ui.label(self.tr("what_am_i_looking_at")).classes("text-h6 mb-4")
 
             # Plain language
             with ui.expansion(self.tr("plain_language"), value=True).classes("w-full"):
