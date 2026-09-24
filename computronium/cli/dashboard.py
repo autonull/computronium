@@ -5,7 +5,7 @@ re-renders on change only. No execution, no ledger writes.
 
 Usage::
 
-    uv run comp dashboard --root artifacts/broad_map --port 8088 [--ui-mode explorer|lab|auto] [--gamify on|off] [--ui-actions on|off] [--rebuild-ui-state]
+    uv run comp dashboard --root artifacts/broad_map --port 8088 [--ui-mode explorer|lab|auto] [--ui-actions on|off] [--quiet]
     uv run comp dashboard --root artifacts/broad_map,artifacts/other   # multi-root selector
 """
 
@@ -65,21 +65,15 @@ def main() -> int:
         help="UI register: explorer (plain), lab (technical), auto (default)",
     )
     parser.add_argument(
-        "--gamify",
-        choices=["on", "off"],
-        default=os.environ.get("COMPUTRONIUM_GAMIFY", "on"),
-        help="Enable gamification layer (badges, quests, records)",
-    )
-    parser.add_argument(
         "--ui-actions",
         choices=["on", "off"],
         default=os.environ.get("COMPUTRONIUM_UI_ACTIONS", "off"),
         help="Enable UI actions (workshop, recipe editor)",
     )
     parser.add_argument(
-        "--rebuild-ui-state",
+        "--quiet",
         action="store_true",
-        help="Rebuild UI state from event log (sqlite sidecar)",
+        help="Compact text-only status chip; hides action lines, batches stream",
     )
     args = parser.parse_args()
 
@@ -91,7 +85,7 @@ def main() -> int:
 
     # An explicit page (not NiceGUI's auto-index) — script-mode
     # re-execution fails under a console-script entry point.
-    @ui.page("/", language="en")
+    @ui.page("/", language="en")  # type: ignore[arg-type]
     def _dashboard_page() -> None:
         build_dashboard(
             roots[0],
@@ -99,9 +93,8 @@ def main() -> int:
             args.poll,
             args.daemon_url,
             ui_mode=args.ui_mode,
-            gamify=args.gamify == "on",
             ui_actions=args.ui_actions == "on",
-            rebuild_state=args.rebuild_ui_state,
+            quiet=args.quiet,
             roots=roots,
         )
 

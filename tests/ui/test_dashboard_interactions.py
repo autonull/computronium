@@ -24,9 +24,8 @@ def _make_app(root: Path) -> DashboardApp:
         poll_seconds=2.0,
         daemon_url=None,
         ui_mode="auto",
-        gamify=True,
         ui_actions=False,
-        rebuild_state=False,
+        quiet=False,
     )
     app.build()
     return app
@@ -56,16 +55,16 @@ def test_ws_events_route_to_feed_and_reports(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    # instantiate the consumer panels
-    app._get_panel("activity_feed")
-    app._get_panel("field_reports")
+    # instantiate the console panel (contains activity feed and field reports)
+    console = app._get_panel("console")
 
-    raw = {"kind": "burst_complete", "cell": "a|b|c|d"}
+    raw = {"kind": "alert", "alert_kind": "breakthrough", "title": "Test", "body": "Test alert"}
     app._route_ws_events(raw, now=1234.0)
     assert len(app.event_history) == 1
 
-    feed = cast("ActivityFeed", app._panels["activity_feed"])
-    reports = cast("FieldReports", app._panels["field_reports"])
+    # Check that the console's internal feed received the event
+    feed = console._activity_feed
+    reports = console._field_reports
     assert len(feed.events) == 1
     assert feed.events[0].summary
     assert len(reports.reports) == 1
@@ -92,13 +91,13 @@ def test_bus_publish_reaches_dashboard_handler(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    app._get_panel("activity_feed")
+    console = app._get_panel("console")
 
     event_bus.publish(
         WebSocketEvent(topic="events", payload={"kind": "cell_done", "cell": "x"})
     )
     assert len(app.event_history) == 1
-    assert len(cast("ActivityFeed", app._panels["activity_feed"]).events) == 1
+    assert len(console._activity_feed.events) == 1
 
 
 def test_glossary_covers_dashboard_keys() -> None:

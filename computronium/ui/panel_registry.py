@@ -6,12 +6,11 @@ DashboardApp builds nav and panel map from registry.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from nicegui import ui
 
     from computronium.ui.data_adapters import DataAdapter
@@ -31,6 +30,10 @@ class PanelLike(Protocol):
         """Render the panel."""
         ...
 
+    def set_lens(self, lens: str) -> None:
+        """Set active lens for panels that support lenses."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class PanelSpec:
@@ -43,6 +46,8 @@ class PanelSpec:
     visible_predicate: Callable[[dict[str, Any]], bool] = field(default=lambda _: True)
     order: int = 0
     adapter: DataAdapter | None = field(default=None, repr=False)
+    lenses: dict[str, str] = field(default_factory=dict)  # lens_key -> label
+    default_lens: str | None = None
 
 
 class PanelRegistry:
@@ -62,6 +67,8 @@ class PanelRegistry:
         visible_predicate: Callable[[dict[str, Any]], bool] | None = None,
         order: int | None = None,
         adapter: DataAdapter | None = None,
+        lenses: dict[str, str] | None = None,
+        default_lens: str | None = None,
     ) -> PanelFactory:
         """Register a panel factory; re-registration updates the existing spec
         in place (preserving its order unless overridden)."""
@@ -79,6 +86,8 @@ class PanelRegistry:
                 else self._order_counter
             ),
             adapter=adapter,
+            lenses=lenses or {},
+            default_lens=default_lens,
         )
         if key not in self._specs:
             self._order_counter += 1
@@ -115,11 +124,13 @@ def register_panel(
     visible_predicate: Callable[[dict[str, Any]], bool] | None = None,
     order: int | None = None,
     adapter: DataAdapter | None = None,
+    lenses: dict[str, str] | None = None,
+    default_lens: str | None = None,
 ) -> Callable[[type[PanelLike]], type[PanelLike]]:
     """Class decorator to register a panel.
 
     Usage:
-        @register_panel("my_panel", "my_panel", "icon")
+        @register_panel("my_panel", "my_panel", "icon", lenses={"lens1": "Lens 1"})
         class MyPanel(BasePanel): ...
     """
 
@@ -132,6 +143,8 @@ def register_panel(
             visible_predicate=visible_predicate,
             order=order,
             adapter=adapter,
+            lenses=lenses,
+            default_lens=default_lens,
         )
         return cls
 

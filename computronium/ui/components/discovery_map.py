@@ -290,6 +290,12 @@ class DiscoveryMap(BasePanel):
             self.atlas_figure = atlas_figure
         self._refresh()
 
+    def set_lens(self, lens: str) -> None:
+        """Set active lens (Map/Trade-offs/Gallery)."""
+        # DiscoveryMap handles view toggle internally
+        # Could switch between map/table view based on lens
+        pass
+
 
 def create_discovery_map_from_atlas(
     df,  # pandas DataFrame from atlas.load_cells

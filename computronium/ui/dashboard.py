@@ -1,7 +1,10 @@
-"""New Computronium Dashboard — integrates all GAME.md UI components.
+"""Computronium Dashboard — five-panel architecture with lens system.
 
-This replaces the old live_atlas.py dashboard with a fully integrated
-implementation using the new UI components from computronium.ui.components.
+Panels: Map / Repair / Console / Composer / Record
+Lenses: Map→(Map, Trade-offs, Gallery), Repair→(Defects, Maturation), Record→(History, Ledger, Lessons)
+Navigation: header tabs + command palette (⌘K) + panel hotkeys 1–5
+Status chip: persistent header with deep links
+URL state: panel/lens/filters/selection encoded
 """
 
 from __future__ import annotations
@@ -9,32 +12,26 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from nicegui import ui
 
 from computronium.ui.a11y.tokens import a11y_css
-from computronium.ui.components.activity_feed import ActivityFeed
-from computronium.ui.components.campaign_card import CampaignCardGallery
-from computronium.ui.components.constitution_health import ConstitutionHealthPanel
-from computronium.ui.components.discovery_map import DiscoveryMap
-from computronium.ui.components.episode_timeline import EpisodeTimeline
-from computronium.ui.components.field_reports import FieldReports
-from computronium.ui.components.genome_health import GenomeHealthTracker
-from computronium.ui.components.health_panel import HealthPanel
-from computronium.ui.components.lineage_viewer import LineageViewer
-from computronium.ui.components.mutation_explorer import MutationExplorer
-from computronium.ui.components.preview_shelf import PreviewShelf
-from computronium.ui.components.probe_analytics import ProbeAnalytics
-from computronium.ui.components.progress_panel import ProgressPanel
-from computronium.ui.components.region_naming import RegionNaming
-from computronium.ui.components.repair_bench import RepairBench
-from computronium.ui.components.stagnation_dashboard import StagnationDashboard
-from computronium.ui.components.team_wall import TeamWall
-from computronium.ui.components.tradeoffs_panel import TradeoffsPanel
-from computronium.ui.components.veto_log import VetoLog
-from computronium.ui.components.workshop import WorkshopPanel
-from computronium.ui.data_adapters import AdapterContext
+from computronium.ui.adapters import get_adapter
+from computronium.ui.components import (
+    CampaignInfo,
+    Composer,
+    Console,
+    ConsoleData,
+    DiscoveryMap,
+    DriverIntent,
+    Record,
+    RecordData,
+    RepairBench,
+    StatusChip,
+)
+from computronium.ui.components.status_chip import ChipSegment, StatusChipData
+from computronium.ui.components.record import RecordLens as ComponentRecordLens
 from computronium.ui.design_tokens import PRIMARY, SECONDARY, css_custom_properties
 from computronium.ui.event_bus import (
     ArtifactChanged,
@@ -43,6 +40,15 @@ from computronium.ui.event_bus import (
     WebSocketEvent,
     event_bus,
 )
+from computronium.ui.lenses import (
+    MapLens,
+    PanelLenses,
+    RepairLens,
+    parse_deep_link,
+)
+from computronium.ui.lenses import (
+    RecordLens as LensRecordLens,
+)
 from computronium.ui.metrics import metrics
 from computronium.ui.mode_toggle import (
     get_mode,
@@ -50,15 +56,12 @@ from computronium.ui.mode_toggle import (
     mode_toggle_select,
     set_mode,
 )
-from computronium.ui.onboarding.quiz import ComfortQuiz
-from computronium.ui.onboarding.tour import GuidedTour
-from computronium.ui.panel_registry import PanelLike, panel_registry
-from computronium.ui.recognition.state_store import RecognitionStateStore
+from computronium.ui.panel_registry import panel_registry
 from computronium.visualization.live_atlas import (
     POLL_SECONDS,
     DaemonClient,
+    DashboardSnapshot,
     EmbedCache,
-    _atlas_data,
     _objectives_from_heartbeat,
     render_snapshot,
     resolve_log_path,
@@ -69,215 +72,92 @@ if TYPE_CHECKING:
     from plotly.graph_objects import Figure
 
     from computronium.autoscientist.objectives import ObjectiveSpec
-    from computronium.visualization.live_atlas import DashboardSnapshot
 
 logger = logging.getLogger("computronium.ui.dashboard")
 
-
-def _register_root_panels(root: Path) -> None:
-    """Re-register root-dependent panels with the app's campaign root."""
-    from computronium.ui.adapters import get_adapter
-    from computronium.ui.components.campaign_card import CampaignCardGallery
-
-    panel_registry.register(
-        "campaigns",
-        "campaign_card",
-        "description",
-        factory=lambda: CampaignCardGallery(root),
-        adapter=get_adapter("campaigns"),
-        order=4,
-        visible_predicate=lambda _: True,
-    )
+# Panels that support lenses
+_LENS_PANELS: frozenset[str] = frozenset({"map", "repair", "record"})
 
 
-# Register all panels with the panel registry
+# Register all 5 panels with lenses
 def _register_panels() -> None:
-    """Register all panels with the panel registry."""
-    from computronium.ui.adapters import get_adapter
+    """Register the five core panels with their lenses."""
 
-    # Explorer panels (visible in both modes)
+    # Map panel with 3 lenses
     panel_registry.register(
-        "discovery_map",
-        "discovery_map",
+        "map",
+        "map",
         "map",
         factory=DiscoveryMap,
         adapter=get_adapter("discovery_map"),
         order=0,
+        lenses={
+            MapLens.MAP: "Map",
+            MapLens.TRADEOFFS: "Trade-offs",
+            MapLens.GALLERY: "Gallery",
+        },
+        default_lens=MapLens.MAP,
     )
+
+    # Repair panel with 2 lenses
     panel_registry.register(
-        "tradeoffs",
-        "tradeoffs",
-        "balance",
-        factory=TradeoffsPanel,
-        adapter=get_adapter("tradeoffs"),
-        order=1,
-    )
-    panel_registry.register(
-        "repair_bench",
-        "repair_bench",
+        "repair",
+        "repair",
         "build",
         factory=RepairBench,
         adapter=get_adapter("repair_bench"),
+        order=1,
+        lenses={
+            RepairLens.DEFECTS: "Defects",
+            RepairLens.MATURATION: "Maturation",
+        },
+        default_lens=RepairLens.DEFECTS,
+    )
+
+    # Console panel (no lenses)
+    panel_registry.register(
+        "console",
+        "console",
+        "terminal",
+        factory=Console,
+        adapter=None,  # Uses live WS + snapshot
         order=2,
+        lenses={},
     )
+
+    # Composer panel (no lenses)
     panel_registry.register(
-        "health",
-        "health",
-        "favorite",
-        factory=HealthPanel,
-        adapter=get_adapter("health"),
+        "composer",
+        "composer",
+        "tune",
+        factory=Composer,
+        adapter=None,  # No adapter needed
         order=3,
+        lenses={},
     )
+
+    # Record panel with 3 lenses
     panel_registry.register(
-        "campaigns",
-        "campaign_card",
-        "description",
-        factory=lambda: CampaignCardGallery(Path("artifacts/broad_map")),
-        adapter=get_adapter("campaigns"),
+        "record",
+        "record",
+        "history",
+        factory=Record,
+        adapter=None,  # Uses derived data from snapshot
         order=4,
-        visible_predicate=lambda _: True,
-    )
-    panel_registry.register(
-        "preview",
-        "preview_shelf",
-        "visibility",
-        factory=PreviewShelf,
-        adapter=get_adapter("preview"),
-        order=5,
-    )
-    panel_registry.register(
-        "region_naming",
-        "region_naming",
-        "label",
-        factory=RegionNaming,
-        adapter=get_adapter("region_naming"),
-        order=6,
-    )
-    panel_registry.register(
-        "team",
-        "team_wall",
-        "groups",
-        factory=TeamWall,
-        adapter=get_adapter("team"),
-        order=7,
-    )
-    panel_registry.register(
-        "activity_feed",
-        "activity_feed",
-        "feed",
-        factory=ActivityFeed,
-        adapter=get_adapter("activity_feed"),
-        order=8,
-    )
-    panel_registry.register(
-        "field_reports",
-        "field_reports",
-        "article",
-        factory=FieldReports,
-        adapter=get_adapter("field_reports"),
-        order=9,
-    )
-
-    # Lab-only panels
-    panel_registry.register(
-        "constitution",
-        "constitution_health",
-        "shield",
-        factory=ConstitutionHealthPanel,
-        adapter=get_adapter("constitution"),
-        order=10,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "lineage",
-        "lineage_viewer",
-        "account_tree",
-        factory=LineageViewer,
-        adapter=get_adapter("lineage"),
-        order=11,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "episodes",
-        "episode_timeline",
-        "event",
-        factory=EpisodeTimeline,
-        adapter=get_adapter("episodes"),
-        order=12,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "progress",
-        "progress",
-        "emoji_events",
-        factory=lambda: ProgressPanel(gamify_enabled=True),
-        adapter=get_adapter("progress"),
-        order=13,
-        visible_predicate=lambda ctx: ctx.get("gamify", True),
-    )
-    panel_registry.register(
-        "workshop",
-        "workshop",
-        "settings",
-        factory=WorkshopPanel,
-        adapter=get_adapter("workshop"),
-        order=14,
-        visible_predicate=lambda ctx: ctx.get("ui_actions", False),
-    )
-    # Auto-Evolve instrumentation (Lab mode)
-    panel_registry.register(
-        "probe_analytics",
-        "probe_analytics",
-        "biotech",
-        factory=ProbeAnalytics,
-        adapter=get_adapter("probe_analytics"),
-        order=15,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "stagnation",
-        "stagnation_dashboard",
-        "show_chart",
-        factory=StagnationDashboard,
-        adapter=get_adapter("stagnation"),
-        order=16,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "genome_health",
-        "genome_health",
-        "monitor_heart",
-        factory=GenomeHealthTracker,
-        adapter=get_adapter("genome_health"),
-        order=17,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "mutations",
-        "mutations",
-        "science",
-        factory=MutationExplorer,
-        adapter=get_adapter("mutations"),
-        order=18,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
-    )
-    panel_registry.register(
-        "veto_log",
-        "veto_log",
-        "block",
-        factory=VetoLog,
-        adapter=get_adapter("veto_log"),
-        order=19,
-        visible_predicate=lambda ctx: ctx.get("mode") != "explorer",
+        lenses={
+            LensRecordLens.HISTORY: "History",
+            LensRecordLens.LEDGER: "Ledger",
+            LensRecordLens.LESSONS: "Lessons",
+        },
+        default_lens=LensRecordLens.HISTORY,
     )
 
 
-# Initialize panel registry
 _register_panels()
 
 
 class DashboardApp:
-    """Main dashboard application with panel routing."""
+    """Main dashboard application with 5-panel routing and lens system."""
 
     _CONFIG_WATCHED = ("campaign.yaml", "heartbeat.json")
 
@@ -288,9 +168,8 @@ class DashboardApp:
         poll_seconds: float,
         daemon_url: str | None,
         ui_mode: str,
-        gamify: bool,
         ui_actions: bool,
-        rebuild_state: bool,
+        quiet: bool,
         *,
         roots: tuple[Path, ...] | None = None,
     ):
@@ -300,11 +179,8 @@ class DashboardApp:
         self.log_path = resolve_log_path(root, log_path)
         self.poll_seconds = poll_seconds
         self.daemon_url = daemon_url
-        self.gamify = gamify
         self.ui_actions = ui_actions
-        self.rebuild_state = rebuild_state
-        _register_root_panels(root)
-        _register_metrics_route()
+        self.quiet = quiet
 
         # Initialize mode
         initialize_mode()
@@ -312,7 +188,8 @@ class DashboardApp:
             set_mode(ui_mode)  # type: ignore[arg-type]
 
         # State
-        self.current_panel = "discovery_map"
+        self.current_panel = PanelLenses.MAP
+        self.current_lens = MapLens.MAP
         self.cache = EmbedCache()
         self.client = DaemonClient(daemon_url) if daemon_url else None
         self.objectives = _objectives_from_heartbeat(root)
@@ -331,43 +208,37 @@ class DashboardApp:
             "stability + plasticity": ("spectral_radius", "psi_capacity"),
         }
 
-        # Recognition state store (for progress panel)
-        self.recognition_store: RecognitionStateStore | None = None
-        if gamify:
-            self.recognition_store = RecognitionStateStore(
-                db_path=root / "ui_state.sqlite"
-            )
-            if rebuild_state:
-                # D3: persist the replay — previously the fold result was discarded.
-                self.recognition_store.persist_state(
-                    self.recognition_store.rebuild_from_events()
-                )
-
         # Stream state
         self.loss_history: list[float] = []
         self.event_history: list[Any] = []
         self.last_signature = watch_signature(root)
         self._last_ws_paint = 0.0
 
-        # One render_snapshot per refresh cycle (D2): lazily built, invalidated
-        # by _clear_panel_data().
+        # One render_snapshot per refresh cycle
         self._snapshot: DashboardSnapshot | None = None
         self._snapshot_has_atlas = False
 
-        # X5: campaign config signature for hot-reload
+        # Campaign config signature for hot-reload
         self._config_signature = self._config_signature_of()
         self._last_config_signature = self._config_signature
 
         # Panel instances (lazy-loaded)
-        self._panels: dict[str, PanelLike] = {}
+        self._panels: dict[str, Any] = {}
         self._panel_data: dict[str, Any] = {}
 
         # UI containers
-        self.left_drawer: Any = None
-        self.main_content: Any = None
         self.header: Any = None
+        self.main_content: Any = None
         self.pareto_selector: Any = None
         self.root_selector: Any = None
+        self.status_chip: StatusChip | None = None
+        self.command_palette: Any = None
+
+        # Session tracking
+        self._session_start = time.time()
+        self._session_cells_at_start = 0
+        self._session_records_at_start = 0
+        self._session_crashes_at_start = 0
 
         # Subscribe to event bus
         self._unsubscribe_artifact = event_bus.subscribe(
@@ -380,7 +251,7 @@ class DashboardApp:
         )
 
     def _on_artifact_changed(self, event: ArtifactChanged) -> None:
-        """Handle artifact change event (ignore foreign roots — X4)."""
+        """Handle artifact change event (ignore foreign roots)."""
         if event.root != self.root:
             return
         self.last_signature = event.signature
@@ -388,11 +259,11 @@ class DashboardApp:
 
     def _on_mode_changed(self, event: ModeChanged) -> None:
         """Handle mode change event."""
-        self._rebuild_left_drawer()
+        self._render_header()
         self._render_current_panel()
 
     def _on_config_changed(self, event: ConfigChanged) -> None:
-        """X5: campaign objectives changed — recompute panels once."""
+        """Campaign objectives changed — recompute panels once."""
         from computronium.autoscientist.objectives import parse_objectives
 
         try:
@@ -409,7 +280,7 @@ class DashboardApp:
     _WS_PAINT_INTERVAL_S = 2.0
 
     def _on_ws_event(self, event: WebSocketEvent) -> None:
-        """Route WebSocket events to panels with ≤1/2s paint throttling (UX-L5)."""
+        """Route WebSocket events with ≤1/2s paint throttling."""
         metrics.inc("dashboard_ws_events_total", labels={"topic": event.topic})
         now = time.time()
         match event.topic:
@@ -421,9 +292,8 @@ class DashboardApp:
                 logger.debug("Unhandled WS topic: %s", event.topic)
 
     def _route_ws_events(self, raw: dict[str, Any], now: float) -> None:
-        """Fan out a classified /ws/events record to feed + reports panels."""
+        """Fan out a classified /ws/events record to console + status chip."""
         from computronium.ui.components.activity_feed import FeedEvent
-        from computronium.ui.components.field_reports import FieldReport
         from computronium.visualization.live_atlas import (
             _classify_event,
             _toast_for_alert,
@@ -435,33 +305,79 @@ class DashboardApp:
         if len(self.event_history) > 100:
             self.event_history.pop(0)
 
-        if (feed := self._panel_as("activity_feed", ActivityFeed)) is not None:
-            feed.add_event(
-                FeedEvent(
-                    timestamp=ev.timestamp,
+        # Update console panel if active
+        if (console := self._panel_as("console", Console)) is not None:
+            feed_event = FeedEvent(
+                timestamp=ev.timestamp,
+                icon=ev.icon,
+                color=ev.color,
+                summary=ev.summary,
+                raw=str(raw),
+            )
+            console.add_stream_event(feed_event)
+
+            # Add field report for alert events (breakthrough/cascade/completion)
+            if ev.kind == "alert":
+                from computronium.ui.components.field_reports import FieldReport
+
+                field_report = FieldReport(
                     icon=ev.icon,
                     color=ev.color,
-                    summary=ev.summary,
-                    raw=str(raw),
+                    sentence=ev.summary,
+                    deep_link=None,
+                    unread=True,
                 )
-            )
-        if (reports := self._panel_as("field_reports", FieldReports)) is not None:
-            reports.add_report(
-                FieldReport(icon=ev.icon, color=ev.color, sentence=ev.summary)
-            )
+                console.add_report(field_report)
+
+            # Parse driver intent from proposal_batch
+            if ev.kind == "proposal_batch":
+                n = raw.get("n_proposals", raw.get("count", 0))
+                _ = raw.get("quarantined", 0)
+                _ = raw.get("voids_pruned", 0)
+                primitives = []
+                if "dynamics" in raw:
+                    primitives.append(raw["dynamics"])
+                if "credit" in raw:
+                    primitives.append(raw["credit"])
+                strategy = "·".join(primitives) if primitives else "exploring"
+                console.data = ConsoleData(
+                    campaigns=console.data.campaigns,
+                    active_campaign=console.data.active_campaign,
+                    liveness=console.data.liveness,
+                    driver_intent=DriverIntent(
+                        proposing=n,
+                        last_batch_ago_s=0,  # Just now
+                        strategy_hint=strategy,
+                    ),
+                    session_delta=console.data.session_delta,
+                    loss_history=console.data.loss_history,
+                    ticker=console.data.ticker,
+                    reports=console.data.reports,
+                )
+
+            # Increment session delta for crashes
+            if ev.kind == "defect_quarantined":
+                console.increment_session_delta(crashes=1)
+
+        # Update status chip
+        snapshot = self._snapshot_for(with_atlas=False)
+        self._update_status_chip(snapshot)
 
     def _route_ws_telemetry(self, payload: dict[str, Any]) -> None:
-        """Push loss history to the health panel (throttled paint)."""
+        """Push loss history to console panel (throttled paint)."""
         now = time.time()
         if now - self._last_ws_paint < self._WS_PAINT_INTERVAL_S:
             return
         self._last_ws_paint = now
-        if (health := self._panel_as("health", HealthPanel)) is not None:
-            health.update_data(loss_history=list(self.loss_history))
-            if self.current_panel == "health":
-                self._render_current_panel()
+        loss = payload.get("train_loss", payload.get("loss"))
+        if isinstance(loss, int | float):
+            self.loss_history.append(float(loss))
+            if len(self.loss_history) > 60:
+                self.loss_history.pop(0)
+            if (console := self._panel_as("console", Console)) is not None:
+                console.add_loss_point(float(loss))
 
-    def _get_panel(self, key: str) -> PanelLike:
+    def _get_panel(self, key: str) -> Any:
         """Lazy-load panel instance."""
         if key in self._panels:
             return self._panels[key]
@@ -473,15 +389,13 @@ class DashboardApp:
         self._panels[key] = spec.factory()
         return self._panels[key]
 
-    def _panel_as[T](self, key: str, typ: type[T]) -> T | None:
-        """Typed panel lookup; None when the panel isn't instantiated or the
-        instance doesn't implement the expected surface."""
+    def _panel_as(self, key: str, typ: type) -> Any | None:
+        """Typed panel lookup."""
         panel = self._panels.get(key)
         return panel if isinstance(panel, typ) else None
 
     def _snapshot_for(self, *, with_atlas: bool) -> DashboardSnapshot:
-        """One render_snapshot per refresh cycle; recompute only when the atlas
-        pass is needed and missing (D2)."""
+        """One render_snapshot per refresh cycle."""
         if self._snapshot is None or (with_atlas and not self._snapshot_has_atlas):
             start = time.perf_counter()
             self._snapshot = render_snapshot(
@@ -505,12 +419,10 @@ class DashboardApp:
         if spec is None or spec.adapter is None:
             return None
 
-        snapshot = self._snapshot_for(with_atlas=key == "discovery_map")
-        ctx = AdapterContext(
-            root=self.root,
-            snapshot=snapshot,
-            recognition_store=self.recognition_store,
-        )
+        snapshot = self._snapshot_for(with_atlas=key == "map")
+        from computronium.ui.data_adapters import AdapterContext
+
+        ctx = AdapterContext(root=self.root, snapshot=snapshot)
         start = time.perf_counter()
         data = spec.adapter.adapt(ctx)
         metrics.observe_seconds("dashboard_adapter", time.perf_counter() - start)
@@ -529,30 +441,75 @@ class DashboardApp:
     def _is_panel_visible(self, key: str) -> bool:
         """Check if panel should be visible in current mode."""
         mode = get_mode()
-        context = {"mode": mode, "gamify": self.gamify, "ui_actions": self.ui_actions}
+        context = {"mode": mode, "ui_actions": self.ui_actions}
         spec = panel_registry.get(key)
         if spec is None:
             return False
         return spec.visible_predicate(context)
 
-    def _build_header(self) -> None:
-        """Build the top header with root selector, mode toggle, pareto selector."""
+    def _render_header(self) -> None:
+        """Build the top header with status chip, panel tabs, palette, root selector."""
         with ui.header().classes(
             "items-center justify-between bg-primary text-white"
         ) as self.header:
-            with ui.row().classes("items-center gap-4"):
-                ui.label("Computronium").classes("text-h6 q-mb-none")
-                ui.label("Live Broad Map").classes("text-caption text-white/80")
-                ui.separator().props("vertical").classes("mx-2")
+            # Status chip (left)
+            with ui.row().classes("items-center gap-2"):
+                self.status_chip = StatusChip(
+                    on_deep_link=self._on_deep_link,
+                    quiet=self.quiet,
+                )
+                self.status_chip.render()
 
-                # X4: root selector when multiple campaign roots were passed
+            ui.separator().props("vertical").classes("mx-2")
+
+            # Panel tabs (center) - 1-5 hotkeys
+            with ui.tabs().classes("flex-1") as self._panel_tabs:
+                self._tab_map = ui.tab("Map", icon="map").props('keyboard="1"')
+                self._tab_repair = ui.tab("Repair", icon="build").props('keyboard="2"')
+                self._tab_console = ui.tab("Console", icon="terminal").props(
+                    'keyboard="3"'
+                )
+                self._tab_composer = ui.tab("Composer", icon="tune").props(
+                    'keyboard="4"'
+                )
+                self._tab_record = ui.tab("Record", icon="history").props(
+                    'keyboard="5"'
+                )
+
+            with ui.tab_panels(
+                self._panel_tabs, value=self._get_tab_for_panel(self.current_panel)
+            ).classes("w-full"):
+                # Panels rendered in main_content, not here
+                pass
+
+            ui.separator().props("vertical").classes("mx-2")
+
+            # Right side: pareto selector, mode toggle, command palette
+            with ui.row().classes("items-center gap-2"):
+                # Pareto selector (only for Map panel)
+                if self.current_panel == "map":
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label("Pareto:").classes("text-sm text-white/90")
+                        self.pareto_selector = (
+                            ui
+                            .select(
+                                options=list(self.pareto_presets.keys()),
+                                value=self.pareto_state["selected"],
+                                on_change=lambda e: self._on_pareto_change(e.value),
+                            )
+                            .props("dense outlined")
+                            .classes("w-48")
+                            .style("color: white;")
+                        )
+
+                # Root selector (multi-root)
                 if len(self.roots) > 1:
                     self.root_selector = (
                         ui
                         .select(
                             options=[str(p) for p in self.roots],
                             value=str(self.root),
-                            on_change=self._on_root_change,  # type: ignore[arg-type]
+                            on_change=lambda e: self.switch_root(Path(str(e.value))),
                         )
                         .props("dense outlined")
                         .classes("w-56")
@@ -560,48 +517,275 @@ class DashboardApp:
                     )
                     ui.separator().props("vertical").classes("mx-2")
 
-                # Pareto objective selector
-                with ui.row().classes("items-center gap-2"):
-                    ui.label("Pareto:").classes("text-sm text-white/90")
-                    self.pareto_selector = (
-                        ui
-                        .select(
-                            options=list(self.pareto_presets.keys()),
-                            value=self.pareto_state["selected"],
-                            on_change=self._on_pareto_change,  # type: ignore[arg-type]
-                        )
-                        .props("dense outlined")
-                        .classes("w-48")
-                        .style("color: white;")
-                    )
-
-            with ui.row().classes("items-center gap-4"):
                 # Mode toggle
                 mode_toggle_select().style("color: white;")
-                # Gamify toggle
-                if self.gamify:
-                    ui.switch("Gamify", value=True).props("color=white").classes(
-                        "text-white"
-                    )
-                # Glossary button
-                ui.button(icon="menu_book", on_click=self._open_glossary).props(
-                    'flat round color=white aria-label="Glossary"'
-                ).classes("text-white").tooltip("Glossary")
-                # Tour button
-                ui.button(icon="help_outline", on_click=self._start_tour).props(
-                    'flat round color=white aria-label="Tour"'
-                ).classes("text-white").tooltip("Tour")
-                # Quiz button
-                ui.button(icon="psychology", on_click=self._start_quiz).props(
-                    'flat round color=white aria-label="Quiz"'
-                ).classes("text-white").tooltip("Quiz")
 
-    def _on_root_change(self, value: str) -> None:  # type: ignore[arg-type]
-        """X4: header root selector handler."""
-        self.switch_root(Path(str(value)))
+                # Command palette button (⌘K)
+                ui.button(icon="search", on_click=self._open_palette).props(
+                    'flat round color=white aria-label="Command Palette (⌘K)"'
+                ).classes("text-white").tooltip("Command Palette (⌘K)")
+
+    def _get_tab_for_panel(self, panel: str) -> Any:
+        """Get the tab element for a panel."""
+        tab_map = {
+            "map": self._tab_map,
+            "repair": self._tab_repair,
+            "console": self._tab_console,
+            "composer": self._tab_composer,
+            "record": self._tab_record,
+        }
+        return tab_map.get(panel, self._tab_map)
+
+    def _on_deep_link(self, deep_link: str) -> None:
+        """Handle cross-panel deep link from status chip."""
+        parsed = parse_deep_link(deep_link)
+        if parsed:
+            panel, lens = parsed
+            self._switch_panel(panel)
+            if lens and panel in _LENS_PANELS:
+                panel_obj = self._get_panel(panel)
+                if hasattr(panel_obj, "set_lens"):
+                    panel_obj.set_lens(lens)
+                self.current_lens = lens
+                self._update_url_state()
+
+    def _open_palette(self) -> None:
+        """Open command palette."""
+        from computronium.ui.command_palette import open_palette
+
+        open_palette(
+            current_panel=self.current_panel,
+            current_lens=self.current_lens,
+            on_select=self._on_palette_select,
+        )
+
+    def _on_palette_select(self, action: str) -> None:
+        """Handle palette selection (panel:lens or action)."""
+        parsed = parse_deep_link(action)
+        if parsed:
+            panel, lens = parsed
+            self._switch_panel(panel)
+            if lens and panel in _LENS_PANELS:
+                panel_obj = self._get_panel(panel)
+                if hasattr(panel_obj, "set_lens"):
+                    panel_obj.set_lens(lens)
+                self.current_lens = lens
+            self._update_url_state()
+
+    def _switch_panel(self, key: str) -> None:
+        """Switch to a different panel."""
+        if not self._is_panel_visible(key):
+            return
+        self.current_panel = key
+        spec = panel_registry.get(key)
+        if spec and spec.default_lens:
+            self.current_lens = spec.default_lens
+        self._render_current_panel()
+        self._update_url_state()
+
+    def _update_status_chip(self, snapshot: DashboardSnapshot | None = None) -> None:
+        """Update status chip from current snapshot."""
+        if self.status_chip is None:
+            return
+        if snapshot is None:
+            snapshot = self._snapshot_for(with_atlas=False)
+        # Get console panel for session delta
+        console = self._panel_as("console", Console)
+        session_delta = console.data.session_delta if console else None
+        chip_data = StatusChipData.from_snapshot(  # type: ignore[attr-defined]
+            snapshot, session_delta=session_delta, quiet=self.quiet
+        )
+        self.status_chip.update_data(chip_data)
+
+    def _update_url_state(self) -> None:
+        """Update URL with current panel/lens state."""
+        # Store in client-side URL hash for bookmarking
+        state = f"#{self.current_panel}"
+        if self.current_lens and self.current_panel in _LENS_PANELS:
+            state += f":{self.current_lens}"
+        ui.run_javascript(f"window.location.hash = '{state}';")
+
+    def _restore_url_state(self) -> None:
+        """Restore panel/lens from URL hash on load."""
+        # This would be called on initial load to parse window.location.hash
+
+    @staticmethod
+    def _push_data(panel: Any, data: object, /, **kwargs: object) -> None:
+        """Duck-typed data push."""
+        update = getattr(panel, "update_data", None)
+        if update is not None:
+            update(data, **kwargs)
+
+    def _render_current_panel(self) -> None:
+        """Render the currently selected panel with its active lens."""
+        start = time.perf_counter()
+        self.main_content.clear()
+        with self.main_content:
+            panel = self._get_panel(self.current_panel)
+
+            # Get data for adapter-backed panels
+            if self.current_panel in {"map", "repair"}:
+                data = self._get_panel_data(self.current_panel)
+                if data is not None:
+                    self._push_data(panel, data)
+
+            # Set lens for lens-aware panels
+            if hasattr(panel, "set_lens") and self.current_lens:
+                panel.set_lens(self.current_lens)
+
+            # Special handling for console/composer
+            if self.current_panel == "console":
+                self._update_console_panel(panel)
+            elif self.current_panel == "composer":
+                self._update_composer_panel(panel)
+            elif self.current_panel == "record":
+                self._update_record_panel(panel)
+
+            panel.render()
+        metrics.observe_seconds("dashboard_render_panel", time.perf_counter() - start)
+
+    def _update_console_panel(self, panel: Console) -> None:
+        """Update console panel with live data."""
+        # Build campaign list from roots
+        campaigns = []
+        for r in self.roots:
+            campaigns.append(
+                CampaignInfo(
+                    root=str(r),
+                    name=r.name,
+                    state="running" if self.client else "idle",
+                    cells=len(self._snapshot_for(with_atlas=False).event_history),
+                    burst=None,
+                    target=None,
+                    uptime_s=time.time() - self._session_start,
+                )
+            )
+
+        # Get liveness
+        from computronium.visualization.live_atlas import liveness
+
+        liveness_data = liveness(self.root, self.client is not None)
+
+        panel.update_data(
+            ConsoleData(
+                campaigns=campaigns,
+                active_campaign=str(self.root),
+                liveness={
+                    "label": liveness_data.label,
+                    "color": liveness_data.color,
+                    "detail": liveness_data.detail,
+                },
+                driver_intent=panel.data.driver_intent,
+                session_delta=panel.data.session_delta,
+                loss_history=self.loss_history,
+                ticker=panel.data.ticker,
+                reports=panel.data.reports,
+            )
+        )
+
+    def _update_composer_panel(self, panel: Composer) -> None:
+        """Update composer panel with campaign list."""
+        campaigns = {str(r): r.name for r in self.roots}
+        panel.set_campaigns(campaigns)
+
+    def _update_record_panel(self, panel: Record) -> None:
+        """Update record panel with derived data from snapshot."""
+        snapshot = self._snapshot_for(with_atlas=False)
+
+        # Build history from event_history + front_history
+        history = []
+        for ev in snapshot.event_history:
+            history.append(
+                type(
+                    "HistoryEvent",
+                    (),
+                    {
+                        "timestamp": ev.get("timestamp", 0),
+                        "kind": ev.get("kind", ""),
+                        "campaign": self.root.name,
+                        "message": ev.get("summary", ""),
+                        "cell_key": ev.get("cell"),
+                        "metrics": {},
+                        "severity": ev.get("color", "info"),
+                    },
+                )()
+            )
+
+        # Build ledger from maturation + front_history
+        def _to_int(val: Any, default: int = 0) -> int:
+            if val is None:
+                return default
+            if isinstance(val, int):
+                return val
+            if isinstance(val, float):
+                return int(val)
+            try:
+                return int(val)
+            except ValueError, TypeError:
+                return default
+
+        ledger = []
+        for row in snapshot.maturation:
+            count_val = _to_int(row.get("count"))
+            ledger.append(
+                type(
+                    "LedgerEntry",
+                    (),
+                    {
+                        "timestamp": time.time(),
+                        "experiment": str(row.get("level", "")),
+                        "belief": str(row.get("meaning", "")),
+                        "gate": "promoted" if count_val > 0 else "pending",
+                        "evidence_refs": [],
+                        "calibration": None,
+                    },
+                )()
+            )
+
+        # Build lessons from graveyard + voids
+        lessons = []
+        for row in snapshot.graveyard:
+            lessons.append(
+                type(
+                    "LessonEntry",
+                    (),
+                    {
+                        "timestamp": time.time(),
+                        "cell_key": str(row.get("primitive", "")),
+                        "lesson": f"{row.get('axis', '')}={row.get('primitive', '')} diverged {row.get('share', '0%')}",
+                        "context": dict(row),
+                    },
+                )()
+            )
+
+        panel.update_data(
+            RecordData(
+                history=history,
+                ledger=ledger,
+                lessons=lessons,
+                active_lens=cast(
+                    "ComponentRecordLens",
+                    (
+                        ComponentRecordLens(self.current_lens)
+                        if self.current_lens in {e.value for e in ComponentRecordLens}
+                        else ComponentRecordLens.HISTORY
+                    ),
+                ),
+            )
+        )
+
+    def _on_pareto_change(self, value: str) -> None:
+        """Handle Pareto objective selector change."""
+        self.pareto_state["selected"] = value
+        obj_names = self.pareto_presets[value]
+        from computronium.autoscientist.objectives import parse_objectives
+
+        self.pareto_state["objectives"] = parse_objectives(",".join(obj_names))
+        self._clear_panel_data()
+        self._render_current_panel()
 
     def switch_root(self, root: Path) -> None:
-        """Switch the active campaign root (X4): reset per-root caches/state."""
+        """Switch the active campaign root."""
         if root == self.root or root not in self.roots:
             return
         self.root = root
@@ -609,10 +793,6 @@ class DashboardApp:
         self.cache = EmbedCache()
         self.objectives = _objectives_from_heartbeat(root)
         self.pareto_state["objectives"] = self.objectives
-        if self.gamify:
-            self.recognition_store = RecognitionStateStore(
-                db_path=root / "ui_state.sqlite"
-            )
         self.loss_history.clear()
         self.event_history.clear()
         self.last_signature = watch_signature(root)
@@ -620,188 +800,69 @@ class DashboardApp:
         self._last_config_signature = self._config_signature
         self._panels.clear()
         self._clear_panel_data()
-        _register_root_panels(root)
-        self._rebuild_left_drawer()
+        self._render_header()
         self._render_current_panel()
 
-    def _build_left_drawer(self) -> None:
-        """(Re)build left navigation drawer contents without nesting drawers."""
-        if self.left_drawer is None:
-            self.left_drawer = ui.left_drawer(value=True).classes(
-                "bg-grey-1 dark:bg-grey-9"
-            )
-        else:
-            self.left_drawer.clear()
-        with self.left_drawer:
-            ui.label("Navigation").classes("text-h6 q-mb-md px-4")
-
-            with ui.column().classes("w-full gap-1 px-2"):
-                for spec in panel_registry.visible_specs({
-                    "mode": get_mode(),
-                    "gamify": self.gamify,
-                    "ui_actions": self.ui_actions,
-                }):
-                    key = spec.key
-                    is_active = key == self.current_panel
-                    btn = (
-                        ui
-                        .button(
-                            icon=spec.icon,
-                            on_click=lambda _e, k=key: self._switch_panel(k),
-                        )
-                        .props(
-                            f"flat no-caps {'color=primary' if is_active else ''} dense"
-                        )
-                        .classes(
-                            "w-full justify-start text-left"
-                            + (
-                                " bg-primary text-white"
-                                if is_active
-                                else " hover:bg-grey-2 dark:hover:bg-grey-8"
-                            )
-                        )
-                    )
-                    with btn:
-                        ui.icon(spec.icon).classes("mr-2")
-                        ui.label(spec.label_key)
-
-    def _rebuild_left_drawer(self) -> None:
-        """Rebuild left drawer on mode change / root switch."""
-        if self.left_drawer:
-            self._build_left_drawer()
-
-    def _switch_panel(self, key: str) -> None:
-        """Switch to a different panel."""
-        if not self._is_panel_visible(key):
-            return
-        self.current_panel = key
-        self._render_current_panel()
-        if self.left_drawer:
-            self.left_drawer.update()
-
-    @staticmethod
-    def _push_data(panel: PanelLike, data: object, /, **kwargs: object) -> None:
-        """Duck-typed data push; panels override update_data with typed kwargs."""
-        update = getattr(panel, "update_data", None)
-        if update is not None:
-            update(data, **kwargs)
-
-    def _render_current_panel(self) -> None:
-        """Render the currently selected panel."""
-        start = time.perf_counter()
-        self.main_content.clear()
-        with self.main_content:
-            panel = self._get_panel(self.current_panel)
-            data = self._get_panel_data(self.current_panel)
-            if data is not None:
-                self._push_data(panel, data)
-            panel.render()
-        metrics.observe_seconds("dashboard_render_panel", time.perf_counter() - start)
-
-    def _on_pareto_change(self, value: str) -> None:  # type: ignore[arg-type]
-        """Handle Pareto objective selector change."""
-        self.pareto_state["selected"] = value
-        obj_names = self.pareto_presets[value]
-        from computronium.autoscientist.objectives import (
-            parse_objectives,
+    def _build_main_content(self) -> None:
+        """Build main content area."""
+        self.main_content = (
+            ui.column().classes("w-full p-4 q-ma-auto").style("max-width: 1400px;")
         )
 
-        self.pareto_state["objectives"] = parse_objectives(",".join(obj_names))
-        self._clear_panel_data()
-        self._render_current_panel()
-
-    def _open_glossary(self) -> None:
-        """Open the searchable glossary dialog (B3)."""
-        from computronium.ui.glossary_service import get_glossary_service
-
-        entries = get_glossary_service().all_entries()
-        dialog = ui.dialog().props("wide")
-
-        with dialog, ui.card().classes("w-full"):
-            ui.label("Glossary").classes("text-h6")
-            search = ui.input(placeholder="Search terms…").props("dense outlined")
-            table_container = ui.column().classes("w-full")
-
-            def _render_table() -> None:
-                table_container.clear()
-                query = (search.value or "").lower()
-                with table_container:
-                    for key, entry in sorted(entries.items()):
-                        plain, expert = entry.explorer, entry.lab
-                        haystack = f"{key} {plain} {expert}".lower()
-                        if query and query not in haystack:
-                            continue
-                        with ui.expansion(plain).classes("w-full"):
-                            ui.label(plain).classes("text-body")
-                            ui.label(expert).classes(
-                                "text-body font-mono text-xs text-grey"
-                            )
-
-            search.on_value_change(lambda _e: _render_table())
-            _render_table()
-            ui.button("Close", on_click=dialog.close).props("flat")
-
-        dialog.open()
-
-    def _start_tour(self) -> None:
-        """Start the guided tour."""
-        tour = GuidedTour()
-        tour.start()
-
-    def _start_quiz(self) -> None:
-        """Start the comfort quiz."""
-        quiz = ComfortQuiz()
-        quiz.start()
-
     def _refresh_cheap(self) -> None:
-        """Fast paint: everything except UMAP fit (D2: shared cycle snapshot)."""
+        """Fast paint: everything except UMAP fit."""
         self._clear_panel_data()
 
         # Update panels that need live data
-        for key in (
-            "discovery_map",
-            "tradeoffs",
-            "repair_bench",
-            "health",
-            "activity_feed",
-            "field_reports",
-        ):
+        for key in ("map", "repair", "console"):
             if key in self._panels:
                 data = self._get_panel_data(key)
                 if data is not None:
                     self._push_data(self._panels[key], data)
 
-        # Check for artifact changes and publish event
+        # Check for artifact changes
         new_sig = watch_signature(self.root)
         if new_sig != self.last_signature:
             self.last_signature = new_sig
             event_bus.publish(ArtifactChanged(signature=new_sig, root=self.root))
             self._render_current_panel()
 
+        # Update status chip
+        snapshot = self._snapshot_for(with_atlas=False)
+        self._update_status_chip(snapshot)
+
     async def _load_atlas(self) -> None:
         """Off-thread UMAP refit."""
         from nicegui import run
 
         try:
-            result = await run.io_bound(_atlas_data, self.root, self.cache)
+            result = await run.io_bound(self._atlas_data_impl, self.root, self.cache)
             if result is None:
                 return
             self._apply_atlas_result(result)
         except Exception as e:
             logger.warning("Atlas load failed: %s", e)
 
+    def _atlas_data_impl(
+        self, root: Path, cache: EmbedCache
+    ) -> tuple[Figure | None, str | None, list[str]]:
+        """Sync atlas data loader for run.io_bound."""
+        from computronium.visualization.live_atlas import _atlas_data
+
+        return _atlas_data(root, cache)
+
     def _apply_atlas_result(
         self, result: tuple[Figure | None, str | None, list[str]]
     ) -> None:
-        """Push a loaded atlas figure into the DiscoveryMap panel."""
-        figure, _, _ = result  # type: ignore[misc]
-        if self.current_panel == "discovery_map":
-            self._panel_data.pop("discovery_map", None)
-            panel = self._get_panel("discovery_map")
+        """Push a loaded atlas figure into the Map panel."""
+        figure, _, _ = result
+        if self.current_panel == "map":
+            self._panel_data.pop("map", None)
+            panel = self._get_panel("map")
             self._push_data(panel, None, atlas_figure=figure)
 
     def _config_signature_of(self) -> tuple[tuple[int, int], ...]:
-        """(mtime_ns, size) stamps for campaign.yaml + heartbeat.json (X5)."""
+        """(mtime_ns, size) stamps for campaign.yaml + heartbeat.json."""
         stamps: list[tuple[int, int]] = []
         for name in self._CONFIG_WATCHED:
             try:
@@ -812,10 +873,7 @@ class DashboardApp:
         return tuple(stamps)
 
     def _reload_objectives(self) -> tuple[ObjectiveSpec, ...] | None:
-        """X5: re-parse objectives from campaign.yaml, else heartbeat.
-
-        Returns None when the current objectives must be kept (invalid config).
-        """
+        """Re-parse objectives from campaign.yaml, else heartbeat."""
         import yaml
 
         from computronium.autoscientist.objectives import parse_objectives
@@ -835,7 +893,7 @@ class DashboardApp:
         return _objectives_from_heartbeat(self.root)
 
     def _maybe_reload_objectives(self) -> None:
-        """Publish ConfigChanged only when objectives actually changed (X5)."""
+        """Publish ConfigChanged only when objectives actually changed."""
         from computronium.autoscientist.objectives import objective_names
 
         new = self._reload_objectives()
@@ -846,11 +904,10 @@ class DashboardApp:
         event_bus.publish(ConfigChanged(objectives=objective_names(new)))
 
     def _poll(self) -> None:
-        """Poll for artifact + campaign-config changes (X5)."""
+        """Poll for artifact + campaign-config changes."""
         new_sig = watch_signature(self.root)
         if new_sig != self.last_signature:
             self.last_signature = new_sig
-            # Publish artifact changed event
             event_bus.publish(ArtifactChanged(signature=new_sig, root=self.root))
             self._refresh_cheap()
         config_sig = self._config_signature_of()
@@ -866,9 +923,10 @@ class DashboardApp:
 
         if not self.daemon_url:
             return
+        daemon_url = self.daemon_url
 
         async def _consume() -> None:
-            ws_url = f"{self.daemon_url.replace('http://', 'ws://')}/ws/telemetry"  # type: ignore[union-attr]
+            ws_url = f"{daemon_url.replace('http://', 'ws://')}/ws/telemetry"
             try:
                 async with websockets.connect(ws_url) as ws:
                     async for message in ws:
@@ -886,7 +944,6 @@ class DashboardApp:
         self.loss_history.append(float(loss))
         if len(self.loss_history) > 60:
             self.loss_history.pop(0)
-        # Publish telemetry event
         event_bus.publish(WebSocketEvent(topic="telemetry", payload=record))
 
     def _events_consumer(self) -> Any:
@@ -897,14 +954,14 @@ class DashboardApp:
 
         if not self.daemon_url:
             return
+        daemon_url = self.daemon_url
 
         async def _consume() -> None:
-            ws_url = f"{self.daemon_url.replace('http://', 'ws://')}/ws/events"  # type: ignore[union-attr]
+            ws_url = f"{daemon_url.replace('http://', 'ws://')}/ws/events"
             try:
                 async with websockets.connect(ws_url) as ws:
                     async for message in ws:
                         raw = json.loads(message)
-                        # Publish events event
                         event_bus.publish(WebSocketEvent(topic="events", payload=raw))
             except OSError:
                 pass
@@ -920,7 +977,7 @@ class DashboardApp:
 
     def build(self) -> None:
         """Build the complete dashboard UI."""
-        # AA-compliant colors (NiceGUI defaults fail axe contrast)
+        # AA-compliant colors
         ui.colors(primary=PRIMARY, secondary=SECONDARY)
         # Inject design tokens and a11y CSS
         ui.add_head_html(f"<style>{css_custom_properties()}</style>")
@@ -930,15 +987,10 @@ class DashboardApp:
         ui.page_title("Computronium — Live Broad Map")
 
         # Build header
-        self._build_header()
-
-        # Build left drawer
-        self._build_left_drawer()
+        self._render_header()
 
         # Main content area
-        self.main_content = (
-            ui.column().classes("w-full p-4 q-ma-auto").style("max-width: 1400px;")
-        )
+        self._build_main_content()
 
         # Initial render
         self._render_current_panel()
@@ -952,22 +1004,6 @@ class DashboardApp:
             self._start_stream_timers()
 
 
-def _register_metrics_route() -> None:
-    """D1: expose the stdlib metrics registry at /metrics (idempotent)."""
-    from fastapi.responses import PlainTextResponse
-    from nicegui import app
-
-    if any(getattr(route, "path", None) == "/metrics" for route in app.routes):
-        return
-
-    @app.get("/metrics")
-    def _metrics_endpoint() -> PlainTextResponse:
-        return PlainTextResponse(
-            metrics.render_prometheus(),
-            media_type="text/plain; version=0.0.4",
-        )
-
-
 def build_dashboard(
     root: Path,
     log_path: Path | None = None,
@@ -975,24 +1011,19 @@ def build_dashboard(
     daemon_url: str | None = None,
     *,
     ui_mode: str = "auto",
-    gamify: bool = True,
     ui_actions: bool = False,
-    rebuild_state: bool = False,
+    quiet: bool = False,
     roots: tuple[Path, ...] | None = None,
 ) -> None:
-    """Build the new integrated Computronium dashboard.
-
-    This is the main entry point called from the CLI.
-    """
+    """Build the Computronium dashboard (five-panel architecture)."""
     app = DashboardApp(
         root=root,
         log_path=log_path,
         poll_seconds=poll_seconds,
         daemon_url=daemon_url,
         ui_mode=ui_mode,
-        gamify=gamify,
         ui_actions=ui_actions,
-        rebuild_state=rebuild_state,
+        quiet=quiet,
         roots=roots,
     )
     app.build()

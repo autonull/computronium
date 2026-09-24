@@ -163,6 +163,12 @@ class RepairBench(BasePanel):
         if rows is not None:
             self.rows = rows
 
+    def set_lens(self, lens: str) -> None:
+        """Set active lens (Defects/Maturation)."""
+        # RepairBench currently only shows defects
+        # Maturation lens would need a different view
+        pass
+
     def _refresh(self) -> None:
         """Refresh on mode change."""
 

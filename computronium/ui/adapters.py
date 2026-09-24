@@ -16,11 +16,8 @@ from computronium.ui.components.constitution_health import (
 )
 from computronium.ui.components.lineage_viewer import LineageEdge, LineageNode
 from computronium.ui.data_adapters import (
-    AdapterContext,
     make_adapter,
-    make_context_adapter,
 )
-from computronium.ui.recognition import Badge, Quest, Record
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -480,84 +477,7 @@ def adapt_episode_timeline(
 
 
 # ============================================================================
-# ProgressPanel Adapter
-# ============================================================================
-
-
-@dataclass(frozen=True, slots=True)
-class ProgressData:
-    """Data for ProgressPanel."""
-
-    badges: list[Badge]
-    quests: list[Quest]
-    records: list[Record]
-
-
-def adapt_progress_panel(
-    snapshot: DashboardSnapshot, root: Path, recognition_store: Any | None = None
-) -> ProgressData:
-    """Adapt snapshot to ProgressPanel data using recognition state store."""
-    if recognition_store is None:
-        return ProgressData(badges=[], quests=[], records=[])
-
-    state = recognition_store.rebuild_from_events()
-
-    badges = [
-        Badge(
-            id=b.id,
-            name=b.name,
-            description=b.description,
-            icon=b.icon,
-            evidence_kind=b.evidence_kind,
-            evidence_query=b.evidence_query,
-            register_explorer=b.register_explorer,
-            register_lab=b.register_lab,
-        )
-        for b in state.badges
-    ]
-
-    quests = [
-        Quest(
-            id=q.id,
-            name=q.name,
-            description=q.description,
-            icon=q.icon,
-            objective=q.objective,
-            completion_message_explorer=q.completion_message_explorer,
-            completion_message_lab=q.completion_message_lab,
-            progress_current=q.progress_current,
-            progress_target=q.progress_target,
-            completed=q.completed,
-            opted_in=q.opted_in,
-            completed_at=q.completed_at,
-        )
-        for q in state.quests
-    ]
-
-    records = [
-        Record(
-            id=r.id,
-            objective=r.objective,
-            value=r.value,
-            cell_key=r.cell_key,
-            timestamp=r.timestamp,
-            scope=r.scope,
-            register_explorer=r.register_explorer,
-            register_lab=r.register_lab,
-        )
-        for r in state.records
-    ]
-
-    return ProgressData(badges=badges, quests=quests, records=records)
-
-
-def _adapt_progress_from_ctx(ctx: AdapterContext) -> ProgressData:
-    """Context-aware progress adapter: recognition store rides AdapterContext."""
-    return adapt_progress_panel(ctx.snapshot, ctx.root, ctx.recognition_store)
-
-
-# ============================================================================
-# WorkshopPanel Adapter
+# WorkshopPanel Adapter (removed - replaced by Composer)
 # ============================================================================
 
 
@@ -969,8 +889,6 @@ ADAPTERS = {
     "constitution": make_adapter(adapt_constitution_health),
     "lineage": make_adapter(adapt_lineage_viewer),
     "episodes": make_adapter(adapt_episode_timeline),
-    "progress": make_context_adapter(_adapt_progress_from_ctx),
-    "workshop": make_adapter(adapt_workshop_panel),
     "campaigns": make_adapter(adapt_campaign_gallery),
     "preview": make_adapter(adapt_preview_shelf),
     "region_naming": make_adapter(adapt_region_naming),

@@ -8,10 +8,18 @@ from computronium.ui.components.campaign_card import (
     create_campaign_card,
     create_campaign_gallery,
 )
+from computronium.ui.components.composer import Composer, ComposerData
 from computronium.ui.components.constitution_health import (
     ConstitutionHealthPanel,
     ConstitutionInvariant,
     create_invariants_from_monitor,
+)
+from computronium.ui.components.console import (
+    CampaignInfo,
+    Console,
+    ConsoleData,
+    DriverIntent,
+    SessionDelta,
 )
 from computronium.ui.components.discovery_map import (
     DiscoveryMap,
@@ -54,6 +62,14 @@ from computronium.ui.components.probe_analytics import (
     create_probe_analytics,
 )
 from computronium.ui.components.progress_panel import ProgressData, ProgressPanel
+from computronium.ui.components.record import (
+    HistoryEvent,
+    LedgerEntry,
+    LessonEntry,
+    Record,
+    RecordData,
+    RecordLens,
+)
 from computronium.ui.components.region_naming import (
     RegionName,
     RegionNaming,
@@ -64,6 +80,7 @@ from computronium.ui.components.repair_bench import (
     RepairBench,
     create_repair_rows_from_defects,
 )
+from computronium.ui.components.status_chip import ChipSegment, StatusChip, StatusChipData
 from computronium.ui.components.stagnation_dashboard import (
     StagnationDashboard,
     StagnationDetector,
@@ -108,12 +125,19 @@ __all__ = [
     "AxisOption",
     "CampaignCard",
     "CampaignCardGallery",
+    "CampaignInfo",
     "CampaignManifest",
+    "ChipSegment",
+    "Composer",
+    "ComposerData",
+    "Console",
+    "ConsoleData",
     "ConstitutionHealthPanel",
     "ConstitutionInvariant",
     "DefectRow",
     "DialComposer",
     "DiscoveryMap",
+    "DriverIntent",
     "EpisodeEvent",
     "EpisodeTimeline",
     "FeedEvent",
@@ -123,6 +147,9 @@ __all__ = [
     "GenomeHealthTracker",
     "HealthPanel",
     "HealthTile",
+    "HistoryEvent",
+    "LedgerEntry",
+    "LessonEntry",
     "LineageEdge",
     "LineageNode",
     "LineageViewer",
@@ -139,12 +166,18 @@ __all__ = [
     "ProgressData",
     "ProgressPanel",
     "RecipeCardPanel",
+    "Record",
+    "RecordData",
+    "RecordLens",
     "RegionName",
     "RegionNaming",
     "RepairBench",
+    "SessionDelta",
     "StagnationDashboard",
     "StagnationDetector",
     "StagnationSnapshot",
+    "StatusChip",
+    "StatusChipData",
     "TeamMember",
     "TeamProgress",
     "TeamWall",

@@ -131,6 +131,8 @@ def test_dashboard_cli_help() -> None:
     assert result.returncode == 0, f"dashboard --help failed: {result.stderr}"
     # Check for new M3 flags
     assert "--ui-mode" in result.stdout
-    assert "--gamify" in result.stdout
     assert "--ui-actions" in result.stdout
-    assert "--rebuild-ui-state" in result.stdout
+    assert "--quiet" in result.stdout
+    # Old flags removed
+    assert "--gamify" not in result.stdout
+    assert "--rebuild-ui-state" not in result.stdout
