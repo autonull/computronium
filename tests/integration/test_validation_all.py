@@ -1,3 +1,5 @@
+import unittest
+
 import pytest
 import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
@@ -221,4 +223,4 @@ class TestValidationAll:
 
 
 if __name__ == "__main__":
-    unittest.main()  # ruff: ignore[undefined-name]
+    unittest.main()

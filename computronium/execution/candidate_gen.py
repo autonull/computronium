@@ -21,6 +21,7 @@ from computronium.execution._lifecycle import CurriculumManager, PromotionGate
 from computronium.execution.criteria import check_criterion
 from computronium.execution.events import EventSink, NullEventSink
 from computronium.execution.task import ExperimentTask
+from computronium.execution.task_weights import TASK_GROUPS
 from computronium.experiment.param_estimator import NATIVE_MODEL_NAMES
 from computronium.hyperopt import PatientLevel
 
@@ -753,8 +754,8 @@ class CandidateGenerator:
             return True
         if self.task_filter == task:
             return True
-        if self.task_filter in TASK_GROUPS:  # ruff: ignore[undefined-name]
-            return task in TASK_GROUPS[self.task_filter]  # ruff: ignore[undefined-name]
+        if self.task_filter in TASK_GROUPS:
+            return task in TASK_GROUPS[self.task_filter]
         return False
 
     def _check_curriculum(self, progress: dict, model_name: str, task: str) -> bool:  # ruff: ignore[complex-structure]

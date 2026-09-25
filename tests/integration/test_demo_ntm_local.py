@@ -9,9 +9,11 @@ arms; the comparison isolates credit locality from memory machinery
 (§17.9).
 
 Measured (w8_ntm_promo_r6 logs, 2026-09-08): bptt 0.979, local3
-oscillates 0.79-0.87 at 3000 steps (assert floor 0.80); the firm
-capability record is the 8000-step 3-seed run — local3 mean 0.944
-(0.958/0.917/0.958), `logs/breadth_ntm_copy8k_s{0,1,2}.log`.
+oscillates 0.79-0.87 at 3000 steps. The local3 floor is therefore set
+*below* the observed band, not inside it: an assertion threshold placed
+within a measured oscillation range is a flake waiting for a busy machine
+(TODO34 §1.1). The firm capability record is the 8000-step 3-seed run —
+local3 mean 0.944 (0.958/0.917/0.958), `logs/breadth_ntm_copy8k_s{0,1,2}.log`.
 """
 
 import time
@@ -76,5 +78,5 @@ def test_demo_ntm_local(emit_run_record) -> None:
             ),
         },
     )
-    assert arms["local3"] >= 0.80
+    assert arms["local3"] >= 0.78
     assert arms["bptt"] >= 0.97

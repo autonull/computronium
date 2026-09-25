@@ -16,7 +16,7 @@ from computronium.acceleration.backends import kernel_available
 from computronium.acceleration.fa_kernels import (
     HAS_TRITON_FA,
     fa_batched_outer_triton,
-    fa_feedback_projection_notrans_triton,
+    fa_feedback_projection_triton,
 )
 from computronium.ontology.credit import _apply_credit_norm
 
@@ -106,9 +106,9 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
         if i > 0:
             B = feedback_weights[i]
             if HAS_TRITON_FA and err.is_cuda:
-                err = fa_feedback_projection_notrans_triton(err, B)
+                err = fa_feedback_projection_triton(err, B)
             else:
-                err @= B
+                err = err @ B
 
             # Apply credit norm only (no activation derivative)
             err = _apply_credit_norm([err], credit_norm, [h_prev])[0]

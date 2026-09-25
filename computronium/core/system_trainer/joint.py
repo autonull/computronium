@@ -49,6 +49,7 @@ if TYPE_CHECKING:
         StateDynamics,
         Substrate,
     )
+    from computronium.state.context import SystemContext
 
 
 def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
@@ -233,7 +234,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-        def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+        def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
             from computronium.core.joint.transition import PlasticityConfig
             from computronium.state import StateRegistry, StateVariable, SystemContext
@@ -291,7 +292,7 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             )
 
         @property
-        def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+        def context(self) -> SystemContext:
             """SystemContext bound to the current θ and component configs."""
             return self._make_context()
 
@@ -370,11 +371,11 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
                 return self
 
             @property
-            def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+            def context(self) -> SystemContext:
                 """SystemContext bound to the current θ and component configs."""
                 return self._make_context()
 
-            def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
+            def _make_context(self) -> SystemContext:
                 from computronium.core.joint.transition import PlasticityConfig
                 from computronium.state import (
                     StateRegistry,

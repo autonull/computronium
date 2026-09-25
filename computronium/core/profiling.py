@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from computronium.core.system_trainer import JointSystem
+    from computronium.ontology import SystemConfig
 
 __all__ = [
     "EnergyProfile",
@@ -471,7 +472,7 @@ def _activity_jacobian_amplification(
 
 
 def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
-    coordinate: str | SystemConfig,  # ruff: ignore[undefined-name]
+    coordinate: str | SystemConfig,
     batch_size: int = 64,
     device: str = "auto",
     iterations: int = 10,

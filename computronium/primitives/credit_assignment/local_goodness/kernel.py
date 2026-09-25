@@ -18,7 +18,7 @@ from computronium.acceleration.backends import kernel_available
 from computronium.acceleration.fa_kernels import (
     HAS_TRITON_FA,
     fa_batched_outer_triton,
-    fa_feedback_projection_notrans_triton,
+    fa_feedback_projection_triton,
 )
 from computronium.ontology.credit import _apply_credit_norm
 
@@ -133,7 +133,7 @@ def _lemma_backward_triton(  # ruff: ignore[too-many-locals]
         # Project e1 through feedback matrix: err = e1 @ B
         B = feedback_weights[k]
         if HAS_TRITON_FA and e1.is_cuda:
-            err = fa_feedback_projection_notrans_triton(e1, B)
+            err = fa_feedback_projection_triton(e1, B)
         else:
             err = e1 @ B
 

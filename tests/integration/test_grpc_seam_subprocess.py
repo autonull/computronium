@@ -145,7 +145,9 @@ async def _run_single_process_step(  # ruff: ignore[unused-async]
         state, system.geometry, system.substrate, target=y
     )
     nudged_state.energy = system.dynamics.compute_energy(nudged_state, system.geometry)
-    nudged_state.loss = task_loss(nudged_state, y)  # ruff: ignore[undefined-name]
+    from computronium.core.pipeline import task_loss
+
+    nudged_state.loss = task_loss(nudged_state, y)
 
     # Credit assignment
     from computronium.core.pipeline import phase_states

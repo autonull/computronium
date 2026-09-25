@@ -8,6 +8,8 @@ Fused kernels for Feedback Alignment backward pass:
 
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import Tensor
 
@@ -266,100 +268,12 @@ class FAKernelBackend:
         return None
 
 
-def _get_activation(name: str) -> torch.nn.Module:
-    """Get activation module by name."""
-    activations = {
-        "relu": torch.nn.ReLU(),
-        "silu": torch.nn.SiLU(),
-        "tanh": torch.nn.Tanh(),
-        "gelu": torch.nn.GELU(),
-    }
-    return activations.get(name.lower(), torch.nn.ReLU())
-
-
-def _apply_activation_derivative(
-    grad_h: Tensor,
-    h_curr: Tensor,
-    activation: torch.nn.Module,
-) -> Tensor:
-    """Apply activation function derivative."""
-    if isinstance(activation, torch.nn.SiLU):
-        sig = torch.sigmoid(h_curr)
-        return grad_h * sig * (1 + h_curr * (1 - sig))
-    if isinstance(activation, torch.nn.ReLU):
-        return grad_h * (h_curr > 0).to(grad_h.dtype)
-    if isinstance(activation, torch.nn.Tanh):
-        return grad_h * (1 - h_curr**2)
-    if isinstance(activation, torch.nn.GELU):
-        # GELU derivative approximation
-        cdf = 0.5 * (1 + torch.erf(h_curr / 1.4142))
-        pdf = torch.exp(-(h_curr**2) / 2) / 2.5066
-        return grad_h * (cdf + h_curr * pdf)
-    return grad_h * (h_curr > 0).to(grad_h.dtype)
-
-
-# Triton kernels for fused FA operations
 try:  # noqa: PLR0915
     import triton
     import triton.language as tl
-    from triton.language.extra import libdevice
 
     @triton.jit
     def _fa_feedback_projection_kernel(
-        error_ptr,
-        feedback_ptr,
-        out_ptr,
-        B,
-        D_in,
-        D_out,
-        BLOCK_B: tl.constexpr,
-        BLOCK_D: tl.constexpr,
-    ):
-        """Fused feedback weight projection: error @ B.T
-
-        feedback matrix has shape [D_out, D_in] (row-major, stride D_in).
-        Computes error @ feedback.T where error: [B, D_out], feedback.T: [D_in, D_out].
-        """
-        pid_b = tl.program_id(0)
-        pid_d = tl.program_id(1)
-
-        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
-        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
-
-        mask_b = offs_b < B
-        mask_d = offs_d < D_in
-
-        # Accumulate error @ feedback.T
-        acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
-        for k in range(0, D_out, BLOCK_D):
-            offs_k = k + tl.arange(0, BLOCK_D)
-            mask_k = offs_k < D_out
-
-            # Load error tile [BLOCK_B, BLOCK_D] from error[offs_b, offs_k]
-            error_tile = tl.load(
-                error_ptr + offs_b[:, None] * D_out + offs_k[None, :],
-                mask=mask_b[:, None] & mask_k[None, :],
-                other=0.0,
-            )
-
-            # Load feedback tile [BLOCK_D, BLOCK_D] from feedback.T[offs_d, offs_k]
-            # feedback is [D_out, D_in], so feedback.T[offs_d, offs_k] = feedback[offs_k, offs_d]
-            fb_tile = tl.load(
-                feedback_ptr + offs_k[:, None] * D_in + offs_d[None, :],
-                mask=mask_k[:, None] & mask_d[None, :],
-                other=0.0,
-            )
-
-            acc += tl.dot(error_tile, tl.trans(fb_tile), input_precision="ieee")
-
-        tl.store(
-            out_ptr + offs_b[:, None] * D_in + offs_d[None, :],
-            acc,
-            mask=mask_b[:, None] & mask_d[None, :],
-        )
-
-    @triton.jit
-    def _fa_feedback_projection_notrans_kernel(
         error_ptr,
         feedback_ptr,
         out_ptr,
@@ -414,40 +328,6 @@ try:  # noqa: PLR0915
         )
 
     @triton.jit
-    def _fa_activation_derivative_kernel(
-        grad_ptr,
-        h_ptr,
-        out_ptr,
-        n_elements,
-        activation_type,
-        BLOCK_SIZE: tl.constexpr,
-    ):
-        """Apply activation derivative in-place."""
-        pid = tl.program_id(0)
-        offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)
-        mask = offs < n_elements
-
-        grad = tl.load(grad_ptr + offs, mask=mask)
-        h = tl.load(h_ptr + offs, mask=mask)
-
-        if activation_type == 0:  # ReLU
-            deriv = (h > 0).to(tl.float32)
-        elif activation_type == 1:  # SiLU
-            sig = libdevice.sigmoid(h)
-            deriv = sig * (1.0 + h * (1.0 - sig))
-        elif activation_type == 2:  # Tanh
-            deriv = 1.0 - h * h
-        elif activation_type == 3:  # GELU (approximate)
-            cdf = 0.5 * (1.0 + libdevice.erf(h * 0.7071067811865475))
-            pdf = libdevice.exp(-h * h * 0.5) * 0.3989422804014327
-            deriv = cdf + h * pdf
-        else:
-            deriv = (h > 0).to(tl.float32)
-
-        out = grad * deriv
-        tl.store(out_ptr + offs, out, mask=mask)
-
-    @triton.jit
     def _fa_batched_outer_kernel(
         pre_ptr,
         post_ptr,
@@ -481,7 +361,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc += tl.dot(tl.trans(post), pre)
+            acc += post * pre
 
         acc = acc / B  # ruff: ignore[non-augmented-assignment]
         tl.store(
@@ -500,33 +380,49 @@ for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.FA, hw, FAKernelBackend)
 
 
-__all__ = ["HAS_TRITON_FA", "FAKernelBackend"]
+# Standalone Triton functions for primitive-level FA acceleration
+def _get_activation(name: str) -> torch.nn.Module:
+    """Get activation module by name."""
+    activations = {
+        "relu": torch.nn.ReLU(),
+        "silu": torch.nn.SiLU(),
+        "tanh": torch.nn.Tanh(),
+        "gelu": torch.nn.GELU(),
+    }
+    return activations.get(name.lower(), torch.nn.ReLU())
+
+
+def _apply_activation_derivative(
+    grad_h: Tensor,
+    h_curr: Tensor,
+    activation: torch.nn.Module,
+) -> Tensor:
+    """Apply activation function derivative."""
+    if isinstance(activation, torch.nn.SiLU):
+        sig = torch.sigmoid(h_curr)
+        return grad_h * sig * (1 + h_curr * (1 - sig))
+    if isinstance(activation, torch.nn.ReLU):
+        return grad_h * (h_curr > 0).to(grad_h.dtype)
+    if isinstance(activation, torch.nn.Tanh):
+        return grad_h * (1 - h_curr**2)
+    if isinstance(activation, torch.nn.GELU):
+        # GELU derivative approximation
+        cdf = 0.5 * (1 + torch.erf(h_curr / 1.4142))
+        pdf = torch.exp(-(h_curr**2) / 2) / 2.5066
+        return grad_h * (cdf + h_curr * pdf)
+    return grad_h * (h_curr > 0).to(grad_h.dtype)
+
+
+# Triton kernels for fused FA operations
 
 
 # Standalone Triton functions for primitive-level FA acceleration
 # These can be used by primitive kernels without the full FAKernelBackend
-
-import math
-
-from computronium.ontology.credit import _apply_credit_norm
-
-
-def _activation_type_from_module(activation: torch.nn.Module) -> int:
-    """Map activation module to integer type for Triton kernel."""
-    if isinstance(activation, torch.nn.SiLU):
-        return 1
-    if isinstance(activation, torch.nn.Tanh):
-        return 2
-    if isinstance(activation, torch.nn.GELU):
-        return 3
-    return 0  # ReLU default
-
-
 def fa_feedback_projection_triton(
     error: torch.Tensor,
     feedback: torch.Tensor,
 ) -> torch.Tensor:
-    """Compute error @ feedback.T using Triton (kept for backward compatibility).
+    """Compute error @ feedback using Triton.
 
     Args:
         error: [B, D_out]
@@ -535,8 +431,8 @@ def fa_feedback_projection_triton(
     Returns:
         [B, D_in]
     """
-    if not HAS_TRITON or not error.is_cuda:
-        return error @ feedback.T
+    if not HAS_TRITON_FA or not error.is_cuda:
+        return error @ feedback
 
     B, D_out = error.shape
     D_in = feedback.shape[1]
@@ -561,72 +457,6 @@ def fa_feedback_projection_triton(
     return out
 
 
-def fa_feedback_projection_notrans_triton(
-    error: torch.Tensor,
-    feedback: torch.Tensor,
-) -> torch.Tensor:
-    """Compute error @ feedback (no transpose) using Triton.
-
-    Args:
-        error: [B, D_out]
-        feedback: [D_out, D_in]
-
-    Returns:
-        [B, D_in]
-    """
-    if not HAS_TRITON or not error.is_cuda:
-        return error @ feedback
-
-    B, D_out = error.shape
-    D_in = feedback.shape[1]
-    assert feedback.shape[0] == D_out
-
-    out = torch.empty(B, D_in, device=error.device, dtype=error.dtype)
-
-    BLOCK_B = 32
-    BLOCK_D = 64
-    grid = (math.ceil(B / BLOCK_B), math.ceil(D_in / BLOCK_D))
-
-    _fa_feedback_projection_notrans_kernel[grid](
-        error,
-        feedback,
-        out,
-        B,
-        D_in,
-        D_out,
-        BLOCK_B=BLOCK_B,
-        BLOCK_D=BLOCK_D,
-    )
-    return out
-
-
-def fa_activation_derivative_triton(
-    grad: torch.Tensor,
-    h: torch.Tensor,
-    activation: torch.nn.Module,
-) -> torch.Tensor:
-    """Apply activation derivative using Triton."""
-    if not HAS_TRITON or not grad.is_cuda:
-        return _apply_activation_derivative(grad, h, activation)
-
-    n_elements = grad.numel()
-    out = torch.empty_like(grad)
-
-    BLOCK_SIZE = 1024
-    grid = (math.ceil(n_elements / BLOCK_SIZE),)
-    act_type = _activation_type_from_module(activation)
-
-    _fa_activation_derivative_kernel[grid](
-        grad,
-        h,
-        out,
-        n_elements,
-        act_type,
-        BLOCK_SIZE=BLOCK_SIZE,
-    )
-    return out
-
-
 def fa_batched_outer_triton(
     pre: torch.Tensor,
     post: torch.Tensor,
@@ -640,7 +470,7 @@ def fa_batched_outer_triton(
     Returns:
         [D_out, D_in] (averaged over batch)
     """
-    if not HAS_TRITON or not pre.is_cuda:
+    if not HAS_TRITON_FA or not pre.is_cuda:
         return (post.T @ pre) / pre.shape[0]
 
     B, D_in = pre.shape
@@ -666,74 +496,9 @@ def fa_batched_outer_triton(
     return out
 
 
-def fa_backward_triton(
-    activations: list[torch.Tensor],
-    output_error: torch.Tensor,
-    feedback_weights: list[torch.Tensor],
-    activation: torch.nn.Module,
-    credit_norm: str = "none",
-) -> list[torch.Tensor]:
-    """Triton-accelerated FA backward pass for primitive-level use.
-
-    Args:
-        activations: List of [x, h1, h2, ..., output] - length num_layers + 1
-        output_error: [B, D_out] - error at output layer (from autograd)
-        feedback_weights: List of feedback matrices B_i [D_{i+1}, D_i] for each layer
-        activation: Activation module
-        credit_norm: Credit normalization type
-
-    Returns:
-        List of weight gradients [grad_W0, grad_W1, ...]
-    """
-    num_layers = len(feedback_weights)
-    if num_layers != len(activations) - 1:
-        raise ValueError(
-            f"Expected {len(activations) - 1} feedback weights, got {num_layers}"
-        )
-
-    # Apply credit norm to output error
-    err = _apply_credit_norm([output_error], credit_norm)[0]
-
-    weight_grads = []
-
-    for i in range(num_layers - 1, -1, -1):
-        h_prev = activations[i]
-        h_curr = activations[i + 1]
-
-        # Weight gradient: err.T @ h_prev / batch
-        if HAS_TRITON_FA and err.is_cuda:
-            wgrad = fa_batched_outer_triton(h_prev, err)
-        else:
-            wgrad = (err.T @ h_prev) / h_prev.shape[0]
-        weight_grads.append(wgrad)
-
-        # Propagate error to previous layer
-        if i > 0:
-            B = feedback_weights[i]
-            if HAS_TRITON_FA and err.is_cuda:
-                err = fa_feedback_projection_triton(err, B)
-            else:
-                err = err @ B.T
-
-            # Apply activation derivative
-            if HAS_TRITON_FA and err.is_cuda:
-                err = fa_activation_derivative_triton(err, h_curr, activation)
-            else:
-                err = _apply_activation_derivative(err, h_curr, activation)
-
-            # Apply credit norm
-            err = _apply_credit_norm([err], credit_norm, [h_curr])[0]
-
-    weight_grads.reverse()
-    return weight_grads
-
-
 __all__ = [
     "HAS_TRITON_FA",
     "FAKernelBackend",
-    "fa_activation_derivative_triton",
-    "fa_backward_triton",
     "fa_batched_outer_triton",
-    "fa_feedback_projection_notrans_triton",
     "fa_feedback_projection_triton",
 ]
