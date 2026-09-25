@@ -40,10 +40,10 @@ class ConfigChanged(Event):
 
 @dataclass(frozen=True, slots=True)
 class WebSocketEvent(Event):
-    """Raw WebSocket event received."""
+    """Enveloped record from the single ``stream`` topic."""
 
-    topic: str  # "telemetry" or "events"
-    payload: dict[str, Any]
+    topic: str  # always "stream" (GAME.todo7 §6.3)
+    payload: dict[str, Any]  # StreamEnvelope dict: v/kind/payload
 
 
 @dataclass(frozen=True, slots=True)

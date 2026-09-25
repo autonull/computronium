@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from computronium.autoscientist.stream_protocol import STREAM_TOPIC, events_envelope
 from computronium.ui.dashboard import DashboardApp
 from computronium.ui.event_bus import WebSocketEvent, event_bus
 from tests.ui.fixture import seed_campaign_root
@@ -95,6 +96,48 @@ def test_bus_publish_reaches_dashboard_handler(tmp_path: Path) -> None:
     app = _make_app(root)
 
     event_bus.publish(
-        WebSocketEvent(topic="events", payload={"kind": "cell_done", "cell": "x"})
+        WebSocketEvent(
+            topic=STREAM_TOPIC,
+            payload=events_envelope({"kind": "cell_done", "cell": "x"}),
+        )
     )
     assert len(app.event_history) == 1
+
+
+def test_bus_malformed_envelope_dropped(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    event_bus.publish(WebSocketEvent(topic=STREAM_TOPIC, payload={"nope": True}))
+    assert len(app.event_history) == 0
+
+
+def test_bus_unknown_topic_ignored(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    event_bus.publish(
+        WebSocketEvent(
+            topic="telemetry",
+            payload=events_envelope({"kind": "cell_done", "cell": "x"}),
+        )
+    )
+    assert len(app.event_history) == 0
+
+
+def test_apply_hash_navigates_view_and_tab(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    app._apply_hash("#atlas/preview")
+    assert app.view == "atlas"
+    assert app._active_tab["atlas"] == "preview"
+
+    app._apply_hash("#nope")
+    assert app.view == "atlas"
+
+    app._apply_hash("")
+    assert app.view == "atlas"

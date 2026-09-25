@@ -52,7 +52,7 @@ MARGINAL_ACC_THRESHOLD = 0.15  # above chance but below learned
 
 @dataclass(frozen=True, slots=True)
 class DashboardEvent:
-    """Structured event from /ws/events for the event panel."""
+    """Structured event from the stream topic for the event panel."""
 
     kind: str
     timestamp: float
@@ -64,7 +64,7 @@ class DashboardEvent:
 
 
 def _classify_event(raw: dict[str, Any], now: float) -> DashboardEvent:
-    """Map a raw /ws/events record to a rendered DashboardEvent."""
+    """Map a raw stream-topic event record to a rendered DashboardEvent."""
     kind = raw.get("kind", "unknown")
     payload = {k: v for k, v in raw.items() if k != "kind"}
 

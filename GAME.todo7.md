@@ -313,7 +313,11 @@ Auto-discovery at startup; palette and registry pick everything up.
 ### Phase 2: Simplification + Defect Fixes
 - [x] Flags removed (progress + workshop always in palette); PanelPlacement
   collapse (landed with the Phase 1 registry rewrite)
-- [ ] Single WS topic
+- [x] Single WS topic (done 2026-09-25): `autoscientist/stream_protocol.py`
+  (`StreamEnvelope` v/kind/payload, `?v=` handshake, 4400 on mismatch);
+  daemon `/ws/telemetry` + `/ws/events` replaced by multiplexed `/ws/stream`;
+  dashboard single `_ws_loop` → enveloped `WebSocketEvent(topic="stream")`
+  → kind-routed. Malformed envelopes dropped, unknown topics ignored.
 - [x] Panel instance caching; tab-bar rebuild fix; keyboard input guard
   → `DashboardApp._tab_panels` cache (cleared on `switch_root`, which
   re-captures root-bound factories); `_tab_membership` skips bar rebuilds,
@@ -321,7 +325,13 @@ Auto-discovery at startup; palette and registry pick everything up.
   command palette is open (`CommandPalette.is_open`). Full input-focus guard
   needs a client-side target check — NiceGUI server key events carry no focus
   target (see §13).
-- [ ] Hash navigation real implementation (4.8); a11y token cleanup (5.5)
+- [x] Hash navigation real implementation (done 2026-09-25):
+  `ui/navigation.py` (`parse_hash`/`format_hash`, `#view`/`#view/tab`);
+  writes on every navigation, 1 s client→server sync timer covers deep-link
+  load, refresh, and back/forward; unknown keys ignored. a11y token cleanup
+  already resolved (§15: grey pinned in `ui/a11y/tokens.py`).
+- [x] Tab duplicate-parenting fix: `tab_bar.default_slot.children.append(btn)`
+  removed (context-manager parenting is sufficient).
 
 ### Phase 3: Capabilities
 - [ ] Cell forensics drawer (4.1) · Atlas filters (4.2) · parallel coordinates (4.3)
@@ -541,3 +551,67 @@ Auto-discovery at startup; palette and registry pick everything up.
 - `docs/platform/dashboard.md` still documents pre-unification flags/registers
   — refresh in the Phase 4 docs pass with the remaining stale prose
   (dogfood walkthrough references `lint_readability`).
+
+## 16. PROGRESS LOG (2026-09-25 — Phase 2 remainder: stream, hash nav, tab fix)
+
+### Shipped
+- Single WS topic (§6.3): new `computronium/autoscientist/stream_protocol.py`
+  (frozen Pydantic `StreamEnvelope` with `extra="forbid"`, `STREAM_TOPIC`,
+  `STREAM_PROTOCOL_VERSION=1`, 4400 mismatch close, envelope helpers +
+  `parse_envelope`/`is_supported`); daemon `/ws/telemetry` + `/ws/events`
+  deleted, replaced by multiplexed `/ws/stream?v=` (`_serve_stream` pumps
+  both `TelemetryBridge`s through one queue; disconnect detected by racing
+  `queue.get` against `receive_text`); dashboard collapsed to one `_ws_loop`
+  (split into `_consume_stream`/`_handle_stream_message` for the try-block
+  lint) publishing enveloped `WebSocketEvent(topic="stream")`, routed by
+  kind in `_on_ws_event` (malformed dropped, unknown topics ignored).
+  `_record_telemetry` deleted (dead after the collapse).
+- Hash navigation: new `computronium/ui/navigation.py` (pure
+  `parse_hash`/`format_hash`); `_update_hash` writes on every view/tab
+  switch; 1 s `_sync_hash_from_client` timer reads `window.location.hash`
+  (headless-safe) and `_apply_hash` navigates, ignoring unknown keys —
+  covers deep-link load, refresh, and back/forward.
+- Tab fix: removed `tab_bar.default_slot.children.append(btn)`
+  duplicate-parenting (§13 quirk closed).
+- Touch-up: `/ws/*` path mentions in `monitor`/`activity_feed`/`live_atlas`
+  docstrings now say "stream topic"; `WebSocketEvent.topic` documented as
+  always `"stream"`.
+
+### Discovered while working
+- `daemon.py` imported `WebSocket` under `TYPE_CHECKING` only, so FastAPI
+  could not recognize the websocket endpoint param (treated as a required
+  query param → 1008 close on connect). Promoted to a runtime import.
+  The old two-endpoint routes were never covered by a websocket test, so
+  this was latent until the new stream tests connected.
+- Pydantic ignores extra fields by default: `{"nope": True}` validated
+  against `StreamEnvelope` with defaults. `extra="forbid"` added — the
+  wire model now rejects malformed envelopes instead of misrouting them.
+- `autoscientist/dashboard.py` (the older non-NiceGUI dashboard module)
+  has its own `/ws` endpoint — untouched; it is outside the GAME.todo7
+  dashboard and a candidate for the dead-code pass.
+
+### New improvement opportunities
+- `dashboard_panel_render_failed_total` metric label set changed
+  (`topic` → `topic`+`kind`); any Grafana/prom queries on the old label
+  set need a glance during the Phase 4 perf pass.
+- Hash-sync polling (1 s `run_javascript` roundtrip per client) is the
+  simple correct bridge; an event-driven `hashchange → emit` bridge would
+  cut the per-second roundtrip if dashboard client count ever matters.
+- `Badge/Quest/Record.register_explorer|_lab` write-only residue,
+  `BasePanel._refresh` no-op stubs, Evolution/Evidence stories, and
+  screenshot regeneration (5 views × 2 densities) still open from §15.
+
+### Notes for remaining work
+- Verified: 109 passed (`test_stream_protocol` + `test_adapters` +
+  `test_dashboard_interactions` + `test_dashboard_render` +
+  `test_dashboard_state` + `test_dashboard_fault_injection` + `tests/lint`)
+  plus 4 passed daemon stream/API/event checks; `ruff format` clean, new
+  modules `ruff check` + `pyright` clean; remaining findings on touched
+  files are the documented pre-existing idioms (WS `create_task`,
+  `assert`, bare-`except` JS bridge, `noqa`-style comments).
+- Next slice: Phase 3 capabilities (forensics drawer, Atlas filters,
+  parallel coordinates, budget panel, Evidence adapters, scrubber), then
+  Phase 4 docs/perf/screenshots.
+- `docs/platform/dashboard.md` still documents pre-unification flags/registers
+  and now also the old `/ws/telemetry` + `/ws/events` endpoints — refresh
+  in the Phase 4 docs pass.

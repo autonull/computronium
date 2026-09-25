@@ -272,3 +272,41 @@ def test_telemetry_publish_without_consumer_never_raises() -> None:
     bridge.publish({"loss": 1.0})  # no loop attached: buffered only
     time.sleep(0.01)
     assert bridge._buf[0] == {"loss": 1.0}
+
+
+def test_ws_stream_multiplexes_telemetry_and_events(tmp_path: Path) -> None:
+    """Single ``/ws/stream`` topic carries both kinds in typed envelopes."""
+    from computronium.autoscientist.stream_protocol import parse_envelope
+
+    daemon = _make(tmp_path)
+    daemon.telemetry.publish({"train_loss": 0.5})
+    daemon.events.publish({"kind": "daemon_started"})
+    try:
+        client = TestClient(daemon.build_app())
+        with client.websocket_connect("/ws/stream?v=1") as ws:
+            first = parse_envelope(ws.receive_json())
+            second = parse_envelope(ws.receive_json())
+        assert first is not None and second is not None
+        assert {first.kind, second.kind} == {"telemetry", "events"}
+    finally:
+        daemon.stop()
+
+
+def test_ws_stream_rejects_unknown_version(tmp_path: Path) -> None:
+    from starlette.websockets import WebSocketDisconnect
+
+    from computronium.autoscientist.stream_protocol import (
+        STREAM_CLOSE_VERSION_MISMATCH,
+    )
+
+    daemon = _make(tmp_path)
+    try:
+        client = TestClient(daemon.build_app())
+        with (
+            client.websocket_connect("/ws/stream?v=999") as ws,
+            pytest.raises(WebSocketDisconnect) as exc,
+        ):
+            ws.receive_json()
+        assert exc.value.code == STREAM_CLOSE_VERSION_MISMATCH
+    finally:
+        daemon.stop()

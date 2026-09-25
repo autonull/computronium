@@ -90,8 +90,8 @@ class MonitorView(BasePanel):
             ),
             expert=(
                 "Liveness from heartbeat freshness + daemon reachability. Tiles from "
-                "health_stats(). Loss curve from /ws/telemetry (throttled paint). "
-                "Feed from /ws/events, classified; alerts raise toasts and reports."
+                "health_stats(). Loss curve from the stream topic (throttled paint). "
+                "Feed from stream events, classified; alerts raise toasts and reports."
             ),
             docs_url="https://computronium.readthedocs.io/en/latest/dashboard/monitor.html",
         )

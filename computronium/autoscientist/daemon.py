@@ -5,8 +5,8 @@ heartbeat artifact, an exclusive root lockfile, and a FastAPI surface:
 
 - lifecycle: POST ``/control/{start,pause,resume,stop,skip_sleep}``
 - state:     GET ``/state``
-- streams:   WS ``/ws/telemetry`` (per-batch trainer metrics, drop-oldest)
-             WS ``/ws/events``   (structured lifecycle events)
+- streams:   WS ``/ws/stream?v=1`` (single typed-envelope topic multiplexing
+              per-batch trainer metrics + structured lifecycle events, §6.3)
 
 Boundary-based stop semantics (TODO30 §1.2): pause/stop take effect at
 iteration boundaries only — a soft stop loses at most the in-flight cell's
@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import psutil
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 
 from computronium.autoscientist.alerts import (
     Alert,
@@ -48,13 +48,17 @@ from computronium.autoscientist.objectives import (
     parse_objectives,
 )
 from computronium.autoscientist.report import generate_report
+from computronium.autoscientist.stream_protocol import (
+    STREAM_CLOSE_VERSION_MISMATCH,
+    STREAM_PROTOCOL_VERSION,
+    events_envelope,
+    telemetry_envelope,
+)
 from computronium.utils import seed_everything
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import AsyncIterator, Callable, Mapping
-
-    from fastapi import WebSocket
 
 logger = logging.getLogger("daemon")
 
@@ -570,19 +574,59 @@ class ContinuousDaemon:
                 "last_summary": daemon._last_summary,
             }
 
-        @app.websocket("/ws/telemetry")
-        async def ws_telemetry(websocket: WebSocket) -> None:
+        @app.websocket("/ws/stream")
+        async def ws_stream(websocket: WebSocket) -> None:
             await websocket.accept()
-            async for record in daemon.telemetry.stream():
-                await websocket.send_json(record)
-
-        @app.websocket("/ws/events")
-        async def ws_events(websocket: WebSocket) -> None:
-            await websocket.accept()
-            async for record in daemon.events.stream():
-                await websocket.send_json(record)
+            try:
+                requested = int(
+                    websocket.query_params.get("v", str(STREAM_PROTOCOL_VERSION))
+                )
+            except ValueError:
+                requested = -1
+            if requested != STREAM_PROTOCOL_VERSION:
+                await websocket.close(code=STREAM_CLOSE_VERSION_MISMATCH)
+                return
+            await daemon._serve_stream(websocket)
 
         return app
+
+    async def _serve_stream(self, websocket: WebSocket) -> None:
+        """Multiplex telemetry + lifecycle events onto the single topic."""
+        import asyncio
+
+        queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+
+        async def _pump(kind: str, bridge: TelemetryBridge) -> None:
+            async for record in bridge.stream():
+                queue.put_nowait((kind, record))
+
+        pumps = [
+            asyncio.create_task(_pump("telemetry", self.telemetry)),
+            asyncio.create_task(_pump("events", self.events)),
+        ]
+        try:
+            while True:
+                getter = asyncio.create_task(queue.get())
+                waiter = asyncio.create_task(websocket.receive_text())
+                done, pending = await asyncio.wait(
+                    {getter, waiter}, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in pending:
+                    task.cancel()
+                if waiter in done:
+                    try:
+                        waiter.result()
+                    except Exception:  # noqa: BLE001 (disconnect ends the stream)
+                        return
+                    continue
+                kind, record = getter.result()
+                if kind == "telemetry":
+                    await websocket.send_json(telemetry_envelope(record))
+                else:
+                    await websocket.send_json(events_envelope(record))
+        finally:
+            for pump in pumps:
+                pump.cancel()
 
     def serve(self) -> None:
         """Run the API server on the calling (main) thread until the worker

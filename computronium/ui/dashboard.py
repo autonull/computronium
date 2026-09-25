@@ -26,6 +26,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from nicegui import app as gui_app
 from nicegui import ui
 
+from computronium.autoscientist.stream_protocol import (
+    STREAM_PROTOCOL_VERSION,
+    STREAM_TOPIC,
+    parse_envelope,
+)
 from computronium.ui.a11y.tokens import a11y_css
 from computronium.ui.adapters import get_adapter
 from computronium.ui.components import (
@@ -61,6 +66,7 @@ from computronium.ui.event_bus import (
     event_bus,
 )
 from computronium.ui.metrics import metrics
+from computronium.ui.navigation import format_hash, parse_hash
 from computronium.ui.panels import BasePanel
 from computronium.ui.view_registry import (
     PanelPlacement,
@@ -635,14 +641,22 @@ class DashboardApp:
     # ── WebSocket streams ─────────────────────────────────────────────────────
 
     def _on_ws_event(self, event: WebSocketEvent) -> None:
-        metrics.inc("dashboard_ws_events_total", labels={"topic": event.topic})
-        match event.topic:
+        if event.topic != STREAM_TOPIC:
+            logger.debug("Unhandled WS topic: %s", event.topic)
+            return
+        envelope = parse_envelope(event.payload)
+        if envelope is None:
+            logger.debug("Dropping malformed stream envelope")
+            return
+        metrics.inc(
+            "dashboard_ws_events_total",
+            labels={"topic": STREAM_TOPIC, "kind": envelope.kind},
+        )
+        match envelope.kind:
             case "events":
-                self._route_ws_events(event.payload, time.time())
+                self._route_ws_events(dict(envelope.payload), time.time())
             case "telemetry":
-                self._route_ws_telemetry(event.payload)
-            case _:
-                logger.debug("Unhandled WS topic: %s", event.topic)
+                self._route_ws_telemetry(dict(envelope.payload))
 
     def _route_ws_events(self, raw: dict[str, Any], now: float) -> None:
         ev = _classify_event(raw, now)
@@ -704,32 +718,42 @@ class DashboardApp:
     def _start_streams(self) -> None:
         if not self.client:
             return
-        for topic in ("telemetry", "events"):
-            asyncio.create_task(self._ws_loop(topic))
+        asyncio.create_task(self._ws_loop())
 
-    async def _ws_loop(self, topic: str) -> None:
-        import websockets
-
+    async def _ws_loop(self) -> None:
         assert self.daemon_url is not None
-        ws_url = f"{self.daemon_url.replace('http://', 'ws://')}/ws/{topic}"
+        ws_url = (
+            f"{self.daemon_url.replace('http://', 'ws://')}"
+            f"/ws/stream?v={STREAM_PROTOCOL_VERSION}"
+        )
         while True:
             try:
-                async with websockets.connect(ws_url) as ws:
-                    async for message in ws:
-                        record = json.loads(message)
-                        if topic == "telemetry":
-                            self._record_telemetry(record)
-                        else:
-                            self._on_ws_event(
-                                WebSocketEvent(topic="events", payload=record)
-                            )
+                await self._consume_stream(ws_url)
             except asyncio.CancelledError:
                 return
             except OSError, ValueError:
                 await asyncio.sleep(self.poll_seconds)
 
-    def _record_telemetry(self, record: dict[str, Any]) -> None:
-        event_bus.publish(WebSocketEvent(topic="telemetry", payload=record))
+    async def _consume_stream(self, ws_url: str) -> None:
+        import websockets
+
+        async with websockets.connect(ws_url) as ws:
+            async for message in ws:
+                self._handle_stream_message(message)
+
+    def _handle_stream_message(self, message: str | bytes) -> None:
+        try:
+            raw = json.loads(message)
+        except ValueError:
+            logger.debug("Dropping undecodable stream message")
+            return
+        envelope = parse_envelope(raw)
+        if envelope is None:
+            logger.debug("Dropping malformed stream envelope")
+            return
+        event_bus.publish(
+            WebSocketEvent(topic=STREAM_TOPIC, payload=envelope.model_dump())
+        )
 
     # ── Snapshot + data ───────────────────────────────────────────────────────
 
@@ -903,7 +927,7 @@ class DashboardApp:
                     for child in list(self._tab_area.default_slot.children):
                         child.delete()
 
-                    with ui.row().classes("w-full") as tab_bar:
+                    with ui.row().classes("w-full"):
                         buttons: dict[str, Any] = {}
                         for spec in tabs_specs:
                             btn = (
@@ -918,7 +942,6 @@ class DashboardApp:
                                 .classes("text-grey hover:text-primary")
                             )
                             buttons[spec.key] = btn
-                            tab_bar.default_slot.children.append(btn)
                         self._tab_buttons[view_key] = buttons
             self._style_tab_buttons(view_key, active_tab)
 
@@ -1300,45 +1323,37 @@ class DashboardApp:
         ui.timer(self.poll_seconds, self._poll)
 
     def _bind_hash_navigation(self) -> None:
-        """Handle URL hash changes for deep linking (#view or #view/tab)."""
+        """Sync the URL hash both ways: writes happen on navigation, client
+        state is read back on a 1 s timer (deep-link load, refresh,
+        back/forward). Headless-safe: without a client the read is a no-op.
+        """
+        ui.timer(1.0, self._sync_hash_from_client)
 
-        # Only bind hash navigation when client context is available
-        def _safe_run_js(code: str) -> None:
-            try:
-                ui.run_javascript(code)
-            except AssertionError, RuntimeError:
-                pass  # No client context (headless test)
+    async def _sync_hash_from_client(self) -> None:
+        try:
+            current = await ui.run_javascript("window.location.hash")
+        except Exception:  # noqa: BLE001 (no client in headless tests)
+            return
+        self._apply_hash(str(current or ""))
 
-        def _on_hash_change(e: Any) -> None:
-            hash_val = e.args.get("hash", "") if hasattr(e, "args") else ""
-            if hash_val.startswith("#"):
-                hash_val = hash_val[1:]
-            if not hash_val:
-                return
-            parts = hash_val.split("/")
-            view_key = parts[0]
-            tab_key = parts[1] if len(parts) > 1 else None
-
-            views = registry.get_visible_views()
-            view_keys = [v.key for v in views]
-            if view_key in view_keys and view_key != self.view:
-                self.switch_view(view_key)
-            if tab_key:
-                tabs = registry.get_panels_for_view(view_key)
-                tab_keys = [t.key for t in tabs]
-                if tab_key in tab_keys:
-                    self._switch_tab(view_key, tab_key)
-
-        # Listen for hash changes (when client is available)
-        _safe_run_js("window.addEventListener('hashchange', () => {})")
+    def _apply_hash(self, raw: str) -> None:
+        """Navigate to a ``#view`` or ``#view/tab`` hash; ignore unknowns."""
+        view_key, tab_key = parse_hash(raw)
+        if view_key is None or registry.get_view(view_key) is None:
+            return
+        if view_key != self.view:
+            self.switch_view(view_key)
+        if tab_key is not None:
+            tabs = {spec.key for spec in registry.get_panels_for_view(view_key)}
+            if tab_key in tabs and self._active_tab.get(view_key) != tab_key:
+                self._switch_tab(view_key, tab_key)
 
     def _update_hash(self, view_key: str, tab_key: str | None = None) -> None:
         """Update URL hash for deep linking."""
-        hash_val = view_key
-        if tab_key:
-            hash_val += f"/{tab_key}"
         try:
-            ui.run_javascript(f"window.location.hash = '{hash_val}'")
+            ui.run_javascript(
+                f"window.location.hash = '{format_hash(view_key, tab_key)}'"
+            )
         except AssertionError, RuntimeError:
             pass  # No client context (headless test)
 

@@ -42,7 +42,7 @@ class ActivityFeed(BasePanel):
                 "Batch summaries prevent overwhelming screen readers."
             ),
             expert=(
-                "Reverse-chronological event stream from /ws/events. "
+                "Reverse-chronological event stream from the stream topic. "
                 f"Rate-limited to {LIVE_REGION_CONFIG.min_interval_ms}ms for aria-live=polite. "
                 "Pausable toggle. Batch summary mode groups events by type. "
                 f"Expandable to raw JSON. Max {max_events} visible."
