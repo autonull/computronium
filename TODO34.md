@@ -1,6 +1,8 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
-**Status**: **ACTIVE** — items 0.1–0.9 completed (post-web-UI-removal repair pass); §1–§5 open.
+**Status**: **ACTIVE** — items 0.1–0.9 completed and committed (`ff6528fb`);
+§2.1 completed and committed (`59d13f47`); §1.1 partially landed. §1.2–§1.6,
+§2.2–§2.6, §3–§5 open.
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -14,6 +16,54 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 2 — §2.1 (undefined names), `59d13f47`
+
+All 11 sites fixed. The reason `ruff check` had stayed green is now a lock:
+**every one of the 11 carried a `# ruff: ignore[undefined-name]`
+directive**, so the F821 gate was silenced at each site it ever flagged. The
+gate now bans the suppression as well as the finding.
+
+| # | Site | What it was |
+|---|------|-------------|
+| 2.1a | `acceleration/fa_kernels.py` (4 sites) | branched on `HAS_TRITON`; module defines `HAS_TRITON_FA`. Live `NameError` on the GPU FA path |
+| 2.1b | `execution/candidate_gen.py` | `_matches_filter` used `TASK_GROUPS` unimported — **every** `--task-filter` call raised `NameError` |
+| 2.1c | `core/system_trainer/joint.py` (4), `core/profiling.py`, `tests/` (2) | annotation-only |
+
+**Calling the two crashed functions exposed two more defects in the same
+untested path.** Both are fixed; both are locked by tests that *call* them:
+
+* `_fa_batched_outer_kernel` used `tl.dot` where the contraction is an outer
+  product. It failed to compile. The obvious repair (`post * tl.trans(pre)`)
+  was **also wrong** — it broadcast the transposed index against the
+  untransposed one and returned a tensor constant along one axis, which a
+  shape-only test would have accepted. `post * pre` is correct, verified
+  numerically on CUDA against the eager path.
+* A duplicate "with transpose" feedback projection whose Triton kernel and
+  eager fallback disagreed with each other *and* with their only callers: the
+  eager path raised `RuntimeError` on any non-square feedback matrix, and the
+  kernel stored a `[B, D_out]` contraction into a `[B, D_in]` buffer. Zero
+  callers — deleted.
+
+Dead code with zero in-tree callers, deleted: `fa_backward_triton` and the
+activation-derivative cluster (`fa_activation_derivative_triton`,
+`_activation_type_from_module`). `fa_backward_triton`'s eager path carried the
+same transposed-projection shape bug, so it could never have run.
+
+**Correction.** I claimed `err @= B` in the `random_projections` kernel was a
+silent no-op. It is not: `Tensor` has no `__imatmul__`, so augmented
+assignment rebinds the name and the statement is exactly `err = err @ B`. The
+explicit form is kept for clarity; no behaviour changed there. The test built
+on the false claim was removed. **Recorded because the reasoning error is the
+kind that survives into a commit message** — a matmul looks in-place and
+isn't, but the interpreter's fallback makes it work.
+
+Suite after: fast lane **3147 passed, 119 skipped, 26 xfailed, 1 xpassed in
+106s**. No full-suite run — the changes are confined to `tests/acceleration`
+and `tests/primitives`, both inside the fast lane, and the §0 pass already
+carries a recorded 3516-passed full-suite result.
+
+### Pass 1 — §0 (post-UI-removal repair), `ff6528fb`
 
 The NiceGUI dashboard removal (`947d33cd`, `0c8e5a2d`) left the tree in a state
 where the suite could not even start, and then surfaced three systemic defects
@@ -65,21 +115,28 @@ process per tier, `-n 4` — is stable and is now the reference runner.
 **Two tests are 64% of the slowest tier.** Integration is 75% of total suite
 time, so this is the only optimization that matters right now.
 
-### 1.1 Fix the `ntm_local` oscillation BEFORE optimizing it — P0
+### 1.1 Fix the `ntm_local` oscillation BEFORE optimizing it — P0 — **partially landed**
 
 `test_demo_ntm_local.py:12` documents the metric as *"oscillates 0.79–0.87
 (assert floor 0.80)"*. An assertion floor set **inside** an observed
 oscillation band is a flake waiting for a busy machine: the same class of
 defect as 0.4 and 0.8 above.
 
-- Decide the claim: if the claim is "the NTM arm learns the copy task", assert
-  on a monotone summary (final-N mean, or a plateau detector), not a raw
-  last-iterate accuracy.
-- If the raw iterate must be asserted, the floor belongs below the observed
-  minimum (0.79) with a comment recording the measured band.
-- **Verify by running it 5× on a loaded machine** before touching `STEPS`.
-- Effort: ~30 min. Do this first — every other number in this section is only
-  trustworthy once this is deterministic.
+- **Done**: the floor is now `0.78`, below the band's observed minimum, with
+  the band recorded in the docstring and the reasoning inline. This part needs
+  no measurement — the band is in the docstring already, and a threshold
+  *inside* a measured range is wrong regardless of what the range is.
+- **Not done**: the monotone-summary rewrite. `_run_local`/`_run_bptt` already
+  evaluate fresh-batch copy accuracy at 5 checkpoints and return `best_fg`,
+  which the demo test discards in favour of a final-iterate recompute — so the
+  curve is *already being computed* and thrown away. Returning the curve
+  instead of `best_fg` and asserting on the last-two-checkpoint mean is a
+  small, clean change, but choosing its floor needs a measurement.
+- **Blocked on measurement.** The bptt arm was measured (600/1200/1800/2400/
+  3000 → 0.781/0.896/0.906/0.969/0.979); the local3 arm did not finish. See
+  §2.7. The plan's instruction to "verify by running it 5× on a loaded
+  machine" is not currently affordable.
+- Effort: ~30 min once a machine is available.
 
 ### 1.2 `test_demo_update_ladder` (182s) — P1
 
@@ -106,17 +163,26 @@ and cut to the knee. Record the curve in the docstring, as was done there.
 
 ### 1.4 Make the fast lane the default lane — P0
 
-- Move `scripts/run_tiered_suite.sh` into the documented workflow
-  (`AGENTS.md` §Testing) as **the** full-suite command, with the OOM rationale
-  in a comment.
-- Add `-n auto` guidance: `-n 4` is what was measured; `auto` is untested here.
-- Add a per-tier `logs/tiers/<tier>.log` convention to `.gitignore` (already
-  untracked — confirm) and a one-line "how to read a tier failure" note.
-- Consider a `make test-fast` / `uv run pytest -m "not integration"` shortcut
-  that completes in ~2.5 min for the inner loop, with the full tiered run as
-  the pre-commit/round-close gate (this is the tiering `AGENTS.md` already
-  describes, just made concrete).
-- Effort: ~30 min.
+Note: this item was **not** written into `AGENTS.md` (rejected — the file
+should stay a standing policy, not a running log of this plan). It is recorded
+here instead; promote it to `AGENTS.md` §Testing only if it stays true.
+
+- `scripts/run_tiered_suite.sh` is the full-suite command: one process per
+  tier, `-n 4`, logs at `logs/tiers/<tier>.log` (`logs/` is gitignored, so no
+  ignore change is needed). The OOM rationale belongs in the script's header
+  comment — it is there.
+- `-n 4` is what every recorded walltime was measured at. `-n auto` is
+  untested here; do not quote its speedups.
+- **The inner loop needs no new command.** `pyproject.toml`'s `testpaths` is
+  already `unit property primitives algorithms acceleration`, so a bare
+  `uv run python -m pytest -q` *is* the fast lane. Measured 106s. A
+  `make test-fast` target would be a second name for the same thing.
+- Reading a tier failure: the `FAILED`/`ERROR` lines at the end of that
+  tier's log, or the `=== TIER <name> exit=N walltime=Ns ===` banners.
+- **A full-suite run is not a per-commit gate here.** The fast lane covers
+  `tests/acceleration` and `tests/primitives`, which is where §2.1's changes
+  landed; the integration tier is ~528s of demo tests. Run it at round close.
+- Effort: ~15 min, most of it deciding what *not* to add.
 
 ### 1.5 Determinism hygiene so timings mean something — P1
 
@@ -141,36 +207,18 @@ table in this document after §1.1–§1.3 land, and keep it honest.
 
 ## 2. Correctness Hardening
 
-### 2.1 Undefined names — 11 sites, 6 of them live crashes — P0
+### 2.1 Undefined names — 11 sites, 6 of them live crashes — **DONE** (`59d13f47`)
 
-`pyright --outputjson` reports 11 `reportUndefinedVariable`; ruff `F821`
-reports 4. These are latent `NameError`s on untested paths — the highest
-severity-per-minute work in this document.
+See the pass-2 table above. Two notes worth keeping:
 
-| File:line | Name | Status |
-|-----------|------|--------|
-| `acceleration/fa_kernels.py:538,577,609,643` | `HAS_TRITON` | **real NameError (reproduced).** Module defines `HAS_TRITON_FA`; the four `fa_*_triton` helpers branch on an undefined name. GPU FA path only — untested, so it has never run. |
-| `execution/candidate_gen.py:756,757` | `TASK_GROUPS` | **real NameError (reproduced).** `TASK_GROUPS` lives in `execution/task_weights.py` and is exported there; `CandidateGenerator._matches_filter` does not import it, so any `task_filter` crashes. |
-| `core/system_trainer/joint.py:236,294,373,377` | `SystemContext` | annotation-only (`from __future__ import annotations` present); `SystemContext` is defined in `state/context.py`. Fix the import for type correctness. |
-| `core/profiling.py:474` | `SystemConfig` | annotation-only; verify whether the module resolves it under `TYPE_CHECKING`. |
-
-Both real crashes reproduce today, in one line each:
-
-```python
->>> from computronium.acceleration.fa_kernels import fa_batched_outer_triton
->>> fa_batched_outer_triton(torch.randn(4, 8), torch.randn(4, 3))
-NameError: name 'HAS_TRITON' is not defined
-
->>> from computronium.execution.candidate_gen import CandidateGenerator, ExecutionStrategyConfig
->>> g = CandidateGenerator(ExecutionStrategyConfig(torch.device("cpu"))); g.task_filter = "vision"
->>> g._matches_filter("mnist")
-NameError: name 'TASK_GROUPS' is not defined
-```
-
-- Fix all 11; add `F821` + `reportUndefinedVariable` to the **blocking** gate.
-- Each of the two real ones gets a regression test that *calls* the function —
-  the reason they survived is that no test reached them.
-- Effort: ~2h including tests.
+- The F821 gate was **not merely incomplete, it was silenced**: all 11 sites
+  carried a `# ruff: ignore[undefined-name]` directive. `tests/property/
+  test_undefined_name_lock.py` therefore bans the suppression string, not just
+  the finding — otherwise the next undefined name walks straight back in.
+- `reportUndefinedVariable` cannot be made blocking repo-wide without also
+  inheriting the other 2068 pyright findings, so the lock shells out to
+  `ruff check --select F821` instead. Same signal, one process, no
+  configuration change.
 
 ### 2.2 Document the contract that bug 0.2 violated — P0
 
@@ -243,6 +291,47 @@ guards that would have caught them:
   it happened (0.8).
 - **Lock the demo gallery** — already exists (`test_gallery_lock.py`); keep
   re-pinning deliberate, as done in this pass.
+
+### 2.7 New: the activation-derivative contract is undefined — P2
+
+Found by §2.1. `_apply_activation_derivative` (in
+`computronium/acceleration/fa_kernels.py`, retained for `FAKernelBackend`)
+branches on the activation module, and its branches **disagree about what
+`h_curr` is**:
+
+- Tanh: `grad * (1 - h**2)` — correct iff `h` is the **post**-activation output.
+- GELU: `grad * (cdf(h/√2) + h·pdf)` — correct iff `h` is the **pre**-activation input.
+- ReLU (`h > 0`) and SiLU (`σ(h)(1 + h(1-σ(h)))`) are correct either way, which
+  is why the inconsistency never showed.
+
+Neither convention is wrong on its own; having both in one function means at
+least one branch is. **Do not guess.** The cluster is unreachable from
+production (zero callers after §2.1) and untested, so nothing is currently
+wrong in a run — but the function is a trap for whoever wires it up, and it is
+the last remaining undefined in the FA kernel module.
+
+Decision needed: is `activations[i+1]` in the credit kernels the pre- or
+post-activation value? Answer it from the producer, then fix or delete.
+
+### 2.8 New: measurement capacity — P1, process
+
+The §0 pass recorded that a single-process full-suite run is OOM-killed. That
+is not the only limit: **`test_demo_ntm_local` was also killed mid-run** while
+measuring the §1.1 curve, on a box at load average 8.4 shared with other
+users. The bptt arm completed (0.781/0.896/0.906/0.969/0.979 at
+600/1200/1800/2400/3000); the local3 arm died after its 600-step checkpoint.
+
+Two consequences for the rest of this document:
+
+1. **Integration-tier numbers here are not reproducible on demand.** §1.2,
+  §1.3 and §1.6 all rest on re-measuring demos that may not survive a run.
+  Budget for retries, or defer them to a quiet window.
+2. **A backgrounded run that dies leaves no trace.** The log ended mid-curve
+   with no pytest summary and no traceback. A killed process is
+   indistinguishable from a hung one unless you check for the summary line —
+   `pgrep -f <testname>` is not a substitute, because it matches the polling
+   command itself. Check for the summary, or run in the foreground under
+   `timeout`.
 
 ### 2.6 Keep the science honest when the numbers move — P2
 
@@ -504,43 +593,51 @@ table, never against source text). Effort: ~1d per layer.
 
 ## Execution Order
 
-| Phase | Items | Effort | Gate |
-|-------|-------|--------|------|
-| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row |
-| **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics |
-| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active |
-| **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 11 settle loops → 1 driver; Pareto in one layer; registries derived |
+Phase A is **done except §1.1's measurement**, which is blocked by §2.8.
 
-Phases A and B are strictly first: every number in C is untrustworthy until the
-`ntm_local` assertion is sound (1.1), and the 11 undefined names (2.1) are live
-crash risks on GPU and CLI paths that the next development push will exercise.
+| Phase | Items | Effort | Gate | State |
+|-------|-------|--------|------|-------|
+| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.1 floor **done**, curve blocked; 1.4 open |
+| **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | open (`F821` blocking **done**, via §2.1) |
+| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | open — **re-measurement needed, see §2.8** |
+| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
+| **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 11 settle loops → 1 driver; Pareto in one layer; registries derived | open |
 
-Phase F is deliberately last. It is the highest-leverage work in this document
-(5.1 alone deletes ten copies of a control loop and one bug class), but it is
-also the only phase whose mistakes are expensive to unwind — a badly
-parameterized settle driver would relocate complexity rather than remove it.
-Do it against a green, deterministic suite, not to rescue a flaky one.
+**Recommended next step** (cheapest, unblocked, high value): **§2.2**, the
+settle-contract docstring. It is pure documentation, needs no measurement, and
+it is the specification §5.1 is written against — so writing it now is what
+makes Phase F cheaper later, not a detour from it.
+
+The standing rule from §0 still holds: Phase F is last because a badly
+parameterized settle driver relocates complexity rather than removing it. Do it
+against a green, deterministic suite, not to rescue a flaky one.
 
 ---
 
 ## Verification After Each Phase
 
 ```bash
-# Fast lane (~2.5 min) — inner loop
+# Fast lane (measured 106s, 3147 passed) — the inner loop and the per-commit gate.
+# A bare `uv run python -m pytest -q` runs exactly this (pyproject testpaths).
 uv run python -m pytest tests/unit tests/property tests/primitives \
     tests/algorithms tests/acceleration -q -n 4
 
-# Full suite, per tier, one process each (the monolith is OOM-killed)
+# Full suite, per tier, one process each — round close only.
+# The single-process monolith is OOM-killed at ~44%; see also §2.8.
 ./scripts/run_tiered_suite.sh
 
 # Gates on changed files
 uv run ruff format --check <changed>
-uv run ruff check <changed>          # now includes F821
+uv run ruff check <changed>
+uv run ruff check --select F821 computronium tests scripts packages
 uv run pyright <changed>             # strict for new/rewritten modules
 uv run python -c "import optuna, scipy, torchvision, pytest"
 ```
+
+`F821` is enforced by `tests/property/test_undefined_name_lock.py` in the
+fast lane, so the explicit `--select F821` run above is for iterating on a
+fix, not for the gate.
 
 Re-pin `docs/figures/manifest.json` via the gallery lock whenever demo numerics
 move, and say so in the commit body.
@@ -548,6 +645,17 @@ move, and say so in the commit body.
 ---
 
 ## Notes
+
+- **A defect found by making a path callable is a defect class of its own.**
+  §2.1's two `NameError`s were not the only thing on the FA credit path: the
+  first call into it produced a compile error, then a silently wrong tensor,
+  then a shape error. Four defects, one untested function, zero of them
+  visible from the outside. §2.5's ratchets are worth more than they look.
+- **Shape-only assertions are not assertions.** The first repair of
+  `_fa_batched_outer_kernel` (`post * tl.trans(pre)`) produced a tensor of
+  exactly the right shape that was constant along an entire axis, and would
+  have passed any test written from the signature. Compare against the eager
+  path; do not assert on shape.
 
 - **Backwards compatibility: NONE** (per `AGENTS.md`) — when a lock disagrees
   with the code, the lock is wrong until proven otherwise; 0.6 and 0.8 were
