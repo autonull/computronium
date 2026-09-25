@@ -1,18 +1,103 @@
-"""Mission Control liveness + lifecycle logic (TODO30 8.3) — headless."""
+"""Campaign-artifact readers: daemon liveness, cost/maturation rollups, report.
+
+These are the read-only loaders behind `comp campaign report` and the daemon's
+own campaign summary — the paths that used to be exercised only through the
+deleted dashboard. Coverage is ported from the retired UI smoke/liveness suites.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
 
-from computronium.visualization.live_atlas import (
+from computronium.autoscientist.campaign_readers import (
     DaemonClient,
-    lifecycle_buttons,
+    cost_stats,
+    health_stats,
     liveness,
+    maturation_rows,
+    read_heartbeat,
 )
+from computronium.autoscientist.report import generate_report
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+_CELL_HP = {
+    "geometry": {"topology_type": "feedforward", "depth": 2, "hidden_dim": 64},
+    "dynamics": "energy_minimization",
+    "credit": "prediction",
+    "update": "euclidean",
+    "param_budget": 25000,
+}
+
+_CELLS = (
+    ("burst:2026-09-16-1", 0.80),
+    ("burst:2026-09-16-1", 0.65),
+    ("burst:2026-09-16-2", 0.83),
+    ("burst:2026-09-16-2", 0.60),
+)
+
+
+def _seed_root(root: Path) -> None:
+    """Tiny KB (4 measured cells across 2 bursts) + voids + defects."""
+    from computronium.knowledge import KnowledgeBase, KnowledgeEntry
+
+    root.mkdir(parents=True, exist_ok=True)
+    kb = KnowledgeBase(root / "kb.sqlite")
+    for i, (burst, acc) in enumerate(_CELLS):
+        kb.add_entry(
+            KnowledgeEntry(
+                id=f"readers_{i}",
+                topic="experiment:mnist",
+                model_family="eqprop",
+                finding="fixture cell",
+                details="",
+                confidence=acc,
+                tags=["experiment", "mnist", "broad_map", "maturity:l0", burst],
+                source="experiment",
+                metrics={
+                    "final_accuracy": acc,
+                    "walltime_s": 1.5 + i * 0.1,
+                    "settle_horizon": 4,
+                    "credit_alignment": 0.4,
+                    "spectral_radius": 0.9 - i * 0.05,
+                    "psi_capacity": 1.0 + i,
+                    "stability_plasticity_ratio": (0.9 - i * 0.05) / (1.0 + i),
+                    "credit_efficiency": (0.2, 0.35, 0.65, 0.3)[i],
+                    "feedback_path_length": 2.0 + i,
+                    "trace_variance": 0.1 * (i + 1),
+                },
+                hyperparameters=dict(_CELL_HP),
+                extra={},
+            )
+        )
+    void = {
+        "timestamp": 1.0,
+        "task": "mnist",
+        "dynamics": "spike_integration",
+        "credit": "prediction",
+        "update": "euclidean",
+        "topology": "recurrent",
+        "category": "geometry_constraint",
+        "error": "Spike integration dynamics requires temporal trace",
+    }
+    (root / "structural_voids.jsonl").write_text(
+        json.dumps(void) + "\n", encoding="utf-8"
+    )
+    defect = {
+        "defect_id": "a1b2c3d4e5f6",
+        "timestamp": 2.0,
+        "task": "mnist",
+        "cell": "energy_minimization|prediction|euclidean|recurrent",
+        "error_class": "RuntimeError",
+        "message": "device poisoning at 0x7f00",
+        "traceback_tail": "",
+        "status": "open",
+    }
+    (root / "runtime_defects.jsonl").write_text(
+        json.dumps(defect) + "\n", encoding="utf-8"
+    )
 
 
 def _heartbeat(root: Path, state: str, age_s: float = 0.0) -> float:
@@ -62,23 +147,62 @@ def test_fresh_heartbeat_drives_badge_per_state(tmp_path: Path) -> None:
 def test_unreachable_api_with_fresh_heartbeat_degrades_gracefully(
     tmp_path: Path,
 ) -> None:
-    """Hybrid transport: landscape survives daemon death via artifacts."""
+    """Hybrid transport: artifacts survive daemon death."""
     _heartbeat(tmp_path, "training")
     badge = liveness(tmp_path, daemon_reachable=False)
     assert badge.label == "● RUNNING"
     assert "API unreachable" in badge.detail
 
 
-def test_lifecycle_buttons_match_daemon_state() -> None:
-    assert lifecycle_buttons(None) == ("start",)
-    assert lifecycle_buttons("idle") == ("start",)
-    assert lifecycle_buttons("stopped") == ("start",)
-    assert lifecycle_buttons("training") == ("pause", "stop")
-    assert lifecycle_buttons("sleeping") == ("pause", "stop")
-    assert lifecycle_buttons("paused") == ("resume", "stop")
+def test_read_heartbeat_round_trips_state(tmp_path: Path) -> None:
+    _heartbeat(tmp_path, "training")
+    beat = read_heartbeat(tmp_path)
+    assert beat is not None
+    assert beat["state"] == "training"
+    assert beat["pid"] == 4242
 
 
-def test_daemon_client_unreachable_returns_none(tmp_path: Path) -> None:
+def test_health_and_maturation_rollups(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    _seed_root(root)
+
+    health = health_stats(root)
+    assert health["measured_cells"] == 4
+    assert health["bursts"] == 2
+    assert health["cells_per_burst"] == 2.0
+    assert health["open_defects"] == 1
+    assert isinstance(health["last_burst_walltime_s"], float)
+
+    counts = {row["level"]: row["count"] for row in maturation_rows(root)}
+    assert counts["maturity:l0"] == 4
+    assert counts["maturity:l2"] == 0
+
+    costs = cost_stats(root)
+    assert costs["measured"] == 4
+
+
+def test_generate_report_assembles_markdown(tmp_path: Path) -> None:
+    """§7.3: the campaign summary the daemon writes at completion."""
+    root = tmp_path / "root"
+    _seed_root(root)
+
+    report = generate_report(root)
+    text = report.read_text(encoding="utf-8")
+    for heading in (
+        "# Computronium campaign summary",
+        "## Totals",
+        "## Final Pareto front",
+        "## Maturation",
+        "## Negative results",
+        "## Cost breakdown",
+        "maturity:l0",
+        "geometry_constraint",
+    ):
+        assert heading in text, heading
+    assert report == root / "campaign_report.md"
+
+
+def test_daemon_client_unreachable_returns_none() -> None:
     client = DaemonClient("http://127.0.0.1:1", timeout=0.2)
     assert client.get_state() is None
     assert client.control("pause") is False
@@ -86,6 +210,7 @@ def test_daemon_client_unreachable_returns_none(tmp_path: Path) -> None:
 
 def test_daemon_client_round_trips_live_daemon(tmp_path: Path) -> None:
     import threading
+    import time
     from argparse import Namespace
 
     import uvicorn
@@ -120,8 +245,6 @@ def test_daemon_client_round_trips_live_daemon(tmp_path: Path) -> None:
             self.step_callback = None
 
         def run_iteration(self, n_experiments):
-            import time
-
             time.sleep(0.05)  # keep the burst alive across the round-trip
             return [
                 {"status": "completed", "proposal": {}, "walltime_s": 0.0}
@@ -142,8 +265,6 @@ def test_daemon_client_round_trips_live_daemon(tmp_path: Path) -> None:
     daemon.start()
     threading.Thread(target=server.run, daemon=True).start()
     try:
-        import time
-
         deadline = time.monotonic() + 10
         port = server.servers[0].sockets[0].getsockname()[1] if server.started else None
         while port is None and time.monotonic() < deadline:
@@ -167,49 +288,6 @@ def test_daemon_client_round_trips_live_daemon(tmp_path: Path) -> None:
         assert client.control("resume") is True
     finally:
         daemon.stop()
-        import time
-
         deadline = time.monotonic() + 10
         while daemon.state is not DaemonState.STOPPED and time.monotonic() < deadline:
             time.sleep(0.05)
-
-
-def test_telemetry_drain_extracts_loss() -> None:
-    """§3.1: the WS consumer appends only numeric train_loss records."""
-    import asyncio
-    import json as _json
-    from collections import deque
-
-    from computronium.visualization.live_atlas import _drain
-
-    class _FakeWS:
-        def __init__(self, messages: list[str]) -> None:
-            self._messages = iter(messages)
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self) -> str:
-            try:
-                return next(self._messages)
-            except StopIteration as e:
-                raise StopAsyncIteration from e
-
-    async def _run() -> deque[float]:
-        history: deque[float] = deque(maxlen=10)
-        calls: list[int] = []
-        await _drain(
-            _FakeWS([
-                _json.dumps({"loss": 1.5}),
-                _json.dumps({"loss": "nan"}),  # non-numeric dropped
-                _json.dumps({"other": 1.0}),
-                _json.dumps({"loss": 0.8}),
-            ]),
-            history,
-            lambda: calls.append(1),
-        )
-        assert len(calls) == 2
-        return history
-
-    history = asyncio.run(_run())
-    assert list(history) == [1.5, 0.8]

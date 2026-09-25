@@ -38,7 +38,6 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "gallery": ("computronium.cli.gallery", "main"),
     "continuous": ("computronium.cli.continuous", "main"),
     "daemon": ("computronium.cli.daemon", "main"),
-    "dashboard": ("computronium.cli.dashboard", "main"),
 }
 
 _USAGE = "comp <" + "|".join(_SUBCOMMANDS) + "> [args]"

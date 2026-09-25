@@ -1,3 +1,9 @@
+> **Historical record.** The web UI this document validates was removed on
+> 2026-09-25 (`comp dashboard`, `computronium/ui/**`). Nothing here is
+> runnable; retained as the design/validation record only. The surviving
+> read path is `computronium/autoscientist/campaign_readers.py`, surfaced by
+> `comp campaign report` and the daemon.
+
 # V3 UX Walkthrough
 
 **Scope**: Usability validation for the Computronium Dashboard across three personas and Nielsen's 10 heuristics.
@@ -222,7 +228,7 @@ for reg in ['explorer', 'lab']:
 |-------|----------|-----|--------|
 | Glossary searchable via ⌘K | ✓ | ✓ | |
 | `comp dashboard --help` complete | ✓ | ✓ | |
-| `docs/platform/dashboard.md` current | ✓ | ✓ | |
+| `docs/platform/dashboard.md` current (guide deleted with the UI) | — | — | |
 | Inline tooltips on all icon buttons | ✓ | ✓ | |
 | "Showing first N rows" on capped tables | ✓ | ✓ | |
 

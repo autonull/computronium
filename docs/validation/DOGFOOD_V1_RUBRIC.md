@@ -1,3 +1,9 @@
+> **Historical record.** The web UI this document validates was removed on
+> 2026-09-25 (`comp dashboard`, `computronium/ui/**`). Nothing here is
+> runnable; retained as the design/validation record only. The surviving
+> read path is `computronium/autoscientist/campaign_readers.py`, surfaced by
+> `comp campaign report` and the daemon.
+
 # V1 Dogfood Validation Rubric
 
 **Scope**: End-to-end workflow validation for the Computronium Dashboard (`comp dashboard`).

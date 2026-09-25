@@ -105,7 +105,7 @@ one.
 | **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
 | **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
 | **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee ([figure](docs/figures/d5_z3_frozen_theta.png)) |
-| **Multi-objective discovery** | `comp continuous --objectives` / `comp daemon --objectives` — configurable Pareto fronts across 20+ objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2), CEEC-governed claims, dashboard Pareto selector |
+| **Multi-objective discovery** | `comp continuous --objectives` / `comp daemon --objectives` — configurable Pareto fronts across 20+ objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2), CEEC-governed claims |
 | **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) — TODO15 §13.3 / TODO16 §0.1 ([figure](docs/figures/d19_depth_harvest.png)) |
 | **Recipe cards** (`recipe_cards.py`) | Family→optimizer/geometry/config canonical-constructor registry — TODO16 §0.3 |
 | **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy — TODO16 §4 |
@@ -418,7 +418,6 @@ All subcommands of the `comp` dispatcher:
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
 | `comp gallery` | Render the demo suite's figures + manifest from live run records; `--generate-broad-demo` runs the stratified broad mapping sweep (TODO28/31) and renders the atlas dashboard (islands/voids UMAP, parallel coordinates, **multi-objective** Pareto radar with selector) | `comp gallery --run` |
 | `comp continuous` | Budgeted burst runner over the stratified broad map (TODO29/31): time-capped bursts, resume-safe via KB coverage, `unquarantine` releases cells after a defect fix, `deep-tier` promotes front-stable cells to claim-grade L2 re-runs; multi-objective via `--objectives` | `comp continuous --budget 5m --limit-batches 30 --objectives accuracy,walltime_s,param_count --root artifacts/broad_map` |
-| `comp dashboard` | Live read-only window over a continuous-discovery root: living atlas, defect funnel, health gauge, Pareto strip with objective-pair selector, burst-log ticker | `comp dashboard --root artifacts/broad_map --port 8088` |
 
 ### Continuous Discovery (TODO29/31)
 
@@ -431,12 +430,10 @@ resume-safe loop that harvests failures as data. **Multi-objective optimization*
 - **Defect funnel** — gate-passing crashes land in `runtime_defects.jsonl` and their cells are quarantined until `comp continuous unquarantine --defect <id>`; gate rejections remain structural voids (ontology boundaries, not bugs).
 - **Divergence flags** — NaN-loss results are tagged `nan_loss` and excluded from Pareto fronts, promotion, and the deep tier.
 - **Maturation** — burst cells are `maturity:l0`; `--maturation N` re-runs front cells at epochs=3 (`l1`), and `deep-tier` re-runs front-stable cells per seed as claim-grade CEEC experiments (`l2`).
-- **Live dashboard** — `comp dashboard` (defaults to `artifacts/broad_map`, port 8088, opens a browser): islands/voids atlas, defect funnel, health gauge with divergence count, Pareto strip with objective-pair selector, burst-log ticker, event stream with alert toasts.
 
 ```bash
 # Multi-objective campaign (accuracy, walltime, param count)
 uv run comp continuous --target-cells 500 --limit-batches 30 --objectives accuracy,walltime_s,param_count --loop --sleep 15
-uv run comp dashboard
 
 # Daemon mode with lifecycle API + WebSockets
 uv run comp daemon --target-cells 500 --limit-batches 30 --objectives accuracy,walltime_s,param_count --port 8940
@@ -464,7 +461,6 @@ The AutoScientist now optimizes **multiple objectives simultaneously** across th
 - **Multi-objective breakthrough alerts** — fire on *any* objective improvement (configurable margin per objective)
 - **Multi-objective promotion** — L1/L2 maturation gates use the configured Pareto front, not accuracy-only
 - **CEEC-governed claims** — experiments registered with Pareto-front evidence across declared objectives; beliefs track Pareto dominance per objective
-- **Dashboard Pareto selector** — dropdown to switch objective pairs (accuracy/walltime, accuracy/params, walltime/params, etc.) with instant recompute
 - **Outcome badges** — `PARETO_OPTIMAL`, `PARETO_NEAR`, `DOMINATED` replace accuracy-only LEARNED/MARGINAL/CHANCE
 - **Substrate-aware objectives** — Memristive → energy_per_op/IR-drop; Neuromorphic → spike_rate/event_density; Photonic → phase_noise/power; Quantum → gate_fidelity/coherence
 - **Frozen-θ ψ adaptation** — `Lab.adapt` uses Pareto front over (accuracy, stability, cost) for ψ-only optimization with bitwise θ invariance
@@ -531,9 +527,7 @@ members, TODO20 Rule 6 — one implementation copy each; legacy
 | `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
 
 Platform docs (recipe book, edge blueprint, external summary, release
-notes/manifest): `docs/platform/`. Live campaign dashboard guide (flags,
-modes, 20-panel table, architecture, extension how-to):
-[`docs/platform/dashboard.md`](docs/platform/dashboard.md). X-STA-002 validated the
+notes/manifest): `docs/platform/`. X-STA-002 validated the
 stable-amplification family: 4×–2600× transient retention over matched
 contractive controls at ρ=0.85, noise amplified at the same rate (retention
 gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
@@ -831,19 +825,6 @@ system = create_fast_weight_mlp(
 ```
 
 ---
-
-### Quickstart: Interactive Demo
-
-```bash
-uv run python demo/main.py
-```
-
-Launches a NiceGUI web dashboard at `http://localhost:8080` with:
-- Model training across ontology coordinates
-- Live loss/accuracy curves
-- Hyperparameter controls
-- Live Campaign tab: discovery report (𝒞-Pareto frontier, replication gate, counterfactual attribution) over commissioned campaign artifacts or in-progress campaigns
-- AutoScientist hypothesis proposals
 
 ---
 
@@ -1185,7 +1166,6 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 - 🔀 Counterfactual generator: "What if β schedule changed?"
 - 📊 Knowledge Base meta-analysis: scaling laws, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny
 - 💾 Campaign persistence/resume (YAML+SQLite, git-like branching) — **includes joint state z, θ, ψ, σ**
-- 👁️ Human-in-the-loop dashboard (NiceGUI, WebSocket live updates)
 - 🖥️ Local LLM support (Ollama auto-pull, llama.cpp quantization, speculative decoding)
 - ⚡ **Joint Kernel Cache**: Persisted compiled kernels for `CoupledTransition.step`, plasticity updates, stability estimators
 - 🛡️ **Fault Tolerance**: Checkpoint-based recovery for multi-hour campaigns on spot instances

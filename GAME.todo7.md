@@ -1,3 +1,9 @@
+> **Historical record.** The web UI this document validates was removed on
+> 2026-09-25 (`comp dashboard`, `computronium/ui/**`). Nothing here is
+> runnable; retained as the design/validation record only. The surviving
+> read path is `computronium/autoscientist/campaign_readers.py`, surfaced by
+> `comp campaign report` and the daemon.
+
 # GAME.todo7 — Dashboard UI: Unification, Simplification & Extensibility (v2)
 
 > **Goal**: A usable, ergonomic, extensible mission-control console for the AutoScientist — no cruft, no ambiguity, no dual-register confusion.

@@ -86,7 +86,7 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         "--log-path",
         type=Path,
         default=None,
-        help="also tee the burst log here (the comp dashboard ticker reads it)",
+        help="also tee the burst log here (full burst transcript on disk)",
     )
     parser.add_argument("--max-iterations", type=int, default=200)
     parser.add_argument("--cells-per-iter", type=int, default=10)

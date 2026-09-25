@@ -7,7 +7,7 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
-from computronium.visualization.live_atlas import (
+from computronium.autoscientist.campaign_readers import (
     cost_breakdown_rows,
     cost_stats,
     front_history_rows,

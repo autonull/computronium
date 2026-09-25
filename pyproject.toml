@@ -46,7 +46,6 @@ dependencies = [
     "optuna>=4.9.0",
     "torchvision>=0.29.0",
     "pytorch-lightning>=2.6.6",
-    "nicegui>=3.16.0",
 ]
 
 [tool.uv.workspace]
@@ -91,7 +90,6 @@ dev = [
     "uvicorn",
     "onnxruntime",
     "datasets",
-    "nicegui>=3.16.0",
     "plotly>=6.9.0",
     "umap-learn>=0.5.9",
     "cryptography==50.0.0",
@@ -124,9 +122,6 @@ export = ["onnx", "onnxscript", "onnxruntime"]
 # --- Networking ---
 p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
-# --- Desktop UI ---
-ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0"]
-
 # --- System monitoring ---
 monitoring = ["psutil"]
 
@@ -137,7 +132,7 @@ llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,llm,nn]",
+    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,monitoring,knowledgebase,graphs,llm,nn]",
 ]
 
 [project.urls]
@@ -207,7 +202,7 @@ omit = [
 target-version = "py314"
 line-length = 88
 preview = true
-exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py", "docs/archive", "demo"]
+exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py", "docs/archive"]
 
 [tool.ruff.lint]
 select = [
