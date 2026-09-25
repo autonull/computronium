@@ -55,7 +55,6 @@ from computronium.ui.mode_toggle import (
     get_mode,
     initialize_mode,
     mode_toggle_select,
-    set_mode,
 )
 from computronium.ui.panel_registry import panel_registry
 from computronium.visualization.live_atlas import (
@@ -188,8 +187,10 @@ class DashboardApp:
         if ui_mode != "auto":
             # Set internal mode without publishing event (UI not built yet)
             from computronium.ui.mode_toggle import _current_mode
+
             _current_mode._register = ui_mode  # type: ignore[assignment]
             from computronium.ui.glossary_service import get_glossary_service
+
             get_glossary_service()  # ensure loaded with correct register
         self._current_mode_applied = get_mode()
         self._last_hash = ""
@@ -653,16 +654,19 @@ class DashboardApp:
             async def _poll_hash() -> None:
                 if not self._hash_polling_enabled:
                     return
+                if self.main_content is None:
+                    return
                 try:
-                    if self.main_content is None:
-                        return
-                    hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
-                    if hash_str and hash_str != self._last_hash:
-                        self._last_hash = hash_str
-                        logger.debug("Hash changed to: %s", hash_str)
-                        await self._apply_hash_from_js()
+                    hash_str = await ui.run_javascript(
+                        "return window.location.hash.substring(1);"
+                    )
                 except Exception as exc:
                     logger.debug("Hash poll error: %s", exc)
+                    return
+                if hash_str and hash_str != self._last_hash:
+                    self._last_hash = hash_str
+                    logger.debug("Hash changed to: %s", hash_str)
+                    await self._apply_hash_from_js()
 
             with suppress(AssertionError, RuntimeError):
                 ui.timer(1.0, _poll_hash)
@@ -675,7 +679,9 @@ class DashboardApp:
         if self.main_content is None:
             return
         try:
-            hash_str = await ui.run_javascript("return window.location.hash.substring(1);")
+            hash_str = await ui.run_javascript(
+                "return window.location.hash.substring(1);"
+            )
         except Exception:
             return
         if not hash_str:
@@ -1093,6 +1099,7 @@ class DashboardApp:
         # Publish mode change event now that UI is built
         if get_mode() != "explorer":  # only if non-default
             from computronium.ui.event_bus import ModeChanged, event_bus
+
             event_bus.publish(ModeChanged(mode=get_mode()))
 
         # Set up timers

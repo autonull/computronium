@@ -1,6 +1,6 @@
 # GAME.todo6.md — Consolidated Remaining Work (from GAME.todo5.md)
 
-**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented and fixed**; deep links work for screenshots. **C3 (Fault Injection & Regression) complete** — all 5 items implemented and tested. **C2b/C4 visual verification infrastructure complete** — screenshot capture + design token validation implemented. **D5 (Perf benchmarks) complete** — 11 performance tests implemented and passing. **D4 (Lock hygiene) complete** — L1-L8, L12, L13, L14, L15, L16 all green. **D1-D3 (Dogfood validation) complete** — V1 rubric, V3 walkthrough, V4 checklist documented.
+**Status:** Lens system complete (Map/Repair/Record). Core dashboard functional. **C2a (URL hash restore) implemented and fixed**; deep links work for screenshots. **C3 (Fault Injection & Regression) complete** — all 5 items implemented and tested. **C2b/C4 visual verification infrastructure complete** — screenshot capture + design token validation implemented. **D5 (Perf benchmarks) complete** — 11 performance tests implemented and passing. **D4 (Lock hygiene) complete** — L1-L8, L12, L13, L14, L15, L16 all green. **D1-D3 (Dogfood validation) complete** — V1 rubric, V3 walkthrough, V4 checklist documented. **This session: Lint fixes + test verification complete** — ruff/pyright clean on changed files; all UI, fault injection, perf, visual verification, and compiled settle tests pass.
 
 ---
 
@@ -176,3 +176,19 @@ All type/lint clean.
 **Next Steps (per plan):**
 - Manual execution of D1-D3 validation rubrics (Week 2)
 - Week 3: E1 (spaced transfer)
+
+---
+
+## 9. Progress Notes (this session — 2026-09-24)
+
+**Completed:**
+- **Lint hygiene on changed files** — Fixed `too-many-statements-in-try-clause` in `computronium/ui/dashboard.py` (hash polling function); cleaned up unused imports and dead code in `scripts/generate_dashboard_screenshots.py` and `scripts/generate_screenshots.py`.
+- **Type checking** — `pyright` passes on `computronium/ui/dashboard.py` (0 errors).
+- **Test verification** — All relevant test suites pass:
+  - UI tests (18/18): `test_dashboard_state.py`, `test_dashboard_render.py`, `test_dashboard_interactions.py`
+  - Fault injection tests (20/20): `test_dashboard_fault_injection.py`
+  - Performance tests (11/11): `test_dashboard_perf.py`, `test_budgets.py`
+  - Visual verification tests (12/12): `TestVisualVerification` (7 design token tests) + `TestDashboardLensRendering` (5 headless lens tests)
+  - Compiled settle tests (4/4): `test_compiled_setlte.py`
+- **Screenshot capture expanded** — Captured repair panel screenshots (defects/maturation lenses, explorer register, populated state). Total reference screenshots now: 9 (overview ×2, map ×3 lenses ×2 states, repair ×2 lenses).
+- **Script cleanup** — Simplified screenshot generation scripts to be documentation-only; actual capture uses `pytest --capture-screenshots`.
