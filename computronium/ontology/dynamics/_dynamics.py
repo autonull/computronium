@@ -668,6 +668,38 @@ class StateDynamics(Protocol):
         phase otherwise. ``compute_energy`` is called by the pipeline *after*
         settle returns, reading the settled state — never mid-settle.
 
+    Settle horizon and early stop (normative — the 0.2 defect):
+        Four rules, all four of which a settle loop can violate silently:
+
+        1. ``settle`` iterates until the convergence criterion is met or
+           ``config.max_steps`` is reached. Not fewer.
+        2. ``_settle_steps_used`` counts steps **actually executed**. It is
+           truth telemetry, consumed by ``analysis/instruments.py`` and
+           ``autoscientist/campaign.py`` to report a real horizon.
+        3. The early-stop signal is a **separate** flag, ``_converged``, reset
+           by ``_note_settle_start()`` at the start of *every* ``settle`` —
+           including each phase of a free/nudged pair. Never test
+           ``_settle_steps_used`` to decide whether to break: it is non-zero
+           by the time the loop body runs, so such a loop breaks on step 0
+           and every settle silently becomes a single forward pass. That is
+           exactly the defect repaired in ``ff6528fb``, where it existed in
+           four copies at once and left the free phase short of its fixed
+           point, so the energy gap thermodynamic credit reads was noise.
+        4. ``on_step(step, energy)`` fires **once per executed step**,
+           independent of ``config.track_free_energy_per_iter``. Telemetry
+           that is gated on an opt-in debug flag is not telemetry.
+
+        A whole-graph or compiled fast path that cannot early-stop
+        (``_settle_compiled``, PC-ALM's full-horizon sweep) legitimately seeds
+        ``_settle_steps_used = max_steps`` because that is the truth for that
+        path. Do not read that as the rule being broken.
+
+        Both helpers live on ``_SettleTelemetry``, which every settle-capable
+        dynamics class inherits. ``tests/property/
+        test_state_dynamics_protocol.py`` (``TestSettleHorizonTelemetry``)
+        enforces rules 1-4, and reintroducing the break-on-horizon pattern
+        makes it fail.
+
     Autograd context:
         Settle runs under the caller's ``no_grad`` by default. Implementations
         needing internal differentiation (ePC error gradients, diffusion

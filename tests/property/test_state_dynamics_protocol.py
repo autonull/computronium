@@ -13,8 +13,10 @@ Tests the canonical contract from the StateDynamics protocol docstring:
   and use the returned state
 """
 
+import ast
 import itertools
 import math
+from pathlib import Path
 
 import pytest
 import torch
@@ -738,3 +740,59 @@ class TestSettleHorizonTelemetry:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestSettleHorizonSourceLock:
+    """Static guard: no settle loop may read the horizon as a stop signal.
+
+    The behavioural ratchet above is the real check, but it only covers the
+    dynamics it enumerates. This one is grep-level and covers the whole module,
+    so a new dynamics class cannot introduce the break-on-horizon shape
+    without failing first. Deliberately narrow: it looks only for the horizon
+    in a *boolean* position, which is the defect. Assignments and truth
+    telemetry reads are fine.
+    """
+
+    MODULE = "computronium/ontology/dynamics/_dynamics.py"
+    PROTOCOL = "class StateDynamics(Protocol):"
+
+    @staticmethod
+    def _lines() -> list[str]:
+        path = Path(__file__).resolve().parents[2] / TestSettleHorizonSourceLock.MODULE
+        return path.read_text(encoding="utf-8").splitlines()
+
+    def test_horizon_is_never_read_as_a_condition(self) -> None:
+        path = Path(__file__).resolve().parents[2] / TestSettleHorizonSourceLock.MODULE
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        offenders = [
+            f"{TestSettleHorizonSourceLock.MODULE}:{node.lineno}"
+            for node in ast.walk(tree)
+            if isinstance(node, ast.If | ast.While | ast.IfExp)
+            and TestSettleHorizonSourceLock._reads_horizon(node.test)
+        ]
+        assert offenders == [], (
+            f"_settle_steps_used is truth telemetry, not a stop signal: {offenders}"
+        )
+
+    @staticmethod
+    def _reads_horizon(node: ast.expr) -> bool:
+        return any(
+            isinstance(child, ast.Attribute) and child.attr == "_settle_steps_used"
+            for child in ast.walk(node)
+        )
+
+    def test_protocol_docstring_states_the_four_rules(self) -> None:
+        """The contract is only load-bearing if it is written down where
+        implementations are read. Guards against silent truncation."""
+        source = "\n".join(TestSettleHorizonSourceLock._lines())
+        protocol = source.index(TestSettleHorizonSourceLock.PROTOCOL)
+        docstring = source[
+            protocol : source.index('"""', source.index('"""', protocol) + 3) + 3
+        ]
+        for marker in (
+            "actually executed",
+            "_converged",
+            "on_step(step, energy)",
+            "track_free_energy_per_iter",
+        ):
+            assert marker in docstring, f"protocol docstring lost rule: {marker}"
