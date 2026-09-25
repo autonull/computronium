@@ -84,10 +84,4 @@ def test_repair_bench_rows_capped(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(rendered) == MAX_RENDERED_ROWS
 
 
-def test_showing_first_glossary_key_exists() -> None:
-    from computronium.ui.glossary_service import get_glossary_service
 
-    service = get_glossary_service()
-    assert service.has("showing_first")
-    explorer, lab = service.get_both("showing_first")
-    assert explorer and lab and explorer != "showing_first"

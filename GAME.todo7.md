@@ -342,7 +342,18 @@ Auto-discovery at startup; palette and registry pick everything up.
   removed (context-manager parenting is sufficient).
 
 ### Phase 3: Capabilities
-- [ ] Cell forensics drawer (4.1) · Atlas filters (4.2) · parallel coordinates (4.3)
+- [x] Cell forensics drawer (4.1) · Atlas filters (4.2)
+  → `AtlasFilters` + `selected_cell_key`/`atlas_filters` signals in
+  `ui/state.py` (interaction-state layer's documented job); `CellForensicsData`
+  /`adapt_cell_forensics` (best-accuracy representative, burst/maturity union,
+  defect excerpts, Pareto via shared `_pareto_key_set`); `CellForensicsPanel`
+  drawer with daemon-gated actions (disabled + "requires daemon" tooltip);
+  Atlas table gets filter chips (D/C/U/topology facets, outcome, maturity,
+  text search), N-of-M caption, row-click → selection signal → drawer;
+  `MapSpecimen` gains `is_defect`/`maturity`; specimen/Pareto keys canonicalized
+  to 4-part `dynamics|credit|update|topology`; `stories/forensics.py`;
+  `tests/unit/test_forensics_filters.py`. Full scope notes in §18.
+- [ ] Parallel coordinates (4.3)
 - [x] Budget panel (4.5) · Evidence view adapters (4.6)
   → `BudgetData`/`adapt_budget` (burn-down, cells/h, maturation, cost spread)
   as a Monitor tab; `EvidenceData`/`adapt_evidence` (beliefs, experiments,
@@ -364,6 +375,72 @@ Auto-discovery at startup; palette and registry pick everything up.
 
 ### v2 Backlog
 - [ ] Campaign diff view · derived-state replay
+
+## 18. PROGRESS LOG (2026-09-25 — Phase 3 slice: forensics drawer + Atlas filters)
+
+### Shipped
+- Interaction state (§4.2 core): `AtlasFilters` frozen dataclass in
+  `ui/state.py` (`dynamics/credit/update/topology` facet sets, `outcome`
+  any/pareto/dominated/diverged/defect, `maturity` any/l0/l1/l2, text
+  `query`; pure `matches()` with `None`-tolerant maturity) plus the only
+  push state in the dashboard: `selected_cell_key` and `atlas_filters`
+  signals (Invariant 2 in code).
+- Cell forensics (§4.1): `CellForensicsData`/`adapt_cell_forensics` in
+  `ui/adapters.py` (representative = best-accuracy KB entry; bursts and
+  maturity unioned; defect excerpts via read-only `read_defects`; Pareto
+  via `_pareto_key_set`, extracted from `adapt_discovery_map` so both
+  adapters share one front computation — DRY). `CellForensicsPanel`
+  (`ui/components/cell_forensics.py`, `DRAWER` placement) with daemon-gated
+  action buttons, all disabled + "requires daemon" tooltip when no daemon.
+- Atlas wiring: filter chips in the DiscoveryMap map lens (axis
+  multi-selects with live options, outcome/maturity selects, search, Clear),
+  filtered table (full `cell_key` row keys, single-select → selection
+  signal), N-of-M caption; `DashboardApp` subscribes and opens the drawer
+  with adapted data, resets selection on `switch_root`.
+- Key canonicalization (bug fix): specimen and Pareto keys were 3-part
+  (`D|C|U`) while KB cell keys are 4-part (`D|C|U|topology`), so front
+  membership could never match — both now 4-part.
+- `MapSpecimen` gains `is_defect`/`maturity` (defaulted, all call sites
+  safe); story `forensics` registered (now 6 stories).
+- Deleted dead `test_showing_first_glossary_key_exists` (imported the
+  Phase-1-deleted `glossary_service`; failed identically on pristine tree).
+- Verified: 68 passed (`test_forensics_filters` 7 new + `test_adapters`),
+  26 passed (render + state + virtualization + interactions), 3 passed
+  (`test_budget_evidence`), 4 passed (`tests/lint`); `ruff format` clean,
+  `ruff check` on touched files shows only pre-existing legacy idioms;
+  `pyright` 0 errors on new/rewritten modules.
+
+### Discovered while working
+- KB rows record only D/C/U/topology per cell — no per-cell substrate or
+  plasticity fields — so S/P facet chips have no data behind them (facets
+  cover what the KB records; docstring says so).
+- The daemon lifecycle API has no per-cell endpoints (only
+  start/pause/resume/stop/skip_sleep), so forensics actions cannot enable
+  yet — they render disabled honestly per Invariant 1.
+- NiceGUI `RightDrawer` has `show()`/`hide()`/`toggle()`, not `open()`
+  (pyright caught it; `BasePanel._open_drawer` calls `.open()` on an
+  `Any`-typed drawer — same latent bug, still open).
+- Filters apply to the Atlas table, not the Plotly map figure (prebuilt
+  from the snapshot); caption says so.
+
+### New improvement opportunities
+- Daemon per-cell endpoints (promote/unquarantine/deep-tier) — until they
+  exist the drawer actions stay disabled; needs a daemon-side slice first.
+- Map-lens filtering: rebuild or mask the Plotly figure from the filtered
+  specimen set so map and table agree.
+- `BasePanel._open_drawer().open()` latent bug (see above) — one-line fix
+  with the explanatory drawer.
+- Substrate/plasticity facets when the KB records per-cell S/P fields.
+- Parallel coordinates (4.3), scrubber (4.4), exports/static-report (4.7)
+  remain; then Phase 4 docs/perf/screenshots.
+
+### Notes for remaining work
+- Next slice: parallel coordinates (4.3) reuses `_pareto_key_set` and the
+  selection signal for linked highlighting; scrubber (4.4) reads the burst
+  log via `resolve_log_path`/`log_tail` (time-indexed offsets still open).
+- `docs/platform/dashboard.md` refresh (Phase 4) now also owes: forensics
+  drawer, filter chips, 4-part cell keys, `/ws/stream`, density flag,
+  Budget tab, Evidence view.
 
 ---
 

@@ -52,9 +52,16 @@ def register_story(entry: Story) -> Story:
 
 
 def _ensure_registered() -> None:
-    from computronium.ui.stories import atlas, budget, defects, evidence, monitor
+    from computronium.ui.stories import (
+        atlas,
+        budget,
+        defects,
+        evidence,
+        forensics,
+        monitor,
+    )
 
-    _ = (atlas, budget, defects, evidence, monitor)
+    _ = (atlas, budget, defects, evidence, forensics, monitor)
 
 
 def build_story(key: str, root: Path) -> tuple[BasePanel, object]:

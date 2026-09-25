@@ -90,6 +90,7 @@ from computronium.ui.components.tradeoffs_panel import (
 )
 from computronium.ui.components.veto_log import VetoEntry, VetoLog, create_veto_log
 from computronium.ui.components.budget_panel import BudgetPanel
+from computronium.ui.components.cell_forensics import CellForensicsPanel
 from computronium.ui.components.evidence_panel import EvidencePanel
 from computronium.ui.components.command_palette import (
     CommandPalette,
@@ -171,6 +172,7 @@ __all__ = [
     "VetoEntry",
     "VetoLog",
     "BudgetPanel",
+    "CellForensicsPanel",
     "EvidencePanel",
     "WorkshopPanel",
     "CommandPalette",

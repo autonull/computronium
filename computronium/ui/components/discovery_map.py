@@ -17,6 +17,13 @@ from computronium.ui.design_tokens import (
     MAX_RENDERED_ROWS,
 )
 from computronium.ui.panels import BasePanel
+from computronium.ui.state import (
+    AtlasFilters,
+    FilterMaturity,
+    FilterOutcome,
+    atlas_filters,
+    selected_cell_key,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]
@@ -42,6 +49,8 @@ class MapSpecimen:
     outcome: str
     is_void: bool = False
     is_pareto: bool = False
+    is_defect: bool = False
+    maturity: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +130,46 @@ class DiscoveryMap(BasePanel):
         # Map view state
         self._show_table = False
 
+    def _visible_specimens(self) -> list[MapSpecimen]:
+        """Specimens surviving the structured Atlas filters (§4.2)."""
+        filters = atlas_filters.peek()
+        if not filters.active:
+            return self.specimens
+        return [
+            specimen
+            for specimen in self.specimens
+            if filters.matches(
+                key=specimen.key,
+                dynamics=specimen.dynamics,
+                credit=specimen.credit,
+                update=specimen.update,
+                topology=specimen.topology,
+                is_pareto=specimen.is_pareto,
+                is_nan=specimen.outcome == "diverged",
+                is_defect=specimen.is_defect,
+                maturity=specimen.maturity or None,
+            )
+        ]
+
+    def _set_facet(self, axis: str, value: list[str] | None) -> None:
+        """Write one axis facet into the shared filter signal."""
+        from dataclasses import replace
+
+        atlas_filters.set(
+            replace(atlas_filters.peek(), **{axis: frozenset(value or [])})
+        )
+
+    def _set_scalar(
+        self, field: str, value: FilterOutcome | FilterMaturity | str
+    ) -> None:
+        """Write one scalar filter (outcome, maturity, query) into the signal."""
+        from dataclasses import replace
+
+        atlas_filters.set(replace(atlas_filters.peek(), **{field: value}))
+
+    def _clear_filters(self) -> None:
+        atlas_filters.set(AtlasFilters())
+
     def render(self) -> ui.element:
         """Render the Discovery Map panel with lens tabs (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
@@ -176,15 +225,60 @@ class DiscoveryMap(BasePanel):
                     f"({100 - self.fog_coverage_pct:.0f}% {'Unexplored Territory'})"
                 ).classes("text-caption text-grey-8")
 
+        self._render_filters()
+
         # View toggle: Map / Table
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label().classes("flex-1")  # Spacer
+            if atlas_filters.peek().active:
+                ui.label(
+                    f"Showing {len(self._visible_specimens())} of "
+                    f"{len(self.specimens)} cells (filters apply to the table)"
+                ).classes("text-caption")
+            else:
+                ui.label().classes("flex-1")  # Spacer
             with ui.row().classes("items-center gap-2"):
                 ui.label("View").classes("text-sm text-grey-8")
                 ui.switch(
                     value=self._show_table,
                     on_change=lambda e: self._toggle_view(bool(e.value)),
                 ).props(f'size="sm" aria-label="{"View"}"')
+
+    def _render_filters(self) -> None:
+        """Structured Atlas filter chips (§4.2) bound to the shared signal."""
+        current = atlas_filters.peek()
+        with ui.expansion("Filters", icon="filter_alt").classes("w-full"):
+            with ui.row().classes("w-full gap-2"):
+                for axis in ("dynamics", "credit", "update", "topology"):
+                    options = sorted({getattr(s, axis) for s in self.specimens})
+                    picked = sorted(set(getattr(current, axis)) & set(options))
+                    ui.select(
+                        options,
+                        multiple=True,
+                        label=axis,
+                        value=picked or None,
+                        on_change=lambda e, axis=axis: self._set_facet(
+                            axis, list(e.value or [])
+                        ),
+                    ).props("dense")
+            with ui.row().classes("w-full items-center gap-2"):
+                ui.select(
+                    ["any", "pareto", "dominated", "diverged", "defect"],
+                    label="outcome",
+                    value=current.outcome,
+                    on_change=lambda e: self._set_scalar("outcome", str(e.value)),
+                ).props("dense")
+                ui.select(
+                    ["any", "l0", "l1", "l2"],
+                    label="maturity",
+                    value=current.maturity,
+                    on_change=lambda e: self._set_scalar("maturity", str(e.value)),
+                ).props("dense")
+                ui.input(
+                    label="Search",
+                    value=current.query,
+                    on_change=lambda e: self._set_scalar("query", str(e.value or "")),
+                ).props("dense")
+                ui.button("Clear", on_click=self._clear_filters).props("flat dense")
 
         # Map view container
         figure_container = ui.column().classes("w-full")
@@ -221,12 +315,21 @@ class DiscoveryMap(BasePanel):
                 ui.icon(ICONS["map"]).classes("text-6xl text-grey-8")
                 ui.label("Map loading...").classes("text-grey-8")
 
+    def _on_table_select(self, event: Any) -> None:
+        """Table row click → shared selection signal (forensics drawer listens)."""
+        selection = getattr(event, "selection", None) or []
+        if selection and isinstance(selection[0], dict):
+            key = selection[0].get("cell_key")
+            if isinstance(key, str) and key:
+                selected_cell_key.set(key)
+
     def _table_rows(self) -> list[dict[str, str]]:
-        """Table rows for the current specimens, capped at MAX_RENDERED_ROWS."""
+        """Filtered table rows, capped at MAX_RENDERED_ROWS."""
         rows = []
-        for s in self.specimens[:MAX_RENDERED_ROWS]:
+        for s in self._visible_specimens()[:MAX_RENDERED_ROWS]:
             rows.append({
                 "key": s.key[:30],
+                "cell_key": s.key,
                 "dynamics": s.dynamics,
                 "credit": s.credit,
                 "update": s.update,
@@ -241,11 +344,11 @@ class DiscoveryMap(BasePanel):
 
     def _render_table(self) -> None:
         """Render sortable table alternative (100% map info, capped rows)."""
-        total = len(self.specimens)
+        total = len(self._visible_specimens())
         rows = self._table_rows()
 
         if not rows:
-            ui.label("No data available").classes("text-grey")
+            ui.label("No cells match the current filters.").classes("text-grey")
             return
 
         columns = [
@@ -311,9 +414,13 @@ class DiscoveryMap(BasePanel):
             },
         ]
 
-        ui.table(rows=rows, columns=columns, row_key="key").classes("w-full").props(
-            "dense flat bordered"
-        )
+        ui.table(
+            rows=rows,
+            columns=columns,
+            row_key="cell_key",
+            selection="single",
+            on_select=self._on_table_select,
+        ).classes("w-full").props("dense flat bordered")
         if total > MAX_RENDERED_ROWS:
             ui.label(f"{'Showing first rows'}: {len(rows)} / {total}").classes(
                 "text-caption text-grey"
@@ -374,11 +481,14 @@ def create_discovery_map_from_atlas(
     voids_df,  # pandas DataFrame from atlas.load_voids
     fog_coverage_pct: float = 0.0,
     pareto_keys: set[str] | None = None,
+    defect_cells: set[str] | None = None,
+    maturity_by_key: dict[str, str] | None = None,
 ) -> tuple[list[MapSpecimen], list[MapRegion]]:
     """Create specimens and regions from atlas DataFrames (columnar, O(n)).
 
     ``pareto_keys`` marks front membership directly — avoids a second
-    specimen rebuild in the adapter.
+    specimen rebuild in the adapter. Keys are canonical 4-part
+    ``dynamics|credit|update|topology`` cell keys.
     """
     n = len(df)
     if n == 0:
@@ -398,7 +508,11 @@ def create_discovery_map_from_atlas(
 
     specimens = []
     for i in range(n):
-        key = str(raw_keys[i]) if raw_keys[i] else f"{dyn[i]}|{cred[i]}|{upd[i]}"
+        key = (
+            str(raw_keys[i])
+            if raw_keys[i]
+            else f"{dyn[i]}|{cred[i]}|{upd[i]}|{topo[i]}"
+        )
         specimens.append(
             MapSpecimen(
                 key=key,
@@ -413,6 +527,8 @@ def create_discovery_map_from_atlas(
                 outcome=_outcome_from_values(void_flags[i], nan_flags[i], acc[i]),
                 is_void=bool(void_flags[i]),
                 is_pareto=bool(pareto_keys) and key in pareto_keys,
+                is_defect=bool(defect_cells) and key in defect_cells,
+                maturity=(maturity_by_key or {}).get(key, ""),
             )
         )
 

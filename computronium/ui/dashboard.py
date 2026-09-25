@@ -522,6 +522,26 @@ registry.register_panel(
 )
 
 
+def _make_forensics() -> Any:
+    from computronium.ui.components.cell_forensics import CellForensicsPanel
+
+    return CellForensicsPanel()
+
+
+# Cell forensics drawer (Atlas table row → selected_cell_key signal → drawer)
+registry.register_panel(
+    PanelSpec(
+        key="cell_forensics",
+        label="Cell forensics",
+        icon="biotech",
+        factory=_make_forensics,
+        adapter_key=None,
+        placement=PanelPlacement.DRAWER,
+        order=0,
+    )
+)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # DASHBOARD APP
 # ═══════════════════════════════════════════════════════════════════════════
@@ -614,6 +634,28 @@ class DashboardApp:
         )
         self._unsub_ws = event_bus.subscribe(WebSocketEvent, self._on_ws_event)
         self._unsub_config = event_bus.subscribe(ConfigChanged, self._on_config_changed)
+
+        # Interaction-state subscription: Atlas selection → forensics drawer
+        from computronium.ui.state import selected_cell_key
+
+        self._forensics: Any = None
+        self._unsub_select = selected_cell_key.subscribe(self._on_cell_selected)
+
+    def _on_cell_selected(self, cell_key: str | None) -> None:
+        """Open the forensics drawer for the selected Atlas cell (§4.1)."""
+        if not cell_key:
+            return
+        from computronium.ui.adapters import adapt_cell_forensics
+
+        snapshot = self._snapshot_for(with_atlas=False)
+        data = adapt_cell_forensics(snapshot, self.root, cell_key)
+        if self._forensics is None:
+            spec = registry.get_panel("cell_forensics")
+            if spec is None:
+                return
+            self._forensics = spec.factory()
+        self._forensics.daemon_client = self.client
+        self._forensics.show(data)
 
     # ── Bus handlers ──────────────────────────────────────────────────────────
 
@@ -1296,6 +1338,11 @@ class DashboardApp:
         self._views.clear()
         self._tab_panels.clear()
         self._rendered.clear()
+        if self._forensics is not None:
+            self._forensics.update_data(None)
+        from computronium.ui.state import selected_cell_key
+
+        selected_cell_key.set(None)
         self._invalidate()
         self._refresh_current()
 

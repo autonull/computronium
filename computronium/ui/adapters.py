@@ -88,6 +88,30 @@ def _coerce_str(mapping: dict[str, object], key: str, default: str = "") -> str:
     return value if isinstance(value, str) else default
 
 
+def _pareto_key_set(root: Path) -> set[str]:
+    """Full cell keys on the Pareto front (shared by map + forensics adapters)."""
+    from computronium.visualization.atlas import load_cells, pareto_top
+
+    cells_df = load_cells(root / "kb.sqlite")
+    if cells_df.empty:
+        return set()
+    from computronium.autoscientist.objectives import DEFAULT_OBJECTIVES
+
+    top = pareto_top(cells_df, k=len(cells_df), objectives=DEFAULT_OBJECTIVES)
+    if "key" not in top.columns:
+        topo = top["topology"].astype(str) if "topology" in top.columns else "?"
+        top = top.assign(
+            key=top["dynamics"].astype(str)
+            + "|"
+            + top["credit"].astype(str)
+            + "|"
+            + top["update"].astype(str)
+            + "|"
+            + topo
+        )
+    return set(top["key"].tolist())
+
+
 def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMapData:
     """Adapt snapshot to DiscoveryMap data."""
     from computronium.ui.components.discovery_map import (
@@ -97,7 +121,6 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
         align_void_columns,
         load_cells,
         load_voids,
-        pareto_top,
     )
 
     # Load cells and voids for the atlas
@@ -107,28 +130,17 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
     voids_df = _with_layout(voids_df)
 
     # Get Pareto front keys
-    pareto_keys: set[str] = set()
-    if not cells_df.empty:
-        from computronium.autoscientist.objectives import DEFAULT_OBJECTIVES
+    pareto_keys = _pareto_key_set(root)
 
-        top = pareto_top(cells_df, k=len(cells_df), objectives=DEFAULT_OBJECTIVES)
-        if "key" not in top.columns:
-            top = top.assign(
-                key=top["dynamics"].astype(str)
-                + "|"
-                + top["credit"].astype(str)
-                + "|"
-                + top["update"].astype(str)
-            )
-        pareto_keys = set(top["key"].tolist())
-
-    # Create specimens and regions using existing helper; Pareto flags set
-    # directly (no second specimen rebuild).
+    # Create specimens and regions using existing helper; Pareto/defect/
+    # maturity flags set directly (no second specimen rebuild).
     specimens, regions = create_discovery_map_from_atlas(
         cells_df,
         voids_df,
         fog_coverage_pct=0.0,
         pareto_keys=pareto_keys or None,
+        defect_cells=_defect_cell_keys(root),
+        maturity_by_key=_maturity_by_key(root),
     )
 
     # Get atlas figure from snapshot
@@ -1048,6 +1060,136 @@ def adapt_evidence(snapshot: DashboardSnapshot, root: Path) -> EvidenceData:
         decisions=decisions,
         ledger_path=str(path),
         empty_reason=reason,
+    )
+
+
+# ============================================================================
+# Cell Forensics (§4.1) — everything about one cell for the Atlas drawer
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class DefectExcerpt:
+    """One defect record touching the cell (message head + status)."""
+
+    defect_id: str
+    error_class: str
+    message: str
+    status: str
+    timestamp: float
+
+
+@dataclass(frozen=True, slots=True)
+class CellForensicsData:
+    """Forensics for one cell key: coordinate, objectives, Pareto status,
+    lineage (bursts/maturity), stability instruments, defect excerpts."""
+
+    cell_key: str
+    dynamics: str
+    credit: str
+    update: str
+    topology: str
+    accuracy: float
+    walltime_s: float
+    param_count: int
+    flops: float
+    memory_mb: float
+    energy_per_step: float
+    bp_deficit: float
+    spectral_radius: float
+    lyapunov_exponent: float
+    max_singular_value: float
+    credit_alignment: float
+    psi_capacity: float
+    settle_horizon: float
+    maturity: tuple[str, ...]
+    bursts: tuple[str, ...]
+    is_pareto: bool
+    is_nan: bool
+    defects: tuple[DefectExcerpt, ...]
+
+
+def _maturity_levels(levels: tuple[str, ...]) -> tuple[str, ...]:
+    cleaned = [str(level).removeprefix("maturity:") for level in levels]
+    return tuple(level for level in cleaned if level in {"l0", "l1", "l2"})
+
+
+def _defect_cell_keys(root: Path) -> set[str]:
+    """Cell keys with at least one defect record (read-only)."""
+    from computronium.autoscientist.defects import read_defects
+
+    return {record.cell for record in read_defects(root / "runtime_defects.jsonl")}
+
+
+def _maturity_by_key(root: Path) -> dict[str, str]:
+    """Highest maturity level per cell key (l2 > l1 > l0)."""
+    from computronium.visualization.live_atlas import _measured_cells
+
+    order = {"l0": 0, "l1": 1, "l2": 2}
+    best: dict[str, str] = {}
+    for row in _measured_cells(root):
+        for level in _maturity_levels(row.levels):
+            if order.get(level, -1) > order.get(best.get(row.key, ""), -1):
+                best[row.key] = level
+    return best
+
+
+def adapt_cell_forensics(
+    snapshot: DashboardSnapshot, root: Path, cell_key: str
+) -> CellForensicsData | None:
+    """Adapt one KB cell to forensics rows. Read-only; ``None`` when unknown.
+
+    Representative row is the best-accuracy entry; bursts/maturity union
+    across repeat measurements. Not in ``ADAPTERS`` — it takes a cell key,
+    resolved from the ``selected_cell_key`` interaction signal.
+    """
+    from computronium.autoscientist.defects import read_defects
+    from computronium.visualization.live_atlas import _measured_cells
+
+    del snapshot
+    rows = [row for row in _measured_cells(root) if row.key == cell_key]
+    if not rows:
+        return None
+    best = max(rows, key=lambda row: row.accuracy)
+    bursts: tuple[str, ...] = tuple(
+        dict.fromkeys(burst for row in rows for burst in row.bursts)
+    )
+    maturity = _maturity_levels(tuple(level for row in rows for level in row.levels))
+    defects = tuple(
+        DefectExcerpt(
+            defect_id=record.defect_id,
+            error_class=record.error_class,
+            message=record.message[:280],
+            status=record.status,
+            timestamp=record.timestamp,
+        )
+        for record in read_defects(root / "runtime_defects.jsonl")
+        if record.cell == cell_key
+    )
+    return CellForensicsData(
+        cell_key=cell_key,
+        dynamics=best.dynamics,
+        credit=best.credit,
+        update=best.update,
+        topology=best.topology,
+        accuracy=best.accuracy,
+        walltime_s=best.walltime,
+        param_count=best.param_budget,
+        flops=best.flops,
+        memory_mb=best.memory_mb,
+        energy_per_step=best.energy_per_step,
+        bp_deficit=best.bp_deficit,
+        spectral_radius=best.spectral_radius,
+        lyapunov_exponent=best.lyapunov_exponent,
+        max_singular_value=best.max_singular_value,
+        credit_alignment=best.credit_alignment,
+        psi_capacity=best.psi_capacity,
+        settle_horizon=best.settle_horizon,
+        maturity=maturity,
+        bursts=bursts,
+        is_pareto=cell_key in _pareto_key_set(root),
+        is_nan=best.nan_loss,
+        defects=defects,
     )
 
 

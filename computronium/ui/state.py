@@ -12,14 +12,97 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Any, Callable, Generic, TypeVar
+from typing import Any, Callable, Generic, Literal, TypeVar
 
 T = TypeVar("T")
+
+FilterOutcome = Literal["any", "pareto", "dominated", "diverged", "defect"]
+FilterMaturity = Literal["any", "l0", "l1", "l2"]
+
+
+@dataclass(frozen=True, slots=True)
+class AtlasFilters:
+    """Structured Atlas filter state (§4.2) — the interaction-state layer's job.
+
+    Empty facet sets mean "no constraint". Facets cover the axes the KB
+    records per cell (D/C/U/topology); substrate/plasticity facets wait on
+    per-cell KB fields. ``maturity`` is ``None``-tolerant: rows with unknown
+    maturity ignore that facet instead of vanishing.
+    """
+
+    dynamics: frozenset[str] = frozenset()
+    credit: frozenset[str] = frozenset()
+    update: frozenset[str] = frozenset()
+    topology: frozenset[str] = frozenset()
+    outcome: FilterOutcome = "any"
+    maturity: FilterMaturity = "any"
+    query: str = ""
+
+    @property
+    def active(self) -> bool:
+        """Whether any facet constrains the visible cell set."""
+        return bool(
+            self.dynamics
+            or self.credit
+            or self.update
+            or self.topology
+            or self.outcome != "any"
+            or self.maturity != "any"
+            or self.query.strip()
+        )
+
+    def matches(
+        self,
+        *,
+        key: str,
+        dynamics: str,
+        credit: str,
+        update: str,
+        topology: str,
+        is_pareto: bool = False,
+        is_nan: bool = False,
+        is_defect: bool = False,
+        maturity: str | None = None,
+    ) -> bool:
+        """Pure predicate: does one cell survive these filters?"""
+        facets = (
+            (self.dynamics, dynamics),
+            (self.credit, credit),
+            (self.update, update),
+            (self.topology, topology),
+        )
+        if any(picked and value not in picked for picked, value in facets):
+            return False
+        if not self._outcome_ok(is_pareto, is_nan, is_defect):
+            return False
+        if (
+            self.maturity != "any"
+            and maturity is not None
+            and maturity != self.maturity
+        ):
+            return False
+        needle = self.query.strip().lower()
+        return not needle or needle in key.lower()
+
+    def _outcome_ok(self, is_pareto: bool, is_nan: bool, is_defect: bool) -> bool:
+        """Outcome facet: dominated excludes front and diverged cells."""
+        match self.outcome:
+            case "any":
+                return True
+            case "pareto":
+                return is_pareto
+            case "dominated":
+                return not is_pareto and not is_nan
+            case "diverged":
+                return is_nan
+            case "defect":
+                return is_defect
 
 
 @dataclass
 class Signal(Generic[T]):
     """Reactive signal — mutable value with change notification."""
+
     value: T
     _subscribers: set[Callable[[T], None]] = field(default_factory=set, repr=False)
     _version: int = 0
@@ -53,6 +136,7 @@ class Signal(Generic[T]):
 @dataclass
 class Computed(Generic[T]):
     """Derived state — recomputes when dependencies change."""
+
     _fn: Callable[[], T]
     _value: T | None = None
     _subscribers: set[Callable[[T], None]] = field(default_factory=set, repr=False)
@@ -91,6 +175,7 @@ class Computed(Generic[T]):
 @dataclass
 class Effect:
     """Side effect that auto-tracks signal dependencies."""
+
     _fn: Callable[[], Any | Callable[[], None]]
     _cleanup: Callable[[], None] | None = None
     _dependencies: set[Signal | Computed] = field(default_factory=set)
@@ -167,6 +252,7 @@ async def _rerun_effect(effect: Effect) -> None:
 # Public API
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def signal(initial: T) -> Signal[T]:
     """Create a reactive signal."""
     return Signal(initial)
@@ -198,6 +284,7 @@ def untracked(fn: Callable[[], T]) -> T:
 # Store Pattern — Global Reactive State
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class Store:
     """Global reactive store with namespaced signals."""
 
@@ -224,6 +311,12 @@ class Store:
 
 
 # Global stores
-ui_store = Store()      # UI state (modals, toasts, loading)
-data_store = Store()    # Data state (snapshots, filters)
-session_store = Store() # Session state (user, preferences)
+ui_store = Store()  # UI state (modals, toasts, loading)
+data_store = Store()  # Data state (snapshots, filters)
+session_store = Store()  # Session state (user, preferences)
+
+# Cross-panel interaction state (GAME.todo7 Invariant 2) — selection,
+# filters, density, scrub cursor. Panels never do I/O and never poll;
+# this is the only push state in the dashboard.
+selected_cell_key: Signal[str | None] = signal(None)
+atlas_filters: Signal[AtlasFilters] = signal(AtlasFilters())
