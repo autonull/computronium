@@ -22,16 +22,13 @@ def _make_app(root: Path) -> DashboardApp:
         log_path=None,
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="auto",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
     return app
 
 
 @pytest.fixture(autouse=True)
-def _restore_mode() -> "object":
+def _restore_mode() -> object:
     yield
     if get_mode() != "explorer":
         set_mode("explorer", persist=False)

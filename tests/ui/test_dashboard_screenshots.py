@@ -1,8 +1,8 @@
 """Visual verification (C2b/C4): screenshot capture for all views.
 
 Generates reference screenshots for:
-- All 4 views (Monitor, Atlas, Repair, Compose)
-- Both registers (explorer, lab)
+- All 5 views (Monitor, Atlas, Defects, Evolution, Evidence)
+- Both densities (comfortable, compact)
 - Empty + populated states
 """
 
@@ -16,8 +16,8 @@ import pytest
 
 SCREENSHOT_DIR = Path("screenshots/dashboard")
 
-VIEWS = ["monitor", "atlas", "repair", "compose"]
-REGISTERS = ["explorer", "lab"]
+VIEWS = ["monitor", "atlas", "defects", "evolution", "evidence"]
+DENSITIES = ["comfortable", "compact"]
 STATES = ["populated", "empty"]
 
 
@@ -35,7 +35,13 @@ def _switch_view(screen: Any, view: str) -> None:
     """Switch views via the nav button group (labelled buttons)."""
     from selenium.webdriver.common.by import By
 
-    labels = {"monitor": "Monitor", "atlas": "Atlas", "repair": "Repair", "compose": "Compose"}
+    labels = {
+        "monitor": "Monitor",
+        "atlas": "Atlas",
+        "defects": "Defects",
+        "evolution": "Evolution",
+        "evidence": "Evidence",
+    }
     target = labels[view]
     for btn in screen.selenium.find_elements(By.CSS_SELECTOR, "button"):
         if btn.text.strip() == target:
@@ -107,14 +113,14 @@ class TestDashboardScreenshots:
 
     @pytest.mark.screenshots
     @pytest.mark.parametrize("state", STATES)
-    @pytest.mark.parametrize("register", REGISTERS)
+    @pytest.mark.parametrize("density", DENSITIES)
     @pytest.mark.parametrize("view", VIEWS)
     def test_capture_view(
         self,
         capture_screenshots: bool,
         screen: Any,
         state: str,
-        register: str,
+        density: str,
         view: str,
         populated_root: Path,
         empty_root: Path,
@@ -139,32 +145,31 @@ class TestDashboardScreenshots:
             "Resize must be passed a displayed plot div",
         ])
 
-        holder = {"root": root, "register": register, "view": view}
+        holder = {"root": root, "density": density, "view": view}
 
-        @ui.page(f"/dashboard_screenshot/{view}/{register}", language="en-US")
+        @ui.page(f"/dashboard_screenshot/{view}/{density}", language="en-US")
         def _screenshot_page() -> None:
             build_dashboard(
                 holder["root"],
-                ui_mode=holder["register"],
-                ui_actions=False,
+                density=holder["density"],
             )
 
-        screen.open(f"/dashboard_screenshot/{view}/{register}", timeout=30)
+        screen.open(f"/dashboard_screenshot/{view}/{density}", timeout=30)
         _wait_for_source(screen.selenium, "Computronium")
         time.sleep(2)
 
         _switch_view(screen, view)
-        filepath = _capture_screenshot(screen, f"{view}_{register}_{state}")
+        filepath = _capture_screenshot(screen, f"{view}_{density}_{state}")
         print(f"Captured: {filepath}")
 
     @pytest.mark.screenshots
-    def test_capture_all_registers_populated(
+    def test_capture_all_densities_populated(
         self,
         capture_screenshots: bool,
         screen: Any,
         populated_root: Path,
     ) -> None:
-        """Quick capture all registers in populated state."""
+        """Quick capture all densities in populated state."""
         from nicegui import ui
 
         from computronium.ui.dashboard import build_dashboard
@@ -175,16 +180,17 @@ class TestDashboardScreenshots:
             "Resize must be passed a displayed plot div",
         ])
 
-        for register in REGISTERS:
-
-            @ui.page(f"/dashboard_quick/{register}", language="en-US")
+        def _make_quick_page(density: str) -> None:
+            @ui.page(f"/dashboard_quick/{density}", language="en-US")
             def _quick_page() -> None:
-                build_dashboard(populated_root, ui_mode=register, ui_actions=False)
+                build_dashboard(populated_root, density=density)  # type: ignore[arg-type]
 
-            screen.open(f"/dashboard_quick/{register}", timeout=30)
+        for density in DENSITIES:
+            _make_quick_page(density)
+            screen.open(f"/dashboard_quick/{density}", timeout=30)
             _wait_for_source(screen.selenium, "Computronium")
             time.sleep(2)
-            _capture_screenshot(screen, f"overview_{register}_populated")
+            _capture_screenshot(screen, f"overview_{density}_populated")
 
 
 class TestVisualVerification:
@@ -240,15 +246,12 @@ class TestVisualVerification:
 
         assert "prefers-contrast: high" in HIGH_CONTRAST_CSS
 
-    def test_quiet_mode_density(self) -> None:
-        """Verify quiet mode tokens exist (C4b)."""
-        from computronium.ui.design_tokens import (
-            EXPLORER_TOKENS,
-            LAB_TOKENS,
-        )
+    def test_density_tokens(self) -> None:
+        """Verify density tokens exist (C4b)."""
+        from computronium.ui.design_tokens import DENSITY_TOKENS
 
-        assert EXPLORER_TOKENS.density == "comfortable"
-        assert LAB_TOKENS.density == "compact"
+        assert DENSITY_TOKENS["comfortable"].density == "comfortable"
+        assert DENSITY_TOKENS["compact"].density == "compact"
 
 
 class TestDashboardViewRendering:
@@ -268,9 +271,6 @@ class TestDashboardViewRendering:
             log_path=root / "logs" / "continuous_500.log",
             poll_seconds=2.0,
             daemon_url=None,
-            ui_mode="lab",
-            ui_actions=False,
-            quiet=False,
         )
         app.build()
         app.switch_view(view)

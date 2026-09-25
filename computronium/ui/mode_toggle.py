@@ -344,3 +344,15 @@ class BasePanel(GlossaryAware):
         Data-driven panels override this, accepting the panel's typed data
         object positionally plus component-specific keyword arguments.
         """
+
+    def on_mount(self) -> None:
+        """First render into a live container."""
+
+    def on_data_update(self, data: object | None = None) -> None:
+        """Fresh data was pushed via ``update_data``."""
+
+    def on_visibility_change(self, visible: bool) -> None:
+        """Container shown or hidden by view/tab navigation."""
+
+    def on_unmount(self) -> None:
+        """Container discarded (e.g. campaign root switch)."""

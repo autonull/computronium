@@ -350,34 +350,34 @@ BREAKPOINTS = {
 
 
 @dataclass(frozen=True, slots=True)
-class RegisterTokens:
-    """Token overrides per register (Explorer vs Lab)."""
+class DensityTokens:
+    """Spacing density for the single-register UI."""
 
-    # Explorer: larger touch targets, simpler density
-    # Lab: denser, more info per pixel
     card_padding: str
     table_row_height: str
     icon_size: str
     density: Literal["comfortable", "compact"]
 
 
-EXPLORER_TOKENS = RegisterTokens(
-    card_padding=SPACING["4"],
-    table_row_height="3rem",
-    icon_size="1.5rem",
-    density="comfortable",
-)
+DENSITY_TOKENS: dict[str, DensityTokens] = {
+    "comfortable": DensityTokens(
+        card_padding=SPACING["4"],
+        table_row_height="3rem",
+        icon_size="1.5rem",
+        density="comfortable",
+    ),
+    "compact": DensityTokens(
+        card_padding=SPACING["2"],
+        table_row_height="2rem",
+        icon_size="1rem",
+        density="compact",
+    ),
+}
 
-LAB_TOKENS = RegisterTokens(
-    card_padding=SPACING["2"],
-    table_row_height="2rem",
-    icon_size="1rem",
-    density="compact",
-)
 
-
-def get_register_tokens(register: Literal["explorer", "lab"]) -> RegisterTokens:
-    return EXPLORER_TOKENS if register == "explorer" else LAB_TOKENS
+def get_density_tokens(density: Literal["comfortable", "compact"]) -> DensityTokens:
+    """Token set for the given density toggle state."""
+    return DENSITY_TOKENS[density]
 
 
 # ──────────────────────────────────────────────────────────────────────────────

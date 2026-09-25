@@ -1,14 +1,15 @@
 """Computronium Dashboard — extensible single-page architecture.
 
-Views: Monitor (live status) / Atlas (discovery map) / Repair (defects) /
-Compose (build). One snapshot per refresh cycle; artifact polling plus
-optional daemon WebSocket streams. Read-only over the campaign root.
+Views: Monitor (live status) / Atlas (discovery map) / Defects (triage) /
+Evolution (probes, genome) / Evidence (beliefs, claims). One snapshot per
+refresh cycle; artifact polling plus optional daemon WebSocket streams.
+Read-only over the campaign root — actions route through the daemon API.
 
-All 20 original panels are registered in the ViewRegistry and available via:
-- Top-level navigation (4 core views)
+All panels are registered in the ViewRegistry and available via:
+- Top-level navigation (5 core views)
 - Command Palette (Cmd+K)
 - Contextual tabs within views
-- Modals/drawers/overlays
+- Modals/drawers
 """
 
 from __future__ import annotations
@@ -18,9 +19,11 @@ import json
 import logging
 import time
 from collections.abc import Callable
+from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from nicegui import app as gui_app
 from nicegui import ui
 
 from computronium.ui.a11y.tokens import a11y_css
@@ -53,22 +56,15 @@ from computronium.ui.design_tokens import PRIMARY, SECONDARY, css_custom_propert
 from computronium.ui.event_bus import (
     ArtifactChanged,
     ConfigChanged,
-    ModeChanged,
     PanelRenderFailed,
     WebSocketEvent,
     event_bus,
 )
 from computronium.ui.metrics import metrics
-from computronium.ui.mode_toggle import (
-    BasePanel,
-    get_mode,
-    initialize_mode,
-    mode_toggle_select,
-)
+from computronium.ui.mode_toggle import BasePanel
 from computronium.ui.view_registry import (
     PanelPlacement,
     PanelSpec,
-    ViewMode,
     ViewSpec,
     registry,
 )
@@ -133,8 +129,8 @@ def _make_episodes() -> EpisodeTimeline:
     return EpisodeTimeline()
 
 
-def _make_campaign_gallery() -> CampaignCardGallery:
-    return CampaignCardGallery()
+def _make_campaign_gallery() -> Any:
+    raise RuntimeError("campaigns tab is root-bound; built per-app in _render_tabs")
 
 
 def _make_preview_shelf() -> Any:
@@ -229,35 +225,77 @@ class _TradeoffsPanel(TradeoffsPanel, BasePanel):
             )
 
 
+class _CampaignGalleryPanel(BasePanel):
+    """Root-bound campaigns tab (the registry factory is root-free)."""
+
+    def __init__(self, manifests_dir: Path):
+        BasePanel.__init__(
+            self,
+            panel_key="campaigns",
+            plain_explanation="Past campaigns and their results",
+            why_explanation="Compare what was tried before starting something new",
+            expert_explanation="CampaignCardGallery over <root>/campaigns manifests",
+        )
+        self._gallery = CampaignCardGallery(manifests_dir)
+
+    def render(self):
+        return self._gallery.render()
+
+    def update_data(self, data: Any = None, **kwargs):
+        pass
+
+
+class _EvidencePanel(BasePanel):
+    """Placeholder for the Evidence view until CEEC adapters land."""
+
+    def __init__(self):
+        BasePanel.__init__(
+            self,
+            panel_key="evidence",
+            plain_explanation="What the campaign believes and why",
+            why_explanation="Beliefs, claims, calibration, and decisions in one place",
+            expert_explanation="CEEC ledger projections; read-only until ceec.run adapters land",
+        )
+
+    def render(self):
+        with ui.card().classes("w-full p-4") as card:
+            ui.label("Evidence").classes("text-h4")
+            ui.label(
+                "Beliefs, claims, calibration curves, and the decision log land "
+                "here. Ledger writes stay in ceec.run."
+            ).classes("text-body")
+        return card
+
+    def update_data(self, data: Any = None, **kwargs):
+        pass
+
+
 # Monitor tabs
 registry.register_view(
     ViewSpec(
         key="monitor",
-        label_key="monitor",
+        label="Monitor",
         icon="dashboard",
         factory=MonitorView,
-        modes=(ViewMode.ALWAYS,),
         order=0,
         hotkey="1",
         tabs=[
             PanelSpec(
                 key="activity_feed",
-                label_key="activity_feed",
+                label="Activity",
                 icon="rss_feed",
                 factory=_ActivityFeedPanel,
                 placement=PanelPlacement.TAB,
                 parent_view="monitor",
-                modes=(ViewMode.ALWAYS,),
                 order=0,
             ),
             PanelSpec(
                 key="field_reports",
-                label_key="field_reports",
+                label="Field reports",
                 icon="report",
                 factory=_make_field_reports,
                 placement=PanelPlacement.TAB,
                 parent_view="monitor",
-                modes=(ViewMode.ALWAYS,),
                 order=1,
             ),
         ],
@@ -268,217 +306,211 @@ registry.register_view(
 registry.register_view(
     ViewSpec(
         key="atlas",
-        label_key="atlas",
+        label="Atlas",
         icon="map",
         factory=DiscoveryMap,
         adapter_key="discovery_map",
-        modes=(ViewMode.ALWAYS,),
         order=1,
         hotkey="2",
         tabs=[
             PanelSpec(
                 key="tradeoffs",
-                label_key="tradeoffs",
+                label="Trade-offs",
                 icon="trending_up",
                 factory=_TradeoffsPanel,
                 adapter_key="tradeoffs",
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
-                modes=(ViewMode.ALWAYS,),
                 order=0,
             ),
             PanelSpec(
                 key="campaigns",
-                label_key="campaigns",
+                label="Campaigns",
                 icon="folder",
-                factory=lambda: CampaignCardGallery(self.root / "campaigns"),
+                factory=_make_campaign_gallery,
                 adapter_key="campaigns",
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
-                modes=(ViewMode.ALWAYS,),
                 order=1,
             ),
             PanelSpec(
                 key="preview",
-                label_key="preview",
+                label="Preview",
                 icon="preview",
                 factory=_make_preview_shelf,
                 adapter_key="preview",
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
-                modes=(ViewMode.ALWAYS,),
                 order=2,
             ),
             PanelSpec(
                 key="region_naming",
-                label_key="region_naming",
+                label="Regions",
                 icon="label",
                 factory=_make_region_naming,
                 adapter_key="region_naming",
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
-                modes=(ViewMode.ALWAYS,),
                 order=3,
             ),
             PanelSpec(
                 key="team",
-                label_key="team",
+                label="Team",
                 icon="groups",
                 factory=_make_team_wall,
                 adapter_key="team",
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
-                modes=(ViewMode.ALWAYS,),
                 order=4,
             ),
         ],
     )
 )
 
-# Repair tabs
+# Defects tabs
 registry.register_view(
     ViewSpec(
-        key="repair",
-        label_key="repair",
+        key="defects",
+        label="Defects",
         icon="build",
         factory=RepairBench,
         adapter_key="repair_bench",
-        modes=(ViewMode.ALWAYS,),
         order=2,
         hotkey="3",
         tabs=[
             PanelSpec(
                 key="constitution",
-                label_key="constitution",
+                label="Constitution",
                 icon="shield",
                 factory=_make_constitution,
                 adapter_key="constitution",
                 placement=PanelPlacement.TAB,
-                parent_view="repair",
-                modes=(ViewMode.LAB,),
+                parent_view="defects",
                 order=0,
             ),
             PanelSpec(
                 key="lineage",
-                label_key="lineage",
+                label="Lineage",
                 icon="account_tree",
                 factory=_make_lineage,
                 adapter_key="lineage",
                 placement=PanelPlacement.TAB,
-                parent_view="repair",
-                modes=(ViewMode.LAB,),
+                parent_view="defects",
                 order=1,
             ),
             PanelSpec(
                 key="episodes",
-                label_key="episodes",
+                label="Episodes",
                 icon="timeline",
                 factory=_make_episodes,
                 adapter_key="episodes",
                 placement=PanelPlacement.TAB,
-                parent_view="repair",
-                modes=(ViewMode.LAB,),
+                parent_view="defects",
                 order=2,
             ),
         ],
     )
 )
 
-# Compose tabs
+# Evolution tabs
 registry.register_view(
     ViewSpec(
-        key="compose",
-        label_key="compose",
+        key="evolution",
+        label="Evolution",
         icon="tune",
         factory=_make_composer,
-        modes=(ViewMode.ALWAYS,),
         order=3,
         hotkey="4",
         tabs=[
             PanelSpec(
                 key="probe_analytics",
-                label_key="probe_analytics",
+                label="Probes",
                 icon="analytics",
                 factory=_make_probe_analytics,
                 adapter_key="probe_analytics",
                 placement=PanelPlacement.TAB,
-                parent_view="compose",
-                modes=(ViewMode.LAB,),
+                parent_view="evolution",
                 order=0,
             ),
             PanelSpec(
                 key="stagnation",
-                label_key="stagnation",
+                label="Stagnation",
                 icon="warning",
                 factory=_make_stagnation,
                 adapter_key="stagnation",
                 placement=PanelPlacement.TAB,
-                parent_view="compose",
-                modes=(ViewMode.LAB,),
+                parent_view="evolution",
                 order=1,
             ),
             PanelSpec(
                 key="genome_health",
-                label_key="genome_health",
+                label="Genome",
                 icon="dna",
                 factory=_make_genome_health,
                 adapter_key="genome_health",
                 placement=PanelPlacement.TAB,
-                parent_view="compose",
-                modes=(ViewMode.LAB,),
+                parent_view="evolution",
                 order=2,
             ),
             PanelSpec(
                 key="mutations",
-                label_key="mutations",
+                label="Mutations",
                 icon="biotech",
                 factory=_make_mutations,
                 adapter_key="mutations",
                 placement=PanelPlacement.TAB,
-                parent_view="compose",
-                modes=(ViewMode.LAB,),
+                parent_view="evolution",
                 order=3,
             ),
             PanelSpec(
                 key="veto_log",
-                label_key="veto_log",
+                label="Veto log",
                 icon="gavel",
                 factory=_make_veto_log,
                 adapter_key="veto_log",
                 placement=PanelPlacement.TAB,
-                parent_view="compose",
-                modes=(ViewMode.LAB,),
+                parent_view="evolution",
                 order=4,
             ),
         ],
     )
 )
 
-# Gamify overlay (modal)
+# Evidence (stub adapters until CEEC projections land)
+registry.register_view(
+    ViewSpec(
+        key="evidence",
+        label="Evidence",
+        icon="verified",
+        factory=_EvidencePanel,
+        order=4,
+        hotkey="5",
+    )
+)
+
+# Progress modal (always available via palette hotkey `b`)
 registry.register_panel(
     PanelSpec(
         key="progress",
-        label_key="progress",
+        label="Progress",
         icon="emoji_events",
         factory=_make_progress,
         adapter_key=None,  # Uses recognition store
         placement=PanelPlacement.MODAL,
-        modes=(ViewMode.GAMIFY,),
         order=0,
         hotkey="b",
     )
 )
 
-# Workshop overlay (modal) - enabled via --ui-actions
+# Workshop modal (always available via palette hotkey `w`)
 registry.register_panel(
     PanelSpec(
         key="workshop",
-        label_key="workshop",
+        label="Workshop",
         icon="build",
         factory=_make_workshop,
         adapter_key=None,
         placement=PanelPlacement.MODAL,
-        modes=(ViewMode.UI_ACTIONS,),
         order=0,
         hotkey="w",
     )
@@ -496,16 +528,15 @@ class DashboardApp:
     _CONFIG_WATCHED = ("campaign.yaml", "heartbeat.json")
     _WS_PAINT_INTERVAL_S = 2.0
 
+    _DENSITY_STORAGE_KEY = "computronium_ui_density"
+
     def __init__(
         self,
         root: Path,
         log_path: Path | None,
         poll_seconds: float,
         daemon_url: str | None,
-        ui_mode: str,
-        ui_actions: bool,
-        quiet: bool,
-        gamify: bool = False,
+        density: Literal["comfortable", "compact"] = "comfortable",
         *,
         roots: tuple[Path, ...] | None = None,
     ):
@@ -515,16 +546,14 @@ class DashboardApp:
         self.log_path = resolve_log_path(root, log_path)
         self.poll_seconds = poll_seconds
         self.daemon_url = daemon_url
-        self.ui_actions = ui_actions
-        self.quiet = quiet
-        self.gamify = gamify
-
-        initialize_mode()
-        if ui_mode != "auto":
-            from computronium.ui.mode_toggle import _current_mode
-
-            _current_mode._register = ui_mode  # type: ignore[assignment]
-        self._current_mode_applied = get_mode()
+        self.density: Literal["comfortable", "compact"] = (
+            density if density in {"comfortable", "compact"} else "comfortable"
+        )
+        with suppress(RuntimeError):
+            stored = gui_app.storage.user.get(self._DENSITY_STORAGE_KEY)
+            if stored in {"comfortable", "compact"}:
+                self.density = stored
+        self.quiet = self.density == "compact"
 
         # State
         self.view = "monitor"
@@ -578,7 +607,6 @@ class DashboardApp:
         self._unsub_artifact = event_bus.subscribe(
             ArtifactChanged, self._on_artifact_changed
         )
-        self._unsub_mode = event_bus.subscribe(ModeChanged, self._on_mode_changed)
         self._unsub_ws = event_bus.subscribe(WebSocketEvent, self._on_ws_event)
         self._unsub_config = event_bus.subscribe(ConfigChanged, self._on_config_changed)
 
@@ -588,12 +616,6 @@ class DashboardApp:
         if event.root != self.root:
             return
         self.last_signature = event.signature
-        self._refresh_current()
-
-    def _on_mode_changed(self, event: ModeChanged) -> None:
-        if event.mode == self._current_mode_applied:
-            return
-        self._current_mode_applied = event.mode
         self._refresh_current()
 
     def _on_config_changed(self, event: ConfigChanged) -> None:
@@ -729,7 +751,7 @@ class DashboardApp:
     def _invalidate(self) -> None:
         self._snapshot = None
         self._snapshot_has_atlas = False
-        for key in ("atlas", "repair", "compose"):
+        for key in ("atlas", "defects", "evolution", "evidence"):
             self._views.pop(key, None)
             self._rendered.discard(key)
 
@@ -808,7 +830,7 @@ class DashboardApp:
             panel.atlas_figure = self.atlas_figure
 
     def _render_panel_safe(
-        self, container: Any, panel_key: str, render: Callable[[], None]
+        self, container: Any, panel_key: str, render: Callable[[], object]
     ) -> None:
         """Render a panel with a server-side error-card fallback (§4.9).
 
@@ -840,10 +862,19 @@ class DashboardApp:
             return
         container.clear()
         panel = self._ensure_view(key)
+        first = key not in self._rendered
         self._render_panel_safe(
-            container, key, lambda: (self._push_view_data(key, panel), panel.render())
+            container,
+            key,
+            lambda: (
+                self._push_view_data(key, panel),
+                panel.on_data_update(),
+                panel.render(),
+            ),
         )
         self._rendered.add(key)
+        if first:
+            panel.on_mount()
 
         # Render tabs for this view (outside the cleared container to avoid deletion issues)
         self._render_tabs(key)
@@ -855,9 +886,7 @@ class DashboardApp:
         instances are cached by spec key so refresh reuses them instead of
         calling ``spec.factory()`` on every paint.
         """
-        tabs_specs = registry.get_panels_for_view(
-            view_key, get_mode(), self.gamify, self.ui_actions
-        )
+        tabs_specs = registry.get_panels_for_view(view_key)
         if not tabs_specs:
             return
 
@@ -880,7 +909,7 @@ class DashboardApp:
                             btn = (
                                 ui
                                 .button(
-                                    spec.icon + " " + spec.label_key,
+                                    spec.icon + " " + spec.label,
                                     on_click=lambda s=spec: self._switch_tab(
                                         view_key, s.key
                                     ),
@@ -920,12 +949,20 @@ class DashboardApp:
                 container.classes(remove="hidden")
                 panel = self._tab_panels.get(spec.key)
                 if panel is None:
-                    panel = spec.factory()
+                    if spec.key == "campaigns":
+                        panel = _CampaignGalleryPanel(self.root / "campaigns")
+                    else:
+                        panel = spec.factory()
                     self._tab_panels[spec.key] = panel
+                    panel.on_mount()
                 self._render_panel_safe(
                     container,
                     spec.key,
-                    lambda p=panel, s=spec: (self._push_tab_data(s, p), p.render()),
+                    lambda p=panel, s=spec: (
+                        self._push_tab_data(s, p),
+                        p.on_data_update(),
+                        p.render(),
+                    ),
                 )
             else:
                 container.classes(add="hidden")
@@ -959,8 +996,13 @@ class DashboardApp:
         panel.update_data(data)
 
     def _switch_tab(self, view_key: str, tab_key: str) -> None:
+        prev = self._active_tab.get(view_key)
         self._active_tab[view_key] = tab_key
         self._render_tabs(view_key)
+        if prev and prev in self._tab_panels:
+            self._tab_panels[prev].on_visibility_change(False)
+        if tab_key in self._tab_panels:
+            self._tab_panels[tab_key].on_visibility_change(True)
         if view_key == self.view:
             self._update_hash(view_key, tab_key)
 
@@ -968,10 +1010,11 @@ class DashboardApp:
         self._render_view(self.view)
 
     def switch_view(self, key: str) -> None:
-        views = registry.get_visible_views(get_mode(), self.gamify, self.ui_actions)
+        views = registry.get_visible_views()
         view_keys = [v.key for v in views]
         if key not in view_keys or key == self.view:
             return
+        prev = self.view
         self.view = key
         for view_key, container in self._view_containers.items():
             if view_key == key:
@@ -983,35 +1026,41 @@ class DashboardApp:
         else:
             # Re-render tabs for the newly visible view
             self._render_tabs(key)
+        if prev in self._views:
+            self._views[prev].on_visibility_change(False)
+        if key in self._views:
+            self._views[key].on_visibility_change(True)
 
         # Show/hide tab area
         if hasattr(self, "_tab_area") and self._tab_area:
-            tabs = registry.get_panels_for_view(
-                key, get_mode(), self.gamify, self.ui_actions
-            )
+            tabs = registry.get_panels_for_view(key)
             if tabs:
                 self._tab_area.classes(remove="hidden")
             else:
                 self._tab_area.classes(add="hidden")
 
         # Initialize active tab
-        tabs = registry.get_panels_for_view(
-            key, get_mode(), self.gamify, self.ui_actions
-        )
+        tabs = registry.get_panels_for_view(key)
         if tabs:
             self._active_tab[key] = tabs[0].key
         self._update_hash(key)
 
-    def toggle_mode(self) -> None:
-        from computronium.ui.mode_toggle import set_mode
+    def set_density(self, density: str) -> None:
+        """Density toggle (comfortable/compact); compact quiets the feed."""
+        if density not in {"comfortable", "compact"} or density == self.density:
+            return
+        self.density = density  # type: ignore[assignment]
+        self.quiet = density == "compact"
+        if "monitor" in self._views:
+            monitor = self._views["monitor"]
+            if hasattr(monitor, "quiet"):
+                monitor.quiet = self.quiet
+        with suppress(RuntimeError):
+            gui_app.storage.user[self._DENSITY_STORAGE_KEY] = density
+        self._refresh_current()
 
-        set_mode("lab" if get_mode() == "explorer" else "explorer")
-
-    def toggle_quiet(self) -> None:
-        self.quiet = not self.quiet
-        if self.view == "monitor" and "monitor" in self._views:
-            self._views["monitor"].quiet = self.quiet
-            self._render_view("monitor")
+    def toggle_density(self) -> None:
+        self.set_density("compact" if self.density == "comfortable" else "comfortable")
 
     def force_refresh(self) -> None:
         self._refresh_current()
@@ -1030,11 +1079,11 @@ class DashboardApp:
                 self._refresh_liveness()
 
             # Navigation toggle
-            views = registry.get_visible_views(get_mode(), self.gamify, self.ui_actions)
+            views = registry.get_visible_views()
             self._nav = (
                 ui
                 .toggle(
-                    {v.key: v.label_key for v in views},
+                    {v.key: v.label for v in views},
                     value=self.view,
                     on_change=lambda e: self.switch_view(str(e.value)),
                 )
@@ -1055,7 +1104,21 @@ class DashboardApp:
                         .classes("w-56")
                         .style("color: white;")
                     )
-                mode_toggle_select().style("color: white;")
+                (
+                    ui
+                    .select(
+                        options={
+                            "comfortable": "Comfortable",
+                            "compact": "Compact",
+                        },
+                        value=self.density,
+                        on_change=lambda e: self.set_density(str(e.value)),
+                    )
+                    .props("dense outlined")
+                    .classes("w-40")
+                    .style("color: white;")
+                    .tooltip("Density")
+                )
                 # Command palette trigger
                 ui.button(icon="search", on_click=self._open_command_palette).props(
                     "flat dense round"
@@ -1064,7 +1127,7 @@ class DashboardApp:
     def _render_body(self) -> None:
         with ui.column().classes("w-full max-w-[1400px] mx-auto p-4") as body:
             # View containers
-            views = registry.get_visible_views(get_mode(), self.gamify, self.ui_actions)
+            views = registry.get_visible_views()
             for spec in views:
                 self._view_containers[spec.key] = ui.column().classes("w-full gap-4")
                 if spec.key != self.view:
@@ -1074,15 +1137,13 @@ class DashboardApp:
             self._tab_area = ui.column().classes("w-full gap-4")
             for spec in views:
                 self._tab_containers[spec.key] = {}
-                for tab_spec in registry.get_panels_for_view(
-                    spec.key, get_mode(), self.gamify, self.ui_actions
-                ):
+                for tab_spec in registry.get_panels_for_view(spec.key):
                     self._tab_containers[spec.key][tab_spec.key] = ui.column().classes(
                         "w-full gap-4 hidden"
                     )
 
     def _bind_hotkeys(self) -> None:
-        views = registry.get_visible_views(get_mode(), self.gamify, self.ui_actions)
+        views = registry.get_visible_views()
         hotkeys = {}
         for v in views:
             if v.hotkey:
@@ -1206,6 +1267,10 @@ class DashboardApp:
         self.last_signature = watch_signature(root)
         self._config_signature = self._config_signature_of()
         self._last_config_signature = self._config_signature
+        for panel in self._views.values():
+            panel.on_unmount()
+        for panel in self._tab_panels.values():
+            panel.on_unmount()
         self._views.clear()
         self._tab_panels.clear()
         self._rendered.clear()
@@ -1226,9 +1291,7 @@ class DashboardApp:
         self._bind_hash_navigation()
         self._render_view(self.view)
         # Initialize active tab for current view
-        tabs = registry.get_panels_for_view(
-            self.view, get_mode(), self.gamify, self.ui_actions
-        )
+        tabs = registry.get_panels_for_view(self.view)
         if tabs:
             self._active_tab[self.view] = tabs[0].key
 
@@ -1256,14 +1319,12 @@ class DashboardApp:
             view_key = parts[0]
             tab_key = parts[1] if len(parts) > 1 else None
 
-            views = registry.get_visible_views(get_mode(), self.gamify, self.ui_actions)
+            views = registry.get_visible_views()
             view_keys = [v.key for v in views]
             if view_key in view_keys and view_key != self.view:
                 self.switch_view(view_key)
             if tab_key:
-                tabs = registry.get_panels_for_view(
-                    view_key, get_mode(), self.gamify, self.ui_actions
-                )
+                tabs = registry.get_panels_for_view(view_key)
                 tab_keys = [t.key for t in tabs]
                 if tab_key in tab_keys:
                     self._switch_tab(view_key, tab_key)
@@ -1288,10 +1349,7 @@ def build_dashboard(
     poll_seconds: float = POLL_SECONDS,
     daemon_url: str | None = None,
     *,
-    ui_mode: str = "auto",
-    ui_actions: bool = False,
-    quiet: bool = False,
-    gamify: bool = False,
+    density: Literal["comfortable", "compact"] = "comfortable",
     roots: tuple[Path, ...] | None = None,
 ) -> None:
     """Build the Computronium dashboard."""
@@ -1300,10 +1358,7 @@ def build_dashboard(
         log_path=log_path,
         poll_seconds=poll_seconds,
         daemon_url=daemon_url,
-        ui_mode=ui_mode,
-        ui_actions=ui_actions,
-        quiet=quiet,
-        gamify=gamify,
+        density=density,
         roots=roots,
     )
     app.build()

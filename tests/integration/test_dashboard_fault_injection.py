@@ -42,9 +42,7 @@ def test_empty_root_shows_actionable_buttons(tmp_path: Path) -> None:
         log_path=None,
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="lab",
-        ui_actions=True,
-        quiet=False,
+        density="comfortable",
     )
     app.build()
 
@@ -100,9 +98,13 @@ def test_corrupt_defects_jsonl_graceful_degradation(tmp_path: Path) -> None:
     defects_path = root / "runtime_defects.jsonl"
     with defects_path.open("a", encoding="utf-8") as fh:
         fh.write("not valid json\n")  # Corrupt line
-        fh.write('{"defect_id": "valid1", "timestamp": 3.0, "task": "mnist", "cell": "test", "error_class": "ValueError", "message": "valid", "status": "open", "traceback_tail": ""}\n')
+        fh.write(
+            '{"defect_id": "valid1", "timestamp": 3.0, "task": "mnist", "cell": "test", "error_class": "ValueError", "message": "valid", "status": "open", "traceback_tail": ""}\n'
+        )
         fh.write("{ incomplete\n")  # Another corrupt line
-        fh.write('{"defect_id": "valid2", "timestamp": 4.0, "task": "mnist", "cell": "test2", "error_class": "RuntimeError", "message": "also valid", "status": "resolved", "traceback_tail": ""}\n')
+        fh.write(
+            '{"defect_id": "valid2", "timestamp": 4.0, "task": "mnist", "cell": "test2", "error_class": "RuntimeError", "message": "also valid", "status": "resolved", "traceback_tail": ""}\n'
+        )
 
     # Should not raise, should process valid lines
     from computronium.visualization.live_atlas import defect_funnel_rows
@@ -133,7 +135,9 @@ def test_corrupt_voids_jsonl_graceful_degradation(tmp_path: Path) -> None:
     voids_path = root / "structural_voids.jsonl"
     with voids_path.open("a", encoding="utf-8") as fh:
         fh.write("not valid json\n")
-        fh.write('{"timestamp": 5.0, "task": "mnist", "dynamics": "test", "credit": "prediction", "update": "euclidean", "topology": "feedforward", "category": "geometry_constraint", "error": "valid void"}\n')
+        fh.write(
+            '{"timestamp": 5.0, "task": "mnist", "dynamics": "test", "credit": "prediction", "update": "euclidean", "topology": "feedforward", "category": "geometry_constraint", "error": "valid void"}\n'
+        )
         fh.write("{ incomplete\n")
 
     from computronium.visualization.live_atlas import void_summary_rows
@@ -176,9 +180,6 @@ def test_slow_umap_shows_loading_not_frozen(tmp_path: Path) -> None:
         log_path=root / "logs" / "continuous_500.log",
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="lab",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
 
@@ -259,9 +260,6 @@ def test_daemon_disconnect_chip_transitions_to_offline(tmp_path: Path) -> None:
         log_path=root / "logs" / "continuous_500.log",
         poll_seconds=2.0,
         daemon_url="http://localhost:8940",
-        ui_mode="lab",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
 
@@ -329,9 +327,7 @@ def test_fault_regression_empty_root_no_crash(tmp_path: Path) -> None:
         log_path=None,
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="lab",
-        ui_actions=True,
-        quiet=False,
+        density="comfortable",
     )
 
     # Snapshot should not raise
@@ -369,9 +365,6 @@ def test_fault_regression_daemon_cycle_no_crash(tmp_path: Path) -> None:
         log_path=root / "logs" / "continuous_500.log",
         poll_seconds=2.0,
         daemon_url="http://localhost:8940",
-        ui_mode="lab",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
 
@@ -456,14 +449,11 @@ def test_fault_regression_view_switch_during_faults(tmp_path: Path) -> None:
         log_path=root / "logs" / "continuous_500.log",
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="lab",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
 
     # Switch through all views - should not raise
-    for view_key in ["monitor", "atlas", "repair", "compose"]:
+    for view_key in ["monitor", "atlas", "defects", "evolution", "evidence"]:
         app.switch_view(view_key)
         assert app.view == view_key
 
@@ -538,7 +528,9 @@ def test_snapshot_collects_atlas_errors(tmp_path: Path) -> None:
     (root / "logs").mkdir()
     (root / "logs" / "continuous_500.log").write_text("test\n")
 
-    snapshot = render_snapshot(root, root / "logs" / "continuous_500.log", with_atlas=True)
+    snapshot = render_snapshot(
+        root, root / "logs" / "continuous_500.log", with_atlas=True
+    )
     # Atlas returns None for figure when data is empty/corrupt (graceful)
     # errors list only captures actual exceptions, not empty data
     assert snapshot.atlas is None

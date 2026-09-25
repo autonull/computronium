@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
-from computronium.ui.mode_toggle import BasePanel, tr
+from computronium.ui.mode_toggle import BasePanel
 from computronium.ui.view_registry import PanelPlacement, registry
 
 if TYPE_CHECKING:
@@ -114,32 +114,29 @@ class CommandPalette(BasePanel):
         self._items = []
 
         # Views
-        mode = self._app.ui_mode
-        gamify = getattr(self._app, "gamify", False)
-        ui_actions = getattr(self._app, "ui_actions", False)
-        for item in registry.all_searchable_items(mode, gamify, ui_actions):
+        for item in registry.all_searchable_items():
             if item["type"] == "view":
                 self._items.append(
                     PaletteItem(
                         key=f"view:{item['key']}",
-                        label=tr(item["label"], mode),
+                        label=item["label"],
                         icon=item["icon"],
-                        description=f"Switch to {tr(item['label'], mode)} view",
+                        description=f"Switch to {item['label']} view",
                         action=lambda k=item["key"]: self._app.switch_view(k),
                         category="view",
                         hotkey=item.get("hotkey"),
                     )
                 )
 
-        # Panels (modals, drawers, overlays)
-        for item in registry.all_searchable_items(mode, gamify, ui_actions):
+        # Panels (modals, drawers)
+        for item in registry.all_searchable_items():
             if item["type"] == "panel":
                 self._items.append(
                     PaletteItem(
                         key=f"panel:{item['key']}",
-                        label=tr(item["label"], mode),
+                        label=item["label"],
                         icon=item["icon"],
-                        description=f"Open {tr(item['label'], mode)} ({item['placement']})",
+                        description=f"Open {item['label']} ({item['placement']})",
                         action=lambda k=item["key"]: self._open_panel(k),
                         category="panel",
                         hotkey=item.get("hotkey"),
@@ -150,7 +147,7 @@ class CommandPalette(BasePanel):
         self._items.extend([
             PaletteItem(
                 key="action:refresh",
-                label=tr("refresh_now"),
+                label="Refresh now",
                 icon="refresh",
                 description="Force refresh all data",
                 action=self._app.force_refresh,
@@ -158,50 +155,33 @@ class CommandPalette(BasePanel):
                 hotkey="r",
             ),
             PaletteItem(
-                key="action:toggle_mode",
-                label=tr("toggle_mode"),
-                icon="swap_horiz",
-                description="Switch Explorer ↔ Lab mode",
-                action=self._app.toggle_mode,
-                category="action",
-                hotkey="m",
-            ),
-            PaletteItem(
-                key="action:toggle_quiet",
-                label=tr("toggle_quiet"),
-                icon="volume_off",
-                description="Toggle quiet mode (compact feed)",
-                action=self._app.toggle_quiet,
+                key="action:toggle_density",
+                label="Toggle density",
+                icon="density_medium",
+                description="Switch comfortable ↔ compact density",
+                action=self._app.toggle_density,
                 category="action",
                 hotkey="q",
             ),
+            PaletteItem(
+                key="action:badges",
+                label="Progress",
+                icon="emoji_events",
+                description="View badges and quests",
+                action=lambda: self._open_panel("progress"),
+                category="progress",
+                hotkey="b",
+            ),
+            PaletteItem(
+                key="action:workshop",
+                label="Workshop",
+                icon="build",
+                description="Open recipe workshop",
+                action=lambda: self._open_panel("workshop"),
+                category="workshop",
+                hotkey="w",
+            ),
         ])
-
-        # Extension actions
-        if gamify:
-            self._items.append(
-                PaletteItem(
-                    key="action:badges",
-                    label=tr("badges"),
-                    icon="emoji_events",
-                    description="View badges and quests",
-                    action=lambda: self._open_panel("progress"),
-                    category="gamify",
-                    hotkey="b",
-                )
-            )
-        if ui_actions:
-            self._items.append(
-                PaletteItem(
-                    key="action:workshop",
-                    label=tr("workshop"),
-                    icon="build",
-                    description="Open recipe workshop",
-                    action=lambda: self._open_panel("workshop"),
-                    category="workshop",
-                    hotkey="w",
-                )
-            )
 
     def _filter(self, *args: Any) -> None:
         """Filter items by search query."""

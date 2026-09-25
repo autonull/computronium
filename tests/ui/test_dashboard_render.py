@@ -7,12 +7,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from computronium.ui.dashboard import DashboardApp
-from computronium.ui.view_registry import registry, UIMode
+from computronium.ui.view_registry import registry
 from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from pathlib import Path
 
 
@@ -22,28 +20,15 @@ def _make_app(root: Path) -> DashboardApp:
         log_path=root / "logs" / "continuous_500.log",
         poll_seconds=2.0,
         daemon_url=None,
-        ui_mode="lab",
-        ui_actions=False,
-        quiet=False,
     )
     app.build()
     return app
 
 
-@pytest.fixture(autouse=True)
-def _restore_mode() -> Iterator[None]:
-    """Mode is a process-global singleton — restore it after each test."""
-    yield
-    from computronium.ui.mode_toggle import get_mode, set_mode
-
-    if get_mode() != "explorer":
-        set_mode("explorer", persist=False)
-
-
-def test_views_are_the_four_navigation_targets() -> None:
-    views = registry.get_visible_views("lab", False, False)
+def test_views_are_the_five_navigation_targets() -> None:
+    views = registry.get_visible_views()
     view_keys = tuple(v.key for v in views)
-    assert view_keys == ("monitor", "atlas", "repair", "compose")
+    assert view_keys == ("monitor", "atlas", "defects", "evolution", "evidence")
 
 
 def test_default_view_is_monitor(tmp_path: Path) -> None:
@@ -58,7 +43,7 @@ def test_all_views_render_populated(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    views = registry.get_visible_views("lab", False, False)
+    views = registry.get_visible_views()
     for view in views:
         app.switch_view(view.key)
         assert app.view == view.key
@@ -76,7 +61,7 @@ def test_all_views_render_empty_root(tmp_path: Path) -> None:
     root = tmp_path / "empty"
     root.mkdir()
     app = _make_app(root)
-    views = registry.get_visible_views("lab", False, False)
+    views = registry.get_visible_views()
     for view in views:
         app.switch_view(view.key)
         assert view.key in app._rendered
@@ -86,12 +71,12 @@ def test_containers_match_views(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    views = registry.get_visible_views("lab", False, False)
+    views = registry.get_visible_views()
     view_keys = tuple(v.key for v in views)
     assert set(app._view_containers) == set(view_keys)
 
 
-@pytest.mark.parametrize("view", registry.get_visible_views("lab", False, False))
+@pytest.mark.parametrize("view", registry.get_visible_views())
 def test_switch_view_headless(tmp_path: Path, view) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)

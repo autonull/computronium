@@ -5,7 +5,7 @@ re-renders on change only. No execution, no ledger writes.
 
 Usage::
 
-    uv run comp dashboard --root artifacts/broad_map --port 8088 [--ui-mode explorer|lab|auto] [--ui-actions on|off] [--quiet]
+    uv run comp dashboard --root artifacts/broad_map --port 8088 [--density comfortable|compact]
     uv run comp dashboard --root artifacts/broad_map,artifacts/other   # multi-root selector
 """
 
@@ -59,21 +59,10 @@ def main() -> int:
         help="do not open a browser tab (headless/server use)",
     )
     parser.add_argument(
-        "--ui-mode",
-        choices=["explorer", "lab", "auto"],
-        default=os.environ.get("COMPUTRONIUM_UI_MODE", "auto"),
-        help="UI register: explorer (plain), lab (technical), auto (default)",
-    )
-    parser.add_argument(
-        "--ui-actions",
-        choices=["on", "off"],
-        default=os.environ.get("COMPUTRONIUM_UI_ACTIONS", "off"),
-        help="Enable UI actions (workshop, recipe editor)",
-    )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Compact text-only status chip; hides action lines, batches stream",
+        "--density",
+        choices=["comfortable", "compact"],
+        default=os.environ.get("COMPUTRONIUM_UI_DENSITY", "comfortable"),
+        help="UI density: comfortable (default) or compact",
     )
     args = parser.parse_args()
 
@@ -92,9 +81,7 @@ def main() -> int:
             args.log_path,
             args.poll,
             args.daemon_url,
-            ui_mode=args.ui_mode,
-            ui_actions=args.ui_actions == "on",
-            quiet=args.quiet,
+            density=args.density,
             roots=roots,
         )
 

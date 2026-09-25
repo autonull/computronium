@@ -5,15 +5,11 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-import pytest
-
 from computronium.ui.dashboard import DashboardApp
 from computronium.ui.event_bus import ConfigChanged, event_bus
 from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
-
     from pathlib import Path
 
 
@@ -23,23 +19,11 @@ def _make_app(root: Path, **kwargs: object) -> DashboardApp:
         "log_path": None,
         "poll_seconds": 2.0,
         "daemon_url": None,
-        "ui_mode": "auto",
-        "ui_actions": False,
-        "quiet": False,
     }
     params.update(kwargs)
     app = DashboardApp(**params)  # type: ignore[arg-type]
     app.build()
     return app
-
-
-@pytest.fixture(autouse=True)
-def _restore_mode() -> Iterator[None]:
-    yield
-    from computronium.ui.mode_toggle import get_mode, set_mode
-
-    if get_mode() != "explorer":
-        set_mode("explorer", persist=False)
 
 
 def test_multi_root_switch_resets_state(tmp_path: Path) -> None:

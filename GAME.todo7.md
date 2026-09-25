@@ -286,13 +286,26 @@ Auto-discovery at startup; palette and registry pick everything up.
   dataclass equality, registry `adapter_key` resolution).
 
 ### Phase 1: Unification + Renames
-- [ ] Delete glossary/mode files; single register; density toggle
-- [ ] Rename views: Defects, Evolution; add Evidence view (stub adapters first)
-- [ ] BasePanel new contract + lifecycle hooks
-- [ ] CLI flag cleanup; regenerate screenshots; compare against baseline
+- [x] Registry collapse: `ViewMode` deleted, `label_key` → plain `label`,
+  `PanelPlacement` → `PAGE|TAB|MODAL|DRAWER`, visibility methods take no
+  args (progress/workshop always available via palette)
+- [x] Rename views: Defects, Evolution; Evidence view added (stub panel,
+  CEEC adapters open)
+- [x] BasePanel lifecycle hooks: `on_mount/on_data_update/
+  on_visibility_change/on_unmount` wired in view/tab switches + root switch
+- [x] CLI cleanup: `--ui-mode`/`--ui-actions` removed, `--quiet` →
+  `--density comfortable|compact` (persisted, compact quiets the feed)
+- [ ] Glossary codemod (deferred): `self.tr()` ×89 across ~20 components →
+  inline explorer strings, then delete `glossary_service.py`/`glossary.json`
+  /`mode_toggle` register machinery/`test_ux_l3_glossary_totality.py`;
+  regenerate screenshots; compare against baseline
+- [ ] Single `DENSITY_TOKENS` done in `design_tokens.py`; `.text-grey`/
+  `!important` → token classes still open (pair with the `tr()` codemod)
 
 ### Phase 2: Simplification + Defect Fixes
-- [ ] Flags removed; PanelPlacement collapse; single WS topic
+- [x] Flags removed (progress + workshop always in palette); PanelPlacement
+  collapse (landed with the Phase 1 registry rewrite)
+- [ ] Single WS topic
 - [x] Panel instance caching; tab-bar rebuild fix; keyboard input guard
   → `DashboardApp._tab_panels` cache (cleared on `switch_root`, which
   re-captures root-bound factories); `_tab_membership` skips bar rebuilds,
@@ -419,6 +432,55 @@ Auto-discovery at startup; palette and registry pick everything up.
   first, regenerate screenshots after, compare by glance.
 - `import computronium.ui.stories` pulls NiceGUI transitively (via
   `mode_toggle`); gallery stays a visual-dev tool, never a test dependency.
-- View renames (Defects/Evolution/Evidence) should land together with the
-  `ViewMode` → presence-flags collapse to avoid double churn in
-  `view_registry.py` + `dashboard.py` + palette + tests.
+- ~~View renames (Defects/Evolution/Evidence) should land together with the
+  `ViewMode` → presence-flags collapse~~ — done 2026-09-25 (single slice).
+
+## 14. PROGRESS LOG (2026-09-25 — Phase 1 registry slice)
+
+### Shipped
+- Single-register UI: `view_registry.py` rewritten (no `ViewMode`, plain
+  `label`, `PAGE|TAB|MODAL|DRAWER`, arg-free visibility); `DENSITY_TOKENS`
+  replaces `EXPLORER/LAB_TOKENS`; `DashboardApp(density=...)` replaces
+  `ui_mode/ui_actions/quiet/gamify`; header density toggle (persisted);
+  palette always lists progress/workshop + density action; CLI
+  `--density`, `--ui-mode`/`--ui-actions`/`--quiet` gone.
+- Views renamed (`defects`, `evolution`) + `evidence` stub; all tabs carry
+  plain labels. `BasePanel` lifecycle hooks wired (mount/visibility/data).
+- Fixed latent `campaigns`-tab `NameError` (`self` in module-scope lambda)
+  via root-bound `_CampaignGalleryPanel`; `_render_panel_safe` accepts
+  `Callable[[], object]`.
+- Net −88 LOC across the 13 touched files (377+/465−); pyright errors on
+  `dashboard.py`+`command_palette.py` fell 10 → 4 (remainder are
+  pre-existing idioms: WS `create_task`, `assert`, bare-`except` JS bridge).
+- Verified: 70 passed (`test_dashboard_render` + `test_dashboard_state` +
+  `test_adapters`), 28 passed (`test_dashboard_interactions` +
+  `test_dashboard_fault_injection`); `ruff format` clean; remaining
+  `ruff check` findings on touched files are pre-existing legacy lines.
+
+### Discovered while working
+- `test_dashboard_screenshots.py` had a loop-var closure bug (quick pages
+  all served the last register); fixed with a page factory while renaming
+  registers → densities.
+- `CampaignCardGallery` is not a `BasePanel` (no `update_data`/hooks) —
+  the wrapper pattern (`_ActivityFeedPanel`-style) is the seam for any
+  future non-panel component promoted to a tab.
+- `progress_panel.py` keeps a component-local `gamify_enabled` param,
+  unrelated to the removed app-level flag — no change needed.
+
+### New improvement opportunities
+- Glossary codemod is now unblocked and mechanical: `self.tr("key")` →
+  explorer string from `glossary.json` (89 calls), then delete
+  `glossary_service.py`, `glossary.json`, `mode_toggle` register
+  machinery, `test_ux_l3_glossary_totality.py`. `mode_toggle.py` still
+  hosts `BasePanel` — move it to a register-free `panels.py` in that
+  slice.
+- `docs/platform/dashboard.md` still documents `--quiet`/`--ui-actions`/
+  `--gamify` — refresh in Phase 4 docs pass.
+- Evidence stub needs CEEC adapters (Phase 3, §4.6) before it shows real
+  beliefs/claims.
+
+### Notes for remaining work
+- Next slice: glossary codemod, then single WS topic + hash-nav +
+  a11y token cleanup (rest of Phase 2).
+- Screenshot baselines must be regenerated (5 views × 2 densities);
+  eyeball via `scripts/generate_dashboard_screenshots.py --serve`.

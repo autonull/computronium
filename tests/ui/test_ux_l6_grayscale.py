@@ -75,8 +75,6 @@ def test_populated_vs_empty_distinguishable_in_grayscale(
     def _pair_page() -> None:
         build_dashboard(
             holder["root"],
-            ui_mode="explorer",
-            ui_actions=False,
         )
 
     screen.open("/ux_l6_pair", timeout=30)
