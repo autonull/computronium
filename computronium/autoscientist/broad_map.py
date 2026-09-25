@@ -924,7 +924,7 @@ def next_burst_tag(kb_path: Path) -> str:
 
 def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRow]:
     """Measured cells with their maturity/burst provenance (mtime-cached)."""
-    from computronium.visualization.atlas import kb_load_cached
+    from computronium.knowledge.kb_cache import kb_load_cached
 
     return kb_load_cached(
         kb_path,
@@ -936,7 +936,7 @@ def _load_measured_cells(kb_path: Path, task: str | None = None) -> list[_CellRo
 
 def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_CellRow]:
     from computronium.knowledge import KnowledgeBase
-    from computronium.visualization.atlas import UNBOUNDED_ROWS
+    from computronium.knowledge.kb_cache import UNBOUNDED_ROWS
 
     rows: list[_CellRow] = []
     if not kb_path.exists():
@@ -1048,7 +1048,7 @@ def promote_candidates(
     candidates, best on primary objective first."""
     import pandas as pd
 
-    from computronium.visualization.atlas import pareto_top
+    from computronium.analysis.dominance import pareto_top
 
     rows = _load_measured_cells(kb_path)
     by_key: dict[str, list[_CellRow]] = {}
@@ -1117,7 +1117,7 @@ def _deep_tier_candidates(
     Uses configurable objectives for multi-objective Pareto front."""
     import pandas as pd
 
-    from computronium.visualization.atlas import pareto_top
+    from computronium.analysis.dominance import pareto_top
 
     rows = [r for r in _load_measured_cells(kb_path, task) if "l2" not in r.levels]
     by_key: dict[str, list[_CellRow]] = {}

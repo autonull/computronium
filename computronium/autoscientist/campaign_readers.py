@@ -288,7 +288,7 @@ def front_history_rows(
     cells that expanded the front (★). Uses configurable objectives."""
     import pandas as pd
 
-    from computronium.visualization.atlas import pareto_top
+    from computronium.analysis.dominance import pareto_top
 
     cells = _measured_cells(root)
     bursts = sorted({b for row in cells for b in row.bursts})  # type: ignore[attr-defined]

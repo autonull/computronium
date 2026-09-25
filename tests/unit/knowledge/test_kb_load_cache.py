@@ -1,4 +1,4 @@
-"""Locks for the KB read cache (``atlas.kb_load_cached``).
+"""Locks for the KB read cache (``knowledge.kb_cache.kb_load_cached``).
 
 Ratchet for the stale-read defect: the cache keyed on the main SQLite
 file's ``(mtime_ns, size)``, but ``KnowledgeBase`` runs in WAL mode, so a
@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from computronium.knowledge import KnowledgeBase, KnowledgeEntry
-from computronium.visualization.atlas import _KB_LOAD_CACHE, kb_load_cached
+from computronium.knowledge.kb_cache import _KB_LOAD_CACHE, kb_load_cached
 
 if TYPE_CHECKING:
     from pathlib import Path
