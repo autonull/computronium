@@ -242,9 +242,7 @@ def adapt_tradeoffs_panel(snapshot: DashboardSnapshot, root: Path) -> TradeoffsD
     from computronium.autoscientist.objectives import objective_names
 
     return TradeoffsData(
-        pareto_cells=_pareto_cells_from_rows(
-            snapshot.pareto_rows, snapshot.objectives
-        ),
+        pareto_cells=_pareto_cells_from_rows(snapshot.pareto_rows, snapshot.objectives),
         objectives=list(objective_names(snapshot.objectives))
         if snapshot.objectives
         else [],
@@ -853,6 +851,207 @@ def adapt_field_reports(snapshot: DashboardSnapshot, root: Path) -> FieldReports
 
 
 # ============================================================================
+# Budget Adapter (§4.5) — burn-down, throughput, maturation, cost spread
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class CostBreakdownRow:
+    """Mean walltime per primitive on one axis."""
+
+    axis: str
+    primitive: str
+    mean_walltime_s: float
+    n: int
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetData:
+    """Data for the Budget panel (Monitor tab)."""
+
+    measured: int
+    target: int | None
+    coverage_label: str
+    mean_walltime_s: float
+    cells_per_hour: float
+    projected_remaining_s: int | None
+    maturation: dict[str, int]
+    breakdown: list[CostBreakdownRow]
+
+
+def adapt_budget(snapshot: DashboardSnapshot, root: Path) -> BudgetData:
+    """Adapt snapshot costs/maturation/health to budget data."""
+    del root
+    costs = snapshot.costs
+    measured = int(_coerce_float(costs, "measured"))
+    target = costs.get("target")
+    target = target if isinstance(target, int) else None
+    mean_walltime = _coerce_float(costs, "mean_walltime_s")
+    remaining = costs.get("projected_remaining_s")
+    remaining = remaining if isinstance(remaining, int) else None
+    coverage = costs.get("coverage_pct")
+    maturation = {
+        str(row.get("level", "")).removeprefix("maturity:"): int(
+            _coerce_float(row, "count")
+        )
+        for row in snapshot.maturation
+    }
+    breakdown = [
+        CostBreakdownRow(
+            axis=str(row.get("axis", "")),
+            primitive=str(row.get("primitive", "")),
+            mean_walltime_s=_coerce_float(row, "mean_walltime_s"),
+            n=int(_coerce_float(row, "n")),
+        )
+        for row in snapshot.cost_breakdown
+    ]
+    return BudgetData(
+        measured=measured,
+        target=target,
+        coverage_label=str(coverage) if isinstance(coverage, str) else "unknown",
+        mean_walltime_s=mean_walltime,
+        cells_per_hour=round(3600.0 / mean_walltime, 1) if mean_walltime > 0 else 0.0,
+        projected_remaining_s=remaining,
+        maturation=maturation,
+        breakdown=breakdown,
+    )
+
+
+# ============================================================================
+# Evidence Adapter (§4.6) — CEEC beliefs, experiments, decisions (read-only)
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class BeliefRow:
+    """One belief with its latest revision."""
+
+    id: str
+    statement: str
+    probability_point: float | None
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentRow:
+    """One CEEC experiment (claim record)."""
+
+    id: str
+    question: str
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionRow:
+    """One ledger decision."""
+
+    id: str
+    selected_experiment: str
+    rationale: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceData:
+    """Data for the Evidence view. Empty with a reason when no ledger exists."""
+
+    beliefs: list[BeliefRow]
+    experiments: list[ExperimentRow]
+    decisions: list[DecisionRow]
+    ledger_path: str | None = None
+    empty_reason: str = ""
+
+
+_LEDGER_NAMES = ("ledger.sqlite", "ceec.sqlite3")
+
+
+def _coerce_optional_float(mapping: dict[str, object], key: str) -> float | None:
+    value = mapping.get(key)
+    return value if isinstance(value, float | int) else None
+
+
+def _ledger_path(root: Path) -> Path | None:
+    for name in _LEDGER_NAMES:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_table(path: Path, table: str) -> list[dict[str, object]]:
+    """Read one ledger table over a read-only connection. Never writes."""
+    import sqlite3
+
+    uri = f"file:{path}?mode=ro"
+    with sqlite3.connect(uri, uri=True) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()  # ruff: ignore[hardcoded-sql-expression] — table is an internal constant
+        except sqlite3.Error:
+            return []
+    return [dict(row) for row in rows]
+
+
+def adapt_evidence(snapshot: DashboardSnapshot, root: Path) -> EvidenceData:
+    """Adapt the CEEC ledger beside the campaign root to evidence rows.
+
+    Read-only: opens the ledger with ``mode=ro`` and never creates it.
+    A missing ledger yields empty data with an honest reason, not an error.
+    """
+    del snapshot
+    path = _ledger_path(root)
+    if path is None:
+        return EvidenceData(
+            beliefs=[],
+            experiments=[],
+            decisions=[],
+            empty_reason="no CEEC ledger found",
+        )
+    revisions: dict[str, dict[str, object]] = {}
+    for row in _read_table(path, "belief_revisions"):
+        belief_id = str(row.get("belief_id", ""))
+        if belief_id not in revisions or str(row.get("created_at", "")) >= str(
+            revisions[belief_id].get("created_at", "")
+        ):
+            revisions[belief_id] = row
+    beliefs = [
+        BeliefRow(
+            id=str(row.get("id", "")),
+            statement=str(row.get("statement", "")),
+            probability_point=_coerce_optional_float(rev, "probability_point"),
+            status=str(rev.get("status", "unknown")),
+        )
+        for row in _read_table(path, "beliefs")
+        if (rev := revisions.get(str(row.get("id", "")), {})) is not None
+    ]
+    experiments = [
+        ExperimentRow(
+            id=str(row.get("id", "")),
+            question=str(row.get("question", "")),
+            status=str(row.get("status", "")),
+        )
+        for row in _read_table(path, "experiments")
+    ]
+    decisions = [
+        DecisionRow(
+            id=str(row.get("id", "")),
+            selected_experiment=str(row.get("selected_experiment", "")),
+            rationale=str(row.get("rationale", "")),
+        )
+        for row in _read_table(path, "decisions")
+    ]
+    reason = ""
+    if not beliefs and not experiments and not decisions:
+        reason = "ledger is empty"
+    return EvidenceData(
+        beliefs=beliefs,
+        experiments=experiments,
+        decisions=decisions,
+        ledger_path=str(path),
+        empty_reason=reason,
+    )
+
+
+# ============================================================================
 # Adapter Registry
 # ============================================================================
 
@@ -875,6 +1074,8 @@ ADAPTERS = {
     "veto_log": make_adapter(adapt_veto_log),
     "activity_feed": make_adapter(adapt_activity_feed),
     "field_reports": make_adapter(adapt_field_reports),
+    "budget": make_adapter(adapt_budget),
+    "evidence": make_adapter(adapt_evidence),
 }
 
 

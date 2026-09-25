@@ -90,9 +90,16 @@ implements progressive disclosure without a global mode.
 ### New `BasePanel` contract
 ```python
 class BasePanel:
-    def __init__(self, panel_key: str, *,
-                 plain: str, why: str, expert: str,
-                 docs_url: str | None = None): ...
+    def __init__(
+        self,
+        panel_key: str,
+        *,
+        plain: str,
+        why: str,
+        expert: str,
+        docs_url: str | None = None,
+    ): ...
+
     # render() / update_data() unchanged
     # lifecycle hooks: on_mount, on_data_update, on_visibility_change, on_unmount
 ```
@@ -237,7 +244,8 @@ class UIExtension:
     panels: tuple[PanelSpec, ...] = ()
     adapters: tuple[tuple[str, DataAdapter], ...] = ()
     commands: tuple[PaletteItem, ...] = ()
-    topics: tuple[str, ...] = ()      # WS topics this extension consumes
+    topics: tuple[str, ...] = ()  # WS topics this extension consumes
+
 
 # pyproject.toml:
 # [project.entry-points."computronium.ui.extensions"]
@@ -335,7 +343,14 @@ Auto-discovery at startup; palette and registry pick everything up.
 
 ### Phase 3: Capabilities
 - [ ] Cell forensics drawer (4.1) · Atlas filters (4.2) · parallel coordinates (4.3)
-- [ ] Budget panel (4.5) · Evidence view adapters (4.6) · scrubber (4.4)
+- [x] Budget panel (4.5) · Evidence view adapters (4.6)
+  → `BudgetData`/`adapt_budget` (burn-down, cells/h, maturation, cost spread)
+  as a Monitor tab; `EvidenceData`/`adapt_evidence` (beliefs, experiments,
+  decisions from the CEEC ledger via read-only `mode=ro` SQLite, missing
+  ledger → honest empty state) driving the Evidence view (stub deleted);
+  `BudgetPanel`/`EvidencePanel` + `stories/budget.py`/`stories/evidence.py`;
+  `tests/unit/test_budget_evidence.py` (content + missing-ledger + seeded-ledger)
+- [ ] Scrubber (4.4)
 - [x] Error cards (4.9) · exports + static-report consolidation (4.7)
   → Error cards shipped: `DashboardApp._render_panel_safe` wraps every
   view/tab render (retry card + `PanelRenderFailed` bus event +
@@ -615,3 +630,57 @@ Auto-discovery at startup; palette and registry pick everything up.
 - `docs/platform/dashboard.md` still documents pre-unification flags/registers
   and now also the old `/ws/telemetry` + `/ws/events` endpoints — refresh
   in the Phase 4 docs pass.
+
+## 17. PROGRESS LOG (2026-09-25 — Phase 3 slice: budget panel + Evidence adapters)
+
+### Shipped
+- Budget panel (§4.5): `BudgetData`/`adapt_budget` in `ui/adapters.py`
+  (burn-down from `costs`, throughput as `3600/mean_walltime`, maturation
+  counts, `cost_breakdown` rows), `BudgetPanel` in
+  `ui/components/budget_panel.py`, registered as a Monitor tab
+  (`adapter_key="budget"`); generic `_push_tab_data` needed no changes.
+- Evidence view (§4.6): `EvidenceData`/`adapt_evidence` (beliefs with latest
+  revision probability/status, experiments, decisions) reading
+  `<root>/ledger.sqlite` (fallback `ceec.sqlite3`) over a read-only
+  `mode=ro` SQLite URI — never creates or writes (Invariant 1); missing
+  ledger → empty data with `empty_reason`, never an error. The
+  `_EvidencePanel` stub in `ui/dashboard.py` is deleted; the view now uses
+  `EvidencePanel` with `adapter_key="evidence"`.
+- Stories: `ui/stories/budget.py` + `ui/stories/evidence.py`, registered in
+  gallery `_ensure_registered` (now 5 stories).
+- Tests: `tests/unit/test_budget_evidence.py` (budget content on the
+  synthetic root, missing-ledger honesty, seeded-ledger round-trip via raw
+  `sqlite3` DDL matching the CEEC schema); the generic adapter purity lock
+  auto-covers both new `ADAPTERS` entries.
+- Verified: 79 passed (`test_budget_evidence` + `test_adapters` +
+  `test_dashboard_render` + `test_dashboard_state`), 9 passed
+  (`test_dashboard_interactions`); new modules `ruff check` + `pyright`
+  clean; remaining `ruff check` findings on `dashboard.py` are the
+  documented pre-existing idioms.
+
+### Discovered while working
+- `FunctionAdapter` wraps `(snapshot, root)` fns, so the evidence adapter
+  keeps the standard signature while reading the ledger off `root` — same
+  pattern as existing adapters that reuse `live_atlas` loaders over `root`.
+- CEEC belief status lives only in `belief_revisions` (latest by
+  `created_at`); the adapter resolves it with a max-`created_at` pass.
+- `DataAdapter` docstring says "pure functions — no I/O", but existing
+  adapters already read `root` via loaders; the docstring overstates the
+  invariant (adapters are deterministic-in-`root`, not I/O-free).
+
+### New improvement opportunities
+- Calibration curves (4.6 remainder): `calibration_records` table is
+  unread by `adapt_evidence` — add a `CalibrationRow` + sparkline when the
+  Evidence view needs it.
+- `next-in-plan` (4.6): surface `decisions.candidate_experiments` top pick
+  or open `experiments_by_status('pre-registered')` in the Evidence view.
+- Cell forensics drawer (4.1) is the natural next slice: reuse
+  `BeliefRow`-style row dataclasses + the read-only ledger pattern for the
+  defect stacktrace/log excerpt, with daemon-gated action buttons.
+
+### Notes for remaining work
+- Next slices: forensics drawer (4.1) → Atlas filters (4.2, gives
+  `ui/state.py` signals their documented job) → parallel coordinates (4.3)
+  → scrubber (4.4); then Phase 4 docs/perf/screenshots.
+- `docs/platform/dashboard.md` refresh (Phase 4) now also owes: Budget tab,
+  Evidence view, `/ws/stream` envelope, density flag.

@@ -34,12 +34,14 @@ from computronium.autoscientist.stream_protocol import (
 from computronium.ui.a11y.tokens import a11y_css
 from computronium.ui.adapters import get_adapter
 from computronium.ui.components import (
+    BudgetPanel,
     CampaignCardGallery,
     Composer,
     ComposerData,
     ConstitutionHealthPanel,
     DiscoveryMap,
     EpisodeTimeline,
+    EvidencePanel,
     FieldReports,
     GenomeHealthTracker,
     LineageViewer,
@@ -187,6 +189,10 @@ def _make_field_reports() -> FieldReports:
     return FieldReports()
 
 
+def _make_budget() -> BudgetPanel:
+    return BudgetPanel()
+
+
 # Register core views with their tabs
 # Monitor tabs
 class _ActivityFeedPanel(ActivityFeed, BasePanel):
@@ -251,29 +257,11 @@ class _CampaignGalleryPanel(BasePanel):
         pass
 
 
-class _EvidencePanel(BasePanel):
-    """Placeholder for the Evidence view until CEEC adapters land."""
+class _EvidencePanel(EvidencePanel):
+    """Evidence view factory (CEEC adapters live in `ui/adapters.py`)."""
 
     def __init__(self):
-        BasePanel.__init__(
-            self,
-            panel_key="evidence",
-            plain="What the campaign believes and why",
-            why="Beliefs, claims, calibration, and decisions in one place",
-            expert="CEEC ledger projections; read-only until ceec.run adapters land",
-        )
-
-    def render(self):
-        with ui.card().classes("w-full p-4") as card:
-            ui.label("Evidence").classes("text-h4")
-            ui.label(
-                "Beliefs, claims, calibration curves, and the decision log land "
-                "here. Ledger writes stay in ceec.run."
-            ).classes("text-body")
-        return card
-
-    def update_data(self, data: Any = None, **kwargs):
-        pass
+        EvidencePanel.__init__(self)
 
 
 # Monitor tabs
@@ -303,6 +291,16 @@ registry.register_view(
                 placement=PanelPlacement.TAB,
                 parent_view="monitor",
                 order=1,
+            ),
+            PanelSpec(
+                key="budget",
+                label="Budget",
+                icon="savings",
+                factory=_make_budget,
+                adapter_key="budget",
+                placement=PanelPlacement.TAB,
+                parent_view="monitor",
+                order=2,
             ),
         ],
     )
@@ -482,13 +480,14 @@ registry.register_view(
     )
 )
 
-# Evidence (stub adapters until CEEC projections land)
+# Evidence (CEEC beliefs, experiments, decisions — read-only)
 registry.register_view(
     ViewSpec(
         key="evidence",
         label="Evidence",
         icon="verified",
         factory=_EvidencePanel,
+        adapter_key="evidence",
         order=4,
         hotkey="5",
     )

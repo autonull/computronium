@@ -89,6 +89,8 @@ from computronium.ui.components.tradeoffs_panel import (
     create_pareto_cells_from_atlas,
 )
 from computronium.ui.components.veto_log import VetoEntry, VetoLog, create_veto_log
+from computronium.ui.components.budget_panel import BudgetPanel
+from computronium.ui.components.evidence_panel import EvidencePanel
 from computronium.ui.components.command_palette import (
     CommandPalette,
     PaletteItem,
@@ -168,6 +170,8 @@ __all__ = [
     "TradeoffsPanel",
     "VetoEntry",
     "VetoLog",
+    "BudgetPanel",
+    "EvidencePanel",
     "WorkshopPanel",
     "CommandPalette",
     "PaletteItem",
