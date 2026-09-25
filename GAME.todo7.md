@@ -1,0 +1,424 @@
+# GAME.todo7 — Dashboard UI: Unification, Simplification & Extensibility (v2)
+
+> **Goal**: A usable, ergonomic, extensible mission-control console for the AutoScientist — no cruft, no ambiguity, no dual-register confusion.
+> **v2**: Design review applied — fixture-first testing, read-only invariant restored, parallel coordinates over radar, honest replay scope, view renames, interaction-state layer, Evidence view, budget panel.
+
+---
+
+## 🎯 Guiding Principles (from README + AGENTS)
+
+| Principle | Application |
+|-----------|-------------|
+| **Elegant, Consolidated, Consistent** | Remove dual-register; single source of truth for strings, density, tokens |
+| **DRY, Abstract, Modularized** | One `UIExtension` surface; no boilerplate per panel |
+| **No Backwards Compatibility** | Rename, break, delete freely |
+| **Working > Cosmetic** | Fixture-first glance-verification > coverage metrics |
+| **GPU/Perf Aware** | Throttled paint, virtualized rows, cached panel instances, lazy snapshot |
+
+---
+
+## 0. CORE INVARIANTS (v2 — binding)
+
+1. **Disk is read-only. Actions are daemon-gated.** The dashboard process never
+   writes to the campaign root. Every action (promote, unquarantine, deep-tier,
+   pause) routes through the daemon lifecycle API. Without `--daemon-url`,
+   actions render disabled with a tooltip ("requires daemon"). One invariant,
+   zero ambiguity — preserves "read-only over the campaign root" while
+   enabling steering.
+2. **One data path.** Files/daemon → `DashboardSnapshot` → adapters → panels
+   (pull). Panels never do their own I/O and never poll. Cross-panel
+   interaction (selection, filters, density, scrub cursor) is the only push
+   state, carried by `ui/state.py` signals. Two layers, documented, nothing
+   else — this resolves the unused-signals-module duality by giving signals a
+   precise job.
+3. **Fixture-first.** No refactor lands before the synthetic campaign fixture
+   and screenshot baseline exist (Phase 0). Every phase is verified by glance.
+4. **No backwards compatibility.** Renames and breaks are free.
+
+---
+
+## 1. UNIFY EXPLORER / LAB — Single Progressive-Disclosure Register
+
+### Problem
+Dual-register adds ~8 files, ~500 LOC, and cognitive overhead:
+`glossary.json` (200+ terms × 2 registers), `GlossaryService`, `tr()`,
+`tr_both()`, `ModeToggle` + localStorage persistence, `GlossaryAware` mixin on
+every panel, `EXPLORER_TOKENS`/`LAB_TOKENS` split, register logic in
+`BasePanel`/`CommandPalette`/`view_registry`.
+
+### Solution: One register, progressive disclosure
+
+Single density + plain-language labels; depth lives in the existing
+"What am I looking at?" drawer (plain → why → expert → docs), which already
+implements progressive disclosure without a global mode.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [Computronium]  ● Live  ▼   [density]  🔍   (one register)     │
+├─────────────────────────────────────────────────────────────────┤
+│ Monitor  Atlas  Defects  Evolution  Evidence                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Health Tiles (plain labels)                    [?]             │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐                            │
+│  │ Cells   │ │ Loss    │ │ Stability│   ← click tile for detail │
+│  │ 1,247   │ │ 0.234   │ │ ρ=0.87   │                            │
+│  └─────────┘ └─────────┘ └─────────┘                            │
+│  Budget: ▓▓▓▓▓░░░ 62% · 41 cells/h · l0 412 l1 38 l2 6          │
+│  Activity Feed (plain)          [technical detail ▼]            │
+│  "What am I looking at?" drawer (plain → why → expert → docs)   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Files to Delete
+| File | Replacement |
+|------|-------------|
+| `ui/glossary_service.py` | Inline strings; explanations co-located in panel constructors |
+| `ui/glossary.json` | Deleted |
+| `ui/mode_toggle.py` | Deleted (drawer covers depth) |
+| `EXPLORER_TOKENS`/`LAB_TOKENS`/`RegisterTokens` | Single `DENSITY_TOKENS` (comfortable/compact header toggle) |
+| `ui/state.py` | **Kept** — repurposed as the interaction-state layer (Invariant 2) |
+
+### Files to Modify
+| File | Change |
+|------|--------|
+| `ui/dashboard.py` | Remove `ui_mode`, mode wiring; keep `quiet`→density |
+| `ui/view_registry.py` | `ViewMode` collapses to presence flags only; `label_key` → plain `label` |
+| `ui/components/*.py` | Remove `GlossaryAware`, `tr()`, register branches |
+| `cli/dashboard.py` | Remove `--ui-mode`; `--ui-actions` removed (workshop always available via palette) |
+| `ui/__init__.py` | Drop mode/glossary exports |
+
+### New `BasePanel` contract
+```python
+class BasePanel:
+    def __init__(self, panel_key: str, *,
+                 plain: str, why: str, expert: str,
+                 docs_url: str | None = None): ...
+    # render() / update_data() unchanged
+    # lifecycle hooks: on_mount, on_data_update, on_visibility_change, on_unmount
+```
+
+---
+
+## 2. VIEW IA — RENAMED (metaphor-free)
+
+| v1 | v2 | Content | Hotkey |
+|----|----|---------|--------|
+| Monitor | **Monitor** | Liveness, tiles, loss, feed, **budget & resources** | 1 |
+| Atlas | **Atlas** | Discovery map, Pareto scatter, campaigns, previews, regions, team, **structured filters** | 2 |
+| Repair | **Defects** | Defect funnel, quarantines, constitution, episodes | 3 |
+| Compose | **Evolution** | Probe analytics, stagnation, genome health, mutations, veto log | 4 |
+| — | **Evidence** | CEEC beliefs, claims, calibration, decisions (new) | 5 |
+
+- "Compose" never composed anything; "Repair" is defect triage. Renames are free (no backcompat).
+- Progress (badges) + Workshop stay as modals (`b`/`w`), always available.
+- Static report ("Evidence" export) shares the Evidence view's adapters.
+
+---
+
+## 3. SIMPLIFICATIONS WITHOUT CAPABILITY LOSS
+
+1. **Remove `gamify`/`ui_actions` flags** — progress + workshop always in palette.
+2. **PanelPlacement** collapses to `PAGE | TAB | MODAL | DRAWER` (toasts/badges = persistent modal).
+3. **Adapter registration** via `@adapter_for("panel_key")` decorator + auto-discovery.
+4. **Single WS topic** `"stream"` with typed envelope (§6.3); daemon handshake negotiates protocol version.
+5. **Quiet mode → density toggle** (comfortable/compact), persisted.
+6. **Panel instance caching** (defect fix): tabs currently call `spec.factory()` on every render of every refresh; cache instances keyed by spec; refresh only the visible view + active tab; visibility via `hidden` class + `on_visibility_change` hooks.
+7. **Tab bar rebuild fix**: rebuild only on membership change, not every refresh.
+
+---
+
+## 4. CAPABILITIES (revised)
+
+### 4.1 Cell Forensics Drawer (Atlas click → everything about a cell)
+Coordinate (S,G,D,P,C,U) · objectives · Pareto status · lineage · stability
+metrics (ρ, σ_max, Lyapunov) · maturity stage · defect stacktrace/log excerpt.
+**Actions** (daemon-gated per Invariant 1): Promote to L1 · Unquarantine ·
+Deep-tier · Export row. Disabled + tooltip when no daemon.
+
+### 4.2 Structured Atlas Filters (ontology-space analysis)
+Facet chips per axis (S/G/D/P/C/U), outcome filter, maturity filter, text
+search over coordinates. Filters live in the interaction-state layer (signals)
+and link Atlas ⇄ Pareto ⇄ feed highlighting.
+
+### 4.3 Objective Explorer — parallel coordinates
+- Plotly parallel-coordinates: axes = selected objectives (up to ~6), lines = cells, per-axis range selection, linked selection with Atlas and cell drawer.
+- 2D Pareto scatter with objective-pair selector retained for front inspection.
+- Radar **rejected**: axis-order effects and scale distortion mislead with 5+ objectives.
+- Perf: `scattergl`/line decimation above ~2k cells.
+
+### 4.4 Burst-Log Scrubber (honest scope)
+Time-indexed cursor over on-disk burst log + events: pause live stream while
+scrubbing, filter by kind, jump-to-alert markers, LIVE button returns.
+**Derived-state replay** (Pareto front at time T) is out of scope until
+snapshots are persisted — in-memory history (200 events) cannot support it.
+
+### 4.5 Budget & Resources Panel (Monitor)
+Budget consumed/remaining burn-down, cells/hour throughput, maturation stage
+counts (l0/l1/l2), daemon resource telemetry (GPU util/mem when reported).
+
+### 4.6 Evidence View (CEEC)
+Beliefs with confidence, claim records, calibration curves, decision log,
+next-in-plan. Read-only; ledger writes stay in `ceec.run`.
+
+### 4.7 Exports & Static-Report Consolidation
+- Figures: PNG/SVG per panel.
+- Cells/KB: CSV/parquet export buttons.
+- **Static report = snapshot export of the dashboard**: `comp campaign`'s
+  static HTML renderer and the live dashboard consume the *same adapters*;
+  one data path, two renderers. Serves docs figures and paper sharing.
+
+
+
+### 4.9 Server-Side Error Cards (no React-style boundaries exist)
+Per-container `try/except` at render → fallback card ("Panel unavailable" +
+retry) + `PanelRenderFailed` bus event + metrics counter. One failed panel
+never kills the page.
+
+### 4.10 Keyboard Overlay + Guard Fix
+`?` overlay lists all shortcuts. **Guard fix**: global hotkeys must ignore
+keystrokes while focus is in an input/textarea (currently typing `r` in the
+palette search triggers refresh — registered defect).
+
+
+
+**v2 backlog**: campaign diff view (n-way cell-set + objective deltas, synced
+navigation), derived-state replay reconstruction.
+
+---
+
+## 5. TESTING INFRASTRUCTURE — Lightweight, Manual
+
+### 5.1 Screenshot Generation (manual, gitignored)
+```
+tests/ui/screenshots/           # generated, not committed
+tests/ui/generate_screenshots.py
+```
+```bash
+# One-liner for dev: start dashboard against a real campaign root, generate
+uv run comp dashboard --root artifacts/broad_map --port 8088 --no-open &
+uv run python tests/ui/generate_screenshots.py
+# open tests/ui/screenshots/ to eyeball
+```
+No pixel diffs, no CI gate. Screenshots are a dev tool — run when you want a
+visual baseline, discard when UI changes. Weekly CI upload is just an artifact
+dump for history.
+
+### 5.2 Component Story Gallery
+`ui/stories/` — one module per panel, rendered standalone with real data;
+hot-reload for visual development. Zero test machinery.
+
+### 5.3 Adapter Snapshot Tests (lightweight, deterministic)
+Parametrized over every registered adapter × real campaign root; dataclass
+equality. Run in targeted tier (`pytest tests/unit/test_adapters.py -q`).
+No browser.
+
+### 5.4 Known-Defect Regression List (fixed in Phase 2, kept as doc)
+- Global hotkeys fire while typing in inputs (palette search).
+- Tab `spec.factory()` per render (instance churn).
+- Tab bar rebuilt on every refresh.
+- `.text-grey` `!important` overrides → token classes.
+
+These are tracked in the issue tracker, not brittle E2E tests. Fix once,
+verify manually against a real campaign.
+
+### 5.5 CI — none for UI visuals
+Only adapter unit tests run in CI. Screenshot generation is a manual/weekly
+workflow_dispatch artifact upload — no pass/fail.
+
+---
+
+## 6. EXTENSIBILITY
+
+### 6.1 `UIExtension` — one surface, one entry-point group
+```python
+@dataclass(frozen=True, slots=True)
+class UIExtension:
+    views: tuple[ViewSpec, ...] = ()
+    panels: tuple[PanelSpec, ...] = ()
+    adapters: tuple[tuple[str, DataAdapter], ...] = ()
+    commands: tuple[PaletteItem, ...] = ()
+    topics: tuple[str, ...] = ()      # WS topics this extension consumes
+
+# pyproject.toml:
+# [project.entry-points."computronium.ui.extensions"]
+# myplugin = "computronium_myplugin:EXTENSION"
+```
+Auto-discovery at startup; palette and registry pick everything up.
+
+### 6.2 Theme API — `theme.configure(primary=..., density=..., radius=...)` → CSS custom properties.
+### 6.3 WS v2 — typed envelope, Pydantic models shared daemon/dashboard; capability handshake.
+### 6.4 Lifecycle hooks — `on_mount / on_data_update / on_visibility_change / on_unmount`.
+### 6.5 DI snapshot source — `DashboardApp(snapshot_source=...)` injectable for embedding and tests.
+
+---
+
+## 7. USE-CASE COVERAGE MATRIX
+
+| # | Use case | Status |
+|---|----------|--------|
+| a | Live campaign monitoring | Shipped (Monitor) + 4.5 budget |
+| b | Retrospective on completed campaign | Planned — hide live affordances on static roots |
+| c | n-way campaign comparison | v2 backlog (diff view) |
+| d | Cell forensics ("why did this diverge?") | 4.1 |
+| e | Ontology-space analysis ("which D dominates?") | 4.2 + 4.3 |
+| f | Evidence/claims review | 4.6 |
+| g | Driver steering (pause/promote/unquarantine) | 4.1 + Invariant 1 |
+| h | Export to notebooks/papers | 4.7 |
+| i | Share/deep-link a dashboard state | Deferred — not needed for live monitoring |
+| j | Docs figures (static report) | 4.7 static report |
+| k | Live single-run curve watching | Shipped (daemon telemetry) |
+| l | Team/social surfaces | Shipped (team wall, badges) — low priority, kept as-is |
+
+---
+
+## 8. IMPLEMENTATION SEQUENCE (reordered — fixture-first)
+
+### Phase 0: Mirror (before any refactor)
+- [x] Screenshot generation script + baseline capture of current UI (5.2)
+  → `scripts/generate_dashboard_screenshots.py` upgraded from stub to a real
+  runner (`--capture-screenshots` suite + `--serve --root/--port` eyeball mode);
+  output `tests/ui/screenshots/` (gitignored via `screenshots/`).
+- [x] Story-gallery scaffolding (5.3)
+  → `computronium/ui/stories/` (`gallery.py` + `monitor`/`atlas`/`defects`
+  stories, `build_story`/`serve`); panels render standalone against real
+  roots via production adapters. Purity lock: `tests/unit/test_adapters.py`
+  (every `ADAPTERS` entry × populated/empty fixture root, determinism via
+  dataclass equality, registry `adapter_key` resolution).
+
+### Phase 1: Unification + Renames
+- [ ] Delete glossary/mode files; single register; density toggle
+- [ ] Rename views: Defects, Evolution; add Evidence view (stub adapters first)
+- [ ] BasePanel new contract + lifecycle hooks
+- [ ] CLI flag cleanup; regenerate screenshots; compare against baseline
+
+### Phase 2: Simplification + Defect Fixes
+- [ ] Flags removed; PanelPlacement collapse; single WS topic
+- [x] Panel instance caching; tab-bar rebuild fix; keyboard input guard
+  → `DashboardApp._tab_panels` cache (cleared on `switch_root`, which
+  re-captures root-bound factories); `_tab_membership` skips bar rebuilds,
+  `_style_tab_buttons` restyles in place; global hotkeys ignored while the
+  command palette is open (`CommandPalette.is_open`). Full input-focus guard
+  needs a client-side target check — NiceGUI server key events carry no focus
+  target (see §13).
+- [ ] Hash navigation real implementation (4.8); a11y token cleanup (5.5)
+
+### Phase 3: Capabilities
+- [ ] Cell forensics drawer (4.1) · Atlas filters (4.2) · parallel coordinates (4.3)
+- [ ] Budget panel (4.5) · Evidence view adapters (4.6) · scrubber (4.4)
+- [x] Error cards (4.9) · exports + static-report consolidation (4.7)
+  → Error cards shipped: `DashboardApp._render_panel_safe` wraps every
+  view/tab render (retry card + `PanelRenderFailed` bus event +
+  `dashboard_panel_render_failed_total` counter). Exports/static-report
+  consolidation still open.
+
+### Phase 4: Polish
+- [ ] Docs update (`docs/platform/dashboard.md`), extension guide
+- [ ] Perf baseline (paint, snapshot latency, memory) · axe-core audit
+- [ ] Screenshot regeneration + gallery completion
+
+### v2 Backlog
+- [ ] Campaign diff view · derived-state replay
+
+---
+
+## 9. SUCCESS CRITERIA
+
+| Metric | Target |
+|--------|--------|
+| **Files deleted** | ≥8 (glossary, mode_toggle, dual tokens…) |
+| **LOC reduced** | ≥1,000 removed |
+| **Fixture exists** | Story gallery + adapter tests work against real campaign roots |
+| **Use-case coverage** | a–l all Planned-or-Shipped; none left unaddressed |
+| **Invariant compliance** | Zero disk writes from UI process (actions daemon-gated) |
+| **Defect list** | All five registered defects fixed (verified manually with fixture) |
+| **Paint latency** | WS event → UI <100ms (2s throttled paint) |
+| **Accessibility** | axe-core: 0 AA violations |
+
+---
+
+## 10. RISKS & MITIGATIONS
+
+| Risk | Likelihood | Mitigation |
+|------|------------|------------|
+| Parallel-coordinates perf at thousands of cells | Medium | `scattergl`/decimation; aggregate mode above ~2k |
+| Scrubber IO on large burst logs | Medium | Time-indexed offsets; lazy segment reads |
+| Daemon absent → dead actions confuse users | Low | Disabled + tooltip; Invariant 1 rendered honestly |
+| Plugin code runs at dashboard startup | Accepted | Lab tool; entry points are opt-in installs |
+| Rename churn across docs/tests | Low | No-backcompat policy; mechanical `ruff` + targeted tests |
+
+---
+
+## 11. OUT OF SCOPE
+
+- Derived-state replay reconstruction (Pareto front at time T) — until snapshots persist
+- Campaign diff view (v1 of it)
+- Real-time multi-user collaboration · drag-drop layouts · 3D/WebGL atlas ·
+  mobile-first layout · natural-language queries · PWA/offline
+
+---
+
+## 12. DECISION LOG
+
+| Decision | Rationale |
+|----------|-----------|
+| Read-only disk, daemon-gated actions | Resolves v1 contradiction; one crisp invariant |
+| Fixture-first (Phase 0) | Refactors verified by glance; JSON-of-snapshot fixtures rejected — they bypass the real pipeline |
+| Parallel coordinates over radar | Radar misleads with 5+ objectives (axis order, scale) |
+| Burst-log scrubber, not full replay | In-memory history capped at 200; derived-state replay is a research project |
+| View renames (Defects, Evolution; + Evidence) | "Compose" held nothing composable; metaphor-free IA |
+| Signals for interaction state only | Gives unused `ui/state.py` a precise job; keeps data path pull-only |
+| Evidence as 5th view | CEEC governance is central to the research program; registry makes it trivial |
+| Static report = dashboard snapshot export | Same adapters, two renderers; kills duplication |
+| `UIExtension` single surface | Three registries → one; simpler plugin authoring |
+| Server-side error cards | NiceGUI has no React boundaries; container-level try/except is the real mechanism |
+
+---
+
+## 13. PROGRESS LOG (2026-09-25 — Phase 0 + defect-fix slice)
+
+### Shipped
+- Fixture-first gate now exists: `tests/unit/test_adapters.py` (55 cases,
+  ~8 s headless), `computronium/ui/stories/` (3 stories verified against the
+  synthetic root: `MonitorView/MonitorData`, `DiscoveryMap/DiscoveryMapData`,
+  `RepairBench/RepairBenchData`), `scripts/generate_dashboard_screenshots.py`
+  (capture + `--serve`).
+- Dashboard perf/correctness: tab-panel instance cache, membership-gated
+  tab-bar rebuild, palette-open keyboard guard, server-side error cards
+  (`PanelRenderFailed` in `ui/event_bus.py`, `_render_panel_safe` in
+  `ui/dashboard.py`).
+- Verified: 69 passed (`test_adapters` + `test_dashboard_render` +
+  `test_dashboard_state`); `ruff format` clean; remaining `ruff check`
+  findings on touched files are pre-existing legacy lines (queued hygiene,
+  not blockers).
+
+### Discovered while working
+- The tree already held uncommitted prior WIP (dead-file deletions:
+  `ui/command_palette.py`, `lenses.py`, `panel_registry.py`,
+  `components/console|record|status_chip|health_panel.py`; test/docs
+  updates; `glossary.json` +16). Reconciled rather than duplicated — e.g.
+  the screenshot runner upgrades the existing `scripts/` stub instead of
+  adding a second script (DRY).
+- `self.tr()` is used in ~20 components and `glossary.json` holds 200+
+  terms, so Phase 1 unification is a mechanical codemod, not a hand edit.
+  The new adapter tests are the safety net for it.
+
+### New improvement opportunities
+- Full keyboard guard needs a client-side key handler that checks
+  `document.activeElement` (server events lack focus info); the palette-open
+  guard is a stopgap covering the reported defect.
+- `.text-grey`/`!important` → token classes still open (touches most
+  components; pair with the Phase 1 `tr()` codemod).
+- `tab_bar.default_slot.children.append(btn)` after in-context creation
+  looks like a duplicate-parenting quirk; harmless today, worth a glance
+  during Phase 2 cleanup.
+- Story coverage: only Monitor/Atlas/Defects so far; add Evolution/Evidence
+  stories when those views land.
+
+### Notes for remaining work
+- Run Phase 1 behind the new locks: `pytest tests/unit/test_adapters.py -q`
+  first, regenerate screenshots after, compare by glance.
+- `import computronium.ui.stories` pulls NiceGUI transitively (via
+  `mode_toggle`); gallery stays a visual-dev tool, never a test dependency.
+- View renames (Defects/Evolution/Evidence) should land together with the
+  `ViewMode` → presence-flags collapse to avoid double churn in
+  `view_registry.py` + `dashboard.py` + palette + tests.

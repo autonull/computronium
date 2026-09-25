@@ -1,4 +1,4 @@
-"""UX-L13: every registered panel renders populated + empty, headless (C2)."""
+"""Every registered view renders populated + empty, headless."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import computronium.ui.dashboard as dashboard_module
 from computronium.ui.dashboard import DashboardApp
-from computronium.ui.panel_registry import panel_registry
-from computronium.visualization.live_atlas import EmbedCache
+from computronium.ui.view_registry import registry, UIMode
 from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from pathlib import Path
 
 
@@ -30,66 +30,85 @@ def _make_app(root: Path) -> DashboardApp:
     return app
 
 
-def _render_all(app: DashboardApp, *, expect_data: bool) -> None:
-    for spec in panel_registry.all_specs():
-        key = spec.key
-        app.current_panel = key
-        data = app._get_panel_data(key)
-        if expect_data and spec.adapter is not None:
-            assert data is not None, f"adapter produced no data for {key}"
-        app._render_current_panel()
+@pytest.fixture(autouse=True)
+def _restore_mode() -> Iterator[None]:
+    """Mode is a process-global singleton — restore it after each test."""
+    yield
+    from computronium.ui.mode_toggle import get_mode, set_mode
+
+    if get_mode() != "explorer":
+        set_mode("explorer", persist=False)
 
 
-def test_all_panels_render_populated(tmp_path: Path) -> None:
+def test_views_are_the_four_navigation_targets() -> None:
+    views = registry.get_visible_views("lab", False, False)
+    view_keys = tuple(v.key for v in views)
+    assert view_keys == ("monitor", "atlas", "repair", "compose")
+
+
+def test_default_view_is_monitor(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    _render_all(app, expect_data=True)
-    # populated root: map has measured specimens
-    map_data = app._get_panel_data("map")
-    assert map_data is not None
-    # console panel gets data from live WS
-    assert app._panels.get("console") is not None
+    assert app.view == "monitor"
+    assert "monitor" in app._rendered
 
 
-def test_all_panels_render_empty_root(tmp_path: Path) -> None:
+def test_all_views_render_populated(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+    views = registry.get_visible_views("lab", False, False)
+    for view in views:
+        app.switch_view(view.key)
+        assert app.view == view.key
+        assert view.key in app._rendered
+
+    from computronium.ui.components.monitor import MonitorView
+
+    monitor = app._views["monitor"]
+    assert isinstance(monitor, MonitorView)
+    assert monitor.data is not None
+    assert monitor.data.tiles, "health tiles derived from populated snapshot"
+
+
+def test_all_views_render_empty_root(tmp_path: Path) -> None:
     root = tmp_path / "empty"
     root.mkdir()
     app = _make_app(root)
-    _render_all(app, expect_data=False)
+    views = registry.get_visible_views("lab", False, False)
+    for view in views:
+        app.switch_view(view.key)
+        assert view.key in app._rendered
 
 
-def test_panel_registry_complete() -> None:
-    expected = {
-        "map",
-        "repair",
-        "console",
-        "composer",
-        "record",
-    }
-    assert set(panel_registry.keys()) == expected
-    assert dashboard_module.panel_registry is panel_registry
-
-
-def test_nav_explorer_hides_lab_panels(tmp_path: Path) -> None:
-    root = tmp_path / "broad_map"
-    seed_campaign_root(root)
-    _make_app(root)
-    ctx = {"mode": "explorer", "ui_actions": False}
-    visible = {spec.key for spec in panel_registry.visible_specs(ctx)}
-    assert "map" in visible
-    assert "console" in visible
-    assert "composer" in visible
-    assert "record" in visible
-    assert "repair" in visible
-    assert EmbedCache  # imported for parity with atlas flow
-
-
-@pytest.mark.parametrize("key", ["map", "repair", "console", "composer", "record"])
-def test_switch_panel_headless(tmp_path: Path, key: str) -> None:
+def test_containers_match_views(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    app._switch_panel(key)
-    assert app.current_panel == key
-    assert key in app._panels
+    views = registry.get_visible_views("lab", False, False)
+    view_keys = tuple(v.key for v in views)
+    assert set(app._view_containers) == set(view_keys)
+
+
+@pytest.mark.parametrize("view", registry.get_visible_views("lab", False, False))
+def test_switch_view_headless(tmp_path: Path, view) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+    app.switch_view(view.key)
+    assert app.view == view.key
+    assert view.key in app._views
+
+
+def test_artifact_change_refreshes_current_view(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+    (root / "runtime_defects.jsonl").open("a", encoding="utf-8").write(
+        '{"defect_id": "new1", "timestamp": 9.0, "task": "t", "cell": "c", '
+        '"error_class": "E", "message": "m", "status": "open", "traceback_tail": ""}\n'
+    )
+    app._poll()
+    assert "monitor" in app._rendered
+    assert app._snapshot is not None

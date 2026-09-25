@@ -1,8 +1,10 @@
-"""UX-L14 + live-stream routing: mode toggle re-render, WS fan-out, glossary (C3)."""
+"""Mode toggle re-render, WS fan-out, glossary (C3) — app-level streams."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
+import pytest
 
 from computronium.ui.dashboard import DashboardApp
 from computronium.ui.event_bus import ModeChanged, WebSocketEvent, event_bus
@@ -28,6 +30,13 @@ def _make_app(root: Path) -> DashboardApp:
     return app
 
 
+@pytest.fixture(autouse=True)
+def _restore_mode() -> "object":
+    yield
+    if get_mode() != "explorer":
+        set_mode("explorer", persist=False)
+
+
 def test_mode_toggle_publishes_and_rerenders(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
@@ -45,15 +54,12 @@ def test_mode_toggle_publishes_and_rerenders(tmp_path: Path) -> None:
         assert [e.mode for e in events] == ["lab", "explorer"]
     finally:
         unsub()
-        set_mode("explorer", persist=False) if get_mode() != "explorer" else None
 
 
 def test_ws_events_route_to_feed_and_reports(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    # instantiate the console panel (contains activity feed and field reports)
-    console = app._get_panel("console")
 
     raw = {
         "kind": "alert",
@@ -63,14 +69,32 @@ def test_ws_events_route_to_feed_and_reports(tmp_path: Path) -> None:
     }
     app._route_ws_events(raw, now=1234.0)
     assert len(app.event_history) == 1
+    assert app.event_history[0].summary
+    assert len(app.reports) == 1
+    assert app.reports[0].sentence == app.event_history[0].summary
 
-    # Check that the console's internal feed received the event
-    feed = console._activity_feed
-    reports = console._field_reports
-    assert len(feed.events) == 1
-    assert feed.events[0].summary
-    assert len(reports.reports) == 1
-    assert reports.reports[0].sentence == feed.events[0].summary
+
+def test_ws_proposal_batch_sets_driver_intent(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    app._route_ws_events(
+        {"kind": "proposal_batch", "n_proposals": 3, "dynamics": "spiking"},
+        now=1234.0,
+    )
+    assert app.intent is not None
+    assert app.intent.proposing == 3
+    assert app.intent.strategy_hint == "spiking"
+
+
+def test_ws_defect_quarantined_increments_session_delta(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    app._route_ws_events({"kind": "defect_quarantined"}, now=1234.0)
+    assert app.session_delta.crashes == 1
 
 
 def test_ws_telemetry_throttled_paint(tmp_path: Path) -> None:
@@ -89,17 +113,24 @@ def test_ws_telemetry_throttled_paint(tmp_path: Path) -> None:
     assert app._last_ws_paint > first_paint
 
 
+def test_ws_telemetry_appends_loss(tmp_path: Path) -> None:
+    root = tmp_path / "broad_map"
+    seed_campaign_root(root)
+    app = _make_app(root)
+
+    app._route_ws_telemetry({"train_loss": 0.42})
+    assert app.loss_history[-1] == 0.42
+
+
 def test_bus_publish_reaches_dashboard_handler(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_campaign_root(root)
     app = _make_app(root)
-    console = app._get_panel("console")
 
     event_bus.publish(
         WebSocketEvent(topic="events", payload={"kind": "cell_done", "cell": "x"})
     )
     assert len(app.event_history) == 1
-    assert len(console._activity_feed.events) == 1
 
 
 def test_glossary_covers_dashboard_keys() -> None:

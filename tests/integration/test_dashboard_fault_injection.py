@@ -33,7 +33,7 @@ from tests.ui.fixture import seed_campaign_root
 
 
 def test_empty_root_shows_actionable_buttons(tmp_path: Path) -> None:
-    """Empty campaign root renders with start button, not blank."""
+    """Empty campaign root renders the Monitor view with zero-state tiles."""
     root = tmp_path / "empty_campaign"
     root.mkdir()
 
@@ -48,11 +48,11 @@ def test_empty_root_shows_actionable_buttons(tmp_path: Path) -> None:
     )
     app.build()
 
-    # Console panel should show "start" button for idle/stopped state
-    console = app._get_panel("console")
-    assert console is not None
+    # The Monitor view renders (default) with zero-state health tiles
+    monitor = app._views.get("monitor")
+    assert monitor is not None
 
-    # In lab mode with ui_actions, the lifecycle buttons should be "start"
+    # Lifecycle vocabulary stays stable for future controls
     from computronium.visualization.live_atlas import lifecycle_buttons
 
     buttons = lifecycle_buttons("idle")
@@ -442,8 +442,8 @@ def test_fault_regression_render_snapshot_handles_all_missing(tmp_path: Path) ->
     assert snapshot.atlas is None
 
 
-def test_fault_regression_panel_switch_during_faults(tmp_path: Path) -> None:
-    """Switching panels while artifacts are corrupt doesn't crash."""
+def test_fault_regression_view_switch_during_faults(tmp_path: Path) -> None:
+    """Switching views while artifacts are corrupt doesn't crash."""
     root = tmp_path / "panel_switch_fault"
     root.mkdir()
     seed_campaign_root(root)
@@ -462,11 +462,10 @@ def test_fault_regression_panel_switch_during_faults(tmp_path: Path) -> None:
     )
     app.build()
 
-    # Switch through all panels - should not raise
-    for panel_key in ["map", "repair", "console", "composer", "record"]:
-        app.current_panel = panel_key
-        app._render_current_panel()
-        assert app.current_panel == panel_key
+    # Switch through all views - should not raise
+    for view_key in ["monitor", "atlas", "repair", "compose"]:
+        app.switch_view(view_key)
+        assert app.view == view_key
 
 
 # =============================================================================

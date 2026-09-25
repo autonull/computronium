@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
 
 from nicegui import ui
 
@@ -16,27 +15,30 @@ from computronium.ui.design_tokens import ICONS
 from computronium.ui.mode_toggle import BasePanel, tr
 
 
+def _default_recipes() -> list[tuple[str, str, RecipeCard]]:
+    """All measurement-backed recipe cards (family, update, card)."""
+    return [(family, update, recipe) for (family, update), recipe in RECIPE_CARDS.items()]
+
+
 @dataclass(frozen=True, slots=True)
 class ComposerData:
     """Data for Composer panel."""
 
-    recipes: list[tuple[str, str, RecipeCard]]  # (family, update, recipe)
+    recipes: list[tuple[str, str, RecipeCard]] = field(default_factory=_default_recipes)
+    campaigns: dict[str, str] = field(default_factory=dict)  # root → name
     valid_config: bool = False
     validation_message: str = ""
 
 
 class Composer(BasePanel):
     """Composer panel: recipes-first cold start, then DialComposer with
-    live SystemConfig.validate() feedback. Submit to campaign via
-    dropdown + [Add to queue] / [Run now] (latter --ui-actions only)."""
+    live SystemConfig.validate() feedback. Submit copies a runnable
+    ``comp campaign run`` command for the selected campaign."""
 
     def __init__(
         self,
         *,
         data: ComposerData | None = None,
-        on_submit_queue: Any | None = None,
-        on_submit_run: Any | None = None,
-        ui_actions: bool = False,
     ) -> None:
         super().__init__(
             panel_key="composer",
@@ -55,27 +57,15 @@ class Composer(BasePanel):
                 "Configurations from computronium.analysis.recipe_cards (M3). "
                 "DialComposer uses config factories from workshop.py. "
                 "Validation = SystemConfig.validate() cross-axis constraints. "
-                "Submit = copy `comp campaign run` command or POST to "
-                "daemon /campaign/queue (--ui-actions only)."
+                "Submit = copy `comp campaign run --root ROOT`."
             ),
             docs_url="https://computronium.readthedocs.io/en/latest/dashboard/composer.html",
         )
-        self.data = data or ComposerData(
-            recipes=[
-                (family, update, recipe)
-                for (family, update), recipe in RECIPE_CARDS.items()
-            ]
-        )
-        self._on_submit_queue = on_submit_queue
-        self._on_submit_run = on_submit_run
-        self._ui_actions = ui_actions
-
+        self.data = data or ComposerData()
         self._dial_composer = DialComposer()
         self._recipe_panel = RecipeCardPanel()
         self._show_dial = False
-        self._campaign_selector: Any = None
-        self._submit_queue_btn: Any = None
-        self._submit_run_btn: Any = None
+        self._selected_campaign: str | None = None
 
     def render(self) -> ui.element:
         """Render the Composer panel."""
@@ -185,7 +175,7 @@ class Composer(BasePanel):
         # Parent will re-render
 
     def _render_submit_section(self) -> None:
-        """Render the submit-to-campaign section."""
+        """Render the submit-to-campaign section (copy runnable command)."""
         if not self._dial_composer._status_label:
             return
 
@@ -202,59 +192,39 @@ class Composer(BasePanel):
             is_valid = False
             msg = "Validation error"
 
-        with ui.card().classes("w-full mt-4").props("flat"):
+        with ui.card().classes("w-full mt-4").props("flat bordered"):
             ui.label("Submit to Campaign").classes("text-h6 mb-4")
 
             with ui.row().classes("w-full items-center gap-4 flex-wrap"):
-                # Campaign dropdown
-                self._campaign_selector = (
-                    ui
-                    .select(
-                        options={},  # Populated from parent
-                        label="Target Campaign",
+                ui.select(
+                    options=self.data.campaigns,
+                    label="Target Campaign",
+                    value=next(iter(self.data.campaigns), None),
+                    on_change=lambda e: self._select_campaign(str(e.value)),
+                ).props("dense outlined").classes("w-64")
+
+                if is_valid:
+                    cmd = self._command_for(self._selected_campaign)
+                    ui.button(
+                        "Copy Command",
+                        icon="content_copy",
+                        on_click=lambda _, c=cmd: ui.clipboard.write(c),
+                    ).props("flat dense color=primary").tooltip(
+                        "Copy the comp command that runs this configuration"
                     )
-                    .props("dense outlined")
-                    .classes("w-64")
-                )
 
-                # Add to queue button
-                self._submit_queue_btn = ui.button(
-                    "Add to Queue",
-                    icon=ICONS.get("queue", "playlist_add"),
-                    on_click=lambda: (
-                        self._on_submit_queue
-                        and self._on_submit_queue(
-                            self._campaign_selector.value,
-                            self._dial_composer._build_config(),
-                        )
-                    ),
-                ).props("color=primary")
-                self._submit_queue_btn.disable = not is_valid
-
-                # Run now button (--ui-actions only)
-                if self._ui_actions:
-                    self._submit_run_btn = ui.button(
-                        "Run Now",
-                        icon=ICONS.get("play_arrow", "play_arrow"),
-                        on_click=lambda: (
-                            self._on_submit_run
-                            and self._on_submit_run(
-                                self._campaign_selector.value,
-                                self._dial_composer._build_config(),
-                            )
-                        ),
-                    ).props("color=positive")
-                    self._submit_run_btn.disable = not is_valid
-
-                # Validation status
                 ui.label(msg).classes(
                     "text-sm " + ("text-positive" if is_valid else "text-negative")
                 )
 
-    def set_campaigns(self, campaigns: dict[str, str]) -> None:
-        """Set available campaigns for the dropdown."""
-        if self._campaign_selector:
-            self._campaign_selector.options = campaigns
+    def _select_campaign(self, root: str) -> None:
+        """Remember the campaign the command will target."""
+        self._selected_campaign = root
+
+    def _command_for(self, root: str | None) -> str:
+        """Runnable command for the current configuration."""
+        target = root or "artifacts/broad_map"
+        return f"comp campaign run --root {target}"
 
     def update_data(self, data: ComposerData | None = None) -> None:
         """Update panel data."""

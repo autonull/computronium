@@ -69,6 +69,14 @@ class WebSocketEvents(Event):
     events: list[dict[str, Any]]
 
 
+@dataclass(frozen=True, slots=True)
+class PanelRenderFailed(Event):
+    """A dashboard panel failed to render (serves the error-card fallback)."""
+
+    panel_key: str
+    error: str
+
+
 type EventHandler[E: Event] = Callable[[E], Any]
 type AsyncEventHandler[E: Event] = Callable[[E], Any]  # Returns awaitable
 

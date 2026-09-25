@@ -9,13 +9,6 @@ from computronium.ui.components.campaign_card import (
     create_campaign_gallery,
 )
 from computronium.ui.components.composer import Composer, ComposerData
-from computronium.ui.components.console import (
-    CampaignInfo,
-    Console,
-    ConsoleData,
-    DriverIntent,
-    SessionDelta,
-)
 from computronium.ui.components.constitution_health import (
     ConstitutionHealthPanel,
     ConstitutionInvariant,
@@ -39,12 +32,18 @@ from computronium.ui.components.genome_health import (
     GenomeHealthTracker,
     create_genome_health_tracker,
 )
-from computronium.ui.components.health_panel import HealthPanel, HealthTile
 from computronium.ui.components.lineage_viewer import (
     LineageEdge,
     LineageNode,
     LineageViewer,
     create_lineage_from_phylogeny,
+)
+from computronium.ui.components.monitor import (
+    DriverIntent,
+    HealthTile,
+    MonitorData,
+    MonitorView,
+    SessionDelta,
 )
 from computronium.ui.components.mutation_explorer import (
     MutationExplorer,
@@ -62,14 +61,6 @@ from computronium.ui.components.probe_analytics import (
     create_probe_analytics,
 )
 from computronium.ui.components.progress_panel import ProgressData, ProgressPanel
-from computronium.ui.components.record import (
-    HistoryEvent,
-    LedgerEntry,
-    LessonEntry,
-    Record,
-    RecordData,
-    RecordLens,
-)
 from computronium.ui.components.region_naming import (
     RegionName,
     RegionNaming,
@@ -86,11 +77,6 @@ from computronium.ui.components.stagnation_dashboard import (
     StagnationSnapshot,
     create_stagnation_dashboard,
 )
-from computronium.ui.components.status_chip import (
-    ChipSegment,
-    StatusChip,
-    StatusChipData,
-)
 from computronium.ui.components.team_wall import (
     TeamMember,
     TeamProgress,
@@ -103,6 +89,11 @@ from computronium.ui.components.tradeoffs_panel import (
     create_pareto_cells_from_atlas,
 )
 from computronium.ui.components.veto_log import VetoEntry, VetoLog, create_veto_log
+from computronium.ui.components.command_palette import (
+    CommandPalette,
+    PaletteItem,
+    create_command_palette,
+)
 from computronium.ui.components.workshop import (
     CREDIT_OPTIONS,
     DYNAMICS_OPTIONS,
@@ -129,13 +120,9 @@ __all__ = [
     "AxisOption",
     "CampaignCard",
     "CampaignCardGallery",
-    "CampaignInfo",
     "CampaignManifest",
-    "ChipSegment",
     "Composer",
     "ComposerData",
-    "Console",
-    "ConsoleData",
     "ConstitutionHealthPanel",
     "ConstitutionInvariant",
     "DefectRow",
@@ -149,16 +136,14 @@ __all__ = [
     "FieldReports",
     "GenomeHealthPoint",
     "GenomeHealthTracker",
-    "HealthPanel",
     "HealthTile",
-    "HistoryEvent",
-    "LedgerEntry",
-    "LessonEntry",
     "LineageEdge",
     "LineageNode",
     "LineageViewer",
     "MapRegion",
     "MapSpecimen",
+    "MonitorData",
+    "MonitorView",
     "MutationExplorer",
     "MutationProposal",
     "P2PToggle",
@@ -170,9 +155,6 @@ __all__ = [
     "ProgressData",
     "ProgressPanel",
     "RecipeCardPanel",
-    "Record",
-    "RecordData",
-    "RecordLens",
     "RegionName",
     "RegionNaming",
     "RepairBench",
@@ -180,8 +162,6 @@ __all__ = [
     "StagnationDashboard",
     "StagnationDetector",
     "StagnationSnapshot",
-    "StatusChip",
-    "StatusChipData",
     "TeamMember",
     "TeamProgress",
     "TeamWall",
@@ -189,6 +169,9 @@ __all__ = [
     "VetoEntry",
     "VetoLog",
     "WorkshopPanel",
+    "CommandPalette",
+    "PaletteItem",
+    "create_command_palette",
     "create_auto_evolve_preview",
     "create_campaign_card",
     "create_campaign_gallery",

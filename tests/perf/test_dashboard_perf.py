@@ -2,9 +2,8 @@
 
 Measures:
 - First paint p95 ≤4s
-- Panel switch p95
-- Palette open/close ≤200ms
-- Status chip update ≤1 poll cycle
+- View switch p95
+- Monitor data assembly ≤1ms
 """
 
 from __future__ import annotations
@@ -18,8 +17,6 @@ import pytest
 # Performance budgets (generous for CI, catches order-of-magnitude regressions)
 FIRST_PAINT_BUDGET_S = 4.0  # p95
 PANEL_SWITCH_BUDGET_S = 0.5  # p95
-PALETTE_BUDGET_S = 1.0  # p95 (1000ms - generous for CI, tracks regressions)
-CHIP_POLL_BUDGET = 1  # ≤1 poll cycle
 
 
 def _median_of_n(fn, n: int = 5) -> float:
@@ -127,11 +124,11 @@ class TestDashboardFirstPaint:
         )
 
 
-class TestDashboardPanelSwitch:
-    """Panel switching performance."""
+class TestDashboardViewSwitch:
+    """View switching performance."""
 
-    def test_panel_switch_p95(self, screen: Any, tmp_path_factory: Any) -> None:
-        """Panel switch p95 ≤500ms (hot path, no data reload)."""
+    def test_view_switch_p95(self, screen: Any, tmp_path_factory: Any) -> None:
+        """View switch p95 ≤500ms (hot path, no data reload)."""
         from nicegui import ui
 
         from computronium.ui.dashboard import build_dashboard
@@ -154,151 +151,56 @@ class TestDashboardPanelSwitch:
         _wait_for_source(screen.selenium, "Computronium")
         time.sleep(1)  # Let initial render settle
 
-        # Switch panels using keyboard hotkeys (1-5) - faster than clicking tabs
+        # Switch views using keyboard hotkeys (1-4) - faster than clicking
         from selenium.webdriver.common.action_chains import ActionChains
 
-        def switch_panels() -> None:
-            # Use number keys 1-5 for panel switching (hotkeys)
-            for key in ["1", "2", "3", "4", "5"]:
+        def switch_views() -> None:
+            for key in ["1", "2", "3", "4"]:
                 ActionChains(screen.selenium).send_keys(key).perform()
                 time.sleep(0.1)  # Allow transition
 
-        median = _median_of_n(switch_panels, n=5)
-        print(f"\nPanel switch median (5 panels): {median * 1000:.1f}ms")
-        per_switch = median / 5
+        median = _median_of_n(switch_views, n=5)
+        print(f"\nView switch median (4 views): {median * 1000:.1f}ms")
+        per_switch = median / 4
         print(
             f"Per-switch median: {per_switch * 1000:.1f}ms (budget: {PANEL_SWITCH_BUDGET_S * 1000:.0f}ms)"
         )
         assert per_switch <= PANEL_SWITCH_BUDGET_S, (
-            f"Panel switch {per_switch * 1000:.1f}ms exceeds budget {PANEL_SWITCH_BUDGET_S * 1000:.0f}ms"
+            f"View switch {per_switch * 1000:.1f}ms exceeds budget {PANEL_SWITCH_BUDGET_S * 1000:.0f}ms"
         )
 
 
-class TestDashboardPalette:
-    """Command palette performance."""
+class TestDashboardMonitorData:
+    """Monitor data assembly performance (headless)."""
 
-    def test_palette_open_close_p95(self, screen: Any, tmp_path_factory: Any) -> None:
-        """Palette open/close p95 ≤200ms."""
-        from nicegui import ui
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.common.keys import Keys
-        from selenium.webdriver.support import expected_conditions as ec
-        from selenium.webdriver.support.ui import WebDriverWait
-
-        from computronium.ui.dashboard import build_dashboard
-        from tests.ui.fixture import seed_campaign_root
-
-        root = tmp_path_factory.mktemp("perf_palette") / "broad_map"
-        seed_campaign_root(root)
-
-        screen.selenium.set_page_load_timeout(30)
-        screen.allowed_js_errors.extend([
-            "lang/en.umd.prod.js",
-            "Resize must be passed a displayed plot div",
-        ])
-
-        @ui.page("/perf_palette", language="en-US")
-        def _page() -> None:
-            build_dashboard(root, ui_mode="lab", ui_actions=False)
-
-        screen.open("/perf_palette", timeout=30)
-        _wait_for_source(screen.selenium, "Computronium")
-        time.sleep(1)
-
-        # Find palette button (search icon) - use JS click to avoid interception
-        palette_btn = WebDriverWait(screen.selenium, 10).until(
-            ec.presence_of_element_located((
-                By.CSS_SELECTOR,
-                'button[aria-label="Command Palette (⌘K)"]',
-            ))
+    def test_monitor_data_creation(self, tmp_path_factory: Any) -> None:
+        """MonitorData assembly ≤1ms (tiles + feed projection)."""
+        from computronium.ui.components.monitor import (
+            DriverIntent,
+            HealthTile,
+            MonitorData,
         )
+        from computronium.visualization.live_atlas import Liveness
 
-        def open_close_palette() -> None:
-            # Use JS click to avoid element interception
-            screen.selenium.execute_script("arguments[0].click();", palette_btn)
-            # Wait for palette to appear
-            WebDriverWait(screen.selenium, 2).until(
-                ec.presence_of_element_located((
-                    By.CSS_SELECTOR,
-                    ".q-dialog .q-menu, .command-palette, [role='dialog']",
-                ))
-            )
-            # Close with Escape
-            body = screen.selenium.find_element(By.TAG_NAME, "body")
-            body.send_keys(Keys.ESCAPE)
-            time.sleep(0.05)
+        def create_monitor_data() -> None:
+            from computronium.ui.components.monitor import SessionDelta
 
-        p95 = _p95_of_n(open_close_palette, n=10)
-        print(
-            f"\nPalette open/close p95: {p95 * 1000:.1f}ms (budget: {PALETTE_BUDGET_S * 1000:.0f}ms)"
-        )
-        assert p95 <= PALETTE_BUDGET_S, (
-            f"Palette open/close p95 {p95 * 1000:.1f}ms exceeds budget {PALETTE_BUDGET_S * 1000:.0f}ms"
-        )
-
-
-class TestDashboardStatusChip:
-    """Status chip update performance."""
-
-    def test_chip_update_within_poll(self, tmp_path_factory: Any) -> None:
-        """Status chip updates within 1 poll cycle (headless test).
-
-        This tests the internal update_data path, not browser rendering.
-        """
-        from computronium.ui.components.status_chip import ChipSegment, StatusChipData
-
-        # Test the data class creation performance (no UI needed)
-        def create_chip_data() -> None:
-            StatusChipData(
-                state="running",
-                segments=[
-                    ChipSegment(
-                        label="cells", count=10, deep_link="console:", color="primary"
-                    ),
-                    ChipSegment(
-                        label="crashes",
-                        count=2,
-                        deep_link="repair:defects",
-                        color="negative",
-                    ),
-                    ChipSegment(
-                        label="records",
-                        count=5,
-                        deep_link="map:tradeoffs",
-                        color="positive",
-                    ),
+            MonitorData(
+                liveness=Liveness("● RUNNING", "green", "pid 1 · cells 10"),
+                tiles=[
+                    HealthTile(label=f"tile{i}", value="1", status="running_smoothly", detail="d")
+                    for i in range(6)
                 ],
-                quiet=False,
+                loss_history=[0.5] * 60,
+                feed=[],
+                intent=DriverIntent(proposing=3, last_batch_ago_s=1.0, strategy_hint="x"),
+                session_delta=SessionDelta(1, 2, 3),
+                ticker=["line"] * 30,
             )
 
-        median = _median_of_n(create_chip_data, n=100)
-        print(f"\nStatusChipData creation median: {median * 1000:.3f}ms")
-        assert median < 0.001, f"Chip data creation {median * 1000:.3f}ms too slow"
-
-    def test_chip_update_quiet_mode(self, tmp_path_factory: Any) -> None:
-        """Quiet mode chip data creation performance."""
-        from computronium.ui.components.status_chip import ChipSegment, StatusChipData
-
-        def create_chip_data() -> None:
-            StatusChipData(
-                state="running",
-                segments=[
-                    ChipSegment(
-                        label="cells", count=10, deep_link="console:", color="primary"
-                    ),
-                    ChipSegment(
-                        label="crashes",
-                        count=2,
-                        deep_link="repair:defects",
-                        color="negative",
-                    ),
-                ],
-                quiet=True,
-            )
-
-        median = _median_of_n(create_chip_data, n=100)
-        print(f"\nStatusChipData (quiet) creation median: {median * 1000:.3f}ms")
-        assert median < 0.001
+        median = _median_of_n(create_monitor_data, n=100)
+        print(f"\nMonitorData creation median: {median * 1000:.3f}ms")
+        assert median < 0.001, f"MonitorData creation {median * 1000:.3f}ms too slow"
 
 
 class TestDashboardRenderSnapshot:

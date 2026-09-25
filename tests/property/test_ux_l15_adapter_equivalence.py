@@ -65,5 +65,5 @@ def test_tradeoffs_accuracy_values_from_pareto_front(tmp_path: Path) -> None:
     source_accuracies = {
         float(cast("str", row["accuracy"])) for row in snapshot.pareto_rows
     }
-    assert {c.accuracy for c in data.pareto_cells} <= source_accuracies
-    assert data.pareto_cells[0].accuracy == pytest.approx(0.83)
+    assert {c.metrics["accuracy"] for c in data.pareto_cells} <= source_accuracies
+    assert data.pareto_cells[0].metrics["accuracy"] == pytest.approx(0.83)

@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import pytest
+
 from computronium.ui.dashboard import DashboardApp
 from computronium.ui.event_bus import ConfigChanged, event_bus
 from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from pathlib import Path
 
 
@@ -29,8 +33,17 @@ def _make_app(root: Path, **kwargs: object) -> DashboardApp:
     return app
 
 
+@pytest.fixture(autouse=True)
+def _restore_mode() -> Iterator[None]:
+    yield
+    from computronium.ui.mode_toggle import get_mode, set_mode
+
+    if get_mode() != "explorer":
+        set_mode("explorer", persist=False)
+
+
 def test_multi_root_switch_resets_state(tmp_path: Path) -> None:
-    """X4: switch_root swaps caches/panels/signature per root."""
+    """X4: switch_root swaps caches/views/signature per root."""
     from computronium.visualization.live_atlas import watch_signature
 
     root_a = tmp_path / "root_a"
@@ -39,16 +52,15 @@ def test_multi_root_switch_resets_state(tmp_path: Path) -> None:
     seed_campaign_root(root_b)
 
     app = _make_app(root_a, roots=(root_a, root_b))
-    app._switch_panel("map")
-    assert "map" in app._panels
-    old_map = app._panels["map"]
+    app.switch_view("atlas")
+    old_atlas = app._views["atlas"]
 
     app.switch_root(root_b)
     assert app.root == root_b
     # Per-root reset: old instances discarded; the re-render lazily builds a
-    # fresh panel bound to root_b.
-    assert app._panels.get("map") is not old_map, "panel instances are per-root"
-    assert app.current_panel == "map"
+    # fresh view bound to root_b.
+    assert app._views.get("atlas") is not old_atlas, "view instances are per-root"
+    assert app.view == "atlas"
     assert app.last_signature == watch_signature(root_b)
     assert app.log_path is not None and root_b in app.log_path.parents
 
@@ -75,7 +87,7 @@ def test_config_hot_reload_publishes_new_objectives(tmp_path: Path) -> None:
     root = tmp_path / "hot_root"
     seed_campaign_root(root)
     app = _make_app(root)
-    before = objective_names(app.pareto_state["objectives"])
+    before = objective_names(app.objectives)
 
     events: list[ConfigChanged] = []
     unsub = event_bus.subscribe(ConfigChanged, events.append)
@@ -89,10 +101,9 @@ def test_config_hot_reload_publishes_new_objectives(tmp_path: Path) -> None:
 
     assert events, "ConfigChanged published on heartbeat change"
     assert events[-1].objectives == ("accuracy", "param_count")
-    after = objective_names(app.pareto_state["objectives"])
+    after = objective_names(app.objectives)
     assert after == ("accuracy", "param_count"), (before, after)
-    # Panel data was invalidated and the replacement snapshot carries the
-    # new objectives (recompute happens on the handler's re-render).
+    # Snapshot was invalidated and the replacement carries the new objectives.
     assert app._snapshot is not None
     assert objective_names(app._snapshot.objectives) == ("accuracy", "param_count")
 
@@ -102,10 +113,10 @@ def test_config_hot_reload_invalid_campaign_keeps_current(tmp_path: Path) -> Non
     root = tmp_path / "bad_cfg_root"
     seed_campaign_root(root)
     app = _make_app(root)
-    before = app.pareto_state["objectives"]
+    before = app.objectives
 
     (root / "campaign.yaml").write_text(
         "hpo:\n  objectives: [accuracy, epoch_time_s]\n", encoding="utf-8"
     )
     app._poll()
-    assert app.pareto_state["objectives"] == before
+    assert app.objectives == before

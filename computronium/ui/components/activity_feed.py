@@ -83,7 +83,13 @@ class ActivityFeed(BasePanel):
 
     def _render_feed(self) -> None:
         """Render the feed events."""
-        self._feed_container.clear()
+        # Check if container is still valid
+        if not hasattr(self, '_feed_container') or self._feed_container is None:
+            return
+        try:
+            self._feed_container.clear()
+        except (AssertionError, RuntimeError):
+            return
         with self._feed_container:
             # aria-live region
             with (

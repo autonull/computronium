@@ -5,7 +5,6 @@ Lenses: Map (UMAP scatter), Trade-offs (Pareto front), Gallery (figure cards).
 
 from __future__ import annotations
 
-from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -109,11 +108,6 @@ class DiscoveryMap(BasePanel):
 
         # Lens state
         self._active_lens = "map"  # "map" | "tradeoffs" | "gallery"
-        self._lens_containers: dict[str, ui.element] = {}
-        self._lens_tabs: Any = None
-        self._tab_map: Any = None
-        self._tab_tradeoffs: Any = None
-        self._tab_gallery: Any = None
 
         # Trade-offs data
         self._tradeoffs_panel = TradeoffsPanel(
@@ -124,64 +118,50 @@ class DiscoveryMap(BasePanel):
         # Gallery data
         self._gallery = CampaignCardGallery(campaigns_dir) if campaigns_dir else None
 
-        # Map view containers (for Map lens)
-        self._figure_container: ui.element = ui.column().classes("w-full")
-        self._table_container: ui.element = ui.column().classes("w-full hidden")
+        # Map view state
         self._show_table = False
 
     def render(self) -> ui.element:
-        """Render the Discovery Map panel with lens tabs."""
+        """Render the Discovery Map panel with lens tabs (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
             self.render_header("atlas")
 
             # Lens tabs
             with ui.tabs().classes("w-full") as tabs:
-                self._tab_map = ui.tab("Map", icon=ICONS.get("map", "map"))
-                self._tab_tradeoffs = ui.tab(
+                tab_map = ui.tab("Map", icon=ICONS.get("map", "map"))
+                tab_tradeoffs = ui.tab(
                     "Trade-offs", icon=ICONS.get("tradeoffs", "balance")
                 )
-                self._tab_gallery = ui.tab(
+                tab_gallery = ui.tab(
                     "Gallery", icon=ICONS.get("gallery", "photo_library")
                 )
 
-            self._lens_tabs = tabs
-
             with ui.tab_panels(
-                tabs, value=self._get_tab_for_lens(self._active_lens)
+                tabs, value=self._get_tab_for_lens(tab_map, tab_tradeoffs, tab_gallery)
             ).classes("w-full"):
                 # Map lens
-                with ui.tab_panel(self._tab_map):
-                    self._lens_containers["map"] = ui.column().classes("w-full")
-                    with self._lens_containers["map"]:
-                        self._render_map_lens()
+                with ui.tab_panel(tab_map):
+                    self._render_map_lens()
 
                 # Trade-offs lens
-                with ui.tab_panel(self._tab_tradeoffs):
-                    self._lens_containers["tradeoffs"] = ui.column().classes("w-full")
-                    with self._lens_containers["tradeoffs"]:
-                        self._tradeoffs_panel.render()
+                with ui.tab_panel(tab_tradeoffs):
+                    self._tradeoffs_panel.render()
 
                 # Gallery lens
-                with ui.tab_panel(self._tab_gallery):
-                    self._lens_containers["gallery"] = ui.column().classes("w-full")
-                    with self._lens_containers["gallery"]:
-                        if self._gallery:
-                            self._gallery.render()
-                        else:
-                            ui.label("No campaign gallery available.").classes(
-                                "text-grey text-center p-8"
-                            )
+                with ui.tab_panel(tab_gallery):
+                    if self._gallery:
+                        self._gallery.render()
+                    else:
+                        ui.label("No campaign gallery available.").classes(
+                            "text-grey text-center p-8"
+                        )
 
         return panel
 
-    def _get_tab_for_lens(self, lens: str) -> Any:
-        """Get the tab element for a lens."""
-        tab_map = {
-            "map": getattr(self, "_tab_map", None),
-            "tradeoffs": getattr(self, "_tab_tradeoffs", None),
-            "gallery": getattr(self, "_tab_gallery", None),
-        }
-        return tab_map.get(lens)
+    def _get_tab_for_lens(self, t_map: Any, t_tradeoffs: Any, t_gallery: Any) -> Any:
+        """Get the tab element for the active lens (defaults to Map)."""
+        tabs = {"map": t_map, "tradeoffs": t_tradeoffs, "gallery": t_gallery}
+        return tabs.get(self._active_lens, t_map)
 
     def _render_map_lens(self) -> None:
         """Render the Map lens (UMAP + table toggle)."""
@@ -207,33 +187,26 @@ class DiscoveryMap(BasePanel):
                     on_change=lambda e: self._toggle_view(bool(e.value)),
                 ).props(f'size="sm" aria-label="{self.tr("view")}"')
 
-        # Map view
-        self._figure_container.classes(
-            remove="hidden" if not self._show_table else "",
-            add="hidden" if self._show_table else "",
-        )
-        with self._figure_container:
+        # Map view container
+        figure_container = ui.column().classes("w-full")
+        if self._show_table:
+            figure_container.classes(add="hidden")
+
+        with figure_container:
             self._render_map()
 
-        # Table view
-        self._table_container.classes(
-            remove="hidden" if self._show_table else "",
-            add="hidden" if not self._show_table else "",
-        )
-        with self._table_container:
+        # Table view container
+        table_container = ui.column().classes("w-full hidden")
+        if self._show_table:
+            table_container.classes(remove="hidden")
+
+        with table_container:
             self._render_table()
 
     def _toggle_view(self, show_table: bool) -> None:
         """Toggle between map and table view."""
         self._show_table = show_table
-        self._figure_container.classes(
-            remove="hidden" if not show_table else "",
-            add="hidden" if show_table else "",
-        )
-        self._table_container.classes(
-            remove="hidden" if show_table else "",
-            add="hidden" if not show_table else "",
-        )
+        # Next render() call will reflect the new state
 
     def _render_map(self) -> None:
         """Render the Plotly map figure."""
@@ -343,24 +316,8 @@ class DiscoveryMap(BasePanel):
             )
 
     def _refresh(self) -> None:
-        """Refresh panel on mode change."""
-        # Guard against deleted containers (headless test cleanup)
-        with suppress(AssertionError, RuntimeError):
-            if self._figure_container:
-                self._figure_container.clear()
-                with self._figure_container:
-                    self._render_map()
-        with suppress(AssertionError, RuntimeError):
-            if self._table_container:
-                self._table_container.clear()
-                with self._table_container:
-                    self._render_table()
-        # Refresh tradeoffs panel
-        with suppress(AssertionError, RuntimeError, AttributeError):
-            self._tradeoffs_panel._refresh()
-        # Refresh gallery (no _refresh method, static)
-        with suppress(AssertionError, RuntimeError):
-            pass
+        """Refresh panel on mode change - no-op since render() creates fresh UI."""
+        # The next render() call will create fresh UI with current data
 
     def update_data(
         self,
@@ -376,7 +333,7 @@ class DiscoveryMap(BasePanel):
         # Gallery data
         campaigns_dir: Path | str | None = None,
     ) -> None:
-        """Update panel data and re-render."""
+        """Update panel data (no UI manipulation - next render() will reflect changes)."""
         if data is not None:
             specimens = data.specimens
             regions = data.regions
@@ -399,17 +356,13 @@ class DiscoveryMap(BasePanel):
             self._tradeoffs_panel.ruler_metrics = ruler_metrics
         if campaigns_dir is not None and self._gallery:
             self._gallery = CampaignCardGallery(campaigns_dir)
-        self._refresh()
+        # No _refresh() call - UI updates on next render()
 
     def set_lens(self, lens: str) -> None:
         """Set active lens (Map/Trade-offs/Gallery)."""
         if lens not in {"map", "tradeoffs", "gallery"}:
             lens = "map"
         self._active_lens = lens
-        if self._lens_tabs:
-            tab = self._get_tab_for_lens(lens)
-            if tab:
-                self._lens_tabs.value = tab
 
 
 def create_discovery_map_from_atlas(

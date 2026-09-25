@@ -99,7 +99,7 @@ class ConstitutionHealthPanel(BasePanel):
     def render(self) -> ui.element:
         """Render the Constitution Health Panel."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("constitution")
+            self.render_header("constitution_health")
 
             # Overall status
             all_passed = all(inv.passed for inv in self.invariants)

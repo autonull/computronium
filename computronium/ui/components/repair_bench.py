@@ -119,12 +119,12 @@ class RepairBench(BasePanel):
         return panel
 
     def _get_tab_for_lens(self, lens: str) -> Any:
-        """Get the tab element for a lens."""
-        tab_map = {
+        """Get the tab element for a lens (defaults to Defects)."""
+        tabs = {
             "defects": getattr(self, "_tab_defects", None),
             "maturation": getattr(self, "_tab_maturation", None),
         }
-        return tab_map.get(lens)
+        return tabs.get(lens) or tabs["defects"]
 
     def _render_defects_lens(self) -> None:
         """Render the Defects lens (table)."""

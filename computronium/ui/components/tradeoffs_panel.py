@@ -78,15 +78,15 @@ class TradeoffsPanel(BasePanel):
         self._selected_preset = "accuracy + walltime"
 
     def render(self) -> ui.element:
-        """Render the Trade-offs panel."""
+        """Render the Trade-offs panel (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
             # Header
-            self.render_header("pareto")
+            self.render_header("tradeoffs")
 
             # Objective pair selector (renamed "Compare two goals")
             with ui.row().classes("w-full items-center gap-2 mb-2"):
                 ui.label(self.tr("objective_pair")).classes("text-bold")
-                self._selector = (
+                selector = (
                     ui
                     .select(
                         options=list(self._presets.keys()),
@@ -104,9 +104,9 @@ class TradeoffsPanel(BasePanel):
                 ).classes("text-caption text-grey")
 
             # Pareto strip
-            self._strip_container = ui.column().classes("w-full")
-            with self._strip_container:
-                self._render_strip()
+            strip_container = ui.column().classes("w-full")
+            with strip_container:
+                self._render_strip(strip_container)
 
         return panel
 
@@ -116,12 +116,12 @@ class TradeoffsPanel(BasePanel):
         self.objectives = list(self._presets[e.value])
         if self.on_objective_change:
             self.on_objective_change(self.objectives)
-        self._render_strip()
+        # Next render() will reflect the new objectives
 
-    def _render_strip(self) -> None:
+    def _render_strip(self, container: ui.element) -> None:
         """Render the Pareto strip with reference anchors."""
-        self._strip_container.clear()
-        with self._strip_container:
+        container.clear()
+        with container:
             if not self.cells:
                 ui.label(self.tr("no_pareto_data")).classes("text-grey text-center p-4")
                 return
@@ -203,9 +203,8 @@ class TradeoffsPanel(BasePanel):
         dialog.open()
 
     def update_cells(self, cells: list[ParetoCell]) -> None:
-        """Update cells and re-render."""
+        """Update cells (no UI manipulation - next render() will reflect changes)."""
         self.cells = cells
-        self._render_strip()
 
     def update_data(
         self,
@@ -216,34 +215,17 @@ class TradeoffsPanel(BasePanel):
     ) -> None:
         """Push adapter TradeoffsData (or explicit cells) into the panel."""
         if cells is None and data is not None:
-            cells = [
-                ParetoCell(
-                    label=c.label,
-                    dynamics=c.dynamics,
-                    credit=c.credit,
-                    update=c.update,
-                    topology=c.topology,
-                    metrics={
-                        "accuracy": c.accuracy,
-                        "bp_deficit": c.bp_deficit,
-                        "credit_alignment": c.credit_alignment,
-                        "settle_horizon": c.settle_horizon,
-                        "walltime_s": c.walltime_s,
-                    },
-                )
-                for c in data.pareto_cells  # type: ignore[attr-defined]
-            ]
+            cells = list(data.pareto_cells)  # type: ignore[attr-defined]
             objs = getattr(data, "objectives", None)
             if objs and len(objs) >= 2:
-                objectives = objs[:2]
+                objectives = list(objs[:2])
         if cells is not None:
             self.cells = cells
         if objectives is not None:
             self.objectives = objectives
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
-        self._render_strip()
+        """Refresh on mode change - no-op since render() creates fresh UI."""
 
 
 def create_pareto_cells_from_atlas(pareto_rows: list[dict]) -> list[ParetoCell]:

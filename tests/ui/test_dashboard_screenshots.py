@@ -1,8 +1,7 @@
-"""Visual verification (C2b/C4): screenshot capture for all panels + lenses.
+"""Visual verification (C2b/C4): screenshot capture for all views.
 
 Generates reference screenshots for:
-- All 5 panels (Map, Repair, Console, Composer, Record)
-- All lenses per panel (Map: 3, Repair: 2, Record: 3)
+- All 4 views (Monitor, Atlas, Repair, Compose)
 - Both registers (explorer, lab)
 - Empty + populated states
 """
@@ -17,18 +16,7 @@ import pytest
 
 SCREENSHOT_DIR = Path("screenshots/dashboard")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Panel + Lens combinations to capture
-# ──────────────────────────────────────────────────────────────────────────────
-
-PANEL_LENS_MAP = {
-    "map": ["map", "tradeoffs", "gallery"],
-    "repair": ["defects", "maturation"],
-    "console": [None],
-    "composer": [None],
-    "record": ["history", "ledger", "lessons"],
-}
-
+VIEWS = ["monitor", "atlas", "repair", "compose"]
 REGISTERS = ["explorer", "lab"]
 STATES = ["populated", "empty"]
 
@@ -43,47 +31,18 @@ def _wait_for_source(driver: Any, needle: str, timeout: float = 30.0) -> None:
     raise AssertionError(f'Page never contained "{needle}" within {timeout}s')
 
 
-def _switch_panel_and_lens(screen: Any, panel: str, lens: str | None) -> None:
-    """Switch to a panel and lens via the UI."""
+def _switch_view(screen: Any, view: str) -> None:
+    """Switch views via the nav button group (labelled buttons)."""
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.support import expected_conditions as ec
-    from selenium.webdriver.support.ui import WebDriverWait
 
-    # Click panel tab (1-5 hotkeys via tab index)
-    tab_index = ["map", "repair", "console", "composer", "record"].index(panel)
-    tabs = screen.selenium.find_elements(By.CSS_SELECTOR, "div.q-tabs__content button")
-    if tabs and tab_index < len(tabs):
-        tabs[tab_index].click()
-        time.sleep(0.5)
-
-    # If panel has lenses, switch lens via dropdown
-    if lens:
-        # Find lens selector - usually a select element in the panel
-        try:
-            lens_select = WebDriverWait(screen.selenium, 5).until(
-                ec.presence_of_element_located((
-                    By.CSS_SELECTOR,
-                    f"div.q-panel[data-panel='{panel}'] select, .lens-selector select",
-                ))
-            )
-            # Select the lens
-            from selenium.webdriver.support.ui import Select
-
-            Select(lens_select).select_by_value(lens)
+    labels = {"monitor": "Monitor", "atlas": "Atlas", "repair": "Repair", "compose": "Compose"}
+    target = labels[view]
+    for btn in screen.selenium.find_elements(By.CSS_SELECTOR, "button"):
+        if btn.text.strip() == target:
+            btn.click()
             time.sleep(0.5)
-        except Exception:
-            # Lens switching might be via tabs or buttons
-            lens_buttons = screen.selenium.find_elements(
-                By.CSS_SELECTOR, f"button[aria-label*='{lens}'], .lens-tab"
-            )
-            for btn in lens_buttons:
-                if (
-                    lens.lower() in btn.text.lower()
-                    or lens.lower() in btn.get_attribute("aria-label", "").lower()
-                ):
-                    btn.click()
-                    time.sleep(0.5)
-                    break
+            return
+    raise AssertionError(f"Nav button for view {view!r} not found")
 
 
 def _capture_screenshot(screen: Any, name: str) -> Path:
@@ -107,6 +66,16 @@ def pytest_configure(config: Any) -> None:
     config.addinivalue_line(
         "markers", "screenshots: mark test as capturing screenshots"
     )
+
+
+def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
+    """Skip capture tests before fixture setup (screen spins up a server)."""
+    if config.getoption("--capture-screenshots"):
+        return
+    skip = pytest.mark.skip(reason="Use --capture-screenshots to enable capture")
+    for item in items:
+        if "screenshots" in item.keywords:
+            item.add_marker(skip)
 
 
 @pytest.fixture(scope="session")
@@ -134,29 +103,26 @@ def capture_screenshots(request: Any) -> bool:
 
 
 class TestDashboardScreenshots:
-    """Visual verification: capture all panel/lens/register/state combos."""
+    """Visual verification: capture all view/register/state combos."""
 
+    @pytest.mark.screenshots
     @pytest.mark.parametrize("state", STATES)
     @pytest.mark.parametrize("register", REGISTERS)
-    @pytest.mark.parametrize("panel,lenses", list(PANEL_LENS_MAP.items()))
-    def test_capture_panel_lens(
+    @pytest.mark.parametrize("view", VIEWS)
+    def test_capture_view(
         self,
+        capture_screenshots: bool,
         screen: Any,
         state: str,
         register: str,
-        panel: str,
-        lenses: list[str | None],
+        view: str,
         populated_root: Path,
         empty_root: Path,
-        capture_screenshots: bool,
     ) -> None:
-        """Capture screenshot for each panel/lens/register/state combination.
+        """Capture screenshot for each view/register/state combination.
 
         Run with: pytest tests/ui/test_dashboard_screenshots.py --capture-screenshots
         """
-        if not capture_screenshots:
-            pytest.skip("Use --capture-screenshots to enable screenshot capture")
-
         from nicegui import ui
 
         from computronium.ui.dashboard import build_dashboard
@@ -173,9 +139,9 @@ class TestDashboardScreenshots:
             "Resize must be passed a displayed plot div",
         ])
 
-        holder = {"root": root, "register": register}
+        holder = {"root": root, "register": register, "view": view}
 
-        @ui.page(f"/dashboard_screenshot/{panel}/{lenses[0] or 'none'}", language="en-US")
+        @ui.page(f"/dashboard_screenshot/{view}/{register}", language="en-US")
         def _screenshot_page() -> None:
             build_dashboard(
                 holder["root"],
@@ -183,31 +149,22 @@ class TestDashboardScreenshots:
                 ui_actions=False,
             )
 
-        # Navigate to page
-        screen.open(f"/dashboard_screenshot/{panel}/{lenses[0] or 'none'}", timeout=30)
+        screen.open(f"/dashboard_screenshot/{view}/{register}", timeout=30)
         _wait_for_source(screen.selenium, "Computronium")
-
-        # Wait for initial render
         time.sleep(2)
 
-        # Capture base panel
-        for lens in lenses:
-            if lens:
-                _switch_panel_and_lens(screen, panel, lens)
-            name = f"{panel}_{lens or 'base'}_{register}_{state}"
-            filepath = _capture_screenshot(screen, name)
-            print(f"Captured: {filepath}")
+        _switch_view(screen, view)
+        filepath = _capture_screenshot(screen, f"{view}_{register}_{state}")
+        print(f"Captured: {filepath}")
 
+    @pytest.mark.screenshots
     def test_capture_all_registers_populated(
         self,
+        capture_screenshots: bool,
         screen: Any,
         populated_root: Path,
-        capture_screenshots: bool,
     ) -> None:
         """Quick capture all registers in populated state."""
-        if not capture_screenshots:
-            pytest.skip("Use --capture-screenshots to enable screenshot capture")
-
         from nicegui import ui
 
         from computronium.ui.dashboard import build_dashboard
@@ -240,7 +197,6 @@ class TestVisualVerification:
         for name, value in SPACING.items():
             if name == "0":
                 continue
-            # All spacing should be multiples of 0.25rem (4px)
             rem_value = float(value.replace("rem", ""))
             assert rem_value % 0.25 == 0, f"Spacing {name}={value} not on 4px grid"
 
@@ -266,7 +222,6 @@ class TestVisualVerification:
         """Verify fast transition is ≤150ms (C4b)."""
         from computronium.ui.design_tokens import TRANSITIONS
 
-        # fast = "150ms ease"
         duration = TRANSITIONS["fast"].split("ms")[0]
         assert int(duration) <= 150, (
             f"Fast transition {TRANSITIONS['fast']} exceeds 150ms"
@@ -292,26 +247,20 @@ class TestVisualVerification:
             LAB_TOKENS,
         )
 
-        # Explorer = comfortable, Lab = compact (quiet density)
         assert EXPLORER_TOKENS.density == "comfortable"
         assert LAB_TOKENS.density == "compact"
 
 
-class TestDashboardLensRendering:
-    """Verify all lenses render without error (headless)."""
+class TestDashboardViewRendering:
+    """Verify all views render without error (headless)."""
 
-    @pytest.mark.parametrize("panel,lenses", list(PANEL_LENS_MAP.items()))
-    def test_all_lenses_render_headless(
-        self,
-        panel: str,
-        lenses: list[str | None],
-        tmp_path: Path,
-    ) -> None:
-        """Verify all lenses render without error in headless mode."""
+    @pytest.mark.parametrize("view", VIEWS)
+    def test_all_views_render_headless(self, view: str, tmp_path: Path) -> None:
+        """Verify all views render without error in headless mode."""
         from computronium.ui.dashboard import DashboardApp
         from tests.ui.fixture import seed_campaign_root
 
-        root = tmp_path / "lens_test"
+        root = tmp_path / "view_test"
         seed_campaign_root(root)
 
         app = DashboardApp(
@@ -324,13 +273,9 @@ class TestDashboardLensRendering:
             quiet=False,
         )
         app.build()
-
-        for lens in lenses:
-            if lens:
-                app.current_lens = lens
-            app.current_panel = panel
-            app._render_current_panel()
-            assert panel in app._panels
+        app.switch_view(view)
+        assert app.view == view
+        assert view in app._views
 
 
 if __name__ == "__main__":

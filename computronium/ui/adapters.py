@@ -7,7 +7,7 @@ rather than re-querying artifacts directly.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from computronium.ui.components.constitution_health import (
@@ -15,6 +15,12 @@ from computronium.ui.components.constitution_health import (
     create_invariants_from_monitor,
 )
 from computronium.ui.components.lineage_viewer import LineageEdge, LineageNode
+from computronium.ui.components.monitor import HealthTile
+from computronium.ui.components.repair_bench import DefectRow, MaturationNode
+from computronium.ui.components.tradeoffs_panel import (
+    ParetoCell,
+    create_pareto_cells_from_atlas,
+)
 from computronium.ui.data_adapters import (
     make_adapter,
 )
@@ -24,6 +30,7 @@ if TYPE_CHECKING:
 
     from plotly.graph_objects import Figure as go_Figure
 
+    from computronium.autoscientist.objectives import ObjectiveSpec
     from computronium.ui.components.discovery_map import MapRegion, MapSpecimen
     from computronium.visualization.live_atlas import DashboardSnapshot
 
@@ -36,6 +43,8 @@ class DiscoveryMapData:
     regions: list[MapRegion]
     fog_coverage_pct: float
     atlas_figure: go_Figure | None
+    pareto_cells: list[ParetoCell] | None = None
+    campaigns_dir: Path | None = None
 
 
 def _with_layout(df: Any) -> Any:
@@ -138,6 +147,8 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
         regions=regions,
         fog_coverage_pct=fog_coverage_pct,
         atlas_figure=atlas_figure,
+        pareto_cells=_pareto_cells_from_rows(snapshot.pareto_rows, snapshot.objectives),
+        campaigns_dir=root / "campaigns",
     )
 
 
@@ -146,18 +157,8 @@ def adapt_discovery_map(snapshot: DashboardSnapshot, root: Path) -> DiscoveryMap
 # ============================================================================
 
 
-@dataclass(frozen=True, slots=True)
-class HealthTile:
-    """A health status tile."""
-
-    label: str
-    value: str
-    status: str  # "running_smoothly" | "needs_attention" | "unstable"
-    detail: str
-
-
 def adapt_health_panel(snapshot: DashboardSnapshot, root: Path) -> list[HealthTile]:
-    """Adapt snapshot to HealthPanel tiles."""
+    """Adapt snapshot to health tiles."""
     health = snapshot.health
     open_defects = int(_coerce_float(health, "open_defects"))
     resolved_defects = int(_coerce_float(health, "resolved_defects"))
@@ -220,23 +221,6 @@ def adapt_health_panel(snapshot: DashboardSnapshot, root: Path) -> list[HealthTi
 
 
 @dataclass(frozen=True, slots=True)
-class ParetoCell:
-    """A cell on the Pareto front."""
-
-    key: str
-    label: str
-    accuracy: float
-    bp_deficit: float
-    credit_alignment: float
-    settle_horizon: float
-    walltime_s: float
-    dynamics: str
-    credit: str
-    update: str
-    topology: str
-
-
-@dataclass(frozen=True, slots=True)
 class TradeoffsData:
     """Data for TradeoffsPanel."""
 
@@ -245,29 +229,22 @@ class TradeoffsData:
     selected_objective: str
 
 
+def _pareto_cells_from_rows(
+    rows: list[dict[str, object]],
+    objectives: tuple[ObjectiveSpec, ...] = (),
+) -> list[ParetoCell]:
+    """Shared Pareto-strip projection (used by Map + Trade-offs adapters)."""
+    return create_pareto_cells_from_atlas(rows)
+
+
 def adapt_tradeoffs_panel(snapshot: DashboardSnapshot, root: Path) -> TradeoffsData:
     """Adapt snapshot to TradeoffsPanel data (membership from snapshot.pareto_rows)."""
     from computronium.autoscientist.objectives import objective_names
 
-    pareto_cells = [
-        ParetoCell(
-            key=str(row.get("label", "")),
-            label=str(row.get("label", "")),
-            accuracy=_coerce_float(row, "accuracy"),
-            bp_deficit=_coerce_float(row, "bp_deficit"),
-            credit_alignment=_coerce_float(row, "credit_alignment"),
-            settle_horizon=_coerce_float(row, "settle_horizon"),
-            walltime_s=_coerce_float(row, "walltime_s"),
-            dynamics="",
-            credit="",
-            update="",
-            topology="",
-        )
-        for row in snapshot.pareto_rows
-    ]
-
     return TradeoffsData(
-        pareto_cells=pareto_cells,
+        pareto_cells=_pareto_cells_from_rows(
+            snapshot.pareto_rows, snapshot.objectives
+        ),
         objectives=list(objective_names(snapshot.objectives))
         if snapshot.objectives
         else [],
@@ -283,27 +260,15 @@ def adapt_tradeoffs_panel(snapshot: DashboardSnapshot, root: Path) -> TradeoffsD
 
 
 @dataclass(frozen=True, slots=True)
-class DefectRow:
-    """A defect row for the repair bench."""
-
-    defect_id: str
-    count: int
-    cells: int
-    status: str
-    error_class: str
-    last_seen: float
-    message: str
-
-
-@dataclass(frozen=True, slots=True)
 class RepairBenchData:
     """Data for RepairBench panel."""
 
     defects: list[DefectRow]
+    maturation_nodes: list[MaturationNode] = field(default_factory=list)
 
 
 def adapt_repair_bench(snapshot: DashboardSnapshot, root: Path) -> RepairBenchData:
-    """Adapt snapshot to RepairBench data."""
+    """Adapt snapshot to RepairBench data (defects + maturation)."""
     defects = [
         DefectRow(
             defect_id=str(row.get("defect_id", "")),
@@ -316,7 +281,17 @@ def adapt_repair_bench(snapshot: DashboardSnapshot, root: Path) -> RepairBenchDa
         )
         for row in snapshot.funnel_rows
     ]
-    return RepairBenchData(defects=defects)
+    maturation_nodes = [
+        MaturationNode(
+            level=str(row.get("level", "")).removeprefix("maturity:"),
+            campaign=root.name,
+            cells=[],
+            count=int(_coerce_float(row, "count")),
+        )
+        for row in snapshot.maturation
+        if str(row.get("level", "")).removeprefix("maturity:") in {"l0", "l1", "l2"}
+    ]
+    return RepairBenchData(defects=defects, maturation_nodes=maturation_nodes)
 
 
 # ============================================================================

@@ -81,12 +81,12 @@ def test_populated_vs_empty_distinguishable_in_grayscale(
 
     screen.open("/ux_l6_pair", timeout=30)
     # Wait for the map panel to render
-    _wait_for_source(screen.selenium, "Map")
+    _wait_for_source(screen.selenium, "Atlas")
     populated_png = screen.selenium.get_screenshot_as_png()
 
     holder["root"] = empty
     screen.open("/ux_l6_pair", timeout=30)
-    _wait_for_source(screen.selenium, "Map")
+    _wait_for_source(screen.selenium, "Atlas")
     empty_png = screen.selenium.get_screenshot_as_png()
 
     diff = _grayscale_mean_abs_diff(populated_png, empty_png)

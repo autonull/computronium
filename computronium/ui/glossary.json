@@ -206,6 +206,18 @@
       "explorer": "Stability check",
       "lab": "Constitution Health"
     },
+    "constitution": {
+      "explorer": "Constitution",
+      "lab": "Constitution"
+    },
+    "pareto": {
+      "explorer": "Trade-offs",
+      "lab": "Pareto"
+    },
+    "events": {
+      "explorer": "Events",
+      "lab": "Events"
+    },
     "continuous_discovery": {
       "explorer": "Continuous discovery",
       "lab": "Continuous discovery"
@@ -545,6 +557,10 @@
     "memristive_substrate": {
       "explorer": "Memristive (conductance, IR-drop)",
       "lab": "MemristiveSubstrate"
+    },
+    "monitor": {
+      "explorer": "Monitor",
+      "lab": "Monitor"
     },
     "morphology_at_boundaries": {
       "explorer": "Recipe changes only at sleep/wake boundaries",

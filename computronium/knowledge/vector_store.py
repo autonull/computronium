@@ -1,13 +1,14 @@
 """
 Vector store and embedding utilities for the knowledge base.
 
-Provides FAISS-based semantic search and embedding generation.
+Provides FAISS-based semantic search with scikit-learn fallback.
 """
 
 import json
 import pathlib
 import sqlite3
 from dataclasses import dataclass
+from enum import Enum
 
 import numpy as np
 
@@ -23,6 +24,13 @@ except ImportError:
     HAS_FAISS = False
 
 try:
+    from sklearn.neighbors import NearestNeighbors
+
+    HAS_SKLEARN = True
+except ImportError:
+    HAS_SKLEARN = False
+
+try:
     from sentence_transformers import SentenceTransformer
 
     HAS_SENTENCE_TRANSFORMERS = True
@@ -30,6 +38,14 @@ except ImportError:
     HAS_SENTENCE_TRANSFORMERS = False
 
 logger = get_logger()
+
+
+class VectorBackend(Enum):
+    """Available vector search backends."""
+
+    FAISS = "faiss"
+    SKLEARN = "sklearn"
+    NONE = "none"
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,10 +59,10 @@ class VectorStoreConfig:
 
 class VectorStore:
     """
-    FAISS-based vector store for semantic similarity search.
+    Vector store for semantic similarity search.
 
-    Integrates with SQLite for metadata storage and FAISS for
-    high-performance vector similarity search.
+    Uses FAISS when available, falls back to scikit-learn NearestNeighbors,
+    and finally to keyword search.
     """
 
     def __init__(
@@ -60,6 +76,9 @@ class VectorStore:
         # Initialize vector index
         self._init_vector_index()
 
+        # Try to load persisted index
+        self.load_persisted()
+
         # Initialize embedding model
         self.embedding_model = None
         if self.config.auto_embed and HAS_SENTENCE_TRANSFORMERS:
@@ -70,17 +89,30 @@ class VectorStore:
                 logger.warning("Failed to load embedding model: %s", e)
 
     def _init_vector_index(self) -> None:
-        """Initialize FAISS vector index."""
+        """Initialize vector index with best available backend."""
         if HAS_FAISS:
-            self.vector_index = faiss.IndexFlatIP(self.config.vector_dim)
-            self.vector_ids = []  # Maps index position to knowledge entry ID
+            self.backend = VectorBackend.FAISS
+            self._vector_index = faiss.IndexFlatIP(self.config.vector_dim)
+            self.vector_ids = []
+            logger.info("Initialized FAISS vector index")
+        elif HAS_SKLEARN:
+            self.backend = VectorBackend.SKLEARN
+            self._init_sklearn_index()
+            logger.info("Initialized scikit-learn NearestNeighbors index")
         else:
-            self.vector_index = None
+            self.backend = VectorBackend.NONE
+            self._vector_index = None
             self.vector_ids = []
             logger.warning(
-                "FAISS not available. Vector search disabled. "
-                "Install with: pip install faiss-cpu"
+                "No vector search backend available. "
+                "Install 'faiss-cpu' or 'scikit-learn' for semantic search."
             )
+
+    def _init_sklearn_index(self) -> None:
+        """Initialize scikit-learn NearestNeighbors index."""
+        self._vectors = np.empty((0, self.config.vector_dim), dtype=np.float32)
+        self._ids = []
+        self._nn = None
 
     def _embed_text(self, text: str) -> np.ndarray | None:
         """Generate embedding for text."""
@@ -95,11 +127,21 @@ class VectorStore:
 
     def add_embedding(self, entry_id: str, embedding: list[float] | np.ndarray) -> None:
         """Add an embedding to the vector index."""
-        if self.vector_index is None:
+        if self.backend == VectorBackend.NONE:
             return
+
         emb = np.array(embedding, dtype=np.float32).reshape(1, -1)
-        self.vector_index.add(emb)
-        self.vector_ids.append(entry_id)
+
+        if self.backend == VectorBackend.FAISS:
+            self.vector_index.add(emb)
+            self.vector_ids.append(entry_id)
+        elif self.backend == VectorBackend.SKLEARN:
+            self._vectors = np.vstack([self._vectors, emb])
+            self._ids.append(entry_id)
+            # Refit index (inefficient for many adds, but OK for <10k vectors)
+            n_neighbors = min(10, len(self._ids))
+            self._nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
+            self._nn.fit(self._vectors)
 
     def search(
         self,
@@ -113,7 +155,7 @@ class VectorStore:
 
         Returns list of (entry_id, similarity_score) tuples.
         """
-        if self.vector_index is None or self.embedding_model is None:
+        if self.backend == VectorBackend.NONE or self.embedding_model is None:
             logger.warning(
                 "Vector search not available. Falling back to keyword search."
             )
@@ -126,20 +168,50 @@ class VectorStore:
 
         query_embedding = query_embedding.reshape(1, -1)
 
-        # Search vector index
+        if self.backend == VectorBackend.FAISS:
+            return self._search_faiss(query_embedding, k, min_similarity)
+        elif self.backend == VectorBackend.SKLEARN:
+            return self._search_sklearn(query_embedding, k, min_similarity)
+
+        return []
+
+    def _search_faiss(
+        self, query_embedding: np.ndarray, k: int, min_similarity: float
+    ) -> list[tuple[str, float]]:
+        """Search using FAISS index."""
         scores, indices = self.vector_index.search(
             query_embedding, min(k * 2, len(self.vector_ids))
         )
 
         results = []
         for score, idx in zip(scores[0], indices[0]):
-            if idx >= 0 and idx < len(self.vector_ids):  # ruff: ignore[collapsible-if]
+            if 0 <= idx < len(self.vector_ids):
                 if score >= min_similarity:
                     entry_id = self.vector_ids[idx]
                     results.append((entry_id, float(score)))
                     if len(results) >= k:
                         break
+        return results
 
+    def _search_sklearn(
+        self, query_embedding: np.ndarray, k: int, min_similarity: float
+    ) -> list[tuple[str, float]]:
+        """Search using scikit-learn NearestNeighbors."""
+        if self._nn is None or len(self._ids) == 0:
+            return []
+
+        # sklearn returns distances, we need similarity (1 - distance for cosine)
+        distances, indices = self._nn.kneighbors(
+            query_embedding, n_neighbors=min(k, len(self._ids))
+        )
+
+        results = []
+        for dist, idx in zip(distances[0], indices[0]):
+            if idx < len(self._ids):
+                similarity = 1.0 - float(dist)  # cosine distance to similarity
+                if similarity >= min_similarity:
+                    entry_id = self._ids[idx]
+                    results.append((entry_id, similarity))
         return results
 
     def _keyword_search(
@@ -174,45 +246,96 @@ class VectorStore:
     def get_stats(self) -> dict[str, object]:
         """Get vector store statistics."""
         return {
-            "vector_index_size": len(self.vector_ids) if self.vector_index else 0,
+            "backend": self.backend.value,
+            "vector_index_size": len(self.vector_ids)
+            if self.backend == VectorBackend.FAISS
+            else len(self._ids) if self.backend == VectorBackend.SKLEARN else 0,
             "has_embeddings": self.embedding_model is not None,
             "embedding_model": self.config.embedding_model,
             "vector_dim": self.config.vector_dim,
         }
 
+    @property
+    def vector_index(self):
+        """Backward compatibility: return FAISS index or None."""
+        if self.backend == VectorBackend.FAISS:
+            return self._vector_index if hasattr(self, '_vector_index') else None
+        return None
+
+    @vector_index.setter
+    def vector_index(self, value):
+        """Backward compatibility setter for FAISS index."""
+        if self.backend == VectorBackend.FAISS:
+            self._vector_index = value
+            if hasattr(self, 'vector_ids'):
+                pass  # Already initialized
+
     def persist(self) -> None:
         """Persist vector index to disk."""
-        if self.vector_index is not None:
+        if self.backend == VectorBackend.FAISS and self.vector_index is not None:
             index_path = pathlib.Path(self.db_path).with_suffix(".faiss")
             faiss.write_index(self.vector_index, str(index_path))
-            # Save vector_ids
             ids_path = pathlib.Path(self.db_path).with_suffix(".faiss_ids.json")
             with ids_path.open("w") as f:
                 json.dump(self.vector_ids, f)
+        elif self.backend == VectorBackend.SKLEARN and self._vectors.size > 0:
+            index_path = pathlib.Path(self.db_path).with_suffix(".sklearn.npz")
+            ids_path = pathlib.Path(self.db_path).with_suffix(".sklearn_ids.json")
+            np.savez_compressed(index_path, vectors=self._vectors)
+            with ids_path.open("w") as f:
+                json.dump(self._ids, f)
 
     def load_persisted(self) -> bool:
         """Load persisted vector index from disk."""
-        index_path = pathlib.Path(self.db_path).with_suffix(".faiss")
-        ids_path = pathlib.Path(self.db_path).with_suffix(".faiss_ids.json")
+        # Try FAISS first
+        if HAS_FAISS:
+            index_path = pathlib.Path(self.db_path).with_suffix(".faiss")
+            ids_path = pathlib.Path(self.db_path).with_suffix(".faiss_ids.json")
+            if index_path.exists() and ids_path.exists():
+                try:
+                    self.backend = VectorBackend.FAISS
+                    self.vector_index = faiss.read_index(str(index_path))
+                    with ids_path.open() as f:
+                        self.vector_ids = json.load(f)
+                    logger.info(
+                        "Loaded persisted FAISS index with %d vectors",
+                        len(self.vector_ids),
+                    )
+                    return True
+                except (OSError, RuntimeError, ValueError) as e:
+                    logger.warning("Failed to load FAISS index: %s", e)
 
-        if index_path.exists() and ids_path.exists() and HAS_FAISS:
-            try:
-                self.vector_index = faiss.read_index(str(index_path))
-                with ids_path.open() as f:
-                    self.vector_ids = json.load(f)
-                logger.info(
-                    "Loaded persisted vector index with %d vectors",
-                    len(self.vector_ids),
-                )
-                return True  # ruff: ignore[try-consider-else]
-            except (OSError, RuntimeError, ValueError) as e:
-                logger.warning("Failed to load persisted vector index: %s", e)
+        # Try sklearn
+        if HAS_SKLEARN:
+            index_path = pathlib.Path(self.db_path).with_suffix(".sklearn.npz")
+            ids_path = pathlib.Path(self.db_path).with_suffix(".sklearn_ids.json")
+            if index_path.exists() and ids_path.exists():
+                try:
+                    self.backend = VectorBackend.SKLEARN
+                    data = np.load(index_path)
+                    self._vectors = data["vectors"]
+                    with ids_path.open() as f:
+                        self._ids = json.load(f)
+                    # Refit the index
+                    n_neighbors = min(10, len(self._ids))
+                    self._nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
+                    self._nn.fit(self._vectors)
+                    logger.info(
+                        "Loaded persisted sklearn index with %d vectors",
+                        len(self._ids),
+                    )
+                    return True
+                except (OSError, RuntimeError, ValueError) as e:
+                    logger.warning("Failed to load sklearn index: %s", e)
+
         return False
 
 
 __all__ = [
     "HAS_FAISS",
+    "HAS_SKLEARN",
     "HAS_SENTENCE_TRANSFORMERS",
+    "VectorBackend",
     "VectorStore",
     "VectorStoreConfig",
 ]
