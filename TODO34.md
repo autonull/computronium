@@ -1,8 +1,9 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
-**Status**: **ACTIVE** — items 0.1–0.9 completed and committed (`ff6528fb`);
-§2.1 completed and committed (`59d13f47`); §1.1 partially landed. §1.2–§1.6,
-§2.2–§2.6, §3–§5 open.
+**Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
+§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`) complete; §1.1's floor landed
+with its curve blocked on §2.8. §1.2–§1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4,
+§5.1, §5.3–§5.4 open.
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -16,6 +17,56 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 5 — §2.5 test-quality ratchets, `0faecede`
+
+`tests/property/test_assertion_quality_lock.py` bans a test whose only
+assertion is `isinstance(x, <builtin>)`. Domain types are exempt — "the
+registry factory returns an instance of the class the registry claims" is a
+real claim no annotation makes.
+
+**The plan's proposed `assert x is not None` clause was tried and dropped.**
+14 false positives on first run: `assert selected_experiment is None` is how
+a dozen tests state "this lookup finds nothing", which is *more* specific
+than a type check, not less. Separating "restates a non-optional annotation"
+from "asserts a sentinel" needs return-type analysis — §2.4's job. A lock
+with false positives gets switched off, so the narrower rule is the useful
+one; the docstring records this so it is not re-attempted blind.
+
+Nine real vacuous assertions strengthened, each to the claim its own comment
+*said* it was making. One immediately failed: the kernel-registry test
+asserted the registry "is functional" and MEP had no CPU backend, because
+registration is import-order-dependent and the test never imported the module
+that registers it.
+
+Two §2.5 rules deliberately **not** implemented, with reasons in the module
+docstring: unseeded-RNG detection (needs dataflow, not a regex) and
+asserting-the-opposite-of-the-name (the plan itself says "cheap to check by
+eye"; a regex would be theatre).
+
+### Pass 4 — §4.1 + §5.2 layering inversion, `5ad96f85`
+
+`broad_map.py` and `campaign_readers.py` imported from
+`visualization/atlas.py` — not to draw, but for Pareto front selection and a
+WAL-aware cache key. That second one is the argument: the cache key is
+correct only because it covers SQLite's `-wal` sidecar, so a *persistence*
+invariant was living in a charting module. That is exactly how §0.5's fix
+came to be applied in the wrong layer.
+
+- `computronium/analysis/dominance.py` — `pareto_top` + its two kernels.
+  Deliberately **not** folded into the existing `analysis/pareto.py`, which
+  imports plotly: putting domain code there would weaken the rule being
+  established.
+- `computronium/knowledge/kb_cache.py` — the cache, its fingerprint,
+  `UNBOUNDED_ROWS`. Persistence invariant now sits in the persistence layer.
+
+`test_layering_lock.py` enforces the rule over the AST **including
+function-local imports** — all 5 violations were function-local, which is
+how they survived. Exemptions require a reason and must name a real
+directory. §4.1's operative claim is tested directly: a subprocess imports
+`computronium` and asserts no renderer reaches `sys.modules` (it loads none).
+
+### Pass 3 — §2.2 settle contract, `f06f7629`
 
 ### Pass 2 — §2.1 (undefined names), `59d13f47`
 
@@ -220,28 +271,30 @@ See the pass-2 table above. Two notes worth keeping:
   `ruff check --select F821` instead. Same signal, one process, no
   configuration change.
 
-### 2.2 Document the contract that bug 0.2 violated — P0
+### 2.2 Document the contract that bug 0.2 violated — **DONE** (`f06f7629`)
 
-The settle loop could break on a pre-seeded counter because **the protocol
-docstring never said what `_settle_steps_used` meant**. Amend the
-`StateDynamics` protocol docstring (and `CompositeState`/telemetry docs) to
-state, normatively:
+The `StateDynamics` protocol docstring now states the four rules
+normatively: settle runs to convergence or `max_steps`; `_settle_steps_used`
+counts steps *actually executed*; the stop signal is the separate `_converged`
+flag reset by `_note_settle_start()` on every settle including each phase of
+a free/nudged pair; `on_step` fires per executed step regardless of
+`track_free_energy_per_iter`.
 
-1. `settle` iterates until the convergence criterion or `max_steps`.
-2. `_settle_steps_used` counts steps **actually executed** (truth telemetry,
-   consumed by `analysis/instruments.py` and `autoscientist/campaign.py`).
-3. The early-stop signal is a **separate** flag, reset at the start of every
-   `settle` — including each phase of a free/nudged pair.
-4. `on_step(step, energy)` fires **once per executed step**, independent of
-   whether `track_free_energy_per_iter` is set.
+It also records the one **legitimate** exception — whole-graph paths
+(`_settle_compiled`, PC-ALM's full-horizon sweep) seed
+`_settle_steps_used = max_steps`, which is the truth for a path that cannot
+early-stop. Without that note, the exception reads as the bug and the next
+person deletes correct code.
 
-Then add a wiring lock that fails if a new dynamics class reintroduces a
-break-on-horizon pattern (grep-level check is sufficient; see §2.5).
+`TestSettleHorizonSourceLock` walks the AST for `_settle_steps_used` in any
+boolean position, so the prohibition *in the docstring* does not trip it, and
+a second test asserts the four rule markers survive docstring edits.
+Mutation-checked by injecting the defect into a live loop.
 
-**§5.1 supersedes the enforcement half of this item**: once the settle loops
-share one driver, the contract is enforced by construction rather than by a
-lock watching for a bad pattern. Do the docstring now (it is the specification
-the migration is written against), and let §5.1 make it structural.
+The behavioural half of the original item — "a wiring lock that fails if a new
+dynamics class reintroduces break-on-horizon" — is what the AST check is.
+**§5.1 supersedes it structurally**: one driver makes the invariant
+unrepresentable rather than policed.
 
 ### 2.3 Lint debt: 684 findings — P2 (Register C scope, per `AGENTS.md`)
 
@@ -275,7 +328,7 @@ pass. This document scopes that pass: pick the **top 3 modules by fan-in**
 first, then ratchet — a CI check that fails only on *changed* files, as
 `pre-commit` already does for ruff.
 
-### 2.5 Test-quality ratchets — P1
+### 2.5 Test-quality ratchets — **PARTLY DONE** (`0faecede`)
 
 Every defect in §0 was caught by a human, not by the suite. Cheap structural
 guards that would have caught them:
@@ -333,6 +386,22 @@ Two consequences for the rest of this document:
    command itself. Check for the summary, or run in the foreground under
    `timeout`.
 
+### 2.9 New: `rich` is a hard dependency — P3
+
+`pyproject.toml` lists `rich` in `[project] dependencies`. §4.1 names `rich`
+as a rendering dep that should be an optional extra.
+
+**Measured: nothing on `import computronium`'s path reaches it** — a
+subprocess probe confirms no renderer (rich, plotly, matplotlib, altair,
+bokeh, dash) lands in `sys.modules`. So §4.1's operative requirement holds
+today, and `test_layering_lock.py::test_import_computronium_pulls_no_renderer`
+now guards it. The declaration is simply louder than the behaviour.
+
+Move `rich` to an extra when something in `computronium.core.logging`
+actually uses it; until then the lock is what protects the invariant, and
+that is the cheaper arrangement. Recorded so nobody "discovers" the
+hard-dependency later and re-breaks a property that currently holds.
+
 ### 2.6 Keep the science honest when the numbers move — P2
 
 0.3 changed every energy-based result in the repo, and the demo records had to
@@ -384,7 +453,7 @@ logic lived *inside* the view. This section is the contract that prevents a
 recurrence, and it is deliberately render-agnostic — the CLI is the first
 consumer, not the only one.
 
-### 4.1 The layering rule — P0
+### 4.1 The layering rule — **DONE** (`5ad96f85`)
 
 ```
 domain core (no I/O, no network, no render imports)
@@ -501,7 +570,7 @@ behind parameterisation.
 returns 0 outside the driver, and the full suite plus the §0.2 mutation test
 (does the lock still catch a reintroduced break-on-horizon?) are green.
 
-### 5.2 Break the domain → presentation inversion — P0
+### 5.2 Break the domain → presentation inversion — **DONE** (`5ad96f85`)
 
 **Evidence.** Domain/orchestration code importing the view layer:
 
@@ -582,12 +651,16 @@ table, never against source text). Effort: ~1d per layer.
 
 ### 5.5 Sequencing summary
 
-| Order | Item | Why here |
-|-------|------|----------|
-| 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code |
-| 2nd | 5.2 | Small, testable, unblocks §4.1's precedent |
-| 3rd | 5.3 | Needs a decision, and wants §5.1 settled first |
-| 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count |
+| Order | Item | Why here | State |
+|-------|------|----------|-------|
+| 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code | **open — the flagship item** |
+| 2nd | 5.2 | Small, testable, unblocks §4.1's precedent | **done** (`5ad96f85`) |
+| 3rd | 5.3 | Needs a decision, and wants §5.1 settled first | open |
+| 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | open |
+
+5.2 was pulled forward because §4.1's lint check fails on day one otherwise —
+the plan says so explicitly, and it was right. That left **5.1 as the only
+untouched high-leverage item in the document.**
 
 ---
 
@@ -597,12 +670,12 @@ Phase A is **done except §1.1's measurement**, which is blocked by §2.8.
 
 | Phase | Items | Effort | Gate | State |
 |-------|-------|--------|------|-------|
-| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.1 floor **done**, curve blocked; 1.4 open |
-| **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | open (`F821` blocking **done**, via §2.1) |
+| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.1 floor **done**, curve blocked (§2.8); 1.4 open |
+| **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | open — **re-measurement needed, see §2.8** |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 11 settle loops → 1 driver; Pareto in one layer; registries derived | open |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 11 settle loops → 1 driver; Pareto in one layer; registries derived | 5.2 **done**; 5.1, 5.3, 5.4 open |
 
 **Recommended next step** (cheapest, unblocked, high value): **§2.2**, the
 settle-contract docstring. It is pure documentation, needs no measurement, and
