@@ -263,8 +263,17 @@ def test_synthesize_full_report_empty_db(empty_db_path: str) -> None:
     """synthesize_full_report handles empty DB without crashing."""
     synth = ResearchSynthesizer(empty_db_path)
     report = synth.synthesize_full_report()
-    # Should not raise, returns dict with all keys
-    assert isinstance(report, dict)
+    assert set(report) == {
+        "cross_algorithm_insights",
+        "task_specific_winners",
+        "efficiency_analysis",
+        "backprop_gap_analysis",
+        "ablation_analysis",
+        "statistical_significance",
+        "failure_analysis",
+        "quick_wins",
+        "research_gaps",
+    }, f"report schema drifted: {sorted(report)}"
 
 
 # ---------------------------------------------------------------------------

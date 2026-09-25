@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 import torch
 from torch import Tensor
@@ -390,7 +392,10 @@ class TestLyapunovExponent:
         estimator = LyapunovEstimator(fast_mode=True)
         transition = MockTransition(rho=0.7)
         lyap = estimator(transition, initial_state, mock_context)
-        assert isinstance(lyap, float)
+        assert math.isfinite(lyap)
+        assert lyap < 0, (
+            f"contractive transition must give a negative Lyapunov estimate, got {lyap}"
+        )
 
 
 # ============================================================

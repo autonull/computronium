@@ -324,17 +324,19 @@ class TestBackendNumericalParity:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_registered_backends_exist(self, algorithm):
         """Verify backends are registered for key algorithms."""
+        import computronium.acceleration.mep_kernels  # noqa: F401  (registers MEP)
+        import computronium.acceleration.triton_kernels  # noqa: F401  (registers EQPROP)
         from computronium.acceleration.kernel_backend import (
             AlgorithmFamily,
+            HardwareTarget,
             KernelRegistry,
         )
 
-        # At least CPU should be available
-        # (actual backend registration happens in respective kernel files)
         alg_family = AlgorithmFamily(algorithm)
         hw_list = KernelRegistry.list_for(alg_family)
-        # This test passes if the registry is functional
-        assert isinstance(hw_list, list)
+        assert HardwareTarget.CPU in hw_list, (
+            f"{alg_family} has no CPU backend registered: {hw_list}"
+        )
 
 
 if __name__ == "__main__":

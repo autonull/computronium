@@ -305,14 +305,16 @@ class TestNASIntegration:
         from computronium.lightning_.nas import get_plausible_model_names
 
         names = get_plausible_model_names()
-        assert isinstance(names, list)
+        assert names, "no plausible model names offered"
+        assert all(isinstance(name, str) for name in names)
 
     def test_get_bio_optimizer_names(self):
         """Test getting bio optimizer names for NAS."""
         from computronium.lightning_.nas import get_bio_optimizer_names
 
         names = get_bio_optimizer_names()
-        assert isinstance(names, list)
+        assert names, "no bio-optimizer names offered"
+        assert all(isinstance(name, str) for name in names)
 
 
 class TestAutoScientistIntegration:

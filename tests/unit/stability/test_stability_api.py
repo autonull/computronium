@@ -5,6 +5,8 @@ Mirrors tests/unit/nn/test_computronium_linear.py pattern.
 
 from __future__ import annotations
 
+import math
+
 import pytest
 import torch
 from torch import Tensor
@@ -413,7 +415,10 @@ class TestLyapunovExponent:
         estimator = LyapunovEstimator(fast_mode=True)
         transition = MockTransition(rho=0.7)
         lyap = estimator(transition, initial_state, mock_context)
-        assert isinstance(lyap, float)
+        assert math.isfinite(lyap)
+        assert lyap < 0, (
+            f"contractive transition must give a negative Lyapunov estimate, got {lyap}"
+        )
 
     def test_lyapunov_config_roundtrip(self):
         config = LyapunovConfig(num_steps=30, fast_mode=True)
@@ -862,4 +867,4 @@ class TestDeviceManagement:
 
         transition = MockTransition(rho=0.7)
         rho = estimate_directional_amplification(transition, z, context)
-        assert isinstance(rho, float)
+        assert 0.0 < rho < 1.0, f"rho=0.7 transition must be contractive, got {rho}"
