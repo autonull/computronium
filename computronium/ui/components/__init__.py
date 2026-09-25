@@ -91,6 +91,8 @@ from computronium.ui.components.tradeoffs_panel import (
 from computronium.ui.components.veto_log import VetoEntry, VetoLog, create_veto_log
 from computronium.ui.components.budget_panel import BudgetPanel
 from computronium.ui.components.cell_forensics import CellForensicsPanel
+from computronium.ui.components.objective_explorer import ObjectiveExplorerPanel
+from computronium.ui.components.scrubber import ScrubberPanel
 from computronium.ui.components.evidence_panel import EvidencePanel
 from computronium.ui.components.command_palette import (
     CommandPalette,
@@ -173,6 +175,8 @@ __all__ = [
     "VetoLog",
     "BudgetPanel",
     "CellForensicsPanel",
+    "ObjectiveExplorerPanel",
+    "ScrubberPanel",
     "EvidencePanel",
     "WorkshopPanel",
     "CommandPalette",

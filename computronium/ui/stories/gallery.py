@@ -57,11 +57,13 @@ def _ensure_registered() -> None:
         budget,
         defects,
         evidence,
+        explorer,
         forensics,
         monitor,
+        scrubber,
     )
 
-    _ = (atlas, budget, defects, evidence, forensics, monitor)
+    _ = (atlas, budget, defects, evidence, explorer, forensics, monitor, scrubber)
 
 
 def build_story(key: str, root: Path) -> tuple[BasePanel, object]:

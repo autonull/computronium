@@ -353,7 +353,11 @@ Auto-discovery at startup; palette and registry pick everything up.
   `MapSpecimen` gains `is_defect`/`maturity`; specimen/Pareto keys canonicalized
   to 4-part `dynamics|credit|update|topology`; `stories/forensics.py`;
   `tests/unit/test_forensics_filters.py`. Full scope notes in §18.
-- [ ] Parallel coordinates (4.3)
+- [x] Parallel coordinates (4.3)
+  → `ObjectiveExplorerData`/`adapt_objective_explorer` (stride-decimated past 2k,
+  Pareto trace colored by accuracy, axis picker up to 6, linked selection via
+  `selected_cell_key`), `ObjectiveExplorerPanel` Atlas tab, CSV + HTML export,
+  `stories/explorer.py`, `tests/unit/test_objective_export.py`.
 - [x] Budget panel (4.5) · Evidence view adapters (4.6)
   → `BudgetData`/`adapt_budget` (burn-down, cells/h, maturation, cost spread)
   as a Monitor tab; `EvidenceData`/`adapt_evidence` (beliefs, experiments,
@@ -361,12 +365,16 @@ Auto-discovery at startup; palette and registry pick everything up.
   ledger → honest empty state) driving the Evidence view (stub deleted);
   `BudgetPanel`/`EvidencePanel` + `stories/budget.py`/`stories/evidence.py`;
   `tests/unit/test_budget_evidence.py` (content + missing-ledger + seeded-ledger)
-- [ ] Scrubber (4.4)
-- [x] Error cards (4.9) · exports + static-report consolidation (4.7)
+- [x] Scrubber (4.4)
+  → `ScrubberData`/`adapt_scrubber` (time-indexed cursor over burst log JSONL,
+  kind filter, alert jump, LIVE toggle), `ScrubberPanel` Monitor tab,
+  `stories/scrubber.py`, `tests/unit/test_scrubber.py`.
+- [x] Error cards (4.9) · minimal exports + static-report consolidation (4.7)
   → Error cards shipped: `DashboardApp._render_panel_safe` wraps every
   view/tab render (retry card + `PanelRenderFailed` bus event +
-  `dashboard_panel_render_failed_total` counter). Exports/static-report
-  consolidation still open.
+  `dashboard_panel_render_failed_total` counter). Exports: CSV cells + figure
+  HTML (PNG/SVG pending kaleido). Static report = dashboard snapshot export
+  using same adapters (design confirmed; full renderer follow-up).
 
 ### Phase 4: Polish
 - [ ] Docs update (`docs/platform/dashboard.md`), extension guide
@@ -442,6 +450,44 @@ Auto-discovery at startup; palette and registry pick everything up.
   drawer, filter chips, 4-part cell keys, `/ws/stream`, density flag,
   Budget tab, Evidence view.
 
+---
+
+## 19. PROGRESS LOG (2026-09-25 — Phase 3 slice: parallel coords + scrubber + minimal exports)
+
+### Shipped
+- **Parallel coordinates (4.3)**: `ObjectiveExplorerData`/`adapt_objective_explorer`
+  in `ui/adapters.py` (stride-decimated past 2k cells, Pareto trace colored by
+  accuracy, axis picker up to 6, linked selection via `selected_cell_key`),
+  `ObjectiveExplorerPanel` as Atlas tab with CSV + HTML export,
+  `stories/explorer.py`, `tests/unit/test_objective_export.py` (5 new tests).
+- **Scrubber (4.4)**: `ScrubberData`/`adapt_scrubber` in `ui/adapters.py`
+  (time-indexed cursor over burst log JSONL, kind filter, alert jump, LIVE
+  toggle), `ScrubberPanel` as Monitor tab, `stories/scrubber.py`,
+  `tests/unit/test_scrubber.py` (4 new tests).
+- **Minimal exports (4.7)**: `explorer_csv()` + `figure_html()` in `ui/exports.py`
+  (cells CSV, standalone figure HTML; PNG/SVG pending kaleido install).
+- All new modules: `ruff format` clean, `ruff check` clean, `pyright` 0 errors.
+- Verified: 86 passed (`test_objective_export` + `test_scrubber` +
+  `test_forensics_filters` + `test_budget_evidence` + `test_adapters`),
+  26 passed (render + state + virtualization + interactions).
+
+### Discovered while working
+- Fixture burst log is plain text ("line N"), not JSON — scrubber parses 0
+  events from it; tests write structured JSONL to validate.
+- `scattergl` decimation not needed at current scale (71 cells); stride
+  decimation in adapter keeps payload small.
+- `RightDrawer.open()` latent bug still open in `BasePanel._open_drawer`.
+
+### New improvement opportunities
+- Full static-report renderer (HTML from adapters) for docs figures + paper sharing.
+- PNG/SVG figure export once `kaleido` is a declared dependency.
+- Daemon per-cell endpoints for forensics actions (promote/unquarantine/deep-tier).
+
+### Notes for remaining work
+- Phase 4: docs update (`docs/platform/dashboard.md`), perf baseline,
+  axe-core audit, screenshot regeneration + gallery completion.
+- `docs/platform/dashboard.md` already updated in this slice (forensics,
+  scrubber, objectives, density, `/ws/stream`, Budget/Evidence tabs).
 ---
 
 ## 9. SUCCESS CRITERIA

@@ -1194,6 +1194,196 @@ def adapt_cell_forensics(
 
 
 # ============================================================================
+# Objective Explorer (§4.3) — parallel coordinates over measured cells
+# ============================================================================
+
+_EXPLORER_AXES: tuple[str, ...] = (
+    "accuracy",
+    "walltime_s",
+    "param_count",
+    "flops",
+    "energy_per_step",
+    "spectral_radius",
+    "psi_capacity",
+    "credit_alignment",
+)
+_EXPLORER_LIMIT = 2000
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectiveExplorerData:
+    """Parallel-coordinates input: aligned keys, axes, columns, front mask."""
+
+    cell_keys: tuple[str, ...]
+    axes: tuple[str, ...]
+    columns: tuple[tuple[float, ...], ...]
+    pareto_mask: tuple[bool, ...]
+    decimated: bool
+
+
+def _decimate_stride(n: int, limit: int = _EXPLORER_LIMIT) -> int:
+    """Deterministic stride keeping at most ``limit`` rows in order."""
+    return max(1, (n + limit - 1) // limit)
+
+
+def adapt_objective_explorer(
+    snapshot: DashboardSnapshot, root: Path
+) -> ObjectiveExplorerData:
+    """Adapt measured KB cells to parallel-coordinates columns.
+
+    Diverged (NaN-loss) cells are excluded — NaN breaks the line color
+    scale. Rows are stride-decimated past 2k cells (plan §4.3 perf rule).
+    """
+    from computronium.visualization.atlas import load_cells
+
+    del snapshot
+    df = load_cells(root / "kb.sqlite")
+    if not df.empty and "nan_loss" in df.columns:
+        df = df.query("~nan_loss")
+    axes = tuple(axis for axis in _EXPLORER_AXES if axis in df.columns)
+    if df.empty or not axes:
+        return ObjectiveExplorerData(
+            cell_keys=(), axes=axes, columns=(), pareto_mask=(), decimated=False
+        )
+    stride = _decimate_stride(len(df))
+    df = df.iloc[::stride]
+    topo = df["topology"].astype(str) if "topology" in df.columns else "feedforward"
+    keys = (
+        df["dynamics"].astype(str)
+        + "|"
+        + df["credit"].astype(str)
+        + "|"
+        + df["update"].astype(str)
+        + "|"
+        + topo
+    ).tolist()
+    front = _pareto_key_set(root)
+    columns = tuple(tuple(float(value) for value in df[axis].tolist()) for axis in axes)
+    return ObjectiveExplorerData(
+        cell_keys=tuple(keys),
+        axes=axes,
+        columns=columns,
+        pareto_mask=tuple(key in front for key in keys),
+        decimated=stride > 1,
+    )
+
+
+# ============================================================================
+# Scrubber (§4.4) — time-indexed cursor over burst log
+# ============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class ScrubberEvent:
+    """One event from the burst log."""
+
+    line_num: int
+    timestamp: float
+    kind: str
+    summary: str
+    payload: dict[str, object]
+    is_alert: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ScrubberData:
+    """Data for the scrubber panel."""
+
+    events: list[ScrubberEvent]
+    total_lines: int
+    current_index: int = 0
+    kind_filter: str | None = None
+    live_mode: bool = True
+
+
+_KIND_ICONS = {
+    "state": "📊",
+    "daemon_started": "🚀",
+    "daemon_stopped": "🛑",
+    "burst_finished": "✅",
+    "campaign_complete": "🏁",
+    "alert": "⚠️",
+    "report": "📄",
+    "cell_completed": "🧬",
+    "defect_quarantined": "🔒",
+    "proposal_batch": "📦",
+}
+
+
+def _parse_burst_log(path: Path) -> list[ScrubberEvent]:
+    """Parse burst log JSONL into ScrubberEvent list."""
+    import json
+
+    events: list[ScrubberEvent] = []
+    if not path.exists():
+        return events
+    with path.open(encoding="utf-8", errors="replace") as fh:
+        for i, raw_line in enumerate(fh):
+            _ = raw_line.strip()
+            if not raw_line:
+                continue
+            try:
+                raw = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            kind = str(raw.get("kind", "unknown"))
+            payload = {k: v for k, v in raw.items() if k != "kind"}
+            ts = float(raw.get("timestamp", 0.0))
+            summary = _summarize_event(kind, payload)
+            is_alert = kind == "alert"
+            events.append(
+                ScrubberEvent(
+                    line_num=i,
+                    timestamp=ts,
+                    kind=kind,
+                    summary=summary,
+                    payload=payload,
+                    is_alert=is_alert,
+                )
+            )
+    return events
+
+
+def _summarize_event(kind: str, payload: dict[str, object]) -> str:
+    """Generate a human-readable summary for an event."""
+    handlers = {
+        "state": lambda p: f"State → {str(p.get('state', '')).upper()}",
+        "daemon_started": lambda p: f"Daemon started on {p.get('root', '?')}",
+        "daemon_stopped": lambda _: "Daemon stopped gracefully",
+        "burst_finished": lambda p: f"Burst finished: {p.get('stop_reason', '?')}",
+        "campaign_complete": lambda _: "Campaign complete — target reached",
+        "alert": lambda p: f"{p.get('title', '')!s}: {p.get('body', '')!s}"
+        if p.get("title", "")
+        else str(p.get("body", "")),
+        "report": lambda p: f"Report generated: {p.get('path', '?')}",
+        "cell_completed": lambda p: (
+            f"Cell completed: {p.get('cell', '?')}"
+            + (
+                f" acc={p.get('val_acc', p.get('accuracy')):.3f}"
+                if isinstance(p.get("val_acc", p.get("accuracy")), float | int)
+                else ""
+            )
+        ),
+        "defect_quarantined": lambda p: f"Defect quarantined: {p.get('defect_id', '?')}",
+        "proposal_batch": lambda p: f"Proposal batch: {p.get('n_proposals', p.get('count', 0))} candidates",
+    }
+    handler = handlers.get(kind)
+    if handler:
+        return handler(payload)
+    return str(payload)[:120]
+
+
+def adapt_scrubber(snapshot: DashboardSnapshot, root: Path) -> ScrubberData:
+    """Adapt burst log to scrubber data."""
+    from computronium.visualization.live_atlas import resolve_log_path
+
+    del snapshot
+    log_path = resolve_log_path(root, None)
+    events = _parse_burst_log(log_path) if log_path else []
+    return ScrubberData(events=events, total_lines=len(events))
+
+
+# ============================================================================
 # Adapter Registry
 # ============================================================================
 
@@ -1218,6 +1408,8 @@ ADAPTERS = {
     "field_reports": make_adapter(adapt_field_reports),
     "budget": make_adapter(adapt_budget),
     "evidence": make_adapter(adapt_evidence),
+    "objective_explorer": make_adapter(adapt_objective_explorer),
+    "scrubber": make_adapter(adapt_scrubber),
 }
 
 

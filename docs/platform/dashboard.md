@@ -1,16 +1,18 @@
 # Dashboard (`comp dashboard`)
 
-A **read-only live window** over a continuous-discovery campaign root. Four
+A **read-only live window** over a continuous-discovery campaign root. Five
 focused views give you the complete picture at a glance: **Monitor** (live
-status + health + activity), **Atlas** (discovery map + trade-offs + gallery),
-**Repair** (defect funnel + maturation), **Compose** (proven recipes + dial
-composer). It polls campaign artifacts and re-renders on change; it never
-executes code or writes to the ledger.
+status + health + budget + activity), **Atlas** (discovery map + trade-offs +
+objectives + gallery), **Defects** (defect funnel + maturation), **Evolution**
+(probes + genome), **Evidence** (CEEC beliefs + claims + decisions). It polls
+campaign artifacts and re-renders on change; it never writes to the campaign
+root — actions route through the daemon lifecycle API and render disabled
+with a tooltip when no `--daemon-url` is attached.
 
 ```bash
 uv run comp dashboard --root artifacts/broad_map --port 8088
 uv run comp dashboard --root artifacts/broad_map,artifacts/other  # multi-root
-uv run comp dashboard --no-open --ui-mode lab                     # headless, lab copy
+uv run comp dashboard --no-open --density compact                 # headless, compact
 ```
 
 ## Flags
@@ -21,62 +23,65 @@ uv run comp dashboard --no-open --ui-mode lab                     # headless, la
 | `--port` | `8088` | HTTP port |
 | `--log-path` | newest `continuous*.log` | Ticker source (searches `<root>/logs/` then repo `logs/`) |
 | `--poll` | `2.0` | Artifact polling interval (seconds) |
-| `--daemon-url` | off | Lifecycle API base (e.g. `http://127.0.0.1:8940`) → live loss + live feed |
+| `--daemon-url` | off | Lifecycle API base (e.g. `http://127.0.0.1:8940`) → live loss + live feed + enabled action buttons |
 | `--no-open` | off | Do not open a browser tab (server/headless use) |
-| `--ui-mode` | `auto` (`COMPUTRONIUM_UI_MODE`) | UI register: `explorer` (plain language) \| `lab` (technical) \| `auto` |
-| `--ui-actions` | `off` (`COMPUTRONIUM_UI_ACTIONS`) | Enable Composer submit buttons (daemon wiring pending) |
-| `--quiet` | off | Compact feed; hide ticker |
-| `--gamify` | `off` (`COMPUTRONIUM_GAMIFY`) | Enable badges/quests/records overlay |
+| `--density` | `comfortable` | `comfortable` \| `compact` (persisted; compact quiets the feed) |
 
-**Kill switches:** `--ui-actions off` (default), `--quiet`, `--gamify off`,
-`COMPUTRONIUM_UI_MODE` / `COMPUTRONIUM_UI_ACTIONS` / `COMPUTRONIUM_GAMIFY` environment overrides.
-The dashboard is strictly read-only with respect to campaign artifacts.
+One register, one density. Depth lives in each panel's "What am I looking at?"
+drawer (plain → why → expert → docs). Progress (`b`) and workshop (`w`) are
+always in the command palette.
 
-## Modes (registers)
+## Views (5, nav-driven, hotkeys 1–5)
 
-- **Explorer** — plain-language copy, FK grade ≤ 8 (glossary-driven).
-- **Lab** — technical copy (Pareto fronts, σ_max(J), burst strata).
+| Key | Label | Purpose |
+|-----|-------|---------|
+| `monitor` | Monitor | Liveness, health tiles, loss curve, budget burn-down, activity feed, driver intent |
+| `atlas` | Atlas | Discovery map (UMAP + filterable table), Pareto trade-offs, parallel-coordinates objectives, figure gallery |
+| `defects` | Defects | Defect funnel + constitution + lineage + episodes |
+| `evolution` | Evolution | Probe analytics, stagnation, genome health, mutations, veto log |
+| `evidence` | Evidence | CEEC beliefs, experiments, decisions (read-only; ledger writes stay in `ceec.run`) |
 
-The header mode toggle publishes `ModeChanged` on the event bus; the visible
-view re-renders in place.
-
-## Views (4, nav-driven)
-
-| Key | Label | Icon | Purpose |
-|-----|-------|------|---------|
-| `monitor` | Monitor | 📊 | Live liveness, health tiles, loss curve, activity feed, driver intent, session delta |
-| `atlas` | Atlas | 🗺 | Discovery map (UMAP + table toggle), Pareto trade-offs, figure gallery |
-| `repair` | Repair | 🔧 | Defect funnel (status + copy unquarantine) + maturation tree |
-| `compose` | Compose | 🎛 | Proven recipe cards → DialComposer with live validation → copy `comp campaign run` command |
-
-## Extensible Panels (16, via tabs / command palette / overlays)
+## Extensible Panels (via tabs / command palette / drawers)
 
 ### Monitor tabs
-- **Activity Feed** — Live event stream with pause/batch controls
+- **Activity Feed** — Live event stream
 - **Field Reports** — Alerts and notifications
+- **Budget** — Burn-down, cells/hour throughput, maturation counts, cost spread
 
 ### Atlas tabs
 - **Trade-offs** — Pareto strip with objective-pair selector
+- **Objectives** — Parallel coordinates over measured cells (axis picker up
+  to 6, front highlighted, CSV + standalone-HTML export, inspect→forensics)
 - **Campaigns** — Campaign card gallery
 - **Preview** — Auto-evolve preview shelf
-- **Region Naming** — Map region label editor
+- **Regions** — Map region labels
 - **Team** — Team wall with member progress
 
-### Repair tabs (Lab only)
+### Atlas drawer
+- **Cell forensics** — Click a table row: coordinate, objectives, Pareto
+  status, bursts/maturity, stability instruments, defect excerpts.
+  Promote/unquarantine/deep-tier buttons are daemon-gated (disabled +
+  tooltip without `--daemon-url`; the daemon has no per-cell endpoints yet,
+  so they stay disabled until it does).
+- **Filters** — Facet chips per recorded axis (dynamics/credit/update/
+  topology), outcome, maturity, text search. Filters apply to the table;
+  the map figure shows all cells.
+
+### Defects tabs
 - **Constitution** — System health invariants
 - **Lineage** — Genome phylogeny viewer
 - **Episodes** — Episode timeline
 
-### Compose tabs (Lab only)
-- **Probe Analytics** — Probe batch metrics
+### Evolution tabs
+- **Probes** — Probe batch metrics
 - **Stagnation** — Diversity alerts
-- **Genome Health** — Fitness history tracker
+- **Genome** — Fitness history tracker
 - **Mutations** — Mutation proposal explorer
-- **Veto Log** — Veto entry history
+- **Veto log** — Veto entry history
 
-### Overlays (conditional)
-- **Progress** — Badges/Quests/Records (modal, `--gamify`)
-- **Workshop** — Recipe editor (modal, `--ui-actions`)
+### Overlays (always available via palette)
+- **Progress** — Badges/Quests/Records (modal, `b`)
+- **Workshop** — Recipe editor (modal, `w`)
 
 ## Architecture
 
@@ -85,20 +90,23 @@ flowchart LR
     subgraph producers
         POLL[Artifact poll timer]
         CFG[Config watcher: campaign.yaml + heartbeat.json]
-        WS[WebSocket consumers: events + telemetry]
+        WS[WebSocket: single stream topic]
     end
     subgraph bus[EventBus]
         AC[ArtifactChanged]
         CC[ConfigChanged]
-        MC[ModeChanged]
-        WE[WebSocketEvent]
+        WE[WebSocketEvent topic=stream]
     end
     subgraph app[DashboardApp]
         SNAP[render_snapshot — one per refresh cycle]
         ADP[DataAdapter + AdapterContext]
         VIEWS[view.update_data + render]
         TABS[tab panels]
-        EXT[extensions: palette, gamify, workshop]
+        EXT[extensions: palette, progress, workshop]
+    end
+    subgraph interaction[ui/state.py signals]
+        SEL[selected_cell_key]
+        FLT[atlas_filters]
     end
     POLL --> AC
     CFG --> CC
@@ -108,16 +116,27 @@ flowchart LR
     SNAP --> ADP
     ADP --> VIEWS
     ADP --> TABS
+    SEL --> VIEWS
+    FLT --> VIEWS
 ```
 
-- **ViewRegistry** (`computronium/ui/view_registry.py`) — declarative registration of views, panels, and extensions with visibility modes.
+- **ViewRegistry** (`computronium/ui/view_registry.py`) — declarative
+  registration of views and panels with plain labels; `PAGE | TAB | MODAL |
+  DRAWER` placements, no mode or flag gating.
 - **DataAdapter** (`computronium/ui/data_adapters.py`) — pure
   `adapt(AdapterContext) -> PanelData`; context carries `root`, one shared
-  `DashboardSnapshot`, and the optional recognition store.
+  `DashboardSnapshot`, and the optional recognition store. Panels never do
+  I/O and never poll.
+- **Interaction state** (`computronium/ui/state.py`) — `selected_cell_key`
+  and `atlas_filters` signals are the only push state (selection, filters,
+  density, scrub cursor).
+- **Stream** — one WebSocket topic `stream` with a typed envelope
+  (`computronium/autoscientist/stream_protocol.py`); the daemon handshake
+  negotiates the protocol version.
 - **EventBus** (`computronium/ui/event_bus.py`) — sync/async pub/sub;
   `ArtifactChanged` carries `root` (foreign roots are dropped).
-- **KB loads** are mtime-keyed cached; `pareto_top` is O(n log n) on
-  2-objective fronts.
+- **KB loads** are mtime-keyed cached; cell keys are canonical 4-part
+  `dynamics|credit|update|topology`.
 - **Observability**: `GET /metrics` (stdlib counters + reservoir summaries —
   `dashboard_snapshot_seconds`, `dashboard_adapter_seconds`,
   `dashboard_ws_events_total`).
@@ -128,17 +147,17 @@ flowchart LR
 
 1. **Add a view** — add a `ViewSpec` to the registry in `computronium/ui/dashboard.py`
    with a factory returning a `BasePanel` and an optional `adapter_key`.
-2. **Add a panel** — add a `PanelSpec` to a view's `tabs` or as a standalone modal/drawer/overlay.
+2. **Add a panel** — add a `PanelSpec` to a view's `tabs` or as a standalone modal/drawer.
 3. **Add an adapter** — pure function `(DashboardSnapshot, root) -> dataclass`
    wrapped with `make_adapter`; register it in `ADAPTERS`
-   (`computronium/ui/adapters.py`).
+   (`computronium/ui/adapters.py`). Per-cell adapters (forensics) take a key
+   resolved from `selected_cell_key` instead of joining `ADAPTERS`.
 4. **Give the panel an `update_data`** — otherwise adapter payloads are
    dropped by the `BasePanel` no-op.
 5. **Optional bus subscription** — `event_bus.subscribe(EventType, handler)`
    for live updates; publish on the bus instead of reaching into views.
-6. **Glossary** — add explorer/lab strings to `computronium/ui/glossary.json`
-   (`scripts/lint_readability.py` reports FK grades as informational —
-   short technical labels are known heuristic false-positives, not a gate).
+6. **Optional story** — one module in `computronium/ui/stories/` rendering
+   the panel standalone against a real root for visual development.
 
 ## Tests
 
@@ -146,24 +165,10 @@ flowchart LR
 |------|------|
 | Views render populated + empty | `tests/ui/test_dashboard_render.py` |
 | Interactions / WS routing | `tests/ui/test_dashboard_interactions.py` |
-| D3 rebuild + X4 multi-root + X5 hot-reload | `tests/ui/test_dashboard_state.py` |
+| Multi-root + hot-reload | `tests/ui/test_dashboard_state.py` |
 | Row virtualization caps | `tests/ui/test_row_virtualization.py` |
-| Grayscale distinguishability (UX-L6) | `tests/ui/test_ux_l6_grayscale.py` |
-| axe scan, 0 critical/serious (UX-L5/C4) | `tests/a11y/test_ux_l5_a11y.py` |
-| Adapter equivalence (UX-L15) | `tests/property/test_ux_l15_adapter_equivalence.py` |
-| EventBus delivery (UX-L16) | `tests/property/test_ux_l16_eventbus_delivery.py` |
-| Performance budgets (D2) | `tests/perf/test_budgets.py` (by path — not in `testpaths`) |
+| Adapter purity + determinism | `tests/unit/test_adapters.py` (+ `test_budget_evidence.py`, `test_forensics_filters.py`, `test_objective_export.py`) |
+| EventBus delivery | `tests/property/test_ux_l16_eventbus_delivery.py` |
 
-NiceGUI `Screen` tests register pages **inside the test** (the plugin resets
-routes between tests) and need `selenium` + the vendored
-`tests/a11y/fixtures/axe.min.js`.
-
-## Known Test Limitation
-
-Running the full `tests/ui/` suite in one process can hit a NiceGUI shared-client
-deletion cascade (fixtures like `screen` spin up a selenium server whose
-teardown deletes the auto-index client, breaking later headless builds). The
-fix is marker-based skip (`--capture-screenshots`) so selenium fixtures never
-instantiate without the flag. Core tests (integration, property, adapter
-equivalence) run in isolation and pass. For full UI suite, use `pytest -p no:nicegui`
-or run test files separately.
+Screenshot generation is a manual dev workflow
+(`scripts/generate_dashboard_screenshots.py`), not a CI gate.

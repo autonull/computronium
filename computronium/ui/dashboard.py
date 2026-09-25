@@ -47,10 +47,12 @@ from computronium.ui.components import (
     LineageViewer,
     MonitorView,
     MutationExplorer,
+    ObjectiveExplorerPanel,
     ProbeAnalytics,
     ProgressPanel,
     RegionNaming,
     RepairBench,
+    ScrubberPanel,
     StagnationDashboard,
     TeamWall,
     TradeoffsPanel,
@@ -193,6 +195,10 @@ def _make_budget() -> BudgetPanel:
     return BudgetPanel()
 
 
+def _make_objective_explorer() -> ObjectiveExplorerPanel:
+    return ObjectiveExplorerPanel()
+
+
 # Register core views with their tabs
 # Monitor tabs
 class _ActivityFeedPanel(ActivityFeed, BasePanel):
@@ -264,6 +270,10 @@ class _EvidencePanel(EvidencePanel):
         EvidencePanel.__init__(self)
 
 
+def _make_scrubber() -> ScrubberPanel:
+    return ScrubberPanel()
+
+
 # Monitor tabs
 registry.register_view(
     ViewSpec(
@@ -301,6 +311,16 @@ registry.register_view(
                 placement=PanelPlacement.TAB,
                 parent_view="monitor",
                 order=2,
+            ),
+            PanelSpec(
+                key="scrubber",
+                label="Scrubber",
+                icon="history",
+                factory=_make_scrubber,
+                adapter_key="scrubber",
+                placement=PanelPlacement.TAB,
+                parent_view="monitor",
+                order=3,
             ),
         ],
     )
@@ -366,6 +386,16 @@ registry.register_view(
                 placement=PanelPlacement.TAB,
                 parent_view="atlas",
                 order=4,
+            ),
+            PanelSpec(
+                key="objective_explorer",
+                label="Objectives",
+                icon="parallel_coords",
+                factory=_make_objective_explorer,
+                adapter_key="objective_explorer",
+                placement=PanelPlacement.TAB,
+                parent_view="atlas",
+                order=5,
             ),
         ],
     )
