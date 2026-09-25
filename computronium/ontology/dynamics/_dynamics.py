@@ -893,13 +893,27 @@ def _compute_bias_energy(
 
 
 class _SettleTelemetry:
-    """Records the horizon (steps actually used) of the most recent settle."""
+    """Records the horizon (steps actually used) and the early stop of the
+    most recent settle.
+
+    ``_settle_steps_used`` is truth telemetry: it counts the steps that
+    actually ran. ``_converged`` is the loop's stop signal and must stay
+    separate -- a loop that tests ``_settle_steps_used`` for early exit
+    breaks on the first iteration, because the horizon is non-zero by the
+    time the body runs.
+    """
 
     config: StateDynamicsConfig  # provided by every concrete dynamics class
     _settle_steps_used: int = 0
+    _converged: bool = False
 
     def _note_settle_start(self) -> None:
-        self._settle_steps_used = self.config.max_steps
+        self._converged = False
+        self._settle_steps_used = 0
+
+    def _mark_converged(self, step: int) -> None:
+        self._settle_steps_used = step + 1
+        self._converged = True
 
 
 class EnergyMinimizationDynamics(_SettleTelemetry):
@@ -1117,11 +1131,12 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                 self._velocity,
                 use_reentrant=False,
             )
+            self._settle_steps_used = step + 1
 
             self._track_free_energy_and_check_convergence(
                 all_acts, geometry, step, prev_output, on_step
             )
-            if self._settle_steps_used > 0:
+            if self._converged:
                 break
         return all_acts
 
@@ -1140,14 +1155,14 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             new_acts, new_velocity = kernel.step(all_acts, beta, target, self._velocity)
             if new_velocity is not None:
                 self._velocity = new_velocity
+            self._settle_steps_used = step + 1
 
             self._track_free_energy_and_check_convergence(
                 new_acts, geometry, step, all_acts[-1], on_step
             )
-            if self._settle_steps_used > 0:
-                all_acts = new_acts
-                break
             all_acts = new_acts
+            if self._converged:
+                break
         return all_acts
 
     def _track_free_energy_and_check_convergence(
@@ -1159,16 +1174,17 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None,
     ) -> None:
         """Track free energy and check convergence criteria."""
-        if self._free_energy_history is not None:
+        if self._free_energy_history is not None or on_step is not None:
             energy_val = _compute_hopfield_energy(acts, geometry).item()
-            self._free_energy_history.append(energy_val)
+            if self._free_energy_history is not None:
+                self._free_energy_history.append(energy_val)
             if on_step is not None:
                 on_step(step, energy_val)
 
         if step >= self.config.convergence_start:
             delta = torch.dist(acts[-1], prev_output, p=float("inf")).item()
             if delta < self.config.convergence_threshold:
-                self._settle_steps_used = step + 1
+                self._mark_converged(step)
 
     def _finalize_settle(
         self,
@@ -1308,12 +1324,10 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None,
     ) -> None:
         """Track free energy for recurrent settling."""
-        if (
-            self.config.track_free_energy_per_iter
-            and self._free_energy_history is not None
-        ):
+        if self._free_energy_history is not None or on_step is not None:
             fe = error.pow(2).sum().item()
-            self._free_energy_history.append(fe)
+            if self._free_energy_history is not None:
+                self._free_energy_history.append(fe)
             if on_step is not None:
                 on_step(step, fe)
 
@@ -1471,9 +1485,8 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
         for step in range(self.config.max_steps):
             new_acts, _ = kernel.step(all_acts, beta, target, None)
-            if self.config.track_free_energy_per_iter and (
-                self._free_energy_history is not None
-            ):
+            self._settle_steps_used = step + 1
+            if self._free_energy_history is not None or on_step is not None:
                 # Free energy in predictive coding = squared prediction errors
                 fe = 0.0
                 for i, (w, b) in enumerate(
@@ -1483,14 +1496,15 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                     if b is not None:
                         pred = pred + b
                     fe += (new_acts[i + 1] - pred).pow(2).sum().item()
-                self._free_energy_history.append(fe)
+                if self._free_energy_history is not None:
+                    self._free_energy_history.append(fe)
                 if on_step is not None:
                     on_step(step, fe)
             if step >= self.config.convergence_start:
                 delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
                     all_acts = new_acts
-                    self._settle_steps_used = step + 1
+                    self._mark_converged(step)
                     break
             all_acts = new_acts
 
@@ -1647,6 +1661,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
                     for new, old in zip(new_eps, eps, strict=True)
                 )
             eps = [e.detach().requires_grad_(True) for e in new_eps]
+            self._settle_steps_used = step + 1
 
             if on_step is not None:
                 on_step(step, delta)
@@ -1655,7 +1670,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
                 step >= self.config.convergence_start
                 and delta < self.config.convergence_threshold
             ):
-                self._settle_steps_used = step + 1
+                self._mark_converged(step)
                 break
 
         states, _ = self._build_forward_with_errors(
@@ -1782,7 +1797,7 @@ class PCALMDynamics(_SettleTelemetry):
             )
         else:
             acts = self._eager_relaxation(
-                acts, dual_vars, layered, op, target, current_rho
+                acts, dual_vars, layered, op, target, current_rho, on_step
             )
 
         # Finalize
@@ -1938,8 +1953,13 @@ class PCALMDynamics(_SettleTelemetry):
         op: ForwardOp,
         target: Tensor | None,
         rho: float | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> list[Tensor]:
         """Eager primal-dual loop: per-iteration energy tracking + early exit."""
+        # Each phase (free, then nudged) is its own settle: reset the horizon
+        # and the convergence latch, or the nudged phase inherits the free
+        # phase's stop flag and exits after a single step.
+        self._note_settle_start()
         num_layers = len(layered.weights)
         current_rho = rho if rho is not None else self.config.rho
         alpha = self.config.prospective_leak
@@ -1982,6 +2002,7 @@ class PCALMDynamics(_SettleTelemetry):
             layered,
             op,
             current_rho,
+            on_step,
         )
         return acts
 
@@ -2089,6 +2110,7 @@ class PCALMDynamics(_SettleTelemetry):
         layered: LayeredParams,
         op: ForwardOp,
         current_rho: float,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> list[Tensor]:
         """Run the relaxation loop with optional checkpointing."""
         if use_checkpointing:
@@ -2101,20 +2123,36 @@ class PCALMDynamics(_SettleTelemetry):
                     )
                 else:
                     acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
+                self._settle_steps_used = step + 1
 
                 self._track_augmented_lagrangian_and_check_convergence(
-                    acts, dual_vars, constraints, layered, op, current_rho, step
+                    acts,
+                    dual_vars,
+                    constraints,
+                    layered,
+                    op,
+                    current_rho,
+                    step,
+                    on_step,
                 )
-                if self._settle_steps_used > 0:
+                if self._converged:
                     return acts
         else:
             for step in range(self.config.max_steps):
                 acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
+                self._settle_steps_used = step + 1
 
                 self._track_augmented_lagrangian_and_check_convergence(
-                    acts, dual_vars, constraints, layered, op, current_rho, step
+                    acts,
+                    dual_vars,
+                    constraints,
+                    layered,
+                    op,
+                    current_rho,
+                    step,
+                    on_step,
                 )
-                if self._settle_steps_used > 0:
+                if self._converged:
                     return acts
         return acts
 
@@ -2127,19 +2165,22 @@ class PCALMDynamics(_SettleTelemetry):
         op: ForwardOp,
         current_rho: float,
         step: int,
+        on_step: Callable[[int, float], None] | None,
     ) -> None:
         """Track augmented Lagrangian and check convergence."""
-        if self._free_energy_history is not None:
-            self._free_energy_history.append(
-                self._compute_augmented_lagrangian(
-                    acts, dual_vars, layered, op, current_rho
-                ).item()
-            )
+        if self._free_energy_history is not None or on_step is not None:
+            lagrangian = self._compute_augmented_lagrangian(
+                acts, dual_vars, layered, op, current_rho
+            ).item()
+            if self._free_energy_history is not None:
+                self._free_energy_history.append(lagrangian)
+            if on_step is not None:
+                on_step(step, lagrangian)
 
         if step >= self.config.convergence_start:
             constraint_norm = max(c.abs().max().item() for c in constraints)
             if constraint_norm < self.config.convergence_threshold:
-                self._settle_steps_used = step + 1
+                self._mark_converged(step)
 
     def _compute_augmented_lagrangian(
         self,
@@ -2275,7 +2316,13 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
                 else None
             )
             return self._settle_layered(
-                state, x, layered, substrate, target, nudge_beta=nudge_beta
+                state,
+                x,
+                layered,
+                substrate,
+                target,
+                nudge_beta=nudge_beta,
+                on_step=on_step,
             )
 
         h = substrate.initial_state(x)
@@ -2317,6 +2364,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         target: Tensor | None,
         *,
         nudge_beta: float | None = None,
+        on_step: Callable[[int, float], None] | None = None,
     ) -> CompositeState:
         """Layer-wise LIF settle over the geometry's Linear transitions.
 
@@ -2348,6 +2396,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         spike_rasters: list[list[Tensor]] = []  # [layer][step] = [batch, neurons]
         threshold = self._spike_threshold
 
+        step_index = 0
         for weight, bias in layer_params:
             if use_compiled:
                 assert bias is not None  # guarded: compiled requires biases  # ruff: ignore[assert]
@@ -2369,6 +2418,12 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
                     spike_counts.append(spikes.float().sum(dim=1))
                     layer_rasters.append(spikes.float())  # [batch, neurons]
                     v = torch.where(spikes, torch.zeros_like(v), v)
+                    self._settle_steps_used = step_index + 1
+                    if on_step is not None:
+                        # Membrane potential stands in for energy: a LIF
+                        # settle has no scalar free energy.
+                        on_step(step_index, v.pow(2).sum().item())
+                    step_index += 1
                 spike_rasters.append(layer_rasters)
                 h = v
             acts.append(h)
@@ -2673,12 +2728,13 @@ class LazyStateDynamics(_SettleTelemetry):
             max_delta = self._run_sweep(
                 acts, weights, biases, activations, params, op, beta, target
             )
+            self._settle_steps_used = sweep + 1
             if on_step is not None:
                 on_step(sweep, max_delta)
             if sweep >= self.config.convergence_start:
                 self._activation_cache[sweep] = [a.clone() for a in acts]
                 if max_delta < self.config.convergence_threshold:
-                    self._settle_steps_used = sweep + 1
+                    self._mark_converged(sweep)
                     break
 
         return _create_output_state(

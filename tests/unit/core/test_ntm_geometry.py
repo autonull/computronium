@@ -199,13 +199,19 @@ class TestNtmCopyLearnability:
 
     def test_bptt_learns_copy_mechanics(self) -> None:
         """The §20 gate at promotion scale: short-BPTT on L=4 copy descends
-        materially and beats the 0.5 all-bit chance on a fresh draw."""
+        materially and beats the 0.5 all-bit chance on a fresh draw.
+
+        600 steps, not 1200: the measured curve on this seed is 0.88 @200,
+        0.95 @400, 1.00 @600 and flat thereafter, so 600 already reaches
+        the ceiling against a 0.6 gate. Extra steps bought no signal and
+        doubled the walltime.
+        """
         geometry = _geometry()
         opt = torch.optim.Adam(geometry.parameters(), lr=1e-3)
         gen = torch.Generator().manual_seed(7)
         seq = 4
         first_loss = 0.0
-        for step in range(1200):
+        for step in range(600):
             bits = torch.randint(0, 2, (16, seq), generator=gen)
             inputs = _copy_inputs(bits, geometry.config.mem_width)
             logits, _mem = geometry.episode(inputs, grad=True)
@@ -220,5 +226,5 @@ class TestNtmCopyLearnability:
                 first_loss = float(loss.detach())
         acc = self._copy_acc(geometry, seq)
         assert acc > 0.6, (
-            f"copy acc {acc:.3f} after 1200 steps (first loss {first_loss:.3f})"
+            f"copy acc {acc:.3f} after 600 steps (first loss {first_loss:.3f})"
         )

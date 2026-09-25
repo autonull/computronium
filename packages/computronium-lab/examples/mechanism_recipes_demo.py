@@ -16,26 +16,39 @@ from computronium_lab.recipes import build_recipe
 
 if TYPE_CHECKING:
     from local_feedback import AdaptiveFeedback
-    from psi_peft import AdaptivePsiReadout
 
 
 def _temporal_psi_segment(lab: Lab) -> None:
-    """Fit the temporal-ψ readout on a frozen-feature task, then flip it."""
+    """Fit the temporal-ψ readout on a frozen-feature task, then flip it.
 
-    readout: AdaptivePsiReadout = build_recipe(  # type: ignore[assignment]
-        "temporal_psi", feature_dim=64, num_classes=4
-    )
+    ``temporal_psi`` composes a full backbone+ψ System (it replaced the bare
+    ``AdaptivePsiReadout``, which no longer survives the continual path), so
+    the segment drives it through ``lab.adapt`` for the ψ re-solve and
+    ``run_forward`` for the probe. Driving it as a bare readout called a
+    non-callable ``System.update`` attribute.
+    """
+    from computronium.core.pipeline import run_forward
+
+    system = build_recipe("temporal_psi", feature_dim=64, num_classes=4)
     gen = torch.Generator().manual_seed(lab.seed)
     basis = torch.randn(64, 4, generator=gen) * 3.0
     probe = torch.randn(64, 64, generator=gen)
+
+    with torch.no_grad():
+        logits = run_forward(system.substrate, system.geometry, system.dynamics, probe)
     for phase in ("task_A", "task_B_conflict"):
         sign = 1.0 if phase == "task_A" else -1.0
+        episodes = []
         for _ in range(8):
             h = torch.randn(32, 64, generator=gen)
-            y = ((h @ basis) * sign).argmax(-1)
-            readout.update(h, y)
+            episodes.append((h, ((h @ basis) * sign).argmax(-1)))
+        lab.adapt(system, episodes, episodes=len(episodes))
+        with torch.no_grad():
+            logits = run_forward(
+                system.substrate, system.geometry, system.dynamics, probe
+            )
         y = ((probe @ basis) * sign).argmax(-1)
-        acc = float((readout.forward(probe).argmax(-1) == y).float().mean())
+        acc = float((logits.argmax(-1) == y).float().mean())
         print(f"temporal_psi {phase}: probe acc={acc:.2f}")
 
 

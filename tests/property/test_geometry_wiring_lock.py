@@ -18,7 +18,6 @@ surface impossible:
 
 import dataclasses
 import inspect
-import re
 from pathlib import Path
 
 import computronium.ontology.geometry as geometry_module
@@ -66,12 +65,20 @@ def test_config_classmethods_dispatch_and_round_trip() -> None:
         assert geometry.config == config, name
 
 
+def _dispatch_aliases() -> set[str]:
+    """Alias literals the dispatcher actually accepts.
+
+    Read from the dispatch tables rather than by scanning source text: the
+    dispatcher is table-driven, so a regex over its body found nothing and
+    the lock silently degraded to "covers 0 classes".
+    """
+    return set(geometry_module._GEOMETRY_FACTORIES) | set(
+        geometry_module._GEOMETRY_DISPATCH
+    )
+
+
 def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
-    source = inspect.getsource(geometry_from_config)
-    aliases: set[str] = set()
-    for group in re.findall(r"in \(([^)]*)\)", source):
-        aliases.update(re.findall(r'"(\w+)"', group))
-    aliases.update(re.findall(r'== "(\w+)"', source))
+    aliases = _dispatch_aliases()
     classes = _geometry_classes()
     resolved: set[str] = set()
     for alias in aliases:
@@ -85,6 +92,7 @@ def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
             recurrent_weight=None,
         )
         resolved.add(type(geometry_from_config(config)).__name__)
+    assert aliases, "dispatch tables are empty"
     assert resolved <= classes, (
         f"dispatch aliases resolve outside geometry.py: {resolved - classes}"
     )

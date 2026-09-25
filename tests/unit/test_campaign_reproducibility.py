@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from computronium.autoscientist.bridge import ExperimentProposal
@@ -48,11 +49,16 @@ class _FakeProposer:
 
 
 def test_geometry_execution_is_bit_for_bit_reproducible(tmp_path: Path) -> None:
+    # One epoch is enough to prove the property: the claim is that two
+    # identically-seeded executions emit identical metrics, not that the
+    # cell learned anything. The default 5-epoch budget made this the
+    # single most expensive test in the suite (~42s) for no extra signal.
+    proposal = replace(PROPOSAL, hyperparams={**PROPOSAL.hyperparams, "epochs": 1})
     campaign = make_campaign(tmp_path)
     histories = []
     for _ in range(2):
         seed_everything(1234, deterministic=True)
-        result = campaign._execute_proposal(PROPOSAL)
+        result = campaign._execute_proposal(proposal)
         assert result["status"] == "completed"
         assert int(str(result["epochs_completed"])) > 0
         histories.append(json.dumps(result["metrics"], sort_keys=True))

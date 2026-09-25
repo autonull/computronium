@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+import os
+import shutil
 from io import StringIO
 from logging import Logger
 
+import pytest
+
 from computronium.execution.dashboard import BRAILLE_FRAMES, PURE, Dashboard
+
+# The status line is truncated to the ambient terminal width, so content
+# assertions are only meaningful against a pinned width. Under a narrow or
+# piped terminal (``pytest -n``, CI) the default 80 columns clipped
+# "New SOTA: 87.5% (tile_pc)" to "New SOTA: 87.5% " and the assertion
+# failed on width alone.
+WIDE_TERMINAL = os.terminal_size((200, 24))
+
+
+@pytest.fixture(autouse=True)
+def _pinned_terminal_width(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        shutil, "get_terminal_size", lambda *_args, **_kwargs: WIDE_TERMINAL
+    )
 
 
 def test_dashboard_exports_standard_logger() -> None:

@@ -249,7 +249,9 @@ class VectorStore:
             "backend": self.backend.value,
             "vector_index_size": len(self.vector_ids)
             if self.backend == VectorBackend.FAISS
-            else len(self._ids) if self.backend == VectorBackend.SKLEARN else 0,
+            else len(self._ids)
+            if self.backend == VectorBackend.SKLEARN
+            else 0,
             "has_embeddings": self.embedding_model is not None,
             "embedding_model": self.config.embedding_model,
             "vector_dim": self.config.vector_dim,
@@ -259,7 +261,7 @@ class VectorStore:
     def vector_index(self):
         """Backward compatibility: return FAISS index or None."""
         if self.backend == VectorBackend.FAISS:
-            return self._vector_index if hasattr(self, '_vector_index') else None
+            return self._vector_index if hasattr(self, "_vector_index") else None
         return None
 
     @vector_index.setter
@@ -267,7 +269,7 @@ class VectorStore:
         """Backward compatibility setter for FAISS index."""
         if self.backend == VectorBackend.FAISS:
             self._vector_index = value
-            if hasattr(self, 'vector_ids'):
+            if hasattr(self, "vector_ids"):
                 pass  # Already initialized
 
     def persist(self) -> None:
@@ -318,7 +320,9 @@ class VectorStore:
                         self._ids = json.load(f)
                     # Refit the index
                     n_neighbors = min(10, len(self._ids))
-                    self._nn = NearestNeighbors(n_neighbors=n_neighbors, metric="cosine")
+                    self._nn = NearestNeighbors(
+                        n_neighbors=n_neighbors, metric="cosine"
+                    )
                     self._nn.fit(self._vectors)
                     logger.info(
                         "Loaded persisted sklearn index with %d vectors",

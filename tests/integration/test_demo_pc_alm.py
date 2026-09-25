@@ -9,10 +9,16 @@ PC-ALM replaces global backprop with layer-local primal–dual dynamics:
 
 Weight update (local Hebbian): ΔW_l ∝ -λ_l @ h_{l-1}^T
 
-Demonstrated regime (re-pinned 2026-09-15): MNIST quick-mode, 1 epoch over capped
+Demonstrated regime (re-pinned 2026-09-25): MNIST quick-mode, 1 epoch over capped
 stream, hidden (128, 128), PCALMDynamics(max_steps=60, step_size=0.2, rho=1.0,
 prospective_leak=0.0, beta=0.5, compiled=True), PCALMCredit(beta=0.5),
-EuclideanUpdate(step_size=0.02) -> accuracy ≈ 26% (chance 0.1).
+EuclideanUpdate(step_size=0.02) -> accuracy ≈ 49% (chance 0.1).
+
+The stream cap was halved (600 -> 300 batches) on 2026-09-25: it runs 1.8x
+faster *and* reaches higher train accuracy, because the settle loop now
+actually relaxes (it used to stop after one step, which also made this
+test marginal against the 120s timeout under ``pytest -n``). The 0.25
+floor went from a 0.26-vs-0.25 sliver to a 0.49-vs-0.25 margin.
 """
 
 from itertools import islice
@@ -38,7 +44,7 @@ from computronium import (
 )
 from computronium.visualization import bars_panel, figure_spec
 
-BATCH_CAP = 600  # loader cap (Register C): suite walltime
+BATCH_CAP = 300  # loader cap (Register C): suite walltime
 
 
 def _flatten(loader, cap=BATCH_CAP):

@@ -13,6 +13,9 @@ Tests the canonical contract from the StateDynamics protocol docstring:
   and use the returned state
 """
 
+import itertools
+import math
+
 import pytest
 import torch
 from hypothesis import given, settings
@@ -438,28 +441,53 @@ class TestComputeEnergyContract:
 
 
 class TestOnStepCallback:
-    """Test on_step callback if provided."""
+    """``on_step`` fires at each settle step with (step_index, energy).
 
-    @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
+    Ratchet: the callback used to be nested inside the free-energy tracking
+    guard, so with the default ``track_free_energy_per_iter=False`` it was a
+    silent no-op -- and the old assertion (``isinstance(steps_called, list)``)
+    passed either way. The protocol docstring makes the cadence load-bearing:
+    it is the live-telemetry channel.
+    """
+
+    # Single-pass and lazily-resolved dynamics have no settle loop to report.
+    @pytest.mark.parametrize(
+        "dynamics_cls",
+        [
+            cls
+            for cls in DYNAMICS_CLASSES
+            if cls not in {InstantaneousDynamics, LazyStateDynamics}
+        ],
+    )
     def test_on_step_called_if_provided(self, dynamics_cls):
-        """on_step callback should be called at each step if provided."""
+        """on_step fires once per settle step, without telemetry enabled."""
         config = DYNAMICS_CONFIGS[dynamics_cls]()
+        assert config.track_free_energy_per_iter is False, (
+            "this lock is only meaningful with per-step tracking off"
+        )
         dynamics = dynamics_cls(config)
         geometry, substrate = _make_geometry_and_substrate()
-        x = torch.randn(2, 8)
-        state = _make_state(x)
+        state = _make_state(torch.randn(2, 8))
 
-        steps_called = []
-
-        def on_step(step: int, energy: float):
-            steps_called.append((step, energy))
+        steps_called: list[tuple[int, float]] = []
 
         with torch.no_grad():
-            dynamics.settle(state, geometry, substrate, target=None, on_step=on_step)
+            dynamics.settle(
+                state,
+                geometry,
+                substrate,
+                target=None,
+                on_step=lambda step, energy: steps_called.append((step, energy)),
+            )
 
-        # Some implementations may not call on_step if they converge early
-        # or use compiled path - just verify it doesn't crash
-        assert isinstance(steps_called, list)
+        assert steps_called, f"{dynamics_cls.__name__} never invoked on_step"
+        indices = [step for step, _ in steps_called]
+        assert indices == sorted(indices), "on_step steps out of order"
+        assert indices == list(range(len(indices))), "on_step skipped a step"
+        assert all(
+            isinstance(energy, float) and math.isfinite(energy)
+            for _, energy in steps_called
+        ), "on_step reported a non-finite energy"
 
 
 class TestDeterminism:
@@ -533,6 +561,179 @@ class TestFiniteOutputs:
         energy = dynamics.compute_energy(settled, geometry)
         assert not torch.isnan(energy).any()
         assert not torch.isinf(energy).any()
+
+
+class TestSettleHorizonTelemetry:
+    """``_settle_steps_used`` counts the steps that actually ran.
+
+    Ratchet for the dead-early-stop defect: the settle loops broke on
+    ``if self._settle_steps_used > 0`` while ``_note_settle_start`` had
+    already seeded that field with ``max_steps``. The condition was
+    therefore true before the body ever ran, so every free phase stopped
+    after one step -- the fixed point was never reached, which silently
+    degraded the EqProp energy gap and the thermo contrast credit that
+    reads it. The horizon must be truth, and the stop signal must be a
+    separate flag.
+    """
+
+    @staticmethod
+    def _counted(dynamics, state, geometry, substrate, target=None) -> int:
+        """Run a settle, counting invocations of the kernel step via on_step."""
+        seen: list[int] = []
+        dynamics.settle(
+            state,
+            geometry,
+            substrate,
+            target=target,
+            on_step=lambda step, _value: seen.append(step),
+        )
+        return len(seen)
+
+    @pytest.mark.parametrize(
+        ("factory", "dynamics_cls"),
+        [
+            (
+                lambda: StateDynamicsConfig.energy_minimization(
+                    max_steps=40, step_size=0.01, convergence_start=10_000
+                ),
+                EnergyMinimizationDynamics,
+            ),
+            (
+                lambda: StateDynamicsConfig.predictive_settling(
+                    max_steps=40, step_size=0.01, convergence_start=10_000
+                ),
+                PredictiveSettlingDynamics,
+            ),
+            (
+                lambda: StateDynamicsConfig.error_predictive_coding(
+                    max_steps=40, step_size=0.01, convergence_start=10_000
+                ),
+                ErrorPredictiveCodingDynamics,
+            ),
+        ],
+    )
+    def test_multi_step_settle_runs_many_steps(self, factory, dynamics_cls):
+        """A settle that cannot converge early runs more than one step."""
+        torch.manual_seed(11)
+        geometry, substrate = _make_geometry_and_substrate()
+        dynamics = dynamics_cls(factory())
+
+        # convergence_start past the horizon => convergence is unreachable,
+        # so the loop is forced to run the full budget.
+        steps = self._counted(
+            dynamics, _make_state(torch.randn(4, 8)), geometry, substrate
+        )
+        assert steps == dynamics.config.max_steps, (
+            f"{dynamics_cls.__name__} ran {steps} steps, expected the full "
+            f"{dynamics.config.max_steps}"
+        )
+
+    def test_horizon_field_matches_steps_actually_run(self):
+        """``_settle_steps_used`` is not a pre-seeded placeholder."""
+        torch.manual_seed(12)
+        geometry, substrate = _make_geometry_and_substrate()
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=40, step_size=0.01, track_free_energy_per_iter=True
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+
+        steps = self._counted(
+            dynamics, _make_state(torch.randn(4, 8)), geometry, substrate
+        )
+        assert dynamics._settle_steps_used == steps
+
+    def test_free_energy_history_has_one_sample_per_step(self):
+        """Tracking is per-step, so the history length pins the horizon."""
+        torch.manual_seed(13)
+        geometry, substrate = _make_geometry_and_substrate()
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=25, step_size=0.01, track_free_energy_per_iter=True
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+
+        steps = self._counted(
+            dynamics, _make_state(torch.randn(4, 8)), geometry, substrate
+        )
+        history = dynamics.get_free_energy_history()
+        assert history is not None
+        # One initial sample plus one per executed step.
+        assert len(history) == steps + 1
+
+    def test_energy_minimization_decreases_free_energy(self):
+        """The thermodynamic contract: settling descends the free energy."""
+        torch.manual_seed(14)
+        geometry, substrate = _make_geometry_and_substrate()
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=60,
+            step_size=0.05,
+            momentum=0.0,
+            track_free_energy_per_iter=True,
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+        self._counted(dynamics, _make_state(torch.randn(4, 8)), geometry, substrate)
+
+        history = dynamics.get_free_energy_history()
+        assert history is not None and len(history) > 2
+        assert history[-1] < history[0], "settling raised the free energy"
+        # Gradient descent on a convex local energy: no step may increase it
+        # by more than float noise.
+        for previous, current in itertools.pairwise(history):
+            assert current <= previous + 1e-6, (
+                f"free energy rose {previous} -> {current}"
+            )
+
+    def test_early_stop_latches_then_resets_between_settles(self):
+        """The convergence flag stops one settle and must not leak into the next."""
+        torch.manual_seed(15)
+        geometry, substrate = _make_geometry_and_substrate()
+        # A horizon that cannot converge: the only way out is the full budget.
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=30, step_size=0.01, convergence_start=10_000
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+        state = _make_state(torch.randn(4, 8))
+
+        # Simulate a latch carried in from a previous settle: a loop that
+        # breaks on the flag without clearing it at settle start returns
+        # after a single step.
+        dynamics._converged = True
+        steps = self._counted(dynamics, state, geometry, substrate)
+        assert steps == config.max_steps
+        assert dynamics._converged is False
+
+    def test_convergence_latches_and_early_stops(self):
+        """A settle that reaches the fixed point stops before its horizon."""
+        torch.manual_seed(17)
+        geometry, substrate = _make_geometry_and_substrate()
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=400, step_size=0.01, convergence_threshold=1e-3
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+        steps = self._counted(
+            dynamics, _make_state(torch.randn(4, 8)), geometry, substrate
+        )
+        assert dynamics._converged is True
+        assert 0 < steps <= config.max_steps
+        # The reported horizon is the early stop, not the budget.
+        assert dynamics._settle_steps_used == steps
+
+    def test_repeated_settles_do_not_accumulate_state(self):
+        """Horizon telemetry is per-settle, not cumulative across calls."""
+        torch.manual_seed(16)
+        geometry, substrate = _make_geometry_and_substrate()
+        config = StateDynamicsConfig.energy_minimization(
+            max_steps=20,
+            step_size=0.01,
+            track_free_energy_per_iter=True,
+            convergence_start=10_000,
+        )
+        dynamics = EnergyMinimizationDynamics(config)
+        state = _make_state(torch.randn(4, 8))
+
+        counts = [self._counted(dynamics, state, geometry, substrate) for _ in range(3)]
+        assert counts == [20, 20, 20], counts
+        # A fresh history per settle, not one growing list.
+        assert len(dynamics.get_free_energy_history() or []) == 21
 
 
 if __name__ == "__main__":

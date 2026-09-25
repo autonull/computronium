@@ -41,8 +41,29 @@ if TYPE_CHECKING:
 
     from plotly.graph_objects import Figure as go_Figure
 
-_KB_LOAD_CACHE: dict[tuple[str, int, int, object], object] = {}
+_KB_LOAD_CACHE: dict[tuple[str, tuple[object, ...], object], object] = {}
 _KB_CACHE_MAX_ENTRIES = 16
+
+
+def _kb_fingerprint(path: Path) -> tuple[object, ...]:
+    """Identity of the KB *data*, not just the main file.
+
+    ``KnowledgeBase`` runs SQLite in WAL mode: a commit appends to the
+    ``-wal`` sidecar and leaves the main database's mtime and size
+    untouched, so keying on the main file alone pinned the cache to the
+    rows read at first touch. Long-lived readers (the continuous campaign
+    loop, the daemon) then never observed newly measured cells, and
+    ``promote_candidates`` re-promoted cells it had already matured.
+    """
+
+    def stat_of(target: Path) -> tuple[object, ...]:
+        try:
+            info = target.stat()
+        except OSError:
+            return ("absent",)
+        return (info.st_mtime_ns, info.st_size)
+
+    return (stat_of(path), stat_of(path.with_name(f"{path.name}-wal")))
 
 
 def kb_load_cached[T](
@@ -52,18 +73,15 @@ def kb_load_cached[T](
     *,
     key_extra: object = (),
 ) -> T:
-    """mtime-keyed memo for read-only KB loads; each caller gets ``clone()``.
+    """Fingerprint-keyed memo for read-only KB loads; each caller gets ``clone()``.
 
-    Keyed on ``(path, mtime_ns, size, key_extra)`` so a campaign that grows
-    mid-run invalidates naturally. The cached value is canonical; callers
-    receive a clone (pandas CoW shallow copy / list copy) so mutation cannot
-    leak across call sites. Stale keys are dropped when the cache is full.
+    Keyed on ``(path, fingerprint, key_extra)`` where the fingerprint covers
+    the main database and its WAL sidecar, so a campaign that grows mid-run
+    invalidates naturally. The cached value is canonical; callers receive a
+    clone (pandas CoW shallow copy / list copy) so mutation cannot leak
+    across call sites. Stale keys are dropped when the cache is full.
     """
-    try:
-        stat = path.stat()
-    except OSError:
-        return loader()
-    key = (str(path), stat.st_mtime_ns, stat.st_size, key_extra)
+    key = (str(path), _kb_fingerprint(path), key_extra)
     hit = _KB_LOAD_CACHE.get(key)
     if hit is None:
         if len(_KB_LOAD_CACHE) >= _KB_CACHE_MAX_ENTRIES:
