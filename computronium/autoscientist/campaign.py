@@ -583,7 +583,7 @@ class AutoScientistCampaign:
         self._campaign_state: CampaignState | None = None
         self._config: dict[str, object] = {}
         # Optional per-batch telemetry sink forwarded to every SystemTrainer
-        # this campaign builds (TODO30 8.2). Side-channel only — never a
+        # this campaign builds. Side-channel only — never a
         # second record path; the KB stays the sole record of truth.
         self.step_callback: Callable[[Mapping[str, float]], None] | None = None
 

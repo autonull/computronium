@@ -1,4 +1,4 @@
-"""Campaign summary report (TODO30 8.8 / §7.3) — read-only assembly over
+"""Campaign summary report — read-only assembly over
 the campaign artifacts. This is the artifact a scientist takes to a paper
 or review; it never writes to the KB or ledger."""
 

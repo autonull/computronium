@@ -1,3 +1,9 @@
+> **Note (2026-09-25).** The live-window/dashboard phases of this plan
+> (`comp dashboard`, `visualization/live_atlas.py`, `demo/`) were removed
+> with the web UI. The CLI surfaces described here — `comp continuous`,
+> `comp daemon`, the defect funnel, maturation, multi-objective Pareto —
+> are unchanged.
+
 # TODO31 — Multi-Objective Autonomous Discovery & Operational Hardening
 
 > **STATUS: DRAFT rev 2 (2026-09-17).** Supersedes TODO30 §13 (remaining work) and

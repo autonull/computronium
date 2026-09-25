@@ -1,4 +1,4 @@
-"""ContinuousDaemon — headless discovery engine with a lifecycle API (TODO30 8.1).
+"""ContinuousDaemon — headless discovery engine with a lifecycle API.
 
 Wraps the budgeted burst loop (``run_burst``) in a state machine with a
 heartbeat artifact, an exclusive root lockfile, and a FastAPI surface:
@@ -8,10 +8,10 @@ heartbeat artifact, an exclusive root lockfile, and a FastAPI surface:
 - streams:   WS ``/ws/stream?v=1`` (single typed-envelope topic multiplexing
               per-batch trainer metrics + structured lifecycle events, §6.3)
 
-Boundary-based stop semantics (TODO30 §1.2): pause/stop take effect at
+Boundary-based stop semantics: pause/stop take effect at
 iteration boundaries only — a soft stop loses at most the in-flight cell's
 compute, never corrupts state. The heartbeat is the only new artifact; the
-KB/ledger/voids/defects streams are untouched (TODO30 §12.4–12.6).
+KB/ledger/voids/defects streams are untouched.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ _LOCKFILE_NAME = "continuous.lock"
 
 
 class DaemonState(StrEnum):
-    """TODO30 §1.2 state machine. No HALTED: stops are boundary-based."""
+    """Lifecycle state machine. No HALTED: stops are boundary-based."""
 
     IDLE = "idle"
     PROPOSING = "proposing"
@@ -563,7 +563,7 @@ class ContinuousDaemon:
 
     def build_app(self) -> FastAPI:
         daemon = self
-        app = FastAPI(title="computronium daemon", version="TODO30")
+        app = FastAPI(title="computronium daemon")
         self._control_post(app)
 
         @app.get("/state")

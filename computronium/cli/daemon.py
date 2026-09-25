@@ -1,4 +1,4 @@
-"""``comp daemon`` — headless discovery engine with a lifecycle API (TODO30 8.9).
+"""``comp daemon`` — headless discovery engine with a lifecycle API.
 
 Same flags as ``comp continuous`` plus ``--port`` for the FastAPI/WS server.
 ``comp continuous`` remains as the legacy alias (one release).

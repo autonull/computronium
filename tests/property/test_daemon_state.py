@@ -1,4 +1,4 @@
-"""ContinuousDaemon state machine (TODO30 8.1): boundary-based lifecycle,
+"""ContinuousDaemon state machine: boundary-based lifecycle,
 heartbeat, exclusive root lockfile, and the REST surface — all with fake
 sweeps, no training."""
 

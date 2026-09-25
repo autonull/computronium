@@ -1,4 +1,4 @@
-"""Alert threshold logic + best-effort webhook (TODO30 8.7)."""
+"""Alert threshold logic + best-effort webhook."""
 
 from __future__ import annotations
 

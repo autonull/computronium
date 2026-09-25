@@ -336,7 +336,7 @@ def pareto_top(
     directions = [o.direction for o in objectives]
 
     # Unknown objectives fail loudly: silently returning the unfiltered
-    # frame rendered fake fronts (GAME.todo3 T2).
+    # frame rendered fake fronts.
     missing = [name for name in obj_names if name not in df.columns]
     if missing:
         raise ValueError(

@@ -1,8 +1,8 @@
-"""Single-topic stream protocol (GAME.todo7 §6.3).
+"""Single-topic stream protocol.
 
 One WebSocket topic (``stream``) with a typed envelope; the daemon
 handshake negotiates the protocol version via ``?v=``. Shared by the
-daemon (producer) and the dashboard (consumer) — one data path.
+daemon (producer) and any stream client — one data path.
 """
 
 from __future__ import annotations

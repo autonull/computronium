@@ -1,3 +1,9 @@
+> **Note (2026-09-25).** The live-window/dashboard phases of this plan
+> (`comp dashboard`, `visualization/live_atlas.py`, `demo/`) were removed
+> with the web UI. The CLI surfaces described here — `comp continuous`,
+> `comp daemon`, the defect funnel, maturation, multi-objective Pareto —
+> are unchanged.
+
 # TODO29 — Continuous Discovery: Budgeted Bursts, Defect Funnel, Live Atlas
 
 > **STATUS: IMPLEMENTED (2026-09-16, Phases 1–5 landed).** The only open

@@ -49,7 +49,7 @@ class SystemTrainer:
     config: SystemTrainerConfig
     train_data: _DataProvider
     val_data: _DataProvider | None = None
-    # Optional per-batch telemetry sink (TODO30 8.2). Default no-op: a bare
+    # Optional per-batch telemetry sink. Default no-op: a bare
     # `None` check on the hot path, never blocks or errors training.
     step_callback: StepCallback | None = None
 

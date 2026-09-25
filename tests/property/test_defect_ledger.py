@@ -236,7 +236,7 @@ def test_failure_burst_emits_defect_closes_ledger_and_continues(
 def test_proposal_rationale_names_stratum_count(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """TODO30 §3.1: each proposal carries a per-cell reason string that
+    """Each proposal carries a per-cell reason string that
     reports the stratum count *before* the proposal (least-sampled first)."""
     monkeypatch.setattr(bm, "GRID_DYNAMICS", ("energy_minimization", "instantaneous"))
     monkeypatch.setattr(bm, "GRID_CREDITS", ("prediction",))

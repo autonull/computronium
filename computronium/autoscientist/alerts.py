@@ -1,4 +1,4 @@
-"""Alerting (TODO30 8.7) — daemon-side significance detection + webhook
+"""Alerting — daemon-side significance detection + webhook
 dispatch. Fires when no browser is attached; the dashboard replays toasts
 from the event stream. Alerts are notifications only — the dashboard and
 the daemon both leave the run/stop decision to the human (§9)."""
