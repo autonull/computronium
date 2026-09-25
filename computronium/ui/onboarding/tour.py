@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,19 +43,18 @@ class GuidedTour(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="guided_tour",
-            plain_explanation=(
+            plain=(
                 "A quick 3-step tour to help you get started. You can skip it "
                 "anytime and come back later from the help menu."
             ),
-            why_explanation=(
+            why=(
                 "Newcomers need a gentle entry point. The tour highlights the "
                 "three core actions: watching measurements, reading trade-offs, "
                 "and seeing repairs. It never restricts features — just guides."
             ),
-            expert_explanation=(
+            expert=(
                 "Tour steps target specific panel selectors. Completion state "
-                "persists in localStorage. Steps are register-aware: Explorer "
-                "sees plain language, Lab sees technical terms. Skippable and "
+                "persists in localStorage. Skippable and "
                 "resumable per GAME.md M3.1."
             ),
             docs_url="https://computronium.readthedocs.io/en/latest/dashboard/tour.html",
@@ -178,7 +177,7 @@ class GuidedTour(BasePanel):
                     "text-caption text-primary font-medium"
                 )
 
-                ui.label(self.tr(step.title)).classes("text-h6")
+                ui.label(step.title).classes("text-h6")
 
                 ui.label(step.content).classes("text-body")
 
@@ -271,7 +270,7 @@ class GuidedTour(BasePanel):
         return panel
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_guided_tour(

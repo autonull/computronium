@@ -9,7 +9,7 @@ from typing import ClassVar
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,15 +52,15 @@ class EpisodeTimeline(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="episode_timeline",
-            plain_explanation=(
+            plain=(
                 "This timeline shows the sleep/wake cycles of the campaign. "
                 "Consolidation happens during sleep. Genome changes only at boundaries."
             ),
-            why_explanation=(
+            why=(
                 "The campaign alternates between training (wake) and consolidation (sleep). "
                 "This makes the evolutionary architecture visible: morphology only at boundaries."
             ),
-            expert_explanation=(
+            expert=(
                 "From campaign event log. Episode boundaries = sleep/wake transitions. "
                 "Consolidation events = plastic state crystallization. "
                 "Genome changes only at boundaries (never mid-pass). "
@@ -76,16 +76,16 @@ class EpisodeTimeline(BasePanel):
     def render(self) -> ui.element:
         """Render the Episode Timeline."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("episode_timeline")
+            self.render_header("Sleep/wake boundaries")
 
             # Current episode indicator
             with ui.row().classes("w-full items-center gap-2"):
                 ui.icon(ICONS["episode"]).classes("text-xl")
-                ui.label(
-                    f"{self.tr('current_episode')}: {self.current_episode}"
-                ).classes("text-h6")
+                ui.label(f"{'Current episode'}: {self.current_episode}").classes(
+                    "text-h6"
+                )
                 ui.separator().classes("flex-1")
-                ui.label(self.tr("morphology_at_boundaries")).classes(
+                ui.label("Recipe changes only at sleep/wake boundaries").classes(
                     "text-caption text-grey"
                 )
 
@@ -101,9 +101,7 @@ class EpisodeTimeline(BasePanel):
         self._timeline_container.clear()
         with self._timeline_container:
             if not self.events:
-                ui.label(self.tr("no_episode_data")).classes(
-                    "text-grey text-center p-8"
-                )
+                ui.label("No episode data yet").classes("text-grey text-center p-8")
                 return
 
             # Group by episode
@@ -131,10 +129,8 @@ class EpisodeTimeline(BasePanel):
         with ui.row().classes("w-full items-center justify-between"):
             with ui.row().classes("items-center gap-2"):
                 if is_current:
-                    ui.badge(self.tr("current"), color="primary").classes("text-xs")
-                ui.label(f"{self.tr('episode')} {ep_events[0].episode}").classes(
-                    "text-bold"
-                )
+                    ui.badge("Current", color="primary").classes("text-xs")
+                ui.label(f"{'Episode'} {ep_events[0].episode}").classes("text-bold")
 
             if len(ep_events) >= 2:
                 duration = ep_events[-1].timestamp - ep_events[0].timestamp
@@ -192,5 +188,5 @@ class EpisodeTimeline(BasePanel):
         self._render_timeline()
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         self._render_timeline()

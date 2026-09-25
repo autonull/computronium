@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,15 +41,15 @@ class TradeoffsPanel(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="tradeoffs",
-            plain_explanation=(
+            plain=(
                 "This panel shows the best trade-offs between two goals. "
                 "Each dot is a recipe. The ruler shows how far each recipe is from the baseline."
             ),
-            why_explanation=(
+            why=(
                 "Comparing two goals at once reveals which recipes give the best balance. "
                 "The ruler anchors show performance relative to a standard baseline."
             ),
-            expert_explanation=(
+            expert=(
                 "Pareto front computed via non-dominated sorting on selected objectives. "
                 "Ruler ratios = cell_value / ruler_value for walltime and energy. "
                 "Selector options: accuracy+walltime, accuracy+params, accuracy+flops, "
@@ -81,11 +81,11 @@ class TradeoffsPanel(BasePanel):
         """Render the Trade-offs panel (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
             # Header
-            self.render_header("tradeoffs")
+            self.render_header("Trade-offs")
 
             # Objective pair selector (renamed "Compare two goals")
             with ui.row().classes("w-full items-center gap-2 mb-2"):
-                ui.label(self.tr("objective_pair")).classes("text-bold")
+                ui.label("Compare two goals").classes("text-bold")
                 selector = (
                     ui
                     .select(
@@ -99,9 +99,9 @@ class TradeoffsPanel(BasePanel):
 
                 # Permanent plain semantics line
                 ui.separator().classes("mx-2")
-                ui.label(
-                    f"{self.tr('pareto_optimal')} = {self.tr('pareto_optimal_explainer')}"
-                ).classes("text-caption text-grey")
+                ui.label(f"{'Best trade-off'} = {'Best trade-off recipes'}").classes(
+                    "text-caption text-grey"
+                )
 
             # Pareto strip
             strip_container = ui.column().classes("w-full")
@@ -123,7 +123,7 @@ class TradeoffsPanel(BasePanel):
         container.clear()
         with container:
             if not self.cells:
-                ui.label(self.tr("no_pareto_data")).classes("text-grey text-center p-4")
+                ui.label("No trade-off data yet").classes("text-grey text-center p-4")
                 return
 
             with ui.row().classes("w-full items-start gap-4 flex-wrap"):
@@ -166,7 +166,7 @@ class TradeoffsPanel(BasePanel):
             for metric in ["walltime", "energy"]:
                 if metric in cell.metrics and metric in self.ruler_metrics:
                     ratio = cell.metrics[metric] / max(self.ruler_metrics[metric], 1e-9)
-                    ui.label(f"{metric}: {ratio:.2f}× {self.tr('ruler')}").classes(
+                    ui.label(f"{metric}: {ratio:.2f}× {'baseline'}").classes(
                         "text-xs text-grey"
                     )
 
@@ -178,7 +178,7 @@ class TradeoffsPanel(BasePanel):
                 self._show_narration(cell)
 
             ui.button(
-                self.tr("guided_reading"),
+                "Guided reading",
                 icon=ICONS["info"],
                 on_click=_handler,
             ).props("flat dense size=sm").classes("text-xs")
@@ -186,20 +186,20 @@ class TradeoffsPanel(BasePanel):
     def _show_narration(self, cell: ParetoCell) -> None:
         """Show guided reading narration for a cell."""
         with ui.dialog() as dialog, ui.card().classes("w-96"):
-            ui.label(self.tr("guided_reading")).classes("text-h6 mb-2")
+            ui.label("Guided reading").classes("text-h6 mb-2")
             ui.label(
                 f"This recipe ({cell.label}) achieves "
                 f"{cell.metrics.get(self.objectives[0], 0):.3f} {self.objectives[0]} "
                 f"and {cell.metrics.get(self.objectives[1], 0):.3f} {self.objectives[1]}."
             ).classes("text-body")
             ui.separator()
-            ui.label(self.tr("reference_anchors")).classes("text-bold")
+            ui.label("Reference anchors").classes("text-bold")
             for metric in ["walltime", "energy"]:
                 if metric in cell.metrics and metric in self.ruler_metrics:
                     ratio = cell.metrics[metric] / max(self.ruler_metrics[metric], 1e-9)
                     ui.label(f"{metric}: {ratio:.2f}× baseline").classes("text-body")
             ui.separator()
-            ui.button(self.tr("close"), on_click=dialog.close).props("flat")
+            ui.button("Close", on_click=dialog.close).props("flat")
         dialog.open()
 
     def update_cells(self, cells: list[ParetoCell]) -> None:
@@ -225,7 +225,7 @@ class TradeoffsPanel(BasePanel):
             self.objectives = objectives
 
     def _refresh(self) -> None:
-        """Refresh on mode change - no-op since render() creates fresh UI."""
+        """Refresh with current data - no-op since render() creates fresh UI."""
 
 
 def create_pareto_cells_from_atlas(pareto_rows: list[dict]) -> list[ParetoCell]:

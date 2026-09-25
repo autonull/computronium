@@ -1,4 +1,4 @@
-"""Constitution Health Panel (M1.12) — 6 invariants status with plain + expert registers."""
+"""Constitution Health Panel (M1.12) — 6 invariants status."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import ClassVar
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +54,7 @@ class ConstitutionMetrics:
 
 
 class ConstitutionHealthPanel(BasePanel):
-    """Constitution Health Panel: 6 invariants with plain + expert registers."""
+    """Constitution Health Panel: 6 invariants."""
 
     INVARIANT_KEYS: ClassVar[list[str]] = [
         "causality_dag",
@@ -73,15 +73,15 @@ class ConstitutionHealthPanel(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="constitution_health",
-            plain_explanation=(
+            plain=(
                 "This panel shows the 6 stability checks. Green = passed, Red = failed. "
                 "All must pass for the campaign to be safe."
             ),
-            why_explanation=(
+            why=(
                 "The Constitution is the immutable rulebook. These 6 invariants "
                 "ensure the system stays stable, passive, and within resources."
             ),
-            expert_explanation=(
+            expert=(
                 "1. Causality (DAG): No circular dependencies in system coordinate. "
                 "2. Passivity (Δℰ≤ℰ_in): Energy out ≤ Energy in. "
                 "3. Lyapunov Bound (ρ(J_F)≤τ): Spectral radius ≤ 1.029. "
@@ -99,14 +99,14 @@ class ConstitutionHealthPanel(BasePanel):
     def render(self) -> ui.element:
         """Render the Constitution Health Panel."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("constitution_health")
+            self.render_header("Stability check")
 
             # Overall status
             all_passed = all(inv.passed for inv in self.invariants)
             status_icon = ICONS["success"] if all_passed else ICONS["error"]
             status_color = "positive" if all_passed else "negative"
             status_text = (
-                self.tr("all_checks_passed") if all_passed else self.tr("checks_failed")
+                "All stability checks passed" if all_passed else "Some checks failed"
             )
 
             with ui.row().classes("w-full items-center gap-2"):
@@ -135,19 +135,16 @@ class ConstitutionHealthPanel(BasePanel):
         with ui.card().classes("flex-1 min-w-[250px]").props("flat bordered"):
             with ui.row().classes("w-full items-center gap-2"):
                 ui.icon(icon).classes(f"text-xl text-{color}")
-                ui.label(self.tr(inv.key)).classes("text-bold")
+                ui.label(inv.label).classes("text-bold")
 
             ui.separator()
 
-            # Value display
-            if self.is_explorer:
-                ui.label(f"{self.tr('value')}: {inv.value}").classes("text-body")
-            elif inv.threshold is not None:
-                ui.label(f"{inv.value} / {inv.threshold}").classes("font-mono text-sm")
+            if inv.threshold is not None:
+                ui.label(f"Value: {inv.value} / {inv.threshold}").classes("text-body")
             else:
-                ui.label(f"{inv.value}").classes("font-mono text-sm")
+                ui.label(f"Value: {inv.value}").classes("text-body")
 
-            if inv.detail and self.is_lab:
+            if inv.detail:
                 ui.label(inv.detail).classes("text-caption text-grey font-mono")
 
     def update_from_stability_verdict(self, verdict: object) -> None:
@@ -169,7 +166,7 @@ class ConstitutionHealthPanel(BasePanel):
             self.invariants = invariants
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         self._render_invariants()
 
 

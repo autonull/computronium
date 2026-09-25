@@ -12,7 +12,7 @@ from typing import Any
 
 from nicegui import ui
 
-from computronium.ui.mode_toggle import BasePanel, tr
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,7 @@ class CampaignManifest:
 
 
 class CampaignCard(BasePanel):
-    """Render a campaign manifest as a card with register-aware copy."""
+    """Render a campaign manifest as a card."""
 
     def __init__(
         self,
@@ -41,9 +41,9 @@ class CampaignCard(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="campaign_card",
-            plain_explanation="A campaign is a coordinated exploration of the 6-axis space. This card shows what the campaign is about and how to join.",
-            why_explanation="Campaigns define the search space (which primitives to explore), the objectives (what to optimize), and the budget. This card makes that visible at a glance.",
-            expert_explanation="Campaign YAML specifies: substrate/geometry/dynamics/plasticity/credit/update strata, objective specs with weights/margins, maturation gates (l0→l1→l2), and CEEC claim thresholds. Entry points map to comp CLI subcommands.",
+            plain="A campaign is a coordinated exploration of the 6-axis space. This card shows what the campaign is about and how to join.",
+            why="Campaigns define the search space (which primitives to explore), the objectives (what to optimize), and the budget. This card makes that visible at a glance.",
+            expert="Campaign YAML specifies: substrate/geometry/dynamics/plasticity/credit/update strata, objective specs with weights/margins, maturation gates (l0→l1→l2), and CEEC claim thresholds. Entry points map to comp CLI subcommands.",
             docs_url="https://github.com/computronium/computronium/blob/main/docs/platform/campaigns.md",
         )
         self._manifest = self._load_manifest(manifest_path)
@@ -97,14 +97,14 @@ class CampaignCard(BasePanel):
 
             # Objectives
             if self._manifest.objectives:
-                ui.label(tr("campaign_objectives")).classes("text-bold text-sm mb-2")
+                ui.label("Goals").classes("text-bold text-sm mb-2")
                 with ui.row().classes("w-full flex-wrap gap-2 mb-4"):
                     for obj in self._manifest.objectives:
                         ui.badge(obj, color="primary").props("outline")
 
             # Entry points
             if self._manifest.entry_points:
-                ui.label(tr("campaign_entry_points")).classes("text-bold text-sm mb-2")
+                ui.label("Entry points").classes("text-bold text-sm mb-2")
                 with ui.row().classes("w-full flex-wrap gap-2"):
                     for label, command in self._manifest.entry_points.items():
                         if self._clickable:
@@ -133,23 +133,15 @@ class CampaignCard(BasePanel):
         return card
 
     def _get_title(self) -> str:
-        """Get title in current register."""
-        return (
-            self.tr(self._manifest.title_explorer)
-            if self.is_explorer
-            else self._manifest.title_lab
-        )
+        """Get title in the single plain register."""
+        return self._manifest.title_explorer
 
     def _get_description(self) -> str:
-        """Get description in current register."""
-        return (
-            self.tr(self._manifest.description_explorer)
-            if self.is_explorer
-            else self._manifest.description_lab
-        )
+        """Get description in the single plain register."""
+        return self._manifest.description_explorer
 
     def _render_status_badge(self) -> None:
-        """Render status badge with register-aware label."""
+        """Render status badge with a plain label."""
         status_colors = {
             "proposed": ("grey", "proposed"),
             "running": ("green", "running"),
@@ -160,12 +152,7 @@ class CampaignCard(BasePanel):
         color, default_label = status_colors.get(
             self._manifest.status, ("grey", "unknown")
         )
-        label = (
-            self.tr(f"status_{default_label}")
-            if self.is_explorer
-            else self._manifest.status.title()
-        )
-        ui.badge(label, color=color).props("outline")
+        ui.badge(default_label, color=color).props("outline")
 
     def _run_entry_point(self, command: str) -> None:
         """Execute an entry point command (stub for demo)."""
@@ -191,7 +178,7 @@ class CampaignCardGallery:
     def render(self) -> ui.element:
         """Render the campaign gallery as a grid."""
         with ui.column().classes("w-full gap-4") as container:
-            ui.label(tr("campaign_card")).classes("text-h5 mb-4")
+            ui.label("Campaign").classes("text-h5 mb-4")
 
             if not self._cards:
                 ui.label("No campaigns found.").classes("text-grey")

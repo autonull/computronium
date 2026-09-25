@@ -16,7 +16,7 @@ from computronium.ui.design_tokens import (
     ICONS,
     MAX_RENDERED_ROWS,
 )
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from pathlib import Path  # ruff: ignore[typing-only-standard-library-import]
@@ -83,15 +83,15 @@ class DiscoveryMap(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="discovery_map",
-            plain_explanation=(
+            plain=(
                 "This map shows all measured configurations as dots. Similar configurations "
                 "are close together. Grey areas show unmeasured regions."
             ),
-            why_explanation=(
+            why=(
                 "The map reveals patterns: which configurations work well, which "
                 "regions are unmeasured, and where to explore next."
             ),
-            expert_explanation=(
+            expert=(
                 "UMAP embedding of one-hot encoded ontology axes (S×G×D×P) "
                 "concatenated with physics metrics (accuracy, bp_deficit). "
                 "Grey area coverage = KB coverage of planned regions. "
@@ -124,7 +124,7 @@ class DiscoveryMap(BasePanel):
     def render(self) -> ui.element:
         """Render the Discovery Map panel with lens tabs (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("atlas")
+            self.render_header("Map")
 
             # Lens tabs
             with ui.tabs().classes("w-full") as tabs:
@@ -169,23 +169,22 @@ class DiscoveryMap(BasePanel):
         with ui.row().classes("w-full items-center gap-2"):
             ui.icon(ICONS["fog"]).classes("text-2xl")
             ui.label(
-                f"{self.tr('fog_of_war')}: "
-                f"{self.tr('region_charted')} {self.fog_coverage_pct:.0f}%"
+                f"{'Unexplored Territory'}: {'Charted'} {self.fog_coverage_pct:.0f}%"
             ).classes("text-body")
             if self.fog_coverage_pct < 100:
                 ui.label(
-                    f"({100 - self.fog_coverage_pct:.0f}% {self.tr('fog_of_war')})"
+                    f"({100 - self.fog_coverage_pct:.0f}% {'Unexplored Territory'})"
                 ).classes("text-caption text-grey-8")
 
         # View toggle: Map / Table
         with ui.row().classes("w-full items-center justify-between"):
             ui.label().classes("flex-1")  # Spacer
             with ui.row().classes("items-center gap-2"):
-                ui.label(self.tr("view")).classes("text-sm text-grey-8")
+                ui.label("View").classes("text-sm text-grey-8")
                 ui.switch(
                     value=self._show_table,
                     on_change=lambda e: self._toggle_view(bool(e.value)),
-                ).props(f'size="sm" aria-label="{self.tr("view")}"')
+                ).props(f'size="sm" aria-label="{"View"}"')
 
         # Map view container
         figure_container = ui.column().classes("w-full")
@@ -220,7 +219,7 @@ class DiscoveryMap(BasePanel):
         else:
             with ui.card().classes("w-full p-8 items-center"):
                 ui.icon(ICONS["map"]).classes("text-6xl text-grey-8")
-                ui.label(self.tr("atlas_pending")).classes("text-grey-8")
+                ui.label("Map loading...").classes("text-grey-8")
 
     def _table_rows(self) -> list[dict[str, str]]:
         """Table rows for the current specimens, capped at MAX_RENDERED_ROWS."""
@@ -246,62 +245,67 @@ class DiscoveryMap(BasePanel):
         rows = self._table_rows()
 
         if not rows:
-            ui.label(self.tr("no_data")).classes("text-grey")
+            ui.label("No data available").classes("text-grey")
             return
 
         columns = [
-            {"name": "key", "label": self.tr("cell"), "field": "key", "sortable": True},
+            {
+                "name": "key",
+                "label": "One measured recipe",
+                "field": "key",
+                "sortable": True,
+            },
             {
                 "name": "dynamics",
-                "label": self.tr("dynamics"),
+                "label": "Learning dynamics",
                 "field": "dynamics",
                 "sortable": True,
             },
             {
                 "name": "credit",
-                "label": self.tr("credit"),
+                "label": "Credit assignment",
                 "field": "credit",
                 "sortable": True,
             },
             {
                 "name": "update",
-                "label": self.tr("update"),
+                "label": "Parameter update",
                 "field": "update",
                 "sortable": True,
             },
             {
                 "name": "topology",
-                "label": self.tr("topology"),
+                "label": "Network topology",
                 "field": "topology",
                 "sortable": True,
             },
             {
                 "name": "accuracy",
-                "label": self.tr("accuracy"),
+                "label": "Accuracy",
                 "field": "accuracy",
                 "sortable": True,
             },
             {
                 "name": "bp_deficit",
-                "label": self.tr("bp_deficit"),
+                "label": "Gap vs. backprop baseline",
                 "field": "bp_deficit",
                 "sortable": True,
             },
             {
                 "name": "outcome",
-                "label": self.tr("outcome"),
+                "label": "Outcome",
                 "field": "outcome",
                 "sortable": True,
             },
             {
                 "name": "pareto",
-                "label": self.tr("pareto_optimal"),
+                "label": "Best trade-off",
                 "field": "pareto",
                 "sortable": True,
             },
             {
                 "name": "void",
-                "label": self.tr("structural_void"),
+                "label": "Ontology boundary (not a bug)",
                 "field": "void",
                 "sortable": True,
             },
@@ -311,12 +315,12 @@ class DiscoveryMap(BasePanel):
             "dense flat bordered"
         )
         if total > MAX_RENDERED_ROWS:
-            ui.label(f"{self.tr('showing_first')}: {len(rows)} / {total}").classes(
+            ui.label(f"{'Showing first rows'}: {len(rows)} / {total}").classes(
                 "text-caption text-grey"
             )
 
     def _refresh(self) -> None:
-        """Refresh panel on mode change - no-op since render() creates fresh UI."""
+        """No-op since render() creates fresh UI."""
         # The next render() call will create fresh UI with current data
 
     def update_data(

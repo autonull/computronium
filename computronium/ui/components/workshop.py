@@ -16,7 +16,7 @@ from nicegui import ui
 
 from computronium.analysis.recipe_cards import RECIPE_CARDS, RecipeCard
 from computronium.ontology.system import SystemConfig
-from computronium.ui.mode_toggle import BasePanel, tr
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from computronium.ontology.credit import CreditAssignmentConfig
@@ -352,7 +352,7 @@ class DialComposer:
     def render(self) -> ui.element:
         """Render the DialComposer UI."""
         with ui.card().classes("w-full") as card:
-            ui.label(tr("dial_composer")).classes("text-h6 mb-4")
+            ui.label("Build your own recipe").classes("text-h6 mb-4")
 
             # Axis selectors in a grid
             with ui.grid(columns=3).classes("w-full gap-4 mb-4"):
@@ -365,7 +365,7 @@ class DialComposer:
 
             # Compatibility status
             with ui.row().classes("w-full items-center gap-2 mb-2"):
-                ui.label(tr("compatibility_check")).classes("text-bold")
+                ui.label("Compatibility check").classes("text-bold")
                 self._status_label = ui.label("").classes("text-lg")
 
             # Detail container for validation messages
@@ -409,7 +409,7 @@ class DialComposer:
         try:
             config.validate()
         except ValueError as e:
-            self._status_label.set_text(tr("invalid_combination"))
+            self._status_label.set_text("Invalid combination")
             self._status_label.classes(remove="text-positive", add="text-negative")
             self._detail_container.clear()
             with self._detail_container:
@@ -423,7 +423,7 @@ class DialComposer:
                 ui.label(f"Unexpected error: {e}").classes("text-warning text-sm")
             return
 
-        self._status_label.set_text(tr("valid_combination"))
+        self._status_label.set_text("Valid combination")
         self._status_label.classes(remove="text-negative", add="text-positive")
         self._detail_container.clear()
         with self._detail_container:
@@ -468,7 +468,7 @@ class RecipeCardPanel:
     def render(self) -> ui.element:
         """Render the recipe card gallery."""
         with ui.card().classes("w-full") as card:
-            ui.label(tr("recipe_card")).classes("text-h6 mb-4")
+            ui.label("Try a known recipe").classes("text-h6 mb-4")
 
             with ui.row().classes("w-full flex-wrap gap-4"):
                 for (family, update), recipe in self._cards:
@@ -528,7 +528,7 @@ class P2PToggle:
             ui.row().classes("w-full items-center justify-between"),
         ):
             with ui.column().classes("gap-1"):
-                ui.label(tr("donate_compute")).classes("text-h6")
+                ui.label("Donate computer").classes("text-h6")
                 ui.label(
                     "Run a P2P worker to contribute compute to the network"
                 ).classes("text-body text-grey")
@@ -562,9 +562,9 @@ class WorkshopPanel(BasePanel):
     def __init__(self) -> None:
         super().__init__(
             panel_key="workshop",
-            plain_explanation="The workshop is where you build and try learning recipes. You can compose your own from the 6-axis menu, pick a known recipe card, or help fix crashes.",
-            why_explanation="Learning systems are built from 6 independent choices (substrate, geometry, dynamics, plasticity, credit, update). The workshop lets you explore this space hands-on — with live compatibility checks so you only build valid combinations.",
-            expert_explanation="DialComposer provides a SystemConfig.validate()-backed compatibility matrix across S×G×D×M×C×U axes. RecipeCards surface measurement-backed verdicts from the I(C,U) ladder (TODO16 §0.3). P2P toggle launches a gRPC worker (computronium.p2p.grpc_worker) for distributed burst execution.",
+            plain="The workshop is where you build and try learning recipes. You can compose your own from the 6-axis menu, pick a known recipe card, or help fix crashes.",
+            why="Learning systems are built from 6 independent choices (substrate, geometry, dynamics, plasticity, credit, update). The workshop lets you explore this space hands-on — with live compatibility checks so you only build valid combinations.",
+            expert="DialComposer provides a SystemConfig.validate()-backed compatibility matrix across S×G×D×M×C×U axes. RecipeCards surface measurement-backed verdicts from the I(C,U) ladder (TODO16 §0.3). P2P toggle launches a gRPC worker (computronium.p2p.grpc_worker) for distributed burst execution.",
             docs_url="https://github.com/computronium/computronium/blob/main/docs/platform/workshop.md",
         )
         self._dial_composer = DialComposer()
@@ -574,13 +574,13 @@ class WorkshopPanel(BasePanel):
     def render(self) -> ui.element:
         """Render the workshop panel with tabs."""
         with ui.column().classes("w-full") as container:
-            self.render_header("workshop")
+            self.render_header("Workshop")
 
             with ui.tabs().classes("w-full") as tabs:
-                tab_composer = ui.tab(tr("dial_composer"), icon="tune")
-                tab_recipe = ui.tab(tr("recipe_card"), icon="menu_book")
-                tab_repair = ui.tab(tr("fix_crash"), icon="build")
-                tab_p2p = ui.tab(tr("donate_compute"), icon="computer")
+                tab_composer = ui.tab("Build your own recipe", icon="tune")
+                tab_recipe = ui.tab("Try a known recipe", icon="menu_book")
+                tab_repair = ui.tab("Fix a crash", icon="build")
+                tab_p2p = ui.tab("Donate computer", icon="computer")
 
             with ui.tab_panels(tabs, value=tab_composer).classes("w-full"):
                 with ui.tab_panel(tab_composer):
@@ -600,7 +600,7 @@ class WorkshopPanel(BasePanel):
     def _render_repair_link(self) -> None:
         """Render link to Repair Bench."""
         with ui.card().classes("w-full"):
-            ui.label(tr("fix_crash")).classes("text-h6 mb-4")
+            ui.label("Fix a crash").classes("text-h6 mb-4")
             ui.label(
                 "Found a crash? The Repair Bench shows all quarantined defects with "
                 "copy-pasteable unquarantine commands."

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -40,18 +40,18 @@ class RegionNaming(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="region_naming",
-            plain_explanation=(
+            plain=(
                 "Give plain-language names to regions on the map. This helps "
                 "you remember what you've explored. Names are just labels — "
                 "they don't affect any measurements."
             ),
-            why_explanation=(
+            why=(
                 "Technical coordinates like 'EnergyMinimization × "
                 "ThermodynamicContrast × EuclideanUpdate' are precise but hard "
                 "to remember. Plain names like 'Valley of Stable EqProp' make "
                 "the map navigable for everyone."
             ),
-            expert_explanation=(
+            expert=(
                 "Region names are stored as presentation metadata in the KB, "
                 "versioned and revertible. They never appear in measurement "
                 "records, CEEC ledger, or promotion logic. Per GAME.md M3.2: "
@@ -172,7 +172,7 @@ class RegionNaming(BasePanel):
     def render(self) -> ui.element:
         """Render the region naming panel."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("region_naming")
+            self.render_header("Region Names")
 
             if not self.regions:
                 ui.label("No regions to name — run a campaign first.").classes(
@@ -226,7 +226,7 @@ class RegionNaming(BasePanel):
             ).props("flat dense color=primary").classes("text-sm")
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_region_naming(

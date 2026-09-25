@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS, MAX_RENDERED_ROWS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -59,15 +59,15 @@ class RepairBench(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="repair_bench",
-            plain_explanation=(
+            plain=(
                 "This panel shows crashes that need fixing. Each row is a unique defect. "
                 "Click 'Copy' to get the unquarantine command."
             ),
-            why_explanation=(
+            why=(
                 "Defects are crashes we can fix (not ontology boundaries). "
                 "Fixing them lets the campaign continue exploring."
             ),
-            expert_explanation=(
+            expert=(
                 "Defect funnel from live_atlas.defect_funnel_rows(). "
                 "Statuses: open → fixed → back_in_service. "
                 "Structural voids (gate-rejected) never appear here. "
@@ -88,7 +88,7 @@ class RepairBench(BasePanel):
     def render(self) -> ui.element:
         """Render the Repair Bench panel with lens tabs."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("repair")
+            self.render_header("Repair")
 
             # Lens tabs
             with ui.tabs().classes("w-full") as tabs:
@@ -129,16 +129,16 @@ class RepairBench(BasePanel):
     def _render_defects_lens(self) -> None:
         """Render the Defects lens (table)."""
         if not self.rows:
-            ui.label(self.tr("no_defects")).classes("text-grey text-center p-4")
+            ui.label("No defects on the bench").classes("text-grey text-center p-4")
             return
 
         total = len(self.rows)
         for row in self.rows[:MAX_RENDERED_ROWS]:
             self._render_defect_row(row)
         if total > MAX_RENDERED_ROWS:
-            ui.label(
-                f"{self.tr('showing_first')}: {MAX_RENDERED_ROWS} / {total}"
-            ).classes("text-caption text-grey")
+            ui.label(f"{'Showing first rows'}: {MAX_RENDERED_ROWS} / {total}").classes(
+                "text-caption text-grey"
+            )
 
     def _render_maturation_lens(self) -> None:
         """Render the Maturation lens (tree: campaign → maturity → cells)."""
@@ -205,9 +205,9 @@ class RepairBench(BasePanel):
             with ui.row().classes("w-full items-center gap-4"):
                 # Status badge
                 status_labels = {
-                    "open": self.tr("arrived"),
-                    "fixed": self.tr("diagnosed"),
-                    "back_in_service": self.tr("back_in_service"),
+                    "open": "Arrived",
+                    "fixed": "Diagnosed",
+                    "back_in_service": "Back in service",
                 }
                 status_colors = {
                     "open": "negative",
@@ -234,22 +234,20 @@ class RepairBench(BasePanel):
                 if is_fixed or is_back:
                     cmd = f"comp unquarantine --root ROOT --defect-id {row.defect_id}"
                     ui.button(
-                        self.tr("copy"),
+                        "Copy",
                         icon=ICONS["copy"],
                         on_click=lambda _=None, c=cmd: ui.clipboard.write(c),
-                    ).props("flat dense size=sm").tooltip(
-                        self.tr("copy_unquarantine_cmd")
-                    )
+                    ).props("flat dense size=sm").tooltip("Copy unquarantine command")
 
                 # Toggle status (for demo)
                 if is_open:
                     ui.button(
-                        self.tr("mark_fixed"),
+                        "Mark as fixed",
                         on_click=lambda _=None, r=row: self._update_status(r, "fixed"),
                     ).props("flat dense size=sm color=warning")
                 elif is_fixed:
                     ui.button(
-                        self.tr("mark_back_in_service"),
+                        "Mark as back in service",
                         on_click=lambda _=None, r=row: self._update_status(
                             r, "back_in_service"
                         ),
@@ -301,7 +299,7 @@ class RepairBench(BasePanel):
                 self._lens_tabs.value = tab
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         with suppress(AssertionError, RuntimeError):
             # Refresh is handled by parent re-rendering
             pass

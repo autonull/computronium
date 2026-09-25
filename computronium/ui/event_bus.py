@@ -1,5 +1,5 @@
 """Reactive State Bus (X3) — lightweight asyncio-based EventBus for artifact changes,
-mode switches, websocket events. Panels subscribe to relevant topics.
+websocket events. Panels subscribe to relevant topics.
 
 Decouples producers (poll/WS) from consumers (panels); enables future multi-root,
 multi-client.
@@ -29,13 +29,6 @@ class ArtifactChanged(Event):
 
     signature: tuple[tuple[int, int], ...]
     root: Path
-
-
-@dataclass(frozen=True, slots=True)
-class ModeChanged(Event):
-    """UI mode changed (Explorer/Lab)."""
-
-    mode: str  # "explorer" or "lab"
 
 
 @dataclass(frozen=True, slots=True)

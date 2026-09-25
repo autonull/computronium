@@ -1,10 +1,8 @@
-"""Computronium UI package — inclusive gamified dashboard (TODO-UX1).
+"""Computronium UI package — mission-control dashboard (GAME.todo7).
 
 Public API:
-- GlossaryService, tr, tr_both — register-aware string lookup
-- get_mode, set_mode, initialize_mode — Explorer/Lab mode toggle
-- mode_toggle_button, mode_toggle_select — UI components for mode switching
-- BasePanel — base class for all dashboard panels
+- BasePanel — base class for all dashboard panels (single register,
+  plain labels, "What am I looking at?" drawer, lifecycle hooks)
 - design_tokens — colorblind-safe palettes, type scale, icons, focus styles
 """
 
@@ -40,25 +38,8 @@ from computronium.ui.design_tokens import (
     get_density_tokens,
 )
 
-# Glossary
-from computronium.ui.glossary_service import (
-    GlossaryService,
-    get_glossary_service,
-    tr,
-    tr_both,
-)
-
-# Mode toggle
-from computronium.ui.mode_toggle import (
-    BasePanel,
-    GlossaryAware,
-    Register,
-    get_mode,
-    initialize_mode,
-    mode_toggle_button,
-    mode_toggle_select,
-    set_mode,
-)
+# Panel base
+from computronium.ui.panels import BasePanel
 
 __all__ = [
     "BORDER_RADIUS",
@@ -86,17 +67,6 @@ __all__ = [
     "Z_INDEX",
     "BasePanel",
     "DensityTokens",
-    "GlossaryAware",
-    "GlossaryService",
-    "Register",
     "css_custom_properties",
     "get_density_tokens",
-    "get_glossary_service",
-    "get_mode",
-    "initialize_mode",
-    "mode_toggle_button",
-    "mode_toggle_select",
-    "set_mode",
-    "tr",
-    "tr_both",
 ]

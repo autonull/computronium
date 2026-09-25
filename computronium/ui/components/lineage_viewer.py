@@ -8,7 +8,7 @@ from typing import ClassVar
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +57,15 @@ class LineageViewer(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="lineage_viewer",
-            plain_explanation=(
+            plain=(
                 "This is the recipe family tree. Each node is a recipe (genome). "
                 "Lines show mutations. Colors show the type of change."
             ),
-            why_explanation=(
+            why=(
                 "The lineage shows which mutations survived selection and why. "
                 "Slope values show the learning speed improvement."
             ),
-            expert_explanation=(
+            expert=(
                 "Reconstructs identical graph from event log replay (UX-L10). "
                 "Nodes = genomes from comp scientist phylogeny. "
                 "Edges = mutations (DuplicateAndPerturb, SpliceOperator, CoordinateSwap). "
@@ -81,7 +81,7 @@ class LineageViewer(BasePanel):
     def render(self) -> ui.element:
         """Render the Lineage Viewer."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("lineage_viewer")
+            self.render_header("Recipe family tree")
 
             # Legend
             with ui.row().classes("w-full gap-4 flex-wrap"):
@@ -104,15 +104,13 @@ class LineageViewer(BasePanel):
         self._graph_container.clear()
         with self._graph_container:
             if not self.nodes:
-                ui.label(self.tr("no_lineage_data")).classes(
-                    "text-grey text-center p-8"
-                )
+                ui.label("No lineage data yet").classes("text-grey text-center p-8")
                 return
 
             # For now, render as a table with hierarchy
             # In production, this would use mermaid.js or a custom D3 visualization
             with ui.card().classes("w-full").props("flat"):
-                ui.label(self.tr("phylogeny_table")).classes("text-bold mb-2")
+                ui.label("Family tree table").classes("text-bold mb-2")
 
                 rows = []
                 for node in self.nodes:
@@ -131,43 +129,43 @@ class LineageViewer(BasePanel):
                 columns = [
                     {
                         "name": "genome",
-                        "label": self.tr("genome_id"),
+                        "label": "Recipe ID",
                         "field": "genome",
                         "sortable": True,
                     },
                     {
                         "name": "tier",
-                        "label": self.tr("tier"),
+                        "label": "Change type",
                         "field": "tier",
                         "sortable": True,
                     },
                     {
                         "name": "fitness",
-                        "label": self.tr("fitness"),
+                        "label": "Fitness",
                         "field": "fitness",
                         "sortable": True,
                     },
                     {
                         "name": "episode",
-                        "label": self.tr("episode"),
+                        "label": "Episode",
                         "field": "episode",
                         "sortable": True,
                     },
                     {
                         "name": "parent",
-                        "label": self.tr("parent"),
+                        "label": "Parent",
                         "field": "parent",
                         "sortable": True,
                     },
                     {
                         "name": "mutation",
-                        "label": self.tr("mutation_type"),
+                        "label": "Mutation type",
                         "field": "mutation",
                         "sortable": True,
                     },
                     {
                         "name": "slope",
-                        "label": self.tr("slope"),
+                        "label": "Learning speed",
                         "field": "slope",
                         "sortable": True,
                     },
@@ -195,7 +193,7 @@ class LineageViewer(BasePanel):
         self._render_graph()
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         self._render_graph()
 
 

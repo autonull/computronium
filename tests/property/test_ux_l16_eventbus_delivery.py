@@ -6,8 +6,8 @@ import asyncio
 
 from computronium.ui.event_bus import (
     ArtifactChanged,
+    ConfigChanged,
     EventBus,
-    ModeChanged,
     WebSocketEvent,
 )
 
@@ -24,21 +24,21 @@ def test_sync_delivery_exact_type() -> None:
 def test_subscription_isolation_by_type() -> None:
     bus = EventBus()
     ws: list[str] = []
-    mode: list[str] = []
+    config: list[tuple[str, ...]] = []
     bus.subscribe(WebSocketEvent, lambda e: ws.append(e.topic))
-    bus.subscribe(ModeChanged, lambda e: mode.append(e.mode))
+    bus.subscribe(ConfigChanged, lambda e: config.append(e.objectives))
     bus.publish(ArtifactChanged(signature=(), root=None))  # type: ignore[arg-type]
-    bus.publish(ModeChanged(mode="lab"))
-    assert ws == [] and mode == ["lab"]
+    bus.publish(ConfigChanged(objectives=("accuracy",)))
+    assert ws == [] and config == [("accuracy",)]
 
 
 def test_unsubscribe_stops_delivery() -> None:
     bus = EventBus()
     received: list[int] = []
-    unsub = bus.subscribe(ModeChanged, lambda _e: received.append(1))
-    bus.publish(ModeChanged(mode="lab"))
+    unsub = bus.subscribe(ConfigChanged, lambda _e: received.append(1))
+    bus.publish(ConfigChanged(objectives=("accuracy",)))
     unsub()
-    bus.publish(ModeChanged(mode="explorer"))
+    bus.publish(ConfigChanged(objectives=("walltime_s",)))
     assert received == [1]
 
 
@@ -60,12 +60,12 @@ def test_async_delivery_publish_async() -> None:
 
 def test_handler_exception_isolated() -> None:
     bus = EventBus()
-    received: list[str] = []
+    received: list[tuple[str, ...]] = []
 
-    def bad(_event: ModeChanged) -> None:
+    def bad(_event: ConfigChanged) -> None:
         raise RuntimeError("boom")
 
-    bus.subscribe(ModeChanged, bad)
-    bus.subscribe(ModeChanged, lambda e: received.append(e.mode))
-    bus.publish(ModeChanged(mode="lab"))
-    assert received == ["lab"]
+    bus.subscribe(ConfigChanged, bad)
+    bus.subscribe(ConfigChanged, lambda e: received.append(e.objectives))
+    bus.publish(ConfigChanged(objectives=("accuracy",)))
+    assert received == [("accuracy",)]

@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from computronium.ui.components.activity_feed import ActivityFeed, FeedEvent
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
-
     from computronium.visualization.live_atlas import Liveness
 
 
@@ -80,16 +79,16 @@ class MonitorView(BasePanel):
     def __init__(self, *, quiet: bool = False) -> None:
         super().__init__(
             panel_key="monitor",
-            plain_explanation=(
+            plain=(
                 "This is the live view of your campaign. The badge shows whether it "
                 "is running, the tiles show campaign health, and the stream shows "
                 "what happened recently."
             ),
-            why_explanation=(
+            why=(
                 "A single glance answers the three questions that matter: is the "
                 "campaign alive, is it making progress, and did anything break."
             ),
-            expert_explanation=(
+            expert=(
                 "Liveness from heartbeat freshness + daemon reachability. Tiles from "
                 "health_stats(). Loss curve from /ws/telemetry (throttled paint). "
                 "Feed from /ws/events, classified; alerts raise toasts and reports."
@@ -103,7 +102,7 @@ class MonitorView(BasePanel):
     def render(self) -> ui.element:
         """Render the Monitor view (fresh UI every call)."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("monitor")
+            self.render_header("Monitor")
 
             if self.data is None:
                 ui.label("Waiting for first refresh…").classes("text-grey")
@@ -143,9 +142,9 @@ class MonitorView(BasePanel):
             ui.separator().props("vertical")
 
             delta = data.session_delta
-            ui.label(
-                f"Session: {delta.summary()}"
-            ).classes("text-sm font-mono text-primary")
+            ui.label(f"Session: {delta.summary()}").classes(
+                "text-sm font-mono text-primary"
+            )
 
     def _render_tiles(self) -> None:
         """Health tiles as a wrap grid of status cards."""
@@ -157,9 +156,7 @@ class MonitorView(BasePanel):
                 with ui.card().classes("w-52").props("flat bordered"):
                     with ui.row().classes("w-full items-center justify-between"):
                         ui.label(tile.label).classes("text-caption text-grey")
-                        ui.badge(label, color=color).props("outline").classes(
-                            "text-xs"
-                        )
+                        ui.badge(label, color=color).props("outline").classes("text-xs")
                     ui.label(tile.value).classes("text-h5 font-mono")
                     ui.label(tile.detail).classes("text-caption text-grey")
 

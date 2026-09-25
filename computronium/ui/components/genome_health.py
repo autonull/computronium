@@ -8,7 +8,7 @@ from typing import Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,19 +37,19 @@ class GenomeHealthTracker(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="genome_health",
-            plain_explanation=(
+            plain=(
                 "This panel shows how recipe size relates to fitness. Bigger "
                 "recipes aren't always better — there's a penalty for size "
                 "(oncological cancer risk). The resource ceiling limits total "
                 "compute + memory."
             ),
-            why_explanation=(
+            why=(
                 "Unbounded recipe growth wastes resources. The genome size "
                 "penalty (λ) creates selective pressure for compact, efficient "
                 "recipes. Resource ceiling headroom shows how close you are to "
                 "the budget limit."
             ),
-            expert_explanation=(
+            expert=(
                 "Per AUTOTILE.md §5.4: Genome health tracks |Ω| vs fitness "
                 "trajectory, oncological cancer risk (GenomeSizePenalty λ), "
                 "and Resource Ceiling headroom (||Z||+|Ω| budget). Campaign "
@@ -74,7 +74,7 @@ class GenomeHealthTracker(BasePanel):
     def render(self) -> ui.element:
         """Render the genome health tracker."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("genome_health")
+            self.render_header("Recipe size vs. fitness")
 
             if not self.points:
                 ui.label("No genome health data — run a campaign first.").classes(
@@ -258,7 +258,7 @@ class GenomeHealthTracker(BasePanel):
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_genome_health_tracker(

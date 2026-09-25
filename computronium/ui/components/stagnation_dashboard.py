@@ -8,7 +8,7 @@ from typing import Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,17 +45,17 @@ class StagnationDashboard(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="stagnation_dashboard",
-            plain_explanation=(
+            plain=(
                 "This panel shows whether campaigns are making progress or "
                 "stuck. Four different detectors watch for stagnation — if any "
                 "trigger, probes are launched to search for better recipes."
             ),
-            why_explanation=(
+            why=(
                 "Stagnation detection is the load-bearing gate: probes only "
                 "fire when progress stalls, keeping overhead near zero in "
                 "stable regimes. Four detectors catch different failure modes."
             ),
-            expert_explanation=(
+            expert=(
                 "Per AUTOTILE.md §2.4: four stagnation detector protocols. "
                 "1. WindowedMean: rolling mean of Pareto front improvement. "
                 "2. EMA: exponential moving average of fitness. "
@@ -80,7 +80,7 @@ class StagnationDashboard(BasePanel):
     def render(self) -> ui.element:
         """Render the stagnation dashboard."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("stagnation_dashboard")
+            self.render_header("Progress monitor")
 
             if not self.snapshots:
                 ui.label("No stagnation data — run a campaign first.").classes(
@@ -162,17 +162,9 @@ class StagnationDashboard(BasePanel):
 
             ui.separator()
 
-            if self.is_explorer:
-                ui.label(f"Value: {det.value:.3f}").classes("text-body")
-                ui.label(f"Threshold: {det.threshold:.3f}").classes(
-                    "text-body text-grey"
-                )
-                ui.label(f"Window: {det.window}").classes("text-body text-grey")
-            else:
-                ui.label(f"{det.value:.3f} / {det.threshold:.3f}").classes(
-                    "font-mono text-sm"
-                )
-                ui.label(f"Window: {det.window}").classes("text-caption text-grey")
+            ui.label(f"Value: {det.value:.3f}").classes("text-body")
+            ui.label(f"Threshold: {det.threshold:.3f}").classes("text-body text-grey")
+            ui.label(f"Window: {det.window}").classes("text-body text-grey")
 
             if det.last_triggered:
                 ui.label(
@@ -185,7 +177,7 @@ class StagnationDashboard(BasePanel):
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_stagnation_dashboard(

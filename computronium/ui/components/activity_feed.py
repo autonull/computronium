@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from nicegui import ui
 
 from computronium.ui.a11y.tokens import LIVE_REGION_CONFIG
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,15 +33,15 @@ class ActivityFeed(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="activity_feed",
-            plain_explanation=(
+            plain=(
                 "This is the activity feed. It shows what's happening right now. "
                 "Pause it to read at your own pace."
             ),
-            why_explanation=(
+            why=(
                 "The feed shows real-time events from the campaign. "
                 "Batch summaries prevent overwhelming screen readers."
             ),
-            expert_explanation=(
+            expert=(
                 "Reverse-chronological event stream from /ws/events. "
                 f"Rate-limited to {LIVE_REGION_CONFIG.min_interval_ms}ms for aria-live=polite. "
                 "Pausable toggle. Batch summary mode groups events by type. "
@@ -59,7 +59,7 @@ class ActivityFeed(BasePanel):
     def render(self) -> ui.element:
         """Render the Activity Feed."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("ticker")
+            self.render_header("Ticker")
 
             # Controls
             with ui.row().classes("w-full items-center gap-2"):
@@ -67,12 +67,12 @@ class ActivityFeed(BasePanel):
                     value=self._paused,
                     on_change=lambda e: setattr(self, "_paused", e.value),
                 ).props('size="sm"')
-                ui.label(self.tr("paused")).classes("text-sm")
+                ui.label("Paused").classes("text-sm")
                 ui.switch(
                     value=self._batch_mode,
                     on_change=lambda e: setattr(self, "_batch_mode", e.value),
                 ).props('size="sm"')
-                ui.label(self.tr("batch_summary")).classes("text-sm")
+                ui.label("Batch summary").classes("text-sm")
 
             # Feed container with aria-live
             self._feed_container = ui.column().classes("w-full")
@@ -84,11 +84,11 @@ class ActivityFeed(BasePanel):
     def _render_feed(self) -> None:
         """Render the feed events."""
         # Check if container is still valid
-        if not hasattr(self, '_feed_container') or self._feed_container is None:
+        if not hasattr(self, "_feed_container") or self._feed_container is None:
             return
         try:
             self._feed_container.clear()
-        except (AssertionError, RuntimeError):
+        except AssertionError, RuntimeError:
             return
         with self._feed_container:
             # aria-live region
@@ -100,10 +100,10 @@ class ActivityFeed(BasePanel):
                 )
                 .classes("sr-only")
             ):
-                ui.label(self.tr("live_region")).classes("sr-only")
+                ui.label("Live updates").classes("sr-only")
 
             if not self.events:
-                ui.label(self.tr("no_events")).classes("text-grey text-center p-4")
+                ui.label("No events yet").classes("text-grey text-center p-4")
                 return
 
             for event in reversed(self.events[-self.max_events :]):
@@ -150,5 +150,5 @@ class ActivityFeed(BasePanel):
             self.events = events
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         self._render_feed()

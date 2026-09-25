@@ -8,7 +8,7 @@ from typing import Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,18 +46,18 @@ class VetoLog(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="veto_log",
-            plain_explanation=(
+            plain=(
                 "This log shows every mutation that was rejected by the "
                 "Constitution. Each entry explains why — stability, energy, "
                 "protocol, or recursion. The veto rate trend shows if the "
                 "system is becoming more or less restrictive."
             ),
-            why_explanation=(
+            why=(
                 "The Constitution isn't just a checklist — it actively blocks "
                 "unsafe mutations. This log is the audit trail. A rising veto "
                 "rate might mean the Constitution needs calibration (amendment 6)."
             ),
-            expert_explanation=(
+            expert=(
                 "Per AUTOTILE.md §3.5: vetoed mutations with reason "
                 "(Lyapunov fast-proxy fail, Passivity fail, Protocol conformance "
                 "fail, Recursion invariant). Veto rate trend is a first-class "
@@ -81,7 +81,7 @@ class VetoLog(BasePanel):
     def render(self) -> ui.element:
         """Render the veto log."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("veto_log")
+            self.render_header("Rejected changes with reasons")
 
             if not self.entries:
                 ui.label("No vetoes — Constitution checks all passing.").classes(
@@ -203,7 +203,7 @@ class VetoLog(BasePanel):
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_veto_log(

@@ -26,7 +26,7 @@ from computronium.visualization.live_atlas import (
 )
 
 if TYPE_CHECKING:
-    from computronium.ui.mode_toggle import BasePanel
+    from computronium.ui.panels import BasePanel
     from computronium.visualization.live_atlas import DashboardSnapshot
 
 type LoadFn = Callable[[DashboardSnapshot, Path], object]

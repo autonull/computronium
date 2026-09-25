@@ -8,7 +8,7 @@ from typing import Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,18 +46,18 @@ class ProbeAnalytics(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="probe_analytics",
-            plain_explanation=(
+            plain=(
                 "This panel shows adaptation probes — small experiments that "
                 "test if a recipe change helps learning. Each probe runs on a "
                 "forked copy of the data, never on your real training runs."
             ),
-            why_explanation=(
+            why=(
                 "Probes let the system test changes safely. The 'forked copy' "
                 "means your actual experiments are never touched. You see the "
                 "proposed learning speed vs. current, and whether it passed "
                 "statistical checks."
             ),
-            expert_explanation=(
+            expert=(
                 "Adaptation probes per AUTOTILE.md §3.2: slope-based selection "
                 "with forked-copy hygiene. Each probe: (1) forks current genome "
                 "and data, (2) applies mutation, (3) measures slope on probe "
@@ -82,7 +82,7 @@ class ProbeAnalytics(BasePanel):
     def render(self) -> ui.element:
         """Render the probe analytics panel."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("probe_analytics")
+            self.render_header("Learning speed comparison")
 
             # Forked-copy hygiene badge
             with ui.row().classes("w-full items-center gap-2 mb-4"):
@@ -164,7 +164,7 @@ class ProbeAnalytics(BasePanel):
         return time.strftime("%H:%M:%S", time.localtime(timestamp))
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_probe_analytics(

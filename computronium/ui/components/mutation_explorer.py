@@ -8,7 +8,7 @@ from typing import Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,18 +39,18 @@ class MutationExplorer(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="mutation_explorer",
-            plain_explanation=(
+            plain=(
                 "This panel shows what the system could try next. Each "
                 "proposal is a recipe change that passes basic validity checks "
                 "and the Constitution stability guard."
             ),
-            why_explanation=(
+            why=(
                 "Before running a mutation, the system checks: (1) Is it a "
                 "valid Registry primitive combination? (2) Does it pass the "
                 "Constitution stability guard? (3) Will it fit in the resource "
                 "budget? Only viable proposals are shown."
             ),
-            expert_explanation=(
+            expert=(
                 "Per AUTOTILE.md §2.3: Tier 1 (structural) and Tier 2 "
                 "(algorithmic) mutations from current Ω. Valid proposals: "
                 "DuplicateAndPerturb (new nodes/edges), SpliceOperator (swap "
@@ -77,7 +77,7 @@ class MutationExplorer(BasePanel):
     def render(self) -> ui.element:
         """Render the mutation explorer."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("mutation_explorer")
+            self.render_header("What could change next")
 
             # Current genome status
             with ui.row().classes("w-full items-center gap-4 mb-4"):
@@ -197,7 +197,7 @@ class MutationExplorer(BasePanel):
         return card
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_mutation_explorer(

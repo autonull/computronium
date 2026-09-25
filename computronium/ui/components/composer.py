@@ -12,12 +12,14 @@ from computronium.ui.components.workshop import (
     RecipeCardPanel,
 )
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel, tr
+from computronium.ui.panels import BasePanel
 
 
 def _default_recipes() -> list[tuple[str, str, RecipeCard]]:
     """All measurement-backed recipe cards (family, update, card)."""
-    return [(family, update, recipe) for (family, update), recipe in RECIPE_CARDS.items()]
+    return [
+        (family, update, recipe) for (family, update), recipe in RECIPE_CARDS.items()
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,18 +44,18 @@ class Composer(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="composer",
-            plain_explanation=(
+            plain=(
                 "The Composer is where you build learning systems. Start with a "
                 "proven configuration, or compose your own from the 6-axis menu "
                 "with live compatibility checking."
             ),
-            why_explanation=(
+            why=(
                 "Configuration cards show measurement-backed results from the "
                 "I(C,U) analysis. The DialComposer lets you explore the full "
                 "S×G×D×M×C×U space with SystemConfig.validate() ensuring "
                 "only valid combinations are buildable."
             ),
-            expert_explanation=(
+            expert=(
                 "Configurations from computronium.analysis.recipe_cards (M3). "
                 "DialComposer uses config factories from workshop.py. "
                 "Validation = SystemConfig.validate() cross-axis constraints. "
@@ -70,7 +72,7 @@ class Composer(BasePanel):
     def render(self) -> ui.element:
         """Render the Composer panel."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("composer")
+            self.render_header("Composer")
 
             # Recipes-first: show recipe cards by default
             if not self._show_dial:
@@ -82,7 +84,9 @@ class Composer(BasePanel):
             with ui.row().classes("w-full items-center justify-between mt-4"):
                 ui.label().classes("flex-1")
                 ui.button(
-                    tr("dial_composer") if not self._show_dial else tr("recipe_card"),
+                    "Build your own recipe"
+                    if not self._show_dial
+                    else "Try a known recipe",
                     icon=ICONS.get("tune", "tune")
                     if not self._show_dial
                     else ICONS.get("book", "menu_book"),

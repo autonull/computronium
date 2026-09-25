@@ -1,4 +1,4 @@
-"""Comfort Quiz (M3.1) — 3 questions, sets default mode/tour depth only."""
+"""Comfort Quiz (M3.1) — 2 questions, sets default tour depth only."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -21,27 +21,17 @@ class QuizQuestion:
     key: str
     question: str
     options: list[tuple[str, str]]  # (value, label)
-    affects: str  # "mode" or "tour_depth"
+    affects: str  # "tour_depth"
 
 
 class ComfortQuiz(BasePanel):
-    """Comfort Quiz: 3 questions, sets default mode/tour depth only.
+    """Comfort Quiz: 2 questions, sets default tour depth only.
 
     Quiz only affects defaults — never restricts features.
     Results persist in localStorage.
     """
 
     QUESTIONS: tuple[QuizQuestion, ...] = (
-        QuizQuestion(
-            key="experience",
-            question="How familiar are you with learning systems research?",
-            options=[
-                ("beginner", "New to this — plain language please"),
-                ("intermediate", "Some experience — mix of both"),
-                ("expert", "Deep expertise — technical precision"),
-            ],
-            affects="mode",
-        ),
         QuizQuestion(
             key="goals",
             question="What brings you here today?",
@@ -73,21 +63,18 @@ class ComfortQuiz(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="comfort_quiz",
-            plain_explanation=(
-                "Three quick questions to personalize your experience. "
+            plain=(
+                "Two quick questions to personalize your experience. "
                 "Your answers only set default preferences — you can change "
                 "anything anytime. No features are ever restricted."
             ),
-            why_explanation=(
-                "Different users need different defaults. A researcher wants "
-                "technical precision; a newcomer wants plain language. The "
+            why=(
+                "Different users need different defaults. The "
                 "quiz sets sensible defaults without gating anything."
             ),
-            expert_explanation=(
-                "Quiz affects two settings: UI mode (explorer/lab) and tour "
-                "depth (full/minimal/none). Results stored in localStorage. "
-                "All settings remain user-changeable at any time via the mode "
-                "toggle and settings. Per GAME.md M3.1: 'quiz only affects "
+            expert=(
+                "Quiz affects tour depth (full/minimal/none). Results stored "
+                "in localStorage. Per GAME.md M3.1: 'quiz only affects "
                 "defaults, never restricts features.'"
             ),
             docs_url="https://computronium.readthedocs.io/en/latest/dashboard/quiz.html",
@@ -200,17 +187,8 @@ class ComfortQuiz(BasePanel):
 
     def _apply_answers(self) -> None:
         """Apply quiz answers to settings."""
-        from computronium.ui.mode_toggle import set_mode
-
-        # Apply mode preference
-        experience = self._answers.get("experience")
-        if experience == "beginner":
-            set_mode("explorer")
-        elif experience == "expert":
-            set_mode("lab")
-        # intermediate -> keep current or auto
-
-        # Apply accessibility preferences
+        # Answers only affect tour-depth defaults; nothing to apply yet.
+        # Accessibility preferences set a CSS custom property or body class.
         accessibility = self._answers.get("accessibility")
         if accessibility in {"reduced_motion", "high_contrast"}:
             # This would set a CSS custom property or body class
@@ -265,7 +243,7 @@ class ComfortQuiz(BasePanel):
         return panel
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_comfort_quiz(

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,15 +32,15 @@ class FieldReports(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="field_reports",
-            plain_explanation=(
+            plain=(
                 "Field reports are important messages from the campaign. "
                 "Each has a one-sentence summary and a link to details."
             ),
-            why_explanation=(
+            why=(
                 "Breakthrough alerts are scoped (e.g., 'New best correctness among similar size'). "
                 "No bare 'state of the art' language. Deep links go to the evidence."
             ),
-            expert_explanation=(
+            expert=(
                 "Re-typed from live_atlas alert toasts. "
                 "Categories: breakthrough (new Pareto front), cascade (divergence wave), "
                 "completion (campaign target reached). "
@@ -58,7 +58,7 @@ class FieldReports(BasePanel):
         with ui.column().classes("w-full gap-4") as panel:
             # Header with unread badge
             with ui.row().classes("w-full items-center justify-between"):
-                self.render_header("events")
+                self.render_header("Events")
                 self._badge_label = (
                     ui.badge("0", color="primary").props("outline").classes("text-sm")
                 )
@@ -79,9 +79,7 @@ class FieldReports(BasePanel):
 
         with self._tray_container:
             if not self.reports:
-                ui.label(self.tr("no_field_reports")).classes(
-                    "text-grey text-center p-4"
-                )
+                ui.label("No field reports").classes("text-grey text-center p-4")
                 return
 
             for report in self.reports[-self.max_reports :]:
@@ -101,7 +99,7 @@ class FieldReports(BasePanel):
                         ui.label(report.sentence).classes("text-body")
                         if report.deep_link:
                             ui.link(
-                                self.tr("see_evidence"),
+                                "See evidence",
                                 report.deep_link,
                             ).props("target=_blank").classes("text-primary text-sm")
 
@@ -131,5 +129,5 @@ class FieldReports(BasePanel):
             self.reports = reports
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
         self._render_tray()

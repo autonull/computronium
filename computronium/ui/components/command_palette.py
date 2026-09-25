@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 from computronium.ui.view_registry import PanelPlacement, registry
 
 if TYPE_CHECKING:
@@ -34,9 +34,9 @@ class CommandPalette(BasePanel):
     def __init__(self, app: DashboardApp) -> None:
         super().__init__(
             panel_key="command_palette",
-            plain_explanation="Quick access to all views, panels, and actions",
-            why_explanation="Type to search and jump anywhere without clicking through menus",
-            expert_explanation="Fuzzy search over registered views, panels, and extensions. Extensible via ViewRegistry.",
+            plain="Quick access to all views, panels, and actions",
+            why="Type to search and jump anywhere without clicking through menus",
+            expert="Fuzzy search over registered views, panels, and extensions. Extensible via ViewRegistry.",
             docs_url="https://github.com/computronium/dashboard#command-palette",
         )
         self._app = app

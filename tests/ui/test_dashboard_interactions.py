@@ -1,15 +1,11 @@
-"""Mode toggle re-render, WS fan-out, glossary (C3) — app-level streams."""
+"""WS fan-out — app-level streams."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
-
 from computronium.ui.dashboard import DashboardApp
-from computronium.ui.event_bus import ModeChanged, WebSocketEvent, event_bus
-from computronium.ui.glossary_service import get_glossary_service
-from computronium.ui.mode_toggle import get_mode, set_mode
+from computronium.ui.event_bus import WebSocketEvent, event_bus
 from tests.ui.fixture import seed_campaign_root
 
 if TYPE_CHECKING:
@@ -25,32 +21,6 @@ def _make_app(root: Path) -> DashboardApp:
     )
     app.build()
     return app
-
-
-@pytest.fixture(autouse=True)
-def _restore_mode() -> object:
-    yield
-    if get_mode() != "explorer":
-        set_mode("explorer", persist=False)
-
-
-def test_mode_toggle_publishes_and_rerenders(tmp_path: Path) -> None:
-    root = tmp_path / "broad_map"
-    seed_campaign_root(root)
-    _make_app(root)
-    events: list[ModeChanged] = []
-    unsub = event_bus.subscribe(ModeChanged, events.append)
-
-    try:
-        set_mode("lab")
-        assert get_mode() == "lab"
-        assert [e.mode for e in events] == ["lab"]
-        set_mode("lab")  # no-op: same register
-        assert len(events) == 1
-        set_mode("explorer")
-        assert [e.mode for e in events] == ["lab", "explorer"]
-    finally:
-        unsub()
 
 
 def test_ws_events_route_to_feed_and_reports(tmp_path: Path) -> None:
@@ -128,12 +98,3 @@ def test_bus_publish_reaches_dashboard_handler(tmp_path: Path) -> None:
         WebSocketEvent(topic="events", payload={"kind": "cell_done", "cell": "x"})
     )
     assert len(app.event_history) == 1
-
-
-def test_glossary_covers_dashboard_keys() -> None:
-    service = get_glossary_service()
-    assert service.has("loss_curve")
-    entries = service.all_entries()
-    assert entries, "glossary loaded"
-    for entry in entries.values():
-        assert entry.explorer and entry.lab

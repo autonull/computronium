@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 if TYPE_CHECKING:
     from nicegui import ui
-    from computronium.ui.mode_toggle import Register
 
 T = TypeVar("T")
 P = TypeVar("P")
@@ -27,12 +26,14 @@ S = TypeVar("S")
 @dataclass(frozen=True, slots=True)
 class ComponentProps(Generic[P]):
     """Immutable props passed to a component."""
+
     data: P
 
 
 @dataclass
 class ComponentState(Generic[S]):
     """Mutable state with change notification."""
+
     value: S
     _listeners: list[Callable[[S], None]] = field(default_factory=list, repr=False)
 
@@ -79,23 +80,31 @@ class LifecycleMixin:
                 cleanup()
         self._cleanup_tasks.clear()
 
-    def set_timer(self, interval: float, callback: Callable[[], None], *, once: bool = False) -> None:
+    def set_timer(
+        self, interval: float, callback: Callable[[], None], *, once: bool = False
+    ) -> None:
         """Set a timer that's auto-cleaned on unmount."""
         loop = asyncio.get_event_loop()
         if once:
             handle = loop.call_later(interval, callback)
             self._register_cleanup(lambda: handle.cancel())
         else:
+
             async def _repeat():
                 while True:
                     await asyncio.sleep(interval)
                     callback()
+
             task = asyncio.create_task(_repeat())
             self._register_cleanup(lambda: task.cancel())
 
     def subscribe(self, observable: Any, callback: Callable[[Any], None]) -> None:
         """Subscribe to an observable (event bus, store, etc.) with auto-cleanup."""
-        unsubscribe = observable.subscribe(callback) if hasattr(observable, 'subscribe') else lambda: None
+        unsubscribe = (
+            observable.subscribe(callback)
+            if hasattr(observable, "subscribe")
+            else lambda: None
+        )
         self._subscriptions.append(unsubscribe)
         self._register_cleanup(unsubscribe)
 
@@ -196,17 +205,22 @@ class StatelessComponent(Component[P, None]):
 # Composition Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def fragment(*elements: ui.element) -> list[ui.element]:
     """Return multiple elements without a wrapper (for use in render)."""
     return list(elements)
 
 
-def conditional(condition: bool, true_elem: ui.element, false_elem: ui.element | None = None) -> ui.element | None:
+def conditional(
+    condition: bool, true_elem: ui.element, false_elem: ui.element | None = None
+) -> ui.element | None:
     """Conditional rendering."""
     return true_elem if condition else false_elem
 
 
-def for_each(items: list[T], render_item: Callable[[T, int], ui.element]) -> list[ui.element]:
+def for_each(
+    items: list[T], render_item: Callable[[T, int], ui.element]
+) -> list[ui.element]:
     """Map items to elements."""
     return [render_item(item, i) for i, item in enumerate(items)]
 
@@ -215,31 +229,10 @@ def for_each(items: list[T], render_item: Callable[[T, int], ui.element]) -> lis
 # Higher-Order Components
 # ──────────────────────────────────────────────────────────────────────────────
 
-def with_mode(component_cls: type[Component]) -> type[Component]:
-    """HOC: Inject mode awareness into component."""
-    from computronium.ui.mode_toggle import get_mode, _current_mode
-    from computronium.ui.glossary_service import tr
-    from computronium.ui.mode_toggle import Register
-
-    class WithMode(component_cls):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            self._mode: Register = get_mode()
-            _current_mode.add_callback(self._on_mode_change)
-
-        def _on_mode_change(self, mode: Register) -> None:
-            self._mode = mode
-            self.set_state(self.state)  # Trigger re-render
-
-        def tr(self, key: str) -> str:
-            return tr(key, self._mode)
-
-    WithMode.__name__ = f"WithMode({component_cls.__name__})"
-    return WithMode
-
 
 def with_data(adapter_key: str) -> Callable[[type[Component]], type[Component]]:
     """HOC: Inject data adapter into component."""
+
     def decorator(component_cls: type[Component]) -> type[Component]:
         class WithData(component_cls):
             def __init__(self, *args, **kwargs):
@@ -257,12 +250,14 @@ def with_data(adapter_key: str) -> Callable[[type[Component]], type[Component]]:
 
         WithData.__name__ = f"WithData({component_cls.__name__})"
         return WithData
+
     return decorator
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Component Registry
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class ComponentRegistry:
     """Registry for component factories with metadata."""

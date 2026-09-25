@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -51,17 +51,17 @@ class TeamWall(BasePanel):
     ) -> None:
         super().__init__(
             panel_key="team_wall",
-            plain_explanation=(
+            plain=(
                 "Work together with your team. This wall shows your team's "
                 "combined progress: regions charted, defects fixed, quests "
                 "completed. No individual rankings — just shared progress."
             ),
-            why_explanation=(
+            why=(
                 "Research is collaborative. The team wall shows what your "
                 "group has achieved together, without pitting individuals "
                 "against each other. Opt-in only — you choose to join."
             ),
-            expert_explanation=(
+            expert=(
                 "Team progress aggregates cooperative metrics only: "
                 "sum of regions_charted, defects_fixed, quests_completed, "
                 "badges_earned, personal_bests across all team members. "
@@ -84,7 +84,7 @@ class TeamWall(BasePanel):
     def render(self) -> ui.element:
         """Render the team wall."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("team_wall")
+            self.render_header("Team")
 
             if not self._joined:
                 self._render_join_prompt()
@@ -219,7 +219,7 @@ class TeamWall(BasePanel):
         return card
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_team_wall(

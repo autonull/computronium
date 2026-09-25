@@ -61,7 +61,7 @@ from computronium.ui.event_bus import (
     event_bus,
 )
 from computronium.ui.metrics import metrics
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 from computronium.ui.view_registry import (
     PanelPlacement,
     PanelSpec,
@@ -188,9 +188,9 @@ class _ActivityFeedPanel(ActivityFeed, BasePanel):
         BasePanel.__init__(
             self,
             panel_key="activity_feed",
-            plain_explanation="Live stream of what the system is doing right now",
-            why_explanation="Shows proposals, defects, alerts, and completions in real time",
-            expert_explanation="Event bus subscription renders classified DashboardEvents as FeedEvents",
+            plain="Live stream of what the system is doing right now",
+            why="Shows proposals, defects, alerts, and completions in real time",
+            expert="Event bus subscription renders classified DashboardEvents as FeedEvents",
         )
         ActivityFeed.__init__(self)
 
@@ -207,9 +207,9 @@ class _TradeoffsPanel(TradeoffsPanel, BasePanel):
         BasePanel.__init__(
             self,
             panel_key="tradeoffs",
-            plain_explanation="See the best trade-offs between accuracy and cost",
-            why_explanation="Pareto front shows which configurations you can't improve without making something worse",
-            expert_explanation="ParetoCell metrics dict with objective names as keys; sorted by first objective",
+            plain="See the best trade-offs between accuracy and cost",
+            why="Pareto front shows which configurations you can't improve without making something worse",
+            expert="ParetoCell metrics dict with objective names as keys; sorted by first objective",
         )
         TradeoffsPanel.__init__(self)
 
@@ -232,9 +232,9 @@ class _CampaignGalleryPanel(BasePanel):
         BasePanel.__init__(
             self,
             panel_key="campaigns",
-            plain_explanation="Past campaigns and their results",
-            why_explanation="Compare what was tried before starting something new",
-            expert_explanation="CampaignCardGallery over <root>/campaigns manifests",
+            plain="Past campaigns and their results",
+            why="Compare what was tried before starting something new",
+            expert="CampaignCardGallery over <root>/campaigns manifests",
         )
         self._gallery = CampaignCardGallery(manifests_dir)
 
@@ -252,9 +252,9 @@ class _EvidencePanel(BasePanel):
         BasePanel.__init__(
             self,
             panel_key="evidence",
-            plain_explanation="What the campaign believes and why",
-            why_explanation="Beliefs, claims, calibration, and decisions in one place",
-            expert_explanation="CEEC ledger projections; read-only until ceec.run adapters land",
+            plain="What the campaign believes and why",
+            why="Beliefs, claims, calibration, and decisions in one place",
+            expert="CEEC ledger projections; read-only until ceec.run adapters land",
         )
 
     def render(self):

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from nicegui import ui
 
 from computronium.ui.design_tokens import ICONS
-from computronium.ui.mode_toggle import BasePanel
+from computronium.ui.panels import BasePanel
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,17 +32,17 @@ class PreviewShelf(BasePanel):
     def __init__(self, entries: list[PreviewEntry] | None = None) -> None:
         super().__init__(
             panel_key="preview_shelf",
-            plain_explanation=(
+            plain=(
                 "This shelf shows features that are proposed but not yet built. "
                 "Each entry explains what it would do and how we'd prove it wrong. "
                 "Nothing here is live — it's a preview of future work."
             ),
-            why_explanation=(
+            why=(
                 "Honest preview prevents hype. The falsification plan is the "
                 "most important part: if we can't say how to prove it wrong, "
                 "we shouldn't build it."
             ),
-            expert_explanation=(
+            expert=(
                 "Auto-Evolve is a constitutional self-modification engine: "
                 "asexual mutation (neutral birth) + slope-based selection + "
                 "immutable Constitution. Per AUTOTILE.md §8.5 kill criterion: "
@@ -85,12 +85,12 @@ class PreviewShelf(BasePanel):
     def render(self) -> ui.element:
         """Render the Preview Shelf."""
         with ui.column().classes("w-full gap-4") as panel:
-            self.render_header("preview_shelf")
+            self.render_header("Preview shelf")
 
             # Status badge
             with ui.row().classes("w-full items-center gap-2 mb-4"):
                 ui.icon(ICONS["warning"]).classes("text-xl text-warning")
-                ui.label(self.tr("proposed_not_implemented")).classes(
+                ui.label("Proposed \u2014 not implemented").classes(
                     "text-h6 text-warning font-bold"
                 )
 
@@ -133,7 +133,7 @@ class PreviewShelf(BasePanel):
                     ).classes("text-primary")
 
     def _refresh(self) -> None:
-        """Refresh on mode change."""
+        """Refresh with current data."""
 
 
 def create_auto_evolve_preview() -> PreviewShelf:

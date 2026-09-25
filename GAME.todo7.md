@@ -295,12 +295,20 @@ Auto-discovery at startup; palette and registry pick everything up.
   on_visibility_change/on_unmount` wired in view/tab switches + root switch
 - [x] CLI cleanup: `--ui-mode`/`--ui-actions` removed, `--quiet` →
   `--density comfortable|compact` (persisted, compact quiets the feed)
-- [ ] Glossary codemod (deferred): `self.tr()` ×89 across ~20 components →
-  inline explorer strings, then delete `glossary_service.py`/`glossary.json`
-  /`mode_toggle` register machinery/`test_ux_l3_glossary_totality.py`;
-  regenerate screenshots; compare against baseline
-- [ ] Single `DENSITY_TOKENS` done in `design_tokens.py`; `.text-grey`/
-  `!important` → token classes still open (pair with the `tr()` codemod)
+- [x] Glossary codemod (done 2026-09-25): `self.tr()`/`tr()` literals ×~100 →
+  inline plain strings via scripted codemod (zero missing keys); dynamic cases
+  resolved by domain fields (`Badge.name`/`Quest.name`/`ConstitutionInvariant.label`,
+  explorer manifest fields); register branches collapsed to the plain variant;
+  deleted `glossary_service.py`/`glossary.json`/`mode_toggle` register
+  machinery/`test_ux_l3_glossary_totality.py`; `BasePanel` moved register-free
+  to `ui/panels.py` (`panel_key, *, plain, why, expert, docs_url`;
+  `render_header(title)` takes a plain label); `component.with_mode` deleted;
+  quiz experience→mode question dropped (2 questions); `ModeChanged` removed
+  from `event_bus` (L16 re-pinned to `ConfigChanged`); `ui/__init__` exports
+  only `BasePanel` + tokens. Net −2,059 LOC across 35 files.
+- [x] `DENSITY_TOKENS` in `design_tokens.py`; `.text-grey`/`!important` resolved
+  without a mass edit: grey classes are Quasar palette pinned to contrast-safe
+  values by `ui/a11y/tokens.py` (single owner) — no per-component token pass needed
 
 ### Phase 2: Simplification + Defect Fixes
 - [x] Flags removed (progress + workshop always in palette); PanelPlacement
@@ -484,3 +492,52 @@ Auto-discovery at startup; palette and registry pick everything up.
   a11y token cleanup (rest of Phase 2).
 - Screenshot baselines must be regenerated (5 views × 2 densities);
   eyeball via `scripts/generate_dashboard_screenshots.py --serve`.
+
+## 15. PROGRESS LOG (2026-09-25 — Phase 1 glossary slice)
+
+### Shipped
+- Single-register UI completed: ~100 literal `tr()` calls inlined (scripted,
+  zero missing keys), 7 dynamic/register-branch sites hand-resolved,
+  6 files deleted (`glossary.json`, `glossary_service.py`, `mode_toggle.py`,
+  `test_ux_l3_glossary_totality.py`, `test_ux_l4_readability.py`,
+  `scripts/lint_readability.py`), 1 added (`ui/panels.py`, pyright-clean).
+  Net −2,059 LOC across 35 files (351+/2410−).
+- Verified: 70 passed (`test_adapters` + `test_dashboard_render` +
+  `test_dashboard_state`), 31 passed (`test_dashboard_fault_injection` +
+  `test_dashboard_interactions` + L16 eventbus), 4 passed (`tests/lint`);
+  `ruff format`/`check` clean on all touched files (remaining findings are
+  pre-existing legacy idioms); `pyright ui/panels.py` 0 errors.
+- `tests/ui/test_dashboard_screenshots.py` file-level run shows 5
+  `test_all_views_render_headless` failures — confirmed pre-existing via
+  `git stash -u` (identical on pristine tree; each view passes solo).
+  Test-ordering pollution, unrelated to this slice.
+
+### Discovered while working
+- Domain objects already carry plain copy: `Badge.name`, `Quest.name`,
+  `ConstitutionInvariant.label`, manifest `title/description_explorer` —
+  the dynamic-`tr()` sites resolved to fields, not new mappings.
+- `ruff format` in this env rewrites 8 untouched UI files (503-line churn
+  from a formatter-version skew); reverted — format only files you edit.
+- UX-L4 readability gate guarded `glossary.json` explorer strings; with the
+  file gone the gate has no target, so script + test were deleted with it.
+- `.text-grey` needs no per-component pass: `ui/a11y/tokens.py` already owns
+  grey at contrast-safe values (single owner, not cruft).
+
+### New improvement opportunities
+- `Badge/Quest/Record.register_explorer|_lab` + manifest
+  `title/description_lab` fields are now write-only dual-register residue —
+  collapse to single label fields in a small follow-up (touches recognition
+  + projector + tests).
+- `BasePanel._refresh` no-op stubs (~10 panels) are dead weight; remove or
+  fold into `on_data_update` during Phase 2 cleanup.
+- `tab_bar.default_slot.children.append(btn)` duplicate-parenting quirk
+  (from §13) still open.
+- Screenshot baselines still need regeneration (5 views × 2 densities).
+
+### Notes for remaining work
+- Next slice: single WS topic + hash-nav (rest of Phase 2), then Phase 3
+  capabilities (forensics drawer, Atlas filters, parallel coordinates,
+  budget panel, Evidence adapters, scrubber).
+- `docs/platform/dashboard.md` still documents pre-unification flags/registers
+  — refresh in the Phase 4 docs pass with the remaining stale prose
+  (dogfood walkthrough references `lint_readability`).
