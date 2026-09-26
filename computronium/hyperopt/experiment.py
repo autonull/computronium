@@ -115,57 +115,67 @@ class TrialRunner:
         )
 
         try:
-            # 1. Create Model and Trainer
-            model, trainer = self._create_model_and_trainer(trial, tracker)
-
-            # 2. Setup Training (Schedule, Monitoring, Checkpointing)
-            schedule, monitor, checkpoint_manager = self._setup_training_components(
-                trial_id
-            )
-
-            # 3. Define Callbacks
-            epoch_times = []
-            start_time = time.time()
-
-            on_epoch_end_callback = self._create_epoch_callback(
-                trial_id, epoch_times, start_time, checkpoint_manager
-            )
-            wrapped_pruning_callback = self._create_pruning_callback(
-                trial_id, pruning_callback, monitor
-            )
-
-            # 4. Execute Training Loop
-            trajectory = self._execute_training_loop(
-                schedule,
-                monitor,
-                trainer,
-                trial_id,
-                trial,
-                on_epoch_end_callback,
-                wrapped_pruning_callback,
-            )
-
-            # 5. Finalize and Save
-            if checkpoint_manager:
-                checkpoint_manager.close()
-
-            return self._finalize_trial(
-                trial_id,
-                trial,
-                trajectory,
-                monitor,
-                epoch_times,
-                model,
-                trainer,
-                config=trial.config,
-            )
-
+            return self._run_trial_body(trial, trial_id, pruning_callback, tracker)
         except Exception as exc:  # broad: a failing trial must not stop the loop
             logger.warning("Trial %s failed: %s: %s", trial_id, type(exc).__name__, exc)
             self.storage.update_trial(trial_id, status="failed")
             return False
         finally:
-            self._cleanup_trial_resources(tracker, monitor)
+            # monitor is created inside the body, so it is unreachable from
+            # here; the pre-extraction code read an unbound name on early failure.
+            self._cleanup_trial_resources(tracker, None)
+
+    def _run_trial_body(
+        self,
+        trial,
+        trial_id: int,
+        pruning_callback,
+        tracker,
+    ) -> bool:
+        # 1. Create Model and Trainer
+        model, trainer = self._create_model_and_trainer(trial, tracker)
+
+        # 2. Setup Training (Schedule, Monitoring, Checkpointing)
+        schedule, monitor, checkpoint_manager = self._setup_training_components(
+            trial_id
+        )
+
+        # 3. Define Callbacks
+        epoch_times = []
+        start_time = time.time()
+
+        on_epoch_end_callback = self._create_epoch_callback(
+            trial_id, epoch_times, start_time, checkpoint_manager
+        )
+        wrapped_pruning_callback = self._create_pruning_callback(
+            trial_id, pruning_callback, monitor
+        )
+
+        # 4. Execute Training Loop
+        trajectory = self._execute_training_loop(
+            schedule,
+            monitor,
+            trainer,
+            trial_id,
+            trial,
+            on_epoch_end_callback,
+            wrapped_pruning_callback,
+        )
+
+        # 5. Finalize and Save
+        if checkpoint_manager:
+            checkpoint_manager.close()
+
+        return self._finalize_trial(
+            trial_id,
+            trial,
+            trajectory,
+            monitor,
+            epoch_times,
+            model,
+            trainer,
+            config=trial.config,
+        )
 
     def _setup_training_components(self, trial_id: int):
         """Setup schedule, monitor, and checkpoint manager."""
@@ -498,46 +508,19 @@ def run_single_trial_task(
 
     try:
         storage = HyperoptStorage(str(db_path))
-
-        # Create trial entry
-        trial_id = storage.create_trial(model_name, config)
-
-        # Log basic config info
-        _log_trial_info(trial_id, task, model_name, config)
-
-        # Extract task kwargs
-        task_kwargs = _extract_task_kwargs(config)
-
-        # Create runner
-        timeout_raw = config.get("timeout", 3600.0)
-        timeout_val: float = (
-            float(timeout_raw) if isinstance(timeout_raw, (int, float)) else 3600.0
-        )
-        runner = TrialRunner(
-            storage=storage,
-            device="auto",
-            task=task,
-            quick_mode=quick_mode,
-            checkpoint_db_path=str(db_path),
-            task_kwargs=task_kwargs,
-            timeout=timeout_val,
-            event_sink=event_sink,
-        )
-
-        # Override epochs if present
-        epochs_raw = config.get("epochs")
-        if epochs_raw is not None:
-            runner.epochs = int(epochs_raw)  # type: ignore[arg-type]
-
-        # Run training
-        success = _run_training(runner, trial_id, verbose)
-
-        if success:
-            return _collect_success_metrics(storage, trial_id, model_name, task, config)
-        else:
-            _handle_trial_failure(model_name, task, config, trial_id, verbose)
-            return None
-
+        try:
+            return _run_trial_task_inner(
+                storage,
+                db_path,
+                task,
+                model_name,
+                config,
+                quick_mode,
+                verbose,
+                event_sink,
+            )
+        finally:
+            _cleanup_trial(storage, temp_dir, verbose)
     except TimeoutError as e:
         logger.exception("Timeout Error")
         _sink_failure(model_name, task, config, "error", error=str(e))
@@ -551,8 +534,61 @@ def run_single_trial_task(
         # Log exception failure
         _sink_failure(model_name, task, config, "error", error=traceback.format_exc())
         return None
-    finally:
-        _cleanup_trial(storage, temp_dir, verbose)
+
+
+def _run_trial_task_inner(
+    storage: HyperoptStorage,
+    db_path: Path,
+    task: str,
+    model_name: str,
+    config: dict[str, object],
+    quick_mode: bool,
+    verbose: bool,
+    event_sink: EventSink | None,
+) -> dict[str, float] | None:
+    """Trial body for :func:`run_single_trial_task`, with storage already open.
+
+    Split out so the caller's `finally` owns the cleanup and its `except`
+    clauses stay a top-level safety net rather than a 14-statement block.
+    """
+    # Create trial entry
+    trial_id = storage.create_trial(model_name, config)
+
+    # Log basic config info
+    _log_trial_info(trial_id, task, model_name, config)
+
+    # Extract task kwargs
+    task_kwargs = _extract_task_kwargs(config)
+
+    # Create runner
+    timeout_raw = config.get("timeout", 3600.0)
+    timeout_val: float = (
+        float(timeout_raw) if isinstance(timeout_raw, (int, float)) else 3600.0
+    )
+    runner = TrialRunner(
+        storage=storage,
+        device="auto",
+        task=task,
+        quick_mode=quick_mode,
+        checkpoint_db_path=str(db_path),
+        task_kwargs=task_kwargs,
+        timeout=timeout_val,
+        event_sink=event_sink,
+    )
+
+    # Override epochs if present
+    epochs_raw = config.get("epochs")
+    if epochs_raw is not None:
+        runner.epochs = int(epochs_raw)  # type: ignore[arg-type]
+
+    # Run training
+    success = _run_training(runner, trial_id, verbose)
+
+    if success:
+        return _collect_success_metrics(storage, trial_id, model_name, task, config)
+    else:
+        _handle_trial_failure(model_name, task, config, trial_id, verbose)
+        return None
 
 
 def _setup_storage(storage_path: str | None) -> tuple[str | None, Path]:
@@ -659,37 +695,65 @@ def _cleanup_trial(
         shutil.rmtree(temp_dir)
 
 
-def _sink_completed(
+def _sink(
     model_name: str,
     task: str,
     config: dict[str, object],
     metrics: Mapping[str, object],
+    status: str,
+    seed: int | None,
+    extra: dict[str, object],
 ) -> None:
-    """Persist a successful ExecutionEngine trial to the KnowledgeBase (best-effort).
+    """Single best-effort bridge to the knowledge layer's result sink.
 
-    Separate from the probe-driver path so each success compounds into the
-    knowledge layer regardless of which experiment framework produced it.
+    One function rather than one per outcome: the two callers differed only in
+    which fields they filled, and the duplication was what let the two sinks
+    drift apart.
     """
     if os.environ.get("COMPUTRONIUM_RECORD_RESULTS", "1") == "0":
         return
     try:
         from computronium.experiment.result_sink import record_experiment_result
 
-        seed_raw = config.get("seed")
-        epochs_raw = config.get("epochs")
         record_experiment_result(
             model=model_name,
             task=task,
             config=config,
             metrics=dict(metrics),
-            status="completed",
-            seed=int(seed_raw) if seed_raw is not None else None,  # type: ignore[arg-type]
-            epochs=int(epochs_raw) if epochs_raw is not None else None,  # type: ignore[arg-type]
+            status=status,
+            seed=seed,
+            epochs=_int_or_none(config.get("epochs")),
             device="auto",
-            extra={"source": "execution_engine"},
+            extra=extra,
         )
     except Exception:  # pragma: no cover  # best-effort persistence
         logger.exception("result_sink failed for %s/%s", model_name, task)
+
+
+def _int_or_none(raw: object) -> int | None:
+    return None if raw is None else int(raw)  # type: ignore[arg-type]
+
+
+def _sink_completed(
+    model_name: str,
+    task: str,
+    config: dict[str, object],
+    metrics: Mapping[str, object],
+) -> None:
+    """Persist a successful ExecutionEngine trial to the KnowledgeBase.
+
+    Separate from the probe-driver path so each success compounds into the
+    knowledge layer regardless of which experiment framework produced it.
+    """
+    _sink(
+        model_name,
+        task,
+        config,
+        metrics,
+        status="completed",
+        seed=_int_or_none(config.get("seed")),
+        extra={"source": "execution_engine"},
+    )
 
 
 def _sink_failure(
@@ -702,34 +766,12 @@ def _sink_failure(
     trial_id: int | None = None,
 ) -> None:
     """Persist a failed ExecutionEngine trial through the single result sink."""
-    if os.environ.get("COMPUTRONIUM_RECORD_RESULTS", "1") == "0":
-        return
-    try:
-        from computronium.experiment.result_sink import record_experiment_result
-
-        extra: dict[str, object] = {
-            "source": "execution_engine",
-            "tier": config.get("tier", "unknown"),
-        }
-        if error:
-            extra["error"] = error
-        epochs_raw = config.get("epochs")
-        job_id_raw = config.get("job_id")
-        seed_val: int | None = (
-            int(job_id_raw)
-            if job_id_raw is not None
-            else (trial_id if trial_id is not None else None)
-        )  # type: ignore[arg-type]
-        record_experiment_result(
-            model=model_name,
-            task=task,
-            config=config,
-            metrics={},
-            status=status,
-            seed=seed_val,
-            epochs=int(epochs_raw) if epochs_raw is not None else None,  # type: ignore[arg-type]
-            device="auto",
-            extra=extra,
-        )
-    except Exception:  # pragma: no cover  # best-effort persistence
-        logger.exception("result_sink failed for %s/%s", model_name, task)
+    job_id_raw = config.get("job_id")
+    seed = _int_or_none(job_id_raw) if job_id_raw is not None else trial_id
+    extra: dict[str, object] = {
+        "source": "execution_engine",
+        "tier": config.get("tier", "unknown"),
+    }
+    if error:
+        extra["error"] = error
+    _sink(model_name, task, config, {}, status, seed, extra)

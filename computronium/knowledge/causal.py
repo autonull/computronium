@@ -57,51 +57,52 @@ class CausalAnalyzer:
         Returns:
             Dict with causal analysis results.
         """
-        try:  # noqa: PLR0915
-            import pandas as pd
-
-            exps = self.list_experiments(limit=500)
-            if not exps or len(exps) < self.config.min_experiments:
-                return {"error": "Not enough data for causal analysis"}
-
-            records = []
-            for exp in exps:
-                config = json.loads(exp.get("config", "{}"))
-                metrics = json.loads(exp.get("metrics", "{}"))
-                if outcome in metrics:
-                    records.append({
-                        "lr": config.get("lr", 0.001),
-                        "hidden_dim": config.get("hidden_dim", 256),
-                        "num_layers": config.get("num_layers", 2),
-                        "batch_size": config.get("batch_size", 64),
-                        "outcome": metrics[outcome],
-                    })
-
-            if len(records) < self.config.min_records:
-                return {"error": f"Not enough records with {outcome}"}
-
-            df = pd.DataFrame(records)
-
-            # Compute correlations with outcome
-            correlations = {}
-            for col in df.columns:
-                if col != "outcome":
-                    corr = df[col].corr(df["outcome"])
-                    if not np.isnan(corr):
-                        correlations[col] = float(abs(corr))
-
-            # Sort by correlation magnitude
-            sorted_corr = sorted(correlations.items(), key=lambda x: x[1], reverse=True)
-
-            return {
-                "outcome": outcome,
-                "correlations": dict(correlations),
-                "ranked_factors": sorted_corr,
-                "n_samples": len(records),
-            }
+        try:
+            return self._analyze(outcome)
         except Exception as e:
             logger.exception("Causal analysis failed")
             raise KnowledgeBaseError("Causal analysis failed") from e
+
+    def _analyze(self, outcome: str) -> dict[str, object]:
+        import pandas as pd
+
+        exps = self.list_experiments(limit=500)
+        if not exps or len(exps) < self.config.min_experiments:
+            return {"error": "Not enough data for causal analysis"}
+
+        records = []
+        for exp in exps:
+            config = json.loads(exp.get("config", "{}"))
+            metrics = json.loads(exp.get("metrics", "{}"))
+            if outcome in metrics:
+                records.append({
+                    "lr": config.get("lr", 0.001),
+                    "hidden_dim": config.get("hidden_dim", 256),
+                    "num_layers": config.get("num_layers", 2),
+                    "batch_size": config.get("batch_size", 64),
+                    "outcome": metrics[outcome],
+                })
+
+        if len(records) < self.config.min_records:
+            return {"error": f"Not enough records with {outcome}"}
+
+        df = pd.DataFrame(records)
+
+        correlations = {}
+        for col in df.columns:
+            if col != "outcome":
+                corr = df[col].corr(df["outcome"])
+                if not np.isnan(corr):
+                    correlations[col] = float(abs(corr))
+
+        return {
+            "outcome": outcome,
+            "correlations": dict(correlations),
+            "ranked_factors": sorted(
+                correlations.items(), key=lambda x: x[1], reverse=True
+            ),
+            "n_samples": len(records),
+        }
 
     def list_experiments(
         self,
@@ -133,13 +134,12 @@ class CausalAnalyzer:
             cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
             return [dict(row) for row in cursor]
 
-    def meta_fit_scaling_laws(  # ruff: ignore[complex-structure, too-many-locals]
+    def meta_fit_scaling_laws(
         self,
         model_families: list[str] | None = None,
         tasks: list[str] | None = None,
     ) -> dict[str, dict[str, float]]:
-        """
-        Aggregate Chinchilla-style scaling law fits across all runs.
+        """Aggregate Chinchilla-style scaling law fits across all runs.
 
         Fits: L = E + A / N^alpha + B / D^beta
         Where N = params, D = data, L = loss
@@ -151,107 +151,75 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {alpha, beta, E, A, B, r2}
         """
-        try:  # noqa: PLR0915
-            import numpy as np
-            import pandas as pd
-            from scipy.optimize import curve_fit
-
-            exps = self.list_experiments(limit=1000)
-            if not exps:
-                return {}
-
-            # Filter
-            if model_families:
-                exps = [e for e in exps if e.get("model_family") in model_families]
-            if tasks:
-                exps = [e for e in exps if e.get("task") in tasks]
-
-            records = []
-            for exp in exps:
-                config = json.loads(exp.get("config", "{}"))
-                metrics = json.loads(exp.get("metrics", {}))
-
-                # Extract scaling parameters
-                n_params = config.get("n_params", 0)
-                n_data = config.get("n_data", 0)
-                loss = metrics.get("final_loss", metrics.get("val_loss", 0))
-
-                if n_params > 0 and n_data > 0 and loss > 0:
-                    records.append({
-                        "model_family": exp.get("model_family", "unknown"),
-                        "task": exp.get("task", "unknown"),
-                        "n_params": n_params,
-                        "n_data": n_data,
-                        "loss": loss,
-                    })
-
-            if len(records) < 20:
-                logger.warning("Not enough data for scaling law meta-fit")
-                return {}
-
-            df = pd.DataFrame(records)
-            results = {}
-
-            def scaling_law(N, D, E, A, B, alpha, beta):
-                return E + A / (N**alpha) + B / (D**beta)
-
-            for model in df["model_family"].unique():
-                model_df = df[df["model_family"] == model]
-                if len(model_df) < 10:
-                    continue
-
-                try:  # noqa: PLR0915
-                    X = np.column_stack([
-                        model_df["n_params"].values,
-                        model_df["n_data"].values,
-                    ])
-                    y = model_df["loss"].values
-
-                    # Initial guess: E=0.1, A=1, B=1, alpha=0.5, beta=0.5
-                    p0 = [0.1, 1.0, 1.0, 0.5, 0.5]
-                    bounds = ([0, 0, 0, 0.1, 0.1], [10, 100, 100, 2.0, 2.0])
-
-                    popt, _pcov = curve_fit(
-                        lambda X, E, A, B, alpha, beta: scaling_law(
-                            X[:, 0], X[:, 1], E, A, B, alpha, beta
-                        ),
-                        X,
-                        y,
-                        p0=p0,
-                        bounds=bounds,
-                        maxfev=5000,
-                    )
-
-                    E, A, B, alpha, beta = popt
-                    y_pred = scaling_law(X[:, 0], X[:, 1], E, A, B, alpha, beta)
-                    r2 = 1 - np.sum((y - y_pred) ** 2) / np.sum((y - np.mean(y)) ** 2)
-
-                    results[model] = {
-                        "alpha": float(alpha),
-                        "beta": float(beta),
-                        "E": float(E),
-                        "A": float(A),
-                        "B": float(B),
-                        "r2": float(r2),
-                        "n_samples": len(model_df),
-                    }
-                except Exception as e:
-                    logger.warning("Scaling fit failed for %s: %s", model, e)
-                    continue
-
-            logger.info("Meta-fit scaling laws for %d model families", len(results))
-            return results  # ruff: ignore[try-consider-else]
-
+        try:
+            return self._meta_fit(model_families, tasks)
         except Exception as e:
             logger.exception("Scaling law meta-fit failed")
             raise KnowledgeBaseError("Scaling law meta-fit failed") from e
 
-    def compute_algorithm_fingerprints(  # ruff: ignore[complex-structure, too-many-branches]
+    def _meta_fit(
+        self,
+        model_families: list[str] | None,
+        tasks: list[str] | None,
+    ) -> dict[str, dict[str, float]]:
+        import pandas as pd
+        from scipy.optimize import curve_fit
+
+        exps = self.list_experiments(limit=1000)
+        if not exps:
+            return {}
+
+        if model_families:
+            exps = [e for e in exps if e.get("model_family") in model_families]
+        if tasks:
+            exps = [e for e in exps if e.get("task") in tasks]
+
+        records = []
+        for exp in exps:
+            config = json.loads(exp.get("config", "{}"))
+            metrics = json.loads(exp.get("metrics", "{}"))
+
+            n_params = config.get("n_params", 0)
+            n_data = config.get("n_data", 0)
+            loss = metrics.get("final_loss", metrics.get("val_loss", 0))
+
+            if n_params > 0 and n_data > 0 and loss > 0:
+                records.append({
+                    "model_family": exp.get("model_family", "unknown"),
+                    "task": exp.get("task", "unknown"),
+                    "n_params": n_params,
+                    "n_data": n_data,
+                    "loss": loss,
+                })
+
+        if len(records) < 20:
+            logger.warning("Not enough data for scaling law meta-fit")
+            return {}
+
+        df = pd.DataFrame(records)
+        results = {}
+
+        for model in df["model_family"].unique():
+            model_df = df[df["model_family"] == model]
+            if len(model_df) < 10:
+                continue
+            fit = _fit_scaling_law(
+                model_df["n_params"].values,
+                model_df["n_data"].values,
+                model_df["loss"].values,
+                curve_fit,
+            )
+            if fit is not None:
+                results[model] = fit
+
+        logger.info("Meta-fit scaling laws for %d model families", len(results))
+        return results
+
+    def compute_algorithm_fingerprints(
         self,
         model_families: list[str] | None = None,
     ) -> dict[str, dict[str, float]]:
-        """
-        Compute algorithm fingerprints: hyperparameter sensitivity embeddings.
+        """Compute algorithm fingerprints: hyperparameter sensitivity embeddings.
 
         Each algorithm gets a fingerprint vector representing its sensitivity
         to different hyperparameters. Used for algorithm phylogeny.
@@ -262,69 +230,54 @@ class CausalAnalyzer:
         Returns:
             Dict of model_family -> {hyperparam: sensitivity_score}
         """
-        try:  # noqa: PLR0915
-            import numpy as np
-            import pandas as pd
-
-            exps = self.list_experiments(limit=1000)
-            if not exps:
-                return {}
-
-            if model_families:
-                exps = [e for e in exps if e.get("model_family") in model_families]
-
-            records = []
-            for exp in exps:
-                config = json.loads(exp.get("config", "{}"))
-                metrics = json.loads(exp.get("metrics", {}))
-                acc = metrics.get("val_accuracy", 0)
-
-                record = {
-                    "model_family": exp.get("model_family", "unknown"),
-                    "lr": config.get("lr", 0.001),
-                    "hidden_dim": config.get("hidden_dim", 256),
-                    "num_layers": config.get("num_layers", 2),
-                    "batch_size": config.get("batch_size", 64),
-                    "beta": config.get("beta", 0.0),
-                    "val_accuracy": acc,
-                }
-                records.append(record)
-
-            if len(records) < 20:
-                return {}
-
-            df = pd.DataFrame(records)
-
-            # Compute sensitivity for each model family
-            fingerprints = {}
-            for model in df["model_family"].unique():
-                model_df = df[df["model_family"] == model]
-                if len(model_df) < 5:
-                    continue
-
-                # Correlation between each hyperparam and accuracy
-                sensitivity = {}
-                for param in ["lr", "hidden_dim", "num_layers", "batch_size", "beta"]:
-                    if param in model_df.columns:
-                        corr = model_df[param].corr(model_df["val_accuracy"])
-                        if not np.isnan(corr):
-                            sensitivity[param] = float(abs(corr))
-
-                # Also compute variance-based sensitivity (Sobol-like)
-                for param in ["lr", "hidden_dim", "num_layers", "batch_size"]:
-                    if param in model_df.columns:
-                        grouped = model_df.groupby(param)["val_accuracy"].mean()
-                        if len(grouped) > 1:
-                            sensitivity[f"{param}_variance"] = float(grouped.var())
-
-                fingerprints[model] = sensitivity
-
-            logger.info("Computed fingerprints for %d algorithms", len(fingerprints))
-            return fingerprints  # ruff: ignore[try-consider-else]
-
+        try:
+            return self._fingerprints(model_families)
         except Exception as e:
             logger.exception("Algorithm fingerprint computation failed")
             raise KnowledgeBaseError("Algorithm fingerprint computation failed") from e
+
+    def _fingerprints(
+        self, model_families: list[str] | None
+    ) -> dict[str, dict[str, float]]:
+        import numpy as np
+        import pandas as pd
+
+        exps = self.list_experiments(limit=1000)
+        if not exps:
+            return {}
+
+        if model_families:
+            exps = [e for e in exps if e.get("model_family") in model_families]
+
+        records = []
+        for exp in exps:
+            config = json.loads(exp.get("config", "{}"))
+            metrics = json.loads(exp.get("metrics", "{}"))
+
+            records.append({
+                "model_family": exp.get("model_family", "unknown"),
+                "lr": config.get("lr", 0.001),
+                "hidden_dim": config.get("hidden_dim", 256),
+                "num_layers": config.get("num_layers", 2),
+                "batch_size": config.get("batch_size", 64),
+                "beta": config.get("beta", 0.0),
+                "val_accuracy": metrics.get("val_accuracy", 0),
+            })
+
+        if len(records) < 20:
+            return {}
+
+        df = pd.DataFrame(records)
+
+        fingerprints = {}
+        for model in df["model_family"].unique():
+            model_df = df[df["model_family"] == model]
+            if len(model_df) < 5:
+                continue
+            fingerprints[model] = _sensitivity(model_df, np)
+
+        logger.info("Computed fingerprints for %d algorithms", len(fingerprints))
+        return fingerprints
 
     def map_failure_manifold(
         self,
@@ -468,67 +421,151 @@ class CausalAnalyzer:
         Returns:
             Dict with tree structure and cluster assignments.
         """
-        try:  # noqa: PLR0915
-            import numpy as np
-            from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
-            from sklearn.preprocessing import StandardScaler
-
-            fingerprints = self.compute_algorithm_fingerprints()
-            if not fingerprints or len(fingerprints) < 3:
-                return {}
-
-            # Build feature matrix
-            models = list(fingerprints.keys())
-            all_features = set()
-            for fp in fingerprints.values():
-                all_features.update(fp.keys())
-
-            feature_list = sorted(all_features)
-            X = np.zeros((len(models), len(feature_list)))
-
-            for i, model in enumerate(models):
-                for j, feat in enumerate(feature_list):
-                    X[i, j] = fingerprints[model].get(feat, 0.0)
-
-            # Standardize
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
-
-            # Hierarchical clustering
-            Z = linkage(X_scaled, method=method)
-
-            # Get cluster assignments
-            clusters = fcluster(Z, t=0.5, criterion="distance")
-
-            # Build tree structure
-            tree = {
-                "models": models,
-                "linkage_matrix": Z.tolist(),
-                "clusters": {models[i]: int(clusters[i]) for i in range(len(models))},
-                "n_clusters": int(clusters.max()),
-                "feature_names": feature_list,
-            }
-
-            # Dendrogram data for visualization
-            dend = dendrogram(Z, labels=models, no_plot=True)
-            tree["dendrogram"] = {
-                "icoord": [c.tolist() for c in dend["icoord"]],
-                "dcoord": [c.tolist() for c in dend["dcoord"]],
-                "ivl": dend["ivl"],
-                "leaves": dend["leaves"],
-            }
-
-            logger.info(
-                "Generated algorithm phylogeny with %d clusters", tree["n_clusters"]
-            )
-            return tree  # ruff: ignore[try-consider-else]
-
+        try:
+            return self._phylogeny(method)
         except Exception as e:
             logger.exception("Algorithm phylogeny generation failed")
             raise KnowledgeBaseError("Algorithm phylogeny generation failed") from e
+
+    def _phylogeny(self, method: str) -> dict[str, object]:
+        import numpy as np
+        from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
+        from sklearn.preprocessing import StandardScaler
+
+        fingerprints = self.compute_algorithm_fingerprints()
+        if not fingerprints or len(fingerprints) < 3:
+            return {}
+
+        # Build feature matrix
+        models = list(fingerprints.keys())
+        all_features = set()
+        for fp in fingerprints.values():
+            all_features.update(fp.keys())
+
+        feature_list = sorted(all_features)
+        X = np.zeros((len(models), len(feature_list)))
+
+        for i, model in enumerate(models):
+            for j, feat in enumerate(feature_list):
+                X[i, j] = fingerprints[model].get(feat, 0.0)
+
+        # Standardize
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        # Hierarchical clustering
+        Z = linkage(X_scaled, method=method)
+
+        # Get cluster assignments
+        clusters = fcluster(Z, t=0.5, criterion="distance")
+
+        # Build tree structure
+        tree = {
+            "models": models,
+            "linkage_matrix": Z.tolist(),
+            "clusters": {models[i]: int(clusters[i]) for i in range(len(models))},
+            "n_clusters": int(clusters.max()),
+            "feature_names": feature_list,
+        }
+
+        # Dendrogram data for visualization
+        dend = dendrogram(Z, labels=models, no_plot=True)
+        tree["dendrogram"] = {
+            "icoord": [c.tolist() for c in dend["icoord"]],
+            "dcoord": [c.tolist() for c in dend["dcoord"]],
+            "ivl": dend["ivl"],
+            "leaves": dend["leaves"],
+        }
+
+        logger.info(
+            "Generated algorithm phylogeny with %d clusters", tree["n_clusters"]
+        )
+        return tree  # ruff: ignore[try-consider-else]
 
 
 __all__ = [
     "CausalAnalyzer",
     "CausalConfig",
 ]
+
+
+def _fit_scaling_law(
+    n_params: object,
+    n_data: object,
+    loss: object,
+    curve_fit: object,
+) -> dict[str, float] | None:
+    """Fit one model family's Chinchilla curve, or `None` if it will not fit.
+
+    A family that cannot be fitted is not an error: the caller keeps the
+    families that did fit, and logs the one that did not. The guard is around
+    the fit alone, because the fit is the only step that can fail on data
+    shape or a diverged optimiser.
+    """
+    import numpy as np
+
+    popt = _guarded_curve_fit(n_params, n_data, loss, curve_fit)
+    if popt is None:
+        return None
+
+    E, A, B, alpha, beta = popt
+    y = loss
+    y_pred = E + A / (np.asarray(n_params) ** alpha) + B / (np.asarray(n_data) ** beta)
+    r2 = 1 - np.sum((y - y_pred) ** 2) / np.sum((y - np.mean(y)) ** 2)
+    return {
+        "alpha": float(alpha),
+        "beta": float(beta),
+        "E": float(E),
+        "A": float(A),
+        "B": float(B),
+        "r2": float(r2),
+        "n_samples": len(y),
+    }
+
+
+def _guarded_curve_fit(
+    n_params: object,
+    n_data: object,
+    loss: object,
+    curve_fit: object,
+) -> list[float] | None:
+    import numpy as np
+
+    def scaling_law(N, D, E, A, B, alpha, beta):
+        return E + A / (N**alpha) + B / (D**beta)
+
+    try:
+        popt, _pcov = curve_fit(
+            lambda X, E, A, B, alpha, beta: scaling_law(
+                X[:, 0], X[:, 1], E, A, B, alpha, beta
+            ),
+            np.column_stack([n_params, n_data]),
+            loss,
+            p0=[0.1, 1.0, 1.0, 0.5, 0.5],
+            bounds=([0, 0, 0, 0.1, 0.1], [10, 100, 100, 2.0, 2.0]),
+            maxfev=5000,
+        )
+    except Exception as e:
+        logger.warning("Scaling fit failed: %s", e)
+        return None
+    return list(popt)
+
+
+_FINGERPRINT_PARAMS = ("lr", "hidden_dim", "num_layers", "batch_size", "beta")
+
+
+def _sensitivity(model_df: object, np: object) -> dict[str, float]:
+    """Correlation and between-bin variance sensitivity for one family."""
+    sensitivity = {}
+    for param in _FINGERPRINT_PARAMS:
+        if param in model_df.columns:
+            corr = model_df[param].corr(model_df["val_accuracy"])
+            if not np.isnan(corr):
+                sensitivity[param] = float(abs(corr))
+
+    for param in _FINGERPRINT_PARAMS[:-1]:
+        if param in model_df.columns:
+            grouped = model_df.groupby(param)["val_accuracy"].mean()
+            if len(grouped) > 1:
+                sensitivity[f"{param}_variance"] = float(grouped.var())
+    return sensitivity
