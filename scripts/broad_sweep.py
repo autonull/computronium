@@ -97,41 +97,28 @@ _SHALLOW_CAPS: dict[str, int] = {
 #   - fa       -> a Feedback-Alignment propagator (local random-feedback)
 #   - hebbian  -> a Contrastive-Hebbian propagator (synapse-local)
 _RULE_ACTIVATION: dict[str, dict[str, object]] = {
-    "eqprop": {"config": {"gradient_method": "equilibrium"}},
+    "eqprop": {"propagator": "eqprop"},
     "fa": {"propagator": "feedback_alignment"},
     "hebbian": {"propagator": "contrastive_hebbian_learning"},
 }
 
 
-def _eqprop_gradient_method(model: str) -> str:
-    """All eqprop models use the energy-contrastive engine with train_step.
-
-    ``gradient_method="equilibrium"`` is the fast, O(1)-memory implicit
-    differentiation path — for models with a native contrastive ``train_step``
-    (the unified ``EquilibriumMLP`` family) the trainer routes through the
-    local rule anyway; for models without one (conv/graph add-ons) it keeps
-    the cheap implicit backward instead of the slow explicit free+nudged
-    settle or a BPTT fallback. The bare ``"equilibrium"`` value therefore
-    gives every eqprop model its fastest correct training path.
-    """
-    return "equilibrium"
-
-
 def _rule_activation_for(model: str, family: str) -> dict[str, object]:
     """Resolve the per-model rule activation for a family.
 
-    ``hebbian`` models that ship their own local ``train_step`` (e.g.
-    ``three_factor_hebbian``, ``deep_hebbian``, ``hebbian_chain``) should use
-    their native rule — the forced CHL propagator would otherwise override
-    their bespoke update in the trainer dispatch (Phase 2 before Phase 3). The
-    CHL propagator is applied only to hebbian models without a native
-    ``train_step``.
+    One field: the propagator, which is the rule the arm must run so a bio
+    family measures its own local cost. It used to be a second, per-family
+    ``config`` override -- eqprop's ``gradient_method="equilibrium"`` -- which
+    was a knob of the native zoo models and has no consumer on the System
+    path, so it made every eqprop probe report a phantom-knob defect while
+    changing nothing about the arm. ``model`` is retained because the rule a
+    model implies is not always the family's (an eqprop model asked to run the
+    FA propagator is running FA).
     """
     activation = dict(_RULE_ACTIVATION.get(family, {}))
-    cfg = dict(activation.get("config") or {})
-    if family == "eqprop" and cfg.get("gradient_method") is not None:
-        cfg["gradient_method"] = _eqprop_gradient_method(model)
-        activation["config"] = cfg
+    if not activation.get("propagator"):
+        activation["propagator"] = None
+    logger.debug("rule activation for %s/%s: %s", family, model, activation)
     return activation
 
 
@@ -182,6 +169,14 @@ def sample_config_for_space(space: dict[str, object]) -> dict[str, object]:
     ``RULE_SPACES`` dict and a ``SearchSpace.params`` dict, so the sweep never
     needs an Optuna trial for a shallow breadth probe.
 
+    The space is intersected with what the arm can actually consume. The rule
+    spaces were written for the native zoo models Sprint 7.6.10 removed, and
+    the System path's rule systems read three of their keys; sampling the other
+    thirteen made every probe report a phantom-knob defect, which is a true
+    statement about a *declaration* and not about the arm. The phantom
+    diagnosis stays as the guard for the other direction -- a key added to a
+    space with no consumer is still caught, per probe.
+
     Args:
         space: Parameter name → range tuple or discrete-choice list.
 
@@ -190,8 +185,19 @@ def sample_config_for_space(space: dict[str, object]) -> dict[str, object]:
     """
     import numpy as np
 
+    from computronium.core.rules import RULE_SYSTEM_CONFIG_KEYS
+
+    dropped = sorted(set(space) - set(RULE_SYSTEM_CONFIG_KEYS))
+    if dropped:
+        logger.info(
+            "space declares %d knob(s) no rule system consumes, not sampled: %s",
+            len(dropped),
+            dropped,
+        )
     config: dict[str, object] = {}
     for name, spec in space.items():
+        if name not in RULE_SYSTEM_CONFIG_KEYS:
+            continue
         if isinstance(spec, list):
             config[name] = np.random.choice(spec).item()
         else:

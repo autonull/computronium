@@ -225,7 +225,6 @@ class CoreTrainerDriver:
         )
         from computronium.domains.factory import create_task
         from computronium.experiment.param_estimator import (
-            estimate_param_count,
             phantom_knobs,
             resolve_native_model,
         )
@@ -256,12 +255,12 @@ class CoreTrainerDriver:
                     )
                 )
             )
-        try:
-            param_count = estimate_param_count(
-                model, config, input_dim=input_dim, output_dim=handle.output_dim
-            )
-        except Exception:  # defensive: counting must never break a probe
-            param_count = 0
+        # Counted off the system that was built, not off the name. The zoo
+        # estimator describes whatever model ``model`` names, which on the
+        # System path is a different architecture from the rule system the arm
+        # trains -- and the sweep gates a fair-comparison budget on this
+        # number, so a count of the wrong model is worse than no count.
+        param_count = sum(t.numel() for t in system.geometry.params.values())
 
         handle.setup()
         trainer_config = SystemTrainerConfig(
