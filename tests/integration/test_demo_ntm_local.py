@@ -34,6 +34,7 @@ def _acc(controller, heads) -> float:
 
 
 @pytest.mark.timeout(900)
+@pytest.mark.slow
 def test_demo_ntm_local(emit_run_record) -> None:
     t0 = time.time()
     arms: dict[str, float] = {}

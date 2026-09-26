@@ -203,13 +203,17 @@ process per tier, `-n 4` — is stable and is now the reference runner.
 
 | Tier | Walltime | Dominant tests |
 |------|----------|-----------------|
-| integration | **528s** | `test_demo_update_ladder` 182s, `test_demo_ntm_local` 155s |
-| property | 72s | spread thin |
-| unit | 38s | thermo cosine 14.3s, NTM copy 11.7s |
-| primitives / algorithms / graph / ceec / platform | 17/13/11/7/13s | — |
+| integration | **670s** | `test_demo_ntm_local` 231s, `test_demo_update_ladder` 183s |
+| property | 74s | spread thin |
+| unit | 34s | — |
+| primitives / algorithms / graph / ceec / platform | 14/11/8/5/11s | — |
 
-**Two tests are 64% of the slowest tier.** Integration is 75% of total suite
-time, so this is the only optimization that matters right now.
+Re-measured 2026-09-25 after §5.1 (the numbers §0 recorded were from before
+the settle-horizon fix made every settle run its full budget, so the suite got
+intrinsically heavier — §1.6's prediction, confirmed). Two tests are 62% of
+the slowest tier; both are now `slow` (§1.2, §1.3), leaving integration at
+≈256s of real work.
+
 
 ### 1.1 Fix the `ntm_local` oscillation BEFORE optimizing it — P0 — **partially landed**
 
@@ -234,28 +238,47 @@ defect as 0.4 and 0.8 above.
   machine" is not currently affordable.
 - Effort: ~30 min once a machine is available.
 
-### 1.2 `test_demo_update_ladder` (182s) — P1
+### 1.2 `test_demo_update_ladder` (183s) — P1 — **demoted to `slow`**
 
-Knobs: `STEPS=600`, `SEEDS=(0,1,2)`, `DEPTH=4`, `CTX=32`, `VOCAB=65`, two
-widths. The claim is a **seed-averaged perplexity ordering** (Muon vs euclid
-at lr 0.01) with a ± range across seeds.
+`@pytest.mark.slow`. The claim is a seed-averaged perplexity ordering whose
+pinned numbers (28.1/28.4/28.5 at w64, ~35 at w32) are the deliverable, and
+the plan's own analysis says `STEPS` is *not* a free lever — any reduction is
+a re-pin, not a speedup. The honest lever remains `SEEDS` 3 → 2, and that
+weakens the ± range the H4 re-pin depends on, so it needs the per-seed spread
+measured first.
 
-- The `SEEDS` tuple is the honest lever: 3 → 2 seeds cuts ~33% but weakens the
-  ± range that the H4 re-pin depends on. **Measure the per-seed spread first**;
-  if the ordering holds with non-overlapping ranges on 2 seeds, take it.
-- `STEPS` is *not* a free lever: the pinned perplexity numbers (28.1/28.4/28.5
-  at w64, ~35 at w32) are the deliverable. Any reduction is a re-pin, not a
-  speedup.
-- Alternative that preserves the claim: this is a **language-model** demo on
-  CPU. If the suite has a GPU, running it on `cuda` is likely a larger win
-  than any parameter cut — measure before cutting science.
-- Effort: ~1h including the re-pin.
+### 1.3 `test_demo_ntm_local` (231s) — P1 — **demoted to `slow`**
 
-### 1.3 `test_demo_ntm_local` (155s) — P1, after 1.1
+`@pytest.mark.slow`. §1.1's monotone-summary rewrite is still open and still
+needs a measurement; demoting the test is not the same as fixing it, and the
+curve is still unmeasured (the bptt arm reads 0.781/0.896/0.906/0.969/0.979 at
+600/1200/1800/2400/3000, so the 0.97 bptt floor pins that arm near the full
+budget; the local3 arm is the one worth measuring).
 
-`STEPS=3000`, two arms. Once 1.1 makes the assertion sound, re-measure the
-accuracy-vs-steps curve (the same technique used for the NTM copy gate in 0.9)
-and cut to the knee. Record the curve in the docstring, as was done there.
+**What demotion actually bought** (measured 2026-09-25, integration tier
+670s): the two demos are 414s of it — 62% — and the marker moves them out of
+the profile the runner and every bare `pytest` executes. Remaining
+integration ≈ 256s by arithmetic on the tier's `--durations=20`; not
+re-measured, because re-measuring to confirm a subtraction is the kind of
+wait this section exists to remove.
+
+**The honest cost, stated.** These tests are the gallery's run records, so
+the manifest pin is no longer verified by the default profile. That is only
+acceptable because the runner now has a pass that runs them:
+`./scripts/run_tiered_suite.sh --with-slow`.
+
+### 1.2b New: the reference runner silently skipped every `slow` test — P1, fixed
+
+`pyproject.toml`'s `addopts` carries `-m 'not slow and not benchmark and not
+llm'`. `scripts/run_tiered_suite.sh` inherited it, so **26 slow tests — every
+heavy demo in the tree — never ran under the documented full-suite command**,
+including the ones that emit and pin the gallery records. A "full suite,
+3516 passed" figure could not have included them.
+
+The runner now takes `--with-slow` and runs a final `slow` pass
+(`logs/tiers/slow.log`). Round close: always pass the flag. Inner loop: never.
+This is §1.4's real content — the profile split was already there, it was just
+undocumented and unenforceable.
 
 ### 1.4 Make the fast lane the default lane — P0
 
@@ -735,19 +758,22 @@ Phase F is **half done**: 5.1 and 5.2 landed, 5.3 and 5.4 remain.
 
 | Phase | Items | Effort | Gate | State |
 |-------|-------|--------|------|-------|
-| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.1 floor **done**, curve blocked (§2.8); 1.4 open |
+| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.4 **done** (1.2b found: the runner skipped every slow test); 1.1 floor **done**, curve open |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | open — **re-measurement needed, see §2.8** |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2 **done**; 5.3, 5.4 open |
 
-**Recommended next step** (cheapest, unblocked, high value): **§5.3**, the
-state-algebra decision. Its own sequencing note says to *write the decision
-down before touching code* — that is a page of prose with no measurement and
-no machine-load dependency, which is exactly what §2.8 says the rest of this
-document currently lacks. It also unblocks 5.4, the last open item in the
-section.
+**Recommended next step** (cheapest, unblocked, high value): **§1.1's
+curve**, now that the machine is quiet and the test that needs it is behind
+`slow` rather than in everyone's critical path. §2.8's blocker was load, not
+difficulty: a 3000-step local3 arm costs ~2 min alone. Measure it, cut
+`STEPS` to the knee, re-pin — the reduction the plan promised before the
+suite started growing again.
+
+Phase C's second-cheapest item is **§1.5** (determinism hygiene), which is
+pure `tests/conftest.py` plus a ratchet and needs no measurement at all.
 
 The standing rule from §0 held: 5.1 was done against a green suite, not to
 rescue a flaky one, and the driver kept the per-class science rather than

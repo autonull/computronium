@@ -181,6 +181,7 @@ def _run_arm(arm, seed: int, train_t, val_windows) -> float:
 
 
 @pytest.mark.timeout(1200)
+@pytest.mark.slow
 def test_demo_update_ladder(emit_run_record) -> None:
     t0 = time.time()
     train_t, val_t = _tokens()
