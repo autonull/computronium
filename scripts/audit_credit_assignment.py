@@ -457,7 +457,7 @@ def _compute_theoretical_fa_grads(
         fb = fb_weights["layer_0"]
         hidden_error = output_error @ fb.T
         if hidden_acts:
-            hidden_error *= (hidden_acts[0] > 0).float()
+            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
         pre_act = free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)
@@ -575,7 +575,7 @@ def _compute_theoretical_dfa_grads(
         fb = fb_weights["layer_0"]
         hidden_error = output_error @ fb.T
         if len(hidden_acts) > 0:
-            hidden_error *= (hidden_acts[0] > 0).float()
+            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
         pre_act = free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)
@@ -584,7 +584,7 @@ def _compute_theoretical_dfa_grads(
         fb = fb_weights["layer_1"]
         hidden_error = output_error @ fb.T
         if len(hidden_acts) > 1:
-            hidden_error *= (hidden_acts[1] > 0).float()
+            hidden_error = hidden_error * (hidden_acts[1] > 0).float()
         pre_act = hidden_acts[0] if len(hidden_acts) > 0 else free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)

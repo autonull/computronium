@@ -5,7 +5,7 @@ asserted rather than merely tracked in a plan document. The rule is one line:
 the total may go down, never up. A suppression added to buy a green run shows
 up here as a net increase, which is the failure mode §2.3 is about.
 
-Measured with ruff 0.16.6; a different ruff version legitimately moves the
+Measured with ruff 0.16.6 (353, down from 671 at the start of the tranche); a different ruff version legitimately moves the
 count, so the version is recorded and a mismatch reports the measured number
 instead of failing opaquely.
 """
@@ -18,7 +18,7 @@ import sys
 
 import pytest
 
-BASELINE = 359
+BASELINE = 353
 RUFF_VERSION = "0.16.6"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

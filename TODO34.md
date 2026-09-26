@@ -26,7 +26,7 @@ starting it.
 
 ### Pass 12 — §2.3 tranche 1: the ignore lists were lying, and a ratchet
 
-`ruff check .` reported **671** findings. The tranche is written up in §2.3
+`ruff check .` reported **671** findings. **353** remain. The tranche is written up in §2.3
 under "Tranche 1"; the two things worth carrying out of it:
 
 **The config was the defect, and it hid 34 findings.** Two per-file-ignore
@@ -45,7 +45,7 @@ It carries a staleness guard (baseline must be within 10 of the measurement),
 because a ratchet whose baseline has drifted out of reach is a ratchet that
 has been switched off without anyone deciding to.
 
-Net: **671 → 359**, fast lane **3208 passed, 119 skipped, 26 xfailed, 1 xpassed
+Net: **671 → 353**, fast lane **3208 passed, 119 skipped, 26 xfailed, 1 xpassed
 in 92s**, no pyright regression on the touched modules (49 and 59 pre-existing
 findings, unchanged either side).
 
@@ -618,7 +618,7 @@ dynamics class reintroduces break-on-horizon" — is what the AST check is.
 **§5.1 supersedes it structurally**: one driver makes the invariant
 unrepresentable rather than policed.
 
-### 2.3 Lint debt: 359 findings (was 684) — P2 (Register C scope, per `AGENTS.md`)
+### 2.3 Lint debt: 353 findings (was 684) — P2 (Register C scope, per `AGENTS.md`)
 
 Mechanical, high-count, low-risk first:
 
@@ -634,7 +634,7 @@ Do **not** enable `RUF105/106/103` until the directive migration is done as one
 change — `AGENTS.md` already records that enabling them individually only
 churns guard-rails.
 
-#### Tranche 1 — **DONE** (Pass 12): 671 → 359, and a ratchet
+#### Tranche 1 — **DONE** (Pass 12): 671 → 353, and a ratchet
 
 **The config was the defect.** Before touching a single finding, the ignore
 lists were audited for truth, because §5.4's lesson is that a hand-kept table
@@ -654,22 +654,46 @@ Then the classes that were **real** rather than sanctioned:
 | `N803` | 216 | ignored, with reason (sanctioned) |
 | `PLW0717` try-clause statements | 92 | untouched — needs extraction, not suppression (as the plan said) |
 | `PLR6201` literal-membership | 23 | **fixed** — `in ("a","b")` → `in {"a","b"}`; all string literals, so hashing is safe |
-| `PLR6104` non-augmented-assignment | 43 | 40 suppressed with reason (the two ontology files' intended per-file ignore, now keyed correctly, plus probes); 3 **fixed** in `audit_credit_assignment.py`; 1 suppressed per-site in `random_projections/kernel.py`, where Pass 2 explicitly chose the explicit rebind over `@=` |
+| `PLR6104` non-augmented-assignment | 43 | **all** suppressed with reason: the two ontology files' intended per-file ignore (now keyed correctly), the probe/audit-script block, and 1 per-site in `random_projections/kernel.py`. None **fixed** — see the correction below. |
 | `RUF012` mutable-class-default | 6 | **fixed** — six read-only class tables in `execution/{strategy,synthesizer}.py` annotated `ClassVar`, which also tells pyright they are not instance state |
 | `S101` assert in library code | 4 | **converted to raises** — a Triton shape precondition that vanishes under `python -O` is precisely the silent-corruption path Pass 2 documented |
 | `F841` unused local | 3 | **deleted** — three `backprop_credit` constructions in `audit_credit_assignment.py` whose value was never read; `_create_credits()` collapsed to `_create_thermo_credit()` |
 
-**Repo-wide: 671 → 359 findings.**
+**A correction, made the same day.** The tranche initially "fixed" three
+`PLR6104` sites in `scripts/audit_credit_assignment.py` by rewriting
+`hidden_error = hidden_error * mask` as `hidden_error *= mask`. Measured
+afterwards: `Tensor.__imul__` **is** in-place — the probe showed the operand's
+storage mutated, not rebound. The results were identical only because
+`hidden_error` was a freshly-created matmul result that nothing aliased, and
+that script has **zero test coverage**. Three findings in an untested
+diagnostic are worth less than the in-place/rebind distinction being
+unambiguous, so the edits were reverted and the `scripts/audit_*.py`
+throwaway exemption widened instead (the same category `scripts/probes/**`
+already had, with the reason written down). This is Pass 2's correction applied
+forward: a matmul looks in-place and isn't, a masked multiply looks like a
+rebind and isn't, and a lint rule cannot tell the difference from the text.
+
+**Repo-wide: 671 → 353 findings.**
 
 **The ratchet is the part that outlasts the tranche.**
 `tests/property/test_lint_count_ratchet.py` asserts the count against a
-measured baseline (359, ruff 0.16.6 recorded alongside it) in **0.2s** — the
+measured baseline (353, ruff 0.16.6 recorded alongside it) in **0.2s** — the
 `ruff check .` subprocess is far cheaper than any test that would police it in
 Python. Two tests, not one: the ratchet, plus a staleness guard that fails if
 the baseline drifts more than 10 above the measurement, so the next
 suppression cannot quietly push the ratchet out of reach (§0.6's lesson, a
 third application). Mutation-checked by dropping a file with three real
 violations into `computronium/` and watching the ratchet fail.
+
+**And the honest bottom line on the deletions: none of them removed
+functionality.** Every removal in this pass was either *unreachable code*
+(`deployment.py`, provably — the import system never resolved to it, and the
+one `pkgutil.walk_packages` discovery pass in the tree is scoped to
+`computronium.primitives`/`computronium.algorithms`, so it never saw it
+either), *dead code with a provably pure constructor* (the three
+`BackpropCredit(...)` builds: `__init__` is one line assigning `config`), or
+*config that suppressed nothing*. The one item that did change behaviour is
+recorded as a correction above and was reverted.
 
 **Two classes deliberately not touched.** `E402` (32) stays: the plan's own
 instruction is to suppress per-site, and 32 hand-written site suppressions are
@@ -1140,7 +1164,7 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3 tranche 1 **done** (Pass 12, 671→359, ratchet live); 2.4 open |
+| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3 tranche 1 **done** (Pass 12, 671→353, ratchet live); 2.4 open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
 

@@ -278,10 +278,15 @@ ignore = [
     "unsorted-imports",  # module-import-not-at-top-of-file — sys.path bootstrap before computronium imports
     "single-line-implicit-string-concatenation",  # unsorted-imports — import block follows the sys.path insert by design
 ]
-"scripts/probes/**" = [
-    # Research probes are sanctioned throwaways (AGENTS probe conventions):
-    # numbers-in-docstrings matter, lint polish does not. Security rules
-    # stay active; these close the style/complexity classes only.
+"scripts/{probes/**,audit_*.py}" = [
+    # Research probes and the audit_* diagnostics are sanctioned throwaways
+    # (AGENTS probe conventions): numbers-in-docstrings matter, lint polish
+    # does not. Security rules stay active; these close the style/complexity
+    # classes only. Audit scripts keep the explicit rebind form (`x = x * m`,
+    # not `x *= m`): the operand is a torch tensor, so `*=` mutates it in
+    # place, and the correctness of that depends on the line above staying
+    # unaliased -- TODO34 Pass 2 recorded the same decision for the
+    # production kernel.
     "assert",    # S101 — asserts are the probe's sanity gates
     "hashlib-insecure-hash-function",    # S324 — md5 for non-cognitive cache keys
     "too-many-return-statements", # PLR0911 — complexity budgets don't apply to one-off sweeps
