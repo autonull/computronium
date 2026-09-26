@@ -54,6 +54,19 @@ def _config_sha(data: dict) -> str:
     return hashlib.sha256(_canonical(canonicalize_floats(data)).encode()).hexdigest()
 
 
+def _env_sha() -> str:
+    """Digest of the execution environment, excluding the commit.
+
+    `git_commit` is already a provenance key, so folding it in here would make
+    this hash move on every commit and stop answering the question it exists
+    for: did the *environment* move, or only the code?
+    """
+    from computronium.utils import capture_environment
+
+    env = {k: v for k, v in capture_environment().items() if k != "git_commit"}
+    return hashlib.sha256(_canonical(env).encode()).hexdigest()
+
+
 @pytest.fixture()
 def emit_run_record(request: pytest.FixtureRequest) -> Callable[[str, str, dict], Path]:
     """Return an emitter writing ``docs/figures/run_records/<capability>.json``.
@@ -70,6 +83,7 @@ def emit_run_record(request: pytest.FixtureRequest) -> Callable[[str, str, dict]
             "provenance": {
                 "git_commit": _git_commit(),
                 "config_sha256": _config_sha(data),
+                "env_sha256": _env_sha(),
             },
             "data": data,
         }

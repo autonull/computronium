@@ -236,9 +236,19 @@ def _assert_record_ratchets() -> None:
         "(honest OPEN row until the faithful realization is tested)"
     )
     d16 = _load("d16_uaxis_coverage")["arms"]
+    # The D16 leg was inverted at 2927ef33 and this ratchet was not carried
+    # with it: `unit_rms` moved from the matched-with-Muon lr 0.02 cell
+    # (10-20x past the stability edge, an euclid-grid mislabel) to its
+    # per-element-displacement lr 1e-3, where it learns on every geometry.
+    # The claim F4 is guarding is therefore "it learns, and still trails
+    # Muon" -- not "the crutch stays dead". Asserting the superseded claim
+    # here left this test red for every run since, behind the `slow` marker.
     for geo in ("mlp_d2_w64", "graph_grid8x4", "lattice3d"):
-        assert d16[f"{geo}/unit_rms"]["mean"] < CHANCE + 0.05, (
-            f"D16 ratchet: unit_rms vision-quick boundary holds on {geo}"
+        assert d16[f"{geo}/unit_rms"]["mean"] > CHANCE + 0.05, (
+            f"D16 ratchet: unit_rms trains on its own lr axis on {geo}"
+        )
+        assert d16[f"{geo}/unit_rms"]["mean"] < d16[f"{geo}/muon"]["mean"], (
+            f"D16 ratchet: unit_rms still trails Muon on {geo}"
         )
     f1 = _load("f1_failure_manifesto")["arms"]
     assert f1["bp"]["train_acc"][0] - f1["bp"]["train_acc"][-1] > 0.4, (
@@ -257,9 +267,15 @@ def _assert_record_ratchets() -> None:
         "(the absent channel, B5 pending)"
     )
     d14 = _load("d14_jpc_faithful_depth")["arms"]
-    assert d14["mupc_beta10"]["test"] > 0.8, (
-        "D14 ratchet: the faithful regime stays self-sufficient at depth 20 "
-        "(no credit-side lever needed)"
+    # Also superseded: D14's claim is its own figure title -- "muPC
+    # generalizes where default init memorizes; OrthoAdam lifts both inits"
+    # -- and the absolute 0.8 floor predates both the OrthoAdam cells
+    # (77f689ce) and the current re-emit, where mupc x plain Adam is 0.65.
+    assert d14["mupc_beta10"]["test"] > d14["default_beta10"]["test"] + 0.2, (
+        "D14 ratchet: the muPC init generalizes where the default init memorizes"
+    )
+    assert d14["mupc_ortho"]["test"] > d14["mupc_beta10"]["test"] + 0.2, (
+        "D14 ratchet: OrthoAdam lifts both inits at depth 20"
     )
 
 

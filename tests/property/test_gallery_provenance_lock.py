@@ -47,7 +47,7 @@ from computronium.visualization.gallery import canonicalize_floats
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORDS_DIR = REPO_ROOT / "docs" / "figures" / "run_records"
 
-PROVENANCE_KEYS = {"git_commit", "config_sha256"}
+PROVENANCE_KEYS = {"git_commit", "config_sha256", "env_sha256"}
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 
@@ -113,4 +113,26 @@ def test_config_sha256_hashes_the_data_not_the_config(name: str) -> None:
         f"{name}: config_sha256 is documented as a hash of the canonicalised "
         "data payload; if this now differs, the emitter's convention changed "
         "and every record's provenance needs re-examining"
+    )
+
+
+@pytest.mark.parametrize("name", sorted(_records()))
+def test_env_sha256_is_a_digest_of_this_environment(name: str) -> None:
+    """The environment key must be a fingerprint, not a copied string.
+
+    It is compared against the *current* environment rather than only checked
+    for shape: a record re-emitted on a different torch, CUDA or Python has a
+    different value, and that is the whole signal. A record whose key set was
+    widened without re-emitting is exactly the gap §1.5 names.
+    """
+    from computronium.utils import capture_environment
+
+    env = {k: v for k, v in capture_environment().items() if k != "git_commit"}
+    expected = hashlib.sha256(
+        json.dumps(env, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert _records()[name]["provenance"]["env_sha256"] == expected, (
+        f"{name}: env_sha256 does not match this environment "
+        f"({expected[:12]}); the record was emitted under a different one, or "
+        "under the two-key emitter this key was added to"
     )
