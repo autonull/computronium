@@ -1,16 +1,16 @@
 # TODO35: The Proveable Remainder
 
-**Status**: **Round 5 is closed (§17).** The acceleration work this document
-kept deferring now has its own plan: **`TODO36.md` — One Acceleration System**,
-which unifies the two kernel layers the audit series kept tripping over, and
-which owns §17.8-1, §17.8-6 and §17.10's compile check. A session working this
-document works §17.8 minus those three, and §17.9 before deleting anything. **§17.11 corrects §17.10**: there
-are two acceleration layers and the accelerated one works. Everything before §17 is the record of why the decisions
-were made, not the work list. Round 4 closed at §15.
-`TODO34.md` keeps its 16 passes as the record of how the tree was made
-fast, provable and ready to be presented; its "Remaining Work" section is
-replaced by a pointer here, because two live open-item lists is the drift
-this plan series has documented five times.
+**Status**: **CLOSED.** Everything this document still owed has moved to
+**`TODO36.md` — One Acceleration System**, which is the series' single live
+work list: §4.1–4.6 are the acceleration system this document kept tripping
+over, §4.7–4.12 are the remainder of §16 and §17.8, and §0.2 asks the
+survive-or-merge question about the two kernel layers before any work starts.
+§17.9 is the rule about deletion and §17.10–17.11 are the corrections to
+Round 5's own claims; both are cited by `TODO36.md` and are the reason it
+starts with a measurement instead of a decision.
+
+What follows is the record of four rounds, kept because the decisions in
+`TODO36.md` rest on it. It is not a work list.
 
 **Round 5 closed**: §16-6 (the cross-module import lock covers all of
 `computronium/`, after two rounds of being scoped to dodge 13 known failures),
