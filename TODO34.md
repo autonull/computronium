@@ -2,8 +2,8 @@
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
 §2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3,
-**§5.4's dispatch half**, **§5.8**, **§3.1** and **§2.3's tranche 1** complete. §1.2–§1.4, §1.6,
-§2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
+**§5.4's dispatch half**, **§5.8**, **§3.1**, **§2.3's tranche 1** and **§2.7**
+complete. §1.2–§1.4, §1.6, §2.4, §2.6, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
 §5.7, §5.9. **No unblocked work item is left in §5** — the rest are
 decisions; the cheapest remaining *work* is §1.6 (Pass 11 took §3.1). (Pass 9 fixed a
 live dispatch gap — `update_from_config` could not build `natural_gradient` —
@@ -23,6 +23,23 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 13 — §2.7: the item's own premises were wrong, and it was a live bug
+
+§2.7 asked which convention `activations[i+1]` followed and warned that the
+answer was not to be guessed. Answering it found that **the item itself was
+misdescribed twice over**: the function was *not* unreachable (it backs the
+public `FAKernelBackend`, one call site, zero tests), and **ReLU and SiLU are
+not "correct either way"** — only ReLU is. SiLU and GELU were silently
+computing the wrong gradient.
+
+The uncomfortable part is the repair. Fixing the call site — passing the
+pre-activation, as the weight-gradient algebra requires — *broke Tanh*, whose
+`1 - x**2` was quietly the post-activation form. The reasoning had been sound
+at every step and the answer was still wrong at one of them; the numerical
+test against autograd is what caught it. Fast lane **3218 passed** (10 new).
+
+Written up in §2.7.
 
 ### Pass 12 — §2.3 tranche 1: the ignore lists were lying, and a ratchet
 
@@ -735,26 +752,54 @@ guards that would have caught them:
 - **Lock the demo gallery** — already exists (`test_gallery_lock.py`); keep
   re-pinning deliberate, as done in this pass.
 
-### 2.7 New: the activation-derivative contract is undefined — P2
+### 2.7 The activation-derivative contract — P2 — **DONE** (Pass 13): a live bug, not a trap
 
-Found by §2.1. `_apply_activation_derivative` (in
-`computronium/acceleration/fa_kernels.py`, retained for `FAKernelBackend`)
-branches on the activation module, and its branches **disagree about what
-`h_curr` is**:
+**The item's own premises were both wrong**, which is why it sat at P2 for a
+pass. Answering the question it posed ("is `activations[i+1]` the pre- or
+post-activation value?") exposed both:
 
-- Tanh: `grad * (1 - h**2)` — correct iff `h` is the **post**-activation output.
-- GELU: `grad * (cdf(h/√2) + h·pdf)` — correct iff `h` is the **pre**-activation input.
-- ReLU (`h > 0`) and SiLU (`σ(h)(1 + h(1-σ(h)))`) are correct either way, which
-  is why the inconsistency never showed.
+1. **It was not unreachable.** The note claimed "zero callers after §2.1".
+   `fa_kernels.py:177` calls it, inside `FAKernelBackend`, reachable through
+   the public `get_algorithm_kernels()` (`acceleration/__init__.py:112`). No
+   in-tree code drives `forward`/`backward` on it, so no run was corrupted —
+   but it is a public API returning wrong gradients, with zero tests.
+2. **ReLU and SiLU are not "correct either way".** Only ReLU is. Tanh's
+   `1 - h**2` is the *post*-activation form; SiLU's `σ(h)(1 + h(1-σ(h)))` is
+   strictly a function of the **pre**-activation. Three of four branches were
+   pre-activation formulas and one was post, and the surviving caller passed
+   post — so **SiLU and GELU were silently wrong** and Tanh was right *by
+   accident*, not by construction.
 
-Neither convention is wrong on its own; having both in one function means at
-least one branch is. **Do not guess.** The cluster is unreachable from
-production (zero callers after §2.1) and untested, so nothing is currently
-wrong in a run — but the function is a trap for whoever wires it up, and it is
-the last remaining undefined in the FA kernel module.
+**Answered from the producer, as the item instructed.** `forward` returns
+`activations = [x, act(L0(x)), …]`, so `activations[i]` is layer i's **input**
+and `activations[i + 1]` its **post**-activation output. The weight gradient
+`batched_outer_product(h_prev, grad_h)` pairs `grad_h` with `activations[i]`,
+so `grad_h` must be d(loss)/d(**pre**-activation of layer i).
 
-Decision needed: is `activations[i+1]` in the credit kernels the pre- or
-post-activation value? Answer it from the producer, then fix or delete.
+**The trap had a second half.** `backward_contrastive` read the same list with
+the opposite naming (`free_pre = activations[i]`, `free_post = activations[i+1]`)
+— the file asserted two incompatible contracts for one value and neither
+matched `forward`. Renamed to `free_in` / `free_out`.
+
+**Landed.** `forward` records each layer's pre-activation; `backward` raises
+`RuntimeError` rather than synthesising one (synthesising is the defect);
+Tanh became `1 - tanh(x)**2`; GELU's `1.4142` / `2.5066` magic constants became
+`math.sqrt(2)` / `math.sqrt(2*pi)`.
+
+**The part that would have been missed by reasoning.** Fixing the call site
+alone would have swapped a two-branch bug for a one-branch bug: Tanh's
+`1 - x**2` is correct *only* for a post-activation argument, so the moment the
+caller was fixed, Tanh broke too. The test caught it. This is the strongest
+argument in the plan for pinning against autograd rather than against a
+reasoning chain — the reasoning was sound at every step and the answer was
+still wrong at one of them.
+
+`tests/acceleration/test_fa_activation_contract.py` — 10 tests, all four
+activations, CPU-only, 3s. One test pins the `activations` layout, one asserts
+**only ReLU's derivative is a function of its own output** (so the "why it went
+unnoticed" explanation is checked, not folklore), one asserts `backward` refuses
+to run without `forward`. Mutation-checked: reintroducing the old argument
+fails 4 of the 10.
 
 ### 2.8 New: measurement capacity — P1, process
 
