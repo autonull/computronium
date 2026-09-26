@@ -280,7 +280,14 @@ try:  # noqa: PLR0915
         BLOCK_B: tl.constexpr,
         BLOCK_D: tl.constexpr,
     ):
-        """Compute prediction: act(mu @ W.T + b)"""
+        """Compute prediction: act(mu @ W.T + b)
+
+        ``input_precision="ieee"`` is not optional: triton's default for ``tl.dot``
+        is TF32 on Ampere and later, which puts this kernel ~1e-2 away from the
+        fp32 expression it claims to compute (cosine 1.0, max_abs_diff 1.6e-2).
+        The Muon kernels in ``triton_kernels`` carry the same directive for the
+        same reason.
+        """
         pid_b = tl.program_id(0)
         pid_d = tl.program_id(1)
 
@@ -305,7 +312,7 @@ try:  # noqa: PLR0915
                 mask=mask_d[:, None] & mask_k[None, :],
                 other=0.0,
             )
-            acc += tl.dot(mu_tile, tl.trans(W_tile))
+            acc += tl.dot(mu_tile, tl.trans(W_tile), input_precision="ieee")
 
         # Add bias
         if b_ptr is not None:
@@ -374,7 +381,7 @@ try:  # noqa: PLR0915
             sig = tl.sigmoid(mu)
             deriv = sig * (1.0 + mu * (1.0 - sig))
         elif activation_type == 2:  # Tanh
-            deriv = 1.0 - mu * mu
+            deriv = 1.0 - libdevice.tanh(mu) * libdevice.tanh(mu)
         elif activation_type == 3:  # GELU
             cdf = 0.5 * (1.0 + libdevice.erf(mu * 0.7071067811865475))
             pdf = libdevice.exp(-mu * mu * 0.5) * 0.3989422804014327

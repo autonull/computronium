@@ -548,7 +548,9 @@ in question.
   `libdevice.sigmoid` → `tl.sigmoid` (2 kernels) and `tl.cosh`/`tl.sinh` →
   `libdevice.cosh`/`libdevice.sinh` in the complex substrate. **14 of 17 compile.**
 - **Done when** each of the 7 has a named torch reference in the test suite, and
-  the kernel either matches it or has a written reason it cannot. **1 of 7.**
+  the kernel either matches it or has a written reason it cannot. **3 of 7**
+  (`_ff_contrastive_update_kernel`, `_pc_prediction_kernel`,
+  `_pc_error_update_kernel`), and those 3 carried **five** defects between them.
 - **The 3 kernels still uncompilable**, after all of the above:
   - `_stdp_update_kernel`, `_contrastive_stdp_kernel` (snn) — `tl.dot` refuses
     `K < 8`; the spike-tensor contraction needs a reduction formulation, not a
@@ -560,13 +562,39 @@ in question.
     the same fix does not apply; it needs `error.T @ feedback` as a real GEMM with
     a transposed load. **Spec first**: `scale * (error.T @ feedback)`, and the
     torch twin is `pepita_error_modulation` in the same module.
-- **Still unspecified: `_pc_prediction_kernel`, `_pc_error_update_kernel`,**
-  `_three_factor_hebbian_update_kernel`, `_contrastive_hebbian_kernel` and
-  `_pepita_contrastive_update_kernel` now *compile* (thanks to the outer-product
-  fix) but have **no torch reference and no parity test** — they are the ones that
-  most need §4.5's discipline, because compiling is not being correct.
+- **The PC inference pair, same session, two more defects.**
+  `tests/acceleration/test_pc_inference_spec.py` specifies both kernels for all
+  four activations, with the reference table spelled out in the test (not imported
+  from the kernel, so a kernel change cannot change its specification) and
+  **checked against autograd finite differences** — the derivative table cannot be a
+  plausible-looking fiction.
+  1. **The prediction kernel computed in TF32.** `tl.dot` defaults to TF32 on
+     Ampere and later, which put it `max_abs_diff` **1.6e-2** from the fp32
+     expression it claims to compute — with `cosine` 1.0, so no cosine-based gate
+     would ever have seen it. Now `input_precision="ieee"`, with the reason in the
+     kernel's docstring and a note that `triton_kernels`' Muon kernels carry the
+     same directive for the same reason.
+  2. **The tanh branch of the error update used the wrong function.**
+     `deriv = 1.0 - mu * mu` is not the derivative of `tanh` at anything; the
+     correct `1 - tanh(mu)²` is what the kernel's own docstring says
+     ("act_deriv(mu)"), and what the silu and relu branches get right. Fixed.
+     **Both defects were invisible for the kernel's whole life, because nothing
+     compared it to anything** — which is the whole argument for §4.5.
+  - **One recorded tolerance decision.** `max_rel_diff` is not a meaningful gate
+     for an activation whose output crosses zero: GELU's negative tail lands within
+     2.1e-6 of zero and the relative measure of that element is 0.48. For GELU only,
+     the test keeps `max_abs_diff` (1e-4) and `min_cosine` (0.999) and drops the
+     relative criterion, recorded in `_tolerance()` with the measurement.
+- **Still unspecified: `_three_factor_hebbian_update_kernel`,**
+  `_contrastive_hebbian_kernel`, `_pepita_contrastive_update_kernel` and
+  `_pc_contrastive_update_kernel` — they compile (thanks to the outer-product fix)
+  but have **no torch reference and no parity test**. They are the ones that most
+  need §4.5's discipline, because compiling is not being correct: the PC pair above
+  had two real defects the moment somebody wrote the equation down.
   `UNWIRED_BUT_COMPILING` names their families; the next session should write each
-  reference from its docstring and its module's own torch path, in that order.
+  reference from its docstring and its module's own torch path, in that order —
+  `pc_contrastive` first, since its reference is the same expression the FF pilot
+  already established.
 
 ### 4.6 Then, and only then, wire the recovered rungs into the ladder
 
