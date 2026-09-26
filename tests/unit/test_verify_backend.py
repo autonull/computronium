@@ -72,16 +72,16 @@ def _check_triton() -> bool:
     """Check Triton availability."""
     print("\n[Checking Triton]...")
     try:
-        from computronium.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
+        from computronium.acceleration.triton_kernels import TRITON_IMPORTED, TritonEqPropOps
 
-        print(f"HAS_TRITON: {HAS_TRITON}")
+        print(f"TRITON_IMPORTED: {TRITON_IMPORTED}")
         print(f"TritonEqPropOps.is_available(): {TritonEqPropOps.is_available()}")
 
         if TritonEqPropOps.is_available():
             print("✅ Triton is available")
             return True
         else:
-            if not HAS_TRITON:
+            if not TRITON_IMPORTED:
                 print("⚠️ Triton import failed")
             elif not os.environ.get("CUDA_PATH"):
                 print("⚠️ CUDA might be missing or torch.cuda.is_available() is False")

@@ -17,7 +17,7 @@ Usage:
         get_optimal_backend,
         compile_model,
         HAS_CUPY,
-        HAS_TRITON,
+        TRITON_IMPORTED,
         KernelBackend,
         KernelRegistry,
         KernelConfig,
@@ -27,16 +27,22 @@ Usage:
 
     # Check available backends
     >>> from computronium.core.logging import get_logger
-    >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, HAS_TRITON)
+    >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, TRITON_IMPORTED)
 """
 
 # Import to trigger EQPROP kernel backend registration
 from computronium.acceleration import (
     eqprop_kernel_backend,
 )
+from computronium.acceleration.availability import (
+    CompileState,
+    compile_report,
+    triton_rung_available,
+    triton_stack_available,
+)
 from computronium.acceleration.backends import (
     HAS_CUPY,
-    HAS_TRITON,
+    TRITON_IMPORTED,
     AutoDispatcher,
     BackendBenchmark,
     BackendDetector,
@@ -152,12 +158,13 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
 
 __all__ = [
     "HAS_CUPY",
-    "HAS_TRITON",
+    "TRITON_IMPORTED",
     "AlgorithmFamily",
     "AutoDispatcher",
     "BackendBenchmark",
     "BackendDetector",
     "BackendType",
+    "CompileState",
     "CupyChecker",
     "HardwareTarget",
     "KernelBackend",
@@ -170,6 +177,7 @@ __all__ = [
     "check_triton_available",
     "compile_model",
     "compile_model_with_preset",
+    "compile_report",
     "compile_settling_loop",
     "conductance_matmul",
     "cross_entropy",
@@ -193,4 +201,6 @@ __all__ = [
     "spectral_normalize",
     "target_propagation_target",
     "to_numpy",
+    "triton_rung_available",
+    "triton_stack_available",
 ]

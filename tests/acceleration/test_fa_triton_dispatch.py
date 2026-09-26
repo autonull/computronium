@@ -1,7 +1,7 @@
 """The standalone ``fa_*_triton`` entry points must resolve their own capability flag.
 
 Both helpers branched on a bare ``HAS_TRITON`` while the module defined
-``HAS_TRITON_FA``, so each raised ``NameError`` before reaching its first line
+``TRITON_IMPORTED_FA``, so each raised ``NameError`` before reaching its first line
 of work, on the GPU credit path no test reached. Calling them surfaced two
 further defects the same untested path was hiding, both now fixed:
 
@@ -18,8 +18,8 @@ The parity tests below are what would catch their return.
 import pytest
 import torch
 
+from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (
-    HAS_TRITON_FA,
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
@@ -70,4 +70,6 @@ def test_cuda_path_is_gated_on_triton() -> None:
     """The CUDA branch is only reachable with Triton; assert the flag agrees."""
     if not torch.cuda.is_available():
         pytest.skip("no CUDA")
-    assert HAS_TRITON_FA, "CUDA present but triton FA kernels unavailable"
+    assert triton_rung_available("fa"), (
+        "CUDA present but the FA triton rung cannot compile"
+    )

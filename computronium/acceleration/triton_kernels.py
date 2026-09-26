@@ -9,7 +9,7 @@ import math
 
 import torch
 
-from computronium.acceleration.backends import HAS_CUPY, HAS_TRITON
+from computronium.acceleration.backends import HAS_CUPY, TRITON_IMPORTED
 
 
 class TritonEqPropOps:
@@ -27,11 +27,11 @@ class TritonEqPropOps:
 
     @classmethod
     def is_available(cls) -> bool:
-        return HAS_TRITON
+        return TRITON_IMPORTED
 
     @classmethod
     def _init_triton(cls):
-        if cls._triton_kernel is None and HAS_TRITON:
+        if cls._triton_kernel is None and TRITON_IMPORTED:
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
@@ -76,7 +76,7 @@ class TritonEqPropOps:
         alpha: float,
         bias: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        if HAS_TRITON and h.is_cuda and pre_act.is_cuda:
+        if TRITON_IMPORTED and h.is_cuda and pre_act.is_cuda:
             cls._init_triton()
             if cls._triton_kernel:
                 out = torch.empty_like(h)
@@ -184,7 +184,7 @@ class TritonEqPropOps:
 
     @classmethod
     def _init_layered(cls):
-        if cls._layered_kernel is None and HAS_TRITON:
+        if cls._layered_kernel is None and TRITON_IMPORTED:
             import triton
             import triton.language as tl
             from triton.language.extra import libdevice
@@ -282,7 +282,7 @@ class TritonEqPropOps:
         ``out``/``hnorm_out``/``ffnhid_out`` when provided and returns them;
         returns ``None`` if Triton is unavailable.
         """
-        if not (HAS_CUPY and HAS_TRITON):
+        if not (HAS_CUPY and TRITON_IMPORTED):
             return None
         cls._init_layered()
         if cls._layered_kernel is None:
@@ -357,7 +357,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
 
     @classmethod
     def _init_muon(cls):
-        if cls._muon_gram_kernel is None and HAS_TRITON:
+        if cls._muon_gram_kernel is None and TRITON_IMPORTED:
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
@@ -466,7 +466,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         norm = out.norm().clamp(min=1e-4, max=1e4)
         out = out / norm  # ruff: ignore[non-augmented-assignment]
 
-        if HAS_TRITON and out.is_cuda and M >= 16 and N >= 16:
+        if TRITON_IMPORTED and out.is_cuda and M >= 16 and N >= 16:
             try:  # noqa: PLR0915
                 import triton
 
@@ -526,7 +526,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
 
     @classmethod
     def _init_fisher(cls):
-        if cls._fisher_kernel is None and HAS_TRITON:
+        if cls._fisher_kernel is None and TRITON_IMPORTED:
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
@@ -562,7 +562,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         cls, grad: torch.Tensor, fisher_diag: torch.Tensor, damping: float = 1e-3
     ) -> torch.Tensor:
         """Diagonal Fisher preconditioning with Triton."""
-        if HAS_TRITON and grad.is_cuda and grad.numel() == fisher_diag.numel():
+        if TRITON_IMPORTED and grad.is_cuda and grad.numel() == fisher_diag.numel():
             cls._init_fisher()
             if cls._fisher_kernel:
                 out = torch.empty_like(grad)
@@ -583,7 +583,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
 
     @classmethod
     def _init_ep_settle(cls):
-        if cls._ep_settle_kernel is None and HAS_TRITON:
+        if cls._ep_settle_kernel is None and TRITON_IMPORTED:
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
@@ -668,7 +668,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         steps: int = 30,
     ) -> torch.Tensor:
         """Fused EP settle with Triton acceleration."""
-        if HAS_TRITON and h.is_cuda and h.dim() == 2:
+        if TRITON_IMPORTED and h.is_cuda and h.dim() == 2:
             cls._init_ep_settle()
             if cls._ep_settle_kernel:
                 M, K = h.shape
@@ -708,7 +708,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
 
 __all__ = [
     "HAS_CUPY",
-    "HAS_TRITON",
+    "TRITON_IMPORTED",
     "MEP_TritonOps",
     "TritonEqPropOps",
 ]

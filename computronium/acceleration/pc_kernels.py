@@ -455,9 +455,9 @@ try:  # noqa: PLR0915
             mask=mask_out[:, None] & mask_in[None, :],
         )
 
-    HAS_TRITON_PC = True
+
 except ImportError:
-    HAS_TRITON_PC = False
+    pass
 for hw in HardwareTarget:
     KernelRegistry.register(AlgorithmFamily.PC, hw, PCKernelBackend)
 

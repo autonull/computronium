@@ -410,10 +410,10 @@ try:  # noqa: PLR0915
                 topk_values_ptr[b * K + k] = max_val
                 probs[max_idx] = -float("inf")
 
-    HAS_TRITON_TILE = True
+    TRITON_IMPORTED_TILE = True
 
 except ImportError:
-    HAS_TRITON_TILE = False
+    TRITON_IMPORTED_TILE = False
 
 
 # ──────────────────────────────────────────────
@@ -548,7 +548,7 @@ class TileKernelBackend:
         """Launch fused activity update kernel."""
         B, N = activity.shape
 
-        if HAS_TRITON_TILE and self._device.type == "cuda":
+        if TRITON_IMPORTED_TILE and self._device.type == "cuda":
             # Stack feedback tensors
             if feedback:
                 num_fb = len(feedback)
@@ -623,7 +623,7 @@ class TileKernelBackend:
 
         B, N = inputs[0].shape
 
-        if HAS_TRITON_TILE and self._device.type == "cuda":
+        if TRITON_IMPORTED_TILE and self._device.type == "cuda":
             num_inputs = len(inputs)
             input_ptrs = torch.tensor(
                 [inp.data_ptr() for inp in inputs], dtype=torch.int64, device="cuda"
@@ -675,7 +675,7 @@ class TileKernelBackend:
         B, D_in = src_free.shape
         _, D_out = dst_free.shape
 
-        if HAS_TRITON_TILE and self._device.type == "cuda":
+        if TRITON_IMPORTED_TILE and self._device.type == "cuda":
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
@@ -727,7 +727,7 @@ class TileKernelBackend:
         B, D_in = src.shape
         _, D_out = dst.shape
 
-        if HAS_TRITON_TILE and self._device.type == "cuda":
+        if TRITON_IMPORTED_TILE and self._device.type == "cuda":
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
@@ -785,7 +785,7 @@ class TileKernelBackend:
         indices = torch.empty(B, num_routes, dtype=torch.int64, device=device)
         values = torch.empty(B, num_routes, dtype=logits.dtype, device=device)
 
-        if HAS_TRITON_TILE and device.type == "cuda":
+        if TRITON_IMPORTED_TILE and device.type == "cuda":
             BLOCK_B = 16
             grid = ((B + BLOCK_B - 1) // BLOCK_B,)
 
@@ -1042,7 +1042,7 @@ for hw in HardwareTarget:
 
 
 __all__ = [
-    "HAS_TRITON_TILE",
+    "TRITON_IMPORTED_TILE",
     "TileKernelBackend",
     "TileShardedBackend",
 ]

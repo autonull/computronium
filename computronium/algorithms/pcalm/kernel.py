@@ -5,14 +5,15 @@ Delegates to primitive kernels where possible.
 
 from typing import Any
 
-from computronium.acceleration.backends import kernel_available
-from computronium.acceleration.pcalm_kernels import HAS_TRITON_PCALM
+from computronium.acceleration.availability import triton_rung_available
+from computronium.acceleration.pcalm_kernels import TRITON_IMPORTED_PCALM
 
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and HAS_TRITON_PCALM
+    """Whether this rung can run here: the family's Triton kernels compile."""
+    return triton_rung_available("pcalm")
 
 
 def step(case: Any) -> Any:

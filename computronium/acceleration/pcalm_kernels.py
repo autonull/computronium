@@ -111,7 +111,7 @@ def _triton_available(device: torch.device) -> bool:
     CPU driver is selected automatically, via ``set_active_to_cpu()``, or
     ``TRITON_DEFAULT_BACKEND=cpu``).
     """
-    if not HAS_TRITON_PCALM:
+    if not TRITON_IMPORTED_PCALM:
         return False
     if device.type == "cuda":
         return True
@@ -140,18 +140,18 @@ def _eager_dual_primal_update(
     return lam_new, h_new
 
 
-HAS_TRITON_PCALM = False
+TRITON_IMPORTED_PCALM = False
 try:
     import triton  # ruff: ignore[unused-import]
 
-    HAS_TRITON_PCALM = True
+    TRITON_IMPORTED_PCALM = True
 except ImportError:
-    HAS_TRITON_PCALM = False
+    TRITON_IMPORTED_PCALM = False
 
 
 def _build_fused_kernel() -> _TritonKernel | None:
     """Compile the fused elementwise update kernel, or None without Triton."""
-    if not HAS_TRITON_PCALM:
+    if not TRITON_IMPORTED_PCALM:
         return None
     import triton
     import triton.language as tl
@@ -234,7 +234,7 @@ def fused_dual_primal_update(
 
 
 __all__ = [
-    "HAS_TRITON_PCALM",
+    "TRITON_IMPORTED_PCALM",
     "_compiled_pcalm_settle",
     "fused_dual_primal_update",
     "pcalm_settle_loop",

@@ -17,7 +17,7 @@ import torch
 from torch import nn
 from torch.autograd import Function
 
-from computronium.acceleration.backends import HAS_TRITON
+from computronium.acceleration.backends import TRITON_IMPORTED
 from computronium.core.logging import get_logger
 
 logger = get_logger()
@@ -95,7 +95,7 @@ def _check_compile_available() -> bool:
         return False
     if not _CompileCache.check():
         return False
-    if not HAS_TRITON:
+    if not TRITON_IMPORTED:
         logger.debug("Triton not available, skipping torch.compile")
         return False
     return True
@@ -427,7 +427,7 @@ class EqPropTritonFunction(Function):
 
     @staticmethod
     def _init_triton():
-        if EqPropTritonFunction._triton_kernel is None and HAS_TRITON:
+        if EqPropTritonFunction._triton_kernel is None and TRITON_IMPORTED:
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
@@ -505,7 +505,7 @@ class EqPropTritonFunction(Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         """Triton-accelerated contrastive backward."""
-        if HAS_TRITON and ctx.free_acts and ctx.nudged_acts:
+        if TRITON_IMPORTED and ctx.free_acts and ctx.nudged_acts:
             EqPropTritonFunction._init_triton()
             if EqPropTritonFunction._triton_kernel:
                 # Use Triton kernel for fused update
@@ -555,7 +555,7 @@ def compile_settling_loop(
     if not hasattr(torch, "compile") or not _CompileCache.check():
         return settling_fn
 
-    if not HAS_TRITON:
+    if not TRITON_IMPORTED:
         return settling_fn
 
     try:

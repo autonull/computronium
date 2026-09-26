@@ -14,9 +14,8 @@ from typing import Any
 
 import torch
 
-from computronium.acceleration.backends import kernel_available
+from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (
-    HAS_TRITON_FA,
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
@@ -26,7 +25,8 @@ KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and HAS_TRITON_FA
+    """Whether this rung can run here: the family's Triton kernels compile."""
+    return triton_rung_available("fa")
 
 
 def _init_feedback_weights(
@@ -132,7 +132,7 @@ def _lemma_backward_triton(  # ruff: ignore[too-many-locals]
 
         # Project e1 through feedback matrix: err = e1 @ B
         B = feedback_weights[k]
-        if HAS_TRITON_FA and e1.is_cuda:
+        if is_available() and e1.is_cuda:
             err = fa_feedback_projection_triton(e1, B)
         else:
             err = e1 @ B
@@ -143,7 +143,7 @@ def _lemma_backward_triton(  # ruff: ignore[too-many-locals]
         )[0]
 
         # Gradient: -(err.T @ stream[c]) / batch
-        if HAS_TRITON_FA and err.is_cuda:
+        if is_available() and err.is_cuda:
             wgrad = fa_batched_outer_triton(stream[c], err)
         else:
             wgrad = (err.T @ stream[c]) / batch

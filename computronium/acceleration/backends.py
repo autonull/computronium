@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "HAS_CUPY",
-    "HAS_TRITON",
+    "TRITON_IMPORTED",
     "AutoDispatcher",
     "BackendBenchmark",
     "BackendDetector",
@@ -101,7 +101,7 @@ class KernelProfiler:
         """Get list of available backends in priority order."""
         backends = []
 
-        if HAS_TRITON:
+        if TRITON_IMPORTED:
             backends.append(BackendType.TRITON)
         if torch.cuda.is_available():
             backends.append(BackendType.CUDA)
@@ -119,7 +119,7 @@ class KernelProfiler:
         backend: BackendType,
     ) -> BackendBenchmark:
         """Benchmark a single operation on a specific backend."""
-        try:  # noqa: PLR0915
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Prepare inputs
             inputs = self._prepare_inputs(shape, backend)
 
@@ -255,7 +255,7 @@ class AutoDispatcher:
 
     def _select_hardware(self) -> HardwareTarget:
         """Select best hardware target."""
-        if HAS_TRITON and torch.cuda.is_available():
+        if TRITON_IMPORTED and torch.cuda.is_available():
             return HardwareTarget.TRITON
         elif torch.cuda.is_available():
             return HardwareTarget.CUDA
@@ -312,7 +312,7 @@ class BackendDetector:
     @staticmethod
     def detect_best_backend() -> str:
         """Detect the best available compute backend."""
-        if HAS_TRITON and torch.cuda.is_available():
+        if TRITON_IMPORTED and torch.cuda.is_available():
             return BackendType.TRITON.value
         elif torch.cuda.is_available():
             return BackendType.CUDA.value
@@ -326,7 +326,7 @@ class BackendDetector:
     def get_fallback_chain() -> list[BackendType]:
         """Get the fallback chain for the current system."""
         chain = []
-        if HAS_TRITON and torch.cuda.is_available():
+        if TRITON_IMPORTED and torch.cuda.is_available():
             chain.append(BackendType.TRITON)
         if torch.cuda.is_available():
             chain.append(BackendType.CUDA)
@@ -368,26 +368,26 @@ def check_cupy_available() -> tuple[bool, str]:
 
 def check_triton_available() -> tuple[bool, str]:
     """Check if Triton is available for custom kernels."""
-    if HAS_TRITON:
+    if TRITON_IMPORTED:
         return True, "Triton available"
     return False, "Triton not installed. Install with: pip install triton"
 
 
 # Triton/CuPy availability
-HAS_TRITON = False
+TRITON_IMPORTED = False
 try:
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice
 
     if hasattr(libdevice, "tanh"):
-        HAS_TRITON = True
+        TRITON_IMPORTED = True
 except ImportError:
     triton = None
     tl = None
 
 HAS_CUPY = False
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import cupy as cp
 
     if hasattr(cp, "cuda") and cp.cuda.is_available():
@@ -455,40 +455,36 @@ class CupyChecker:
 
 
 def kernel_available(technology: str) -> bool:
-    """
-    Return True if the given kernel technology is usable in the current environment.
+    """Whether ``technology`` is usable in the current environment.
+
+    Every rung this returns ``True`` for has been *measured* on this box, not
+    inferred from a presence check (TODO36 §4.2). "triton" compiles a known-good
+    kernel; "cupy" allocates on the device. The per-family question — "can *this*
+    family's triton rung compile?" — is
+    :func:`~computronium.acceleration.availability.triton_rung_available`, which
+    a ``kernel.py`` should call when it knows its family.
 
     Args:
-        technology: One of "triton", "cuda", "torch_compile", "cupy", "numpy"
+        technology: One of "triton", "cuda", "torch_compile", "cupy", "numpy".
+
+    Returns:
+        Whether the technology can run here.
     """
     if technology == "triton":
-        try:
-            import torch
+        from computronium.acceleration.availability import triton_stack_available
 
-            return torch.cuda.is_available()
-        except Exception:
-            return False
+        return triton_stack_available()
 
     if technology == "cuda":
-        import torch
-
         return torch.cuda.is_available()
 
     if technology == "torch_compile":
-        import torch
-
         return hasattr(torch, "compile")
 
     if technology == "cupy":
-        try:
-            return True
-        except Exception:
-            return False
+        return HAS_CUPY
 
-    if technology == "numpy":
-        return True
-
-    return False
+    return technology == "numpy"
 
 
 class TritonChecker:
@@ -497,6 +493,6 @@ class TritonChecker:
     @staticmethod
     def check_availability() -> tuple[bool, str]:
         """Check if Triton is available for custom kernels."""
-        if HAS_TRITON:
+        if TRITON_IMPORTED:
             return True, "Triton available"
         return False, "Triton not installed. Install with: pip install triton"

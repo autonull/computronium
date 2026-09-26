@@ -476,9 +476,9 @@ try:  # noqa: PLR0915
             mask=mask_out[:, None] & mask_in[None, :],
         )
 
-    HAS_TRITON_HEBBIAN = True
+
 except ImportError:
-    HAS_TRITON_HEBBIAN = False
+    pass
 
 
-__all__ = ["HAS_TRITON_HEBBIAN", "HebbianKernelBackend", "ThreeFactorKernelBackend"]
+__all__ = ["HebbianKernelBackend", "ThreeFactorKernelBackend"]

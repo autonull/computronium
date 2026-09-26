@@ -12,9 +12,8 @@ from typing import Any
 
 import torch
 
-from computronium.acceleration.backends import kernel_available
+from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.fa_kernels import (
-    HAS_TRITON_FA,
     fa_batched_outer_triton,
     fa_feedback_projection_triton,
 )
@@ -24,7 +23,8 @@ KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and HAS_TRITON_FA
+    """Whether this rung can run here: the family's Triton kernels compile."""
+    return triton_rung_available("fa")
 
 
 def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
@@ -95,7 +95,7 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
         h_prev = nudged_activations[i]
 
         # Weight gradient: err.T @ h_prev / batch
-        if HAS_TRITON_FA and err.is_cuda:
+        if is_available() and err.is_cuda:
             wgrad = fa_batched_outer_triton(h_prev, err)
         else:
             wgrad = (err.T @ h_prev) / batch
@@ -105,7 +105,7 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
         # Reference uses: err = err @ B (not B.T)
         if i > 0:
             B = feedback_weights[i]
-            if HAS_TRITON_FA and err.is_cuda:
+            if is_available() and err.is_cuda:
                 err = fa_feedback_projection_triton(err, B)
             else:
                 err = err @ B  # ruff: ignore[non-augmented-assignment] — explicit rebind; `@=` reads as in-place mutation

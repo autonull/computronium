@@ -392,9 +392,9 @@ try:  # noqa: PLR0915
             mask=mask_out[:, None] & mask_in[None, :],
         )
 
-    HAS_TRITON_FA = True
+    TRITON_IMPORTED_FA = True
 except ImportError:
-    HAS_TRITON_FA = False
+    TRITON_IMPORTED_FA = False
 
 
 # Register the backend for all HardwareTargets
@@ -458,7 +458,7 @@ def fa_feedback_projection_triton(
     Returns:
         [B, D_in]
     """
-    if not HAS_TRITON_FA or not error.is_cuda:
+    if not TRITON_IMPORTED_FA or not error.is_cuda:
         return error @ feedback
 
     B, D_out = error.shape
@@ -500,7 +500,7 @@ def fa_batched_outer_triton(
     Returns:
         [D_out, D_in] (averaged over batch)
     """
-    if not HAS_TRITON_FA or not pre.is_cuda:
+    if not TRITON_IMPORTED_FA or not pre.is_cuda:
         return (post.T @ pre) / pre.shape[0]
 
     B, D_in = pre.shape
@@ -528,7 +528,7 @@ def fa_batched_outer_triton(
 
 
 __all__ = [
-    "HAS_TRITON_FA",
+    "TRITON_IMPORTED_FA",
     "FAKernelBackend",
     "fa_batched_outer_triton",
     "fa_feedback_projection_triton",

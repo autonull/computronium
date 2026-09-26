@@ -183,7 +183,7 @@ third rung its own sentence promises exists as a label and not as a rung.
 | source | what it actually reports |
 |---|---|
 | `kernel_available("triton")` | `torch.cuda.is_available()` — a GPU, not triton |
-| `HAS_TRITON_PC` / `_FF` / `_SNN` / `_HEBBIAN` / `_HAS_TRITON` | triton imported — on this box all five are `True` while 12 of the 16 kernels they guard cannot be launched |
+| `HAS_TRITON_PC` / `_FF` / `_SNN` / `_HEBBIAN` / `_HAS_TRITON` | triton imported — on this box all five are `True` while 12 of the 16 kernels they guard cannot be launched — **retired in §4.2; the last one is now `TRITON_IMPORTED`, and the four are gone** |
 | `KERNEL_TECHNOLOGY` on 41 primitives, `kernel_technology` on 54 specs | a string. Most never import a triton kernel |
 | `spec.supported_backends` containing `"kernel"` | a torch implementation exists |
 
@@ -319,30 +319,66 @@ existing schema with `device: "cuda"` and a field that names the technology.
 
 ### 4.2 One meaning for "available"
 
-A single function, in `acceleration/`, that answers *"can the triton rung for
-this family run, here, now?"* and means it: the kernel imports **and compiles**.
-Triton's `.warmup()` compiles without launching, so the honest flag is
-"compiled once, cached", not "CUDA is present".
+**DONE 2026-09-26.** A single function, in `acceleration/`, that answers *"can
+the triton rung for this family run, here, now?"* and means it: the kernel imports
+**and compiles**. Triton's `.warmup()` compiles without launching, so the honest
+flag is "compiled once, cached", not "CUDA is present".
 
-- Replace `kernel_available("triton")`, the five `HAS_TRITON_*` flags, and
-  `KERNEL_TECHNOLOGY`-as-a-boolean with it. Callers keep working; their meaning
-  stops lying.
-- **Done when** `HAS_TRITON_PC` and its siblings report what they say, and a
-  test asserts a flag is `False` for a kernel that does not compile (§2's
-  finding is the fixture: 5 flags `True`, 12 kernels unlaunchable).
-- **A standing compile check over the whole `@triton.jit` population**
-  (`TODO35.md` §17.8-6), promoted from the throwaway probe
-  `scripts/probes/todo35_r17_kernels_compile.py` into the tree. It must
-  **report** every kernel's compile state and **fail only on a regression from a
-  recorded baseline** — the 12 uncompilable kernels of §2 are a *known state*,
-  listed in that baseline, not a red gate.
-- **Why the baseline, and why it is load-bearing:** a check that simply failed
-  on those 12 would be red on arrival, and the fastest way anyone makes it
-  green is to delete the kernels — which is precisely the failure `TODO35.md`
-  §17.9 exists to prevent. A regression-only check keeps the uncompilable ones
-  visible and named, so §4.5 can work through them deliberately, and so a
-  *newly* broken kernel is still caught. If a session finds itself wanting to
-  delete a kernel to satisfy this check, that is the signal §3 describes.
+- **Landed as** `computronium/acceleration/availability.py`:
+  - `triton_rung_available(family)` — the family answer. Every kernel in the
+    family must compile. This is what the four triton `kernel.py` dispatch sites
+    (`local_goodness`, `random_projections`, `pc_alm_settling`, `algorithms/pcalm`)
+    now call.
+  - `triton_stack_available()` — the box-wide answer: a known-good kernel from the
+    baseline is compiled here. This is what `kernel_available("triton")` reports,
+    so all ~60 `is_available()` implementations that call it are fixed in one
+    place, which is §0.1's rule (the fix belongs at the boundary, once).
+  - `compile_state` / `compile_report` / `regressions` / `record_baseline` and the
+    CLI `python -m computronium.acceleration.availability [--check|--record]`.
+- **The four names are gone, not aliased.** `HAS_TRITON_PC`, `HAS_TRITON_SNN` and
+  `HAS_TRITON_HEBBIAN` are deleted (no consumer but their own `__all__`);
+  `HAS_TRITON_FA` / `_TILE` / `_PCALM` are renamed `TRITON_IMPORTED_*`, because
+  that is the only thing they ever measured; `backends.HAS_TRITON` becomes
+  `TRITON_IMPORTED`. `kernel_available("cupy")` used to `return True` from a `try`
+  block that could not fail — it now returns `HAS_CUPY`, which is itself measured
+  by allocating on the device. **No `HAS_TRITON` name remains in the tree.**
+- **Standing compile check, promoted out of the probe.** The 14 hand-written
+  fixtures of `scripts/probes/todo35_r17_kernels_compile.py` moved into
+  `availability.fixtures()`, joined by fixtures for the two *wired* families a
+  dispatch site actually asks about (`fa`, `pcalm`) so their answer is a
+  measurement. **The probe is deleted** — one census, in the tree, with a
+  baseline. Baseline: `computronium/acceleration/triton_compile_baseline.json`,
+  `--record`ed, 5 of 17 compile and 12 do not.
+- **Regression-only, as §4.2 requires.** `regressions()` compares measured state
+  to the baseline and reports a problem only when a kernel that compiled stops
+  compiling. A kernel that newly compiles is progress and is not reported. The 12
+  uncompilable kernels are named, recorded states — §2's classification, now
+  machine-readable.
+- **Done when** `HAS_TRITON_PC` and its siblings report what they say, and a test
+  asserts a flag is `False` for a kernel that does not compile. **Met:**
+  `tests/acceleration/test_triton_availability.py` asserts
+  `triton_stack_available() is True` *and* `triton_rung_available("pc") is False`
+  in the same breath — §2's finding as an executable fixture, 5 flags that used to
+  say `True` while 12 kernels could not launch.
+- **The census is closed.** `discover_kernels()` enumerates every module-level
+  `@triton.jit` in the acceleration package; `unfixtured_kernels()` must equal the
+  test's `GPU_TESTED` allowlist, so a new kernel cannot join without either a
+  fixture or a named test that compiles it. Adding a row is the fix — deleting a
+  kernel is not one (§3).
+- **A synthesiser was tried and rejected, with the measurement recorded.** Building
+  fixture arguments from each kernel's parameter names and annotations produced
+  **13 false failures out of 18** on kernels that demonstrably work, because a
+  wrong-but-well-typed argument is a compile error, not a no-op (`tl.dot`'s `K >= 8`,
+  equal reduction dimensions). Fixtures are hand-written from the signature; that
+  is the cost of a truthful answer.
+- **Family labels are not all `AlgorithmFamily` members.** The complex substrate's
+  `tanh` kernel is labelled `complex_substrate`, not `pcalm` — it is not part of
+  pcalm's rung, and folding it in would have made `pc_alm_settling`'s rung report
+  unavailable for someone else's broken kernel.
+- **Why the baseline is load-bearing** (restated, because it now has a file):
+  a check that simply failed on those 12 would be red on arrival, and the fastest
+  way to green it is deletion. `--check` exits 0 today with 12 known failures
+  recorded, and non-zero the moment one of the 5 stops compiling.
 
 ### 4.3 Make the technology a selectable rung
 
@@ -567,7 +603,23 @@ globalised:
 | `energy_minimization`, `predictive_settling` (`torch_compile`) | yes, 1.5–5× | yes | keep, but the rung under test is the wrong one; see opportunity 2 below |
 | `pcalm` | n/a — no triton work | yes | unrankable until §4.6 gives it a real rung |
 
-### 5.3 The rest of the census
+### 5.3 §4.2 — what "available" says now
+
+| question | before | after |
+|---|---|---|
+| triton importable? | `HAS_TRITON` / `kernel_available("triton")` — a CUDA check | `TRITON_IMPORTED`, a fact about an import, named as one |
+| can triton compile *anything* here? | not asked | `triton_stack_available()` — compiles a baseline canary |
+| can *this family's* triton rung run? | `HAS_TRITON_<FAM>`, `True` for 5 families whose kernels do not compile | `triton_rung_available(fam)` — `pc`/`ff`/`pepita`/`snn`/`hebbian`/`complex_substrate` all report **`False`** today |
+| is cupy usable? | `return True` from an empty `try` | `HAS_CUPY`, which allocates on the device |
+| how many triton kernels compile? | "2 of 14 sampled", from a probe | **5 of 17**, from `availability.py --record`, machine-readable |
+
+`triton_rung_available("fa")` and `triton_rung_available("pcalm")` are `True`, and
+that is now a measurement: the two families `local_goodness`, `random_projections`,
+`pc_alm_settling` and `algorithms/pcalm` dispatch on have their kernels compiled
+before the rung is offered. `triton_rung_available("pc")` is `False` on the same
+box in the same second — which is the whole of §1.5 in one line of output.
+
+### 5.4 The rest of the census
 
 | question | answer |
 |---|---|
@@ -576,9 +628,10 @@ globalised:
 | Why were there no GPU rows before? | geometries were built on CPU and never moved, so every `device="cuda"` run raised a device mismatch; fixed in §4.1 |
 | `kernel.py` modules reaching a triton rung | 7 (9 call sites), behind 17 kernels |
 | GPU tests covering them | 19, all passing here |
+| `HAS_TRITON*` names in the tree | **0** (retired in §4.2) |
 | `*KernelBackend` classes with a consumer | 0 of 13 (plus 10 contrastive, never registered) |
 | `KernelRegistry` families on plain import | 1 (`eqprop`); 2 after Layer A's spec walk |
-| Layer B kernels that compile | 2 of 14 sampled |
+| Layer B kernels that compile | 5 of 17 with a fixture; 4 of 13 without |
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | 1 level only (reference ↔ kernel) |
@@ -592,7 +645,7 @@ globalised:
 
 ```bash
 uv run python scripts/probes/todo36_kernel_census.py
-COMPUTRONIUM_RECORD_RESULTS=0 uv run python scripts/probes/todo35_r17_kernels_compile.py
+uv run python -m computronium.acceleration.availability --check
 uv run python -m pytest tests/integration/test_triton_kernel.py \
     tests/integration/test_kernel_equivalence.py \
     tests/acceleration/test_fa_triton_dispatch.py \
@@ -689,3 +742,16 @@ scheduled; they are the things measuring the ladder taught us.
    benchmark evidence ever meant to be reviewed), or move the summary table that
    §5.1 already is into a committed doc and let the raw rows stay local. The
    second is cheaper and loses nothing; the first is what a reviewer would want.
+9. **`triton_rung_available` falls back to "triton imports" for a family with no
+   fixtures**, and says so in its docstring — but a fallback is still a weaker
+   claim, and four families (`tile` and the class-built `eqprop`/`mep` kernels)
+   have no fixtures and so no compile evidence from this module. §4.2 left them
+   on the import check deliberately: writing their fixtures is the same work as
+   §4.5's specifications, and doing it twice would be the duplication §0.2
+   condemns. When §4.5 writes a torch reference for a family, the fixture should
+   land in the same commit.
+10. **`unfixtured_kernels()` is a hard equality against a test-local allowlist.**
+    That is deliberate — it forces a decision when a kernel is added — but it
+    means the allowlist lives in `tests/acceleration/test_triton_availability.py`
+    while the truth lives in `availability.py`. The day a second test needs the
+    census, the allowlist belongs beside the fixtures.

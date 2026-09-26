@@ -178,7 +178,7 @@ def _spec_site(spec_id: str, package: str) -> RungSite:
 
 def _muon_site() -> RungSite:
     """Muon orthogonalisation: the torch rung against the triton rung."""
-    from computronium.acceleration.triton_kernels import HAS_TRITON, MEP_TritonOps
+    from computronium.acceleration.triton_kernels import TRITON_IMPORTED, MEP_TritonOps
     from computronium.core.optimization.strategies import MuonUpdate
 
     torch_rung = MuonUpdate()
@@ -197,7 +197,7 @@ def _muon_site() -> RungSite:
                 "kernel",
                 "triton",
                 lambda g: MEP_TritonOps.muon_orthogonalize(g, ns_steps=5),
-                available=lambda: HAS_TRITON,
+                available=lambda: TRITON_IMPORTED,
             ),
         ),
         shape=lambda g: f"{g.shape[0]}x{g.shape[1]}",

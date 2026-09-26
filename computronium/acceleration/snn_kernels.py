@@ -547,9 +547,9 @@ try:  # noqa: PLR0915
             mask=mask_post[:, None] & mask_pre[None, :],
         )
 
-    HAS_TRITON_SNN = True
+
 except ImportError:
-    HAS_TRITON_SNN = False
+    pass
 
 
-__all__ = ["HAS_TRITON_SNN", "SNNKernelBackend"]
+__all__ = ["SNNKernelBackend"]

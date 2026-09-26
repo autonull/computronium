@@ -7,14 +7,14 @@ on every commit. Ensures bitwise/numerical equivalence across backends.
 import pytest
 import torch
 
-from computronium.acceleration.backends import HAS_CUPY, HAS_TRITON
+from computronium.acceleration.backends import HAS_CUPY, TRITON_IMPORTED
 from computronium.acceleration.triton_kernels import MEP_TritonOps, TritonEqPropOps
 
 
 class TestTritonEqPropEquivalence:
     """Test Triton EqProp kernels match PyTorch reference."""
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_step_equivalence(self):
         """Test Triton step kernel matches PyTorch reference."""
@@ -39,7 +39,7 @@ class TestTritonEqPropEquivalence:
         assert max_diff < 1e-5, f"Max absolute diff: {max_diff}"
         assert rel_diff < 1e-4, f"Max relative diff: {rel_diff}"
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_step_no_bias_equivalence(self):
         """Test Triton step kernel without bias matches PyTorch."""
@@ -56,7 +56,7 @@ class TestTritonEqPropEquivalence:
         max_diff = (triton_out - ref_out).abs().max().item()
         assert max_diff < 1e-5, f"Max absolute diff: {max_diff}"
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     @pytest.mark.xfail(
         reason="Layered step requires CuPy for Triton path; skipping until fixed"
@@ -75,7 +75,7 @@ class TestTritonEqPropEquivalence:
         gamma = 0.5
 
         # Triton (via step_layered_cupy which uses Triton)
-        if HAS_TRITON and HAS_CUPY:
+        if TRITON_IMPORTED and HAS_CUPY:
             triton_out = TritonEqPropOps.step_layered_cupy(
                 h, x_emb, w1, b1, w2, b2, gamma
             )
@@ -103,7 +103,7 @@ class TestTritonEqPropEquivalence:
 class TestMEPKernelsEquivalence:
     """Test MEP Triton kernels match PyTorch reference."""
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_muon_orthogonalize_equivalence(self):
         """Test Triton Muon NS matches PyTorch reference."""
@@ -135,7 +135,7 @@ class TestMEPKernelsEquivalence:
         assert max_diff < 1e-4, f"Muon max diff: {max_diff}"
         assert rel_diff < 1e-3, f"Muon rel diff: {rel_diff}"
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_fisher_whiten_equivalence(self):
         """Test Triton Fisher whitening matches PyTorch."""
@@ -152,7 +152,7 @@ class TestMEPKernelsEquivalence:
         max_diff = (triton_out - ref_out).abs().max().item()
         assert max_diff < 1e-5, f"Fisher max diff: {max_diff}"
 
-    @pytest.mark.skipif(not HAS_TRITON, reason="Triton not available")
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     @pytest.mark.xfail(
         reason="EP settle tolerance needs tuning for accumulated operations"

@@ -253,6 +253,5 @@ try:  # noqa: PLR0915
         tl.store(out_real_ptr + pid_b * M * N + pid_m * N + pid_n, acc_r)
         tl.store(out_imag_ptr + pid_b * M * N + pid_m * N + pid_n, acc_i)
 
-    _HAS_TRITON = True
 except ImportError:
-    _HAS_TRITON = False
+    pass
