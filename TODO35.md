@@ -1,10 +1,12 @@
 # TODO35: The Proveable Remainder
 
-**Status**: **ACTIVE — open.** This document owns every open item as of
-**A new session works from the Round 4 brief in §0 below, and stops there.**
-made fast, provable and ready to be presented; its "Remaining Work" section is
-replaced by a pointer here, because two live open-item lists is the drift this
-plan series has documented five times.
+**Status**: **ACTIVE — open. A new session works from the Round 4 brief in
+§0 below and stops there**; everything past §0 is the record of why the
+decisions were made, not the work list. Round 3 is closed (§12).
+`TODO34.md` keeps its 16 passes as the record of how the tree was made
+fast, provable and ready to be presented; its "Remaining Work" section is
+replaced by a pointer here, because two live open-item lists is the drift
+this plan series has documented five times.
 
 **Round 3 closed**: §1.2 (the three highest-fan-in modules are at 0 — and
 the third of them held an `ImportError` on a live branch that no test had
