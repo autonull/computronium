@@ -490,7 +490,7 @@ class HyperparameterMetamodel:
         }
         is_vision_model = (
             "vision" in model_spec.model_type.lower()
-            or model_spec.family in ("backprop", "eqprop", "fa", "tile")
+            or model_spec.family in {"backprop", "eqprop", "fa", "tile"}
         )
         if is_vision_model and "hidden_dim" in search_space and not is_small_task:
             hd_spec = search_space["hidden_dim"]

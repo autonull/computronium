@@ -834,7 +834,10 @@ def _is_tile_geometry(geometry: Geometry, all_acts: list[Tensor]) -> bool:
 def _compute_tile_hopfield_energy(geometry: Geometry, all_acts: list[Tensor]) -> Tensor:
     """Compute energy using tile geometry's block-view method."""
     tile_energy = getattr(geometry, "hopfield_energy", None)
-    assert callable(tile_energy), "Tile energy function must be callable"
+    if not callable(tile_energy):
+        raise TypeError(
+            f"Tile energy must be callable, got {type(tile_energy).__name__}"
+        )
     return cast("Tensor", tile_energy(all_acts))
 
 
@@ -989,8 +992,8 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         if all_acts is None:
             return state
 
-        # At this point, kernel is guaranteed to be non-None
-        assert kernel is not None
+        if kernel is None:
+            raise RuntimeError("settle kernel was not initialised")
 
         # Execute the appropriate settling path
         if use_compiled:

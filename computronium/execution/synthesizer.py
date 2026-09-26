@@ -6,9 +6,11 @@ strategic analysis, failure pattern detection, and actionable recommendations
 to guide future research directions.
 """
 
+import importlib.util
 import json
 import sqlite3
 import traceback
+from typing import ClassVar
 
 import pandas as pd
 
@@ -134,7 +136,7 @@ class ResearchSynthesizer:
             return {"error": str(e)}
 
     # Metadata rescue constants
-    _KNOWN_TASKS = [
+    _KNOWN_TASKS: ClassVar[list[str]] = [
         "tiny_shakespeare",
         "char_ngram",
         "fashion_mnist",
@@ -144,7 +146,7 @@ class ResearchSynthesizer:
         "pendulum",
     ]
 
-    _TIER_VALUES = ["smoke", "shallow", "standard", "deep"]
+    _TIER_VALUES: ClassVar[list[str]] = ["smoke", "shallow", "standard", "deep"]
 
     def _get_trials_df(self, conn: sqlite3.Connection) -> pd.DataFrame:
         """
@@ -332,9 +334,7 @@ class ResearchSynthesizer:
                 }
             ]
 
-        try:
-            from scipy import stats
-        except ImportError:
+        if importlib.util.find_spec("scipy") is None:
             return [{"error": "SciPy not installed, skipping statistical tests."}]
 
         return self._compute_pairwise_significance(model_accs)

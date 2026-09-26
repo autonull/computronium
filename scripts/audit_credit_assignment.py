@@ -104,13 +104,11 @@ def _create_linear_geometry(
     return geometry, substrate, dynamics
 
 
-def _create_credits() -> tuple[ThermodynamicContrast, BackpropCredit]:
-    """Create credit assignment primitives."""
-    thermo_credit = ThermodynamicContrast(
+def _create_thermo_credit() -> ThermodynamicContrast:
+    """Create the thermodynamic-contrast primitive under audit."""
+    return ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
-    return thermo_credit, backprop_credit
 
 
 def _run_batch_linear(
@@ -184,7 +182,7 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     geometry, substrate, dynamics = _create_linear_geometry(device)
-    thermo_credit, backprop_credit = _create_credits()
+    thermo_credit = _create_thermo_credit()
 
     cosines = []
     rel_errors = []
@@ -349,7 +347,6 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
     thermo_credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     cosines = []
     rel_errors = []
@@ -460,7 +457,7 @@ def _compute_theoretical_fa_grads(
         fb = fb_weights["layer_0"]
         hidden_error = output_error @ fb.T
         if hidden_acts:
-            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+            hidden_error *= (hidden_acts[0] > 0).float()
         pre_act = free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)
@@ -482,7 +479,6 @@ def test_fa_theoretical() -> dict[str, Any]:
     geometry, substrate = _create_fa_geometry(device)
     credit = _create_fa_credit(device, geometry)
     fb_weights = credit._feedback_weights
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     rel_errors = []
 
@@ -579,7 +575,7 @@ def _compute_theoretical_dfa_grads(
         fb = fb_weights["layer_0"]
         hidden_error = output_error @ fb.T
         if len(hidden_acts) > 0:
-            hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+            hidden_error *= (hidden_acts[0] > 0).float()
         pre_act = free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)
@@ -588,7 +584,7 @@ def _compute_theoretical_dfa_grads(
         fb = fb_weights["layer_1"]
         hidden_error = output_error @ fb.T
         if len(hidden_acts) > 1:
-            hidden_error = hidden_error * (hidden_acts[1] > 0).float()
+            hidden_error *= (hidden_acts[1] > 0).float()
         pre_act = hidden_acts[0] if len(hidden_acts) > 0 else free_state.x
         if pre_act is not None:
             theoretical_grads.append(hidden_error.T @ pre_act)
@@ -610,7 +606,6 @@ def test_dfa_theoretical() -> dict[str, Any]:
     geometry, substrate = _create_dfa_geometry(device)
     credit = _create_dfa_credit(device, geometry)
     fb_weights = credit._feedback_weights
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     rel_errors = []
 

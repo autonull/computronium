@@ -108,7 +108,7 @@ def step(case: Any) -> list[Any]:  # ruff: ignore[too-many-locals]
             if HAS_TRITON_FA and err.is_cuda:
                 err = fa_feedback_projection_triton(err, B)
             else:
-                err = err @ B
+                err = err @ B  # ruff: ignore[non-augmented-assignment] — explicit rebind; `@=` reads as in-place mutation
 
             # Apply credit norm only (no activation derivative)
             err = _apply_credit_norm([err], credit_norm, [h_prev])[0]

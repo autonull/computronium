@@ -436,7 +436,10 @@ def fa_feedback_projection_triton(
 
     B, D_out = error.shape
     D_in = feedback.shape[1]
-    assert feedback.shape[0] == D_out
+    if feedback.shape[0] != D_out:
+        raise ValueError(
+            f"feedback projection must map D_out={D_out}, got {feedback.shape[0]}"
+        )
 
     out = torch.empty(B, D_in, device=error.device, dtype=error.dtype)
 
@@ -475,7 +478,8 @@ def fa_batched_outer_triton(
 
     B, D_in = pre.shape
     D_out = post.shape[1]
-    assert post.shape[0] == B
+    if post.shape[0] != B:
+        raise ValueError(f"post-activation must have B={B} rows, got {post.shape[0]}")
 
     out = torch.empty(D_out, D_in, device=pre.device, dtype=pre.dtype)
 

@@ -1,5 +1,6 @@
 import random
-from typing import TYPE_CHECKING
+from collections.abc import Callable  # ruff: ignore[typing-only-standard-library-import] — ClassVar annotations are evaluated at runtime
+from typing import TYPE_CHECKING, ClassVar
 
 from computronium.core.logging import get_logger
 from computronium.execution._guards import (
@@ -129,7 +130,7 @@ class ExecutionStrategy:
         self._events.set_insight(desc)
 
     # Task-specific criterion overrides: (tier -> threshold)
-    _TASK_CRITERIA_OVERRIDES: dict[str, dict[PatientLevel, float]] = {
+    _TASK_CRITERIA_OVERRIDES: ClassVar[dict[str, dict[PatientLevel, float]]] = {
         "cifar100": {
             PatientLevel.SMOKE: 0.05,
             PatientLevel.SHALLOW: 0.15,
@@ -881,7 +882,7 @@ class ExecutionStrategy:
             constraints[model]["max_num_layers"] = 6
 
     # Mapping of failure issue to handler method
-    _HARD_FAILURE_HANDLERS = {
+    _HARD_FAILURE_HANDLERS: ClassVar[dict[str, Callable[..., object]]] = {
         "High NaN failure rate": _handle_nan_failure,
         "Out of memory errors": _handle_oom_failure,
         "Frequent timeouts": _handle_timeout_failure,
@@ -913,13 +914,13 @@ class ExecutionStrategy:
         return constraints
 
     # Task-specific saturation thresholds
-    _SATURATION_THRESHOLDS: dict[str, float] = {
+    _SATURATION_THRESHOLDS: ClassVar[dict[str, float]] = {
         "digits": 0.98,
         "mnist": 0.99,
         "fashion_mnist": 0.94,
     }
 
-    _IMPLICIT_SATURATION_RULES: dict[str, list[str]] = {
+    _IMPLICIT_SATURATION_RULES: ClassVar[dict[str, list[str]]] = {
         "mnist": ["digits", "usps"],
         "fashion_mnist": ["mnist", "kmnist"],
     }

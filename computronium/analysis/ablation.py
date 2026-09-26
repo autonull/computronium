@@ -534,13 +534,13 @@ class AblationStudy:
         report_paths: dict,
     ):
         """Generate HTML and/or Markdown reports."""
-        if format in ("html", "all"):
+        if format in {"html", "all"}:
             html_path = self._generate_html_report(
                 output_dir, summary, df, loo_results, sobol
             )
             report_paths["html"] = html_path
 
-        if format in ("markdown", "all"):
+        if format in {"markdown", "all"}:
             md_path = self._generate_markdown_report(
                 output_dir, summary, loo_results, sobol
             )

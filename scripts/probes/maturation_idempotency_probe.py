@@ -14,8 +14,6 @@ import time
 from pathlib import Path
 from tempfile import mkdtemp
 
-from tests.integration.test_continuous_burst import _SEED, _args, build_sweep
-
 from computronium.autoscientist.broad_map import (
     ContinuousBudget,
     promote_candidates,
@@ -24,6 +22,7 @@ from computronium.autoscientist.broad_map import (
 )
 from computronium.knowledge import KnowledgeBase
 from computronium.utils import seed_everything
+from tests.integration.test_continuous_burst import _SEED, _args, build_sweep
 
 
 def main() -> None:

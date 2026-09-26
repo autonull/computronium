@@ -395,7 +395,7 @@ class SystemConfig:
 
     def _validate_recurrent_geometry_dynamics(self) -> None:
         """Recurrent geometry requires energy-based, PC-family, or instantaneous dynamics."""
-        if self.geometry.topology_type in ("recurrent", "recurrent_attractor"):
+        if self.geometry.topology_type in {"recurrent", "recurrent_attractor"}:
             if self.dynamics.dynamics_type not in {
                 "energy_minimization",
                 "predictive_settling",
@@ -431,12 +431,12 @@ class SystemConfig:
 
     def _validate_tile_mesh_dynamics(self) -> None:
         """Tile mesh geometry requires compatible dynamics."""
-        if self.geometry.topology_type in ("tile_mesh", "tile"):
-            if self.dynamics.dynamics_type not in (
+        if self.geometry.topology_type in {"tile_mesh", "tile"}:
+            if self.dynamics.dynamics_type not in {
                 "energy_minimization",
                 "pc_alm",
                 "instantaneous",
-            ):
+            }:
                 raise ValueError(
                     f"Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics, "
                     f"got {self.dynamics.dynamics_type!r}"
@@ -465,12 +465,12 @@ class SystemConfig:
     def _validate_spike_integration_credit(self) -> None:
         """Spike integration dynamics requires temporal trace or target inversion credit."""
         if self.dynamics.dynamics_type == "spike_integration":
-            if self.credit.credit_type not in (
+            if self.credit.credit_type not in {
                 "temporal_trace",
                 "spiking",
                 "target_inversion",
                 "target_prop",
-            ):
+            }:
                 raise ValueError(
                     f"Spike integration dynamics requires temporal trace or target inversion credit, "
                     f"got {self.credit.credit_type!r}"
@@ -478,15 +478,15 @@ class SystemConfig:
 
     def _validate_predictive_settling_credit(self) -> None:
         """Predictive settling dynamics requires compatible credit."""
-        if self.dynamics.dynamics_type in (
+        if self.dynamics.dynamics_type in {
             "predictive_settling",
             "error_predictive_coding",
-        ) and self.credit.credit_type not in (
+        } and self.credit.credit_type not in {
             "thermodynamic_contrast",
             "equilibrium",
             "local_goodness",
             "forward_only",
-        ):
+        }:
             raise ValueError(
                 f"{self.dynamics.dynamics_type} dynamics requires "
                 f"thermodynamic_contrast, local_goodness, or forward_only credit, "
@@ -496,16 +496,16 @@ class SystemConfig:
     def _validate_pc_alm_dynamics(self) -> None:
         """PC-ALM dynamics requires PCALMCredit (or thermodynamic_contrast) and layered geometry."""
         if self.dynamics.dynamics_type == "pc_alm":
-            if self.credit.credit_type not in ("pc_alm", "thermodynamic_contrast"):
+            if self.credit.credit_type not in {"pc_alm", "thermodynamic_contrast"}:
                 raise ValueError(
                     f"PC-ALM dynamics requires pc_alm or thermodynamic_contrast credit, "
                     f"got {self.credit.credit_type!r}"
                 )
-            if self.geometry.topology_type not in (
+            if self.geometry.topology_type not in {
                 "feedforward",
                 "recurrent",
                 "tile_mesh",
-            ):
+            }:
                 raise ValueError(
                     f"PC-ALM dynamics requires layered geometry, "
                     f"got {self.geometry.topology_type!r}"
@@ -524,14 +524,14 @@ class SystemConfig:
 
     def _validate_thermodynamic_contrast_dynamics(self) -> None:
         """Thermodynamic contrast credit requires energy-based or PC-family dynamics."""
-        if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
-            if self.dynamics.dynamics_type not in (
+        if self.credit.credit_type in {"thermodynamic_contrast", "equilibrium"}:
+            if self.dynamics.dynamics_type not in {
                 "energy_minimization",
                 "predictive_settling",
                 "error_predictive_coding",
                 "lazy",
                 "pc_alm",
-            ):
+            }:
                 raise ValueError(
                     f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "
                     f"requires energy-based or PC-family dynamics, got {self.dynamics.dynamics_type!r}"
@@ -566,11 +566,11 @@ class SystemConfig:
     def _validate_neuromorphic_substrate_dynamics(self) -> None:
         """Neuromorphic substrate requires temporal dynamics."""
         if self.substrate.precision == "float16" and self.substrate.sparsity > 0.9:
-            if self.dynamics.dynamics_type not in (
+            if self.dynamics.dynamics_type not in {
                 "spike_integration",
                 "energy_minimization",
                 "diffusion",
-            ):
+            }:
                 raise ValueError(
                     f"Neuromorphic substrate (precision={self.substrate.precision}, "
                     f"sparsity={self.substrate.sparsity}) requires temporal dynamics "
@@ -596,12 +596,12 @@ class SystemConfig:
             self.substrate.precision == "float32"
             and getattr(self.substrate, "_complex_emulated", False)
             and self.credit.credit_type
-            not in (
+            not in {
                 "thermodynamic_contrast",
                 "equilibrium",
                 "gradient",
                 "backprop",
-            )
+            }
         ):
             warnings.warn(
                 f"Complex substrate used with {self.credit.credit_type!r} credit. "
@@ -614,16 +614,16 @@ class SystemConfig:
     def _validate_quantum_substrate_dynamics(self) -> None:
         """Quantum substrate requires compatible dynamics and beta matching."""
         if self.substrate.precision == "complex64":
-            if self.dynamics.dynamics_type not in (
+            if self.dynamics.dynamics_type not in {
                 "energy_minimization",
                 "instantaneous",
                 "diffusion",
-            ):
+            }:
                 raise ValueError(
                     f"Quantum substrate requires energy_minimization, instantaneous, "
                     f"or diffusion dynamics, got {self.dynamics.dynamics_type!r}"
                 )
-            if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):
+            if self.credit.credit_type in {"thermodynamic_contrast", "equilibrium"}:
                 if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
                     warnings.warn(
                         f"Quantum substrate with thermodynamic contrast: "
@@ -651,12 +651,12 @@ class SystemConfig:
             self.substrate.precision == "float32"
             and self.substrate.sparsity == 0.0
             and self.substrate.weight_bounds == (-1.0, 1.0)
-        ) and self.credit.credit_type not in (
+        ) and self.credit.credit_type not in {
             "thermodynamic_contrast",
             "equilibrium",
             "gradient",
             "backprop",
-        ):
+        }:
             warnings.warn(
                 f"Ternary-like substrate used with {self.credit.credit_type!r} credit. "
                 f"Best results with thermodynamic_contrast (Ternary EqProp) "
@@ -680,7 +680,7 @@ class SystemConfig:
 
     def _validate_spatial_neuromorphic_geometry_substrate(self) -> None:
         """Spatial/neuromorphic geometry works best with neuromorphic substrate."""
-        if self.geometry.topology_type in ("spatial_lattice", "neuromorphic", "fabric"):
+        if self.geometry.topology_type in {"spatial_lattice", "neuromorphic", "fabric"}:
             if not (
                 self.substrate.precision == "float16" and self.substrate.sparsity > 0.9
             ):
@@ -696,7 +696,7 @@ class SystemConfig:
     def _validate_tile_mesh_sparse_substrate(self) -> None:
         """Tile mesh with sparse substrate warns about structured sparsity."""
         if (
-            self.geometry.topology_type in ("tile_mesh", "tile")
+            self.geometry.topology_type in {"tile_mesh", "tile"}
             and self.substrate.sparsity > 0.5
         ):
             warnings.warn(
@@ -806,15 +806,15 @@ class SystemConfig:
         validators: list[tuple[bool, bool]] = [
             # (condition, should_pass)
             (
-                geo_type in ("recurrent", "recurrent_attractor"),
+                geo_type in {"recurrent", "recurrent_attractor"},
                 dyn_type in _RECURRENT_DYNAMICS,
             ),
             (
-                cred_type in ("thermodynamic_contrast", "equilibrium"),
+                cred_type in {"thermodynamic_contrast", "equilibrium"},
                 dyn_type in _THERMO_CREDIT_DYNAMICS,
             ),
             (dyn_type == "spike_integration", cred_type in _SPIKE_INTEGRATION_CREDITS),
-            (geo_type in ("tile_mesh", "tile"), dyn_type in _TILE_MESH_DYNAMICS),
+            (geo_type in {"tile_mesh", "tile"}, dyn_type in _TILE_MESH_DYNAMICS),
             (sub_precision == "complex64", dyn_type in _QUANTUM_DYNAMICS),
             (
                 dyn_type == "predictive_settling",

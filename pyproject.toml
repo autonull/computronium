@@ -232,29 +232,28 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "line-too-long",   # line-too-long — disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
-    "magic-value-comparison", # magic-value-comparison — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
-    "no-self-use", # no-self-use — protocol implementations keep a uniform method surface (self unused by design)
-    "unused-function-argument",    # unused-function-argument — math notation (W, G, V, X) is the domain's naming convention
-    "non-lowercase-variable-in-function",    # non-lowercase-variable-in-function — ditto for local math variables
-    "unnecessary-paren-on-raise-exception",  # unnecessary-paren-on-raise-exception — long messages in raise calls are the sanctioned error style (AGENTS.md)
-    "raise-vanilla-args",  # raise-vanilla-args — ditto; long descriptive messages stay at the raise site
-    "unused-function-argument",  # unused-function-argument — the family-neutral pipeline passes uniform args; primitives ignore some by design
-    "unused-method-argument",  # unused-method-argument
-    "ambiguous-unicode-character-string",  # ambiguous-unicode-character-docstring — Greek/math symbols (β, θ, ≈) in docstrings are the domain language
-    "ambiguous-unicode-character-docstring",  # ambiguous-unicode-character-string
-    "ambiguous-unicode-character-comment",  # ambiguous-unicode-character-comment
-    "comparison-of-constant", # comparison-of-constant — exact float equality is load-bearing (bitwise L5 locks), not a bug
-    "float-equality-comparison",  # float-equality-comparison — ditto — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs
-    "commented-out-code",  # commented-out-code — eradicate false positive on `# ruff: file-ignore[...]` directives in __init__.py
+    "line-too-long",   # E501 — disabled forever (user directive 2026-09-03): the formatter handles what it can, the rest is noise
+    "magic-value-comparison", # PLR2004 — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
+    "no-self-use", # PLR6301 — protocol implementations keep a uniform method surface (self unused by design)
+    "unused-function-argument",    # ARG001 — math notation (W, G, V, X) is the domain's naming convention
+    "unused-method-argument",  # ARG002 — ditto
+    "non-lowercase-variable-in-function",    # N806 — ditto for local math variables
+    "invalid-argument-name", # N803 — ditto for argument names, plus Triton's DSL-mandated kernel params (BLOCK_*, *_ptr)
+    "unnecessary-paren-on-raise-exception",  # B904 — long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "raise-vanilla-args",  # TRY003 — ditto; long descriptive messages stay at the raise site
+    "ambiguous-unicode-character-string",  # RUF001 — Greek/math symbols (β, θ, ≈) in strings are the domain language
+    "ambiguous-unicode-character-docstring",  # RUF002 — ditto
+    "ambiguous-unicode-character-comment",  # RUF003 — ditto
+    "float-equality-comparison",  # RUF069 — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs are load-bearing (bitwise L5 locks)
+    "commented-out-code",  # ERA001 — eradicate false positive on `# ruff: file-ignore[...]` directives in __init__.py
     # Suppression-comment style rules (ruff 0.15 directive family): the repo
     # uses ~1.5k legacy `# ruff: ignore[rule-name]` guard-rail comments;
     # RUF100 marks them unused, RUF105/106 want the other directive form and
     # RUF103 rejects it back. Canonical-form migration is Register C work;
     # enabling these rules only churns guard-rails without lint signal.
-    "unused-noqa",  # unused-noqa
-    "invalid-suppression-comment",  # invalid-suppression-comment
-    # # "RUF105",  # noqa-comments — new preview rule prefers `ruff: ignore`; canonical directive migration is Register C
+    "unused-noqa",  # RUF100
+    "invalid-suppression-comment",  # RUF103
+    # "RUF105",  # noqa-comments — new preview rule prefers `ruff: ignore`; canonical directive migration is Register C
     # "RUF201",  # rule-codes-in-selectors — codes are the enforced canonical selector form (2026-09-16 mid-flight fix)
 ]
 
@@ -267,10 +266,10 @@ ignore = [
     "non-empty-init-module", # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
 "computronium/ontology/dynamics/_dynamics.py" = [
-    "too-many-statements", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3)
+    "non-augmented-assignment", # PLR6104 — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics
 ]
 "computronium/ontology/_settle_kernel.py" = [
-    "too-many-statements", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3)
+    "non-augmented-assignment", # PLR6104 — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics
 ]
 "packages/*/tests/**/*.py" = [
     "assert",   # assert in standalone-package tests
@@ -283,19 +282,20 @@ ignore = [
     # Research probes are sanctioned throwaways (AGENTS probe conventions):
     # numbers-in-docstrings matter, lint polish does not. Security rules
     # stay active; these close the style/complexity classes only.
-    "assert",    # asserts are the probe's sanity gates
-    "hashlib-insecure-hash-function",    # hashlib-insecure-hash-function — md5 for non-cognitive cache keys
-    "too-many-return-statements", # too-many-return-statements — complexity budgets don't apply to one-off sweeps
-    "too-many-branches", # too-many-branches
-    "too-many-locals", # too-many-locals
-    "too-many-statements", # too-many-statements
-    "too-many-statements", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom
-    "global-statement", # global-statement — probe-level module state by design
-    "redefined-loop-name", # redefined-loop-name — loop-var overwrite is a common probe idiom
-    "asyncio-dangling-task",    # ambiguous-variable-name — single-letter math names (l, n) are the domain language
-    "unused-variable",    # unused-variable — assignments kept for side effects / future inspection
-    "unused-lambda-argument",  # unused-lambda-argument — lambda placeholders in tracker callbacks
-    "redefined-argument-from-local",  # enumerate-for-loop — manual counters read clearer in sweep loops
+    "assert",    # S101 — asserts are the probe's sanity gates
+    "hashlib-insecure-hash-function",    # S324 — md5 for non-cognitive cache keys
+    "too-many-return-statements", # PLR0911 — complexity budgets don't apply to one-off sweeps
+    "too-many-branches", # PLR0912 — ditto
+    "too-many-locals", # PLR0914 — ditto
+    "too-many-statements", # PLR0915 — ditto
+    "global-statement", # PLW0603 — probe-level module state by design
+    "redefined-loop-name", # PLW2901 — loop-var overwrite is a common probe idiom
+    "redefined-argument-from-local", # PLW2901 — manual counters read clearer in sweep loops
+    "asyncio-dangling-task",    # RUF006 — fire-and-forget probe tasks
+    "ambiguous-variable-name",    # E741 — single-letter math names (l, n) are the domain language
+    "unused-variable",    # F841 — assignments kept for side effects / future inspection
+    "unused-lambda-argument",  # ARG005 — lambda placeholders in tracker callbacks
+    "non-augmented-assignment",  # PLR6104 — ditto; probes accumulate torch tensors out-of-place for the same graph-safety reason
 ]
 "computronium/primitives/substrate/noisy/reference.py" = [
     "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
@@ -325,14 +325,12 @@ ignore = [
     "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "tests/**/*.py" = [
-    "assert",   # assert in tests
-    "subprocess-without-shell-equals-true",   # suspicious-subprocess-import — subprocess CLI smoke / wheel-acceptance tests
-    "no-self-use", # no-self-use — no-self-use in test methods
-    "start-process-with-partial-path",   # start-process-with-no-shell — subprocess CLI smoke tests
-    "start-process-with-partial-path",   # subprocess-without-shell-equals-true — subprocess.run with fixed args
-    "start-process-with-partial-path",   # start-process-with-partial-path — partial-path executables (uv)
-    "suspicious-non-cryptographic-random-usage",   # suspicious-non-cryptographic-random-usage — random.Random in test samplers/fixtures
-    "magic-value-comparison", # magic-value-comparison — literal expected values in assertions
+    "assert",   # S101 — assert in tests
+    "suspicious-subprocess-import",  # S404 — subprocess CLI smoke / wheel-acceptance tests
+    "subprocess-without-shell-equals-true",   # S603 — ditto
+    "start-process-with-partial-path",   # S607 — subprocess CLI smoke tests; partial-path executables (uv)
+    "suspicious-non-cryptographic-random-usage",   # S311 — random.Random in test samplers/fixtures
+    "magic-value-comparison", # PLR2004 — literal expected values in assertions
 ]
 
 [tool.ruff.lint.flake8-type-checking]

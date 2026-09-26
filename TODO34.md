@@ -2,7 +2,7 @@
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
 §2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3,
-**§5.4's dispatch half**, **§5.8** and **§3.1** complete. §1.2–§1.4, §1.6,
+**§5.4's dispatch half**, **§5.8**, **§3.1** and **§2.3's tranche 1** complete. §1.2–§1.4, §1.6,
 §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
 §5.7, §5.9. **No unblocked work item is left in §5** — the rest are
 decisions; the cheapest remaining *work* is §1.6 (Pass 11 took §3.1). (Pass 9 fixed a
@@ -23,6 +23,31 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 12 — §2.3 tranche 1: the ignore lists were lying, and a ratchet
+
+`ruff check .` reported **671** findings. The tranche is written up in §2.3
+under "Tranche 1"; the two things worth carrying out of it:
+
+**The config was the defect, and it hid 34 findings.** Two per-file-ignore
+entries for the settle graph-safety idiom were keyed `too-many-statements`
+while their own comment described `non-augmented-assignment`. The suppression
+was doing nothing, in the two files where the idiom is most load-bearing, and
+a third global entry (`comparison-of-constant`) suppressed nothing at all
+because the rule has no findings in this tree. Counting findings is not
+auditing a config: a *mis-keyed* suppression is invisible from the count,
+because a count only moves when someone looks.
+
+**A count can gate, if the check is cheap enough.** `ruff check .` runs in
+0.2s, which makes `tests/property/test_lint_count_ratchet.py` affordable in the
+92s fast lane — a repo-wide lint ratchet for the price of two property tests.
+It carries a staleness guard (baseline must be within 10 of the measurement),
+because a ratchet whose baseline has drifted out of reach is a ratchet that
+has been switched off without anyone deciding to.
+
+Net: **671 → 359**, fast lane **3208 passed, 119 skipped, 26 xfailed, 1 xpassed
+in 92s**, no pyright regression on the touched modules (49 and 59 pre-existing
+findings, unchanged either side).
 
 ### Pass 11 — §3.1 the shadowed module, and a name that survived the split
 
@@ -593,7 +618,7 @@ dynamics class reintroduces break-on-horizon" — is what the AST check is.
 **§5.1 supersedes it structurally**: one driver makes the invariant
 unrepresentable rather than policed.
 
-### 2.3 Lint debt: 684 findings — P2 (Register C scope, per `AGENTS.md`)
+### 2.3 Lint debt: 359 findings (was 684) — P2 (Register C scope, per `AGENTS.md`)
 
 Mechanical, high-count, low-risk first:
 
@@ -608,6 +633,50 @@ Mechanical, high-count, low-risk first:
 Do **not** enable `RUF105/106/103` until the directive migration is done as one
 change — `AGENTS.md` already records that enabling them individually only
 churns guard-rails.
+
+#### Tranche 1 — **DONE** (Pass 12): 671 → 359, and a ratchet
+
+**The config was the defect.** Before touching a single finding, the ignore
+lists were audited for truth, because §5.4's lesson is that a hand-kept table
+does not fail — it accumulates accommodations, and a *comment* that no longer
+matches its key is the cheapest possible form of that. Three were wrong:
+
+| Finding | Evidence |
+|---|---|
+| `comparison-of-constant` (PLR0133) was globally ignored and **suppressed nothing** — zero findings repo-wide. Dead config. Deleted. |
+| `computronium/ontology/dynamics/_dynamics.py` and `ontology/_settle_kernel.py` ignored **`too-many-statements`**, while their comment said *"out-of-place adds are the settle graph-safety idiom"* — i.e. `non-augmented-assignment`. The key was wrong, so **34 of that file's 43 findings were never actually suppressed**; they were simply not being looked at. |
+| `N803` (216) was the largest unlisted class. Globally ignored with the reason the plan specified — math notation (`W`, `G`, `X`, `I_syn`) *and* Triton's DSL-mandated kernel params (`BLOCK_*`, `*_ptr`), which renaming would make wrong. |
+
+Then the classes that were **real** rather than sanctioned:
+
+| Class | Before | Action |
+|---|---|---|
+| `N803` | 216 | ignored, with reason (sanctioned) |
+| `PLW0717` try-clause statements | 92 | untouched — needs extraction, not suppression (as the plan said) |
+| `PLR6201` literal-membership | 23 | **fixed** — `in ("a","b")` → `in {"a","b"}`; all string literals, so hashing is safe |
+| `PLR6104` non-augmented-assignment | 43 | 40 suppressed with reason (the two ontology files' intended per-file ignore, now keyed correctly, plus probes); 3 **fixed** in `audit_credit_assignment.py`; 1 suppressed per-site in `random_projections/kernel.py`, where Pass 2 explicitly chose the explicit rebind over `@=` |
+| `RUF012` mutable-class-default | 6 | **fixed** — six read-only class tables in `execution/{strategy,synthesizer}.py` annotated `ClassVar`, which also tells pyright they are not instance state |
+| `S101` assert in library code | 4 | **converted to raises** — a Triton shape precondition that vanishes under `python -O` is precisely the silent-corruption path Pass 2 documented |
+| `F841` unused local | 3 | **deleted** — three `backprop_credit` constructions in `audit_credit_assignment.py` whose value was never read; `_create_credits()` collapsed to `_create_thermo_credit()` |
+
+**Repo-wide: 671 → 359 findings.**
+
+**The ratchet is the part that outlasts the tranche.**
+`tests/property/test_lint_count_ratchet.py` asserts the count against a
+measured baseline (359, ruff 0.16.6 recorded alongside it) in **0.2s** — the
+`ruff check .` subprocess is far cheaper than any test that would police it in
+Python. Two tests, not one: the ratchet, plus a staleness guard that fails if
+the baseline drifts more than 10 above the measurement, so the next
+suppression cannot quietly push the ratchet out of reach (§0.6's lesson, a
+third application). Mutation-checked by dropping a file with three real
+violations into `computronium/` and watching the ratchet fail.
+
+**Two classes deliberately not touched.** `E402` (32) stays: the plan's own
+instruction is to suppress per-site, and 32 hand-written site suppressions are
+worse than 32 honest findings. `SIM102` collapsible-if (19) is a *decision*, not
+a chore — 13 of the 19 are the `_validate_*` chains in `ontology/system.py`,
+where collapsing `if a: if b: raise` into `if a and b:` keeps behaviour and
+loses the one-branch-per-message structure the validators are read for.
 
 ### 2.4 pyright: 2079 findings — P2
 
@@ -1071,7 +1140,7 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3, 2.4 open |
+| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3 tranche 1 **done** (Pass 12, 671→359, ratchet live); 2.4 open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
 
@@ -1080,7 +1149,10 @@ what remains is §5.4's export half, §5.6 and §5.7, and all three are
 *decisions* rather than chores, which is the point at which this plan's
 remaining budget is better spent on the untouched sections: **§1.6**
 (re-baseline the cost table — arithmetic plus one slow pass, no design
-question) and **§2.3**'s mechanical lint tranche. §3.1 is closed (Pass 11).
+question) and **§2.4** (drive the top three modules by fan-in to zero).
+§3.1 is closed (Pass 11); §2.3's tranche 1 is closed and ratcheted (Pass 12),
+which leaves its remaining tranches to be driven by what the ratchet reports
+rather than by a static table here.
 §5.6/§5.7
 should be taken by whoever next touches `local_learning/settling.py` or the
 LIF horizon, since both are questions only that code can answer cheaply.
@@ -1222,6 +1294,15 @@ move, and say so in the commit body.
   finding about the credit layer alone: it is the settle defect again, one
   layer down, and the *count* (120 directives repo-wide) is what makes
   §2.4's pyright ratchet worth running before any of it is fixed by hand.
+
+- **A mis-keyed suppression is invisible to a count.** §2.3's tranche 1 found
+  two per-file ignores keyed `too-many-statements` whose own comment said
+  `non-augmented-assignment`: 34 findings in the two settle files were being
+  *neither* reported *nor* suppressed, and no total ever moved. A count answers
+  "how much is left"; only reading the key against the finding answers "is the
+  thing that is making it quiet actually doing anything". §5.4's argument about
+  hand-kept tables applies to config tables with the same force — and the tell
+  is always the same, a comment that has drifted from its key.
 
 - **An unreachable module is worse than a missing one.** §3.1's
   `deployment.py` was 1,633 lines of plausible-looking deployment code that
