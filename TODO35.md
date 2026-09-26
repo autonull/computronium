@@ -1486,11 +1486,11 @@ other four plus `complex_substrate` were never wired:
 
 | module | kernels | flag | referenced by |
 |---|---|---|---|
-| `pc_kernels` | 3 | `HAS_TRITON_PC` | nothing |
-| `ff_kernels` | 4 | `HAS_TRITON_FF` | nothing |
-| `snn_kernels` | 3 | `HAS_TRITON_SNN` | nothing |
-| `hebbian_kernels` | 3 | `HAS_TRITON_HEBBIAN` | nothing |
-| `substrates/complex_substrate` | 2 | `_HAS_TRITON` | nothing |
+| `pc_kernels` | 3 | `HAS_TRITON_PC` | nothing (§17.10: 0 of 3 compile) |
+| `ff_kernels` | 4 | `HAS_TRITON_FF` | nothing (§17.10: 1 of 4 compiles) |
+| `snn_kernels` | 3 | `HAS_TRITON_SNN` | nothing (§17.10: 1 of 3 compiles) |
+| `hebbian_kernels` | 3 | `HAS_TRITON_HEBBIAN` | nothing (§17.10: 0 of 3 compile) |
+| `substrates/complex_substrate` | 2 | `_HAS_TRITON` | nothing (§17.10: 0 of 2 compile) |
 
 A `grep` for each name over the tree returns its own definition and its own
 import, and nothing else. So five backends advertised a Triton path they had
@@ -1631,7 +1631,12 @@ skipped / 5 xfailed / 1 xpassed. Dev-env smoke clean.
    unchanged for the fourth round running. §14.2's arithmetic still applies
    to any remaining tranche: the next round should either take one of these
    or state why not.
-6. **A `__getattr__`-based dead-KB check.** `computronium/knowledge/kb.py`
+6. **A compile check over the `@triton.jit` population** (§17.10). Two of
+   fourteen kernels compile; the flag says all fourteen are available. This is
+   the lock §14.4 rule 1 has been holding back, and §17.10 is the defect of
+   that class found inside this round, so it is now unblocked. It also tells
+   the next session which of the restored kernels are worth finishing.
+7. **A `__getattr__`-based dead-KB check.** `computronium/knowledge/kb.py`
    has a module `__getattr__` (line 745) whose names the import lock treats
    as excluded because they are not statically derivable. `KB` was one of
    them — a name that resolved to nothing. The population is worth
@@ -1691,3 +1696,55 @@ Cost of the correction, measured: `PLW0717` is back to 79 and the ratchet
 baseline to 334, which is the correct state. 2,638 fast-lane tests and 1,140
 across algorithms/primitives/acceleration/integration pass on the restored
 tree.
+
+### 17.10 Are the 16 restored kernels any good? Measured, not assumed
+
+§17.9 restored them and left the question open, because "unwired" and "broken"
+call for opposite responses. `scripts/probes/todo35_r17_kernels_compile.py`
+answers it by building each kernel's arguments from its own signature and
+calling `.warmup`, which compiles without launching. RTX 3080, triton 3.8.0.
+
+**2 of 14 sampled kernels compile. Both of those are numerically correct**
+(`_lif_step_kernel` spikes 14.6% of entries; `_ff_goodness_kernel` matches its
+docstring's `‖pos‖² − ‖neg‖² − θ` to 1.9e-5). The other twelve fail in three
+distinct ways:
+
+| count | failure | whose fault |
+|---|---|---|
+| 2 | `libdevice.sigmoid` — removed from triton | an **API migration** nobody finished |
+| 1 | `tl.cosh` / `tl.sinh` — never existed on `tl` | same |
+| 7 | `tl.dot`: "input and other must have equal reduction dimensions" | **the kernel source**, and not because of triton |
+| 2 | `tl.dot`/`tl.sum`: "K >= 8" constraint | the launch shape its own signature implies |
+
+The seven are worth reading, because they are broken *by inspection*.
+`_pepita_error_modulation_kernel` is documented as
+`ΔW = scale · error.T @ feedback` and does:
+
+```python
+err = tl.load(error_ptr + b * D_out + offs_out[:, None], mask=mask_out[:, None])  # [BLOCK_OUT, 1]
+fb  = tl.load(feedback_ptr + offs_in[:, None] * D_out + offs_out[None, :], ...)     # [BLOCK_IN, BLOCK_OUT]
+acc += tl.dot(err, fb)                                                             # K = 1 vs BLOCK_IN
+```
+
+`tl.dot` contracts the second axis of the left operand against the first of the
+right, so the reduction dimensions are `1` and `BLOCK_IN` and no value of
+`BLOCK_IN` makes it well-formed. Every contrastive-update kernel in the PC, FF
+and hebbian sets has this shape. These were written and never run — which is
+the answer to "why did nobody wire them up", and it is not that wiring them was
+deprioritised.
+
+**The flag lies, and that is the finding worth keeping.**
+`HAS_TRITON_PC`/`_FF`/`_SNN`/`_HEBBIAN`/`_HAS_TRITON` are all `True` on this
+box. They report that *triton* is importable, not that the kernel compiles, so
+the one piece of state that would tell a caller whether the fast path is usable
+says yes for twelve kernels that cannot be launched. That is the same defect
+class as `cpu_only` in Round 4 and `allow_bptt_fallback` this round: a switch
+that reads the environment instead of the thing it names. The honest flag
+compiles the kernel once and caches the outcome.
+
+This does not license deletion — §17.9 stands, and a broken kernel is still
+work in progress rather than rubbish. It changes what the work *is*: seven of
+them need a `tl.dot` fixed, five need a triton API migration, and two are ready
+to wire up behind a flag that tells the truth. The first useful step for all
+three groups is the same, and it is the step that would have caught this in
+Round 1: a compile check over the `@triton.jit` population.
