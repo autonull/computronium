@@ -274,6 +274,7 @@ class TestGRPCSeamSubprocess:
                 child.close()
 
     @pytest.mark.asyncio
+    @pytest.mark.cpu_only
     @pytest.mark.xfail(
         reason="DistributedSystemTrainer single-node output projection issue with TileGeometry"
     )

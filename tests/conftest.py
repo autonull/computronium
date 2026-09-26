@@ -208,14 +208,25 @@ def eqprop_model():
 # --- Sprint 4.3.4 Synthetic Fixtures (zero I/O, zero download) ---
 
 
-@pytest.fixture(scope="session")
-def device() -> str:
+_CUDA_PRESENT = torch.cuda.is_available()
+
+
+@pytest.fixture
+def device(request: pytest.FixtureRequest) -> str:
     """Return 'cuda' if available, else 'cpu'.
 
     Persistent CUDA is avoided; tests that need a live GPU should use the
     ``gpu`` / ``gpu_only`` markers and place tensors on the returned device.
+
+    ``cpu_only`` forces CPU, and it forces it here rather than in each test:
+    a declared marker that nothing reads is not a marker. TileGeometry trips
+    a CUDA device-side assert, and the poisoned context makes every later
+    CUDA call in that worker raise -- so one marked test that ignored its own
+    marker took 30 further tests down with it.
     """
-    return "cuda" if torch.cuda.is_available() else "cpu"
+    if request.node.get_closest_marker("cpu_only") is not None:
+        return "cpu"
+    return "cuda" if _CUDA_PRESENT else "cpu"
 
 
 @pytest.fixture(scope="session")
