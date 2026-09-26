@@ -1766,8 +1766,8 @@ Every primitive carries its own `kernel.py` with `KERNEL_TECHNOLOGY` and an
 module: `triton_kernels.py` (EqProp, Muon, Fisher, EP settle),
 `fa_kernels.py` (feedback projection + batched outer), `pcalm_kernels.py`,
 `tile_kernels.py`, `compile.py`. **On a CUDA box `select_backend(spec, "auto")`
-routes 25 of 64 specs to the kernel path with no flag to set**, and the GPU
-tests pass here today: `test_triton_kernel.py`, `test_kernel_equivalence.py`
+routes 25 of 64 specs to their "kernel" backend with no flag to set**, and the
+GPU tests pass here today: `test_triton_kernel.py`, `test_kernel_equivalence.py`
 (19 passed, 3 skipped, 3 xfailed, 4.0s on an RTX 3080), plus
 `test_fa_triton_dispatch.py` and `test_fa_activation_contract.py`. This is the
 set the plan's acceleration work produced, and it works.
@@ -1808,6 +1808,19 @@ kernel match it, then assert. That is the work, and it is worth doing as
 *writing the spec*, not as *repairing code*: the kernels are currently the only
 record of an intent nobody wrote down, which is exactly why they cannot be
 checked.
+
+**"kernel" is not "triton", and §17.11's first version of this paragraph
+conflated them.** All 64 specs declare a `kernel` backend and 25 are selected
+automatically on CUDA, but a spec's `kernel` is a **torch** implementation in
+`algorithms/*/kernel.py`. Only **9 of the 64 kernel modules reach a triton
+module at all**, and the committed benchmark evidence
+(`artifacts/benchmarks/*.jsonl`, 75 rows) is `backend: "kernel"` on
+`device: "cpu"` throughout — **there is no measured GPU speedup anywhere in
+the tree.** So the corrected answer to "when can we run optimised kernels on
+GPU in production" is: the *dispatch* is live and 19 GPU tests prove 9 modules
+execute their triton path, but nobody has measured whether any of it is faster
+than the torch it replaces. `TODO36.md` takes that as its first task, because
+a unification that cannot say which half is faster is bookkeeping.
 
 **When can we run optimised kernels on GPU in production?** Layer A: now,
 already do, no work. Layer B, per family, needs four things in order — a spec
