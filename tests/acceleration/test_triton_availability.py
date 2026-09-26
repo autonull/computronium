@@ -4,6 +4,13 @@ The point of these tests is that an *unlaunchable* kernel reports unavailable.
 Before this module existed, `HAS_TRITON_PC` and its four siblings were `True` on
 this box while 12 of the 17 kernels they guarded could not compile — the flags
 answered "is triton importable", and every caller read them as "will this run".
+
+§4.5 then wrote a specification for each of those 12 and all 17 now compile, so
+the demonstration this file used to give from the real tree — a family with a
+broken kernel reporting unavailable — is no longer available *by accident*. It is
+now injected instead: :func:`test_a_family_whose_kernel_does_not_compile_reports_unavailable`
+marks one family broken and reads the flag, which is a stronger test than the old
+one because it cannot rot into a tautology.
 """
 
 import pytest
@@ -12,6 +19,7 @@ import torch
 from computronium.acceleration import availability
 from computronium.acceleration.availability import (
     CompileState,
+    KernelReport,
     compile_report,
     fixtures,
     regressions,
@@ -33,6 +41,9 @@ requires_cuda = pytest.mark.skipif(
 #: a fixture above — the census cannot be widened by accident.
 GPU_TESTED = frozenset({
     "complex_substrate._complex_matmul_kernel",
+    # A device helper, not a launchable kernel: compiled by
+    # tests/acceleration/test_snn_stdp_spec.py through both STDP kernels.
+    "snn_kernels._stdp_phase_delta",
     "tile_kernels._tile_activity_update_kernel",
     "tile_kernels._tile_contrastive_update_kernel",
     "tile_kernels._tile_hebbian_update_kernel",
@@ -64,19 +75,41 @@ def test_unknown_technology_is_unavailable() -> None:
 
 @requires_triton
 @requires_cuda
-def test_family_with_uncompilable_kernels_reports_unavailable() -> None:
-    """The §4.2 done-when: a family whose kernels do not compile says so.
+def test_every_family_reports_available_when_every_kernel_compiles() -> None:
+    """The measured state of the tree: every family with a fixture is available.
 
-    `snn` is the fixture: triton imports, CUDA is present, and both of its STDP
-    kernels fail to compile on triton 3.8 (`tl.dot` refuses the K=1 contraction).
-    `fa` and `pcalm` are the counter-examples in the same breath: both report
-    available, and both mean it.
+    This is the sentence §4.5's specifications changed. It was ``snn`` that used
+    to be ``False`` here, with two STDP kernels that could not compile.
     """
     assert TRITON_IMPORTED, "the premise of this test is that triton is importable"
     assert triton_stack_available() is True
+    unfixtured = {
+        r.family for r in compile_report() if r.state is not CompileState.COMPILES
+    }
+    assert unfixtured == set()
+    for family in ("snn", "fa", "pcalm", "pc", "hebbian", "pepita", "ff"):
+        assert triton_rung_available(family) is True
+
+
+@requires_triton
+@requires_cuda
+def test_a_family_whose_kernel_does_not_compile_reports_unavailable(
+    monkeypatch,
+) -> None:
+    """§4.2's done-when: a flag is ``False`` for a kernel that does not compile.
+
+    Injected rather than found, so the property holds whatever the tree's kernels
+    do next. A family is unavailable when *any* of its kernels fails, which is
+    the whole claim: a half-working family is a family that will not run.
+    """
+    snn = next(f for f in fixtures() if f.family == "snn")
+    monkeypatch.setitem(
+        availability._STATE_CACHE,  # ruff: ignore[private-member-access]  (the cache is the measurement)
+        snn.name,
+        KernelReport(snn.name, "snn", CompileState.FAILS, "injected"),
+    )
     assert triton_rung_available("snn") is False
     assert triton_rung_available("fa") is True
-    assert triton_rung_available("pcalm") is True
 
 
 @requires_cuda

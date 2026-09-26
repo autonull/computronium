@@ -19,10 +19,10 @@ executable and produced a rule about deletion the hard way. This one completes a
 | step | state | one line |
 |---|---|---|
 | §4.1 measure the rungs | **done** | 9 sites × 3 scales × 2 rungs on a GPU; triton wins 3 of 9 (§5.1) |
-| §4.2 one meaning for "available" | **done** | `availability.py`; every `HAS_TRITON*` name retired; 14 of 17 kernels compile (§5.4) |
+| §4.2 one meaning for "available" | **done** | `availability.py`; every `HAS_TRITON*` name retired; **17 of 17** kernels compile (§5.4) |
 | §4.3 name the technology | **done** | `select_backend(spec, "triton")`; one `BINDINGS` table; 12 families bound on import (§5.5) |
-| §4.4 parity between adjacent rungs | **done** for the 5 rungs that compile | found 2 defects, one of them a test that certified the wrong algorithm |
-| §4.5 recover the specifications | **4 of 7** | six defects found; the three remaining are named with their blockers |
+| §4.4 parity between adjacent rungs | **done** for every rung that compiles | found 2 defects, one of them a test that certified the wrong algorithm |
+| §4.5 recover the specifications | **done — 7 of 7** | **17 of 17 kernels compile**; eleven defects found across the seven (§4.5) |
 | §4.6 wire the recovered rungs | not started | needs §4.5's remaining three, and §4.8's naming decision |
 | §4.7 a kernel arm on `System` | not started | the largest piece; gates §4.6 for algorithm-level families |
 | §4.8 zoo membership predicate | **partial** | `has_model` landed; 2 silent substitutions closed; the naming is §8.8 |
@@ -32,11 +32,13 @@ executable and produced a rule about deletion the hard way. This one completes a
 | §4.12 timeout-marker policy | **done** on the static half | `KNOWN_LONG` + a lock; the discovery half is §8.14 |
 | §4.13 the knowledge layer's `__getattr__` | **done** | 10 modules enumerated and checked; one silent no-op deleted |
 
-Six steps landed, four partial, three untouched. The plan's own order held: every
-step was verified before the next started, and the two steps that were supposed to
-be mechanical (§4.2's flags, §4.5's outer-product fix) each turned out to be hiding
-a live defect — which is the argument for doing them in this order rather than
-later. §5 holds the measurements; §8 holds the fifteen improvement opportunities
+Seven steps landed, four partial, two untouched. The plan's own order held: every
+step was verified before the next started, and the steps that were supposed to
+be mechanical (§4.2's flags, §4.5's outer-product fix, §4.5's own three remaining
+kernels) each turned out to be hiding live defects — which is the argument for doing
+them in this order rather than later. §4.5 closed with **all 17 kernels compiling**
+and **eleven defects**, of which three were in a *torch* function that had no
+caller and so had never run. §5 holds the measurements; §8 holds the fifteen improvement opportunities
 that measuring produced.
 
 
@@ -374,7 +376,8 @@ flag is "compiled once, cached", not "CUDA is present".
   dispatch site actually asks about (`fa`, `pcalm`) so their answer is a
   measurement. **The probe is deleted** — one census, in the tree, with a
   baseline. Baseline: `computronium/acceleration/triton_compile_baseline.json`,
-  `--record`ed, 5 of 17 compile and 12 do not.
+  `--record`ed, 5 of 17 compile and 12 do not. *(Superseded by §4.5: all 17
+  compile, and the baseline is re-`--record`ed with an empty failure list.)*
 - **Regression-only, as §4.2 requires.** `regressions()` compares measured state
   to the baseline and reports a problem only when a kernel that compiled stops
   compiling. A kernel that newly compiles is progress and is not reported. The 12
@@ -404,7 +407,10 @@ flag is "compiled once, cached", not "CUDA is present".
 - **Why the baseline is load-bearing** (restated, because it now has a file):
   a check that simply failed on those 12 would be red on arrival, and the fastest
   way to green it is deletion. `--check` exits 0 today with 12 known failures
-  recorded, and non-zero the moment one of the 5 stops compiling.
+  recorded, and non-zero the moment one of the 5 stops compiling. *(Superseded by
+  §4.5: the 12 are specified and compiling, so the baseline now forgives nothing
+  and `--check` is a lock rather than a ledger. The argument for keeping the file
+  is unchanged.)*
 
 ### 4.3 Make the technology a selectable rung
 
@@ -530,106 +536,188 @@ they replace, with the tolerance the owning spec already carries.
 
 ### 4.5 Recover the specifications for the seven
 
-**PILOT DONE 2026-09-26: 1 of 7 specified, and the pilot recovered 9 kernels
-between them.** For each of the 7 kernels whose intent is unrecoverable: **write
-the torch expression it is meant to equal, first, as a test.** Then either make
-the kernel match that expression or record that the expression is unimplementable
-in triton and why. Do not port from the kernel to the test — the kernel is what is
-in question.
+**DONE 2026-09-26 — 7 of 7, and every kernel in the tree now compiles.** For each
+of the 7 kernels whose intent is unrecoverable: **write the torch expression it
+is meant to equal, first, as a test.** Then either make the kernel match that
+expression or record that the expression is unimplementable in triton and why.
+Do not port from the kernel to the test — the kernel is what is in question.
 
-- **`_ff_contrastive_update_kernel` is the pilot the plan names, and it is done.**
-  `tests/acceleration/test_ff_contrastive_spec.py` states the specification
-  *before* touching the kernel:
+**The headline number is not "7 of 7", it is that the compile baseline went from
+5 of 17 to 17 of 17 and nothing was deleted to get there.** §4.2's `--check` now
+exits 0 with an empty failure list, so the load-bearing-baseline argument from
+§4.2 has changed shape: the baseline is now a *regression* lock with nothing left
+to forgive, which is a stronger position than "12 known failures recorded".
 
-      dW = lr * ( (post_pos.T @ pre_pos)/B - (post_neg.T @ pre_neg)/B )
+Eleven defects, in the order they had to be found. The first four are §4.5's
+earlier session (recorded here so the count is complete):
 
-  anchored to an explicit Python loop (`_loop_reference`) so the specification is
-  tied to something other than the kernel, plus two algebraic properties (zero
-  `lr` ⇒ zero update; zero negative phase ⇒ the positive phase's outer product).
-  **The kernel now matches it exactly — `max_abs_diff` 0.0.** It took three
-  defects, in the order they had to be found:
-  1. **The contraction was wrong for the maths.** The kernel accumulated
-     `tl.dot(tl.trans(post), pre)`, a `tl.dot` whose contraction dimension is 1 —
-     which is why it did not compile at all. The intent is a rank-1 outer product,
-     which is `post * pre` with broadcasting.
-  2. **The grid convention was transposed relative to the store.** The kernel read
-     `program_id(0)` as the *input* tile while storing row-major over
-     `[D_out, D_in]`. Launched the natural way, `D_in` not being a multiple of
-     `BLOCK_IN`, **the second half of the output is silently never written** — no
-     error, no partial result, just unwritten memory. Fixed and documented in the
-     kernel's docstring, because the transposed order still looks plausible.
-  3. Defect 1 alone was not enough: with the contraction fixed and the grid
-     transposed, parity was 0.017 — which is defect 2 wearing a different hat.
-- **The same two-line class of fix, applied tree-wide, recovered 9 kernels.**
-  The rank-1 `tl.dot(tl.trans(post), pre)` appears **13 times** — 4 in
-  `ff_kernels`, 4 in `hebbian_kernels`, 2 in `pc_kernels`, 3 in `tile_kernels` —
-  and every one of them is the same bug. Replacing it with the broadcast outer
-  product took the compile baseline from **5 of 17 to 11 of 17**.
-  **This also means `tile_kernels`' three contrastive kernels never compiled**, so
-  `tile_mesh`'s "triton rung" was not running the contrastive kernel its §5.1
-  measurement attributed to it. That is §1.2's census being wrong in the tree's
-  favour, and it is the second instance of the plan's own warning: *"a kernel that
-  does not compile is a specification nobody wrote down."*
-- **Plus three triton API renames, which §2 called mechanical and was right.**
-  `libdevice.sigmoid` → `tl.sigmoid` (2 kernels) and `tl.cosh`/`tl.sinh` →
-  `libdevice.cosh`/`libdevice.sinh` in the complex substrate. **14 of 17 compile.**
-- **Done when** each of the 7 has a named torch reference in the test suite, and
-  the kernel either matches it or has a written reason it cannot. **4 of 7**
-  (`_ff_contrastive_update_kernel`, `_pc_contrastive_update_kernel`,
-  `_pc_prediction_kernel`, `_pc_error_update_kernel`), and those 4 carried **six**
-  defects between them.
-- **The 3 kernels still uncompilable**, after all of the above:
-  - `_stdp_update_kernel`, `_contrastive_stdp_kernel` (snn) — `tl.dot` refuses
-    `K < 8`; the spike-tensor contraction needs a reduction formulation, not a
-    `tl.dot`. **Spec first**: the maths is `(pre ⊗ post)` outer accumulation over
-    `(B, PRE, POST, T)`, and the torch twin is
-    `contrastive_primitives.stdp_update`.
-  - `_pepita_error_modulation_kernel` — still `equal reduction dimensions`, because
-    its operands are the *feedback matrix* (`[D_in, D_out]`, not batch-major), so
-    the same fix does not apply; it needs `error.T @ feedback` as a real GEMM with
-    a transposed load. **Spec first**: `scale * (error.T @ feedback)`, and the
-    torch twin is `pepita_error_modulation` in the same module.
-- **The PC inference pair, same session, two more defects.**
-  `tests/acceleration/test_pc_inference_spec.py` specifies both kernels for all
-  four activations, with the reference table spelled out in the test (not imported
-  from the kernel, so a kernel change cannot change its specification) and
-  **checked against autograd finite differences** — the derivative table cannot be a
-  plausible-looking fiction.
-  1. **The prediction kernel computed in TF32.** `tl.dot` defaults to TF32 on
-     Ampere and later, which put it `max_abs_diff` **1.6e-2** from the fp32
-     expression it claims to compute — with `cosine` 1.0, so no cosine-based gate
-     would ever have seen it. Now `input_precision="ieee"`, with the reason in the
-     kernel's docstring and a note that `triton_kernels`' Muon kernels carry the
-     same directive for the same reason.
-  2. **The tanh branch of the error update used the wrong function.**
-     `deriv = 1.0 - mu * mu` is not the derivative of `tanh` at anything; the
-     correct `1 - tanh(mu)²` is what the kernel's own docstring says
-     ("act_deriv(mu)"), and what the silu and relu branches get right. Fixed.
-     **Both defects were invisible for the kernel's whole life, because nothing
-     compared it to anything** — which is the whole argument for §4.5.
-  - **One recorded tolerance decision.** `max_rel_diff` is not a meaningful gate
-     for an activation whose output crosses zero: GELU's negative tail lands within
-     2.1e-6 of zero and the relative measure of that element is 0.48. For GELU only,
-     the test keeps `max_abs_diff` (1e-4) and `min_cosine` (0.999) and drops the
-     relative criterion, recorded in `_tolerance()` with the measurement.
-- **`_pc_contrastive_update_kernel`, fourth of the seven, same session.** Its
-  reference *is* the FF expression in the other order — `nudged - free` divided by
-  the nudge strength, which is `contrastive_primitives.contrastive_delta`'s
-  convention — so the two kernels now share one specification
-  (`tests/acceleration/test_contrastive_update_spec.py`, one reference, two
-  kernels) rather than two copies of it. It carried **the same transposed-grid
-  bug** as the FF kernel, with the same silent-half-write failure mode; fixed and
-  documented the same way.
-- **Still unspecified: `_three_factor_hebbian_update_kernel`,**
-  `_contrastive_hebbian_kernel` and `_pepita_contrastive_update_kernel` — they
-  compile (thanks to the outer-product fix) but have **no torch reference and no
-  parity test**. They are the ones that most need §4.5's discipline, because
-  compiling is not being correct: of the four kernels specified so far, **four
-  carried defects** (a wrong contraction, a transposed grid twice, a silent TF32
-  dot, and a wrong derivative). The hebbian pair share the contrastive expression
-  already written down, so they are the cheapest remaining; the pepita one is
-  `lr`-scaled like the FF kernel but with different operands and should be read
-  from `ff_kernels`' own torch path first.
+1. **A wrong contraction** in `_ff_contrastive_update_kernel` — `tl.dot` over a
+   length-1 axis where the intent is a rank-1 outer product.
+2. **A transposed grid, twice** (FF and PC) — program 0 walked the *input* axis
+   while the store walked the *output* axis, so with `D_in` not a multiple of
+   `BLOCK_IN` a third of the output was never written. No error, no partial
+   result.
+3. **A silent TF32 `tl.dot`** in the PC prediction kernel, 1.6e-2 from the fp32
+   expression it claims to compute, at cosine 1.0.
+4. **A wrong derivative** in the tanh branch of the PC error update
+   (`1 - mu²` instead of `1 - tanh(mu)²`).
+
+And the seven found closing the remaining three kernels:
+
+5. **The transposed grid, a third and fourth time** —
+   `_contrastive_hebbian_kernel` and `_pepita_contrastive_update_kernel`, plus
+   `_hebbian_update_kernel` and `_three_factor_hebbian_kernel`, all four in the
+   same commit and all the same one-line shape. Measured before the fix at
+   `max_abs_diff` 0.0703 with **cosine −0.81** on the first and **+0.81** on the
+   second — the two being mirror images is the signature of a transposed store,
+   and re-introducing the defect into `_hebbian_update_kernel` after the fix was
+   measured to fail 3 of the new tests, so the finding is confirmed by
+   construction and not only by argument. **Every kernel in this family now
+   carries the grid convention in its docstring**, next to the sentence that
+   explains why the transposed order still looks plausible.
+6. **The batch axis was never read** — by *both* STDP kernels. The loads address
+   `offs * T + t` with no batch stride, so each computed one sample's spike-timing
+   correlation and returned it for the whole batch. Invisible in every dimension
+   that exists: shapes, dtypes and compiled-ness are all correct, and the wrong
+   answer is a plausible magnitude.
+7. **The STDP branches loaded each other's time step.** The branch commented
+   "LTP: post at t+1 with pre at t" loaded post at `t` and pre at `t+1`; the LTD
+   branch did the reverse. So `A_plus` and `A_minus` were applied to the wrong
+   terms and every weight delta had the sign of a depression rather than a
+   potentiation.
+8. **The contrastive STDP kernel had no amplitudes and no signs.** It summed both
+   orderings into one unsigned term, so its phase term was not the STDP its own
+   sibling computes. `A_plus`/`A_minus` are now parameters and the two orderings
+   keep their signs — a contrastive rule whose phase term is not the rule it
+   contrasts is a different rule.
+9. **`pepita_error_modulation`, the torch twin, was a shape error.**
+   `scale * (error.T @ feedback_matrix)` multiplies `[D_out, B]` by
+   `[D_in, D_out]` and raises for every `B` that is not also `D_in`. It has no
+   caller in the tree, which is why it had never run. **A torch function that
+   cannot be called is a kernel that was never verified**, from the other
+   direction.
+10. **The PEPITA kernel divided by `B` and the torch twin did not.** A mean is
+    invisible in shape and in sign and is a factor of `B` in every element, so it
+    survives any parity check written against the kernel itself.
+11. **`tl.dot` with a contraction of length 1, twice more** — the reason
+    `_pepita_error_modulation_kernel` and both STDP kernels could not compile at
+    all. Same two-line fix as §4.5's first session.
+
+#### What the seven specifications are
+
+Landed as four files, and the *composition* turned out to be shared, which is why
+they are four files and not seven:
+
+* **`tests/acceleration/test_contrastive_update_spec.py`** — one expression,
+  **four** kernels. FF, PEPITA, PC and Hebbian all compute
+  `lr * (added − subtracted) / divisor`, differing only in which phase is added
+  and whether `beta` is divided out. A `Rung` table carries each kernel's module,
+  attribute, spec id, scalar order *and phase order* — the phase order because
+  half the rungs take `(free, nudged)` and half take `(positive, negative)`, and
+  passing them the wrong way round returns the exact negation of the right answer
+  (cosine −1.0, which is as unambiguous a failure as this tree has produced).
+  Extended from 2 kernels to 4 by this session.
+* **`tests/acceleration/test_hebbian_spec.py`** — the Oja and 3-factor pair, the
+  two rungs with no `beta` in them. The pair is tied together by a
+  kernel-independent property: **with an all-ones modulator and Oja's term off,
+  the two rungs must agree exactly**, checked on the references *and* on the two
+  triton kernels (`torch.equal`).
+* **`tests/acceleration/test_pepita_spec.py`** — the error-modulation rung, where
+  the specification had to be *derived* rather than transcribed, because its three
+  records disagreed and two of them were not type-correct. See below.
+* **`tests/acceleration/test_snn_stdp_spec.py`** — the STDP pair, and the only
+  place in the plan where a specification had no torch twin to lean on. The
+  composition is the one the PC and Hebbian rungs already use: a phase term,
+  differenced, divided by the nudge strength. Here the phase term is a spike-timing
+  correlation rather than a batched outer product, and nothing else about the
+  composition changes.
+
+Every reference in the four files is anchored three ways: to an explicit Python
+loop, to the torch twin it replaces, and to an algebraic property. `B`, `D_in` and
+`D_out` are deliberately **not** multiples of `BLOCK` in all four files, because
+that is the only thing that exposes a transposed grid, and the transposed grid is
+now the third most common defect in this family.
+
+#### The one specification that had to be derived, and why
+
+`_pepita_error_modulation_kernel` is the only rung in the plan whose intent existed
+in three places that did not agree:
+
+| record | says | type-correct? |
+|---|---|---|
+| the kernel's docstring | `scale * error.T @ feedback` | no — `[D_out, B] @ [D_in, D_out]` |
+| `pepita_error_modulation` | `scale * (error.T @ feedback_matrix)` | no — same shape error |
+| the kernel's arithmetic | `Σ_b err[b, o] * feedback[i, o]` | yes, but not a matmul |
+
+The declared shapes (`error` is `[B, D_out]`, `feedback` is `[D_in, D_out]`, output
+is `[D_out, D_in]`) leave exactly **one** reading under which all three
+declarations hold at once, because the batch and the output unit cannot both index
+the error: output unit `o` gates feedback column `o`, and the batch is reduced per
+output unit *before* the product. The specification is
+
+```
+dW[o, i] = scale * (Σ_b error[b, o]) * feedback[i, o]
+         = scale * error.sum(dim=0)[:, None] * feedback.T
+```
+
+**Recorded as a decision, not as a discovery**, because the plan's own rule is
+that a specification must be written from the maths and not ported from the code —
+and here the maths was genuinely under-determined, so the tie was broken on three
+grounds that are stated in the test: (i) it is the only shape-consistent reading;
+(ii) the kernel's `for b` loop accumulates exactly this expression, in the wrong
+order to see it; (iii) the batch is summed, not averaged, which defect 10 confirms
+independently. One consequence is pinned by a test because it is load-bearing: the
+result is a **row scaling** of the transposed feedback, not an outer product — an
+earlier draft of this specification asserted rank 1, and the test caught it. That
+is also why the fixed kernel has no `tl.dot`: this is a broadcast, not a
+contraction.
+
+#### A triton 3.8 miscompilation, recorded because it will bite again
+
+The obvious way to write the STDP correlation is a loop over `t` accumulating a
+`[BLOCK_POST, 1] × [1, BLOCK_PRE]` broadcast. **That formulation is wrong on
+triton 3.8.0**, and the specification is how it was found: an all-but-one-silent
+train produced a non-zero 7×8 block where the reference produces one element, and
+the leak crossed *both* tile axes. A 25-line standalone reproduction confirms it is
+triton and not this tree, and the fix — broadcasting each operand to an explicit
+2-D `[N, BLOCK_T]` tile and reducing over the time axis — is exact on every shape
+tried (`(1,16,16,8)`, `(6,24,20,8)`, `(3,17,13,5)`, `(2,32,32,16)`, error 0.0
+against `stdp_update`) **and faster**, because the dynamic inner loop is gone. The
+reason is recorded in the device helper's docstring, since the loop version is
+shorter and looks better.
+
+#### A test that could have certified the wrong thing, again
+
+`test_family_with_uncompilable_kernels_reports_unavailable` asserted
+`triton_rung_available("snn") is False`, using the two STDP kernels as its
+fixture. Fixing the kernels made it fail, and the obvious repair — deleting the
+assertion — would have deleted §4.2's done-when: *a flag is `False` for a kernel
+that does not compile*. It is now **injected** instead: one family is marked broken
+in the compile cache and the flag is read, which is a stronger test than the old
+one because it cannot rot into a tautology. `test_every_family_reports_available_when_every_kernel_compiles`
+records the new measured state, and `unfixtured_kernels()` still equals the
+allowlist — the census is closed with one more name in it
+(`snn_kernels._stdp_phase_delta`, a device helper compiled by the GPU spec tests).
+
+#### Fixtures were measuring nothing for the hebbian family
+
+§4.2's compile fixtures are the only compile evidence the unwired rungs have, and
+the three hebbian fixtures were built with **STDP-shaped arguments** — 3-D
+`(B, PRE, T)` binary tensors and a 3-D delta, against kernels whose signature is
+2-D activations. `warmup()` compiles without launching and does not check shapes,
+so those fixtures reported `compiles` for arguments no call site would ever pass.
+Corrected to the signature's own shapes, with the measurement re-recorded. This is
+§4.2's own warning taken one step further: *a wrong-but-well-typed argument is a
+compile error* — and a wrong-shaped one is not an error at all.
+
+#### What §4.5 does not do
+
+The seven are specified and verified against the rung below them, which is the
+done-when. **Six families' rungs are still unwired** — `ff`, `pc`, `hebbian`,
+`pepita`, `snn` and `complex_substrate` all compile now and none is reached by a
+`kernel.py`, which is recorded in `test_rung_parity.UNWIRED_BUT_COMPILING` and is
+§4.6's work. §4.5 made those rungs *runnable and correct*; it did not make them
+*reachable*, and the difference is the whole of the next step.
 
 ### 4.6 Then, and only then, wire the recovered rungs into the ladder
 
@@ -641,6 +729,16 @@ branch at the one hot site.
 - **Done when** the family appears in §0.3 item 5 with a GPU row, a parity test
   against the rung below it, and a status promoted through the existing ladder
   — not by editing the status by hand.
+- **Unblocked by §4.5 (2026-09-26), with one caveat.** Every rung §4.6 has to
+  wire is now *specified and parity-clean*: `ff`, `pc`, `hebbian`, `pepita`, `snn`
+  and `complex_substrate` all compile and all match the expression written down for
+  them, so the remaining work per family is the ten-line pattern and nothing else.
+  The caveat is §8.19: **§4.1's measurements predate every kernel this session
+  touched**, so promoting on them would be promoting on stale evidence. Re-run
+  `uv run python -m computronium.acceleration.rungbench` for the affected sites
+  before promoting, and note that `pcalm` is still a rung in name only (§8.3) —
+  its `kernel.py` calls `reference.step` in both branches, which is the one thing
+  §4.6 must actually *write* rather than wire.
 
 ### 4.7 A kernel arm on the System pipeline
 
@@ -871,17 +969,18 @@ globalised:
 |---|---|---|
 | triton importable? | `HAS_TRITON` / `kernel_available("triton")` — a CUDA check | `TRITON_IMPORTED`, a fact about an import, named as one |
 | can triton compile *anything* here? | not asked | `triton_stack_available()` — compiles a baseline canary |
-| can *this family's* triton rung run? | `HAS_TRITON_<FAM>`, `True` for 5 families whose kernels do not compile | `triton_rung_available(fam)` — `pc`/`ff`/`pepita`/`snn`/`hebbian`/`complex_substrate` all report **`False`** today |
+| can *this family's* triton rung run? | `HAS_TRITON_<FAM>`, `True` for 5 families whose kernels do not compile | `triton_rung_available(fam)` — **`True` for every family that has fixtures**, and `False` for one whose kernel is marked broken (injected, not found: §4.5) |
 | is cupy usable? | `return True` from an empty `try` | `HAS_CUPY`, which allocates on the device |
-| how many triton kernels compile? | "2 of 14 sampled", from a probe | **5 of 17**, from `availability.py --record`, machine-readable |
+| how many triton kernels compile? | "2 of 14 sampled", from a probe | **17 of 17**, from `availability.py --record`, machine-readable |
 
 `triton_rung_available("fa")` and `triton_rung_available("pcalm")` are `True`, and
 that is now a measurement: the two families `local_goodness`, `random_projections`,
 `pc_alm_settling` and `algorithms/pcalm` dispatch on have their kernels compiled
-before the rung is offered. `triton_rung_available("snn")` is `False` on the same
-box in the same second — which is the whole of §1.5 in one line of output. (`pc`
-was the example when this was written and stopped being one in §4.5: its two
-`libdevice.sigmoid` kernels now compile, so all three of its fixtures pass.)
+before the rung is offered. `snn` was the counter-example in the same second when
+this table was written — its two STDP kernels could not compile — and §4.5 closed
+that too, which is why the counter-example is now **injected** rather than found.
+That is the honest end state for §4.2: the function is the only answer, and its
+negative case is a test rather than an accident of the tree.
 
 ### 5.4 §4.3 — the registry, before and after
 
@@ -915,12 +1014,12 @@ trusting the field.
 | `HAS_TRITON*` names in the tree | **0** (retired in §4.2) |
 | `*KernelBackend` classes with a consumer | 0 of 13 (plus 10 contrastive, never registered) |
 | `KernelRegistry` families on plain import | **12**, from one table; unchanged by `all_specs()` |
-| Kernels in the compile baseline that compile | **14 of 17** (was 5 when §4.2 recorded it) |
+| Kernels in the compile baseline that compile | **17 of 17** (5 when §4.2 recorded it, 14 when §4.5's first session closed) |
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | **two levels** — 64 specs at `step(case)`, plus 5 kernel entry points triton-vs-torch (§4.4) |
 | Native-model names silently substituted by the EqProp fallback | **2 closed** (`directed_ep`, `lemma_mlp`); 1 open (`diff_target_prop`, no factory exists) |
-| Kernels specified against a written reference (§4.5) | **4 of 7**, carrying 6 defects: a wrong contraction, a transposed grid (×2), a silent TF32 `tl.dot`, a wrong derivative |
+| Kernels specified against a written reference (§4.5) | **7 of 7**, carrying **11 defects**: a wrong contraction, a transposed grid (×4), a silent TF32 `tl.dot`, a wrong derivative, an unread batch axis (×2), transposed LTP/LTD branches, missing STDP amplitudes, a shape-error torch twin, a batch mean the twin did not have |
 | Adjacent-rung defects found by §4.4 | **2** — an EqProp fallback that disagreed with its kernel, and a triton Muon rung running a retired algorithm behind a tautological test |
 | Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
 | Modules excluded from the import lock by a module `__getattr__` | 10, enumerated and checked (§4.13) |
@@ -1090,3 +1189,43 @@ scheduled; they are the things measuring the ladder taught us.
     the rule lane at all; if it does, `models/native` needs a
     `create_native_diff_target_prop`, and if it does not, `_FAMILY_MODELS` should
     stop naming it and `resolve_native_model` can raise.
+
+16. **A `[N, 1] × [1, N]` broadcast inside a dynamic double loop is miscompiled by
+    triton 3.8.0, and the leak crosses both tile axes.** Found by §4.5's
+    specification, reproduced in 25 standalone lines, fixed by making the time
+    axis a `tl.constexpr`-sized tile and reducing over it. This is a *toolchain*
+    finding rather than a tree finding, and it generalises: every kernel in this
+    family that accumulates a rank-1 product over a runtime-length axis is a
+    candidate. `tile_kernels` and `pc_kernels` both have that shape and neither has
+    a specification yet, so **the honest next step is not more kernels but
+    checking the ones already wired** against this failure mode — a green
+    `assert_parity` there is not the evidence it appears to be.
+17. **A torch function with no caller is a kernel that was never verified, from
+    the other direction.** `pepita_error_modulation` was a shape error that raised
+    for every input a caller could have passed, and it survived because nothing
+    called it. §4.2 established that a kernel nobody dispatches is unverified;
+    this is the symmetric case, and the census that would catch it is a coverage
+    measurement over `contrastive_primitives` — **how many of its exported
+    functions does anything in the tree actually call?** The answer is currently
+    a handful out of thirteen, and the ratio is worth knowing before §4.6 wires
+    more rungs onto twins that may be wrong.
+18. **The compile fixtures are not shape-checked, so a shape-wrong fixture is
+    silent evidence.** `warmup()` compiles without launching, which is what makes
+    §4.2's answer cheap, and it is also why the three hebbian fixtures could carry
+    STDP-shaped 3-D arguments against 2-D signatures and still report `compiles`.
+    Corrected by hand this time; the standing fix is a launch check for the
+    unwired rungs, or a `triton_rung_available` that launches a canary rather than
+    only compiling it. That is a real cost (compilation is the cheap part) and a
+    real decision, so it is named rather than made.
+19. **§4.5 made six families' rungs runnable and correct, and none of them
+    reachable.** `ff`, `pc`, `hebbian`, `pepita`, `snn` and `complex_substrate` now
+    compile and pass parity, and no `kernel.py` imports any of their modules. This
+    sharpens §4.6 rather than completing it: the rungs §4.6 has to wire are now
+    *tested*, so the only thing left in each is the ten-line Layer A pattern
+    (`primitives/credit_assignment/local_goodness/kernel.py`) plus the §4.2
+    availability guard. The risk §4.6 now carries is the opposite of the one the
+    plan predicted: not that a wired rung will be wrong, but that six of them will
+    be *promoted* on the strength of a parity test and never measured against the
+    rung below at a real size. §4.1's numbers predate every kernel this session
+    touched, so **§4.1's ranking is now stale for the families it covers** and
+    should be re-measured before §4.6 promotes anything.

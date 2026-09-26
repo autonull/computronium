@@ -395,152 +395,219 @@ try:  # noqa: PLR0915
         )
 
     @triton.jit
+    def _stdp_phase_delta(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+        pre_ptr,
+        post_ptr,
+        B,
+        N_pre,
+        N_post,
+        T,
+        A_plus,
+        A_minus,
+        offs_pre,
+        offs_post,
+        mask_pre,
+        mask_post,
+        offs_t,
+        mask_t,
+        BLOCK_PRE: tl.constexpr,
+        BLOCK_POST: tl.constexpr,
+        BLOCK_T: tl.constexpr,
+    ):
+        """One phase's spike-timing correlation, as a ``[BLOCK_POST, BLOCK_PRE]`` tile.
+
+        The time axis is a tile rather than a loop: each operand is loaded once
+        as ``[N, BLOCK_T]`` and the correlation is a reduction over that axis.
+
+        A loop over ``t`` with a ``[BLOCK_POST, 1]`` by ``[1, BLOCK_PRE]``
+        broadcast is the obvious formulation and it is **wrong on triton 3.8**:
+        the compiled kernel leaks values across both tile axes, so an
+        all-but-one-silent train produces a non-zero block where the reference
+        produces one element. Broadcasting the two operands to explicit 2-D tiles
+        is exact, and it is also the faster form because the dynamic inner loop
+        is gone.
+        """
+        acc = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
+        mask_post_t = mask_post[:, None] & mask_t[None, :]
+        mask_pre_t = mask_pre[:, None] & mask_t[None, :]
+        for b in range(B):
+            pre_row = pre_ptr + b * N_pre * T + offs_pre[:, None] * T
+            post_row = post_ptr + b * N_post * T + offs_post[:, None] * T
+            # LTP: post fires at t+1, pre at t.  LTD: post at t, pre at t+1.
+            ltp = tl.sum(
+                tl.load(post_row + (offs_t + 1)[None, :], mask=mask_post_t, other=0.0)[
+                    :, None, :
+                ]
+                * tl.load(pre_row + offs_t[None, :], mask=mask_pre_t, other=0.0)[
+                    None, :, :
+                ],
+                axis=2,
+            )
+            ltd = tl.sum(
+                tl.load(post_row + offs_t[None, :], mask=mask_post_t, other=0.0)[
+                    :, None, :
+                ]
+                * tl.load(pre_row + (offs_t + 1)[None, :], mask=mask_pre_t, other=0.0)[
+                    None, :, :
+                ],
+                axis=2,
+            )
+            acc += A_plus * ltp - A_minus * ltd  # ruff: ignore[non-augmented-assignment]
+        return acc
+
+    @triton.jit
     def _stdp_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_spikes_ptr,
         post_spikes_ptr,
         delta_ptr,
-        tau_plus,
-        tau_minus,
-        A_plus,
-        A_minus,
+        B,
         N_pre,
         N_post,
         T,
+        A_plus,
+        A_minus,
         BLOCK_PRE: tl.constexpr,
         BLOCK_POST: tl.constexpr,
+        BLOCK_T: tl.constexpr,
     ):
-        """STDP weight update from spike timing correlation."""
+        """Spike-timing correlation: dW = A_plus * ltp - A_minus * ltd.
+
+        Equal to `contrastive_primitives.stdp_update`, which is the specification
+        (TODO36 §4.5). Two things this kernel got wrong for its whole life, both
+        recorded here because the fixed form is the one that looks obvious:
+
+        * it read **no batch** — the loads address ``offs * T + t`` with no batch
+          stride, so one sample's correlation was returned for the whole batch;
+        * its two branches loaded **each other's** time step, so ``A_plus`` and
+          ``A_minus`` landed on the wrong terms and every weight delta had the
+          sign of a depression rather than a potentiation.
+
+        There is no ``tl.dot`` here and there never should have been: the
+        correlation is a rank-1 product accumulated over time, and ``tl.dot``
+        refuses a contraction of length 1 — which is why this kernel did not
+        compile until its specification existed.
+
+        Launch with ``grid = (cdiv(N_pre, BLOCK_PRE), cdiv(N_post, BLOCK_POST))``:
+        the grid is row-major over ``delta``'s own ``[N_post, N_pre]`` layout.
+        """
         pid_pre = tl.program_id(0)
         pid_post = tl.program_id(1)
 
         offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
         offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
+        offs_t = tl.arange(0, BLOCK_T)
 
-        mask_pre = offs_pre < N_pre
-        mask_post = offs_post < N_post
-
-        ltp = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
-        ltd = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
-
-        # Correlation over time
-        for t in range(T - 1):
-            # LTP: post at t+1 with pre at t
-            pre_t = tl.load(
-                pre_spikes_ptr + offs_pre[None, :] * T + (t + 1),
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_t = tl.load(
-                post_spikes_ptr + offs_post[:, None] * T + t,
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            ltp += tl.dot(post_t, pre_t)
-
-            # LTD: post at t with pre at t+1
-            pre_t1 = tl.load(
-                pre_spikes_ptr + offs_pre[None, :] * T + t,
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_t1 = tl.load(
-                post_spikes_ptr + offs_post[:, None] * T + (t + 1),
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            ltd += tl.dot(post_t1, pre_t1)
-
-        delta = A_plus * ltp - A_minus * ltd
+        delta = _stdp_phase_delta(
+            pre_spikes_ptr,
+            post_spikes_ptr,
+            B,
+            N_pre,
+            N_post,
+            T,
+            A_plus,
+            A_minus,
+            offs_pre,
+            offs_post,
+            offs_pre < N_pre,
+            offs_post < N_post,
+            offs_t,
+            offs_t < T - 1,
+            BLOCK_PRE,
+            BLOCK_POST,
+            BLOCK_T,
+        )
 
         tl.store(
             delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
             delta,
-            mask=mask_post[:, None] & mask_pre[None, :],
+            mask=(offs_post < N_post)[:, None] & (offs_pre < N_pre)[None, :],
         )
 
     @triton.jit
-    def _contrastive_stdp_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
+    def _contrastive_stdp_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,
         post_nudged_ptr,
         delta_ptr,
+        B,
         N_pre,
         N_post,
         T,
+        A_plus,
+        A_minus,
         beta,
         BLOCK_PRE: tl.constexpr,
         BLOCK_POST: tl.constexpr,
+        BLOCK_T: tl.constexpr,
     ):
-        """Contrastive STDP: free vs nudged phase."""
+        """Contrastive STDP: dW = (stdp(nudged) - stdp(free)) / beta.
+
+        The same composition as `contrastive_hebbian_update` — a phase term,
+        differenced, divided by the nudge strength — with a spike-timing
+        correlation as the phase term instead of a batched outer product
+        (TODO36 §4.5).
+
+        ``A_plus``/``A_minus`` were not parameters of this kernel and it summed
+        both orderings into one unsigned term. A contrastive rule whose phase term
+        is not the rule it contrasts is a different rule, so the amplitudes are
+        here and the two orderings keep their signs.
+
+        Launch with ``grid = (cdiv(N_pre, BLOCK_PRE), cdiv(N_post, BLOCK_POST))``:
+        the grid is row-major over ``delta``'s own ``[N_post, N_pre]`` layout.
+        """
         pid_pre = tl.program_id(0)
         pid_post = tl.program_id(1)
 
         offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
         offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
-
+        offs_t = tl.arange(0, BLOCK_T)
         mask_pre = offs_pre < N_pre
         mask_post = offs_post < N_post
+        mask_t = offs_t < T - 1
 
-        free_delta = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
-        nudged_delta = tl.zeros((BLOCK_POST, BLOCK_PRE), dtype=tl.float32)
-
-        for t in range(T - 1):
-            # Free phase
-            pre_f = tl.load(
-                pre_free_ptr + offs_pre[None, :] * T + (t + 1),
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_f = tl.load(
-                post_free_ptr + offs_post[:, None] * T + t,
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            free_delta += tl.dot(post_f, pre_f)
-
-            pre_f_t = tl.load(
-                pre_free_ptr + offs_pre[None, :] * T + t,
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_f_t = tl.load(
-                post_free_ptr + offs_post[:, None] * T + (t + 1),
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            free_delta += tl.dot(post_f_t, pre_f_t)
-
-            # Nudged phase
-            pre_n = tl.load(
-                pre_nudged_ptr + offs_pre[None, :] * T + (t + 1),
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_n = tl.load(
-                post_nudged_ptr + offs_post[:, None] * T + t,
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            nudged_delta += tl.dot(post_n, pre_n)
-
-            pre_n_t = tl.load(
-                pre_nudged_ptr + offs_pre[None, :] * T + t,
-                mask=mask_pre[None, :],
-                other=0.0,
-            )
-            post_n_t = tl.load(
-                post_nudged_ptr + offs_post[:, None] * T + (t + 1),
-                mask=mask_post[:, None],
-                other=0.0,
-            )
-            nudged_delta += tl.dot(post_n_t, pre_n_t)
-
-        delta = (nudged_delta - free_delta) / beta
+        free = _stdp_phase_delta(
+            pre_free_ptr,
+            post_free_ptr,
+            B,
+            N_pre,
+            N_post,
+            T,
+            A_plus,
+            A_minus,
+            offs_pre,
+            offs_post,
+            mask_pre,
+            mask_post,
+            offs_t,
+            mask_t,
+            BLOCK_PRE,
+            BLOCK_POST,
+            BLOCK_T,
+        )
+        nudged = _stdp_phase_delta(
+            pre_nudged_ptr,
+            post_nudged_ptr,
+            B,
+            N_pre,
+            N_post,
+            T,
+            A_plus,
+            A_minus,
+            offs_pre,
+            offs_post,
+            mask_pre,
+            mask_post,
+            offs_t,
+            mask_t,
+            BLOCK_PRE,
+            BLOCK_POST,
+            BLOCK_T,
+        )
 
         tl.store(
             delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
-            delta,
+            (nudged - free) / beta,
             mask=mask_post[:, None] & mask_pre[None, :],
         )
 

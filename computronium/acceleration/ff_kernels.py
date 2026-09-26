@@ -653,9 +653,24 @@ try:  # noqa: PLR0915
         BLOCK_IN: tl.constexpr,
         BLOCK_OUT: tl.constexpr,
     ):
-        """PEPITA error modulation: Delta W = scale * error.T @ feedback"""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        """PEPITA error modulation: Delta W = scale * colsum(error) rows of feedback.T.
+
+        Equal to `contrastive_primitives.pepita_error_modulation`, which is the
+        specification (TODO36 §4.5). Output unit ``o`` gates the feedback column
+        it belongs to, so the batch is reduced per output unit first and the
+        product is a row scaling of the transposed feedback. There is no
+        ``tl.dot`` here and that is deliberate: this is a broadcast, not a
+        contraction, and the first version of this kernel had a GEMM with a
+        contraction of length 1 — which is why it did not compile for its whole
+        life.
+
+        Launch with ``grid = (cdiv(D_out, BLOCK_OUT), cdiv(D_in, BLOCK_IN))``:
+        the grid is row-major over ``delta``'s own ``[D_out, D_in]`` layout. The
+        transposed order looks plausible and silently writes nothing when
+        ``D_in`` is not a multiple of ``BLOCK_IN``.
+        """
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
@@ -663,23 +678,17 @@ try:  # noqa: PLR0915
         mask_in = offs_in < D_in
         mask_out = offs_out < D_out
 
-        acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
-
+        err = tl.zeros((BLOCK_OUT,), dtype=tl.float32)
         for b in range(B):
-            err = tl.load(
-                error_ptr + b * D_out + offs_out[:, None],
-                mask=mask_out[:, None],
-                other=0.0,
-            )
-            fb = tl.load(
-                feedback_ptr + offs_in[:, None] * D_out + offs_out[None, :],
-                mask=mask_in[:, None] & mask_out[None, :],
-                other=0.0,
-            )
-            acc += tl.dot(err, fb)
+            err += tl.load(error_ptr + b * D_out + offs_out, mask=mask_out, other=0.0)
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
-        delta = scale * acc
+        fb = tl.load(
+            feedback_ptr + offs_in[:, None] * D_out + offs_out[None, :],
+            mask=mask_in[:, None] & mask_out[None, :],
+            other=0.0,
+        )
+        acc = err[:, None] * tl.trans(fb)
+        delta = scale * acc  # ruff: ignore[non-augmented-assignment]
 
         tl.store(
             delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
@@ -702,8 +711,8 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """PEPITA contrastive update: Delta W = lr * (std_post.T @ std_pre - err_post.T @ err_pre) / B"""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)

@@ -222,7 +222,19 @@ def pepita_error_modulation(
 ) -> Tensor:
     """PEPITA error-modulated update.
 
-    Delta W = scale * error @ feedback_matrix.T
+    Output unit ``o`` gates the feedback column it belongs to, so the error is
+    summed over the batch per output unit and the transposed feedback has each of
+    its rows scaled, in the weight's own ``[D_out, D_in]`` orientation:
+
+        dW[o, i] = scale * (sum_b error[b, o]) * feedback_matrix[i, o]
+
+    Summed, not averaged: the error is already a per-sample difference of two
+    phases, and a mean would make the update's scale depend on the batch size.
+    The batch is summed per output unit *before* the product, so this is the only
+    reading of the expression for which the declared shapes ``[B, D_out]`` and
+    ``[D_in, D_out]`` and the declared output ``[D_out, D_in]`` are all consistent
+    at once (TODO36 §4.5 — the triton rung is
+    ``_pepita_error_modulation_kernel``).
 
     Args:
         error: Error signal [B, D_out]
@@ -232,7 +244,7 @@ def pepita_error_modulation(
     Returns:
         Weight delta [D_out, D_in]
     """
-    return scale * (error.T @ feedback_matrix)
+    return scale * error.sum(dim=0)[:, None] * feedback_matrix.T
 
 
 def target_propagation_target(

@@ -5,7 +5,7 @@
   "ff_kernels._ff_contrastive_update_kernel": "compiles",
   "ff_kernels._ff_goodness_kernel": "compiles",
   "ff_kernels._pepita_contrastive_update_kernel": "compiles",
-  "ff_kernels._pepita_error_modulation_kernel": "fails",
+  "ff_kernels._pepita_error_modulation_kernel": "compiles",
   "hebbian_kernels._contrastive_hebbian_kernel": "compiles",
   "hebbian_kernels._hebbian_update_kernel": "compiles",
   "hebbian_kernels._three_factor_hebbian_kernel": "compiles",
@@ -13,7 +13,7 @@
   "pc_kernels._pc_error_update_kernel": "compiles",
   "pc_kernels._pc_prediction_kernel": "compiles",
   "pcalm_kernels._FUSED_UPDATE_KERNEL": "compiles",
-  "snn_kernels._contrastive_stdp_kernel": "fails",
+  "snn_kernels._contrastive_stdp_kernel": "compiles",
   "snn_kernels._lif_step_kernel": "compiles",
-  "snn_kernels._stdp_update_kernel": "fails"
+  "snn_kernels._stdp_update_kernel": "compiles"
 }

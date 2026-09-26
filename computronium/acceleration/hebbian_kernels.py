@@ -304,8 +304,8 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Hebbian weight update with Oja's rule: Delta W = lr * (post.T @ pre / B - post^2 @ W)"""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
@@ -369,8 +369,8 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Three-factor Hebbian: Delta W = lr * modulator * (post.T @ pre / B)"""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
@@ -422,8 +422,8 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Contrastive Hebbian update."""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
