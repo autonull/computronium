@@ -26,7 +26,7 @@ repos:
         always_run: true
       - id: pytest-fast
         name: pytest (property tests)
-        entry: uv run pytest tests/property/ -q
+        entry: uv run python -m pytest tests/property/ -q
         language: system
         pass_filenames: false
         always_run: true

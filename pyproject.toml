@@ -37,7 +37,6 @@ dependencies = [
     "numpy",
     # CLI / progress / output
     "tqdm",
-    "rich",
     # Configuration & validation
     "pydantic>=2.0",
     "omegaconf>=2.3",
@@ -91,6 +90,7 @@ dev = [
     "pandas",
     "optuna",
     "tabulate>=0.9",
+    "rich",
     "psutil",
     "gymnasium",
     "fastapi",
@@ -119,6 +119,9 @@ analysis = ["optuna", "tabulate>=0.9"]
 # --- ML/data utilities ---
 ml = ["scikit-learn", "pandas", "scipy"]
 
+# --- Terminal rendering (renderer layer; not a core import, see TODO35 §1.4) ---
+console = ["rich"]
+
 # --- Plotting & visualization ---
 plot = ["matplotlib", "seaborn", "plotly>=6.9.0"]
 
@@ -139,7 +142,7 @@ llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,monitoring,knowledgebase,graphs,llm,nn]",
+    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,console,deploy,export,p2p,monitoring,knowledgebase,graphs,llm,nn]",
 ]
 
 [project.urls]

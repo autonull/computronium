@@ -3,15 +3,20 @@
 # the rest down, xdist to bound memory (the monolith was OOM-killed), and
 # --durations to surface the slowest tests for cost reduction.
 #
-# addopts deselects `-m slow`, so the eight tiers below are the fast profile
+# addopts deselects `-m slow`, so the tiers below are the fast profile
 # and the demo suite (test_demo_ntm_local 231s, test_demo_update_ladder 183s,
 # measured 2026-09-25) is invisible here. The SLOW pass is what keeps that
 # from being a silent skip: the gallery run records and manifest pin are
 # verified by tests that live behind the marker. Run it before a round closes;
 # skip it for an inner-loop gate.
-cd /home/me/computronium || exit 1
+cd "$(dirname "$(readlink -f "$0")")/.." || exit 1
 mkdir -p logs/tiers
-TIERS="unit primitives algorithms graph ceec platform property integration"
+# Derived, not hand-listed: a hand list is a silent skip the day a test
+# directory is added (TODO35 §1.1 — `acceleration` was missing for a whole
+# pass, which meant the entire Triton/FA kernel suite never ran at round close).
+# tests/slow is excluded because it is the marker pass below, not a tier.
+TIERS=$(find tests -mindepth 1 -maxdepth 1 -type d -not -name 'slow' \
+          -not -name '__pycache__' -printf '%f\n' | sort)
 for tier in $TIERS; do
   start=$SECONDS
   echo "=== TIER $tier (start $start) ==="
