@@ -186,6 +186,7 @@ class ComplexSubstrate(DigitalSubstrate):
 try:  # noqa: PLR0915
     import triton
     import triton.language as tl
+    from triton.language.extra import libdevice
 
     @triton.jit
     def _complex_tanh_kernel(
@@ -206,10 +207,10 @@ try:  # noqa: PLR0915
 
         two_r = 2.0 * real
         two_i = 2.0 * imag
-        denom = tl.cos(two_r) + tl.cosh(two_i)
+        denom = tl.cos(two_r) + libdevice.cosh(two_i)
 
-        out_r = tl.sin(two_r) / denom
-        out_i = tl.sinh(two_i) / denom
+        out_r = libdevice.sin(two_r) / denom
+        out_i = libdevice.sinh(two_i) / denom
 
         tl.store(out_real_ptr + offs, out_r, mask=mask)
         tl.store(out_imag_ptr + offs, out_i, mask=mask)

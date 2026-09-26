@@ -504,17 +504,69 @@ they replace, with the tolerance the owning spec already carries.
 
 ### 4.5 Recover the specifications for the seven
 
-For each of the 7 kernels whose intent is unrecoverable: **write the torch
-expression it is meant to equal, first, as a test.** Then either make the kernel
-match that expression or record that the expression is unimplementable in
-triton and why. Do not port from the kernel to the test — the kernel is what is
+**PILOT DONE 2026-09-26: 1 of 7 specified, and the pilot recovered 9 kernels
+between them.** For each of the 7 kernels whose intent is unrecoverable: **write
+the torch expression it is meant to equal, first, as a test.** Then either make
+the kernel match that expression or record that the expression is unimplementable
+in triton and why. Do not port from the kernel to the test — the kernel is what is
 in question.
 
+- **`_ff_contrastive_update_kernel` is the pilot the plan names, and it is done.**
+  `tests/acceleration/test_ff_contrastive_spec.py` states the specification
+  *before* touching the kernel:
+
+      dW = lr * ( (post_pos.T @ pre_pos)/B - (post_neg.T @ pre_neg)/B )
+
+  anchored to an explicit Python loop (`_loop_reference`) so the specification is
+  tied to something other than the kernel, plus two algebraic properties (zero
+  `lr` ⇒ zero update; zero negative phase ⇒ the positive phase's outer product).
+  **The kernel now matches it exactly — `max_abs_diff` 0.0.** It took three
+  defects, in the order they had to be found:
+  1. **The contraction was wrong for the maths.** The kernel accumulated
+     `tl.dot(tl.trans(post), pre)`, a `tl.dot` whose contraction dimension is 1 —
+     which is why it did not compile at all. The intent is a rank-1 outer product,
+     which is `post * pre` with broadcasting.
+  2. **The grid convention was transposed relative to the store.** The kernel read
+     `program_id(0)` as the *input* tile while storing row-major over
+     `[D_out, D_in]`. Launched the natural way, `D_in` not being a multiple of
+     `BLOCK_IN`, **the second half of the output is silently never written** — no
+     error, no partial result, just unwritten memory. Fixed and documented in the
+     kernel's docstring, because the transposed order still looks plausible.
+  3. Defect 1 alone was not enough: with the contraction fixed and the grid
+     transposed, parity was 0.017 — which is defect 2 wearing a different hat.
+- **The same two-line class of fix, applied tree-wide, recovered 9 kernels.**
+  The rank-1 `tl.dot(tl.trans(post), pre)` appears **13 times** — 4 in
+  `ff_kernels`, 4 in `hebbian_kernels`, 2 in `pc_kernels`, 3 in `tile_kernels` —
+  and every one of them is the same bug. Replacing it with the broadcast outer
+  product took the compile baseline from **5 of 17 to 11 of 17**.
+  **This also means `tile_kernels`' three contrastive kernels never compiled**, so
+  `tile_mesh`'s "triton rung" was not running the contrastive kernel its §5.1
+  measurement attributed to it. That is §1.2's census being wrong in the tree's
+  favour, and it is the second instance of the plan's own warning: *"a kernel that
+  does not compile is a specification nobody wrote down."*
+- **Plus three triton API renames, which §2 called mechanical and was right.**
+  `libdevice.sigmoid` → `tl.sigmoid` (2 kernels) and `tl.cosh`/`tl.sinh` →
+  `libdevice.cosh`/`libdevice.sinh` in the complex substrate. **14 of 17 compile.**
 - **Done when** each of the 7 has a named torch reference in the test suite, and
-  the kernel either matches it or has a written reason it cannot.
-- **FF is the pilot**: `_ff_goodness_kernel` already compiles and is correct to
-  1.9e-5, so only its contrastive update is in question, and FF has a real
-  reference in `algorithms/ff/`.
+  the kernel either matches it or has a written reason it cannot. **1 of 7.**
+- **The 3 kernels still uncompilable**, after all of the above:
+  - `_stdp_update_kernel`, `_contrastive_stdp_kernel` (snn) — `tl.dot` refuses
+    `K < 8`; the spike-tensor contraction needs a reduction formulation, not a
+    `tl.dot`. **Spec first**: the maths is `(pre ⊗ post)` outer accumulation over
+    `(B, PRE, POST, T)`, and the torch twin is
+    `contrastive_primitives.stdp_update`.
+  - `_pepita_error_modulation_kernel` — still `equal reduction dimensions`, because
+    its operands are the *feedback matrix* (`[D_in, D_out]`, not batch-major), so
+    the same fix does not apply; it needs `error.T @ feedback` as a real GEMM with
+    a transposed load. **Spec first**: `scale * (error.T @ feedback)`, and the
+    torch twin is `pepita_error_modulation` in the same module.
+- **Still unspecified: `_pc_prediction_kernel`, `_pc_error_update_kernel`,**
+  `_three_factor_hebbian_update_kernel`, `_contrastive_hebbian_kernel` and
+  `_pepita_contrastive_update_kernel` now *compile* (thanks to the outer-product
+  fix) but have **no torch reference and no parity test** — they are the ones that
+  most need §4.5's discipline, because compiling is not being correct.
+  `UNWIRED_BUT_COMPILING` names their families; the next session should write each
+  reference from its docstring and its module's own torch path, in that order.
 
 ### 4.6 Then, and only then, wire the recovered rungs into the ladder
 
@@ -763,8 +815,10 @@ globalised:
 `triton_rung_available("fa")` and `triton_rung_available("pcalm")` are `True`, and
 that is now a measurement: the two families `local_goodness`, `random_projections`,
 `pc_alm_settling` and `algorithms/pcalm` dispatch on have their kernels compiled
-before the rung is offered. `triton_rung_available("pc")` is `False` on the same
-box in the same second — which is the whole of §1.5 in one line of output.
+before the rung is offered. `triton_rung_available("snn")` is `False` on the same
+box in the same second — which is the whole of §1.5 in one line of output. (`pc`
+was the example when this was written and stopped being one in §4.5: its two
+`libdevice.sigmoid` kernels now compile, so all three of its fixtures pass.)
 
 ### 5.4 §4.3 — the registry, before and after
 
@@ -798,7 +852,7 @@ trusting the field.
 | `HAS_TRITON*` names in the tree | **0** (retired in §4.2) |
 | `*KernelBackend` classes with a consumer | 0 of 13 (plus 10 contrastive, never registered) |
 | `KernelRegistry` families on plain import | **12**, from one table; unchanged by `all_specs()` |
-| Layer B kernels that compile | 5 of 17 with a fixture; 4 of 13 without |
+| Kernels in the compile baseline that compile | **14 of 17** (was 5 when §4.2 recorded it) |
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | **two levels** — 64 specs at `step(case)`, plus 5 kernel entry points triton-vs-torch (§4.4) |

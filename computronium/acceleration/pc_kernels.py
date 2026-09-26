@@ -316,7 +316,7 @@ try:  # noqa: PLR0915
         if activation_type == 0:  # ReLU
             pred = tl.maximum(acc, 0.0)
         elif activation_type == 1:  # SiLU
-            sig = libdevice.sigmoid(acc)
+            sig = tl.sigmoid(acc)
             pred = acc * sig
         elif activation_type == 2:  # Tanh
             pred = libdevice.tanh(acc)
@@ -371,7 +371,7 @@ try:  # noqa: PLR0915
         if activation_type == 0:  # ReLU
             deriv = (mu > 0).to(tl.float32)
         elif activation_type == 1:  # SiLU
-            sig = libdevice.sigmoid(mu)
+            sig = tl.sigmoid(mu)
             deriv = sig * (1.0 + mu * (1.0 - sig))
         elif activation_type == 2:  # Tanh
             deriv = 1.0 - mu * mu
@@ -429,7 +429,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_free += tl.dot(tl.trans(post_f), pre_f)
+            acc_free += post_f * pre_f
 
             pre_n = tl.load(
                 pre_nudged_ptr + b * D_in + offs_in[None, :],
@@ -441,7 +441,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_nudged += tl.dot(tl.trans(post_n), pre_n)
+            acc_nudged += post_n * pre_n
 
         acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
         acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]

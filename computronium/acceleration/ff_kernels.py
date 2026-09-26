@@ -586,9 +586,15 @@ try:  # noqa: PLR0915
         BLOCK_IN: tl.constexpr,
         BLOCK_OUT: tl.constexpr,
     ):
-        """FF contrastive weight update: Delta W = lr * (pos_post.T @ pos_pre - neg_post.T @ neg_pre) / B"""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        """FF contrastive weight update: dW = lr * (post_pos.T @ pre_pos - post_neg.T @ pre_neg) / B
+
+        Launch with ``grid = (cdiv(D_out, BLOCK_OUT), cdiv(D_in, BLOCK_IN))``:
+        the grid is row-major over ``delta``'s own ``[D_out, D_in]`` layout, so
+        program 0 walks the output axis. The transposed order looks plausible and
+        silently writes nothing when ``D_in`` is not a multiple of ``BLOCK_IN``.
+        """
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
@@ -610,7 +616,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_pos += tl.dot(tl.trans(post_p), pre_p)
+            acc_pos += post_p * pre_p
 
             pre_n = tl.load(
                 pre_neg_ptr + b * D_in + offs_in[None, :],
@@ -622,7 +628,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_neg += tl.dot(tl.trans(post_n), pre_n)
+            acc_neg += post_n * pre_n
 
         acc_pos = acc_pos / B  # ruff: ignore[non-augmented-assignment]
         acc_neg = acc_neg / B  # ruff: ignore[non-augmented-assignment]
@@ -719,7 +725,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_std += tl.dot(tl.trans(post_s), pre_s)
+            acc_std += post_s * pre_s
 
             pre_e = tl.load(
                 pre_err_ptr + b * D_in + offs_in[None, :],
@@ -731,7 +737,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_err += tl.dot(tl.trans(post_e), pre_e)
+            acc_err += post_e * pre_e
 
         acc_std = acc_std / B  # ruff: ignore[non-augmented-assignment]
         acc_err = acc_err / B  # ruff: ignore[non-augmented-assignment]

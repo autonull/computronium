@@ -67,13 +67,16 @@ def test_unknown_technology_is_unavailable() -> None:
 def test_family_with_uncompilable_kernels_reports_unavailable() -> None:
     """The §4.2 done-when: a family whose kernels do not compile says so.
 
-    `pc` is the fixture: triton imports, CUDA is present, and both of its
-    prediction/error kernels fail to compile on triton 3.8 (`libdevice.sigmoid`).
+    `snn` is the fixture: triton imports, CUDA is present, and both of its STDP
+    kernels fail to compile on triton 3.8 (`tl.dot` refuses the K=1 contraction).
+    `fa` and `pcalm` are the counter-examples in the same breath: both report
+    available, and both mean it.
     """
     assert TRITON_IMPORTED, "the premise of this test is that triton is importable"
     assert triton_stack_available() is True
-    assert triton_rung_available("pc") is False
+    assert triton_rung_available("snn") is False
     assert triton_rung_available("fa") is True
+    assert triton_rung_available("pcalm") is True
 
 
 @requires_cuda

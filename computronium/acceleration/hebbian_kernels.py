@@ -324,7 +324,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc += tl.dot(tl.trans(post), pre)
+            acc += post * pre
 
         acc = acc / B  # ruff: ignore[non-augmented-assignment]
 
@@ -395,7 +395,7 @@ try:  # noqa: PLR0915
                 other=0.0,
             )
             post_mod = post * mod
-            acc += tl.dot(tl.trans(post_mod), pre)
+            acc += post_mod * pre
 
         acc = acc / B  # ruff: ignore[non-augmented-assignment]
         delta = lr * acc
@@ -445,7 +445,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_free += tl.dot(tl.trans(post_f), pre_f)
+            acc_free += post_f * pre_f
 
             pre_n = tl.load(
                 pre_nudged_ptr + b * D_in + offs_in[None, :],
@@ -457,7 +457,7 @@ try:  # noqa: PLR0915
                 mask=mask_out[:, None],
                 other=0.0,
             )
-            acc_nudged += tl.dot(tl.trans(post_n), pre_n)
+            acc_nudged += post_n * pre_n
 
         acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
         acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]

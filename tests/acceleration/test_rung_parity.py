@@ -132,11 +132,19 @@ def test_eqprop_step_matches_the_euler_tanh_it_replaces(device: str) -> None:
     )
 
 
-#: Compiling kernels whose family no spec reaches. `_ff_goodness_kernel` is
-#: correct today (TODO36 §2) and nothing verifies it, because no `kernel.py`
-#: imports `ff_kernels`; `snn` likewise. Recorded rather than failed, because the
-#: fix is §4.5/§4.6 (recover the spec, wire the rung), never to delete a kernel (§3).
-UNWIRED_BUT_COMPILING: frozenset[str] = frozenset({"ff", "snn"})
+#: Compiling kernels whose family no spec reaches. These recovered from
+#: uncompilable to compiling in §4.5 (the outer-product fix and three triton API
+#: renames) and *still* have nothing dispatching or verifying them, because no
+#: `kernel.py` imports their module. Recorded rather than failed, because the fix
+#: is §4.6 (wire the rung), never to delete a kernel (§3).
+UNWIRED_BUT_COMPILING: frozenset[str] = frozenset({
+    "complex_substrate",
+    "ff",
+    "hebbian",
+    "pc",
+    "pepita",
+    "snn",
+})
 
 
 def test_a_compiling_kernel_has_either_a_spec_or_a_recorded_reason() -> None:
