@@ -25,6 +25,12 @@ from computronium.ontology._settle_kernel import (
     _one_hot,
     extract_layered_params,
 )
+from computronium.ontology.dynamics._settle_driver import (
+    SettleIterate,
+    checkpointed,
+    checkpointed_every,
+    run_settle_loop,
+)
 from computronium.ontology.geometry import layer_stack
 
 GainControlMode = Literal["none", "unit_rms", "spectral"]
@@ -1142,35 +1148,36 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None,
     ) -> list[Tensor]:
         """Checkpointed settling path for memory efficiency."""
-        from torch.utils import checkpoint
 
         def _kernel_step(
-            acts: list[Tensor],
-            beta_: float,
-            target_: Tensor | None,
-            velocity_: list[Tensor] | None,
+            step: int,
         ) -> tuple[list[Tensor], list[Tensor] | None]:
-            return kernel.step(acts, beta_, target_, velocity_)
+            acts, velocity = iterate.value
+            return kernel.step(acts, beta, target, velocity)
 
         self._note_settle_start()
-        for step in range(self.config.max_steps):
-            prev_output = all_acts[-1].detach()
-            all_acts, self._velocity = checkpoint.checkpoint(
-                _kernel_step,
-                all_acts,
-                beta,
-                target,
-                self._velocity,
-                use_reentrant=False,
-            )
-            self._settle_steps_used = step + 1
+        iterate = SettleIterate((all_acts, self._velocity))
+        previous = SettleIterate(all_acts[-1].detach())
+        advance = checkpointed(_kernel_step)
 
+        def _step(step: int) -> None:
+            acts, _ = iterate.value
+            previous.value = acts[-1].detach()
+            iterate.value = advance(step)
+            self._velocity = iterate.value[1]
+
+        def _observe(step: int) -> bool:
             self._track_free_energy_and_check_convergence(
-                all_acts, geometry, step, prev_output, on_step
+                iterate.value[0], geometry, step, previous.value, on_step
             )
-            if self._converged:
-                break
-        return all_acts
+            return self._converged
+
+        self._settle_steps_used = run_settle_loop(
+            _step,
+            max_steps=self.config.max_steps,
+            after_step=_observe,
+        )
+        return iterate.value[0]
 
     def _settle_eager(
         self,
@@ -1183,19 +1190,30 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
     ) -> list[Tensor]:
         """Eager (non-checkpointed) settling path."""
         self._note_settle_start()
-        for step in range(self.config.max_steps):
-            new_acts, new_velocity = kernel.step(all_acts, beta, target, self._velocity)
+        iterate = SettleIterate(all_acts)
+        previous = SettleIterate(iterate.value[-1])
+
+        def _step(step: int) -> None:
+            previous.value = iterate.value[-1]
+            new_acts, new_velocity = kernel.step(
+                iterate.value, beta, target, self._velocity
+            )
             if new_velocity is not None:
                 self._velocity = new_velocity
-            self._settle_steps_used = step + 1
+            iterate.value = new_acts
 
+        def _observe(step: int) -> bool:
             self._track_free_energy_and_check_convergence(
-                new_acts, geometry, step, all_acts[-1], on_step
+                iterate.value, geometry, step, previous.value, on_step
             )
-            all_acts = new_acts
-            if self._converged:
-                break
-        return all_acts
+            return self._converged
+
+        self._settle_steps_used = run_settle_loop(
+            _step,
+            max_steps=self.config.max_steps,
+            after_step=_observe,
+        )
+        return iterate.value
 
     def _track_free_energy_and_check_convergence(
         self,
@@ -1317,24 +1335,31 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         """Standard predictive coding settling for recurrent geometries."""
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
+        iterate = SettleIterate(h)
 
-        for step in range(self.config.max_steps):
-            prediction = geometry.route(h)
-            prediction = self._match_prediction_shape(prediction, h)
+        def _step(step: int) -> None:
+            prediction = geometry.route(iterate.value)
+            prediction = self._match_prediction_shape(prediction, iterate.value)
             error = x - prediction
-            h = h + self.config.step_size * op(
+            iterate.value = iterate.value + self.config.step_size * op(
                 error,
-                geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
+                geometry.params.get(
+                    "weight", torch.eye(iterate.value.shape[-1], device=h.device)
+                ),
             )
             self._track_free_energy_recurrent(error, step, on_step)
+
+        self._settle_steps_used = run_settle_loop(
+            _step, max_steps=self.config.max_steps
+        )
 
         return _create_output_state(
             state,
             x=x,
-            output=h,
-            free_state=[h] if target is None else None,
-            nudged_state=[h] if target is not None else None,
-            activations=[h],
+            output=iterate.value,
+            free_state=[iterate.value] if target is None else None,
+            nudged_state=[iterate.value] if target is not None else None,
+            activations=[iterate.value],
         )
 
     def _match_prediction_shape(self, prediction: Tensor, h: Tensor) -> Tensor:
@@ -1459,8 +1484,11 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         substrate operator and recurrent weights keep this path general
         (any substrate, per-iteration energy tracking).
         """
-        for step in range(self.config.max_steps):
-            new_acts = [acts[0]]  # Input layer is clamped
+        iterate = SettleIterate(acts)
+
+        def _step(step: int) -> None:
+            acts_ = iterate.value
+            new_acts = [acts_[0]]  # Input layer is clamped
             step_energy = 0.0
 
             for i, (weight, _bias) in enumerate(
@@ -1469,9 +1497,9 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                 # acts[i+1] is current state of layer i+1; weight maps from
                 # layer i to layer i+1. Top-down prediction uses the weight
                 # transpose (no bias in top-down).
-                h_upper = acts[i + 1]
+                h_upper = acts_[i + 1]
                 prediction = op(h_upper, weight.T)  # type: ignore[operator]
-                error = acts[i] - prediction
+                error = acts_[i] - prediction
                 h_upper_new = h_upper + self.config.step_size * op(error, weight)  # type: ignore[operator]
                 new_acts.append(h_upper_new)
 
@@ -1493,8 +1521,12 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
             if on_step is not None:
                 on_step(step, step_energy)
-            acts = new_acts
-        return acts
+            iterate.value = new_acts
+
+        self._settle_steps_used = run_settle_loop(
+            _step, max_steps=self.config.max_steps
+        )
+        return iterate.value
 
     def _settle_tile(
         self,
@@ -1514,10 +1546,15 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         )
         beta = self.config.beta if target is not None else 0.0
         all_acts = self._tile_block_acts(geometry, x, substrate)
+        iterate = SettleIterate(all_acts)
+        previous = SettleIterate(all_acts)
 
-        for step in range(self.config.max_steps):
-            new_acts, _ = kernel.step(all_acts, beta, target, None)
-            self._settle_steps_used = step + 1
+        def _step(step: int) -> None:
+            previous.value = iterate.value
+            iterate.value, _ = kernel.step(iterate.value, beta, target, None)
+
+        def _observe(step: int) -> bool:
+            new_acts = iterate.value
             if self._free_energy_history is not None or on_step is not None:
                 # Free energy in predictive coding = squared prediction errors
                 fe = 0.0
@@ -1533,12 +1570,18 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
                 if on_step is not None:
                     on_step(step, fe)
             if step >= self.config.convergence_start:
-                delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
+                delta = torch.dist(
+                    new_acts[-1], previous.value[-1], p=float("inf")
+                ).item()
                 if delta < self.config.convergence_threshold:
-                    all_acts = new_acts
                     self._mark_converged(step)
-                    break
-            all_acts = new_acts
+                    return True
+            return False
+
+        self._settle_steps_used = run_settle_loop(
+            _step, max_steps=self.config.max_steps, after_step=_observe
+        )
+        all_acts = iterate.value
 
         return _create_output_state(
             state,
@@ -1664,14 +1707,18 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         ]
 
         self._note_settle_start()
-        for step in range(self.config.max_steps):
+        eps_box = SettleIterate(eps)
+        delta_box = SettleIterate(0.0)
+
+        def _step(step: int) -> None:
+            eps_ = eps_box.value
             with torch.enable_grad():
-                states, y_hat = self._build_forward_with_errors(
-                    xf, transitions, substrate, eps, residual=layered.residual
+                _states, y_hat = self._build_forward_with_errors(
+                    xf, transitions, substrate, eps_, residual=layered.residual
                 )
                 # PC energy (Algorithm 2): ½ Σ ‖εᵢ‖² + β·ℒ(ŷ, y)
                 energy = torch.zeros((), device=xf.device, dtype=xf.dtype)
-                for e in eps:
+                for e in eps_:
                     energy = energy + 0.5 * e.pow(2).sum()
                 if target is not None:
                     energy = (
@@ -1680,31 +1727,35 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
                         * torch.nn.functional.cross_entropy(y_hat, target)
                     )
                 # ∇εⱼE = εⱼ + (∂ŷ/∂εⱼ)ᵀ ∇ŷℒ — one reverse-mode sweep, unattenuated
-                grads = torch.autograd.grad(energy, eps, allow_unused=True)
+                grads = torch.autograd.grad(energy, eps_, allow_unused=True)
 
             new_eps = [
                 e
                 - self.config.step_size * (g if g is not None else torch.zeros_like(e))
-                for e, g in zip(eps, grads, strict=True)
+                for e, g in zip(eps_, grads, strict=True)
             ]
             with torch.no_grad():
-                delta = max(
+                delta_box.value = max(
                     (new - old).abs().max().item()
-                    for new, old in zip(new_eps, eps, strict=True)
+                    for new, old in zip(new_eps, eps_, strict=True)
                 )
-            eps = [e.detach().requires_grad_(True) for e in new_eps]
-            self._settle_steps_used = step + 1
+            eps_box.value = [e.detach().requires_grad_(True) for e in new_eps]
 
+        def _observe(step: int) -> bool:
             if on_step is not None:
-                on_step(step, delta)
-
+                on_step(step, delta_box.value)
             if (
                 step >= self.config.convergence_start
-                and delta < self.config.convergence_threshold
+                and delta_box.value < self.config.convergence_threshold
             ):
                 self._mark_converged(step)
-                break
+                return True
+            return False
 
+        self._settle_steps_used = run_settle_loop(
+            _step, max_steps=self.config.max_steps, after_step=_observe
+        )
+        eps = eps_box.value
         states, _ = self._build_forward_with_errors(
             xf, transitions, substrate, eps, residual=layered.residual
         )
@@ -2145,48 +2196,33 @@ class PCALMDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None = None,
     ) -> list[Tensor]:
         """Run the relaxation loop with optional checkpointing."""
-        if use_checkpointing:
-            from torch.utils import checkpoint
+        iterate = SettleIterate((acts, dual_vars, []))
 
-            for step in range(self.config.max_steps):
-                if step % checkpoint_every == 0 and step > 0:
-                    acts, dual_vars, constraints = checkpoint.checkpoint(
-                        step_fn, acts, dual_vars, step, use_reentrant=False
-                    )
-                else:
-                    acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
-                self._settle_steps_used = step + 1
+        def _step_fn(step: int) -> tuple[list[Tensor], list[Tensor], list[Tensor]]:
+            return step_fn(iterate.value[0], iterate.value[1], step)
 
-                self._track_augmented_lagrangian_and_check_convergence(
-                    acts,
-                    dual_vars,
-                    constraints,
-                    layered,
-                    op,
-                    current_rho,
-                    step,
-                    on_step,
-                )
-                if self._converged:
-                    return acts
-        else:
-            for step in range(self.config.max_steps):
-                acts, dual_vars, constraints = step_fn(acts, dual_vars, step)
-                self._settle_steps_used = step + 1
+        advance: Callable[[int], tuple[list[Tensor], list[Tensor], list[Tensor]]] = (
+            checkpointed_every(_step_fn, checkpoint_every)
+            if use_checkpointing
+            else _step_fn
+        )
 
-                self._track_augmented_lagrangian_and_check_convergence(
-                    acts,
-                    dual_vars,
-                    constraints,
-                    layered,
-                    op,
-                    current_rho,
-                    step,
-                    on_step,
-                )
-                if self._converged:
-                    return acts
-        return acts
+        def _step(step: int) -> None:
+            iterate.value = advance(step)
+
+        def _observe(step: int) -> bool:
+            acts_, dual_vars_, constraints = iterate.value
+            self._track_augmented_lagrangian_and_check_convergence(
+                acts_, dual_vars_, constraints, layered, op, current_rho, step, on_step
+            )
+            return self._converged
+
+        self._settle_steps_used = run_settle_loop(
+            _step,
+            max_steps=self.config.max_steps,
+            after_step=_observe,
+        )
+        return iterate.value[0]
 
     def _track_augmented_lagrangian_and_check_convergence(
         self,
@@ -2363,16 +2399,23 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         spike_rasters: list[Tensor] = []
         threshold = self._spike_threshold
 
-        for _step in range(self.config.max_steps):
+        iterate = SettleIterate(h)
+
+        def _step(step: int) -> None:
             # LIF dynamics: tau * dh/dt = -h + I_syn
-            I_syn = geometry.route(h)
-            h = h + self.config.step_size * (-h + I_syn)
+            I_syn = geometry.route(iterate.value)
+            h_ = iterate.value + self.config.step_size * (-iterate.value + I_syn)
             # Count spikes: neurons where membrane potential crosses threshold
-            spikes = (h > threshold).float()
+            spikes = (h_ > threshold).float()
             spike_counts.append(spikes.sum(dim=1))  # [batch]
             spike_rasters.append(spikes)  # [batch, neurons] per step
             # Reset spiking neurons
-            h = torch.where(h > threshold, torch.zeros_like(h), h)
+            iterate.value = torch.where(h_ > threshold, torch.zeros_like(h_), h_)
+
+        self._settle_steps_used = run_settle_loop(
+            _step, max_steps=self.config.max_steps
+        )
+        h = iterate.value
 
         new_state = _create_output_state(
             state,
@@ -2442,22 +2485,29 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
                 I_syn = op(h, weight)
                 if bias is not None:
                     I_syn = I_syn + bias
-                v = torch.zeros_like(I_syn)
                 layer_rasters: list[Tensor] = []
-                for _step in range(self.config.max_steps):
-                    v = v + self.config.step_size * (-v + I_syn)
-                    spikes = v > threshold
+                v_box = SettleIterate(torch.zeros_like(I_syn))
+
+                def _lif_step(_step: int) -> None:
+                    nonlocal step_index
+                    v_ = v_box.value + self.config.step_size * (-v_box.value + I_syn)
+                    spikes = v_ > threshold
                     spike_counts.append(spikes.float().sum(dim=1))
                     layer_rasters.append(spikes.float())  # [batch, neurons]
-                    v = torch.where(spikes, torch.zeros_like(v), v)
-                    self._settle_steps_used = step_index + 1
+                    v_box.value = torch.where(spikes, torch.zeros_like(v_), v_)
                     if on_step is not None:
                         # Membrane potential stands in for energy: a LIF
                         # settle has no scalar free energy.
-                        on_step(step_index, v.pow(2).sum().item())
+                        on_step(step_index, v_box.value.pow(2).sum().item())
                     step_index += 1
+
+                run_settle_loop(
+                    advance=_lif_step,
+                    max_steps=self.config.max_steps,
+                )
+                self._settle_steps_used = step_index
                 spike_rasters.append(layer_rasters)
-                h = v
+                h = v_box.value
             acts.append(h)
 
         if nudge_beta is not None and target is not None:
@@ -2606,8 +2656,11 @@ class DiffusionDynamics(_SettleTelemetry):
                     "Diffusion settling requires a layered activation stack"
                 )
             input_act = acts[0]
-            for step in range(self.config.max_steps):
-                leaves = [a.detach().requires_grad_(True) for a in acts]
+            acts_box = SettleIterate(acts)
+            energy_box = SettleIterate(torch.zeros(()))
+
+            def _diffusion_step(step: int) -> None:
+                leaves = [a.detach().requires_grad_(True) for a in acts_box.value]
                 with torch.enable_grad():
                     energy = self._langevin_energy(
                         leaves, geometry, target, self.config.beta
@@ -2615,35 +2668,58 @@ class DiffusionDynamics(_SettleTelemetry):
                     grads = torch.autograd.grad(energy, leaves)
                 with torch.no_grad():
                     noise_scale = math.sqrt(2 * self.config.step_size)
-                    acts = [
+                    acts_box.value = [
                         a
                         - self.config.step_size * g
                         + noise_scale * torch.randn_like(a)
                         for a, g in zip(leaves, grads, strict=True)
                     ]
-                acts[0] = input_act  # clamp the input
+                acts_box.value[0] = input_act  # clamp the input
+                energy_box.value = energy
 
+            def _energy_observer(step: int) -> bool:
                 if on_step is not None:
-                    on_step(step, energy.item())
+                    on_step(step, energy_box.value.item())
+                return False
 
-            acts = [a.detach() for a in acts]
+            self._settle_steps_used = run_settle_loop(
+                _diffusion_step,
+                max_steps=self.config.max_steps,
+                after_step=_energy_observer,
+            )
+            acts = [a.detach() for a in acts_box.value]
         else:
             # Fallback: prior-only walk on the raw state (no geometry
             # weights to descend) — unreachable through the campaign grid.
             h = substrate.initial_state(x).detach().requires_grad_(True)
-            for step in range(self.config.max_steps):
+            h_box = SettleIterate(h)
+            energy_box = SettleIterate(torch.zeros(()))
+
+            def _prior_step(step: int) -> None:
                 with torch.enable_grad():
-                    energy = self._prior_energy(h, target)
-                    energy_grad = torch.autograd.grad(energy, h)[0]
-                noise = torch.randn_like(h) * math.sqrt(2 * self.config.step_size)
+                    energy = self._prior_energy(h_box.value, target)
+                    energy_grad = torch.autograd.grad(energy, h_box.value)[0]
+                noise = torch.randn_like(h_box.value) * math.sqrt(
+                    2 * self.config.step_size
+                )
                 with torch.no_grad():
-                    h = h - self.config.step_size * energy_grad + noise
-                h = h.detach().requires_grad_(True)
+                    h_box.value = (
+                        h_box.value - self.config.step_size * energy_grad + noise
+                    )
+                h_box.value = h_box.value.detach().requires_grad_(True)
+                energy_box.value = energy
 
+            def _prior_observer(step: int) -> bool:
                 if on_step is not None:
-                    on_step(step, energy.item())
+                    on_step(step, energy_box.value.item())
+                return False
 
-            acts = [h.detach()]
+            self._settle_steps_used = run_settle_loop(
+                _prior_step,
+                max_steps=self.config.max_steps,
+                after_step=_prior_observer,
+            )
+            acts = [h_box.value.detach()]
 
         new_state = _create_output_state(
             state,
@@ -2756,19 +2832,26 @@ class LazyStateDynamics(_SettleTelemetry):
         beta = self.config.beta if target is not None else 0.0
 
         self._note_settle_start()
-        for sweep in range(self.config.max_steps):
-            max_delta = self._run_sweep(
+        delta_box = SettleIterate(0.0)
+
+        def _sweep(sweep: int) -> None:
+            delta_box.value = self._run_sweep(
                 acts, weights, biases, activations, params, op, beta, target
             )
-            self._settle_steps_used = sweep + 1
+
+        def _observe(sweep: int) -> bool:
             if on_step is not None:
-                on_step(sweep, max_delta)
+                on_step(sweep, delta_box.value)
             if sweep >= self.config.convergence_start:
                 self._activation_cache[sweep] = [a.clone() for a in acts]
-                if max_delta < self.config.convergence_threshold:
+                if delta_box.value < self.config.convergence_threshold:
                     self._mark_converged(sweep)
-                    break
+                    return True
+            return False
 
+        self._settle_steps_used = run_settle_loop(
+            _sweep, max_steps=self.config.max_steps, after_step=_observe
+        )
         return _create_output_state(
             state,
             output=acts[-1],

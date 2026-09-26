@@ -2,8 +2,9 @@
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
 §2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`) complete; §1.1's floor landed
-with its curve blocked on §2.8. §1.2–§1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4,
-§5.1, §5.3–§5.4 open.
+with its curve blocked on §2.8. **§5.1 (the settle driver) complete** — the
+flagship item of Phase F, and the only untouched high-leverage item left in
+§5. §1.2–§1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4, §5.3–§5.4 open.
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -17,6 +18,50 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 6 — §5.1 the settle driver (flagship)
+
+`computronium/ontology/dynamics/_settle_driver.py` — `run_settle_loop`,
+`SettleIterate`, `checkpointed`, `checkpointed_every`. **Ten** hand-written
+`for step in range(self.config.max_steps)` loops across six dynamics classes
+are now ten three-line declarations; `grep -c "for step in
+range(self.config.max_steps)" computronium/ontology/dynamics/` returns 0
+outside the driver, which is the plan's definition of done.
+
+**The driver owns the control flow, not the science.** It runs the horizon,
+returns the executed-step count, and enforces the ordering that made the 0.2
+defect possible — *advance first, observer second* — so no flag can be
+consulted in place of the step itself. The convergence predicate and the
+telemetry scalar stay with each dynamics class, because §5.1's own risk note
+predicted exactly what happens if they move: a driver with eleven flag
+combinations relocates complexity instead of removing it. Checkpointing is
+carried by the two wrappers rather than a `use_checkpointing` parameter, for
+the same reason.
+
+**Three latent telemetry gaps closed for free.** `_settle_recurrent`,
+`_eager_layered_steps` and both `DiffusionDynamics` paths ran steps and
+**never set `_settle_steps_used` at all** — rule 2 of §2.2's contract, which
+no test could see, because §2.2's lock is a *source* lock. They now report
+what they execute, and
+`TestDriverUniquenessLock::test_every_dynamics_class_reports_its_horizon`
+walks every registered dynamics class and asserts it.
+
+**One behaviour fix, found by the ratchet rather than by reading.** The
+per-layer LIF loop emitted `on_step` with a constant step index and
+incremented the counter only after the layer finished. The §0.4 lock's
+`indices == list(range(len(indices)))` caught it immediately — first test
+failure, one fix, and the reason that lock was worth writing.
+
+`tests/property/test_settle_driver_lock.py`: driver semantics (horizon, early
+stop, step-before-observe, zero horizon), `checkpointed_every` cadence, an AST
+**uniqueness** lock over the dynamics package, and a probe-the-probe asserting
+the scan still sees the driver's own loop — the §0.6 lesson (a lock that
+silently resolved zero of ten classes) applied forward rather than after the
+fact.
+
+`TestSettleHorizonSourceLock` (from `f06f7629`) is now redundant for its
+original purpose and is kept as a second, independent signal; the driver makes
+the invariant unrepresentable, which is what §2.2 predicted §5.1 would allow.
 
 ### Pass 5 — §2.5 test-quality ratchets, `0faecede`
 
@@ -522,53 +567,31 @@ test for how to lock it.
 Four structural changes, each justified by duplication that has already caused
 damage rather than by aesthetic preference. Ranked by leverage.
 
-### 5.1 Collapse the 11 hand-written settle loops into one driver — P0
+### 5.1 Collapse the hand-written settle loops into one driver — **DONE**
 
-**Evidence.** `for step in range(self.config.max_steps)` appears **11 times
-across 6 dynamics classes** — Diffusion 2, EnergyMinimization 2, PC-ALM 2,
-PredictiveSettling 3, ErrorPredictiveCoding 1, Lazy 1 — with **24 distinct
-convergence-check sites**.
+**Evidence (measured).** `for step in range(self.config.max_steps)` appeared
+**10 times** across the dynamics module — Diffusion 2, EnergyMinimization 2,
+PC-ALM 2, PredictiveSettling 3, ErrorPredictiveCoding 1, Lazy 1 — plus two
+per-layer LIF loops over the same horizon, with **24 distinct
+convergence-check sites**. (The plan's count of 11 was one high; the two
+PC-ALM copies were counted separately at one site each.)
 
-That count is the argument. The dead-early-stop defect of §0.2 existed in **4
-of those copies simultaneously**: not four independent mistakes, but one
-copy-paste and a flaw that travelled with it. The repair had to be applied by
-hand at 8 sites. The duplication is the bug factory.
+That count was the argument. The dead-early-stop defect of §0.2 existed in
+**4 of those copies simultaneously**: not four independent mistakes, but one
+copy-paste and a flaw that travelled with it.
 
-**Target shape.** One driver owns the control flow and the semantics §2.2
-specifies — horizon accounting, convergence latch, checkpointing cadence,
-per-step telemetry emission, early stop:
+**Landed as described in Pass 6 above.** Driver + checkpointing wrappers in
+`computronium/ontology/dynamics/_settle_driver.py`; all ten loops migrated;
+`tests/property/test_settle_driver_lock.py` guards both the driver's semantics
+and its uniqueness in the package.
 
-```
-_settle_loop(step_fn, config, *, telemetry, on_step, use_checkpointing)
-```
-
-Each dynamics supplies a `step_fn` (advance one iteration) and a `telemetry`
-extractor (the scalar a progress consumer should see). Eleven loops become
-eleven three-line declarations, and the invariant has one implementation
-instead of eleven.
-
-**Delivers.** §2.2's contract stops being a document and becomes code; the
-horizon-telemetry lock (§2.5) gets a single choke point to guard.
-
-**Risk — state this before starting.** This is not free. The 11 loops carry
-per-class quirks: compiled fast paths that cannot early-stop, PC-ALM dual
-variables and augmented-Lagrangian telemetry, LIF reset semantics, per-layer
-drive in `SpikeIntegrationDynamics`. A "one driver" that grows 11 flag
-combinations relocates the complexity rather than removing it, and hides it
-behind parameterisation.
-
-**Sequencing (incremental, each step green).**
-1. Driver + migrate the two `EnergyMinimizationDynamics` paths (eager,
-   checkpointed) — these are the paths the §0.2 lock already covers, so
-   correctness is directly comparable.
-2. Migrate `PCALMDynamics` (the other dual-variable case).
-3. Migrate the rest; retire the duplicated convergence checks.
-4. Keep compiled fast paths *outside* the driver until the eager paths are
-   proven — they are a genuinely different execution mode, not a flag.
-
-**Definition of done.** `grep -c "for step in range(self.config.max_steps)"`
-returns 0 outside the driver, and the full suite plus the §0.2 mutation test
-(does the lock still catch a reintroduced break-on-horizon?) are green.
+**Residual risk, stated honestly.** The driver did not remove the per-class
+quirks — PC-ALM's augmented-Lagrangian telemetry, the LIF drive-per-layer
+structure, the compiled whole-graph paths — because those are science, not
+control flow. What it removed is the part that broke: horizon accounting and
+early-stop ordering now have one implementation. The plan's own warning
+against a driver grown by parameterisation was the design constraint, and it
+is met: the driver has two parameters (`max_steps`, `after_step`).
 
 ### 5.2 Break the domain → presentation inversion — **DONE** (`5ad96f85`)
 
@@ -649,24 +672,66 @@ re-encoding a hand-written list.
 primitives; reuse the corrected lock shape from §0.6 (assert against the
 table, never against source text). Effort: ~1d per layer.
 
+### 5.6 New: three more hand-written settle loops outside `StateDynamics` — P2
+
+Found by §5.1's uniqueness lock, which is scoped to
+`computronium/ontology/dynamics/` and so cannot see them.
+`computronium/core/local_learning/settling.py` carries its own settle loops —
+lines ~397, ~439 (model-level fixed-point settling with its own
+`steps_taken`, `convergence_start` and custom `_check_converged` hook) and
+~1150 (adjoint iteration for implicit differentiation). The first two are the
+same contract §2.2 states, re-implemented for a layer the protocol does not
+cover; the third is a backward sweep and is genuinely a different thing.
+
+They are *not* migrated blindly. `local_learning` settles user-supplied
+models whose `_step` is `object`-typed and may checkpoint internally, so the
+driver's `SettleIterate` box is the only part that would transfer unchanged.
+Decide whether `StateDynamicsConfig.max_steps` and `convergence_*` should
+apply to model settling at all; if yes, the driver is free, if no, write down
+that the two are separate contracts so the next reader does not assume
+otherwise.
+
+### 5.7 New: the LIF horizon counts layers, not steps — P3, needs a decision
+
+`SpikeIntegrationDynamics._settle_layered` integrates each layer against its
+own (already-settled) drive, so a settle executes `max_steps` **per layer**:
+a 3-layer network reports `_settle_steps_used = 90` at `max_steps=30`. §2.2
+rule 2 says the field "counts steps actually executed", which is true, but
+every consumer of the field (`analysis/instruments.py`,
+`autoscientist/campaign.py`) reads it as *a horizon*, and a number three
+times the configured horizon is a lie to a log reader even when the code is
+correct. `TestDriverUniquenessLock` deliberately does **not** assert
+`horizon <= max_steps` — the ambiguity is recorded rather than locked in.
+Decide: per-layer count summed (today), per-layer max, or separate
+`steps_used` / `layers` fields — and then make the lock assert it.
+
 ### 5.5 Sequencing summary
 
 | Order | Item | Why here | State |
 |-------|------|----------|-------|
-| 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code | **open — the flagship item** |
+| 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code | **done** |
 | 2nd | 5.2 | Small, testable, unblocks §4.1's precedent | **done** (`5ad96f85`) |
-| 3rd | 5.3 | Needs a decision, and wants §5.1 settled first | open |
+| 3rd | 5.3 | Needs a decision, and wanted §5.1 settled first | open — **now unblocked** |
 | 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | open |
+| 5th | 5.6, 5.7 | Both are decisions the driver exposed, not new work | open |
 
 5.2 was pulled forward because §4.1's lint check fails on day one otherwise —
-the plan says so explicitly, and it was right. That left **5.1 as the only
-untouched high-leverage item in the document.**
+the plan says so explicitly, and it was right. 5.1 then followed, and the
+§5 risk note ("a driver that grows flag combinations relocates complexity")
+turned out to be the binding design constraint rather than a formality: the
+driver shipped with **two** parameters.
+
+**Next in §5 is 5.3**, and it is now unblocked — the plan made it wait for
+5.1 because the driver is where the state type is passed most, and that
+reasoning is now spent. 5.3 is *a decision first* (write it down, then land it
+annotation-only), which makes it the cheapest remaining item in the section.
 
 ---
 
 ## Execution Order
 
 Phase A is **done except §1.1's measurement**, which is blocked by §2.8.
+Phase F is **half done**: 5.1 and 5.2 landed, 5.3 and 5.4 remain.
 
 | Phase | Items | Effort | Gate | State |
 |-------|-------|--------|------|-------|
@@ -675,23 +740,25 @@ Phase A is **done except §1.1's measurement**, which is blocked by §2.8.
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | open — **re-measurement needed, see §2.8** |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 11 settle loops → 1 driver; Pareto in one layer; registries derived | 5.2 **done**; 5.1, 5.3, 5.4 open |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2 **done**; 5.3, 5.4 open |
 
-**Recommended next step** (cheapest, unblocked, high value): **§2.2**, the
-settle-contract docstring. It is pure documentation, needs no measurement, and
-it is the specification §5.1 is written against — so writing it now is what
-makes Phase F cheaper later, not a detour from it.
+**Recommended next step** (cheapest, unblocked, high value): **§5.3**, the
+state-algebra decision. Its own sequencing note says to *write the decision
+down before touching code* — that is a page of prose with no measurement and
+no machine-load dependency, which is exactly what §2.8 says the rest of this
+document currently lacks. It also unblocks 5.4, the last open item in the
+section.
 
-The standing rule from §0 still holds: Phase F is last because a badly
-parameterized settle driver relocates complexity rather than removing it. Do it
-against a green, deterministic suite, not to rescue a flaky one.
+The standing rule from §0 held: 5.1 was done against a green suite, not to
+rescue a flaky one, and the driver kept the per-class science rather than
+absorbing it.
 
 ---
 
 ## Verification After Each Phase
 
 ```bash
-# Fast lane (measured 106s, 3147 passed) — the inner loop and the per-commit gate.
+# Fast lane (measured 91s, 3167 passed) — the inner loop and the per-commit gate.
 # A bare `uv run python -m pytest -q` runs exactly this (pyproject testpaths).
 uv run python -m pytest tests/unit tests/property tests/primitives \
     tests/algorithms tests/acceleration -q -n 4
@@ -724,6 +791,22 @@ move, and say so in the commit body.
   first call into it produced a compile error, then a silently wrong tensor,
   then a shape error. Four defects, one untested function, zero of them
   visible from the outside. §2.5's ratchets are worth more than they look.
+- **A refactor that records what its predecessors silently dropped is a
+  refactor with a second payload.** Moving ten loops into one driver was
+  supposed to be pure structure. It also surfaced four settles that ran
+  steps and never reported a horizon (§2.2 rule 2) and one that reported
+  `on_step` a step index it never incremented. None of those were visible
+  to a suite that only asserted *outputs*; all four were caught the moment
+  the duplicated code had to be re-expressed as a shared contract. The
+  duplication was hiding defects, not just code.
+
+- **A source lock cannot see an omission.** `TestSettleHorizonSourceLock`
+  proved §2.2's rule 2 across the whole module and stayed green through
+  four paths that never wrote the field it guards. Structural locks must
+  be paired with a behavioural one that *calls* the thing — which is what
+  `test_every_dynamics_class_reports_its_horizon` now does, one line per
+  registered dynamics class.
+
 - **Shape-only assertions are not assertions.** The first repair of
   `_fa_batched_outer_kernel` (`post * tl.trans(pre)`) produced a tensor of
   exactly the right shape that was constant along an entire axis, and would
