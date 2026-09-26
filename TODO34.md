@@ -1370,8 +1370,8 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 **Pass 15's lesson, which generalises past §3.2.** Three of the last four
 passes turned on a claim that was asserted rather than measured, and in every
 case the measurement was cheap next to the claim: a wheel build (30s) proved
-the packaging dropped the table;  (0.1s) proved  was
-unreachable; a count per rule (0.2s) proved an ignore suppressed nothing. The
+the packaging dropped the table;
+`find_spec` (0.1s) proved `deployment.py` was unreachable; a count per rule (0.2s) proved an ignore suppressed nothing. The
 ratchet in Pass 12 and the wheel assertion in Pass 15 are the same instinct
 applied twice: when something claims to work, make the claim executable.
 
