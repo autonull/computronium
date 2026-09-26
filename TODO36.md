@@ -573,7 +573,7 @@ place that must not make one.
   framing)? That is a product decision about the parity study, and it is left to
   whoever owns it. `has_model` is the tool for answering it: `has_model(
   "diff_target_prop")` is `False` today, which is the fact the decision needs.
-- **Not done, and named:** the naming itself. Four lists still describe the zoo —
+- **Not done, and named (§8.8):** the naming itself. Four lists still describe the zoo —
   `_NATIVE_MODEL_FACTORIES`, `NATIVE_MODEL_NAMES`, `computronium/__init__.py`'s
   export map, and `NATIVE_MODEL_NAMES` in the sklearn/lightning layers — and two
   names for one factory (`pepita_mlp` / `lemma_mlp`) are exactly the kind of
@@ -880,7 +880,14 @@ scheduled; they are the things measuring the ladder taught us.
    on micro-workloads is a reason a reader deserves to see next to the spec that
    selects it.
 
-8. **The GPU rows are untracked, so §0.3 item 5's evidence cannot be reviewed in
+8. **The zoo's four overlapping name lists are the same defect as §4.3's three
+   family vocabularies, one layer down.** `_NATIVE_MODEL_FACTORIES`,
+   `NATIVE_MODEL_NAMES`, `computronium/__init__.py`'s export map and the
+   sklearn/lightning layer's own list all enumerate the same zoo, and one factory
+   has two names. Collapsing them is a rename with call sites in sklearn, lightning,
+   serialization, autoscientist and robustness — mechanical, wide, and exactly the
+   kind of change that should be its own commit with its own review.
+9. **The GPU rows are untracked, so §0.3 item 5's evidence cannot be reviewed in
    a diff.** `.gitignore` excludes `artifacts/`, and all 75 pre-existing benchmark
    rows are untracked for the same reason. For a *measurement* that is right; for
    the one measurement the plan's completion criterion names, it means the
@@ -889,7 +896,7 @@ scheduled; they are the things measuring the ladder taught us.
    benchmark evidence ever meant to be reviewed), or move the summary table that
    §5.1 already is into a committed doc and let the raw rows stay local. The
    second is cheaper and loses nothing; the first is what a reviewer would want.
-9. **`triton_rung_available` falls back to "triton imports" for a family with no
+10. **`triton_rung_available` falls back to "triton imports" for a family with no
    fixtures**, and says so in its docstring — but a fallback is still a weaker
    claim, and four families (`tile` and the class-built `eqprop`/`mep` kernels)
    have no fixtures and so no compile evidence from this module. §4.2 left them
@@ -897,12 +904,12 @@ scheduled; they are the things measuring the ladder taught us.
    §4.5's specifications, and doing it twice would be the duplication §0.2
    condemns. When §4.5 writes a torch reference for a family, the fixture should
    land in the same commit.
-10. **`unfixtured_kernels()` is a hard equality against a test-local allowlist.**
+11. **`unfixtured_kernels()` is a hard equality against a test-local allowlist.**
     That is deliberate — it forces a decision when a kernel is added — but it
     means the allowlist lives in `tests/acceleration/test_triton_availability.py`
     while the truth lives in `availability.py`. The day a second test needs the
     census, the allowlist belongs beside the fixtures.
-11. **There are now three family vocabularies, and §4.3 reconciled two of them.**
+12. **There are now three family vocabularies, and §4.3 reconciled two of them.**
     `AlgorithmFamily` (13 values, the binding layer), spec ids
     (`algorithm.pcalm`, the ladder), and `ImplementationSpec.family` (14 values:
     `predictive_coding`, `random_feedback`, `modular`, …). The third is the odd
@@ -913,7 +920,7 @@ scheduled; they are the things measuring the ladder taught us.
     rename the field `scientific_family` and stop expecting it to align) or
     "algorithm family" (then make the values align). That is a naming decision
     with 64 edits behind it, and it belongs to whoever owns the vocabulary.
-12. **`select_backend(spec, "triton")` can select a rung whose kernels do not
+13. **`select_backend(spec, "triton")` can select a rung whose kernels do not
     compile.** It answers the spec's *declaration*, which is the right answer for
     a dispatch that must not compile anything to decide, and the status table's
     `compiles` column is where the measurement lives. But a caller that wants
@@ -921,7 +928,7 @@ scheduled; they are the things measuring the ladder taught us.
     `resolve_available_rung(spec, requested)` that folds the two would be one call
     instead of two, at the cost of a dispatch that compiles kernels. Deliberately
     not done — the trade is recorded here rather than made silently.
-13. **§4.12's discovery half needs the suite's walltime budget as an input.** The
+14. **§4.12's discovery half needs the suite's walltime budget as an input.** The
     lock added in §4.12 can enforce an annotation but cannot notice a test that
     has become slow. Doing so needs one of: a `--durations` JSON written by
     `conftest.py` on every run with a committed baseline (cheap, but it makes
@@ -931,11 +938,11 @@ scheduled; they are the things measuring the ladder taught us.
     first is a false-flip risk on shared hardware, the second is maintenance with
     no payoff until a test is actually slow, and the third is a decision for
     whoever owns CI. Not started; the choice is recorded rather than guessed.
-14. **The zoo registry was incomplete rather than merely unlabelled**, which
+15. **The zoo registry was incomplete rather than merely unlabelled**, which
     reframes §4.8: the two silent EqProp substitutions (`directed_ep`,
     `lemma_mlp`) were missing *rows*, not wrong names. One name remains —
     `diff_target_prop` — and it has no factory to point at. Before the naming
-    cleanup (§8.15), someone should decide whether target propagation belongs on
+    cleanup (§8.8), someone should decide whether target propagation belongs on
     the rule lane at all; if it does, `models/native` needs a
     `create_native_diff_target_prop`, and if it does not, `_FAMILY_MODELS` should
     stop naming it and `resolve_native_model` can raise.
