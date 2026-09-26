@@ -40,7 +40,7 @@ def _geometry_classes() -> set[str]:
         for name, member in vars(geometry_module).items()
         if inspect.isclass(member)
         and name.endswith("Geometry")
-        and name != "Geometry"  # the Protocol, not an implementation
+        and not getattr(member, "_is_protocol", False)  # Protocols are not backends
         and member.__module__ == geometry_module.__name__
     }
 

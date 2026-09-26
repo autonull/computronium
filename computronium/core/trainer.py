@@ -8,7 +8,7 @@ of ``SystemTrainer`` and ``ExperimentConfig`` (Sprint 7.6.10).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, TypeIs
+from typing import TYPE_CHECKING, Protocol, TypeIs, cast
 
 import torch
 from torch import nn
@@ -17,7 +17,7 @@ from computronium.core.ebm import EBMTrainer
 from computronium.core.losses import compute_loss
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 
 class _TrainerConfigProtocol(Protocol):
@@ -34,6 +34,14 @@ class _LearningRuleOptimizer(Protocol):
     def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None: ...
 
 
+class _TrainStepModel(Protocol):
+    """A model-side training step, the one hook ``dispatch_train_step`` probes."""
+
+    def train_step(
+        self, x: torch.Tensor, y: torch.Tensor
+    ) -> dict[str, object] | None: ...
+
+
 def _is_learning_rule_optimizer(o: object) -> TypeIs[_LearningRuleOptimizer]:
     """Type-narrowing guard for the learning-rule-optimizer calling convention."""
     return bool(getattr(type(o), "_is_learning_rule", False))
@@ -41,12 +49,16 @@ def _is_learning_rule_optimizer(o: object) -> TypeIs[_LearningRuleOptimizer]:
 
 def _make_ebm_trainer(config: _TrainerConfigProtocol, model: nn.Module) -> EBMTrainer:
     """Create an EBMTrainer from trainer config (legacy compat)."""
+    lr = config.optimizer_kwargs.get("lr", 0.01)
+    free_steps = config.extra.get("free_steps", 30)
+    nudged_steps = config.extra.get("nudged_steps")
+    beta = config.extra.get("beta", 0.1)
     return EBMTrainer(
         model,
-        lr=config.optimizer_kwargs.get("lr", 0.01),
-        free_steps=config.extra.get("free_steps", 30),
-        nudged_steps=config.extra.get("nudged_steps"),
-        beta=config.extra.get("beta", 0.1),
+        lr=float(lr) if isinstance(lr, int | float) else 0.01,
+        free_steps=free_steps if isinstance(free_steps, int) else 30,
+        nudged_steps=nudged_steps if isinstance(nudged_steps, int) else None,
+        beta=float(beta) if isinstance(beta, int | float) else 0.1,
         clip_grad_norm=config.grad_clip,
     )
 
@@ -111,34 +123,22 @@ def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-stat
             record_path(path)
 
     # Kernel backend path - consumes the attached backend directly
-    if (
-        config is not None
-        and hasattr(model, "_kernel_backend")
-        and model._kernel_backend is not None
-    ):
+    if config is not None and getattr(model, "_kernel_backend", None) is not None:
         _record("kernel")
-        bespoke_step = getattr(model._kernel_backend, "kernel_train_step", None)
-        contrastive_step_fn = getattr(model._kernel_backend, "contrastive_step", None)
-        if bespoke_step is not None:
-            kernel_metrics = bespoke_step(model, config, x, y, optimizer)
-            if kernel_metrics is not None:
-                return kernel_metrics
-        elif contrastive_step_fn is not None:
-            from computronium.core.trainer import _run_contrastive_kernel_step
-
-            kernel_metrics = _run_contrastive_kernel_step(
-                model, model._kernel_backend, config, x, y
+        backend = model._kernel_backend
+        bespoke_step = getattr(backend, "kernel_train_step", None)
+        contrastive_step = getattr(backend, "contrastive_step", None)
+        if callable(bespoke_step):
+            kernel_metrics: dict[str, object] | None = cast(
+                "dict[str, object] | None",
+                bespoke_step(model, config, x, y, optimizer),
             )
-            if kernel_metrics is not None:
-                return kernel_metrics
+        elif callable(contrastive_step):
+            kernel_metrics = dict(cast("Mapping[str, float]", contrastive_step(x, y)))
         else:
-            from computronium.core.trainer import _run_kernel_train_step
-
-            kernel_metrics = _run_kernel_train_step(
-                model, model._kernel_backend, config, x, y, optimizer=optimizer
-            )
-            if kernel_metrics is not None:
-                return kernel_metrics
+            kernel_metrics = None
+        if kernel_metrics is not None:
+            return kernel_metrics
 
     from computronium.core.ebm import EnergyModel
 
@@ -154,7 +154,7 @@ def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-stat
 
     if hasattr(model, "train_step"):
         try:
-            metrics = model.train_step(x, y)
+            metrics = cast("_TrainStepModel", model).train_step(x, y)
         except NotImplementedError:
             metrics = None
         if metrics is not None:

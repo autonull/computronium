@@ -528,8 +528,14 @@ class ParameterUpdate(Protocol):
         ...
 
 
-class _StatefulUpdate(Protocol):
-    """Snapshot-protocol surface every ParameterUpdate implements."""
+class StatefulUpdate(Protocol):
+    """A ``ParameterUpdate`` that can be replayed without consuming state.
+
+    ``actual_parameter_displacement`` snapshots, replays and restores, so a
+    rule that cannot round-trip its optimizer buffers is not replayable — the
+    requirement is in the type because a caller that registers a rule for a
+    credit's within-batch recompute view gets a crash otherwise.
+    """
 
     def step(
         self,
@@ -545,7 +551,7 @@ class _StatefulUpdate(Protocol):
 
 
 def actual_parameter_displacement(
-    update: _StatefulUpdate,
+    update: StatefulUpdate,
     params: dict[str, Tensor],
     pseudo_grads: list[Tensor],
     geometry: Geometry | None = None,
@@ -1574,12 +1580,12 @@ class RoleSplitUpdate:
         spec = RoleSplitSpec.coerce(config.sub_rules)
         self.config = config
         self._role_names = frozenset(config.role_names)
-        self._on_role = cast("_StatefulUpdate", update_from_config(spec.on_role))
-        self._other = cast("_StatefulUpdate", update_from_config(spec.other))
+        self._on_role = cast("StatefulUpdate", update_from_config(spec.on_role))
+        self._other = cast("StatefulUpdate", update_from_config(spec.other))
 
     def _partitions(
         self, params: dict[str, Tensor]
-    ) -> tuple[tuple[_StatefulUpdate, frozenset[str]], ...]:
+    ) -> tuple[tuple[StatefulUpdate, frozenset[str]], ...]:
         names = frozenset(params)
         return (
             (self._on_role, names & self._role_names),

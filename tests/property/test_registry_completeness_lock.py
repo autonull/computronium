@@ -539,7 +539,7 @@ def test_every_update_class_is_registered() -> None:
         if isinstance(member, type)
         and name.endswith("Update")
         and not name.startswith("_")
-        and name != "ParameterUpdate"
+        and not getattr(member, "_is_protocol", False)
         and member.__module__ == update_module.__name__
     }
     registered = {cls.__name__ for cls in update_module._UPDATE_BACKENDS.values()}

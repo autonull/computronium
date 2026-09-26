@@ -123,3 +123,38 @@ def test_every_tier_contains_tests() -> None:
         if not any((TESTS_ROOT / t).rglob("test_*.py"))
     ]
     assert not empty, f"tiers with no test files: {empty}"
+
+
+# The locks that read committed run records, and the runner step that re-reads
+# them once the pass that re-emits those records has finished.
+RECORD_LOCKS = (
+    "tests/integration/test_gallery_lock.py",
+    "tests/property/test_gallery_provenance_lock.py",
+    "tests/property/test_claim_ownership_lock.py",
+    "tests/property/test_determinism_thread_lock.py",
+)
+
+
+def test_record_locks_are_re_verified_after_the_slow_pass() -> None:
+    """A lock that runs before the pass that changes what it locks is a no-op.
+
+    The gallery lock lives in the `integration` tier and the slow pass
+    re-emits seven of the records it compares against, so the tier-order
+    result is taken against pre-slow-pass records. That staleness is what
+    §11.2 found: a manifest that matched nothing it was pinned against, for
+    a round, invisibly. The runner re-reads them after; this asserts it still
+    does, in that order.
+    """
+    script = RUNNER.read_text(encoding="utf-8")
+    slow_at = script.index("=== TIER slow (start")
+    verify_at = script.index("POST-SLOW RE-PIN VERIFY (start")
+    assert slow_at < verify_at, (
+        "the post-slow re-verify must run after the slow tier, not before it"
+    )
+    missing = [lock for lock in RECORD_LOCKS if lock not in script]
+    assert not missing, (
+        f"the post-slow re-verify does not run {missing}; a record lock that "
+        "is not re-read after the pass that re-emits its records is a no-op"
+    )
+    for lock in RECORD_LOCKS:
+        assert (REPO_ROOT / lock).is_file(), f"{lock} does not exist"

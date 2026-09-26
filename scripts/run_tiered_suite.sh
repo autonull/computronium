@@ -35,6 +35,28 @@ if [ "$1" = "--with-slow" ]; then
   code=$?
   echo "=== TIER slow exit=$code walltime=$((SECONDS - start))s ==="
   tail -3 "logs/tiers/slow.log" | grep -E "passed|failed|error" || true
+
+  # Re-verify the locks that the slow pass invalidates. The gallery lock lives
+  # in the integration tier, which runs BEFORE slow — so the pass that
+  # re-emits seven of the records it compares against has already happened by
+  # the time this runs, and the tier-order result was taken against
+  # pre-slow-pass records (TODO35 §11.6-1; this staleness went unnoticed for
+  # a round and was §11.2's finding). Provenance is the same shape for the
+  # same reason: re-emitted records must be re-read against the environment.
+  start=$SECONDS
+  echo "=== POST-SLOW RE-PIN VERIFY (start $start) ==="
+  uv run python -m pytest tests/integration/test_gallery_lock.py \
+      tests/property/test_gallery_provenance_lock.py \
+      tests/property/test_claim_ownership_lock.py \
+      tests/property/test_determinism_thread_lock.py \
+      -q -p no:cacheprovider > "logs/tiers/post_slow_verify.log" 2>&1
+  code=$?
+  echo "=== POST-SLOW RE-PIN VERIFY exit=$code walltime=$((SECONDS - start))s ==="
+  tail -3 "logs/tiers/post_slow_verify.log" | grep -E "passed|failed|error" || true
+  if [ "$code" -ne 0 ]; then
+    echo "=== A record moved under a stale pin: re-pin docs/figures/manifest.json"
+    echo "=== and commit it; this failure is the order bug's own detector."
+  fi
 fi
 
 echo "=== ALL TIERS DONE ==="

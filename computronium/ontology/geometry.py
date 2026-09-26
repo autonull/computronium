@@ -5,7 +5,14 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    Protocol,
+    TypeIs,
+    cast,
+    runtime_checkable,
+)
 
 import torch
 from torch import Tensor, nn
@@ -588,6 +595,38 @@ class Geometry(Protocol):
 
         out = self.forward(x, substrate)
         return [x, out]
+
+
+class TileBlockGeometry(Geometry, Protocol):
+    """A geometry whose transitions are assembled as per-edge blocks (R11.1.4).
+
+    The block layout is ``[x, z_0..z_{L-1}, output]``: a settle produces
+    ``block_act_count`` activations and the feedback walk crosses whole
+    transition blocks rather than one matrix per layer. Only ``TileGeometry``
+    carries this view; every other backend stays a plain ``Geometry``.
+    """
+
+    @property
+    def block_act_count(self) -> int:
+        """Length of the settled block-act layout."""
+        ...
+
+    def assemble_blocks(self, named: dict[str, Tensor]) -> tuple[Tensor, ...]:
+        """Per-transition block matrices from a name->tensor mapping."""
+        ...
+
+    def scatter_block_grads(self, block_grads: list[Tensor]) -> list[Tensor]:
+        """Scatter per-transition block pseudo-gradients to per-edge parameters."""
+        ...
+
+
+def is_tile_block_geometry(geometry: object) -> TypeIs[TileBlockGeometry]:
+    """Narrow a geometry to its block view, the one tile-block contract check."""
+    return (
+        isinstance(getattr(geometry, "block_act_count", None), int)
+        and callable(getattr(geometry, "assemble_blocks", None))
+        and callable(getattr(geometry, "scatter_block_grads", None))
+    )
 
 
 # ============================================================

@@ -10,7 +10,7 @@ autograd through settling only when the rule declares
 from __future__ import annotations
 
 from contextlib import nullcontext
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, TypeIs
 
 import torch
 from torch import Tensor
@@ -23,13 +23,51 @@ from computronium.ontology import (
     Substrate,
     SystemState,
 )
+from computronium.ontology.dynamics import (
+    SettableState,
+    set_state_field,
+    state_energy,
+)
+from computronium.state import CompositeState
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from computronium.ontology import CreditAssignment
+    from computronium.state.composite import ActivityValue
 
-type PhaseStates = Mapping[Phase, SystemState]
+type PhaseStates = Mapping[Phase, SettableState]
+
+
+class _Plasticity(Protocol):
+    """The optional P-axis hook: ψ steps once per episode, then modulates."""
+
+    psi_phase: str | None
+
+    def step(
+        self, psi: dict[str, Tensor], z: CompositeState, context: object
+    ) -> dict[str, Tensor]: ...
+
+    def modulate(
+        self, activations: list[Tensor] | Tensor | None, psi: dict[str, Tensor]
+    ) -> list[Tensor] | Tensor | None: ...
+
+
+class _BiasGradientSource(Protocol):
+    """The optional bias-gradient hook on a credit rule."""
+
+    def compute_bias_pseudo_gradients(
+        self, states: PhaseStates, loss: Tensor | None, geometry: Geometry
+    ) -> dict[str, Tensor]: ...
+
+
+def _is_plasticity(candidate: object) -> TypeIs[_Plasticity]:
+    return callable(getattr(candidate, "step", None))
+
+
+def _is_bias_gradient_source(candidate: object) -> TypeIs[_BiasGradientSource]:
+    return callable(getattr(candidate, "compute_bias_pseudo_gradients", None))
+
 
 __all__ = [
     "METRIC_SCHEMA",
@@ -76,7 +114,7 @@ def forward_pass(
     return acts
 
 
-def task_loss(state: SystemState, y: Tensor) -> Tensor:
+def task_loss(state: SettableState, y: Tensor) -> Tensor:
     """Cross-entropy on the state's output activations.
 
     Writes accuracy into ``state.metrics`` (pre-aggregated float contract).
@@ -88,7 +126,7 @@ def task_loss(state: SystemState, y: Tensor) -> Tensor:
     loss = torch.nn.functional.cross_entropy(logits, y)
     with torch.no_grad():
         acc = (logits.argmax(dim=-1) == y).float().mean().item()
-    state.metrics = {**state.metrics, "accuracy": acc}
+    set_state_field(state, "metrics", {**(state.metrics or {}), "accuracy": acc})
     return loss
 
 
@@ -97,9 +135,9 @@ def _scalar(value: Tensor | float) -> float:
 
 
 def _step_psi(
-    plasticity: object,
+    plasticity: _Plasticity,
     psi: dict[str, Tensor],
-    settled: SystemState,
+    settled: SettableState,
     x: Tensor,
     y: Tensor,
     phase: Phase,
@@ -113,12 +151,13 @@ def _step_psi(
     )
     if not step_here or context is None:
         return psi
-    from computronium.state import CompositeState
 
     acts = settled.activations
     act_list = acts if isinstance(acts, list) else None
     post = acts[-1] if isinstance(acts, list) else acts
-    activity: dict[str, object] = {"x": x, "y": post}
+    activity: dict[str, ActivityValue] = {"x": x}
+    if post is not None:
+        activity["y"] = post
     if act_list is not None and len(act_list) >= 2:
         activity["h"] = act_list[-2]
     if phase is Phase.NUDGED:
@@ -168,7 +207,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
     """
     grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
     with grad_ctx:
-        states: dict[Phase, SystemState] = {}
+        states: dict[Phase, SettableState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
         for phase in credit.phases:
@@ -183,15 +222,19 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
             # instead — the z state then also carries the target (D22's
             # missing-supervised-term: no ψ law can consume a loss term it
             # never sees). Modulation applies to every phase after the step.
-            if plasticity is not None and psi is not None:
+            if psi is not None and _is_plasticity(plasticity):
                 psi = _step_psi(plasticity, psi, settled, x, y, phase, credit, context)
                 modulate = getattr(plasticity, "modulate", None)
                 if modulate is not None:
-                    settled.activations = modulate(settled.activations, psi)
+                    set_state_field(
+                        settled, "activations", modulate(settled.activations, psi)
+                    )
 
             if phase is Phase.NUDGED:
-                settled.loss = task_loss(settled, y)
-            settled.energy = dynamics.compute_energy(settled, geometry)
+                set_state_field(settled, "loss", task_loss(settled, y))
+            set_state_field(
+                settled, "energy", dynamics.compute_energy(settled, geometry)
+            )
             states[phase] = settled
 
         output = states.get(Phase.NUDGED, states.get(Phase.FREE))
@@ -202,16 +245,19 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         loss = output.loss
         if loss is None:
             loss = task_loss(output, y)
-            output.loss = loss
+            set_state_field(output, "loss", loss)
         elif not isinstance(loss, Tensor):
             loss = torch.as_tensor(loss)
-        if output.energy is None:
-            output.energy = dynamics.compute_energy(output, geometry)
+        energy = state_energy(output)
+        if energy is None:
+            energy = dynamics.compute_energy(output, geometry)
+            set_state_field(output, "energy", energy)
 
         pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
-        bias_getter = getattr(credit, "compute_bias_pseudo_gradients", None)
         bias_grads = (
-            bias_getter(states, loss, geometry) if callable(bias_getter) else None
+            credit.compute_bias_pseudo_gradients(states, loss, geometry)
+            if _is_bias_gradient_source(credit)
+            else None
         )
         geometry.update_params(
             update.step(geometry.params, pseudo_grads, geometry, bias_grads)
@@ -226,12 +272,12 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
             free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
             free_loss = task_loss(free_settled, y)
             free_energy = dynamics.compute_energy(free_settled, geometry)
-            free_accuracy = free_settled.metrics.get("accuracy", 0.0)
+            free_accuracy = (free_settled.metrics or {}).get("accuracy", 0.0)
 
         metrics = {
             "loss": _scalar(loss),
-            "energy": _scalar(output.energy),
-            "nudged_fit_accuracy": output.metrics.get(
+            "energy": _scalar(energy),
+            "nudged_fit_accuracy": (output.metrics or {}).get(
                 "accuracy", 0.0
             ),  # output-phase fit; target-conditioned when a NUDGED phase ran
             "free_loss": _scalar(free_loss),
@@ -240,7 +286,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         }
         metrics.update({
             k: v
-            for k, v in output.metrics.items()
+            for k, v in (output.metrics or {}).items()
             if isinstance(v, (int, float))
             and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
         })

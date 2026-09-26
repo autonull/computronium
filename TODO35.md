@@ -1,10 +1,19 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open.** This document owns every open item as of
-Round 2 (see §11). `TODO34.md` keeps its 16 passes as the record of how the tree was
+Round 3 (see §12). `TODO34.md` keeps its 16 passes as the record of how the tree was
 made fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift this
 plan series has documented five times.
+
+**Round 3 closed**: §1.2 (the three highest-fan-in modules are at 0 — and
+the third of them held an `ImportError` on a live branch that no test had
+ever taken), §11.6-1, and two wiring locks whose guard against a second
+Protocol was a spelled-out name. The round's output is a defect *class*, not
+a count: **F821 cannot see an import of a name the module does not define**,
+and the scan that can see it found six more in eight modules that no gate
+was looking at. §12.5 also records that the fast-lane walltime this series
+has been quoting is not reproducible, and should stop being quoted.
 
 **Round 2 closed**: §10.8-1 (with its mechanism *corrected* — the suite was
 never nondeterministic, it was environment-dependent, and the pin that claimed
@@ -60,7 +69,7 @@ Ordered by what it costs to be wrong, not by section number.
 | # | Item | State (measured 2026-09-26) | First move | Effort | Done when |
 |---|---|---|---|---|---|
 | 1.1 | **The reference "full suite" silently omits `tests/acceleration`** | `scripts/run_tiered_suite.sh` runs `TIERS="unit primitives algorithms graph ceec platform property integration"` — **`acceleration` is not in the list**, so the 210 tests under it never run in the full-suite pass or in the slow pass (no `slow` marker). That is the whole Triton/FA kernel suite and §2.7's activation-contract lock. The *fast lane* catches them (`testpaths` includes it), which is why this has survived: the inner loop is complete and the round-close figure is short | Add `acceleration` to `TIERS`, and add the §0 population assertion to the runner: a tier that is not in the list is a silent skip, which is exactly what `TODO34` §1.2b fixed for the 26 (now **34**) slow tests one pass ago. Same defect class, one pass later | ~15min | `TIERS` covers every directory under `tests/` that is not `slow`, and a lock fails if a new test directory is not in the list |
-| 1.2 | **pyright: the top modules by fan-in** | 2,079 findings repo-wide. `pre-commit` gates pyright on `computronium/ontology` only | Re-count per module before picking: `TODO34` Pass 16 took `p2p/evolution.py` from 16 → 0 *inside an unrelated extraction*, so the fan-in ranking is a guess until measured. Then drive the top 3 to zero and widen the pre-commit hook to changed files, the way ruff's already is | ~4h + ongoing | 3 modules report 0; the pre-commit pyright hook reads its filenames instead of hardcoding one directory |
+| 1.2 | **pyright: the top modules by fan-in** | **CLOSED in Round 3 (§12.1)** — the three named modules are at 0. Originally 2,079 findings repo-wide. `pre-commit` gates pyright on `computronium/ontology` only | Re-count per module before picking: `TODO34` Pass 16 took `p2p/evolution.py` from 16 → 0 *inside an unrelated extraction*, so the fan-in ranking is a guess until measured. Then drive the top 3 to zero and widen the pre-commit hook to changed files, the way ruff's already is | ~4h + ongoing | 3 modules report 0; the pre-commit pyright hook reads its filenames instead of hardcoding one directory |
 | 1.3 | **Lint tranche 2** | **349** findings (ratchet baseline 353, ruff 0.16.6). By rule: `RUF105` 148, `PLW0717` **89**, `E402` 32, `SIM102` 19, `PLR0913` 8, `C901` 5, rest ≤6 | Take `PLW0717` next: `knowledge/causal.py` holds 4 (16/39/9/29 statements) and `hyperopt/experiment.py` 3. The `p2p` extraction is the recipe and the precedent — it found a live crash. **Leave `E402` and `SIM102` alone** (see §3.4) | ~3h | count falls with no new suppression; the ratchet moves down with it |
 | 1.4 | **`rich` is a declared hard dependency and three library modules import it** | `pyproject.toml` lists `rich` in `[project] dependencies`; `hyperopt/_dashboard.py`, `execution/dashboard/_rich.py` and a third module import it at module scope. `TODO34` §2.9 deferred this "until something uses it" — that condition is now **met**, and the layering lock still shows no renderer on `import computronium`, so the declaration is louder than the behaviour *and* the deferral's condition is gone | Move `rich` to an extra (`pyproject.toml` only — no code change), and let `test_layering_lock.py::test_import_computronium_pulls_no_renderer` keep proving the property holds. This is the cheap half of a decision that has been open for two plans because its own precondition never got re-checked | ~15min | `rich` is not in `[project] dependencies`; the import lock still passes |
 | 1.5 | **Environment fingerprint in run records** | `capture_environment()` / `deps_hash()` exist and are **used** — `cli/repro.py` writes `deps_hash` into its own repro record, and `z3_fixed_weights.py` calls `capture_environment()`. The gap is narrower and sharper: the **run-record emitter** does not. `emit_run_record` is the fixture at `tests/integration/conftest.py:58`, and its `provenance` carries exactly two keys, `git_commit` and `config_sha256` | Add a third key from `deps_hash(capture_environment())`, then re-emit every record in the one slow pass that §2.1 also needs — backfilling a version into an existing record is **fabricating** provenance, so it cannot be done piecemeal. **Sequencing note**: `test_provenance_keys_are_exactly_the_emitter_contract` asserts the key set is exactly two, so the lock and the emitter must move in the same commit, and the lock is the *right* thing to update here — it is encoding the old contract, not defending it | ~1h + the slow pass | a drift lock can say which of code / config / environment moved |
@@ -510,8 +519,10 @@ answer changes.
 
 ### 10.7 Still open from the original tables
 
-- **§1.2** (pyright fan-in) — untouched. The measurement the plan asks for
-  first is still the first move: 2,079 findings repo-wide, ranking unmeasured.
+- **§1.2** (pyright fan-in) — **closed in Round 3, §12.1.** The measurement
+  came first (§11.5) and the ranking held; the three modules are at 0 and
+  repo-wide is 1,936. The pyright half of the pre-commit hook was widened in
+  Round 2, so the two halves of the item are both done.
 - **§1.9** — the two unwritten test-quality rules. Recommendation unchanged:
   leave them unwritten and record that as the decision. But note §10.3: the
   determinism rule this section declined to write is the one that would have
@@ -715,3 +726,160 @@ you only opened is a gate people switch off.
    loading. If the claim set grows, that cost grows with it; the alternative is
    moving the claim functions into an importable module, at the cost of the
    owner relationship being declared rather than structural.
+
+---
+
+## 12. Round 3 — a dead branch, and the type checker that found it
+
+Round 3 took §1.2 (pyright on the three highest-fan-in modules) and
+§11.6-1 (the gallery lock's ordering). **§1.2 is closed, and it paid for
+itself before it was closed**: the third module's findings included an
+`ImportError` on a live branch that no test had ever taken.
+
+### 12.1 §1.2 closed: 39 findings, and one that was a crash
+
+The §11.5 ranking was measured, so this was three named modules rather than
+a guess: `ontology/credit.py` 21, `core/pipeline.py` 11, `core/trainer.py`
+7. All three are at **0**. The fixes were not 39 suppressions; they were
+five type gaps, each of which had a name:
+
+| gap | sites | what it was |
+|---|---|---|
+| `Geometry` does not declare the tile-block view | 9 | `credit.py` called `assemble_blocks` / `scatter_block_grads` behind a repeated `getattr` on a Protocol that never declared them. `TileBlockGeometry` + `is_tile_block_geometry` (a `TypeIs`) now carry it, and the guard **returns the narrowed geometry** instead of a bool — which is what deleted the `getattr`s |
+| `settle` returns the read-only `SettableState`; the pipeline wrote to it | 7 | `pipeline.py` assigned `settled.activations/loss/energy` on a read-only Protocol. Routed through the `set_state_field` / `state_energy` helpers that already existed for exactly this |
+| `TransformerGeometry.blocks` is an untyped `nn.ModuleList` | 10 | every `block.ln1` / `block.in_proj` read as `Tensor | Module`. One narrow in `tf_blocks` instead of four casts |
+| `PepitaCredit` passed `None` as a `Substrate` | 4 | **the docstring said "a DigitalSubstrate is assumed when unset" and the code passed `None`.** `FeedforwardGeometry` resolves `None` itself; a backend that does not would have crashed. Resolved once, in `_resolved_substrate` |
+| `ParameterUpdate` cannot satisfy `_StatefulUpdate` | 1 | see below |
+
+The 39 were not equal: **one of them was a crash.** `dispatch_train_step`'s
+kernel-backend path imported `_run_contrastive_kernel_step` and
+`_run_kernel_train_step` from `computronium.core.trainer`. Neither name is
+defined in that module, and `grep -rn "def _run_.*_kernel_step"` over the
+tree returns nothing. The `elif` and `else` branches were guaranteed
+`ImportError` the first time a backend exposed `contrastive_step` and
+nothing else — a whole class of backend, with the signatures the deleted
+helpers were thin wrappers around sitting on the objects themselves. The
+fix routes to `backend.contrastive_step` / `backend.kernel_train_step`
+directly; the `else` branch was unreachable by construction (it called
+`kernel_train_step` in the arm that had already found `kernel_train_step` to
+be `None`) and is gone. `tests/unit/core/test_trainer_kernel_dispatch.py`
+asserts all three arms, because a green bespoke-arm test says nothing about
+its sibling.
+
+**The last finding is the interesting one.** `credit.py` held a
+`ParameterUpdate` and passed it to `actual_parameter_displacement`, which
+takes the private `_StatefulUpdate` — a Protocol requiring
+`get_state`/`load_state` that `ParameterUpdate` never declared. Both are
+true: every rule implements the snapshot protocol, and the Protocol that
+says so was unreachable from outside. `_StatefulUpdate` is now the public
+`StatefulUpdate`, with the requirement written down where a caller sees it
+(register a rule for a within-batch recompute view and it must be
+replayable). The *replay obligation* was previously unstated, which is the
+same class as the `None` substrate: a contract the type did not carry and
+the code did not state.
+
+### 12.2 Two wiring locks were guarding a name, not a property
+
+Adding the two Protocols turned four locks red — and every one of them was
+right to be. `_geometry_classes()` excluded `Geometry` from the backend
+registry by spelling `"Geometry"`, and the update lock excluded
+`ParameterUpdate` the same way. Both now exclude **any** Protocol
+(`getattr(member, "_is_protocol", False)`), so the population is expressed
+as a property of the class rather than as a growing list of names, and the
+special case that would have been the next failure is gone.
+
+### 12.3 New: the import lock, and six stale imports outside its scope
+
+F821 cannot see this defect class: `from computronium.core.trainer import
+_name_that_does_not_exist` is a *valid* import to the linter and an
+`ImportError` at runtime. `test_undefined_name_lock.py` now carries a third
+lock — every runtime `from computronium.<module> import <name>` must name a
+symbol the target module defines. It is scoped to `computronium/core` and
+`computronium/ontology`, with the three excluded populations named in the
+docstring: package `__init__` re-export surfaces (they have their own
+locks), star-import shims (not statically derivable), and
+`TYPE_CHECKING`-block imports (pyright's population, and §1.2's widened
+pre-commit hook is its per-commit gate). Verified non-vacuous: injecting
+`from computronium.core.ebm import EnergyModel, EnergyModelX` fails it
+with the offending line.
+
+The scan found **six genuinely dead imports in eight modules outside that
+scope** — every one confirmed by `hasattr` on the imported module, not by
+reading:
+
+| consumer | stale import from |
+|---|---|
+| `core/trainer.py` (the defect above), `cli/export_trained_kernel.py`, `config/experiment.py`, `evaluation/base.py`, `evaluation/cross_domain.py`, `experiment/probe.py`, `experiments/{cross_domain_transfer,fa_depth_scaling,mep_tournament,mot_ablation,tile_algorithm_comparison,tile_scaling}.py` | `CoreTrainer`, `TrainerConfig` — **removed from `core/trainer.py`**, whose own docstring says so |
+| `analysis/ablation.py` | `run_from_runconfig` |
+| `cli/commands/verify.py`, `cli/shared.py` | `run_single_trial` |
+| `validation/gradient_check.py` | `KB` |
+| `execution/engine.py` | `ReportOrchestrator` |
+| `experiments/eqprop_vision_parity.py` | `_BASELINE_MODELS` |
+
+`from computronium.core.trainer import CoreTrainer` appears in **13
+modules**, and `core/trainer.py` has said "Legacy `CoreTrainer` and
+`TrainerConfig` have been removed" in its first paragraph the whole time.
+So the question is not "is this a lock worth having" — it is *which of those
+13 modules are live*, and the answer decides whether the fix is 13
+one-line repoints or 13 deletions. Not taken here; see §12.6.
+
+### 12.4 §11.6-1 closed: the record locks are re-read after the pass that moves them
+
+`run_tiered_suite.sh` now runs a `POST-SLOW RE-PIN VERIFY` step after the
+slow tier: the gallery lock, the provenance lock, the claim-ownership lock
+and the determinism-thread lock, all four re-read against post-slow-pass
+records. The step does not re-pin — backfilling a pin is fabricating one —
+it **fails and says which file to re-pin**, which is the only honest
+response. `test_tier_coverage_lock.py` asserts the step exists, names all
+four locks, and sits *after* the slow tier in the script; the tier-order
+result it replaces was structurally incapable of catching §11.2's
+staleness.
+
+### 12.5 Numbers, re-measured
+
+| quantity | §11.5 | measured 2026-09-26 (this round) |
+|---|---|---|
+| pyright, repo-wide | 1,975 (210 files) | **1,936** — the 39 findings above, and nothing else moved |
+| ruff, repo-wide | 334 | **334** — at the ratchet baseline, no re-baseline |
+| fast lane | 127s / 3397 passed | **240s / 3403 passed, 119 skipped, 26 xfailed, 1 xpassed** |
+| new lock cost | — | cross-module import lock 4.2s; post-slow ordering assertion 0.0s |
+
+The fast lane's walltime is 240s against 127s, on the same machine, and
+nothing in this round adds 113s of compute — the two new locks account for
+~4s. The honest reading is that §11.5's 127s was measured on a quieter box
+or a warmer cache, and **the number in §7/§11.5 should be treated as
+"120–240s", not as a figure to regress against**. This is the third time
+this series has recorded a fast-lane walltime it could not reproduce; the
+metric is too noisy to gate on, and the *test count* is the part that is
+load-bearing.
+
+### 12.6 New items, for the next round
+
+1. **Resolve the 13 `CoreTrainer` / `TrainerConfig` importers and the five
+   other stale-import clusters** (§12.3). The lock is scoped away from them
+   precisely because they are not yet resolved, and scoping a lock to dodge
+   known failures is the arrangement §0 warns about. Answer one question
+   first: which of those modules are still imported by anything live? The
+   dead ones are deletions, not repoints.
+2. **Re-scope the cross-module import lock once (1) closes.** It is scoped to
+   two layers because the other 13 files fail it. A lock that covers half the
+   tree is worth having; a lock that covers half the tree *by choice* needs
+   the choice revisited.
+3. **§6's flake has now recurred once** (this round, in a three-tier `-n 4`
+   run; the failure message was again not captured). More usefully: that run
+   also produced a **new, reproducible pair** —
+   `test_credit.py::test_cosine_similarity_reasonable` and
+   `test_ntm_geometry.py::test_bptt_learns_copy_mechanics` — which **pass in
+   isolation and in `tests/unit` alone, and fail identically on the
+   unmodified tree** when `tests/unit tests/property tests/primitives` run
+   together under `-n 4`. Confirmed pre-existing by stashing the diff and
+   re-running. That is a cross-tier ordering/seed interaction, not a
+   defect in either test, and it is a better lead than §6's flake: it
+   reproduces.
+4. **§1.3's PLW0717 tranche is still open** at 81, untouched by this round
+   for the same reason it was untouched by the last two: the pyright work
+   in `credit.py` and `pipeline.py` removed the findings, not the
+   complexity.
+5. **§4, §5, §1.9** — unchanged; §1.9's recommendation still stands, and
+   note that the two unwritten rules would not have caught any of this
+   round's findings.

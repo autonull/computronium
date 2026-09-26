@@ -20,9 +20,26 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from computronium.ontology.dynamics._state import SettableState
-    from computronium.ontology.geometry import Geometry, TransformerGeometry
+    from computronium.ontology.geometry import (
+        Geometry,
+        TileBlockGeometry,
+        TransformerGeometry,
+    )
+    from computronium.ontology.geometry import (
+        _TransformerBlock as TransformerBlock,
+    )
     from computronium.ontology.substrate import Substrate
-    from computronium.ontology.update import ParameterUpdate
+    from computronium.ontology.update import StatefulUpdate
+
+
+def tf_blocks(geometry: TransformerGeometry) -> list[TransformerBlock]:
+    """The transformer's blocks with their element type recovered.
+
+    ``blocks`` is an untyped ``nn.ModuleList``, so iterating it yields
+    ``Module`` and every ``block.ln1`` reads as an unknown attribute. One
+    narrow here is cheaper than four casts at the use sites.
+    """
+    return cast("list[TransformerBlock]", list(geometry.blocks))
 
 
 # ============================================================
@@ -571,12 +588,18 @@ def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
 
 def _block_transition_acts(
     acts: list[Tensor], geometry: Geometry
-) -> list[Tensor] | None:
-    """The settled acts when the geometry declares a block transition table
-    and they align with it (tile meshes, R11.1.4); else None."""
-    count = getattr(geometry, "block_act_count", None)
-    if count is not None and len(acts) == count:
-        return acts
+) -> TileBlockGeometry | None:
+    """The geometry when it declares a block transition table and the settled
+    acts align with it (tile meshes, R11.1.4); else None.
+
+    Returning the narrowed geometry rather than a bool is what lets the block
+    paths call ``assemble_blocks`` / ``scatter_block_grads`` under the type
+    checker instead of behind a repeated ``getattr``.
+    """
+    from computronium.ontology.geometry import is_tile_block_geometry
+
+    if is_tile_block_geometry(geometry) and len(acts) == geometry.block_act_count:
+        return geometry
     return None
 
 
@@ -699,9 +722,9 @@ class ThermodynamicContrast:
 
         # Tile meshes: per-transition block contrast scattered to per-edge
         # weights (R11.1.4).
-        if _block_transition_acts(free_acts, geometry) is not None and (
-            len(nudged_acts) == len(free_acts)
-        ):
+        if (
+            block_geometry := _block_transition_acts(free_acts, geometry)
+        ) is not None and (len(nudged_acts) == len(free_acts)):
             batch = free_acts[0].shape[0]
             block_grads = [
                 (
@@ -716,7 +739,7 @@ class ThermodynamicContrast:
                 (free_acts[i + 1] - nudged_acts[i + 1]) / self.config.beta
                 for i in range(len(free_acts) - 1)
             ]
-            return geometry.scatter_block_grads(
+            return block_geometry.scatter_block_grads(
                 _apply_credit_norm(block_grads, self.config.credit_norm, eps)
             )
 
@@ -886,15 +909,15 @@ class RandomProjectionsCredit:
         # walked back over the block layout, grads scattered to per-edge
         # weights (R11.1.4). B_e shares its weight's shape, so the layered
         # contract (B maps act_{k+1} widths down to act_k) holds per edge.
-        if _block_transition_acts(acts, geometry) is not None:
-            return self._block_path(acts, delta_out, geometry, batch)
+        if (block_geometry := _block_transition_acts(acts, geometry)) is not None:
+            return self._block_path(acts, delta_out, block_geometry, batch)
         return self._layered_path(acts, weight_names, delta_out, geometry)
 
     def _block_path(
         self,
         acts: list[Tensor],
         delta_out: Tensor,
-        geometry: Geometry,
+        geometry: TileBlockGeometry,
         batch: int,
     ) -> list[Tensor]:
         """Tile-mesh error walk over assembled feedback blocks."""
@@ -1376,9 +1399,9 @@ class LocalContrastiveCredit:
         self._step_view: dict[int, nn.Linear] = {}
         self._tf_views: dict[str, Tensor] = {}
         self._tf_label_emb: Tensor | None = None
-        self._update_rule: ParameterUpdate | None = None
+        self._update_rule: StatefulUpdate | None = None
 
-    def set_update_rule(self, update: ParameterUpdate) -> None:
+    def set_update_rule(self, update: StatefulUpdate) -> None:
         """Register the system's update rule (wired by ``compose_system``).
 
         With a rule registered, ``sequential_lr`` recomputation views use
@@ -1691,7 +1714,7 @@ class LocalContrastiveCredit:
         if not isinstance(geometry, TransformerGeometry):
             return []
         seq: list[tuple[str, nn.Linear]] = [("embed.weight", geometry.embed)]
-        for j, block in enumerate(geometry.blocks):
+        for j, block in enumerate(tf_blocks(geometry)):
             seq += [
                 (f"blocks.{j}.in_proj.weight", block.in_proj),
                 (f"blocks.{j}.out_proj.weight", block.out_proj),
@@ -1708,14 +1731,16 @@ class LocalContrastiveCredit:
     def _tf_label_embedding(
         self, vocab: int, d: int, device: torch.device, dtype: torch.dtype
     ) -> Tensor:
-        if self._tf_label_emb is None or self._tf_label_emb.shape != (vocab, d):
+        emb = self._tf_label_emb
+        if emb is None or emb.shape != (vocab, d):
             gen = torch.Generator(device="cpu").manual_seed(
                 zlib.crc32(b"local_contrastive_label_emb")
             )
             emb = torch.empty(vocab, d, dtype=torch.float32).normal_(generator=gen)
             emb /= emb.shape[1] ** 0.5
-            self._tf_label_emb = emb.to(device=device, dtype=dtype)
-        return self._tf_label_emb
+            emb = emb.to(device=device, dtype=dtype)
+            self._tf_label_emb = emb
+        return emb
 
     def _tf_recompute(
         self,
@@ -1752,7 +1777,7 @@ class LocalContrastiveCredit:
             # every deeper input, and a norm on the goodness stream would
             # pin G == 1 for both phases — a structurally zero contrast
             # (measured 2026-09-07: embed/label gradients exactly 0).
-            for j, block in enumerate(tf.blocks):
+            for j, block in enumerate(tf_blocks(tf)):
                 a1 = torch.nn.functional.layer_norm(
                     h, (d,), block.ln1.weight, block.ln1.bias
                 )
@@ -2223,8 +2248,8 @@ class TargetInversionCredit:
 
         # Tile meshes: targets propagate over the assembled blocks, grads
         # scattered to per-edge weights (R11.1.4).
-        if _block_transition_acts(acts, geometry) is not None:
-            return self._block_target_grads(acts, y, geometry)
+        if (block_geometry := _block_transition_acts(acts, geometry)) is not None:
+            return self._block_target_grads(acts, y, block_geometry)
 
         targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
         pairs = _weight_acts(weight_names, acts, geometry)
@@ -2248,28 +2273,22 @@ class TargetInversionCredit:
         return grads
 
     def _block_target_grads(
-        self, acts: list[Tensor], y: Tensor, geometry: Geometry
+        self, acts: list[Tensor], y: Tensor, geometry: TileBlockGeometry
     ) -> list[Tensor]:
         """Tile meshes: targets propagate over the assembled blocks, grads
         scattered to per-edge weights (R11.1.4).
         """
         blocks = geometry.assemble_blocks(geometry.params)
-        targets: list[Tensor | None] = [None] * len(acts)
-        targets[-1] = torch.nn.functional.one_hot(
-            y, num_classes=acts[-1].shape[-1]
-        ).float()
-        batch = acts[0].shape[0]
+        targets: list[Tensor] = [
+            torch.nn.functional.one_hot(y, num_classes=acts[-1].shape[-1]).float()
+        ]
         for i in range(len(acts) - 2, -1, -1):
-            nxt = targets[i + 1]
-            targets[i] = nxt @ blocks[i] if nxt is not None else None
-        n_trans = len(acts) - 1
+            targets.append(targets[-1] @ blocks[i])
+        targets.reverse()
+        batch = acts[0].shape[0]
         block_grads = [
             (acts[i + 1] - targets[i + 1]).T @ acts[i] / batch
-            if targets[i + 1] is not None
-            else torch.zeros(
-                acts[i + 1].shape[-1], acts[i].shape[-1], device=acts[i].device
-            )
-            for i in range(n_trans)
+            for i in range(len(acts) - 1)
         ]
         return geometry.scatter_block_grads(block_grads)
 
@@ -2567,6 +2586,20 @@ class PepitaCredit:
         """Register the system's substrate (wired by ``compose_system``)."""
         self._substrate = substrate
 
+    def _resolved_substrate(self) -> Substrate:
+        """The wired substrate, or the documented digital default when unset.
+
+        ``FeedforwardGeometry`` resolves a ``None`` substrate to a fresh
+        ``DigitalSubstrate`` itself; doing it here keeps the ``Geometry``
+        contract — whose ``forward`` takes a non-optional ``Substrate`` —
+        honest for the backends that do not.
+        """
+        if self._substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            self._substrate = DigitalSubstrate()
+        return self._substrate
+
     def _modulated_input(self, x: Tensor, delta: Tensor) -> Tensor:
         b = self.config.feedback_matrix
         if b is None:
@@ -2589,7 +2622,7 @@ class PepitaCredit:
         if free is None or free.x is None or free.y is None:
             return []
         x, y = free.x, free.y
-        substrate = self._substrate
+        substrate = self._resolved_substrate()
         with torch.no_grad():
             logits1 = geometry.forward(x, substrate)
             delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
@@ -2619,7 +2652,7 @@ class PepitaCredit:
         bias_names = [n for n in geometry.params if "bias" in n]
         if not bias_names:
             return {}
-        substrate = self._substrate
+        substrate = self._resolved_substrate()
         with torch.no_grad():
             logits1 = geometry.forward(x, substrate)
             delta = torch.nn.functional.one_hot(y, logits1.shape[-1]).to(
