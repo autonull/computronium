@@ -14,6 +14,32 @@ executable and produced a rule about deletion the hard way. This one completes a
 
 ## 0. Start here
 
+### 0.0 Where this plan stands (2026-09-26)
+
+| step | state | one line |
+|---|---|---|
+| §4.1 measure the rungs | **done** | 9 sites × 3 scales × 2 rungs on a GPU; triton wins 3 of 9 (§5.1) |
+| §4.2 one meaning for "available" | **done** | `availability.py`; every `HAS_TRITON*` name retired; 14 of 17 kernels compile (§5.4) |
+| §4.3 name the technology | **done** | `select_backend(spec, "triton")`; one `BINDINGS` table; 12 families bound on import (§5.5) |
+| §4.4 parity between adjacent rungs | **done** for the 5 rungs that compile | found 2 defects, one of them a test that certified the wrong algorithm |
+| §4.5 recover the specifications | **4 of 7** | six defects found; the three remaining are named with their blockers |
+| §4.6 wire the recovered rungs | not started | needs §4.5's remaining three, and §4.8's naming decision |
+| §4.7 a kernel arm on `System` | not started | the largest piece; gates §4.6 for algorithm-level families |
+| §4.8 zoo membership predicate | **partial** | `has_model` landed; 2 silent substitutions closed; the naming is §8.8 |
+| §4.9 rule spaces | not started | a product decision per rule |
+| §4.10 one name per family, in the sweep | not started | |
+| §4.11 re-measure and re-pin | not started | needs the slow tier; POST-SLOW verify |
+| §4.12 timeout-marker policy | **done** on the static half | `KNOWN_LONG` + a lock; the discovery half is §8.14 |
+| §4.13 the knowledge layer's `__getattr__` | **done** | 10 modules enumerated and checked; one silent no-op deleted |
+
+Six steps landed, four partial, three untouched. The plan's own order held: every
+step was verified before the next started, and the two steps that were supposed to
+be mechanical (§4.2's flags, §4.5's outer-product fix) each turned out to be hiding
+a live defect — which is the argument for doing them in this order rather than
+later. §5 holds the measurements; §8 holds the fifteen improvement opportunities
+that measuring produced.
+
+
 ### 0.1 The goal, and the three purposes it serves
 
 The repo already declares the architecture. `README.md:1427`:
