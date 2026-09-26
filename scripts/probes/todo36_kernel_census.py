@@ -2,10 +2,9 @@
 
 Two parallel acceleration systems share the `computronium/acceleration/`
 directory and the family names `fa`, `ff`, `pc`, `snn`, `hebbian`, `tile`,
-`tp`, `eqprop`, `backprop`, `mep`. This probe answers, per layer, the four
-questions a session needs before touching either: what is registered, what is
-reachable, what compiles, and whether any of it has been measured to be faster
-than the torch it replaces.
+`tp`, `eqprop`, `backprop`, `mep`. TODO36 §0.2 restates them as one ladder
+(reference -> torch.compile -> triton) and a set of rungs built outside it; this
+probe measures both halves so the plan's numbers stay reproducible.
 
 Run: ``uv run python scripts/probes/todo36_kernel_census.py``
 Measured on an RTX 3080, triton 3.8.0, torch with CUDA, 2026-09-26.
@@ -49,14 +48,7 @@ def _layer_b_backends() -> tuple[int, int, list[str], bool]:
             for node in tree.body
             if isinstance(node, ast.ClassDef)
             and node.name.endswith("KernelBackend")
-            and not any(
-                (
-                    isinstance(d, ast.expr)
-                    and getattr(d, "attr", "") == "runtime_checkable"
-                )
-                or (isinstance(d, ast.Name) and d.id == "runtime_checkable")
-                for d in node.decorator_list
-            )
+            and not _is_protocol(node)
         )
     import computronium.acceleration  # ruff: ignore[unused-import]  (populates the registry)
     from computronium.acceleration.kernel_backend import KernelRegistry
@@ -65,6 +57,19 @@ def _layer_b_backends() -> tuple[int, int, list[str], bool]:
         "local_goodness" in m for m in sys.modules
     )
     return classes, 10, sorted(f.value for f in KernelRegistry._backends), walked
+
+
+def _is_protocol(node: ast.ClassDef) -> bool:
+    """Is this class declared as a ``Protocol`` rather than a real backend?"""
+    for base in node.bases:
+        name = (
+            base.attr
+            if isinstance(base, ast.Attribute)
+            else (base.id if isinstance(base, ast.Name) else "")
+        )
+        if name == "Protocol":
+            return True
+    return False
 
 
 def _layer_a() -> tuple[int, int, int, list[str]]:
@@ -111,19 +116,20 @@ def main() -> int:
     rows, gpu, seen = _benchmark_rows()
     kernels = {m: _triton_kernel_count(m) for m in TRITON_MODULES}
 
-    print("LAYER A  -- primitives/**/kernel.py -> acceleration/, select_backend()")
+    print("THE LADDER  -- primitives/**/kernel.py -> acceleration/, select_backend()")
     print(f"  ImplementationSpecs                  {specs}")
     print(
         f"  status == kernel_verified            {verified}   (reference_only {specs - verified})"
     )
     print(f"  kernel_technology == 'triton'        {declared}")
-    print(f"  kernel modules reaching triton       {len(reaching)}")
+    print("  rungs the ladder can name            2   (Backend = reference|kernel)")
+    print(f"  kernel.py modules reaching triton    {len(reaching)}")
     for name in reaching:
         print(f"      {name}")
     print(f"  triton kernels behind those modules  {sum(kernels.values())}  {kernels}")
 
     print()
-    print("LAYER B  -- kernel_backend.py KernelRegistry, *KernelBackend classes")
+    print("RUNGS OUTSIDE THE LADDER  -- kernel_backend.py KernelRegistry")
     print(f"  concrete *KernelBackend classes      {classes} (excludes the Protocol)")
     print(
         f"  contrastive backend classes          {contrastive}  (module never imported)"
@@ -140,10 +146,11 @@ def main() -> int:
         print(f"      device={key[0]!r:8} backend={key[1]!r:10} {n}")
 
     print()
-    print("READ THIS AS: Layer A is the system that runs. Layer B is a second design")
-    print("whose registry is populated by an import side effect and whose classes")
-    print("have no consumer outside the two export CLIs. TODO36.md §0.2 asks which")
-    print("of the two survives before any work starts.")
+    print("READ THIS AS: the ladder runs. The rungs outside it have no consumer")
+    print("outside the two export CLIs, and their registry is populated by an")
+    print("import side effect. TODO36 §0.2: redundancy at the implementation")
+    print("rung is the product; redundancy in the plumbing is what this plan")
+    print("removes. Nothing here is deleted.")
     return 0
 
 
