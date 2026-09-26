@@ -17,7 +17,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -283,11 +282,6 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
 
 
 # Register backends for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, HebbianKernelBackend)
-# ThreeFactorKernelBackend is a variant; register explicitly if needed by users
-# for hw in HardwareTarget:
-#     KernelRegistry.register(AlgorithmFamily.HEBBIAN, hw, ThreeFactorKernelBackend)  # ruff: ignore[commented-out-code]
 
 
 # Triton kernels for fused Hebbian operations

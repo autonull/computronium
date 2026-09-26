@@ -15,7 +15,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -392,8 +391,6 @@ def _get_activation(name: str) -> torch.nn.Module:
 
 
 # Register backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.TP, hw, TPKernelBackend)
 
 
 __all__ = ["TPKernelBackend"]

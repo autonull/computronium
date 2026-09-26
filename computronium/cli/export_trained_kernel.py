@@ -26,7 +26,6 @@ from computronium.acceleration import (
     AlgorithmFamily,
     HardwareTarget,
     KernelRegistry,
-    get_algorithm_kernels,
 )
 from computronium.acceleration.export import export_kernel
 from computronium.core.logging import get_logger
@@ -121,8 +120,6 @@ def main(argv: list[str] | None = None) -> int:  # ruff: ignore[too-many-locals,
         help="Skip ONNX export",
     )
     args = parser.parse_args(argv)
-
-    get_algorithm_kernels()  # populate the registry (lazy import side effect)
 
     family = AlgorithmFamily(args.algorithm)
     target = HardwareTarget(args.target)

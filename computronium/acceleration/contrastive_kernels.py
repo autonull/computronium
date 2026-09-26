@@ -1137,10 +1137,13 @@ def get_contrastive_kernel(algorithm: AlgorithmFamily) -> BaseContrastiveKernel 
 
 
 def register_contrastive_kernels() -> None:
-    """Register all contrastive kernels in the global KernelRegistry.
+    """Bind every contrastive kernel over its family's standard backend.
 
-    Called on import to make contrastive kernels visible to KernelRegistry
-    alongside standard KernelBackend implementations.
+    Not called on import, and deliberately not part of
+    :func:`computronium.acceleration.families.register_all`: these classes share
+    a ``(family, hardware)`` key with the standard backends, so registering them
+    would displace ``FAKernelBackend`` and friends for the whole family. A
+    consumer that wants the contrastive path asks for it by name.
     """
     for algorithm, cls in _CONTRASTIVE_KERNEL_CLASSES.items():
         for hardware in HardwareTarget:
@@ -1177,10 +1180,6 @@ def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
         "mep": MEPContrastiveKernel,
         "o1memory": O1MemoryContrastiveKernel,
     }
-
-
-# Auto-register on import
-register_contrastive_kernels()
 
 
 __all__ = [

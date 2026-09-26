@@ -1,7 +1,15 @@
-"""Unified Kernel Backend Infrastructure for Bio-Plausible Algorithms.
+"""The binding layer: stateful rungs, bound to a family and a hardware target.
 
-Provides the KernelBackend protocol, KernelRegistry for auto-selection,
-and configuration dataclasses for hardware-agnostic kernel acceleration.
+``KernelRegistry`` holds rungs that need state — ``initialize``, ``set_model_ref``,
+and the export path's need to serialise a *bound* backend. It is **not** the
+training dispatch: every training run goes through
+:func:`computronium.acceleration.dispatch.select_backend`, which is driven by
+``ImplementationSpec`` and knows about technologies, promotion status and parity
+tolerances. This module knows about classes and instances, and nothing else.
+
+The bindings themselves live in one table,
+:data:`computronium.acceleration.families.BINDINGS`, applied by
+:func:`computronium.acceleration.families.register_all`.
 """
 
 from __future__ import annotations

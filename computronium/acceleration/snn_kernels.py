@@ -17,7 +17,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -322,8 +321,6 @@ class SNNKernelBackend:
 
 
 # Register backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.SNN, hw, SNNKernelBackend)
 
 
 # Triton kernels for fused SNN operations

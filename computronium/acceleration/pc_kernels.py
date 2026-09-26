@@ -17,7 +17,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -458,8 +457,6 @@ try:  # noqa: PLR0915
 
 except ImportError:
     pass
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.PC, hw, PCKernelBackend)
 
 
 __all__ = ["PCKernelBackend"]

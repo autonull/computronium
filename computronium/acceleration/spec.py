@@ -13,6 +13,7 @@ Backend = Literal[
 ]
 
 KernelTechnology = Literal[
+    "torch",
     "triton",
     "cuda",
     "torch_compile",

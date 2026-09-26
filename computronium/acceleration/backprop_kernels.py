@@ -19,7 +19,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -162,7 +161,5 @@ def _activation_deriv(h: Tensor, activation: nn.Module) -> Tensor:
 
 
 # Register backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.BACKPROP, hw, BackpropKernelBackend)
 
 __all__ = ["BackpropKernelBackend"]

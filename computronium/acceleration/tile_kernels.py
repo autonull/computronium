@@ -12,7 +12,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -1037,8 +1036,6 @@ class TileKernelBackend:
 
 
 # Register backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.TILE, hw, TileKernelBackend)
 
 
 __all__ = [

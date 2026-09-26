@@ -16,7 +16,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -526,9 +525,6 @@ def _get_activation(name: str) -> torch.nn.Module:
 
 
 # Register backends for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.FF, hw, FFKernelBackend)
-    KernelRegistry.register(AlgorithmFamily.PEPITA, hw, PEPITAKernelBackend)
 
 
 # Triton kernels for fused FF/PEPITA operations

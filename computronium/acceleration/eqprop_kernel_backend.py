@@ -17,7 +17,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 from computronium.acceleration.kernels import EqPropKernel
@@ -300,8 +299,6 @@ class EqPropKernelBackend:
 
 
 # Register the backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.EQPROP, hw, EqPropKernelBackend)
 
 
 __all__ = ["EqPropKernelBackend"]

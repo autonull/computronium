@@ -30,10 +30,6 @@ Usage:
     >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, TRITON_IMPORTED)
 """
 
-# Import to trigger EQPROP kernel backend registration
-from computronium.acceleration import (
-    eqprop_kernel_backend,
-)
 from computronium.acceleration.availability import (
     CompileState,
     compile_report,
@@ -71,6 +67,11 @@ from computronium.acceleration.contrastive_primitives import (
     pepita_error_modulation,
     phase_encode,
     target_propagation_target,
+)
+from computronium.acceleration.families import (
+    BINDINGS,
+    backends_by_family,
+    register_all,
 )
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -112,51 +113,17 @@ def get_triton_ops() -> type[object] | None:  # ruff: ignore[non-empty-init-modu
 
 
 def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
-    """Get all algorithm-specific kernel backends (uniform interface)."""
-    kernels = {}
-    kernel_specs = [
-        ("computronium.acceleration.fa_kernels", ["FAKernelBackend"], ["fa"]),
-        (
-            "computronium.acceleration.hebbian_kernels",
-            ["HebbianKernelBackend", "ThreeFactorKernelBackend"],
-            ["hebbian", "three_factor"],
-        ),
-        (
-            "computronium.acceleration.ff_kernels",
-            ["FFKernelBackend", "PEPITAKernelBackend"],
-            ["ff", "pepita"],
-        ),
-        ("computronium.acceleration.tp_kernels", ["TPKernelBackend"], ["tp"]),
-        ("computronium.acceleration.pc_kernels", ["PCKernelBackend"], ["pc"]),
-        ("computronium.acceleration.snn_kernels", ["SNNKernelBackend"], ["snn"]),
-        ("computronium.acceleration.tile_kernels", ["TileKernelBackend"], ["tile"]),
-        (
-            "computronium.acceleration.mep_kernels",
-            ["MEPKernelBackend", "O1MemoryEPv2KernelBackend"],
-            ["mep", "o1memory"],
-        ),
-        (
-            "computronium.acceleration.backprop_kernels",
-            ["BackpropKernelBackend"],
-            ["backprop"],
-        ),
-        (
-            "computronium.acceleration.eqprop_kernel_backend",
-            ["EqPropKernelBackend"],
-            ["eqprop"],
-        ),
-    ]
-    for module_name, class_names, keys in kernel_specs:
-        try:
-            module = __import__(module_name, fromlist=class_names)
-            for cls_name, key in zip(class_names, keys):
-                kernels[key] = getattr(module, cls_name)
-        except ImportError:
-            pass
-    return kernels
+    """Bind every family and return its backend class, keyed by family value."""
+    return backends_by_family()
 
+
+# The one stated call site for the binding layer (TODO36 §4.3). Every family is
+# bound here, explicitly, so no kernel module registers as an import side effect
+# and the registry's contents cannot depend on which module was imported first.
+register_all()  # ruff: ignore[non-empty-init-module]  (the stated call site)
 
 __all__ = [
+    "BINDINGS",
     "HAS_CUPY",
     "TRITON_IMPORTED",
     "AlgorithmFamily",
@@ -183,7 +150,6 @@ __all__ = [
     "cross_entropy",
     "dispatch_kernel",
     "enable_tf32",
-    "eqprop_kernel_backend",
     "forward_forward_goodness",
     "get_algorithm_kernels",
     "get_backend",
@@ -197,6 +163,7 @@ __all__ = [
     "pepita_error_modulation",
     "phase_encode",
     "profile_kernel",
+    "register_all",
     "softmax",
     "spectral_normalize",
     "target_propagation_target",

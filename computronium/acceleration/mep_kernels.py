@@ -16,7 +16,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 from computronium.acceleration.triton_kernels import MEP_TritonOps
@@ -432,9 +431,6 @@ def _activation_deriv(state: Tensor, activation: str) -> Tensor:
 
 
 # Register backends for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.MEP, hw, MEPKernelBackend)
-    KernelRegistry.register(AlgorithmFamily.O1MEMORY, hw, O1MemoryEPv2KernelBackend)
 
 
 __all__ = ["MEPKernelBackend", "O1MemoryEPv2KernelBackend"]

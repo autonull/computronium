@@ -382,30 +382,64 @@ flag is "compiled once, cached", not "CUDA is present".
 
 ### 4.3 Make the technology a selectable rung
 
-This is the unification, and it is smaller than the census makes it look.
+**DONE 2026-09-26.** This is the unification, and it is smaller than the census
+makes it look.
 
-1. Extend the ladder so a rung can be *named*: `Backend` gains a
-   technology-qualified form (or `select_backend` gains a `technology`
-   argument) so `select_backend(spec, "triton")` is expressible and
-   `select_backend(spec, "auto")` picks the highest *promoted* rung.
-2. `KernelRegistry` becomes what it was built for: the **binding layer** for
-   rungs that need state — `set_model_ref`, `initialize`, the export path's
-   need to serialise a *bound* backend. Document that in its module docstring,
-   which currently describes it as if it were the training dispatch.
-3. Move the population out of a side effect, all three of them (§1.3). Either
-   `register_all()` called explicitly by the export CLIs, or registration at
-   import as a stated contract in one place. A registry whose contents depend
-   on which module someone imported first — or on whether someone queried
-   Layer A — is not a registry.
-4. Give Layer B's families names that do not collide with Layer A's specs, or
-   retire the colliding ones. "FF" currently means `algorithms/ff/kernel.py`
-   (torch), `acceleration/ff_kernels.py` (an `FFKernelBackend`),
-   `PEPITAKernelBackend` in the same file, `AlgorithmFamily.FF`, and an `ff`
-   key in `get_algorithm_kernels()`.
-5. Layer A keeps `select_backend`; it is the dispatch 19 tests already cover.
+1. **A rung can be named.** `dispatch.select_backend(spec, "triton")` is now
+   expressible, as is any other technology in `KernelTechnology` (which gained
+   `"torch"`, which is what the reference rung has always been). Asking for a
+   technology a spec does not use raises a `ValueError` that names what it *does*
+   have — *"has no triton rung: supported backends are reference, kernel, kernel
+   technology is torch_compile, status is kernel_verified"* — because "not
+   available" without that is the defect §4.2 removed.
+   `resolve_rung(spec, requested) -> SelectedRung` is the same decision with the
+   technology, entrypoint, status and promotion flag attached; `select_backend` is
+   its `rung` field, so there is one implementation of the policy, not two that
+   can disagree. `select_backend` keeps its old signature and its 19 tests.
+2. **`KernelRegistry` is documented as the binding layer**, in its own module
+   docstring: rungs that need `initialize`, `set_model_ref` and export
+   serialisation. It is not the training dispatch, and now says so where a reader
+   arrives.
+3. **Population is out of the side effects, all three of them (§1.3).**
+   `accelerator/families.py` holds `BINDINGS` — one row per family, naming the
+   module and the class — and `register_all()`. The ten
+   `for hw in HardwareTarget: KernelRegistry.register(...)` loops at the bottoms
+   of the kernel modules are **deleted**; the
+   `import ... eqprop_kernel_backend  # for its side effect` line in
+   `acceleration/__init__.py` is deleted; and `get_algorithm_kernels()` now
+   derives its keys from `BINDINGS` instead of keeping a second, differently-keyed
+   list. The two export CLIs no longer call it to "populate the registry".
+   **`import computronium.acceleration` now binds 12 families (was 1), and
+   `all_specs()` no longer changes that number** — the emergent property of §1.3 is
+   gone, and `tests/acceleration/test_family_bindings.py` pins it, including an
+   AST census that fails if any module calls `KernelRegistry.register` at module
+   level again.
+   - **The contrastive kernels stay unbound by default.** Ten classes share a
+     `(family, hardware)` key with the standard backends, so binding them would
+     silently displace `FAKernelBackend` and friends. `register_contrastive_kernels()`
+     remains, explicitly callable, and its import-time call is gone. That is
+     §1.3's mechanism 3 resolved by *naming* the choice, not by deleting the code.
+   - **A family has at most one binding**, because the registry keys on
+     `(family, hardware)`. `ThreeFactorKernelBackend` is a Hebbian variant and is
+     therefore reachable by direct import only — registering it would replace
+     `HebbianKernelBackend` for the whole family. Recorded rather than silently
+     changed.
+4. **One name per family, mostly.** `AlgorithmFamily` (13 values) is the binding
+   layer's namespace; spec ids are the ladder's; and the *third* vocabulary —
+   `ImplementationSpec.family` (14 values like `predictive_coding`,
+   `random_feedback`) — is the one §4.3 could not reconcile without renaming
+   64 specs, so it stays and is now joined by a **derived** family in
+   `status.family_of()`, read off the kernel module's own imports. The status
+   table prints both, and they disagree in exactly the places that are defects:
+   `algorithm.fa` declares `kernel_technology="triton"` and derives **no** family,
+   because its `kernel.py` imports no acceleration kernel module at all.
+5. **Layer A keeps `select_backend`**, as §4.3 requires.
 
 - **Done when** §0.3 items 1–3 hold, and §6.2 prints one unambiguous answer per
-  family.
+  family. **Met.** §6.2 exists:
+  `uv run python -m computronium.acceleration.status --family fa` prints one line
+  per rung — `spec, family, rung, technology, compiles, parity, gpu, status` —
+  with `none` meaning *not recorded here*, never *absent*.
 
 ### 4.4 Cross-verification as a product: parity between adjacent rungs
 
@@ -619,7 +653,27 @@ that is now a measurement: the two families `local_goodness`, `random_projection
 before the rung is offered. `triton_rung_available("pc")` is `False` on the same
 box in the same second — which is the whole of §1.5 in one line of output.
 
-### 5.4 The rest of the census
+### 5.4 §4.3 — the registry, before and after
+
+| | before | after |
+|---|---|---|
+| families bound after `import computronium` | **1** (`eqprop`, via a side-effect import) | **12**, from one table |
+| families bound after `all_specs()` | 2 — *the second system's contents changed when you queried the first* | 12 — unchanged, and locked |
+| places a binding is written down | 10 module tails + 1 side-effect import + 1 differently-keyed list | **1** (`families.BINDINGS`) |
+| `select_backend(spec, "triton")` | inexpressible — `Backend` had two values | expressible; a wrong technology names what the spec has |
+| asking "what does 'the kernel for X' mean?" | four answers (§1.5) | `status.family_of()` derives it from the kernel module's imports |
+| contrastive backends | 10 classes, registered at an import nothing performed | unbound by default, one explicit function, documented why |
+
+The status table's most useful column is the one §4.3 could not fix by
+construction: `compiles` is `none` for **49 of the 54 specs that declare
+`kernel_technology="triton"`**, because their `kernel.py` imports no acceleration
+kernel module. `algorithm.fa` and `algorithm.pc` are the two that would be looked
+for first, and both report a triton rung that nothing delivers. That is §1.4's
+"54 declare triton; 7 deliver it" as a queryable column rather than a census
+count — and it is the argument for §8.2 (derive the technology) rather than
+trusting the field.
+
+### 5.5 The rest of the census
 
 | question | answer |
 |---|---|
@@ -630,7 +684,7 @@ box in the same second — which is the whole of §1.5 in one line of output.
 | GPU tests covering them | 19, all passing here |
 | `HAS_TRITON*` names in the tree | **0** (retired in §4.2) |
 | `*KernelBackend` classes with a consumer | 0 of 13 (plus 10 contrastive, never registered) |
-| `KernelRegistry` families on plain import | 1 (`eqprop`); 2 after Layer A's spec walk |
+| `KernelRegistry` families on plain import | **12**, from one table; unchanged by `all_specs()` |
 | Layer B kernels that compile | 5 of 17 with a fixture; 4 of 13 without |
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
@@ -652,15 +706,17 @@ uv run python -m pytest tests/integration/test_triton_kernel.py \
     tests/acceleration/test_fa_activation_contract.py -q
 ```
 
-### 6.2 The check §0.3 asks for, and which does not exist yet
+### 6.2 The check §0.3 asks for — **exists since §4.3**
 
 ```bash
 uv run python -m computronium.acceleration.status --family fa
-# one line per rung: family, rung, technology, compiles, parity, GPU row, status
+uv run python -m computronium.acceleration.status --spec algorithm.pcalm --json
+# one line per rung: spec, family, rung, technology, compiles, parity, gpu, status
 ```
 
-Its absence is the clearest single measure of the confusion: there is no way to
-ask the question today. Write it in §4.3, when a rung can be named.
+Its absence was the clearest single measure of the confusion. It reads the spec
+registry, `availability.compile_report()` and the benchmark rows, and every
+column says `none` rather than guessing.
 
 ---
 
@@ -755,3 +811,22 @@ scheduled; they are the things measuring the ladder taught us.
     means the allowlist lives in `tests/acceleration/test_triton_availability.py`
     while the truth lives in `availability.py`. The day a second test needs the
     census, the allowlist belongs beside the fixtures.
+11. **There are now three family vocabularies, and §4.3 reconciled two of them.**
+    `AlgorithmFamily` (13 values, the binding layer), spec ids
+    (`algorithm.pcalm`, the ladder), and `ImplementationSpec.family` (14 values:
+    `predictive_coding`, `random_feedback`, `modular`, …). The third is the odd
+    one out: it is a *scientific grouping*, not an implementation name, and no two
+    values in it correspond to an `AlgorithmFamily` value. The status table prints
+    the derived family beside it, so the disagreement is visible; the fix is to
+    decide whether `ImplementationSpec.family` means "scientific grouping" (then
+    rename the field `scientific_family` and stop expecting it to align) or
+    "algorithm family" (then make the values align). That is a naming decision
+    with 64 edits behind it, and it belongs to whoever owns the vocabulary.
+12. **`select_backend(spec, "triton")` can select a rung whose kernels do not
+    compile.** It answers the spec's *declaration*, which is the right answer for
+    a dispatch that must not compile anything to decide, and the status table's
+    `compiles` column is where the measurement lives. But a caller that wants
+    "run triton, or fall back" has to consult `availability` as well; a
+    `resolve_available_rung(spec, requested)` that folds the two would be one call
+    instead of two, at the cost of a dispatch that compiles kernels. Deliberately
+    not done — the trade is recorded here rather than made silently.

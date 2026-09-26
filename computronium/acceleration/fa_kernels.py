@@ -21,7 +21,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    KernelRegistry,
     LocalityLevel,
 )
 
@@ -398,8 +397,6 @@ except ImportError:
 
 
 # Register the backend for all HardwareTargets
-for hw in HardwareTarget:
-    KernelRegistry.register(AlgorithmFamily.FA, hw, FAKernelBackend)
 
 
 # Standalone Triton functions for primitive-level FA acceleration
