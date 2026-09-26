@@ -1,9 +1,7 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open.** This document owns every open item as of
-Round 3 (see §12). **A new session should read §13 first** — it is the
-handoff, and it carries the next three moves with the measurement each one
-needs. `TODO34.md` keeps its 16 passes as the record of how the tree was
+**A new session works from the Round 4 brief in §0 below, and stops there.**
 made fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift this
 plan series has documented five times.
@@ -40,6 +38,56 @@ layer). Where `TODO34` removed the defects, this one closes what the removal
 **Read this, not `TODO34`'s section numbering.** The section numbers here are
 local to this document; `TODO34` §-numbers are cited only where an item was
 moved from there.
+
+---
+
+## 0. Round 4 brief — read this; everything below is history, not the work list
+
+State: tree clean at `88e21d1f`. Round 3 closed (§12).
+
+### 0.1 The rule
+
+**The code is its own correctness guard.** A guard in a test protects one
+test run; a guard in the code protects every caller, including the ones
+nobody wrote a test for. In order:
+
+1. Fix the cause in library code.
+2. Make the library fail fast at its own boundary (import-time or
+   construction-time), so the defect is caught by *every* existing test.
+3. A test or lock only for what genuinely cannot live in code.
+
+Never the reverse. Adding a lock is not a fix, and a falling count is not
+progress (§14.2 has the arithmetic behind that).
+
+**Two rules from §14.6.** A static import graph does not contain README
+tables, `python -m` invocations or CLI scripts, so "0 importers" is the
+expected shape of a *live* entry point and is never a reason to delete.
+And run the fast lane after a change, not before the next one.
+
+### 0.2 The work, in order — causes, not counts
+
+| # | Cause | Done when |
+|---|---|---|
+| **1** | The package never checks its own public surface, so five documented entry points raise `ImportError` and no gate sees it | An **import-time surface assertion** in `computronium/__init__.py`: every name in `__all__` and every README-documented module resolves. In the code, so every test importing the package inherits it. First because it is both the health number and the guard for 2–3 |
+| **2** | `CoreTrainer`/`TrainerConfig` were replaced in Sprint 7.6.10 and 10 call sites were never repointed — they rotted together because the shared entry point was never extracted | `train_task(model_factory, task, epochs)` in `core/system_trainer/`, then all 10 repointed. One site proven with a test before the other nine. `python -m computronium.experiments.cross_domain_transfer` (`README.md:1253`) runs |
+| **3** | 81 `PLW0717` long functions: `acceleration/triton_kernels.py` (5), `execution/synthesizer.py` (4), `execution/_state.py` (3), `execution/robustness.py` (3), `autoscientist/local_llm.py` (3) | Taken in bulk as **extraction**, never suppression. The `p2p` precedent: extraction finds live crashes |
+| **4** | Global per-test `timeout = 120` (`pyproject.toml:190`); the slowest test has ~30s margin and no marker of its own | Per-test margins measured, then a marker or a raise. May close §6 |
+| **5** | §7 quotes a fast-lane walltime that does not reproduce on this machine | Three back-to-back runs, record a **spread**, quote a range. Test count is the metric, not walltime |
+| **6** | Two pre-existing failures that pass alone and fail in a 3-tier `-n 4` run | Cause named, or filed as environmental. Not a regression — do not re-chase per run |
+| **7** | `test_undefined_name_lock.py` covers 2 of 15 layers because 13 files fail it | Full-tree scope, or a written blocker. Arrives free with 1 and 2 |
+
+### 0.3 Not this round
+
+`§4` presentation layer — no consumer; but the honest question is whether
+the absence of a watchable run is *why* nothing needs it. First question
+here a lock cannot answer. `§1.9`'s two test-quality rules — **decision:
+leave unwritten.** `p2p/` tests, `TODO34` §5.4's export half, repo-root
+scratch, `E402`/`SIM102` — reasons in §3.4 and §5.
+
+### 0.4 Reporting
+
+One number per item as it lands. No interim narration. If an item is
+bigger than it looks, say so once and move on.
 
 ---
 
