@@ -1084,3 +1084,33 @@ answer first is not "is it ready" (it is) or "does anything need it" but
 **"is the absence of a watchable run part of why nothing needs it."**
 That is a product question, and it is the first one in this document
 that a lock cannot answer.
+
+### 14.6 The graph that says "unreachable" was measuring the wrong graph
+
+Round 4 nearly deleted five modules on a `0 static importers` inference.
+All five are **documented capabilities** — `README.md:1189/1190/1193` list
+`eqprop_vision_parity`, `mep_tournament` and `cross_domain_transfer` in the
+experiment catalogue, `README.md:1253` gives one of them a runnable
+`python -m` command, and `README.md:1351` documents `ablation.py` as the
+home of leave-one-out and Sobol sensitivity reporting. `ablation.py` was
+nearly written off as a duplicate of `tile_research.py` because
+`create_ablation_study` appears in both — it uniquely holds
+`LeaveOneOutResult`, `SobolIndices` and `create_ablation_report`.
+
+**The rule: this repo's public surface includes documented entry points —
+README tables, `python -m` invocations, CLI scripts, config-driven
+entry — and no static import graph contains any of them.** "0 importers"
+is not deadness. It is the *expected shape* of a documented entry point.
+
+This is the same shape as `TODO34` Pass 16's swallowed `TypeError` in
+`p2p/evolution.py` and as the daemon in §5 that is silent by
+construction. Three instances now, and the common error is always the
+same: treating an absence of *code-level* evidence as evidence of
+absence. The reachability check that does not lie is "does the tree
+document it, and does it run?" — which is why the five-file deletion is
+recorded here as **reverted, not merely declined**.
+
+Corollary for the locks: `test_undefined_name_lock.py` finds these
+imports by static analysis, and its *scope* argument in §13 is "13 files
+fail it" — which is the right reason to fix them and the wrong reason to
+leave them. Round 4 fixes them by extraction, per §14.4 rule 2.
