@@ -2,8 +2,9 @@
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
 §2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3,
-**§5.4's dispatch half**, **§5.8**, **§3.1**, **§2.3's tranche 1** and **§2.7**
-complete. §1.2–§1.4, §1.6, §2.4, §2.6, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
+**§5.4's dispatch half**, **§5.8**, **§3.1**, **§2.3's tranche 1**,
+**§2.7**, **§2.6** and **§3.2** complete or partly so. §1.2–§1.4, §1.6, §2.4,
+§3.2 (checkpoints, docs/archive), §4.2–§4.4 open, plus §5.4's export half, §5.6,
 §5.7, §5.9. **No unblocked work item is left in §5** — the rest are
 decisions; the cheapest remaining *work* is §1.6 (Pass 11 took §3.1). (Pass 9 fixed a
 live dispatch gap — `update_from_config` could not build `natural_gradient` —
@@ -23,6 +24,38 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 15 — §3.2: a calibration table that library code read from a gitignored directory
+
+`campaign._ruler_lr` decides the learning rate for every campaign that does not
+carry its own, and it read `artifacts/ruler_table.json` through a hardcoded
+`parents[2]`. Its own docstring called it "the **committed** ruler table". Two
+silent failures: the path does not exist in an installed wheel, and the
+`except` branch falls back to a flat `1e-2` — which is **10x** the calibrated
+value for the 4 of 11 tasks that measure `1e-3`. A fresh clone trained them
+wrong, with a log line as the only signal.
+
+**The find that generalises.** The first fix — move the table beside
+`campaign.py`, read it from `__file__` — was correct in the source tree and
+would still have shipped a wheel with no table: `include-package-data = true`
+resolves through `MANIFEST.in` or a VCS plugin and this project has neither.
+Built a wheel to check, found **zero** `.json` files in it, added
+`[tool.setuptools.package-data]`, rebuilt, confirmed. I asserted the packaging
+worked; measuring it is what found out it didn't.
+
+**And the lock was wrong first.** `test_ruler_table_lock.py` reconstructs the
+path from `campaign.__file__` — so it passed while the code pointed back at
+`artifacts/`, because the artifacts copy still existed on this machine.
+`_ruler_table_path()` now exists so the lock reads the path the code opens.
+Three mutations are checked; the first two were missed by the first version.
+
+Also answered §3.2's actual question per class: `data/` (878M) is entirely
+public datasets fetched by the loaders, so "re-derivable from a seed + task id"
+is the wrong question for it; `checkpoints/` (24M) has **no** provenance and
+**no** referrers, and is now the open item rather than a footnote.
+
+Fast lane **3323 passed**. The `data/` half of the question is closed by
+measurement rather than by a document nobody would read.
 
 ### Pass 14 — §2.6: provenance that was shaped like provenance and wasn't
 
@@ -940,19 +973,70 @@ Lock: `tests/property/test_module_shadowing_lock.py` — no `X.py` may coexist
 with `X/` in the same parent directory, with the scan-population assertion
 (§0.6 / §5.4's lesson) so a scan that resolves nothing cannot pass.
 
-### 3.2 Repository hygiene — P2
+### 3.2 Repository hygiene — P2 — **partly DONE** (Pass 15)
 
 - Repo is **7.9G**: `.venv` 6.7G (ignored), `data/` 878M, `logs/` 60M,
   `artifacts/` 50M, `checkpoints/` 24M, `docs/` 8.0M. Git pack is 20.7M.
 - Ignore status verified: `data/`, `logs/`, `artifacts/`, `checkpoints/` are all
   ignored; `docs/figures/` is **tracked** (correct — it is the pinned gallery,
   re-pinned deliberately in this pass).
-- The open question is not tracking but **reproducibility**: a research artifact
-  nobody can regenerate is a finding. Confirm the `data/` and `artifacts/`
-  contents are re-derivable from a seed + task id, and document the command.
 - `docs/archive/` is 5.1M of superseded plans. The web-UI era already had one
   archival pass (`0c8e5a2a`); decide whether archive lives in-tree or in a
-  cold store, and record the decision.
+  cold store, and record the decision. **Still open.**
+
+#### The reproducibility question, answered by measurement
+
+The item asked to "confirm the `data/` and `artifacts/` contents are
+re-derivable from a seed + task id, and document the command". Asked per
+class, because the answer differs sharply:
+
+| Class | Size | Re-derivable? | Command |
+|---|---|---|---|
+| `data/` | 878M | **Yes, by construction** — every entry is a public dataset (CIFAR-10/100, SVHN, MNIST/Fashion/KMNIST, USPS, Citeseer, Cora) loaded through `domains/vision.py` with `download=` on the loader. Nothing here is *generated*, so the item's "seed + task id" framing is the wrong question for 878M of the repo. | implicit: any loader that names the dataset fetches it |
+| `artifacts/ruler_table.json` | 2.9K | **Yes, and it has to be — library code depends on it.** See below. | `scripts/probes/ruler_calibration.py` |
+| `artifacts/broad_map*` | 50M | Yes — campaign outputs, each from a `comp broad-map` / `comp continuous` invocation. | the run's own command |
+| `checkpoints/` | 24M | **No provenance at all** — `epoch_0_val_0.3416.pt`, no seed, no config, no manifest, and **no code or doc references them**. | nothing |
+
+#### The finding: a gitignored calibration table that library code reads
+
+`autoscientist/campaign.py::_ruler_lr` — which decides the learning rate for
+every campaign that does not carry its own — read
+`Path(__file__).parents[2] / "artifacts/ruler_table.json"`. Two independent
+problems, both silent:
+
+1. **The path does not exist in an installed wheel.** `parents[2]` is the repo
+   root, so this only ever worked from a source checkout. Its own docstring
+   called it "the **committed** ruler table".
+2. **The `except` branch degrades the numbers.** A missing or unreadable table
+   logs a warning and falls back to a flat `1e-2`. Measured over the table's
+   11 tasks, **4 calibrate to `1e-3`** (xor, iris, wine, and one more) — so a
+   fresh clone trained those at **10x** the calibrated learning rate, and a log
+   line is not a gate.
+
+The table now ships beside `campaign.py` and resolves from `__file__`. No task's
+resolved lr changed on this machine; what changed is that a clone and a wheel
+now get the calibrated values instead of the fallback.
+
+**The packaging half was the second-order find, and it is the part worth
+remembering.** `include-package-data = true` resolves through `MANIFEST.in` or
+a VCS plugin, and this project has **neither**. The first fix therefore looked
+correct in the source tree and would still have shipped a wheel with no table
+at all — the same silent fallback, one level down. Measured rather than
+assumed: built a wheel, found **zero** `.json` files in it, added
+`[tool.setuptools.package-data]`, rebuilt, and confirmed the table is present.
+
+`tests/property/test_ruler_table_lock.py` (17 tests) asserts the file is
+tracked by git, that every task's resolved lr equals the shipped table, that the
+path resolves inside the package, and that a `package-data` pattern covers it.
+Three mutations checked — untracked file, hardcoded `artifacts/` path, emptied
+declaration — each caught. **The first version of the lock passed the first
+two**, because it reconstructed the path from `campaign.__file__` instead of
+asking the code. `_ruler_table_path()` now exists so the lock reads the path
+the code opens; that is §0.6's lesson, and the cheapest possible instance of it.
+
+**Still open in this item**: `checkpoints/` (24M, zero provenance, zero
+referrers — either give them a manifest or delete them), and the `docs/archive/`
+decision above.
 
 ### 3.3 Finish `TODO33`'s open item — P3
 
@@ -1279,9 +1363,17 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3 tranche 1 **done** (Pass 12, 671→353, ratchet live); 2.4 open |
+| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 3.2 **partly done** (Pass 15); 2.3 tranche 1 **done** (Pass 12, 671→353, ratchet live); 2.4 open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
+
+**Pass 15's lesson, which generalises past §3.2.** Three of the last four
+passes turned on a claim that was asserted rather than measured, and in every
+case the measurement was cheap next to the claim: a wheel build (30s) proved
+the packaging dropped the table;  (0.1s) proved  was
+unreachable; a count per rule (0.2s) proved an ignore suppressed nothing. The
+ratchet in Pass 12 and the wheel assertion in Pass 15 are the same instinct
+applied twice: when something claims to work, make the claim executable.
 
 **Recommended next step**: there is no unblocked *work* item left in §5 —
 what remains is §5.4's export half, §5.6 and §5.7, and all three are
