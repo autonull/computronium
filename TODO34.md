@@ -24,6 +24,33 @@ starting it.
 
 ## Summary of Completed Work
 
+### Pass 14 — §2.6: provenance that was shaped like provenance and wasn't
+
+`emit_run_record` ran `git rev-parse HEAD` with no `cwd`. Every demo that
+`monkeypatch.chdir`s into a tmp_path before emitting therefore ran git outside
+a work tree, the handler swallowed the failure, and the record was written with
+`"unknown"` where its commit should be — **shaped like it had provenance and
+carrying none**. `d24_evolution_search.json` had been that way since
+`b5a1ff1b`; 28 of 29 records had a real commit, and the one that didn't is
+what made it findable.
+
+Two lessons worth more than the fix:
+
+* **A handler with a fallback is not a value that is right.** `"unknown"` is a
+  string, so the record validated, the figure rendered, and the lock passed.
+  The failure mode was silent *by construction* — the fallback existed to avoid
+  a crash and in doing so removed the only signal that anything went wrong.
+* **A misleading key name is a latent API.** `config_sha256` hashes the
+  **data**. The next drift lock written against §2.6's original suggestion
+  would reach for it to answer "did the config change?" and get a digest that
+  only moves when the numbers move — and a second emitter in the repo already
+  uses the same name for a real config hash.
+
+Locked in the fast lane (88 tests, 0.8s) over the *committed* records, because
+`test_gallery_lock.py` only runs at round close and provenance that decays
+between round closes needs a per-commit gate. Fast lane **3306 passed**.
+
+
 ### Pass 13 — §2.7: the item's own premises were wrong, and it was a live bug
 
 §2.7 asked which convention `activations[i+1]` followed and warned that the
@@ -837,16 +864,59 @@ actually uses it; until then the lock is what protects the invariant, and
 that is the cheaper arrangement. Recorded so nobody "discovers" the
 hard-dependency later and re-breaks a property that currently holds.
 
-### 2.6 Keep the science honest when the numbers move — P2
+### 2.6 Keep the science honest when the numbers move — P2 — **partly DONE** (Pass 14)
 
 0.3 changed every energy-based result in the repo, and the demo records had to
 be re-pinned (`docs/figures/run_records/*.json` + `manifest.json`). That is
 correct behaviour, but it is manual and easy to skip.
 
 - When a fix changes numerics, the PR description should state which pinned
-  artifacts moved and why.
-- Consider recording the settle horizon in the run record so a future drift
-  lock can distinguish "the algorithm changed" from "the environment changed".
+  artifacts moved and why. **Held to from here on**: the last two passes that
+  touched numerics (§2.7, this one) each say in the commit body exactly which
+  artifacts moved — and §2.7's says *none*, which is the claim worth making.
+- ~~Consider recording the settle horizon in the run record so a future drift
+  lock can distinguish "the algorithm changed" from "the environment
+  changed".~~ **Re-scoped by measurement.** The records already carry
+  `provenance`, and reading it found two things the item did not anticipate:
+
+**The provenance that existed was not working.** `emit_run_record` shells out
+to `git rev-parse HEAD` with **no `cwd`**, and any demo that
+`monkeypatch.chdir`s into a tmp_path before emitting runs git outside a work
+tree. The handler catches it and records the string `"unknown"`, so the record
+is *shaped* like it has provenance and carries none.
+`d24_evolution_search.json` had been that way since `b5a1ff1b` — and it was
+only visible because 28 of 29 records had a real commit and one did not. `cwd`
+is now pinned to the repo root; only `d24`'s provenance moved, its data
+payload byte-identical, so no manifest re-pin was owed.
+
+**`config_sha256` is a hash of the data, not of the config.** The name promises
+exactly what this item asks for, so the drift lock it anticipates would reach
+for it to answer "did the configuration change?" and get a digest that moves
+only when the numbers move. Worse, `experiments/joint/z3_fixed_weights.py`
+uses the same key name for a *genuine* config hash, so two conventions already
+collide. Renaming it is not free (every record, and the emitter's docstring),
+so it is **pinned as-is** with a test that states what the field is, which is
+the cheap half and stops the next reader building on the name.
+
+**Lock.** `tests/property/test_gallery_provenance_lock.py` — 88 tests, 0.8s, in
+the **fast lane** and reading the *committed* records.
+`tests/integration/test_gallery_lock.py` validates freshly-emitted records
+after the demos run, which is a round-close concern; provenance that decays
+between round closes needs a per-commit gate. Three invariants: every
+`git_commit` is a real commit and an **ancestor of HEAD** (catches a record
+emitted from another clone or branch), provenance is *exactly* the emitter's
+two keys (a field the lock does not read is a field nobody checks), and
+`config_sha256` still hashes the canonicalised data. Mutation-checked by
+restoring `"unknown"` into `d24` and by the ancestor check.
+
+**Still open — the environment fingerprint.** `torch` / `CUDA` / `python`
+versions, so a drift lock can tell "the environment changed" from "the code
+changed". The machinery already exists and is unused here:
+`computronium.utils.capture_environment()` and `deps_hash()`. It is *not* done
+because backfilling a version string into an existing record would be
+**fabricating provenance** rather than recording it — it needs every record
+re-emitted, i.e. every demo re-run. That is §1.6's slow pass, and the two
+should be taken together.
 
 ---
 
