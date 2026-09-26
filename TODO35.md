@@ -1,10 +1,11 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **CLOSED.** Everything this document still owed has moved to
-**`TODO36.md` — One Acceleration System**, which is the series' single live
-work list: §4.1–4.6 are the acceleration system this document kept tripping
-over, §4.7–4.12 are the remainder of §16 and §17.8, and §0.2 asks the
-survive-or-merge question about the two kernel layers before any work starts.
+**`TODO36.md` — One Acceleration Ladder**, which is the series' single live
+work list: §4.1–4.7 complete the acceleration ladder this document kept
+tripping over, §4.8–4.13 are the remainder of §16 and §17.8, and §0.2 records
+the distinction the whole plan turns on -- redundancy at the implementation
+rung is the product, zero redundancy in the plumbing.
 §17.9 is the rule about deletion and §17.10–17.11 are the corrections to
 Round 5's own claims; both are cited by `TODO36.md` and are the reason it
 starts with a measurement instead of a decision.
