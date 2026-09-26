@@ -654,13 +654,38 @@ reads like a flake.
 
 ### 4.13 The knowledge layer's `__getattr__` population
 
-`TODO35.md` §17.8-7. `knowledge/kb.py` has a module `__getattr__` whose names
-the import lock treats as excluded because they are not statically derivable.
-`KB` was one of them — a name that resolved to nothing. Enumerate the
-population once, by hand, in the module's docstring, so the exclusion is a list
-someone checked rather than a class nobody looked at.
+**DONE 2026-09-26.** `TODO35.md` §17.8-7. The import lock excluded "star-import
+shims, whose names are not statically derivable at all" — a *class* nobody looked
+at, and it cost a live silent no-op.
 
----
+- **The population, enumerated in the lock's own docstring, and checked.** Ten
+  modules have a module-level `__getattr__`, in three shapes and no fourth:
+  **9 table-driven** (names come from a table in the same file, so statically
+  derivable) — `_LAZY` ×4 (root, `cli`, `core`, `execution`), `_PRIMITIVES` ×3
+  (`primitives`, `primitives/geometry`, `primitives/substrate`), `_ALGORITHMS` ×1
+  (`algorithms`) — and **2 hand-written single-name** shims,
+  `knowledge/__init__.py` and `knowledge/kb.py`, each resolving exactly
+  `DEFAULT_KB` so the SQLite file stays off the import path.
+  `test_getattr_population_is_enumerated` re-derives the list from the tree and
+  fails if the two disagree, so a new `__getattr__` cannot join the exclusion
+  silently. `test_hand_written_getattr_modules_resolve_exactly_one_name` pins the
+  "exactly one name" claim from both sides.
+- **The class was hiding a real defect, exactly as §4.2's flags hid theirs.**
+  `computronium/validation/gradient_check.py` did
+  `from computronium.knowledge.kb import KB` inside
+  `try: ... except Exception: pass`. `KB` resolved to nothing (the module resolves
+  `DEFAULT_KB`), and the method it then called, `record_gradient_fingerprint`, is
+  not defined by any `KnowledgeBase` — so the block had never run and never could,
+  and the gradient fingerprint it claims to record is not recorded anywhere.
+  **The block is deleted**, the file's `KNOWN_BLOCKED` exemption is dropped, and
+  the lock's own message ("every import in it resolves now — drop the entry and
+  re-pin the lock") is what said so.
+  **This is the one deletion in the plan that is not a rung**, and the reasoning is
+  worth stating: §3 protects implementations and their parity pairs, not a
+  `try/except` that swallows an `AttributeError` and hides a missing capability.
+- **The capability itself is still owed.** No `KnowledgeBase` has
+  `record_gradient_fingerprint`; if gradient fingerprints should be recorded, that
+  is a method to write, and the question stays with `TODO35.md` §17.8-6.
 
 ## 5. Results (filled in as §4 lands; empty means not measured)
 
@@ -780,6 +805,7 @@ trusting the field.
 | Native-model names silently substituted by the EqProp fallback | **2 closed** (`directed_ep`, `lemma_mlp`); 1 open (`diff_target_prop`, no factory exists) |
 | Adjacent-rung defects found by §4.4 | **2** — an EqProp fallback that disagreed with its kernel, and a triton Muon rung running a retired algorithm behind a tautological test |
 | Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
+| Modules excluded from the import lock by a module `__getattr__` | 10, enumerated and checked (§4.13) |
 | `PLW0717` findings | 79, opportunistic only (§7) |
 
 ---

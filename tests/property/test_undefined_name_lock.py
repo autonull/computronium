@@ -20,11 +20,37 @@ Two locks:
 
   Three populations are out of the lock's reach by construction, and saying
   so is the point: package ``__init__`` re-export surfaces (``__all__`` /
-  ``_LAZY`` -- they have their own locks), star-import shims, whose names are
-  not statically derivable at all, and ``TYPE_CHECKING``-block imports, which
-  are pyright's population and are checked as such by the widened per-commit
-  gate. What is left is the class that has no other gate: an import that
-  fails at runtime.
+  ``_LAZY`` -- they have their own locks), ``TYPE_CHECKING``-block imports,
+  which are pyright's population and are checked as such by the widened
+  per-commit gate, and module-level ``__getattr__``. What is left is the class
+  that has no other gate: an import that fails at runtime.
+
+  **The ``__getattr__`` population, enumerated (TODO36 §4.13).** It used to be
+  described as "star-import shims, whose names are not statically derivable at
+  all" -- a class nobody had looked at, which is how
+  ``computronium/validation/gradient_check.py`` got away with
+  ``from computronium.knowledge.kb import KB`` inside a bare
+  ``except Exception: pass``: a name that resolved to nothing, a call to a
+  method that does not exist, and therefore a block that had never run and
+  never could. There are exactly two shapes, and no third:
+
+  * **9 table-driven lazy shims** -- every one resolves its names from a table
+    declared in the same file, so the population *is* statically derivable:
+
+    - ``_LAZY`` (4): ``computronium/__init__.py``, ``cli``, ``core``,
+      ``execution``. The root ``__all__``/``_LAZY`` wiring lock covers these.
+    - ``_PRIMITIVES`` (3): ``primitives``, ``primitives/geometry``,
+      ``primitives/substrate``.
+    - ``_ALGORITHMS`` (1): ``algorithms``.
+
+    The last four have no lock of their own, so they are named here.
+  * **2 hand-written single-name modules**, each resolving exactly one name:
+    ``computronium/knowledge/__init__.py`` and ``computronium/knowledge/kb.py``
+    both resolve ``DEFAULT_KB`` and nothing else, so that constructing the
+    ``KnowledgeBase`` (and its SQLite file) stays off the import path.
+
+  :func:`test_getattr_population_is_enumerated` keeps that list true, so a new
+  ``__getattr__`` cannot join the exclusion silently.
 
 The lock covers the whole of ``computronium/``. It was scoped to ``core`` +
 ``ontology`` for two rounds because 13 files failed it, and scoping a lock to
@@ -62,12 +88,6 @@ KNOWN_BLOCKED = {
         "core.pipeline.run_train_step, which has no kernel arm, so the "
         "exported weights would not be the ones a kernel trained. TODO35 "
         "§17.8-1 carries both missing contracts."
-    ),
-    "computronium/validation/gradient_check.py": (
-        "the KB fingerprint block is inside `try: ... except Exception: pass` "
-        "and calls record_gradient_fingerprint, which no KnowledgeBase "
-        "defines. It has therefore never run; TODO35 §17.8-6 carries the "
-        "question of what that write should be."
     ),
 }
 
@@ -255,3 +275,61 @@ def test_every_known_blocked_file_still_blocks_for_the_stated_reason() -> None:
             f"{src} is exempt from the import lock but every import in it "
             f"resolves now — drop the entry and re-pin the lock ({reason})"
         )
+
+
+#: Modules whose ``__getattr__`` names are not statically derivable, and why.
+#: Mirrors the enumeration in this module's docstring; the test below fails if the
+#: two disagree, which is the point of writing it down.
+GETATTR_SHIMS: dict[str, str] = {
+    "computronium/__init__.py": "_LAZY",
+    "computronium/cli/__init__.py": "_LAZY",
+    "computronium/core/__init__.py": "_LAZY",
+    "computronium/execution/__init__.py": "_LAZY",
+    "computronium/algorithms/__init__.py": "_ALGORITHMS",
+    "computronium/primitives/__init__.py": "_PRIMITIVES",
+    "computronium/primitives/geometry/__init__.py": "_PRIMITIVES",
+    "computronium/primitives/substrate/__init__.py": "_PRIMITIVES",
+    "computronium/knowledge/__init__.py": "DEFAULT_KB",
+    "computronium/knowledge/kb.py": "DEFAULT_KB",
+}
+
+
+#: Table names a module-level ``__getattr__`` may resolve from. A module whose
+#: names come from a table in the same file is statically derivable, which is the
+#: whole difference between the first shape and the hand-written one.
+_LAZY_TABLES = ("_LAZY", "_PRIMITIVES", "_ALGORITHMS")
+
+
+def _getattr_modules() -> dict[str, str]:
+    """Every module with a module-level ``__getattr__``, and the source of its names."""
+    found: dict[str, str] = {}
+    for path in sorted(Path("computronium").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "\ndef __getattr__(" not in source:
+            continue
+        found[str(path)] = next(
+            (table for table in _LAZY_TABLES if table in source), "hand-written"
+        )
+    return found
+
+
+def test_getattr_population_is_enumerated() -> None:
+    """§4.13: the exclusion is a list somebody checked, not a class nobody looked at."""
+    found = _getattr_modules()
+    assert set(found) == set(GETATTR_SHIMS), (
+        f"__getattr__ population changed: {sorted(set(found) ^ set(GETATTR_SHIMS))}"
+    )
+    for module, kind in GETATTR_SHIMS.items():
+        expected = kind if kind in _LAZY_TABLES else "hand-written"
+        assert found[module] == expected, f"{module}: {found[module]} != {expected}"
+
+
+def test_hand_written_getattr_modules_resolve_exactly_one_name() -> None:
+    """Each hand-written shim must resolve the one name the docstring claims."""
+    from computronium import knowledge
+    from computronium.knowledge import kb
+
+    for module in (knowledge, kb):
+        with pytest.raises(AttributeError):
+            module.KB  # ruff: ignore[useless-expression]  (the name that resolved to nothing)
+        assert module.DEFAULT_KB is not None
