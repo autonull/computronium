@@ -1,7 +1,10 @@
 # TODO35: The Proveable Remainder
 
-**Status**: **ACTIVE — open. Round 5 is closed (§17); a new session works from
-§17.8, and §17.9 before deleting anything. **§17.11 corrects §17.10**: there
+**Status**: **Round 5 is closed (§17).** The acceleration work this document
+kept deferring now has its own plan: **`TODO36.md` — One Acceleration System**,
+which unifies the two kernel layers the audit series kept tripping over, and
+which owns §17.8-1, §17.8-6 and §17.10's compile check. A session working this
+document works §17.8 minus those three, and §17.9 before deleting anything. **§17.11 corrects §17.10**: there
 are two acceleration layers and the accelerated one works. Everything before §17 is the record of why the decisions
 were made, not the work list. Round 4 closed at §15.
 `TODO34.md` keeps its 16 passes as the record of how the tree was made
