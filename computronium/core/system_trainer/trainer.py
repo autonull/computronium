@@ -11,6 +11,7 @@ import torch
 
 from computronium.core.logging import get_logger
 from computronium.core.losses import perplexity
+from computronium.core.system_trainer._resources import EpochResource, EpochResources
 from computronium.core.system_trainer._resume import (
     DOMAIN_EPOCH,
     TrainerSnapshot,
@@ -57,6 +58,10 @@ class SystemTrainer:
     current_epoch: int = field(default=0, init=False)
     global_step: int = field(default=0, init=False)
     history: list[dict[str, float]] = field(default_factory=list, init=False)
+    # Per-epoch cost, kept out of ``history`` on purpose: history is a claim
+    # about the model and must be bit-for-bit reproducible from a seed, and
+    # wall time and peak memory are not.
+    epoch_resources: list[EpochResource] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         self._setup_device()
@@ -67,6 +72,13 @@ class SystemTrainer:
         self._ema: dict[str, Tensor] = {}
         self._best_theta: dict[str, Tensor] | None = None
         self._best_score = -float("inf")
+        self._resources = EpochResources(
+            system=self.system,
+            device=self.device,
+            track_flops=self.config.track_flops,
+            track_memory=self.config.track_memory,
+            max_epoch_time=self.config.max_epoch_time,
+        )
 
     def _harvest_enabled(self) -> bool:
         return self.config.harvest_mode is not None
@@ -158,7 +170,8 @@ class SystemTrainer:
         epoch_acc = 0.0
         epoch_energy = 0.0
         num_samples = 0
-        num_samples = 0
+        budget = self.config.max_epoch_time
+        self._resources.start()
 
         for batch_idx, (x, y) in enumerate(self.train_data):
             if (
@@ -181,7 +194,7 @@ class SystemTrainer:
 
             metrics = self.system.train_step(x, y)
             batch = x.size(0)
-
+            self._resources.note_step(batch)
             epoch_loss += metrics.get("loss", 0.0) * batch
             epoch_acc += (
                 metrics.get("free_accuracy", metrics.get("nudged_fit_accuracy", 0.0))
@@ -205,13 +218,24 @@ class SystemTrainer:
                     ),
                     metrics.get("energy", 0.0),
                 )
+            if budget and self._resources.over_budget:
+                logger.info(
+                    "Epoch %d stopped after batch %d: max_epoch_time=%.1fs",
+                    self.current_epoch,
+                    batch_idx,
+                    budget,
+                )
+                break
 
+        self._resources.stop()
         denom = max(num_samples, 1)
         avg_loss = epoch_loss / denom
         avg_acc = epoch_acc / denom
         avg_energy = epoch_energy / denom
 
-        epoch_metrics = {
+        self.epoch_resources.append(self._resources.record(self.current_epoch))
+
+        epoch_record: dict[str, float] = {
             "epoch": self.current_epoch,
             "train_loss": avg_loss,
             "train_acc": avg_acc,
@@ -220,10 +244,9 @@ class SystemTrainer:
         }
 
         if self.val_data is not None:
-            val_metrics = self.validate()
-            epoch_metrics.update(val_metrics)
+            epoch_record.update(self.validate())
 
-        self.history.append(epoch_metrics)
+        self.history.append(epoch_record)
         self._harvest_snapshot_epoch()
         self.current_epoch += 1
 
@@ -235,7 +258,7 @@ class SystemTrainer:
             avg_energy,
         )
 
-        return epoch_metrics
+        return epoch_record
 
     def validate(self) -> dict[str, float]:
         """Run validation epoch."""

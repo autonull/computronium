@@ -302,7 +302,6 @@ def backprop_baseline(  # baseline signature is the report contract
         track_flops=True,
         track_memory=True,
         record_results=False,
-        allow_bptt_fallback=True,
     )
     probes: list[dict[str, float]] = []
     metrics: dict[str, object] = {}
@@ -781,7 +780,6 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
         track_flops=True,
         track_memory=True,
         record_results=False,
-        allow_bptt_fallback=True,
     )
 
     models: dict[str, object] = {}

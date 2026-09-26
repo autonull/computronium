@@ -44,6 +44,10 @@ class SystemTrainerConfig:
         harvest_decay: Per-batch EMA decay for ``harvest_mode="ema"``.
         harvest_every_n: Evaluation cadence (batches) for
             ``harvest_mode="best_snapshot"``.
+        max_epoch_time: Per-epoch wall-clock budget in seconds; ``0`` is
+            unlimited. An epoch that overruns it stops early and is flagged
+            ``epoch_time_budget_stopped``, so a consumer of that epoch's
+            resource metrics knows they describe a partial epoch.
     """
 
     max_epochs: int = 10
@@ -62,6 +66,7 @@ class SystemTrainerConfig:
     harvest_mode: Literal["ema", "best_snapshot"] | None = None
     harvest_decay: float = 0.99
     harvest_every_n: int = 10
+    max_epoch_time: float = 0.0
 
 
 class _DataProvider(Protocol):

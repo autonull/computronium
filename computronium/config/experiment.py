@@ -197,9 +197,6 @@ class TrainingConfig:
     early_stopping_metric: str
     early_stopping_mode: Literal["min", "max"]
 
-    # Bio-rule honesty
-    allow_bptt_fallback: bool
-
     # Validation / profiling
     run_validation: bool
     profile_epochs: bool
@@ -448,7 +445,6 @@ def _base_training() -> TrainingConfig:
         early_stopping_patience=None,
         early_stopping_metric="val_loss",
         early_stopping_mode="min",
-        allow_bptt_fallback=True,
         run_validation=True,
         profile_epochs=False,
         use_kernel=False,

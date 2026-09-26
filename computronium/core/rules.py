@@ -37,9 +37,12 @@ if TYPE_CHECKING:
 __all__ = [
     "MODEL_NAME_RULES",
     "RULES",
+    "RULE_SYSTEM_CONFIG_KEYS",
     "routing_system",
     "rule_for",
+    "rule_for_name",
     "rule_system",
+    "rule_system_from_config",
 ]
 
 RULE_SYSTEMS: Final[Mapping[str, Callable[..., System]]] = MappingProxyType({
@@ -69,6 +72,7 @@ MODEL_NAME_RULES: Final[Mapping[str, str]] = MappingProxyType({
     "fa": "fa",
     "fa_mlp": "fa",
     "feedback_alignment": "fa",
+    "contrastive_hebbian_learning": "hebbian",
     "hebbian": "hebbian",
     "hebbian_mlp": "hebbian",
     "pc": "pc",
@@ -76,6 +80,7 @@ MODEL_NAME_RULES: Final[Mapping[str, str]] = MappingProxyType({
     "pepita": "pepita",
     "snn": "snn",
     "tile_mlp": "backprop",
+    "target_prop": "tp",
     "tp": "tp",
     "tp_mlp": "tp",
 })
@@ -153,3 +158,78 @@ def rule_system(
         known = ", ".join(RULES)
         raise KeyError(f"no learning-rule system for {rule!r}; known rules: {known}")
     return factory(input_dim, hidden_dims, output_dim, lr=lr, device=device)
+
+
+def rule_for_name(name: str) -> str:
+    """The learning rule a caller means, whether it named a rule or a model.
+
+    Sweeps and probes reach for rules under three vocabularies -- the rule
+    name (``"ep"``), the zoo model name (``"eqprop_mlp"``) and the
+    propagator name a family is written with (``"feedback_alignment"``) --
+    and all three are in :data:`MODEL_NAME_RULES`. Accepting any of them is
+    what lets one probe path serve a rule, a zoo arm and a family.
+
+    Raises:
+        KeyError: The name is neither, with both sets of known names in the
+            message. A probe that cannot name a rule must fail here rather
+            than train with a rule nobody asked for.
+    """
+    if name in RULES:
+        return name
+    return rule_for(name)
+
+
+RULE_SYSTEM_CONFIG_KEYS: Final[frozenset[str]] = frozenset({
+    "hidden_dim",
+    "num_layers",
+    "learning_rate",
+})
+"""The probe-config keys :func:`rule_system_from_config` can deliver.
+
+A sweep samples a config per rule, and the rule systems are deliberately
+narrow: an MLP over the task's flattened input whose credit assignment is
+the named rule. A sampled key outside this set has no consumer on the System
+path, which is a defect the sweep should see rather than a knob quietly
+discarded -- so the leftover keys are reported, not dropped.
+"""
+
+
+def rule_system_from_config(
+    rule: str,
+    input_dim: int,
+    output_dim: int,
+    config: Mapping[str, object],
+    *,
+    device: str = "cpu",
+    default_hidden_dim: int = 256,
+    default_layers: int = 2,
+) -> tuple[System, list[str]]:
+    """Build ``rule``'s system from a probe config, and report what it missed.
+
+    Args:
+        rule: A name :func:`rule_for_name` accepts.
+        input_dim: Flattened input width of the task.
+        output_dim: Task output width.
+        config: A sampled probe config; only :data:`RULE_SYSTEM_CONFIG_KEYS`
+            is delivered, the rest is returned.
+        device: Device the system is built on.
+        default_hidden_dim: Width used when the config names none.
+        default_layers: Depth used when the config names none.
+
+    Returns:
+        ``(system, phantom_keys)`` -- the composed system, and the sorted
+        sampled keys it could not consume.
+    """
+    width = int(config.get("hidden_dim", default_hidden_dim))
+    depth = int(config.get("num_layers", default_layers))
+    lr = float(config.get("learning_rate", 1e-3))
+    system = rule_system(
+        rule,
+        input_dim,
+        output_dim,
+        hidden_dims=(width,) * max(1, depth),
+        lr=lr,
+        device=device,
+    )
+    phantom = sorted(key for key in config if key not in RULE_SYSTEM_CONFIG_KEYS)
+    return system, phantom

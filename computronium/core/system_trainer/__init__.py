@@ -38,6 +38,7 @@ from computronium.core.continual import (
     run_continual_learning_suite,
     run_continual_train_step,
 )
+from computronium.core.system_trainer._resources import EpochResource
 from computronium.core.system_trainer._resume import TrainerSnapshot, fold_in
 from computronium.core.system_trainer.config import (
     SystemTrainerConfig,
@@ -74,14 +75,17 @@ from computronium.core.system_trainer.spec import (
 from computronium.core.system_trainer.train_task import (
     FlattenLoader,
     TaskBatches,
+    flat_input_dim,
     train_on_task,
     train_task,
 )
 from computronium.core.system_trainer.trainer import StepCallback, SystemTrainer
 
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
+    "EpochResource",
     "FlattenLoader",
     "TaskBatches",
+    "flat_input_dim",
     "train_on_task",
     "train_task",
     "SystemTrainer",

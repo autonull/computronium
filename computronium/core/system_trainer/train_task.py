@@ -34,6 +34,7 @@ __all__ = [
     "FlattenLoader",
     "TaskBatches",
     "final_metrics",
+    "flat_input_dim",
     "train_on_task",
     "train_task",
 ]
@@ -135,7 +136,7 @@ def _is_pair(batch: object) -> bool:
     return isinstance(batch, (tuple, list)) and len(batch) == 2
 
 
-def _flat_input_dim(input_dim: object, task: str) -> int:
+def flat_input_dim(input_dim: object, task: str) -> int:
     """The flattened input width, which is what an MLP geometry is sized by.
 
     Vision tasks report their unflattened shape (the registry's
@@ -234,7 +235,7 @@ def train_on_task(
     task.setup()
     return SystemTrainer(
         system=model_factory(
-            _flat_input_dim(task.input_dim, task.name), task.output_dim
+            flat_input_dim(task.input_dim, task.name), task.output_dim
         ),
         config=config,
         train_data=TaskBatches(task, "train", config.batch_size, batches_per_epoch),

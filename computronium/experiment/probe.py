@@ -2,9 +2,10 @@
 
 A **probe** is one ``(model, task, config, seed)`` training run. The layer's
 :class:`ProbeDriver` is a thin adapter over the existing training path
-(default ``CoreTrainer`` via ``cli``); :func:`run_probe` is the single point
-where a probe's per-seed record is normalized once into a
-:class:`ProbeResult`.
+(default :class:`CoreTrainerDriver`, which composes a learning rule's system
+and trains it through :class:`~computronium.core.system_trainer.SystemTrainer`);
+:func:`run_probe` is the single point where a probe's per-seed record is
+normalized once into a :class:`ProbeResult`.
 
 ``run_verify`` (existing in ``cli/run.py``) already emits per-seed JSONL with
 CI/effect-size metadata; this module consumes that record shape rather than
@@ -13,13 +14,12 @@ re-implementing a training loop.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
-
-from computronium.core._caching import DatasetCache, ModelCache
 
 # Whether probes persist results to the knowledge layer (KnowledgeBase /
 # FailureTracker) by default. Environment-controllable so tests can isolate.
@@ -60,9 +60,9 @@ def _dominant_training_path(
 ) -> str:
     """Return the most-frequent credit-assignment path observed, or ``""``.
 
-    ``paths`` is the per-epoch ``training_paths`` dict recorded by
-    ``CoreTrainer`` (path name → step count). The dominant path is the probe
-    headline; the full map is preserved separately as ``training_paths``.
+    ``paths`` is the per-epoch ``training_paths`` dict the trainer records
+    (route name → step count). The dominant route is the probe headline; the
+    full map is preserved separately as ``training_paths``.
     """
     if not isinstance(paths, dict) or not paths:
         return ""
@@ -122,7 +122,7 @@ def field_to_dict(result: ProbeResult) -> dict[str, object]:
 class ProbeDriver(Protocol):
     """Narrow adapter over the existing training path (architecture §6.4)."""
 
-    def train(
+    def train(  # ruff: ignore[too-many-locals]
         self,
         *,
         model: str,
@@ -136,12 +136,20 @@ class ProbeDriver(Protocol):
 
 
 class CoreTrainerDriver:
-    """Drives a probe through ``CoreTrainer`` (the existing training path).
+    """Drives a probe through the System path (the existing training path).
 
-    Compute settings (worker count, tracking toggles) come from the campaign's
-    ``compute`` block and are threaded into every ``TrainerConfig`` so a probe
-    respects the operator's declared resource budget — e.g. ``num_workers: 0``
-    on a bulk overnight run spawns no DataLoader worker processes per probe.
+    Compute settings (batch size, tracking toggles, the per-epoch time
+    budget) come from the campaign's ``compute`` block and are threaded into
+    every :class:`~computronium.core.system_trainer.SystemTrainerConfig` so a
+    probe respects the operator's declared resource budget.
+
+    The driver used to reach training through ``CoreTrainer``, removed in
+    Sprint 7.6.10, so every call raised ``ImportError`` and the three sweep
+    scripts that construct it had no working path. It now composes the named
+    learning rule's system and trains it, which also removes the silent-BPTT
+    hazard the old path carried: a rule system has exactly one credit
+    assignment, and :func:`~computronium.core.system_trainer.EpochRecord`'s
+    ``training_paths`` says which one actually ran.
     """
 
     def __init__(  # driver constructor captures all campaign compute settings at once  # ruff: ignore[too-many-arguments]
@@ -155,10 +163,7 @@ class CoreTrainerDriver:
         batches_per_epoch: int | None = None,
         record_results: bool = _DEFAULT_RECORD,
         target_hardware: str | None = None,
-        allow_bptt_fallback: bool = True,
         max_epoch_time: float = 0.0,
-        dataset_cache: DatasetCache | None = None,
-        model_cache: ModelCache | None = None,
     ) -> None:
         self.num_workers = num_workers
         self.batch_size = batch_size
@@ -168,10 +173,7 @@ class CoreTrainerDriver:
         self.batches_per_epoch = batches_per_epoch
         self.record_results = record_results
         self.target_hardware = target_hardware
-        self.allow_bptt_fallback = allow_bptt_fallback
         self.max_epoch_time = max_epoch_time
-        self._dataset_cache = dataset_cache or DatasetCache()
-        self._model_cache = model_cache or ModelCache()
 
     def train(  # ruff: ignore[too-many-locals]
         self,
@@ -183,38 +185,46 @@ class CoreTrainerDriver:
         epochs: int,
         device: str,
         propagator: str | None = None,
-        allow_bptt_fallback: bool | None = None,
     ) -> dict[str, object]:
         """Train one probe and return aggregated metrics.
 
-        Uses ``TrainerConfig`` so the run follows the exact CoreTrainer path
-        (registration, data loading, tracking) used by the parity CLI. Compute
-        settings captured at construction (worker count, tracking) are applied.
+        The arm is an MLP over the task's flattened input whose credit
+        assignment is the named learning rule, so the sweep varies the rule
+        and holds the geometry. ``propagator`` overrides the rule the model
+        name implies, which is how a family is forced onto a rule its native
+        arm would not otherwise use.
 
         Args:
-            model: Registered model name.
-            task: Registered task name.
-            config: Architecture config (hidden_dim, num_layers, ...).
+            model: Zoo model name or rule name, per
+                :func:`~computronium.core.rules.rule_for_name`.
+            task: Task name understood by
+                :func:`~computronium.domains.factory.create_task`.
+            config: Sampled architecture config (``hidden_dim``, ``num_layers``,
+                ``learning_rate``; anything else is reported as a phantom knob).
             seed: Master seed.
             epochs: Training epochs.
             device: Target device.
-            propagator: Registered learning-rule propagator (e.g.
-                ``"feedback_alignment"``, ``"contrastive_hebbian_learning"``).
-                When set, the trainer drives this rule instead of letting the
-                model degrade to plain BPTT — required so a bio-rule probe
-                measures *local* cost, not backprop cost.
+            propagator: Learning rule to force, when the model name's own rule
+                is not the one under test.
 
         Returns:
-            A metrics dict with ``final_acc``, ``epoch_time_s``, flops, memory.
+            A metrics dict with ``final_acc``, ``epoch_time_s``, flops, memory,
+            and the ``training_path`` the probe actually took.
 
         Raises:
+            KeyError: The model or propagator names no known learning rule.
             RuntimeError: If training raises or returns no history.
         """
         from computronium.core.exceptions import NumericalInstabilityError
-        from computronium.core.trainer import CoreTrainer, TrainerConfig
-        from computronium.domains.registry import resolve_task
+        from computronium.core.rules import rule_for_name, rule_system_from_config
+        from computronium.core.system_trainer import (
+            SystemTrainer,
+            SystemTrainerConfig,
+            TaskBatches,
+            flat_input_dim,
+        )
+        from computronium.domains.factory import create_task
         from computronium.experiment.param_estimator import (
-            build_model_kwargs,
             estimate_param_count,
             phantom_knobs,
             resolve_native_model,
@@ -222,79 +232,61 @@ class CoreTrainerDriver:
         from computronium.utils import seed_everything
 
         seed_everything(seed, device)
-        spec = resolve_task(task)
-        model_cls = resolve_native_model(model)
-        model_kwargs = build_model_kwargs(
-            model_cls,
-            config,
-            input_dim=spec.input_dim,
-            output_dim=spec.output_dim,
-            model_name=model,
+        rule = rule_for_name(propagator or model)
+        handle = create_task(
+            task, device=device, quick_mode=False, num_workers=self.num_workers
         )
-        # Phantom-drift diagnosis: sampled tuning knobs the model cannot consume
-        # (surfaced as a sweep defect instead of silently ignored).
-        phantom = sorted(
-            phantom_knobs(
-                model_cls,
-                config,
-                input_dim=spec.input_dim,
-                output_dim=spec.output_dim,
-                model_name=model,
+        input_dim = flat_input_dim(handle.input_dim, handle.name)
+        system, phantom = rule_system_from_config(
+            rule, input_dim, handle.output_dim, config, device=device
+        )
+        # Phantom-drift diagnosis: sampled knobs the arm could not consume,
+        # from both namespaces -- the zoo model's own signature and the rule
+        # system's. Surfaced by the sweep instead of silently ignored.
+        with contextlib.suppress(KeyError, ValueError, TypeError):
+            phantom = sorted(
+                set(phantom)
+                | set(
+                    phantom_knobs(
+                        resolve_native_model(model),
+                        config,
+                        input_dim=input_dim,
+                        output_dim=handle.output_dim,
+                        model_name=model,
+                    )
+                )
             )
-        )
-        # Static parameter count under this config (fair-comparison budget).
         try:
             param_count = estimate_param_count(
-                model,
-                config,
-                input_dim=spec.input_dim,
-                output_dim=spec.output_dim,
+                model, config, input_dim=input_dim, output_dim=handle.output_dim
             )
         except Exception:  # defensive: counting must never break a probe
             param_count = 0
-        # Thread the sampled learning rate into the trainer's optimizer so
-        # trainer-driven (BPTT) models respect it — self-training models already
-        # read it from their own ``config``. The scalar is carried in
-        # ``model_kwargs`` (the OmegaConf-safe view), never a nested object.
-        learn_rate = model_kwargs.get("learning_rate")
-        opt_kwargs: dict[str, object] = (
-            {"lr": float(learn_rate)} if learn_rate is not None else {}
-        )
-        core_train_flag = self.track_energy or self.track_flops or self.track_memory
-        cfg = TrainerConfig(
-            model=model,
-            model_kwargs=model_kwargs,
-            task=task,
-            epochs=epochs,
-            seed=seed,
-            device=device,
-            propagator=propagator,
+
+        handle.setup()
+        trainer_config = SystemTrainerConfig(
+            max_epochs=epochs,
             batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            optimizer_kwargs=opt_kwargs,
-            allow_bptt_fallback=(
-                self.allow_bptt_fallback
-                if allow_bptt_fallback is None
-                else allow_bptt_fallback
-            ),
-            # Probes are disposable resource measurements: they must not write
-            # resumable checkpoints to disk (that path is for the settle-state
-            # memory lever / long runs, not shallow probes).
-            save_checkpoints=False,
-            # CoreTrainer's EnergyTracker computes flops+memory+energy under one
-            # gate; enable it when the campaign asks for any of them so the
-            # declared `compute.track` produces real values.
-            track_energy=core_train_flag,
+            val_batch_size=self.batch_size,
+            device=device,
+            track_energy=self.track_energy,
             track_flops=self.track_flops,
             track_memory=self.track_memory,
-            batches_per_epoch=self.batches_per_epoch,
+            seed=seed,
             max_epoch_time=self.max_epoch_time,
-            target_hardware=self.target_hardware,
         )
         try:
-            history = CoreTrainer(
-                cfg, dataset_cache=self._dataset_cache, model_cache=self._model_cache
-            ).fit()
+            trainer = SystemTrainer(
+                system=system,
+                config=trainer_config,
+                train_data=TaskBatches(
+                    handle, "train", self.batch_size, self.batches_per_epoch
+                ),
+                val_data=TaskBatches(
+                    handle, "val", self.batch_size, self.batches_per_epoch
+                ),
+            )
+            history = trainer.fit()
         except NumericalInstabilityError as exc:
             self._record(
                 model=model,
@@ -334,65 +326,60 @@ class CoreTrainerDriver:
             )
 
         last = history[-1]
-        total_time = sum(float(m.epoch_time or 0.0) for m in history)
-        last_extra = getattr(last, "extra", {}) or {}
-        # Liveness-gate endpoints (plan §5 cycle 1): the broad sweep marks a
-        # rule "dead" iff loss does not decrease across the run. Expose both
-        # ends so the sweep (and the KB sink) can gate without the full series.
-        loss_0 = float(history[0].train_loss or 0.0)
-        loss_final = float(last.train_loss or 0.0)
-        # Convergence diagnostic: max accuracy over the run and accuracy at the
-        # halfway epoch. A rule with low `final_acc` but a rising, non-flat
-        # trajectory (best_epoch_acc >> final_acc, or acc_at_half << final_acc)
-        # is *mid-convergence* — a training-budget (epochs) issue — not a model
-        # failure. This distinguishes "needs more epochs" from "never learns".
-        accs = [float(m.train_acc or 0.0) for m in history if m.train_acc]
+        cost = trainer.epoch_resources[-1] if trainer.epoch_resources else None
+        total_time = sum(c.epoch_time_s for c in trainer.epoch_resources)
+        paths = dict(cost.training_paths) if cost else {}
+        accs = [float(m["train_acc"]) for m in history if m.get("train_acc")]
         half_idx = max(1, len(accs) // 2) if accs else 0
-        metrics = {
-            "final_acc": float(last.train_acc or last.val_acc or 0.0),
-            "final_train_loss": float(last.train_loss or 0.0),
+        unavailable = sorted(
+            name
+            for name in ("forward_flops", "backward_flops", "peak_memory_mb")
+            if cost is None or getattr(cost, name) is None
+        )
+        metrics: dict[str, object] = {
+            "final_acc": float(last.get("train_acc") or last.get("val_acc") or 0.0),
+            "final_train_loss": float(last.get("train_loss") or 0.0),
             "epoch_time_s": total_time,
             "param_count": param_count,
-            "forward_flops": int(last.forward_flops or 0),
-            "backward_flops": int(last.backward_flops or 0),
-            "peak_memory_mb": float(last.peak_memory_mb or 0.0),
-            # peak_memory_mb is CUDA-only; wall_time_s is not populated by
-            # CoreTrainer on CPU, so fall back to the summed epoch time so the
-            # parity contract's `matched_by.reported: [wall_time_s]` is real.
+            "forward_flops": int(cost.forward_flops or 0) if cost else 0,
+            "backward_flops": int(cost.backward_flops or 0) if cost else 0,
+            "peak_memory_mb": float(cost.peak_memory_mb or 0.0) if cost else 0.0,
+            # peak_memory_mb is CUDA-only and flops need a settle model, so a
+            # metric the trainer could not measure is listed here rather than
+            # being indistinguishable from a measured zero.
+            "resource_metrics_unavailable": unavailable,
+            # peak_memory_mb is CUDA-only; wall_time_s is not populated on CPU,
+            # so fall back to the summed epoch time so the parity contract's
+            # `matched_by.reported: [wall_time_s]` is real.
             "wall_time_s": total_time,
-            "best_epoch_acc": max(accs) if accs else float(last.train_acc or 0.0),
+            "best_epoch_acc": max(accs)
+            if accs
+            else float(last.get("train_acc") or 0.0),
             "acc_at_half": float(accs[half_idx - 1])
             if accs and half_idx
-            else float(last.train_acc or 0.0),
-            "loss_epoch_0": loss_0,
-            "loss_epoch_final": loss_final,
-            # Self-diagnosis (EXPERIMENT_PLAN5 §1): the credit-assignment path
-            # actually used by this probe (energy | model_train_step |
-            # propagator | bptt). A bio-family probe reporting "bptt" is a
-            # silent-fallback defect surfaced without human audit.
-            "training_paths": dict(last_extra.get("training_paths") or {}),
-            "training_path": _dominant_training_path(last_extra.get("training_paths")),
+            else float(last.get("train_acc") or 0.0),
+            "loss_epoch_0": float(history[0].get("train_loss") or 0.0),
+            "loss_epoch_final": float(last.get("train_loss") or 0.0),
+            # Self-diagnosis: the credit-assignment route this probe actually
+            # used. A bio-family probe reporting "bptt" is a silent-fallback
+            # defect surfaced without human audit; a rule system has no such
+            # route, so the name is the rule that ran.
+            "training_paths": paths,
+            "training_path": _dominant_training_path(paths),
             # Epoch-time truncation: if any epoch was cut short by the
             # ``max_epoch_time`` budget, the run's resource metrics are over a
-            # partial epoch — not comparable to full-epoch runs. The sweep must
-            # prune (flag as defect) such a run, not average partial stats in.
-            "epoch_time_budget_stopped": bool(
-                any(
-                    bool(m.extra.get("epoch_time_budget_stopped"))
-                    for m in history
-                    if getattr(m, "extra", None)
-                )
+            # partial epoch -- not comparable to full-epoch runs. The sweep
+            # must prune (flag as defect) such a run.
+            "epoch_time_budget_stopped": any(
+                c.budget_stopped for c in trainer.epoch_resources
             ),
-            # Phantom-drift diagnosis: sampled tuning knobs this probe could not
-            # deliver to the model. A non-empty list is a self-diagnosis defect
-            # flagged by the sweep (the config advertised knobs that had no
-            # consumer — reported, never silently ignored).
+            # Phantom-drift diagnosis: sampled tuning knobs this probe could
+            # not deliver. Flagged by the sweep as a defect.
             "phantom_knobs": phantom,
-            # Hardware-aware fields (plan §17): present only when the trainer
-            # swapped in a substrate facade via TrainerConfig.target_hardware.
-            "target_hardware": last_extra.get("target_hardware"),
-            "bits": last_extra.get("bits"),
-            "noise_level": last_extra.get("noise_level"),
+            # Requested substrate facade. The System path composes its own
+            # substrate and has no facade to swap, so this is reported as
+            # requested rather than as applied.
+            "target_hardware": self.target_hardware,
         }
         self._record(
             model=model,

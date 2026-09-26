@@ -187,7 +187,13 @@ markers = [
     "timeout: marks tests with a timeout (requires pytest-timeout)",
 ]
 addopts = "--strict-markers --durations=25 -m 'not slow and not benchmark and not llm' -p no:warnings"
-faulthandler_timeout = 120
+# pytest-timeout is the kill, and its signal method already dumps the stack of
+# the test it stops. faulthandler's own 120s dump fired on every test that
+# legitimately runs longer than the default -- it printed "Timeout (0:02:00)!"
+# for tests that then passed, which reads exactly like the failure it was
+# meant to diagnose. A test over the default now carries an explicit
+# `@pytest.mark.timeout(...)`; nothing else needed a second clock.
+faulthandler_timeout = 0
 timeout = 120
 timeout_method = "signal"
 

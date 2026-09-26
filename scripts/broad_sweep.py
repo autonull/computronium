@@ -297,9 +297,9 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
 
     Applies the family's rule activation (so bio-rule probes measure their own
     local cost, not a BPTT fallback) and clamps sampled configs to small sizes.
-    Bio families are also told the trainer must NOT silently fall back to BPTT
-    (``allow_bptt_fallback=False``) so any degradation is loud + recorded, and
-    the summary flags it as a defect.
+    The System path has no BPTT fallback to suppress -- an arm is an MLP whose
+    credit assignment is the named rule -- so the summary's ``training_path``
+    check is what proves the local rule engaged rather than backprop.
 
     Args:
         driver: The probe driver.
@@ -317,9 +317,6 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
     """
     activation = _rule_activation_for(model, family)
     propagator = activation.get("propagator")
-    # Bio families may not silently fall back to BPTT: a bio probe that ends up
-    # backprop-pathed is a defect, so the trainer warns loudly and path records.
-    allow_bptt_fallback = family not in _RULE_ACTIVATION
     runs: list[dict[str, object]] = []
     n_total = 0
     n_ok = 0
@@ -345,7 +342,6 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
                 epochs=epochs,
                 device=device,
                 propagator=propagator,
-                allow_bptt_fallback=allow_bptt_fallback,
             )
         except Exception as exc:  # a broken probe must not kill the sweep
             logger.warning(

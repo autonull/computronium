@@ -75,6 +75,7 @@ class SystemTrainerConfig:
         log_every_n_steps: Logging frequency
         seed: Random seed
         deterministic: Use deterministic algorithms
+        max_epoch_time: Per-epoch wall-clock budget in seconds (0 = unlimited)
     """
 
     max_epochs: int = 10
@@ -88,6 +89,7 @@ class SystemTrainerConfig:
     log_every_n_steps: int = 10
     seed: int = 42
     deterministic: bool = False
+    max_epoch_time: float = 0.0
 
 
 class _DataProvider(Protocol):
