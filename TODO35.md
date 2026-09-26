@@ -996,3 +996,91 @@ layer — still no consumer, still not to be started because it is ready.
   speeding it up speeds up the artifact the fix improved. Item 3 above is a
   *measurement* of a claim already in the document, which is a different
   thing.
+
+---
+
+## 14. Round 4's operating rule — stop auditing, start extracting
+
+Written after an honest mid-series assessment, not a round close. The
+assessment is recorded here because the conclusion is a **rule change**,
+and a rule that lives only in someone's judgement does not bind the next
+session.
+
+### 14.1 What three rounds actually bought
+
+Trustworthiness, not capability. Concretely: three live defects no test
+caught (a branch that raised `ImportError` on first execution, a
+CUDA-poisoned worker costing 37 slow-tier tests, `cpu_only` declared and
+read by nothing), plus the thread pin that made the record set
+reproducible. Every demo claim is the same claim it was three rounds ago.
+
+That trade was correct, and the evidence is that the tree was not
+trustworthy enough: six modules cannot be imported at all, and one live
+branch would have crashed. But it is a *precondition*, and three rounds
+of it is enough.
+
+### 14.2 The three numbers that say the series is not converging
+
+- **The false-claim rate is flat.** Round 2 found three stale claims,
+  Round 3 found six dead imports, two wiring locks guarding spelled-out
+  names, one non-reproducible walltime, and one open item (§6) whose
+  reasoning rested on an assumption nobody checked — including this
+  document's own §12.5, wrong in the session that wrote it. The pattern
+  the series exists to end is reproducing at the rate it started. A
+  process whose output is "the last round's claims were wrong" is
+  auditing at a fixed cadence, not converging. **n=3 is too few to call
+  a trend, and it is also too many to keep calling it progress.**
+- **The main thread's arithmetic.** Repo-wide pyright 1,975 → 1,936:
+  39 findings in a round whose stated cost was ~4h. Clearing the
+  remainder at that rate is ~50 rounds. `PLW0717` has moved 89 → 81
+  across three rounds and been declined three times running, each
+  decline reading as principled and functioning as a deferral.
+- **Marginal lock value is falling.** Round 3 spent most of its time
+  writing locks *about* locks, and the import lock's population
+  assertion took three iterations to become non-vacuous. §0 is a good
+  rule; it stops paying at some point, and Round 3 was past it for the
+  later items.
+
+### 14.3 The self-indictment, recorded so it cannot be quietly dropped
+
+`§12.3`'s handoff note says resolving the 13 `CoreTrainer` /
+`TrainerConfig` importers needs "a graph question, not a reading
+exercise" — and that graph question is five minutes of `git grep`. So
+Round 3's own #2 handoff item is a deferral wearing a prerequisite's
+clothes. Worse: the cross-module import lock was scoped to
+`computronium/core` + `computronium/ontology` **because 13 files fail
+it**, and it was landed in the same commit that quotes §0. That is the
+§0 violation the section is named after, committed deliberately and
+flagged rather than hidden. Naming it is not discharging it.
+
+### 14.4 The rule, effective this round
+
+1. **No new locks in Round 4.** A lock may be *widened* or *unscoped*
+   (the import lock's real scope is the whole tree and it is currently
+   dodging 13 failures). A lock may not be added. If a change needs a
+   new guard, the change waits for Round 5.
+2. **The deferred work is the work.** `PLW0717` (81) is taken this
+   round, in bulk, not declined a fourth time. It is the one item where
+   doing it is unambiguously *doing* rather than *measuring*, and the
+   `p2p` extraction precedent is that it finds live crashes.
+3. **The `CoreTrainer` cluster gets the five minutes**, in this round,
+   and the import lock goes to full-tree scope or the reason is written
+   down as a blocker.
+4. **Stop at one new lock per round, and only if it guards a defect
+   found in that same round.** Everything else is a bug fix, an
+   extraction, or a doc correction.
+5. **Round 4 closes with a capability statement or it does not close.**
+   If Round 4 produces findings and no code that is better, the series
+   is auditing rather than building and the right response is to stop and
+   change what the series is for — not to open Round 5.
+
+### 14.5 What is explicitly not being done, and why it is now a decision
+
+`§4`'s presentation layer has been deferred across three rounds on the
+grounds that it has "no consumer." If the tree's capability is not
+growing, that is a statement about the *series*, not about the timing.
+It stays deferred — but the next time it is raised, the question to
+answer first is not "is it ready" (it is) or "does anything need it" but
+**"is the absence of a watchable run part of why nothing needs it."**
+That is a product question, and it is the first one in this document
+that a lock cannot answer.
