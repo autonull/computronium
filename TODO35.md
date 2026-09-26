@@ -1,7 +1,8 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open. Round 5 is closed (§17); a new session works from
-§17.8, and §17.9 before deleting anything. Everything before §17 is the record of why the decisions
+§17.8, and §17.9 before deleting anything. **§17.11 corrects §17.10**: there
+are two acceleration layers and the accelerated one works. Everything before §17 is the record of why the decisions
 were made, not the work list. Round 4 closed at §15.
 `TODO34.md` keeps its 16 passes as the record of how the tree was made
 fast, provable and ready to be presented; its "Remaining Work" section is
@@ -16,10 +17,13 @@ runs end to end for the first time since Sprint 7.6.10. A wall-clock metric in
 a run's records broke bit-for-bit reproducibility on its first run, which is
 why resource accounting and model metrics are now separate structures.
 
-**Read §17.9 before doing any further deletion in this tree.** This round
-deleted 16 Triton kernels and three code paths because a grep found no caller,
-and all of it was reverted: *not called* is not *not wanted*. The rule is
-there now so the next session does not spend the same hour.
+**Read §17.9 before doing any further deletion in this tree**, and §17.11
+before believing anything about the acceleration layer. This round deleted 16
+Triton kernels and three code paths because a grep found no caller, and all of
+it was reverted: *not called* is not *not wanted*. The rule is there now so the
+next session does not spend the same hour. The production answer to "can we run
+optimised kernels on GPU" is **yes, today, automatically** — 25 of 64 specs
+route to the kernel path on a CUDA box and 19 GPU tests pass.
 
 **Round 3 closed**: §1.2 (the three highest-fan-in modules are at 0 — and
 the third of them held an `ImportError` on a live branch that no test had
@@ -1748,3 +1752,72 @@ them need a `tl.dot` fixed, five need a triton API migration, and two are ready
 to wire up behind a flag that tells the truth. The first useful step for all
 three groups is the same, and it is the step that would have caught this in
 Round 1: a compile check over the `@triton.jit` population.
+
+### 17.11 There are two acceleration layers. §17.10 measured the wrong one.
+
+§17.10 reported "2 of 14 kernels compile" and implied the acceleration plan was
+in a poor state. It measured one of **two parallel layers**, and the wrong one.
+This is the correction, and it is the same error as §17.3's deletion read from
+a different angle: a reachability scan over one layer, generalised to the tree.
+
+**Layer A — the production path. `primitives/**/kernel.py` → `acceleration/`.**
+Every primitive carries its own `kernel.py` with `KERNEL_TECHNOLOGY` and an
+`is_available()`, and the ones that can be accelerated dispatch to a triton
+module: `triton_kernels.py` (EqProp, Muon, Fisher, EP settle),
+`fa_kernels.py` (feedback projection + batched outer), `pcalm_kernels.py`,
+`tile_kernels.py`, `compile.py`. **On a CUDA box `select_backend(spec, "auto")`
+routes 25 of 64 specs to the kernel path with no flag to set**, and the GPU
+tests pass here today: `test_triton_kernel.py`, `test_kernel_equivalence.py`
+(19 passed, 3 skipped, 3 xfailed, 4.0s on an RTX 3080), plus
+`test_fa_triton_dispatch.py` and `test_fa_activation_contract.py`. This is the
+set the plan's acceleration work produced, and it works.
+
+**Layer B — a newer parallel design. `acceleration/kernel_backend.py`'s
+`KernelRegistry` + per-family `*KernelBackend` classes.** `pc_kernels`,
+`ff_kernels`, `snn_kernels`, `hebbian_kernels` and `complex_substrate` are its
+first draft: 16 kernels, `initialize`/`set_model_ref`/`settle`/`compute_energy`
+/`backward`/`update_weights` per family, and **no caller**. Two of Layer B's
+backends *are* reachable — `FAKernelBackend` via two primitives and
+`TileKernelBackend` via `tile_mesh` — which is the pattern the other four are
+waiting for. Layer B is a deliberate second attempt at the same problem, not
+the plan's output.
+
+**So: are Layer B's kernels broken?** §17.10's measurement stands, with the
+correction that it was scoped correctly and read wrongly. They do not compile —
+2 of 14 sampled do — and the three failure modes are nameable:
+
+- **3 need a triton API rename.** `libdevice.sigmoid` and `tl.cosh`/`tl.sinh`
+  moved. Mechanical.
+- **2 need a launch shape** their own signature permits but `tl.dot` will not
+  accept (K >= 8/16). Mechanical.
+- **7 need their index expressions, load orientation and contraction
+  reconciled against a torch reference that was never written.** This is the
+  one that is not mechanical, and §17.10 understated it. I tried the cheap fix
+  on `_pepita_error_modulation_kernel` — replace `tl.dot` with
+  `tl.sum(err[:, None] * fb, axis=0)`, which is the textbook outer product —
+  and it compiled and ran but was still **1.76 off** the torch reference,
+  because the two operands are loaded in opposite orientations and `fb` carries
+  no batch stride while `err` does. Three things had to be reconciled at once
+  and the intended maths exists **only as this code**, nowhere else. There is
+  no oracle to check the answer against.
+
+**How easily fixed, honestly:** the 5 mechanical ones are an afternoon each with
+a parity test. The 7 structural ones are a specification exercise first — for
+each, write the torch expression the kernel is meant to equal, then make the
+kernel match it, then assert. That is the work, and it is worth doing as
+*writing the spec*, not as *repairing code*: the kernels are currently the only
+record of an intent nobody wrote down, which is exactly why they cannot be
+checked.
+
+**When can we run optimised kernels on GPU in production?** Layer A: now,
+already do, no work. Layer B, per family, needs four things in order — a spec
+and a parity test, the compile fix, a dispatch site in the primitive's
+`kernel.py` of the `local_goodness` shape, and a `set_model_ref` that can bind
+a `System`'s geometry (the last is §17.8-1 and is shared with the export CLI).
+FF is closest: `_ff_goodness_kernel` already compiles and matches its docstring
+to 1.9e-5, so only the contrastive update stands between it and a dispatch
+site.
+
+**Nothing here licenses deletion** — §17.9 stands, and this section is the
+stronger version of the same point. A kernel that does not compile is a
+specification nobody wrote down, not code that should not exist.
