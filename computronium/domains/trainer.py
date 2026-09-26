@@ -41,8 +41,13 @@ class TaskProtocol(Protocol):
     """
 
     name: str
-    device: str
     quick_mode: bool
+
+    @property
+    def device(self) -> str | torch.device:
+        """Where batches live. Read-only here: ``DomainTask`` widens it to
+        ``str | torch.device``, and a mutable attribute in a Protocol makes
+        the protocol invariant, which no concrete task then satisfies."""
 
     @property
     def input_dim(self) -> int | None: ...

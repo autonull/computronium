@@ -147,6 +147,8 @@ if TYPE_CHECKING:
         create_eqprop_system,
         create_fa_system,
         extract_config,
+        train_on_task,
+        train_task,
     )
     from computronium.core.theta_audit import theta_audit
     from computronium.domains.factory import create_task
@@ -457,6 +459,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "create_task": ("computronium.domains.factory", "create_task"),
     # System Trainers
     "SystemTrainer": ("computronium.core.system_trainer", "SystemTrainer"),
+    "train_task": ("computronium.core.system_trainer", "train_task"),
+    "train_on_task": ("computronium.core.system_trainer", "train_on_task"),
     "SystemModule": ("computronium.nn", "SystemModule"),
     "SystemTrainerConfig": ("computronium.core.system_trainer", "SystemTrainerConfig"),
     "compose_joint_system": (
@@ -723,6 +727,8 @@ __all__ = [
     "smep",
     "smep_fast",
     "theta_audit",
+    "train_on_task",
+    "train_task",
 ]
 
 
@@ -739,3 +745,19 @@ def __getattr__(name: str) -> object:
 
 def __dir__() -> list[str]:
     return sorted(__all__)
+
+
+def _verify_public_surface() -> None:  # ruff: ignore[non-empty-init-module]
+    """Hold the declared surface to itself, once, at import time.
+
+    Every test that imports the package inherits this, so a name in
+    ``__all__`` that nothing defines, or a README-documented module whose
+    imports no longer resolve, fails here rather than in whichever caller
+    happens to reach it first.
+    """
+    from computronium._surface import assert_public_surface
+
+    assert_public_surface(__all__, _LAZY, set(globals()))
+
+
+_verify_public_surface()  # ruff: ignore[non-empty-init-module]

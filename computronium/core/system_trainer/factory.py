@@ -620,6 +620,11 @@ def compose_system_from_configs(
     )
 
 
+def param_count(system: System) -> int:
+    """Learnable parameters in a composed system's geometry."""
+    return sum(param.numel() for param in system.geometry.params.values())
+
+
 __all__ = [
     "compose_system",
     "compose_system_from_configs",
@@ -627,4 +632,5 @@ __all__ = [
     "create_eqprop_system",
     "create_fa_system",
     "extract_config",
+    "param_count",
 ]

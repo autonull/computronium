@@ -10,18 +10,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
 from computronium.analysis.pareto import ParetoFrontier, compute_pareto_frontier
 from computronium.analysis.scaling import ScalingLawFitter, fit_power_law
-from computronium.utils import seed_everything
+from computronium.core.rules import rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -49,32 +56,6 @@ class ScalingConfig:
     device: str = "auto"
 
 
-# Algorithm to model mapping
-ALGORITHM_TO_MODEL = {
-    "ep": "tile_lm",  # Uses TileLM with algorithm=ep
-    "fa": "conv_tile_fa",
-    "tp": "conv_tile_tp",
-    "pc": "conv_tile_pc",
-    "hebbian": "conv_tile_hebbian",
-    "snn": "conv_tile_snn",
-    "backprop": "backprop_mlp",
-}
-
-# For MNIST (grayscale)
-MNIST_MODELS = {
-    "ep": "tile_lm",
-    "fa": "conv_tile_fa",
-    "tp": "conv_tile_tp",
-    "pc": "conv_tile_pc",
-    "hebbian": "conv_tile_hebbian",
-    "snn": "conv_tile_snn",
-    "backprop": "backprop_mlp",
-}
-
-# For CIFAR-10 (RGB)
-CIFAR_MODELS = MNIST_MODELS.copy()
-
-
 def _resolve_device(device: str) -> str:
     """Resolve device string."""
     if device == "auto":
@@ -82,107 +63,52 @@ def _resolve_device(device: str) -> str:
     return device
 
 
-def _get_model_for_task(algorithm: str, task: str) -> str:
-    """Get model name for algorithm and task."""
-    if task == "mnist":
-        return MNIST_MODELS.get(algorithm, algorithm)
-    return CIFAR_MODELS.get(algorithm, algorithm)
-
-
-def _create_model_config(
-    model_name: str,
-    task: str,
-    depth: int,
-    width: int,
-    config: ScalingConfig,
-):
-    """Create trainer config for a model."""
-    from computronium.core.trainer import TrainerConfig
-
-    # Map depth/width to model-specific parameters
-    model_kwargs = {}
-
-    if "conv_tile" in model_name:
-        # Vision models: width -> neurons_per_tile, depth -> num_fc_layers
-        model_kwargs = {
-            "neurons_per_tile": width,
-            "tiles_per_layer": max(2, depth // 2),
-            "num_fc_layers": depth,
-            "input_channels": 1 if task == "mnist" else 3,
-            "input_size": 28 if task == "mnist" else 32,
-            "num_classes": 10,
-        }
-    elif model_name == "tile_lm":
-        model_kwargs = {
-            "embed_dim": width,
-            "num_layers": depth,
-            "neurons_per_tile": width // 4,
-            "tiles_per_layer": 4,
-        }
-    elif model_name == "backprop_mlp":
-        model_kwargs = {
-            "hidden_dim": width,
-            "num_layers": depth,
-        }
-
-    return TrainerConfig(
-        model=model_name,
-        task=task,
-        epochs=config.epochs,
-        batch_size=config.batch_size,
-        optimizer_kwargs={"lr": config.learning_rate},
-        model_kwargs=model_kwargs,
-        device=config.device,
-    )
-
-
 def _run_single_experiment(
-    model_name: str,
+    algorithm: str,
     task: str,
     depth: int,
     width: int,
     seed: int,
     config: ScalingConfig,
 ) -> dict:
-    """Run a single training experiment."""
-    seed_everything(seed)
+    """Run a single training experiment: one rule, one depth, one width."""
+    built: list[System] = []
 
-    trainer_config = _create_model_config(model_name, task, depth, width, config)
-    from computronium.core.trainer import CoreTrainer
-
-    trainer = CoreTrainer(trainer_config)
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = rule_system(
+            algorithm,
+            input_dim,
+            output_dim,
+            hidden_dims=(width,) * depth,
+            lr=config.learning_rate,
+            device=config.device,
+        )
+        built.append(system)
+        return system
 
     start_time = time.time()
-    history = trainer.fit()
+    history = train_task(
+        factory,
+        task,
+        config.epochs,
+        batch_size=config.batch_size,
+        device=config.device,
+        seed=seed,
+    )
     elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "model": model_name,
-            "task": task,
-            "depth": depth,
-            "width": width,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": elapsed,
-            "params": 0,
-            "success": False,
-        }
-
-    final = history[-1]
+    final = final_metrics(history)
     return {
-        "model": model_name,
-        "algorithm": model_name.split("_")[-1] if "_" in model_name else model_name,
+        "model": algorithm,
+        "algorithm": algorithm,
         "task": task,
         "depth": depth,
         "width": width,
         "seed": seed,
-        "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-        "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
         "time": elapsed,
-        "params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
+        "params": param_count(built[0]) if built else 0,
+        "success": bool(history),
     }
 
 
@@ -190,7 +116,7 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     """Run the full scaling sweep."""
     results = []
     device = _resolve_device(config.device)
-    config = ScalingConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     total_experiments = (
         len(config.tasks)
@@ -210,8 +136,6 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     exp_count = 0
     for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
         for algorithm in config.algorithms:
-            model_name = _get_model_for_task(algorithm, task)
-
             for depth in config.depths:
                 for width in config.widths:
                     for seed in range(config.seeds):
@@ -220,7 +144,7 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
                             "[%d/%d] %s on %s: depth=%d width=%d seed=%d",
                             exp_count,
                             total_experiments,
-                            model_name,
+                            algorithm,
                             task,
                             depth,
                             width,
@@ -229,20 +153,20 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
 
                         try:
                             result = _run_single_experiment(
-                                model_name, task, depth, width, seed, config
+                                algorithm, task, depth, width, seed, config
                             )
                             results.append(result)
                         except Exception as e:
                             logger.exception(
                                 "Experiment failed: %s on %s depth=%d width=%d seed=%d",
-                                model_name,
+                                algorithm,
                                 task,
                                 depth,
                                 width,
                                 seed,
                             )
                             results.append({
-                                "model": model_name,
+                                "model": algorithm,
                                 "task": task,
                                 "depth": depth,
                                 "width": width,

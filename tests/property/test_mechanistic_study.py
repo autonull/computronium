@@ -64,6 +64,7 @@ def test_norm_matching_calibrated_to_credit_reference(study_record):
             assert got == pytest.approx(ref, rel=0.15), (credit, update, got, ref)
 
 
+@pytest.mark.timeout(600)  # measured 86s in the fast lane
 def test_determinism(study_record):
     """Same seeds → identical metrics and seeds (walltime/commit excluded)."""
 

@@ -10,19 +10,26 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.utils import seed_everything
+from computronium.core.rules import routing_system, rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
 from computronium.validation.statistics import (
     cohens_d,
     permutation_test_p,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +63,14 @@ class MoTAblationConfig:
     quick_mode: bool = False
 
 
-# Routing configurations
-ROUTING_CONFIGS = {
-    "dense": {"sparse_routing": False, "top_k": None},
-    "sparse": {"sparse_routing": True, "top_k": 2},
-    "topk": {"sparse_routing": True, "top_k": 4},
-    "random": {"sparse_routing": True, "top_k": 2, "random_routing": True},
+# Routing modes. ``top_k`` is the ontology's own routing knob; the legacy
+# `random_routing` flag has no counterpart, so uniform (random) gating is the
+# Gumbel-Softmax limit of the same primitive, expressed as temperature.
+ROUTING_MODES: dict[str, dict[str, float | int | None]] = {
+    "dense": {"top_k": None, "temperature": 1.0},
+    "sparse": {"top_k": 2, "temperature": 1.0},
+    "topk": {"top_k": 4, "temperature": 1.0},
+    "random": {"top_k": 2, "temperature": 5.0},
 }
 
 
@@ -69,47 +78,6 @@ def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device
-
-
-def _create_mot_config(
-    routing_mode: str,
-    tile_algorithm: str,
-    num_tiles: int,
-    top_k: int | None,
-    task: str,
-) -> dict:
-    """Create model kwargs for MoT experiment."""
-    config = {
-        "algorithm": tile_algorithm,
-        "neurons_per_tile": 64,
-        "tiles_per_layer": num_tiles,
-        "num_hidden_layers": 3,
-    }
-    config.update(ROUTING_CONFIGS.get(routing_mode, {}))
-
-    if top_k is not None:
-        config["top_k"] = top_k
-
-    # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
-        config["input_dim"] = 784
-        config["output_dim"] = 10
-    elif task == "cifar10":
-        config["input_dim"] = 3072
-        config["output_dim"] = 10
-    elif task == "tiny_shakespeare":
-        config["input_dim"] = 256  # embed_dim
-        config["output_dim"] = 256
-        config["vocab_size"] = 1000
-
-    return config
-
-
-def _get_model_name(routing_mode: str, tile_algorithm: str) -> str:
-    """Get registered model name."""
-    # Try to find a model that supports MoT
-    base_name = f"mot_{tile_algorithm}"
-    return base_name
 
 
 def _run_single_mot_experiment(
@@ -121,57 +89,47 @@ def _run_single_mot_experiment(
     seed: int,
     config: MoTAblationConfig,
 ) -> dict:
-    """Run a single MoT experiment."""
-    seed_everything(seed)
+    """Run a single MoT experiment: one rule, one routing mode, one tile count."""
+    built: list[System] = []
+    knobs = ROUTING_MODES[routing_mode]
+    sparse = knobs["top_k"] is not None
 
-    model_kwargs = _create_mot_config(
-        routing_mode, tile_algorithm, num_tiles, top_k, task
-    )
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = (
+            routing_system(
+                tile_algorithm,
+                input_dim,
+                output_dim,
+                top_k=top_k if top_k is not None else knobs["top_k"],
+                temperature=float(knobs["temperature"]),
+                gate_dim=num_tiles,
+                lr=config.learning_rate,
+                device=config.device,
+            )
+            if sparse
+            else rule_system(
+                tile_algorithm,
+                input_dim,
+                output_dim,
+                lr=config.learning_rate,
+                device=config.device,
+            )
+        )
+        built.append(system)
+        return system
 
-    # Try to find a suitable registered model
-    model_name = "tile_lm" if task == "tiny_shakespeare" else "conv_tile"
-    # Add routing-specific suffix
-    if routing_mode != "dense":
-        model_name = f"{model_name}_{routing_mode}"
-
-    from computronium.core.trainer import TrainerConfig
-
-    trainer_config = TrainerConfig(
-        model=model_name,
-        task=task,
-        epochs=config.epochs if not config.quick_mode else 3,
+    start_time = time.time()
+    history = train_task(
+        factory,
+        task,
+        config.epochs if not config.quick_mode else 3,
         batch_size=config.batch_size,
-        optimizer_kwargs={"lr": config.learning_rate},
-        model_kwargs=model_kwargs,
         device=config.device,
         quick_mode=config.quick_mode,
+        seed=seed,
     )
-
-    from computronium.core.trainer import CoreTrainer
-
-    trainer = CoreTrainer(trainer_config)
-    start_time = time.time()
-    history = trainer.fit()
     elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "routing_mode": routing_mode,
-            "tile_algorithm": tile_algorithm,
-            "num_tiles": num_tiles,
-            "top_k": top_k,
-            "task": task,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": elapsed,
-            "params": 0,
-            "flops": 0,
-            "memory_mb": 0,
-            "success": False,
-        }
-
-    final = history[-1]
+    final = final_metrics(history)
     return {
         "routing_mode": routing_mode,
         "tile_algorithm": tile_algorithm,
@@ -179,20 +137,20 @@ def _run_single_mot_experiment(
         "top_k": top_k,
         "task": task,
         "seed": seed,
-        "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-        "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
         "time": elapsed,
-        "params": final.param_count if hasattr(final, "param_count") else 0,
-        "flops": getattr(final, "flops", 0),
-        "memory_mb": getattr(final, "memory_mb", 0),
-        "success": True,
+        "params": param_count(built[0]) if built else 0,
+        "flops": float(final.get("val_flops", 0.0)),
+        "memory_mb": float(final.get("val_memory_mb", 0.0)),
+        "success": bool(history),
     }
 
 
 def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
     """Run MoT ablation experiments."""
     device = _resolve_device(config.device)
-    config = MoTAblationConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     results = []
     total = (

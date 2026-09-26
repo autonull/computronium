@@ -1,6 +1,6 @@
 """Feedback Alignment Depth Scaling — 10→1000 Layers.
 
-Tests FA viability at extreme depths on MNIST and synthetic parity tasks.
+Tests FA viability at extreme depths on MNIST and the toy XOR task.
 Produces depth-scaling curves proving FA viability.
 
 Usage:
@@ -10,18 +10,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
 from computronium.analysis.scaling import fit_power_law
-from computronium.utils import seed_everything
+from computronium.core.rules import rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
 from computronium.validation.statistics import bootstrap_ci
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +42,7 @@ logger = logging.getLogger(__name__)
 class FADepthConfig:
     """Configuration for FA depth scaling experiment."""
 
-    tasks: list[str] = field(default_factory=lambda: ["mnist", "synthetic"])
+    tasks: list[str] = field(default_factory=lambda: ["mnist", "xor"])
     depths: list[int] = field(default_factory=lambda: [10, 20, 50, 100, 200, 500, 1000])
     widths: list[int] = field(default_factory=lambda: [128, 256, 512])
     algorithms: list[str] = field(
@@ -48,95 +55,12 @@ class FADepthConfig:
     output_dir: str = "results/fa_depth_scaling"
     device: str = "auto"
     quick_mode: bool = False
-    synthetic_samples: int = 5000
-    synthetic_dim: int = 128
-    synthetic_classes: int = 10
-
-
-# Model configurations per algorithm
-ALGO_CONFIGS = {
-    "fa": {
-        "model": "fa_mlp",
-        "base_kwargs": {
-            "use_spectral_norm": True,
-            "feedback_type": "random",
-            "learning_rate": 1e-3,
-        },
-    },
-    "backprop": {
-        "model": "backprop_mlp",
-        "base_kwargs": {
-            "use_spectral_norm": True,
-            "learning_rate": 1e-3,
-        },
-    },
-    "ep": {
-        "model": "eqprop",
-        "base_kwargs": {
-            "use_spectral_norm": True,
-            "beta": 0.1,
-            "step_size": 0.1,
-            "inference_steps": 20,
-            "learning_rate": 1e-3,
-        },
-    },
-    "pc": {
-        "model": "predictive_coding",
-        "base_kwargs": {
-            "use_spectral_norm": True,
-            "learning_rate": 1e-3,
-        },
-    },
-}
 
 
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device
-
-
-def _get_task_dims(task: str, config: FADepthConfig) -> tuple[int, int]:
-    """Get input/output dimensions for task."""
-    if task == "mnist":
-        return 784, 10
-    elif task == "synthetic":
-        return config.synthetic_dim, config.synthetic_classes
-    return 784, 10
-
-
-def _create_trainer_config(
-    algorithm: str,
-    task: str,
-    depth: int,
-    width: int,
-    seed: int,
-    config: FADepthConfig,
-):
-    """Create trainer config for algorithm at specific depth/width."""
-    from computronium.core.trainer import TrainerConfig
-
-    algo_cfg = ALGO_CONFIGS[algorithm]
-    input_dim, output_dim = _get_task_dims(task, config)
-
-    model_kwargs = algo_cfg["base_kwargs"].copy()
-    model_kwargs.update({
-        "input_dim": input_dim,
-        "output_dim": output_dim,
-        "hidden_dim": width,
-        "num_layers": depth,
-    })
-
-    return TrainerConfig(
-        model=algo_cfg["model"],
-        task=task,
-        epochs=config.epochs if not config.quick_mode else 3,
-        batch_size=config.batch_size,
-        optimizer_kwargs={"lr": config.learning_rate},
-        model_kwargs=model_kwargs,
-        device=config.device,
-        quick_mode=config.quick_mode,
-    )
 
 
 def _run_single_experiment(
@@ -147,53 +71,52 @@ def _run_single_experiment(
     seed: int,
     config: FADepthConfig,
 ) -> dict:
-    """Run a single depth scaling experiment."""
-    seed_everything(seed)
+    """Run a single depth scaling experiment: one rule, one depth, one width."""
+    built: list[System] = []
 
-    trainer_config = _create_trainer_config(algorithm, task, depth, width, seed, config)
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = rule_system(
+            algorithm,
+            input_dim,
+            output_dim,
+            hidden_dims=(width,) * depth,
+            lr=config.learning_rate,
+            device=config.device,
+        )
+        built.append(system)
+        return system
 
-    from computronium.core.trainer import CoreTrainer
-
-    trainer = CoreTrainer(trainer_config)
     start_time = time.time()
-    history = trainer.fit()
+    history = train_task(
+        factory,
+        task,
+        config.epochs if not config.quick_mode else 3,
+        batch_size=config.batch_size,
+        device=config.device,
+        quick_mode=config.quick_mode,
+        seed=seed,
+    )
     elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "algorithm": algorithm,
-            "model": trainer_config.model,
-            "task": task,
-            "depth": depth,
-            "width": width,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": elapsed,
-            "params": 0,
-            "success": False,
-        }
-
-    final = history[-1]
+    final = final_metrics(history)
     return {
         "algorithm": algorithm,
-        "model": trainer_config.model,
+        "model": algorithm,
         "task": task,
         "depth": depth,
         "width": width,
         "seed": seed,
-        "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-        "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
         "time": elapsed,
-        "params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
+        "params": param_count(built[0]) if built else 0,
+        "success": bool(history),
     }
 
 
 def run_fa_depth_scaling(config: FADepthConfig) -> list[dict]:
     """Run FA depth scaling experiments."""
     device = _resolve_device(config.device)
-    config = FADepthConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     results = []
     total = (
@@ -489,9 +412,7 @@ def _generate_plots(results: list[dict], output_dir: str) -> None:  # ruff: igno
 
 def main():
     parser = argparse.ArgumentParser(description="Feedback Alignment Depth Scaling")
-    parser.add_argument(
-        "--tasks", default="mnist,synthetic", help="Comma-separated tasks"
-    )
+    parser.add_argument("--tasks", default="mnist,xor", help="Comma-separated tasks")
     parser.add_argument(
         "--depths", default="10,20,50,100,200,500,1000", help="Comma-separated depths"
     )

@@ -1,8 +1,8 @@
 # TODO35: The Proveable Remainder
 
-**Status**: **ACTIVE — open. A new session works from the Round 4 brief in
-§0 below and stops there**; everything past §0 is the record of why the
-decisions were made, not the work list. Round 3 is closed (§12).
+**Status**: **ACTIVE — open. Round 4 is closed (§15); a new session works from
+§16 and stops there. Everything before §15 is the record of why the decisions
+were made, not the work list. Round 3 closed at §12.
 `TODO34.md` keeps its 16 passes as the record of how the tree was made
 fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift
@@ -1164,3 +1164,210 @@ Corollary for the locks: `test_undefined_name_lock.py` finds these
 imports by static analysis, and its *scope* argument in §13 is "13 files
 fail it" — which is the right reason to fix them and the wrong reason to
 leave them. Round 4 fixes them by extraction, per §14.4 rule 2.
+
+---
+
+## 15. Round 4 — the surface checks itself, and six modules came back
+
+Closed against §0.2's seven items: **1, 2, 4 done; 3 not started; 5 measured;
+6 answered (it was item 4); 7 answered with a written blocker.** The round's
+output is code, not findings: **seven modules that could not be imported now
+run**, and two of the tree's long-standing "environmental" failures turned out
+to be a hard 120s kill rather than anything about ordering or seeds.
+
+### 15.1 Item 1 closed: the package verifies its own surface at import time
+
+`computronium/_surface.py` + one call at the bottom of `computronium/__init__.py`.
+Per §0.1, in code, so every test that imports the package inherits it. It
+checks three things: `__all__` ⇄ `_LAZY` agreement, every lazy target's
+module *and* attribute resolving, and every README-documented module existing
+with its runtime `computronium` imports resolving.
+
+**It cost 16 findings on its first run, in one import:**
+
+| finding | count |
+|---|---|
+| `CoreTrainer` / `TrainerConfig` imported from a module that has said they were removed since Sprint 7.6.10 | 13 sites in 6 documented experiment modules |
+| `equprop_vision_parity` importing `_BASELINE_MODELS` from `computronium.cli.run` (it lives in `cli.shared`) | 1 |
+| README documenting `core/joint/context.py`, `core/ontology.py`, `deployment.py` — all three moved or deleted, quietly | 3 |
+
+Every one is fixed, and `python -m computronium.experiments.cross_domain_transfer`
+— the command `README.md:1253` documents — now runs to completion.
+
+**Three design decisions worth keeping.** *Scanning is by pattern, not by
+`ast`*: tokenizing the 25 modules the lazy map points at costs 470ms, three
+regex passes cost 20ms, and the whole check is now **60ms of import time**.
+*A skipped check is a hole, so the population is asserted*:
+`test_public_surface_lock.py` pins the documented set and fails if it shrinks
+below 20 entries, and parametrizes the five binding forms the scan must see —
+including the PEP 695 `type` alias, which the first version missed and
+reported as a false alarm on a *live* import. *It caught its own author*: the
+guard failed the package twice during this round, once on a stale import I had
+just written in `mot_ablation.py`, once on the alias gap.
+
+Out of scope by construction, and said so in the module docstring: wheel
+installs have no README to read, and star imports / `globals()` binding are not
+statically derivable.
+
+### 15.2 Item 2 closed: `train_task`, and seven modules that could not be imported
+
+`core/system_trainer/train_task.py` — `train_task(model_factory, task, epochs)`
+for callers holding a task *name*, `train_on_task(factory, task, config)` for
+callers holding a task object, plus `FlattenLoader`/`TaskBatches` and
+`final_metrics`. `core/rules.py` holds the one table the callers needed and
+none of them had: learning-rule name → system factory, `rule_for` for the zoo
+model names, and `routing_system` for the MoT arms.
+
+| module | was | now |
+|---|---|---|
+| 6 `experiments/*` | `CoreTrainer` + a zoo-name registry deleted in Sprint 7.6.10 | `train_task` + `rule_system` |
+| `evaluation/cross_domain.py` | `CoreTrainer` + `resolve_native_model` | `train_on_task` + `rule_for` |
+| `evaluation/base.py` | `cross_validate` drove the old trainer's privates | `cross_validate(system_factory, task, …)` |
+| `analysis/ablation.py` | `run_from_runconfig`, gone since 7.6.10 | `config/run.py::run_run_config` |
+| `config/experiment.py` | `to_trainer_config` → the removed trainer's config | **deleted**; `to_system_trainer_config` already existed next to it |
+
+**Findings that came out of doing it, not out of reading it:**
+
+- **`RecurrentGeometry` cannot span heterogeneous hidden widths.** One shared
+  recurrent weight is applied after *every* hidden layer, so
+  `hidden_dims=(256, 128)` reached torch as a matmul shape error two layers
+  in. The zoo's own default is uniform, which is why it never showed. The
+  geometry now refuses it with the widths and the reason — the §0.1
+  fail-fast rule, on a class of defect that was previously a `RuntimeError`
+  from `torch.empty`.
+- **Every experiment read `history[-1]` as an object.** `fit()` has always
+  returned a list of dicts, so all six had `final.val_acc if hasattr(final,
+  "val_acc") else final.accuracy` — an `AttributeError` on the success path.
+- **`{**config.__dict__}` on a `slots=True` frozen dataclass** (7 sites) is an
+  `AttributeError`; now `dataclasses.replace` / `asdict`.
+- **`TaskProtocol.device` was declared narrower than every implementation**
+  (`str` vs `str | torch.device`), and being a *mutable* attribute made the
+  protocol invariant, so no concrete task satisfied it. Now a read-only
+  property, and `DomainTask` type-checks against the protocol.
+- **The MEP tournament varied none of its factors.** All 256 combinations
+  trained `model="mep"` — the factor levels were decorative. It is now three
+  factors over primitives the ontology has (3×3×2 = 18 real arms), with the
+  dropped `feedback` factor and the reason in the module docstring.
+- **cross_domain_transfer's "finetune" phase never transferred weights** (the
+  removed trainer could not carry them across input geometries, and the code
+  created a fresh trainer while calling it finetuning). The record now carries
+  `weights_transferred: False`.
+
+**Two capability boundaries, stated rather than papered over.** The language
+lane yields token *indices* and the 5-D path has no embedding geometry, so
+`train_task` refuses it by name instead of failing inside a geometry's energy
+computation — which is why cross-domain transfer's targets are
+`tabular,vision` and `README.md:1253`'s command was updated to match. The RL
+and graph tasks provide no `(inputs, targets)` dataloader at all, and
+`TaskBatches` says so with the fix in the message.
+
+### 15.3 Item 4 closed, and §6 and §12.6-3 are the same defect
+
+§13.1 item 1 asked whether the fast lane's slowest test was being killed by
+the global `timeout = 120`. **It was, and so was the "reproducible pair" of
+§12.6-3** — which is therefore *not* a cross-tier ordering or seed interaction,
+as three rounds of notes assumed. Both failures in this round's fast lane are
+`Failed: Timeout (>120.0s) from pytest-timeout`, at 120.00s and 120.43s.
+
+Measured durations that cross the default under `-n 4` contention, now marked
+explicitly:
+
+| test | measured | marker |
+|---|---|---|
+| `test_credit.py::test_cosine_similarity_reasonable` | 120.0s (killed) | 600 |
+| `test_ntm_geometry.py::test_bptt_learns_copy_mechanics` | 120.4s (killed) | 900 |
+| `test_deep_credit_trial.py::TestContrasts::test_contrasts_cover_deep_tier` | 47s in-tier, 90s isolated | 600 |
+| `test_axis_certifications.py` local-goodness + target-inversion cells | 93s, 75s, 31s, 29s, 26s | 600 (class) |
+| `test_mechanistic_study.py::test_determinism` | 86s | 600 |
+
+The three that were killed now pass (58s for all three together). **§6 closes
+as a mechanism, not a flake**: it was never an assertion failure, and no
+threshold was adjusted to accommodate it. The three figures above that are
+merely *near* the default are the risk this item bought down — the marker
+policy itself is unenforced, which is §16's item 1.
+
+### 15.4 Item 5: the fast lane, measured twice
+
+| run | walltime | result |
+|---|---|---|
+| first pass, before the timeout markers | **407s** | 2 failed (both the 120s kills of §15.3), 3431 passed, 119 skipped, 26 xfailed, 1 xpassed |
+| confirmation pass, after them | **460s** | **3433 passed**, 119 skipped, 26 xfailed, 1 xpassed — no failures |
+
+Same 3,453 collected in both; the count moved by exactly the two tests the
+markers saved. Walltime spread **407–460s** (13%), which is the number §7
+should quote instead of a single figure.
+
+§12.5 was right that §11.5's 127s is not a number to regress against: the same
+five-path lane took 240s in Round 3 and 407s here, with **+28 tests**. The test
+count is the load-bearing metric and the walltime is not.
+
+### 15.5 Item 7 answered with a blocker, not a dodge
+
+`test_undefined_name_lock.py` is still scoped to `core` + `ontology` because
+**two** of the 13 files fail it, down from 13. Both are capability work, not
+repointing:
+
+- `cli/export_trained_kernel.py` needs a kernel backend attached to a composed
+  `System`. `dispatch_train_step` reads `model._kernel_backend` off an
+  `nn.Module`; the System path (`core/pipeline.run_train_step`) has no kernel
+  arm at all. A documented `python -m` entry point that cannot work until
+  someone builds that bridge.
+- `experiment/probe.py`'s `CoreTrainerDriver` reports `epoch_time`,
+  `forward_flops`, `backward_flops`, `peak_memory_mb`, `training_paths`,
+  `epoch_time_budget_stopped` and `target_hardware`. `SystemTrainer`'s epoch
+  dict has eight keys — `epoch`, `global_step`, `train_loss`, `train_acc`,
+  `train_energy`, `val_loss`, `val_acc`, `val_ppl` — and **none** of those
+  seven. Porting it means either inventing the metrics or reporting zeros,
+  and a probe that reports zeros is worse than one that fails.
+
+Both are the same shape of gap as the LM boundary in §15.2: the *contract* the
+caller needs does not exist downstream, and the honest move is to name that
+rather than approximate it. Item 7's scope should be widened when they are
+built, not before.
+
+### 15.6 Item 3 (PLW0717, 81) — not started, and the reason is the arithmetic
+
+§14.2 said this round would take it in bulk. It is untouched, for a reason
+worth recording rather than re-deciding next round: the round's seven items
+were **not** the size §0.2 estimated. Items 1 and 2 alone are ~1,100 lines
+across 24 files, and item 2 was six dead modules *plus* five live defects
+found by making them run. PLW0717 is mechanical next to that, and the
+extraction it wants (five named modules, 81 functions) is best done on a tree
+that is not mid-port. It stays the first item of Round 5.
+
+### 15.7 What this round cost, measured
+
+Fast lane 407s for 3,451 tests. `pyright` on the new modules: 0.
+`ruff` on every file touched: clean. Import cost of the new guard: **60ms**
+(measured, and the reason it is pattern-based).
+
+---
+
+## 16. Open after Round 4
+
+1. **The timeout-marker policy is unenforced.** Five tests were marked by hand
+   from one `--durations` run. Nothing stops the next 100s test from appearing
+   unmarked, and the failure mode is a `Timeout` that reads like a flake. A
+   check over `--durations` output (or over collected durations) is the lock
+   this class wants — and per §14.4 rule 1 it cannot be written until a defect
+   in this class has been found *by* it.
+2. **Two `CoreTrainer` sites need capability, not repointing** (§15.5): a
+   kernel-backed `System` for `export_trained_kernel`, and a metrics contract
+   for `probe.py`. Both are documented/live entry points.
+3. **Item 3: PLW0717 at 81**, first item of Round 5.
+4. **The LM lane has no training path** (§15.2). An embedding geometry, or an
+   explicit statement that the 5-D path is vision/tabular only, is a product
+   question — and `test_public_surface_lock.py` will now *say* so on every
+   import instead of a `RuntimeError` from a geometry.
+5. **Re-measure and re-pin**: the slow tier and `docs/figures/manifest.json`
+   have not been re-run this round. Nothing in the diff touches a demo's
+   numerics, so the claim is "no re-pin needed" — unverified, and §7's
+   POST-SLOW step is the thing that would verify it.
+6. **The cross-module import lock's scope** stays at two layers, with the
+   blocker written down in §15.5 rather than implied by silence.
+7. **`faulthandler_timeout = 120` prints a "Timeout (0:02:00)!" dump for any
+   test that legitimately runs longer**, marker or not — it fired twice in the
+   green confirmation run above, on tests that then passed. It is a diagnostic,
+   not a kill, and it reads exactly like the failure §15.3 just closed, so the
+   next person to see it will re-chase a solved problem. Aligning it with the
+   marker policy (or setting it to 0) is a config change, not a lock.

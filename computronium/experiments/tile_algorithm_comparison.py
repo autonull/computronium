@@ -10,22 +10,29 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
-from computronium.utils import seed_everything
+from computronium.core.rules import rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
 from computronium.validation.statistics import (
     bootstrap_ci,
     cliffs_delta,
     cohens_d,
     permutation_test_p,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +47,7 @@ class TileAlgorithmConfig:
     """Configuration for tile algorithm comparison."""
 
     tasks: list[str] = field(
-        default_factory=lambda: ["mnist", "cifar10", "tiny_shakespeare"]
+        default_factory=lambda: ["mnist", "cifar10"]
     )
     algorithms: list[str] = field(
         default_factory=lambda: ["ep", "fa", "tp", "pc", "hebbian", "snn", "backprop"]
@@ -59,97 +66,10 @@ class TileAlgorithmConfig:
     fixed_depth: int = 3
 
 
-# Algorithm to model mapping (all using tile substrate)
-ALGORITHM_MODELS = {
-    "ep": "conv_tile",  # will use algorithm=ep
-    "fa": "conv_tile_fa",
-    "tp": "conv_tile_tp",
-    "pc": "conv_tile_pc",
-    "hebbian": "conv_tile_hebbian",
-    "snn": "conv_tile_snn",
-    "backprop": "backprop_mlp",
-}
-
-# For LM tasks
-LM_ALGORITHM_MODELS = {
-    "ep": "tile_lm",  # will use algorithm=ep
-    "fa": "tile_lm",  # with algorithm=fa
-    "tp": "tile_lm",  # with algorithm=tp
-    "pc": "tile_lm",  # with algorithm=pc
-    "hebbian": "tile_lm",  # with algorithm=hebbian
-    "snn": "tile_lm",  # with algorithm=snn
-    "backprop": "backprop_lm",
-}
-
-
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device
-
-
-def _get_model_for_task(algorithm: str, task: str) -> tuple[str, dict]:
-    """Get model name and algorithm-specific kwargs for task."""
-    if task == "tiny_shakespeare":
-        model_name = LM_ALGORITHM_MODELS.get(algorithm, algorithm)
-        model_kwargs = {"algorithm": algorithm} if algorithm != "backprop" else {}
-    else:
-        model_name = ALGORITHM_MODELS.get(algorithm, algorithm)
-        model_kwargs = {}  # algorithm is in model name for conv_tile variants
-
-    return model_name, model_kwargs
-
-
-def _create_trainer_config(
-    algorithm: str,
-    task: str,
-    seed: int,
-    config: TileAlgorithmConfig,
-):
-    """Create trainer config with fixed architecture (width/depth)."""
-    from computronium.core.trainer import TrainerConfig
-
-    model_name, algo_kwargs = _get_model_for_task(algorithm, task)
-
-    # Fixed architecture for fair comparison
-    base_kwargs = {
-        "neurons_per_tile": config.fixed_width // 4,
-        "tiles_per_layer": 4,
-        "num_hidden_layers": config.fixed_depth,
-        "learning_rate": config.learning_rate,
-    }
-    base_kwargs.update(algo_kwargs)
-
-    # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
-        base_kwargs.update({
-            "input_channels": 1,
-            "input_size": 28,
-            "num_classes": 10,
-        })
-    elif task == "cifar10":
-        base_kwargs.update({
-            "input_channels": 3,
-            "input_size": 32,
-            "num_classes": 10,
-        })
-    elif task == "tiny_shakespeare":
-        base_kwargs.update({
-            "vocab_size": 1000,
-            "embed_dim": config.fixed_width,
-            "num_layers": config.fixed_depth,
-        })
-
-    return TrainerConfig(
-        model=model_name,
-        task=task,
-        epochs=config.epochs if not config.quick_mode else 3,
-        batch_size=config.batch_size,
-        optimizer_kwargs={"lr": config.learning_rate},
-        model_kwargs=base_kwargs,
-        device=config.device,
-        quick_mode=config.quick_mode,
-    )
 
 
 def _run_single_experiment(
@@ -158,53 +78,52 @@ def _run_single_experiment(
     seed: int,
     config: TileAlgorithmConfig,
 ) -> dict:
-    """Run a single algorithm comparison experiment."""
-    seed_everything(seed)
+    """Run one arm: a learning rule at the sweep's fixed width and depth."""
+    built: list[System] = []
 
-    trainer_config = _create_trainer_config(algorithm, task, seed, config)
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = rule_system(
+            algorithm,
+            input_dim,
+            output_dim,
+            hidden_dims=(config.fixed_width,) * config.fixed_depth,
+            lr=config.learning_rate,
+            device=config.device,
+        )
+        built.append(system)
+        return system
 
-    from computronium.core.trainer import CoreTrainer
-
-    trainer = CoreTrainer(trainer_config)
     start_time = time.time()
-    history = trainer.fit()
+    history = train_task(
+        factory,
+        task,
+        config.epochs if not config.quick_mode else 3,
+        batch_size=config.batch_size,
+        device=config.device,
+        quick_mode=config.quick_mode,
+        seed=seed,
+    )
     elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "algorithm": algorithm,
-            "model": trainer_config.model,
-            "task": task,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": elapsed,
-            "params": 0,
-            "flops": 0,
-            "memory_mb": 0,
-            "success": False,
-        }
-
-    final = history[-1]
+    final = final_metrics(history)
     return {
         "algorithm": algorithm,
-        "model": trainer_config.model,
+        "model": algorithm,
         "task": task,
         "seed": seed,
-        "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-        "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
         "time": elapsed,
-        "params": final.param_count if hasattr(final, "param_count") else 0,
-        "flops": getattr(final, "flops", 0),
-        "memory_mb": getattr(final, "memory_mb", 0),
-        "success": True,
+        "params": param_count(built[0]) if built else 0,
+        "flops": float(final.get("val_flops", 0.0)),
+        "memory_mb": float(final.get("val_memory_mb", 0.0)),
+        "success": bool(history),
     }
 
 
 def run_tile_algorithm_comparison(config: TileAlgorithmConfig) -> list[dict]:
     """Run tile algorithm family comparison."""
     device = _resolve_device(config.device)
-    config = TileAlgorithmConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     results = []
     total = len(config.tasks) * len(config.algorithms) * config.seeds
@@ -477,7 +396,7 @@ def main():
     parser = argparse.ArgumentParser(description="Tile Algorithm Family Comparison")
     parser.add_argument(
         "--tasks",
-        default="mnist,cifar10,tiny_shakespeare",
+        default="mnist,cifar10",
         help="Comma-separated tasks",
     )
     parser.add_argument(

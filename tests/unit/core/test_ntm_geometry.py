@@ -174,7 +174,7 @@ class TestNtmCreditUpdateComposition:
         # before the ntm-specific message; either rejection is correct.
         with pytest.raises(
             ValueError,
-            match="state-shape contract|NTM geometry requires instantaneous",
+            match=r"state-shape contract|NTM geometry requires instantaneous",
         ):
             config.validate()
 
@@ -197,6 +197,7 @@ class TestNtmCopyLearnability:
             ((logits.argmax(-1) == targets) & mask).float().sum() / mask.float().sum()
         )
 
+    @pytest.mark.timeout(900)  # measured 120s killed by the global 120s default
     def test_bptt_learns_copy_mechanics(self) -> None:
         """The §20 gate at promotion scale: short-BPTT on L=4 copy descends
         materially and beats the 0.5 all-bit chance on a fresh draw.

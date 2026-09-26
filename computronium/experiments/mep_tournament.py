@@ -10,19 +10,25 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import itertools
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import torch
 
-from computronium.core.trainer import CoreTrainer, TrainerConfig
-from computronium.utils import seed_everything
+from computronium.core.rules import rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
+from computronium.ontology import ParameterUpdateConfig, update_from_config
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -31,57 +37,47 @@ logger = logging.getLogger(__name__)
 # MEP Factor Definitions
 # =============================================================================
 
-# MEP factors and their levels
+# MEP factors and their levels. Every level is a primitive the ontology
+# actually has: `gradient` names a credit assignment, `update` a
+# ParameterUpdate, `constraint` the spectral-constrained variant of it. The
+# legacy fourth factor, `feedback` (symmetric/random/alignment/none), has no
+# axis in the 5-D ontology -- the four levels named pathways the current
+# geometries do not distinguish -- so it is not a factor here. Naming factors
+# the tree cannot express is how a tournament reports 256 arms and varies
+# none of them, which is what the previous version did.
 MEP_FACTORS = {
-    "gradient": ["bp", "fa", "direct", "kfac"],  # Gradient estimator
-    "update": ["sgd", "adam", "muon", "shampoo"],  # Update rule
-    "constraint": ["none", "spectral", "frobenius", "lipschitz"],  # Constraint type
-    "feedback": ["symmetric", "random", "alignment", "none"],  # Feedback pathway
+    "gradient": ["bp", "fa", "direct"],  # gradient estimator == learning rule
+    "update": ["sgd", "adam", "muon"],  # update rule
+    "constraint": ["none", "spectral"],  # constraint type
 }
 
-# Base MEP config
-BASE_MEP_CONFIG = {
-    "hidden_dim": 512,
-    "num_layers": 3,
-    "use_spectral_norm": True,
-    "learning_rate": 1e-3,
+# Factor level -> the ontology primitive it names.
+_GRADIENT_RULES = {"bp": "backprop", "fa": "fa", "direct": "ep"}
+_UPDATE_CONFIGS = {
+    "sgd": ParameterUpdateConfig.euclidean,
+    "adam": ParameterUpdateConfig.adam,
+    "muon": ParameterUpdateConfig.muon,
 }
+
+LEARNING_RATE = 1e-3
+HIDDEN_DIMS = (512, 512, 512)
 
 
 @dataclass(frozen=True, slots=True)
 class MEPConfig:
     """Configuration for a single MEP factor combination."""
 
-    gradient: Literal["bp", "fa", "direct", "kfac"]
-    update: Literal["sgd", "adam", "muon", "shampoo"]
-    constraint: Literal["none", "spectral", "frobenius", "lipschitz"]
-    feedback: Literal["symmetric", "random", "alignment", "none"]
+    gradient: Literal["bp", "fa", "direct"]
+    update: Literal["sgd", "adam", "muon"]
+    constraint: Literal["none", "spectral"]
     task: str
     seed: int
     epochs: int
     batch_size: int
 
     def model_name(self) -> str:
-        """Generate model name from factors."""
-        return f"mep_{self.gradient}_{self.update}_{self.constraint}_{self.feedback}"
-
-    def model_kwargs(self) -> dict:
-        """Generate model kwargs for trainer."""
-        kwargs = BASE_MEP_CONFIG.copy()
-        kwargs.update({
-            "gradient_estimator": self.gradient,
-            "update_rule": self.update,
-            "constraint_type": self.constraint,
-            "feedback_type": self.feedback,
-        })
-        # Task-specific dims
-        if self.task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
-            kwargs["input_dim"] = 784
-            kwargs["output_dim"] = 10
-        else:
-            kwargs["input_dim"] = 3072
-            kwargs["output_dim"] = 10
-        return kwargs
+        """A stable name for this factor combination."""
+        return f"mep_{self.gradient}_{self.update}_{self.constraint}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,56 +110,64 @@ def _generate_all_combinations(factors: dict[str, list[str]]) -> list[dict]:
     return combinations
 
 
+def _mep_system(config: MEPConfig, input_dim: int, output_dim: int) -> System:
+    """The system for one factor combination: rule, then update, then constraint."""
+    base = rule_system(
+        _GRADIENT_RULES[config.gradient],
+        input_dim,
+        output_dim,
+        hidden_dims=HIDDEN_DIMS,
+        lr=LEARNING_RATE,
+        device="cpu",
+    )
+    update_config = _UPDATE_CONFIGS[config.update](step_size=LEARNING_RATE)
+    if config.constraint == "spectral":
+        update_config = ParameterUpdateConfig.spectral_constrained(
+            step_size=LEARNING_RATE
+        )
+    return dataclasses.replace(base, update=update_from_config(update_config))
+
+
 def _run_single_mep_experiment(config: MEPConfig, device: str) -> dict:
     """Run a single MEP experiment."""
-    seed_everything(config.seed)
+    built: list[System] = []
 
-    trainer_config = TrainerConfig(
-        model="mep",  # Assuming MEP model is registered as "mep"
-        task=config.task,
-        epochs=config.epochs,
-        batch_size=config.batch_size,
-        optimizer_kwargs={"lr": BASE_MEP_CONFIG["learning_rate"]},
-        model_kwargs=config.model_kwargs(),
-        device=device,
-    )
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = _mep_system(config, input_dim, output_dim)
+        built.append(system)
+        return system
 
-    try:  # noqa: PLR0915
-        trainer = CoreTrainer(trainer_config)
-        start_time = time.time()
-        history = trainer.fit()
-        elapsed = time.time() - start_time
-
-        if not history:
-            return {
-                **config.__dict__,
-                "accuracy": 0.0,
-                "loss": float("inf"),
-                "time": elapsed,
-                "params": 0,
-                "success": False,
-            }
-
-        final = history[-1]
-        return {
-            **config.__dict__,
-            "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-            "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
-            "time": elapsed,
-            "params": final.param_count if hasattr(final, "param_count") else 0,
-            "success": True,
-        }
-    except Exception as e:
+    start_time = time.time()
+    try:
+        history = train_task(
+            factory,
+            config.task,
+            config.epochs,
+            batch_size=config.batch_size,
+            device=device,
+            seed=config.seed,
+        )
+    except Exception as error:
         logger.exception("MEP experiment failed: %s", config.model_name())
         return {
-            **config.__dict__,
+            **dataclasses.asdict(config),
             "accuracy": 0.0,
             "loss": float("inf"),
             "time": 0.0,
             "params": 0,
             "success": False,
-            "error": str(e),
+            "error": str(error),
         }
+    elapsed = time.time() - start_time
+    final = final_metrics(history)
+    return {
+        **dataclasses.asdict(config),
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
+        "time": elapsed,
+        "params": param_count(built[0]) if built else 0,
+        "success": bool(history),
+    }
 
 
 def run_mep_tournament(config: MEPExperimentConfig) -> list[dict]:
@@ -220,7 +224,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
     if df.empty:
         return {}
 
-    factor_cols = ["gradient", "update", "constraint", "feedback"]
+    factor_cols = list(MEP_FACTORS)
     importance = {}
 
     for task in df["task"].unique():
@@ -303,7 +307,7 @@ def _find_best_presets(results: list[dict], top_k: int = 5) -> dict:
     for task in df["task"].unique():
         task_df = df[df["task"] == task]
         # Aggregate by factor combination
-        factor_cols = ["gradient", "update", "constraint", "feedback"]
+        factor_cols = list(MEP_FACTORS)
         grouped = (
             task_df
             .groupby(factor_cols)

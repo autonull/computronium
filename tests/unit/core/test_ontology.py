@@ -776,3 +776,28 @@ class TestOntologyConfigs:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_recurrent_geometry_refuses_hidden_widths_it_cannot_recur() -> None:
+    """One recurrent weight cannot span hidden layers of different widths.
+
+    ``RecurrentGeometry.forward`` applies the recurrent connection after *every*
+    hidden layer, so heterogeneous widths used to reach torch as a matmul shape
+    error several layers in -- i.e. only when an experiment happened to build
+    the arm. Uniform widths, which is what the zoo's own default is, still
+    build.
+    """
+    import pytest
+
+    from computronium.ontology import GeometryConfig, RecurrentGeometry
+
+    uniform = GeometryConfig.recurrent(
+        input_dim=8, output_dim=3, hidden_dims=(16, 16), init_scale=0.1
+    )
+    assert RecurrentGeometry(uniform, hidden_dim=16).config.hidden_dims == (16, 16)
+
+    mixed = GeometryConfig.recurrent(
+        input_dim=8, output_dim=3, hidden_dims=(32, 16), init_scale=0.1
+    )
+    with pytest.raises(ValueError, match="uniform"):
+        RecurrentGeometry(mixed, hidden_dim=16)

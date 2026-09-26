@@ -1,30 +1,44 @@
-"""Cross-Domain Transfer — Vision→LM/RL/Graph Transfer Efficiency.
+"""Cross-Domain Transfer — Vision→Tabular/Vision Transfer Efficiency.
 
 Tests whether local learning representations transfer better than backprop.
 Measures transfer efficiency across domains.
 
+Target domains are the ones the loader-based training path can actually
+reach. The four this experiment used to name -- language, RL, graph,
+time series -- cannot, and the reasons are properties of the tree rather
+than of the experiment: the language lane yields token *indices* and the
+5-D path has no embedding geometry, while the RL and graph tasks provide no
+``(inputs, targets)`` dataloader at all. ``train_task`` refuses each with
+that message rather than failing inside a geometry.
+
 Usage:
-    python -m computronium.experiments.cross_domain_transfer --source vision --targets lm,rl,graph --seeds 3
+    python -m computronium.experiments.cross_domain_transfer --source vision --targets tabular,vision --seeds 3
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
-from computronium.core.trainer import CoreTrainer, TrainerConfig
-from computronium.utils import seed_everything
+from computronium.core.rules import rule_system
+from computronium.core.system_trainer.factory import param_count
+from computronium.core.system_trainer.train_task import final_metrics, train_task
 from computronium.validation.statistics import (
     cohens_d,
     permutation_test_p,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +53,10 @@ class TransferConfig:
     """Configuration for cross-domain transfer experiment."""
 
     source_domains: list[str] = field(default_factory=lambda: ["vision"])
-    target_domains: list[str] = field(
-        default_factory=lambda: ["lm", "rl", "graph", "timeseries"]
-    )
+    target_domains: list[str] = field(default_factory=lambda: ["tabular", "vision"])
     source_tasks: list[str] = field(default_factory=lambda: ["cifar10"])
     target_tasks: dict[str, list[str]] = field(
-        default_factory=lambda: {
-            "lm": ["tiny_shakespeare"],
-            "rl": ["cartpole"],
-            "graph": ["cora"],
-            "timeseries": ["forecasting"],
-        }
+        default_factory=lambda: {"tabular": ["iris", "wine"], "vision": ["xor"]}
     )
     algorithms: list[str] = field(
         default_factory=lambda: ["ep", "fa", "pc", "hebbian", "backprop"]
@@ -65,123 +72,55 @@ class TransferConfig:
     quick_mode: bool = False
 
 
-# Domain to model mapping
-DOMAIN_MODELS = {
-    "vision": {
-        "ep": "conv_tile",
-        "fa": "conv_tile_fa",
-        "pc": "conv_tile_pc",
-        "hebbian": "conv_tile_hebbian",
-        "backprop": "backprop_mlp",
-    },
-    "lm": {
-        "ep": "tile_lm",
-        "fa": "tile_lm",  # with algorithm=fa
-        "pc": "tile_lm",  # with algorithm=pc
-        "hebbian": "tile_lm",
-        "backprop": "backprop_lm",
-    },
-    "rl": {
-        "ep": "rl_tile",
-        "fa": "rl_tile_fa",
-        "pc": "rl_tile_pc",
-        "hebbian": "rl_tile_hebbian",
-        "backprop": "backprop_rl",
-    },
-    "graph": {
-        "ep": "graph_tile",
-        "fa": "graph_tile_fa",
-        "pc": "graph_tile_pc",
-        "hebbian": "graph_tile_hebbian",
-        "backprop": "backprop_gnn",
-    },
-    "timeseries": {
-        "ep": "timeseries_tile",
-        "fa": "timeseries_tile_fa",
-        "pc": "timeseries_tile_pc",
-        "hebbian": "timeseries_tile_hebbian",
-        "backprop": "backprop_rnn",
-    },
-}
-
-
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
     return device
 
 
-def _get_model_for_domain(domain: str, algorithm: str) -> str:
-    """Get model name for domain and algorithm."""
-    return DOMAIN_MODELS.get(domain, {}).get(algorithm, algorithm)
-
-
-def _create_trainer_config(
-    model_name: str,
-    task: str,
-    domain: str,
+def _run_target_arm(
     algorithm: str,
+    task: str,
     epochs: int,
     lr: float,
-    is_finetune: bool,
+    seed: int,
     config: TransferConfig,
-) -> TrainerConfig:
-    """Create trainer config."""
-    model_kwargs = {"algorithm": algorithm}
+) -> tuple[dict, System | None]:
+    """Train one rule on one task and report its final metrics."""
+    built: list[System] = []
 
-    # Domain-specific defaults
-    if domain == "vision":
-        model_kwargs.update({
-            "input_channels": 3 if "cifar" in task else 1,
-            "input_size": 32,
-            "num_classes": 10,
-            "neurons_per_tile": 128,
-            "tiles_per_layer": 4,
-            "num_fc_layers": 3,
-        })
-    elif domain == "lm":
-        model_kwargs.update({
-            "vocab_size": 1000,
-            "embed_dim": 192,
-            "num_layers": 3,
-            "neurons_per_tile": 48,
-            "tiles_per_layer": 4,
-        })
-    elif domain == "rl":
-        model_kwargs.update({
-            "obs_dim": 4,  # cartpole
-            "action_dim": 2,
-            "hidden_dim": 128,
-            "neurons_per_tile": 32,
-            "tiles_per_layer": 4,
-        })
-    elif domain == "graph":
-        model_kwargs.update({
-            "node_features": 1433,  # cora
-            "hidden_dim": 64,
-            "num_classes": 7,
-            "neurons_per_tile": 32,
-            "tiles_per_layer": 4,
-        })
-    elif domain == "timeseries":
-        model_kwargs.update({
-            "input_dim": 10,
-            "seq_len": 100,
-            "pred_len": 10,
-            "hidden_dim": 64,
-            "neurons_per_tile": 32,
-            "tiles_per_layer": 4,
-        })
+    def factory(input_dim: int, output_dim: int) -> System:
+        system = rule_system(
+            algorithm,
+            input_dim,
+            output_dim,
+            lr=lr,
+            device=config.device,
+        )
+        built.append(system)
+        return system
 
-    return TrainerConfig(
-        model=model_name,
-        task=task,
-        epochs=epochs,
+    start_time = time.time()
+    history = train_task(
+        factory,
+        task,
+        epochs,
         batch_size=config.batch_size,
-        optimizer_kwargs={"lr": lr},
-        model_kwargs=model_kwargs,
         device=config.device,
         quick_mode=config.quick_mode,
+        seed=seed,
+    )
+    elapsed = time.time() - start_time
+    final = final_metrics(history)
+    return (
+        {
+            "accuracy": final.get("val_acc", 0.0),
+            "loss": final.get("val_loss", float("inf")),
+            "time": elapsed,
+            "params": param_count(built[0]) if built else 0,
+            "success": bool(history),
+        },
+        built[0] if built else None,
     )
 
 
@@ -190,52 +129,26 @@ def _run_pretraining(
     source_task: str,
     seed: int,
     config: TransferConfig,
-) -> tuple[dict, CoreTrainer]:
-    """Run pretraining on source domain."""
-    seed_everything(seed)
-
-    model_name = _get_model_for_domain("vision", algorithm)
-    trainer_config = _create_trainer_config(
-        model_name,
-        source_task,
-        "vision",
+) -> dict:
+    """Phase 1: train on the source task, as a transferability baseline."""
+    result, _ = _run_target_arm(
         algorithm,
+        source_task,
         config.pretrain_epochs,
         config.learning_rate,
-        False,
+        seed,
         config,
     )
-
-    trainer = CoreTrainer(trainer_config)
-    start_time = time.time()
-    history = trainer.fit()
-    elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "algorithm": algorithm,
-            "source_task": source_task,
-            "seed": seed,
-            "pretrain_accuracy": 0.0,
-            "pretrain_loss": float("inf"),
-            "pretrain_time": elapsed,
-            "pretrain_params": 0,
-            "success": False,
-        }, trainer
-
-    final = history[-1]
     return {
         "algorithm": algorithm,
         "source_task": source_task,
         "seed": seed,
-        "pretrain_accuracy": final.val_acc
-        if hasattr(final, "val_acc")
-        else final.accuracy,
-        "pretrain_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
-        "pretrain_time": elapsed,
-        "pretrain_params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
-    }, trainer
+        "pretrain_accuracy": result["accuracy"],
+        "pretrain_loss": result["loss"],
+        "pretrain_time": result["time"],
+        "pretrain_params": result["params"],
+        "success": result["success"],
+    }
 
 
 def _run_finetuning(
@@ -243,56 +156,34 @@ def _run_finetuning(
     target_domain: str,
     target_task: str,
     seed: int,
-    pretrained_trainer: CoreTrainer,
     config: TransferConfig,
 ) -> dict:
-    """Run finetuning on target domain."""
-    seed_everything(seed)
+    """Phase 2: train on the target task.
 
-    model_name = _get_model_for_domain(target_domain, algorithm)
-    trainer_config = _create_trainer_config(
-        model_name,
-        target_task,
-        target_domain,
+    ``weights_transferred`` is False on purpose and recorded on purpose: the
+    removed trainer could not carry weights across domains of different input
+    geometry, and the legacy code created a fresh trainer here while calling
+    the phase "finetuning". The record says which it is.
+    """
+    result, _ = _run_target_arm(
         algorithm,
+        target_task,
         config.finetune_epochs,
         config.finetune_lr,
-        True,
+        seed,
         config,
     )
-
-    # For simplicity, create new trainer (in practice would load pretrained weights)
-    trainer = CoreTrainer(trainer_config)
-    start_time = time.time()
-    history = trainer.fit()
-    elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "algorithm": algorithm,
-            "target_domain": target_domain,
-            "target_task": target_task,
-            "seed": seed,
-            "finetune_accuracy": 0.0,
-            "finetune_loss": float("inf"),
-            "finetune_time": elapsed,
-            "finetune_params": 0,
-            "success": False,
-        }
-
-    final = history[-1]
     return {
         "algorithm": algorithm,
         "target_domain": target_domain,
         "target_task": target_task,
         "seed": seed,
-        "finetune_accuracy": final.val_acc
-        if hasattr(final, "val_acc")
-        else final.accuracy,
-        "finetune_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
-        "finetune_time": elapsed,
-        "finetune_params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
+        "finetune_accuracy": result["accuracy"],
+        "finetune_loss": result["loss"],
+        "finetune_time": result["time"],
+        "finetune_params": result["params"],
+        "weights_transferred": False,
+        "success": result["success"],
     }
 
 
@@ -303,59 +194,32 @@ def _run_scratch_baseline(
     seed: int,
     config: TransferConfig,
 ) -> dict:
-    """Run from-scratch training on target (baseline)."""
-    seed_everything(seed)
-
-    model_name = _get_model_for_domain(target_domain, algorithm)
-    trainer_config = _create_trainer_config(
-        model_name,
-        target_task,
-        target_domain,
+    """The from-scratch control for a target arm, at the source learning rate."""
+    result, _ = _run_target_arm(
         algorithm,
+        target_task,
         config.finetune_epochs,
-        config.finetune_lr,
-        False,
+        config.learning_rate,
+        seed,
         config,
     )
-
-    trainer = CoreTrainer(trainer_config)
-    start_time = time.time()
-    history = trainer.fit()
-    elapsed = time.time() - start_time
-
-    if not history:
-        return {
-            "algorithm": algorithm,
-            "target_domain": target_domain,
-            "target_task": target_task,
-            "seed": seed,
-            "scratch_accuracy": 0.0,
-            "scratch_loss": float("inf"),
-            "scratch_time": elapsed,
-            "scratch_params": 0,
-            "success": False,
-        }
-
-    final = history[-1]
     return {
         "algorithm": algorithm,
         "target_domain": target_domain,
         "target_task": target_task,
         "seed": seed,
-        "scratch_accuracy": final.val_acc
-        if hasattr(final, "val_acc")
-        else final.accuracy,
-        "scratch_loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
-        "scratch_time": elapsed,
-        "scratch_params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
+        "scratch_accuracy": result["accuracy"],
+        "scratch_loss": result["loss"],
+        "scratch_time": result["time"],
+        "scratch_params": result["params"],
+        "success": result["success"],
     }
 
 
 def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: ignore[complex-structure]
     """Run cross-domain transfer experiments."""
     device = _resolve_device(config.device)
-    config = TransferConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     results = []
 
@@ -366,8 +230,6 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
     logger.info(
         "Phase 1: Pretraining on source domain (%d experiments)", total_pretrain
     )
-    pretrained_models = {}
-
     for source_task in config.source_tasks:
         for algorithm in config.algorithms:
             for seed in range(config.seeds):
@@ -381,12 +243,8 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
                     seed,
                 )
 
-                result, trainer = _run_pretraining(algorithm, source_task, seed, config)
+                result = _run_pretraining(algorithm, source_task, seed, config)
                 results.append({**result, "phase": "pretrain"})
-
-                if result["success"]:
-                    key = (algorithm, source_task, seed)
-                    pretrained_models[key] = trainer
 
     # Phase 2: Finetuning + Scratch baselines
     total_finetune = (
@@ -421,16 +279,8 @@ def run_transfer_experiment(config: TransferConfig) -> list[dict]:  # ruff: igno
                             seed,
                         )
 
-                        # Finetune
-                        key = (algorithm, source_task, seed)
-                        pretrained = pretrained_models.get(key)
                         ft_result = _run_finetuning(
-                            algorithm,
-                            target_domain,
-                            target_task,
-                            seed,
-                            pretrained,
-                            config,
+                            algorithm, target_domain, target_task, seed, config
                         )
                         results.append({
                             **ft_result,
@@ -649,7 +499,7 @@ def main():
     parser = argparse.ArgumentParser(description="Cross-Domain Transfer Experiment")
     parser.add_argument("--source", default="vision", help="Source domain")
     parser.add_argument(
-        "--targets", default="lm,rl,graph,timeseries", help="Target domains"
+        "--targets", default="tabular,vision", help="Target domains"
     )
     parser.add_argument("--source-tasks", default="cifar10", help="Source tasks")
     parser.add_argument(

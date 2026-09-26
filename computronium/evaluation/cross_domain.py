@@ -14,11 +14,10 @@ Integrates with KnowledgeBase for persistent storage and LeaderboardGenerator.
 """
 
 import json
-import math
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
@@ -34,12 +33,32 @@ from computronium.domains import (
 from computronium.evaluation.base import BenchmarkResult
 from computronium.knowledge import KnowledgeBase, KnowledgeEntry
 from computronium.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
-from computronium.utils import count_parameters
 
 logger = get_logger()
 
+
 if TYPE_CHECKING:
-    from torch import nn
+    from computronium.ontology import System
+
+
+def _train_rule(rule, task, config, device) -> tuple[list[dict[str, float]], System | None]:
+    """Train one rule's system on ``task``; return the history and the system.
+
+    The system comes back because a benchmark result reports its parameter
+    count, and ``train_on_task`` returns metrics only.
+    """
+    from computronium.core.rules import rule_system
+    from computronium.core.system_trainer.train_task import train_on_task
+
+    built: list[System] = []
+
+    def factory(input_dim: int, output_dim: int) -> System:
+        composed = rule_system(rule, input_dim, output_dim, device=device)
+        built.append(composed)
+        return composed
+
+    history = train_on_task(factory, task, config)
+    return history, (built[0] if built else None)
 
 
 @dataclass(slots=True)
@@ -172,61 +191,43 @@ class CrossDomainBenchmarkSuite:
         track_energy: bool = False,
     ) -> BenchmarkResult | None:
         """Run a single model on a task and return benchmark result."""
-        from computronium.core.trainer import CoreTrainer, TrainerConfig
-        from computronium.experiment.param_estimator import resolve_native_model
+        from computronium.core.rules import rule_for
+        from computronium.core.system_trainer.config import SystemTrainerConfig
+        from computronium.core.system_trainer.factory import param_count
 
-        try:  # noqa: PLR0915
-            config = TrainerConfig(
-                model=model_name,
-                task=task.name,
-                epochs=epochs,
-                batch_size=batch_size,
-                device=device,
-                track_energy=track_energy,
-                val_batches=20,
-            )
-
-            trainer = CoreTrainer(config)
-            trainer._setup_data()
-
-            model = trainer.model
-            if model is None:
-                input_dim = task.input_dim
-                if isinstance(input_dim, tuple | list):
-                    input_dim = int(math.prod(input_dim))
-                model = cast(
-                    "nn.Module",
-                    resolve_native_model(model_name)(
-                        int(input_dim or 0), 64, int(task.output_dim or 0)
-                    ),
-                )
-
-            model = model.to(trainer.device)
-
-            history = trainer.fit()
-
-            if history:
-                final = history[-1]
-                result = BenchmarkResult(
-                    model_name=model_name,
-                    task_name=task.name,
-                    metrics={
-                        "accuracy": final.val_acc or 0.0,
-                        "loss": final.val_loss or float("inf"),
-                    },
-                    params_count=count_parameters(model, trainable_only=False),
-                    metadata={
-                        "epochs": len(history),
-                        "train_accuracy": final.train_acc,
-                        "energy_proxy": final.energy_proxy,
-                    },
-                )
-                return result
-
-        except RuntimeError, ValueError, TypeError, KeyError:
+        config = SystemTrainerConfig(
+            max_epochs=epochs,
+            batch_size=batch_size,
+            val_batch_size=batch_size,
+            device=device,
+            track_energy=track_energy,
+            track_flops=False,
+            track_memory=False,
+        )
+        try:
+            rule = rule_for(model_name)
+            history, system = _train_rule(rule, task, config, device)
+        except (RuntimeError, ValueError, TypeError, KeyError):
             logger.exception("Failed to run %s on %s", model_name, task.name)
+            return None
 
-        return None
+        if not history or system is None:
+            return None
+        final = history[-1]
+        return BenchmarkResult(
+            model_name=model_name,
+            task_name=task.name,
+            metrics={
+                "accuracy": final.get("val_acc", 0.0),
+                "loss": final.get("val_loss", float("inf")),
+            },
+            params_count=param_count(system),
+            metadata={
+                "epochs": len(history),
+                "train_accuracy": final.get("train_acc", 0.0),
+                "learning_rule": rule,
+            },
+        )
 
     def run_suite(
         self,

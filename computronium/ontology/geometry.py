@@ -1030,6 +1030,28 @@ class RecurrentGeometry(nn.Module):
             self._recurrent_weight = nn.Parameter(
                 torch.randn(hidden_dim, hidden_dim) * config.init_scale * 0.1
             )
+        self._check_recurrent_width()
+
+    def _check_recurrent_width(self) -> None:
+        """One recurrent weight cannot span hidden layers of different widths.
+
+        ``forward`` applies the recurrent connection after *every* hidden
+        layer, so a single square weight is only meaningful when the hidden
+        widths agree. Heterogeneous widths used to reach torch as a matmul
+        shape error several layers in; the geometry knows the widths and the
+        weight, so it is the right place to refuse.
+        """
+        if self._recurrent_weight is None:
+            return
+        widths = set(self.config.hidden_dims)
+        if len(widths) > 1:
+            msg = (
+                f"RecurrentGeometry carries one recurrent weight of shape "
+                f"{tuple(self._recurrent_weight.shape)} but its hidden widths are "
+                f"{sorted(widths)}; a shared recurrent weight needs uniform "
+                "hidden_dims"
+            )
+            raise ValueError(msg)
 
     def _build_layers(self) -> None:
         # For recurrent: input -> hidden (with recurrent), hidden -> output

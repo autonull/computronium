@@ -362,6 +362,7 @@ def _finite_diff_gradient_support(
 # ======================================================================
 
 
+@pytest.mark.timeout(600)  # the [1000] cell is measured at 93s in the fast lane
 class TestCAxisLocalGoodnessCredit:
     """C-Axis: LocalGoodnessCredit (FF/PEPITA) surrogate alignment."""
 
@@ -429,6 +430,7 @@ class TestCAxisLocalGoodnessCredit:
             )
 
 
+@pytest.mark.timeout(600)  # the [1000] cell is measured at 75s in the fast lane
 class TestCAxisTargetInversionCredit:
     """C-Axis: TargetInversionCredit global surrogate alignment."""
 

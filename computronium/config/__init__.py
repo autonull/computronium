@@ -22,7 +22,6 @@ from computronium.config.experiment import (
     to_omegaconf,
     to_system_trainer_config,
     to_tile_algorithm_config,
-    to_trainer_config,
 )
 from computronium.config.unified import (
     BaseConfig,
@@ -47,5 +46,4 @@ __all__ = [
     "to_omegaconf",
     "to_system_trainer_config",
     "to_tile_algorithm_config",
-    "to_trainer_config",
 ]

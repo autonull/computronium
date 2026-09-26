@@ -830,12 +830,12 @@ system = create_fast_weight_mlp(
 
 ## 🏗️ Core Architecture
 
-### 1. Ontology Protocols (`computronium/core/ontology.py`)
+### 1. Ontology Protocols (`computronium/ontology/`)
 
 <details>
 <summary><strong>Protocol details</strong> ⋯</summary>
 
-Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/core/ontology.py` for full Protocol definitions.
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/ontology/` for the full Protocol definitions.
 </details>
 
 - `Substrate` — `forward_operator`, `weight_update_operator`
@@ -849,7 +849,7 @@ Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses
 <details>
 <summary><strong>Joint protocol details</strong> ⋯</summary>
 
-The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py`, `computronium/core/joint/context.py`, `computronium/core/joint/transition.py`.
+The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py` and `computronium/core/joint/transition.py`.
 </details>
 
 - **CompositeState** — joint intra-episode state $z_t = (x_t, \psi_t, \sigma_t)$ with `activity`, `plastic`, `substrate` mappings
@@ -1190,7 +1190,7 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 | MEP Preset Tournament | `computronium/experiments/mep_tournament.py` | Factorized ablation: gradient×update×constraint×feedback with ANOVA + Sobol |
 | FA Depth Scaling | `computronium/experiments/fa_depth_scaling.py` | Extreme depth, MNIST + synthetic parity |
 | MoT Ablation | `computronium/experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
-| Cross-Domain Transfer | `computronium/experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
+| Cross-Domain Transfer | `computronium/experiments/cross_domain_transfer.py` | Vision→tabular/vision transfer, local vs global learning |
 | Tile Algorithm Comparison | `computronium/experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
 
 ### 6-D Joint Experiments — In Development
@@ -1250,7 +1250,7 @@ comp lab benchmark --domain vision --quick
 comp lab core-train --model eqprop_mlp --task mnist --epochs 10
 
 # Cross-domain transfer: vision → LM
-uv run python -m computronium.experiments.cross_domain_transfer --source vision --target lm
+uv run python -m computronium.experiments.cross_domain_transfer --source vision --targets tabular,vision
 ```
 
 ### 📝 Language Modeling Domain
@@ -1323,7 +1323,7 @@ uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --
 
 ## 🚀 Deployment & Inference
 
-### Model Export (`computronium/deployment.py`)
+### Model Export (`computronium/deployment/`)
 
 - 📦 **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
 - 🔗 **TorchScript**: trace method works for all TileNet models

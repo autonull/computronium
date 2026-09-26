@@ -238,6 +238,7 @@ class TestThermodynamicVsBackpropLinear:
 class TestThermodynamicVsBackpropMLP:
     """Test ThermodynamicContrast approximates BackpropCredit on MLP."""
 
+    @pytest.mark.timeout(600)  # measured 120s killed by the global 120s default
     def test_cosine_similarity_reasonable(  # ruff: ignore[too-many-locals]
         self,
         mlp_geometry,

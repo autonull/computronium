@@ -22,7 +22,7 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
-from computronium.core.trainer import run_from_runconfig as run_from_config
+from computronium.config.run import run_run_config
 
 if TYPE_CHECKING:
     from computronium.config.omegaconf import RunConfig
@@ -140,9 +140,9 @@ class AblationStudy:
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                res = run_from_config(cfg)
+                res = run_run_config(cfg)
 
-            score = float(res.get("final_val_accuracy", 0.0))
+            score = float(res.get("val_acc", 0.0))
             return AblationResult(
                 params=params,
                 success=True,

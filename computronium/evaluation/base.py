@@ -20,13 +20,16 @@ from computronium.domains.base import DomainTask, TaskSplit
 from computronium.utils import count_parameters
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
+
+    from computronium.ontology import System
 
 __all__ = [
     "BenchmarkResult",
     "EvaluatorBase",
     "MetricFn",
     "MetricSuite",
+    "SystemModule",
     "accuracy_fn",
     "cross_validate",
     "evaluate_model_on_task",
@@ -192,6 +195,28 @@ class MetricSuite:
         return "maximize"
 
 
+class SystemModule(nn.Module):
+    """A composed System behind the ``nn.Module`` surface evaluators expect.
+
+    Task evaluators and metric suites are written against ``nn.Module``; a
+    ``System`` is a frozen dataclass whose geometry holds the parameters, so
+    it needs this two-method bridge. ``parameters`` is overridden because the
+    geometry's tensors are not registered with the wrapper, and a parameter
+    count of zero is a claim nobody should publish.
+    """
+
+    def __init__(self, system: System) -> None:
+        super().__init__()
+        self.system = system
+
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        return self.system.forward(inputs)
+
+    def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
+        """The system's geometry parameters, in place of the wrapper's own."""
+        return iter(self.system.geometry.params.values())
+
+
 @dataclass(frozen=True, slots=True)
 class BenchmarkResult:
     """Result of a benchmark evaluation."""
@@ -333,7 +358,7 @@ def evaluate_model_on_task(
 
 
 def cross_validate(
-    model_factory: Callable[[], nn.Module],
+    system_factory: Callable[[int, int], System],
     task: DomainTask,
     n_folds: int = 5,
     epochs: int = 5,
@@ -343,7 +368,8 @@ def cross_validate(
     Run k-fold cross-validation on a task.
 
     Args:
-        model_factory: Callable that returns a fresh model instance.
+        system_factory: Called with the task's ``(input_dim, output_dim)``,
+            returning a fresh composed System for each fold.
         task: DomainTask (must support k-fold via DataLoader).
         n_folds: Number of folds.
         epochs: Training epochs per fold.
@@ -351,29 +377,29 @@ def cross_validate(
     Returns:
         Dict of fold -> metrics.
     """
-    from computronium.core.trainer import CoreTrainer, TrainerConfig
+    from computronium.core.system_trainer.config import SystemTrainerConfig
+    from computronium.core.system_trainer.train_task import train_on_task
 
     all_fold_metrics: dict[str, dict[str, float]] = {}
+    config = SystemTrainerConfig(max_epochs=epochs, track_energy=False)
 
     for fold in range(n_folds):
         logger.info("Cross-validation fold %s/%s", fold + 1, n_folds)
-        model = model_factory()
-        config = TrainerConfig(
-            model=model.__class__.__name__,
-            epochs=epochs,
-            task=task.name,
-            track_energy=False,
-        )
-        trainer = CoreTrainer(config)
-        trainer.model = model
-        trainer.device = task.device
-        trainer._setup_data()
-
         if hasattr(task, "set_fold"):
             task.set_fold(fold, n_folds)
+        trained: list[System] = []
 
-        trainer.fit()
-        result = evaluate_model_on_task(model, task, metric_suite=metric_suite)
+        def factory(input_dim: int, output_dim: int) -> System:
+            system = system_factory(input_dim, output_dim)
+            trained.append(system)
+            return system
+
+        train_on_task(factory, task, config)
+        result = evaluate_model_on_task(
+            SystemModule(trained[-1]),
+            task,
+            metric_suite=metric_suite,
+        )
         all_fold_metrics[f"fold_{fold}"] = result.metrics
 
     return all_fold_metrics

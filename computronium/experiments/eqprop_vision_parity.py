@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 import time
@@ -22,7 +23,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from computronium.analysis.dynamics import DynamicsAnalyzer
-from computronium.cli.run import _BASELINE_MODELS
+from computronium.cli.shared import _BASELINE_MODELS
 from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
@@ -245,7 +246,7 @@ def run_eqprop_parity(config: EqPropParityConfig) -> list[dict]:
     """Run EqProp vision parity experiments."""
     results = []
     device = _resolve_device(config.device)
-    config = EqPropParityConfig(**{**config.__dict__, "device": device})
+    config = dataclasses.replace(config, device=device)
 
     # Filter out baseline models that fail learns-gate
     eqprop_models = [m for m in config.eqprop_models if m not in _BASELINE_MODELS]

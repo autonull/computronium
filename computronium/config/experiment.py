@@ -41,7 +41,6 @@ __all__ = [
     "to_omegaconf",
     "to_system_trainer_config",
     "to_tile_algorithm_config",
-    "to_trainer_config",
 ]
 
 
@@ -312,83 +311,6 @@ def from_omegaconf(cfg: Any) -> ExperimentConfig:
 
     merged = OmegaConf.merge(ExperimentConfig, cfg)
     return OmegaConf.to_object(merged)  # type: ignore[return-value]
-
-
-def to_trainer_config(config: ExperimentConfig):
-    """Convert to core.trainer.TrainerConfig for CoreTrainer."""
-    from computronium.core.trainer import TrainerConfig
-
-    return TrainerConfig(
-        model=config.model.name,
-        model_kwargs={
-            **config.model.extra,
-            "hidden_dims": list(config.model.hidden_dims),
-            "num_layers": config.model.num_layers,
-            "learning_rate": config.model.learning_rate,
-            "beta": config.model.beta,
-            "max_steps": config.model.max_steps,
-            "convergence_threshold": config.model.convergence_threshold,
-            "convergence_start": config.model.convergence_start,
-            "use_spectral_norm": config.model.use_spectral_norm,
-            "activation": config.model.activation,
-        },
-        propagator=config.model.extra.get("propagator"),
-        propagator_kwargs=config.model.extra.get("propagator_kwargs", {}),
-        optimizer=config.training.optimizer,
-        optimizer_kwargs={
-            "lr": config.training.learning_rate,
-            "weight_decay": config.training.weight_decay,
-            **config.training.scheduler_kwargs,
-        },
-        task=config.data.task,
-        data_kwargs=config.data.data_kwargs,
-        batch_size=config.training.batch_size,
-        val_batch_size=config.training.val_batch_size or config.data.val_batch_size,
-        num_workers=config.data.num_workers,
-        epochs=config.training.epochs,
-        batches_per_epoch=config.training.batches_per_epoch,
-        val_batches=config.training.val_batches,
-        max_epoch_time=config.training.max_epoch_time,
-        grad_clip=config.training.grad_clip,
-        use_compile=config.hardware.use_compile,
-        compile_mode=config.hardware.compile_mode,
-        precision=config.hardware.precision,
-        track_energy=config.training.track_energy,
-        track_flops=config.training.track_flops,
-        track_memory=config.training.track_memory,
-        allow_bptt_fallback=config.training.allow_bptt_fallback,
-        run_validation=config.training.run_validation,
-        profile_epochs=config.training.profile_epochs,
-        target_hardware=config.hardware.substrate
-        if config.hardware.substrate != "digital"
-        else None,
-        use_kernel=config.training.use_kernel,
-        kernel_backend=config.training.kernel_backend,
-        kernel_dtype=config.training.kernel_dtype,
-        save_checkpoints=config.training.save_checkpoints,
-        checkpoint_dir=config.training.checkpoint_dir,
-        save_every_n_epochs=config.training.save_every_n_epochs,
-        save_best_only=config.training.save_best_only,
-        early_stopping_patience=config.training.early_stopping_patience,
-        early_stopping_metric=config.training.early_stopping_metric,
-        early_stopping_mode=config.training.early_stopping_mode,
-        log_every_n_steps=config.training.log_every_n_steps,
-        log_dir=config.output_dir,
-        use_wandb=config.use_wandb,
-        wandb_project=config.wandb_project,
-        seed=config.seed,
-        deterministic=config.deterministic,
-        device=config.hardware.device,
-        tags=dict.fromkeys(config.tags, True) if config.tags else {},
-        extra={
-            **config.training.extra,
-            "gradient_accumulation_steps": config.training.gradient_accumulation_steps,
-            "use_amp": config.training.use_amp,
-            "min_lr_ratio": config.training.min_lr_ratio,
-            "scheduler": config.training.scheduler,
-            "warmup_steps": config.training.warmup_steps,
-        },
-    )
 
 
 def to_system_trainer_config(config: ExperimentConfig):

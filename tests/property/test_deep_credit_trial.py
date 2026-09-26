@@ -377,6 +377,10 @@ class TestRegisteredCommission:
 
 
 class TestContrasts:
+    # Measured 37s in-tier, 90s isolated, and the reason the property tier
+    # occasionally reported a failure that no assertion could explain: the
+    # global 120s per-test default kills it under load (TODO35 §6/§13.1).
+    @pytest.mark.timeout(600)
     def test_contrasts_cover_deep_tier(self) -> None:
         result = run_trial(DeepCreditConfig(device="cpu", depths=(4, 16), seeds=(0, 1)))
         contrast_keys = list(result.contrasts_vs_gradient.keys())
