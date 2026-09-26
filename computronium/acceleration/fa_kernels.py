@@ -48,6 +48,7 @@ class FAKernelBackend:
         self._num_layers: int = 0
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
+        self._pre_activations: list[Tensor] = []
 
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
@@ -122,13 +123,17 @@ class FAKernelBackend:
             x = x.view(x.size(0), -1)
 
         activations: list[Tensor] = [x]
+        pre_activations: list[Tensor] = []
         h = x
 
         for i, layer in enumerate(self._layers):
             h = layer(h)
+            pre_activations.append(h)
             if i < len(self._layers) - 1:
                 h = self._activation(h)
             activations.append(h)
+
+        self._pre_activations = pre_activations
 
         return activations[-1], activations
 
@@ -173,8 +178,9 @@ class FAKernelBackend:
                 # B = feedback_weights[i+1] is shaped [D_{i+1}, D_i].
                 grad_h = propagated_error @ B_eff
 
-                h_curr = activations[i + 1]
-                grad_h = _apply_activation_derivative(grad_h, h_curr, self._activation)
+                grad_h = _apply_activation_derivative(
+                    grad_h, self._pre_activation(i), self._activation
+                )
             else:
                 grad_h = propagated_error
 
@@ -194,6 +200,22 @@ class FAKernelBackend:
         result.update(weight_grads)
         result.update(bias_grads)
         return result
+
+    def _pre_activation(self, layer_index: int) -> Tensor:
+        """Pre-activation of ``layer_index``, as recorded by :meth:`forward`.
+
+        The activation derivative is a function of the pre-activation, and for
+        SiLU and GELU it is not recoverable from the post-activation value the
+        activations list carries (for ReLU and Tanh it is: sign(h) and
+        ``1 - h**2`` respectively). The backward pass therefore depends on
+        ``forward`` having run on this backend.
+        """
+        if len(self._pre_activations) != len(self._layers):
+            raise RuntimeError(
+                "FA backward requires the pre-activations recorded by forward(); "
+                f"got {len(self._pre_activations)} for {len(self._layers)} layers"
+            )
+        return self._pre_activations[layer_index]
 
     def backward_contrastive(
         self,
@@ -216,19 +238,19 @@ class FAKernelBackend:
 
         num_layers = len(self._layers)
         for i in range(num_layers):
-            free_pre = free_activations[i]
-            free_post = free_activations[i + 1]
-            nudged_pre = nudged_activations[i]
-            nudged_post = nudged_activations[i + 1]
+            free_in = free_activations[i]
+            free_out = free_activations[i + 1]
+            nudged_in = nudged_activations[i]
+            nudged_out = nudged_activations[i + 1]
 
-            free_wgrad = batched_outer_product(free_pre, free_post)
-            nudged_wgrad = batched_outer_product(nudged_pre, nudged_post)
+            free_wgrad = batched_outer_product(free_in, free_out)
+            nudged_wgrad = batched_outer_product(nudged_in, nudged_out)
             weight_deltas[f"layers.{i}.weight"] = contrastive_delta(
                 free_wgrad, nudged_wgrad, beta
             )
 
-            free_bgrad = free_post.mean(dim=0)
-            nudged_bgrad = nudged_post.mean(dim=0)
+            free_bgrad = free_out.mean(dim=0)
+            nudged_bgrad = nudged_out.mean(dim=0)
             if self._layers[i].bias is not None:
                 bias_deltas[f"layers.{i}.bias"] = contrastive_delta(
                     free_bgrad, nudged_bgrad, beta
@@ -394,23 +416,28 @@ def _get_activation(name: str) -> torch.nn.Module:
 
 def _apply_activation_derivative(
     grad_h: Tensor,
-    h_curr: Tensor,
+    pre_activation: Tensor,
     activation: torch.nn.Module,
 ) -> Tensor:
-    """Apply activation function derivative."""
+    """Multiply ``grad_h`` by f'(x), the derivative at the **pre**-activation.
+
+    ``pre_activation`` must be the layer's input to the activation module, not
+    its output: every branch below is a function of x, and the SiLU and GELU
+    branches have no closed form in terms of f(x).
+    """
+    x = pre_activation
     if isinstance(activation, torch.nn.SiLU):
-        sig = torch.sigmoid(h_curr)
-        return grad_h * sig * (1 + h_curr * (1 - sig))
+        sig = torch.sigmoid(x)
+        return grad_h * sig * (1 + x * (1 - sig))
     if isinstance(activation, torch.nn.ReLU):
-        return grad_h * (h_curr > 0).to(grad_h.dtype)
+        return grad_h * (x > 0).to(grad_h.dtype)
     if isinstance(activation, torch.nn.Tanh):
-        return grad_h * (1 - h_curr**2)
+        return grad_h * (1 - torch.tanh(x) ** 2)
     if isinstance(activation, torch.nn.GELU):
-        # GELU derivative approximation
-        cdf = 0.5 * (1 + torch.erf(h_curr / 1.4142))
-        pdf = torch.exp(-(h_curr**2) / 2) / 2.5066
-        return grad_h * (cdf + h_curr * pdf)
-    return grad_h * (h_curr > 0).to(grad_h.dtype)
+        cdf = 0.5 * (1 + torch.erf(x / math.sqrt(2)))
+        pdf = torch.exp(-(x**2) / 2) / math.sqrt(2 * math.pi)
+        return grad_h * (cdf + x * pdf)
+    return grad_h * (x > 0).to(grad_h.dtype)
 
 
 # Triton kernels for fused FA operations
