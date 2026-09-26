@@ -1249,6 +1249,10 @@ class AutoScientistCampaign:
             "param_count": param_count,
             "spectral_radius": spectral_radius,
             "settle_horizon": settle_steps_used,
+            "settle_configured_horizon": int(
+                getattr(system.dynamics, "_settle_horizon", 0) or 0
+            ),
+            "settle_layers": int(getattr(system.dynamics, "_settle_layers", 1) or 1),
             "credit_alignment": credit_alignment,
             "walltime_s": walltime_s,
             "lr": lr,

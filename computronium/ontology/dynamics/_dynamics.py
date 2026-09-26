@@ -84,23 +84,8 @@ def _apply_gain_control(acts: list[Tensor], mode: GainControlMode) -> list[Tenso
 
 
 # ============================================================
-# State type detection helpers (duck typing for SystemState + CompositeState)
+# State type detection helpers
 # ============================================================
-
-
-def _get_state_x(state: StateLike) -> Tensor | None:
-    """Get input x from either SystemState or CompositeState."""
-    return getattr(state, "x", None)
-
-
-def _get_state_activations(state: StateLike) -> list[Tensor] | Tensor | None:
-    """Get activations from either SystemState or CompositeState."""
-    return getattr(state, "activations", None)
-
-
-def _get_state_free_state(state: StateLike) -> list[Tensor] | Tensor | None:
-    """Get free_state from either SystemState or CompositeState."""
-    return getattr(state, "free_state", None)
 
 
 def _get_state_activity(state: StateLike) -> Mapping[str, ActivityValue] | None:
@@ -130,7 +115,7 @@ def _energy_tensor(value: ActivityValue) -> Tensor:
 def _state_energy_vector(state: StateLike) -> Tensor:
     """The activity field an output-energy reads: the last activation, else
     the ``output`` activity."""
-    acts = _get_state_activations(state)
+    acts = state.activations
     if acts is not None:
         acts = acts if isinstance(acts, list) else [acts]
         return acts[-1] if acts else torch.zeros(1)
@@ -937,15 +922,37 @@ class _SettleTelemetry:
     separate -- a loop that tests ``_settle_steps_used`` for early exit
     breaks on the first iteration, because the horizon is non-zero by the
     time the body runs.
+
+    ``_settle_steps_used`` is a **total**, not a horizon: a settle that runs
+    once per layer executes ``_settle_horizon`` steps in each of
+    ``_settle_layers`` layers, so the total can legitimately exceed the
+    configured horizon. Reporting only the total is a lie to a log reader
+    even when the code is right, so the two factors are reported alongside
+    it and ``_settle_steps_used <= _settle_horizon * _settle_layers`` is
+    locked (TODO35 §3.2). Consumers that divide by it -- energy per settle
+    step -- want the total; consumers that display it want the ratio.
     """
 
     config: StateDynamicsConfig  # provided by every concrete dynamics class
     _settle_steps_used: int = 0
+    _settle_layers: int = 1
     _converged: bool = False
 
     def _note_settle_start(self) -> None:
         self._converged = False
         self._settle_steps_used = 0
+        self._settle_layers = 1
+
+    @property
+    def _settle_horizon(self) -> int:
+        """The configured per-layer horizon.
+
+        Read from the config rather than latched at settle start, so a
+        dynamics that runs a single pass without calling
+        :meth:`_note_settle_start` (``InstantaneousDynamics``) still reports a
+        horizon of 1 rather than a stale 0.
+        """
+        return self.config.max_steps
 
     def _mark_converged(self, step: int) -> None:
         self._settle_steps_used = step + 1
@@ -1296,7 +1303,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None = None,
     ) -> SettableState:
         """Predictive coding settling: minimize prediction error."""
-        x = _get_state_x(state)
+        x = state.x
         if x is None:
             raise ValueError("State must contain input 'x'")
 
@@ -1688,7 +1695,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> SettableState:
-        x = _get_state_x(state)
+        x = state.x
         if x is None:
             raise ValueError("State must contain input 'x'")
 
@@ -1865,7 +1872,7 @@ class PCALMDynamics(_SettleTelemetry):
         on_step: Callable[[int, float], None] | None = None,
     ) -> SettableState:
         """PC-ALM primal-dual settling."""
-        x = _get_state_x(state)
+        x = state.x
         if x is None:
             raise ValueError("State must contain input 'x'")
 
@@ -2368,7 +2375,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> SettableState:
-        x = _get_state_x(state)
+        x = state.x
         if x is None:
             raise ValueError("State must contain input 'x'")
 
@@ -2454,6 +2461,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         h = h.flatten(1) if h.dim() > 2 else h
 
         layer_params = list(zip(layered.weights, layered.biases, strict=True))
+        self._settle_layers = len(layer_params)
         # Compiled fast path (R11.2.25 recipe): whole LIF loop per layer as
         # one graph; fixed step budget, digital arithmetic inlined. Guard
         # keeps it on the eager path's common case (biases present, no
@@ -2639,7 +2647,7 @@ class DiffusionDynamics(_SettleTelemetry):
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
     ) -> SettableState:
-        x = _get_state_x(state)
+        x = state.x
         if x is None:
             raise ValueError("State must contain input 'x'")
 
@@ -2934,9 +2942,9 @@ class LazyStateDynamics(_SettleTelemetry):
 
     def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Hopfield energy of the settled state (shared with the EqProp family)."""
-        acts = _get_state_free_state(state)
+        acts = state.free_state
         if acts is None:
-            acts = _get_state_activations(state)
+            acts = state.activations
         if acts is None or isinstance(acts, Tensor):
             return torch.tensor(0.0)
         return _compute_hopfield_energy(list(acts), geometry)

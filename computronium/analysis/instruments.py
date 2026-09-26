@@ -169,6 +169,10 @@ def settle_horizon(system: System, x: Tensor, y: Tensor | None = None) -> int | 
     Reads the canonical per-settle telemetry (``_settle_steps_used``,
     recorded by every settle implementation); the free-energy history
     length is the fallback for dynamics that predate the telemetry.
+
+    This is the **total**, not the configured horizon: a layered settle
+    (SpikeIntegrationDynamics) runs the horizon once per layer, so the total
+    can exceed it. See :func:`settle_horizon_factors` for the two factors.
     """
     geometry = cast("Geometry", system.geometry)
     substrate = cast("Substrate", system.substrate)
@@ -186,3 +190,18 @@ def settle_horizon(system: System, x: Tensor, y: Tensor | None = None) -> int | 
         return None
     history = get_history()
     return len(history) if history is not None else None
+
+
+def settle_horizon_factors(dynamics: object) -> tuple[int, int]:
+    """``(configured_horizon, layers)`` behind a settle's step total.
+
+    Returned beside the total rather than folded into it so a reader can see
+    that "90 steps" is "30 steps x 3 layers" rather than a horizon three
+    times the configured one (TODO35 §3.2).
+    """
+    horizon = getattr(dynamics, "_settle_horizon", 0)
+    layers = getattr(dynamics, "_settle_layers", 1)
+    return (
+        horizon if isinstance(horizon, int) else 0,
+        layers if isinstance(layers, int) else 1,
+    )

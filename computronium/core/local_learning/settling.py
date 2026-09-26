@@ -7,6 +7,18 @@ Provides reusable helpers for the three common settling patterns:
 
 Phase 3 (REFACTOR7): Unified SettleProtocol + settle_universal primitive
 for cross-algorithm convergence instrumentation.
+
+These loops are **not** the ontology's settle contract and must not be made to
+look like it. ``StateDynamics`` settles the framework's own state algebra, so
+its driver can assume a `SettleIterate` box, autograd continuity across the
+whole loop, and the `_on_step_end` / `_on_converged` telemetry hooks. The
+models settled here are supplied by callers outside that protocol: their
+`_step` and `_forward_step_impl` are object-typed, they may checkpoint
+internally, and their convergence gate is the model's own
+`convergence_threshold` / `convergence_start` rather than a config's. The
+driver's box would transfer; the rest of the contract would not. TODO35 §3.1
+records the decision this paragraph is the record of — the duplication is
+deliberate, not unfinished.
 """
 
 from dataclasses import dataclass

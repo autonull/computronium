@@ -129,10 +129,7 @@ class TestDriverUniquenessLock:
     def test_every_dynamics_class_reports_its_horizon(self) -> None:
         """Telemetry coverage: a settle that runs steps but never records the
         count is indistinguishable from a single pass to the instruments.
-        ``InstantaneousDynamics`` runs one pass and says so. The count is
-        not bounded by ``max_steps``: ``SpikeIntegrationDynamics``'s layered
-        path integrates every layer against its own drive, so a settle
-        executes ``max_steps`` per layer and the horizon counts them all."""
+        ``InstantaneousDynamics`` runs one pass and says so."""
 
         torch.manual_seed(0)
 
@@ -153,5 +150,27 @@ class TestDriverUniquenessLock:
             )
             with torch.no_grad():
                 dynamics.settle(state, geometry, substrate, target=None)
-            horizon = cast("int", getattr(dynamics, "_settle_steps_used"))
-            assert horizon > 0, f"{dynamics_type} ran a settle, recorded no horizon"
+            steps = cast("int", getattr(dynamics, "_settle_steps_used"))
+            assert steps > 0, f"{dynamics_type} ran a settle, recorded no step count"
+            assert self._total_is_readable(dynamics), (
+                f"{dynamics_type}: reported "
+                f"{getattr(dynamics, '_settle_steps_used')} steps against a "
+                f"horizon of {getattr(dynamics, '_settle_horizon')} "
+                f"over {getattr(dynamics, '_settle_layers')} layers"
+            )
+
+    @staticmethod
+    def _total_is_readable(dynamics: object) -> bool:
+        """§3.2: the per-layer sum, with the factors that make it readable.
+
+        ``_settle_steps_used`` counts every step that ran, so a layered settle
+        legitimately reports ``max_steps * layers``. The lie is not the number,
+        it is the number alone: a log reader sees 90 against a configured
+        horizon of 30. So the horizon and the layer count are reported beside
+        it, and the bound they imply is asserted here rather than left as a
+        comment.
+        """
+        steps = cast("int", getattr(dynamics, "_settle_steps_used"))
+        horizon = cast("int", getattr(dynamics, "_settle_horizon"))
+        layers = cast("int", getattr(dynamics, "_settle_layers"))
+        return horizon > 0 and layers >= 1 and steps <= horizon * layers
