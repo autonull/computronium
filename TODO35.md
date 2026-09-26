@@ -1,7 +1,9 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open.** This document owns every open item as of
-Round 3 (see §12). `TODO34.md` keeps its 16 passes as the record of how the tree was
+Round 3 (see §12). **A new session should read §13 first** — it is the
+handoff, and it carries the next three moves with the measurement each one
+needs. `TODO34.md` keeps its 16 passes as the record of how the tree was
 made fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift this
 plan series has documented five times.
@@ -258,6 +260,14 @@ unexplained failure is the exact mistake `TODO34` §1.1 made with a 0.78 floor
 inside a measured oscillation band. When it recurs, capture it with
 `-x --tb=long` and the run's walltime beside the assertion. If it does not
 recur, it is a data point, not a task.
+
+> **§13.1 supersedes the "if it does not recur" half of this.** It recurred
+> in Round 3, and there is a candidate mechanism that was never checked
+> because this section assumed — without the message — that the failure was
+> an *assertion* failure. A global per-test `timeout = 120`
+> (`pyproject.toml:190-192`) reports as `Timeout`, the offending test holds
+> half the property tier, and it has been measured at 37.36s in-tier and
+> 90.08s isolated. Read §13.1 item 1 before touching anything here.
 
 ---
 
@@ -844,14 +854,16 @@ staleness.
 | fast lane | 127s / 3397 passed | **240s / 3403 passed, 119 skipped, 26 xfailed, 1 xpassed** |
 | new lock cost | — | cross-module import lock 4.2s; post-slow ordering assertion 0.0s |
 
-The fast lane's walltime is 240s against 127s, on the same machine, and
-nothing in this round adds 113s of compute — the two new locks account for
-~4s. The honest reading is that §11.5's 127s was measured on a quieter box
-or a warmer cache, and **the number in §7/§11.5 should be treated as
-"120–240s", not as a figure to regress against**. This is the third time
-this series has recorded a fast-lane walltime it could not reproduce; the
-metric is too noisy to gate on, and the *test count* is the part that is
-load-bearing.
+The fast lane's walltime is 240s against 127s, and **this paragraph is a
+guess, not a measurement** — the only thing established is that the diff
+adds ~4s of locks. The samples that exist contradict the "quieter box"
+story rather than confirm it: the same three-tier command took 279.82s at
+baseline and 269.96s with this round's diff, a 3.5% spread, so this box is
+*stable*, and the gap is **between sessions**. So the sharper claim is that
+**§11.5's 127s is not reproducible on this machine and is not a number
+anyone should regress against**. Corrected and given a first move in
+§13.1 item 3: three back-to-back runs, and the *test count* is the
+load-bearing metric rather than the walltime.
 
 ### 12.6 New items, for the next round
 
@@ -883,3 +895,104 @@ load-bearing.
 5. **§4, §5, §1.9** — unchanged; §1.9's recommendation still stands, and
    note that the two unwritten rules would not have caught any of this
    round's findings.
+
+---
+
+## 13. Start here — Round 4 handoff
+
+State at `4be5eb6d`, working tree clean. Round 3 (§12) is closed and
+committed; nothing below has been started.
+
+### 13.1 The next three moves, in order
+
+**1. §6 has a mechanism, and it is the one thing never checked.**
+Cheapest item on the list, and it may close a two-round-old open item.
+`pyproject.toml:190-192` sets a **global per-test `timeout = 120`** with
+`timeout_method = "signal"`, enforced by `pytest-timeout` (a hard
+dependency, not aspirational). Long tests are expected to opt out with an
+explicit marker — `@pytest.mark.timeout(600)` / `(900)` appears on
+`tests/slow/**` and on `test_demo_uaxis_depth_frontier`. Measured margins
+on this box:
+
+| test | tier log | isolated | explicit marker | margin vs the 120s kill |
+|---|---|---|---|---|
+| `property/test_deep_credit_trial.py::TestContrasts::test_contrasts_cover_deep_tier` | **37.36s** | **90.08s** | **none** | **~30s, and it varies 2.4× in one session** |
+| `integration` tier slowest | 87.00s | — | — | ~33s |
+| fast-lane slowest | 38.12s | — | — | ~82s |
+
+This is §6's occurrence: the failure came in a property-tier run that took
+**217s** against a normal 75–95s, and this one test is **half the tier**
+(37.36s of 74.24s). **§6 assumed the failure was an assertion failure and
+reasoned from the assertion's shape** — but §6 also records that the
+failure message was never captured. A SIGALRM kill reports as `Timeout`,
+not as a failed assert, and if that is what happened then the "key-presence
+check cannot fail from numerics" argument was answering a question nobody
+had asked. The two hypotheses are distinguishable: re-run that test to
+**≥120s** and the exit reason says which.
+
+Do this first because it is one command and it may delete an open item:
+`uv run python -m pytest tests/property/test_deep_credit_trial.py -q -n 4
+--timeout=120 --timeout-method=signal` under load, or read
+`faulthandler_timeout`'s traceback out of `logs/tiers/property.log` if a
+future run trips it. Whatever the answer, **the finding that survives
+either way is that the fastest lane's slowest test has a 30s margin against
+a hard kill and no marker of its own** — a per-test duration lock (assert
+the slowest N tests hold ≥2× margin, or that any test over 60s carries an
+explicit marker) is the lock this class wants.
+
+**2. The 13 `CoreTrainer` / `TrainerConfig` importers (§12.3).** This is
+what unblocks the cross-module import lock's scope. First move is a graph
+question, not a reading exercise: for each of the 13 consumers, is
+anything live importing *it*? Dead consumer → delete; live consumer →
+repoint at `SystemTrainerConfig` / `compose_system`. The five other
+clusters (`run_from_runconfig`, `run_single_trial`, `KB`,
+`ReportOrchestrator`, `_BASELINE_MODELS`) are single-site and can ride
+along. Then re-scope `test_undefined_name_lock.py` to the whole tree —
+a lock covering half the tree *by choice* is the arrangement §0 warns
+about, and this is the item that removes the choice.
+
+**3. Replace §7's single fast-lane figure with a spread.** §12.5 attributed
+a 240s-vs-127s gap to "machine noise" without measuring it. The samples
+that *do* exist contradict the story rather than confirm it: the same
+three-tier command took **279.82s at baseline and 269.96s with Round 3's
+diff** (3.5% spread, so this box is stable) while §11.5 recorded 127s for
+the *larger* five-path lane. The gap is between sessions, not within one,
+which means **§11.5's 127s is not reproducible on this machine and should
+not be a figure anyone regresses against.** Three back-to-back fast-lane
+runs give the distribution; the test *count* is the load-bearing metric,
+not the walltime.
+
+### 13.2 What is deliberately still open
+
+`§1.3` PLW0717 at 81 — untouched three rounds running, for the honest
+reason that the pyright work in `credit.py` and `pipeline.py` removed
+*findings*, not complexity. `§1.9`'s two unwritten test-quality rules —
+recommendation unchanged (leave unwritten, record the decision), and note
+that neither would have caught anything in Rounds 1–3. `§4` presentation
+layer — still no consumer, still not to be started because it is ready.
+`§5`, `§6` — §6 per §13.1 above.
+
+### 13.3 Session notes (things that cost time this round)
+
+- **Dev-env smoke first**, per `AGENTS.md`: `uv run python -c "import
+  optuna, scipy, torchvision, pytest"`. `UV_LINK_MODE=copy` is set in the
+  env. No `py-spy`, no `yappi` installed; **no profiler was needed** — every
+  question in §13.1 is answered by `--durations` output, `pyproject.toml`
+  config, or a re-run.
+- **The pre-existing cross-tier failure pair** (§12.6-3) will reappear in
+  `tests/unit tests/property tests/primitives -n 4` and is *not* a
+  regression: `test_credit.py::test_cosine_similarity_reasonable` and
+  `test_ntm_geometry.py::test_bptt_learns_copy_mechanics` pass alone, pass
+  in `tests/unit` alone, and fail identically on an unmodified tree.
+  Confirmed by stashing the diff. Do not chase it as a Round-4 regression.
+- **Adding a `Protocol` breaks four wiring locks**, by design:
+  `test_geometry_wiring_lock.py` and `test_registry_completeness_lock.py`
+  enumerate "classes whose name ends in `Geometry`/`Update`" and used to
+  exclude their Protocol *by spelling its name*. They now exclude any
+  Protocol, so a second Protocol is free — but expect the red on the first
+  one after this.
+- **Do not profile the fast lane.** §8 is right: the suite got heavier
+  because a correctness fix made settles run their full budget, so
+  speeding it up speeds up the artifact the fix improved. Item 3 above is a
+  *measurement* of a claim already in the document, which is a different
+  thing.
