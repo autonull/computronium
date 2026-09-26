@@ -1,0 +1,136 @@
+{
+  "rows": [
+    {
+      "task": "digits",
+      "bp_val_accuracy": 0.8305555555555556,
+      "chance_band": 0.1,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 0.4
+    },
+    {
+      "task": "mnist",
+      "bp_val_accuracy": 0.9707,
+      "chance_band": 0.1,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 52.3
+    },
+    {
+      "task": "fashion_mnist",
+      "bp_val_accuracy": 0.8581,
+      "chance_band": 0.1,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 87.3
+    },
+    {
+      "task": "kmnist",
+      "bp_val_accuracy": 0.8617,
+      "chance_band": 0.1,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 18.9
+    },
+    {
+      "task": "usps",
+      "bp_val_accuracy": 0.8913801694070752,
+      "chance_band": 0.1,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 2.5
+    },
+    {
+      "task": "xor",
+      "bp_val_accuracy": 1.0,
+      "chance_band": 0.5,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.001,
+      "walltime_s": 1.8
+    },
+    {
+      "task": "spiral",
+      "bp_val_accuracy": 0.955,
+      "chance_band": 0.5,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 1.8
+    },
+    {
+      "task": "circles",
+      "bp_val_accuracy": 1.0,
+      "chance_band": 0.5,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 2.1
+    },
+    {
+      "task": "iris",
+      "bp_val_accuracy": 1.0,
+      "chance_band": 0.3333333333333333,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.001,
+      "walltime_s": 0.1
+    },
+    {
+      "task": "wine",
+      "bp_val_accuracy": 0.9722222222222222,
+      "chance_band": 0.3333333333333333,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.001,
+      "walltime_s": 0.3
+    },
+    {
+      "task": "breast_cancer",
+      "bp_val_accuracy": 0.9736842105263158,
+      "chance_band": 0.5,
+      "beats_chance": true,
+      "eligible": true,
+      "epochs": 3,
+      "batch_size": 64,
+      "hidden_dim": 64,
+      "lr": 0.01,
+      "walltime_s": 0.4
+    }
+  ]
+}

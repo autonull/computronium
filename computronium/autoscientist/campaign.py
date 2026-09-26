@@ -154,8 +154,18 @@ def probe_spectral_radius(
         return 0.0
 
 
+def _ruler_table_path() -> Path:
+    """The ruler table shipped beside this module.
+
+    Resolved from ``__file__`` so an installed wheel carries it; a lock asserts
+    this function's return value is tracked by git, so the path cannot be
+    pointed back into a gitignored directory.
+    """
+    return Path(__file__).with_name("ruler_table.json")
+
+
 def _ruler_lr(task: str | None, topology: str | None = None) -> float:
-    """Per-task best lr from the committed ruler table (P0.3 protocol).
+    """Per-task best lr from the ruler table shipped in this package.
 
     A proposal without its own ``lr`` trains at the task's calibrated
     ceiling lr — but only for ``feedforward``, the topology the ruler
@@ -168,7 +178,7 @@ def _ruler_lr(task: str | None, topology: str | None = None) -> float:
     if topology not in {None, "feedforward"}:
         return 1e-2
     if not _RULER_LR:
-        path = Path(__file__).parents[2] / "artifacts/ruler_table.json"
+        path = _ruler_table_path()
         try:
             rows = json.loads(path.read_text(encoding="utf-8"))["rows"]
             for row in rows:
@@ -176,7 +186,12 @@ def _ruler_lr(task: str | None, topology: str | None = None) -> float:
                 if isinstance(lr, int | float):
                     _RULER_LR[str(row["task"])] = float(lr)
         except OSError, ValueError, KeyError:
-            logger.warning("Ruler table missing at %s; defaulting lr 1e-2", path)
+            logger.warning(
+                "Ruler table unreadable at %s; defaulting lr 1e-2 for every "
+                "task, which is 10x the calibrated value for xor, iris and "
+                "wine -- reinstall the package rather than accept this",
+                path,
+            )
         _RULER_LR.setdefault("*", 1e-2)
     return _RULER_LR.get(task or "*", _RULER_LR["*"])
 

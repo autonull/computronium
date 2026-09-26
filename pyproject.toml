@@ -5,6 +5,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.package-data]
+# include-package-data alone resolves through MANIFEST.in or a VCS plugin, and
+# this project has neither: measured against a built wheel, every package .json
+# was being dropped. `ruler_table.json` is the load-bearing one -- without it
+# campaign._ruler_lr falls back to a flat 1e-2 for tasks calibrated at 1e-3.
+computronium = ["**/*.json"]
+
 [tool.setuptools.packages.find]
 include = ["computronium*"]
 
