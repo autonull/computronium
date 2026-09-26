@@ -296,6 +296,19 @@ Triton's `.warmup()` compiles without launching, so the honest flag is
 - **Done when** `HAS_TRITON_PC` and its siblings report what they say, and a
   test asserts a flag is `False` for a kernel that does not compile (§2's
   finding is the fixture: 5 flags `True`, 12 kernels unlaunchable).
+- **A standing compile check over the whole `@triton.jit` population**
+  (`TODO35.md` §17.8-6), promoted from the throwaway probe
+  `scripts/probes/todo35_r17_kernels_compile.py` into the tree. It must
+  **report** every kernel's compile state and **fail only on a regression from a
+  recorded baseline** — the 12 uncompilable kernels of §2 are a *known state*,
+  listed in that baseline, not a red gate.
+- **Why the baseline, and why it is load-bearing:** a check that simply failed
+  on those 12 would be red on arrival, and the fastest way anyone makes it
+  green is to delete the kernels — which is precisely the failure `TODO35.md`
+  §17.9 exists to prevent. A regression-only check keeps the uncompilable ones
+  visible and named, so §4.5 can work through them deliberately, and so a
+  *newly* broken kernel is still caught. If a session finds itself wanting to
+  delete a kernel to satisfy this check, that is the signal §3 describes.
 
 ### 4.3 Make the technology a selectable rung
 
