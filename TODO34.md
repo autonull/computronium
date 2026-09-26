@@ -1,10 +1,9 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
-§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5 complete; §1.1's floor
-landed with its curve blocked on §2.8. **§5.1 (the settle driver) complete** —
-the flagship item of Phase F, and the only untouched high-leverage item left in
-§5. §1.2–§1.4, §1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4, §5.3–§5.4 open.
+§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, and now
+**§5.3 (the state-algebra decision)** complete. §1.2–§1.4, §1.6, §2.3–§2.4,
+§2.6–§2.7, §3, §4.2–§4.4, §5.4 open. §5.4 is the only item left in Phase F.
 (§1.4's substance landed in `fb6bb0f7`, which also found §1.2b.)
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
@@ -19,6 +18,65 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 8 — §5.3 the state-algebra decision
+
+**The decision** (written into `computronium/ontology/dynamics/_state.py`
+before any code changed, per §5.3's sequencing): *neither algebra is
+canonical, and the settle contract is the surface they share.* `SystemState`
+(flat 5-layer pipeline record) and `CompositeState`
+(z_t = activity/plastic/substrate) are both live — the pipeline constructs
+one, every `primitives/**/kernel.py` reference and the joint/plasticity
+paths construct the other. What was wrong was not their coexistence: it was
+that `StateDynamics.settle` **named one of them** while the runtime passed
+the other, so 11 dynamics classes carried an annotation pyright rejects and
+every implementation `cast` its own return value to satisfy it.
+
+- `SettableState` — a `runtime_checkable` Protocol declaring the seven
+  fields both algebras expose (`x, y, activations, free_state, nudged_state,
+  loss, metrics`). All 26 `state: CompositeState` annotations and 18
+  `-> CompositeState` returns across `_dynamics.py` now name the surface.
+- `set_state_field(state, name, value)` — the write side, at the 14 sites
+  that write settle output. The Protocol's members are **read-only
+  properties** because pyright treats mutable protocol members as invariant,
+  and `CompositeState` exposes these fields as properties over its
+  `activity` mapping while `SystemState` uses plain fields. Read-only is
+  what makes both satisfy the same surface; the setter is real, a read-only
+  Protocol just cannot prove it. That is the one concession the decision
+  cost, and it is recorded in the module docstring.
+- `is_system_state` / `is_composite_state` — `TypeIs` narrowing, replacing
+  the package-private `hasattr` duck check and its three `cast`s. The
+  composite test is **structural**, not `isinstance`: `computronium.state`
+  and `computronium.core.joint.state` are two import paths to one record,
+  and duck-typed callers must not care which they hold.
+- Fields outside the surface (`energy`, `dual_vars`, `spike_counts`,
+  `spike_rasters`) are `SystemState`-only and stay on the `getattr`/`setattr`
+  accessors — that asymmetry is now the *documented* encoding of "optional,
+  absent on the z_t view" rather than an unexplained one. A test asserts
+  the asymmetry, so it cannot quietly change.
+
+**Rejected alternative, with the reason recorded**: making `CompositeState`
+canonical behind a flat adapter. The compat properties on `CompositeState`
+(`x`/`activations`/`free_state`/`nudged_state`) are read by the pipeline,
+the distributed trainer *and* the reference kernels, so the "adapter" would
+have had to be the default representation — a much larger diff for a naming
+preference.
+
+`pyright computronium/ontology/dynamics/` is **0 errors** (was 3 after the
+first cut, which is how the invariance and read-only facts above were
+found — the type checker is what made the decision concrete).
+
+`tests/property/test_state_algebra_lock.py` (23 tests, 2.8s): the surface
+is satisfied by both real classes; narrowing is mutually exclusive; the
+optional fields are system-only; a **source lock** over the package AST that
+fails if a settle signature names an algebra again (with `_state.py`
+exempt, as the module that *defines* the contract); and the **behavioural**
+half a source lock cannot see — every registered dynamics class settles
+from both algebras and returns the algebra it was given (16 parametrised
+cases). Probe-the-probe included, per §0.6.
+
+Fast lane after: **3196 passed, 119 skipped, 26 xfailed, 1 xpassed in
+91s**. No numerics moved; no demo re-pin owed.
 
 ### Pass 7 — §1.1's curve and §1.5's ratchet
 
@@ -694,7 +752,13 @@ for long-lived readers now lives in a module named for charts.
 and §0.5's lock already covers the cache), then re-point the three importers.
 Effort: ~4h.
 
-### 5.3 Reconcile the two state algebras — P1
+### 5.3 Reconcile the two state algebras — P1 — **DONE**
+
+**Decision taken** (recorded in `computronium/ontology/dynamics/_state.py`):
+neither algebra is canonical; the settle contract is the **surface** both
+expose (`SettableState`), with `TypeIs` narrowing for callers that need a
+concrete view. See Pass 8 for what landed and why the "make
+`CompositeState` canonical" alternative was rejected on measurement.
 
 **Evidence.** `SystemState` (flat pipeline record: `x, y, activations,
 free_state, nudged_state, metrics, dual_vars, spike_rasters`) versus
@@ -772,15 +836,50 @@ correct. `TestDriverUniquenessLock` deliberately does **not** assert
 Decide: per-layer count summed (today), per-layer max, or separate
 `steps_used` / `layers` fields — and then make the lock assert it.
 
+### 5.8 New: the credit layer has §5.3's defect, suppressed — P2
+
+Found while landing §5.3. `ontology/credit.py` annotates **17** signatures
+`SystemState` (`compute_pseudo_gradient(states: Mapping[Phase, SystemState])`,
+every `free_state: SystemState` helper) — the *mirror image* of the settle
+contract's error, and equally wrong at runtime: every
+`primitives/credit_assignment/*/{kernel,reference}.py` builds
+`CompositeState` per phase and calls the credit with it, silencing the
+mismatch at the call site with `# type: ignore[arg-type]`. There are **120**
+such directives repo-wide, so this is the same debt class one layer down,
+and the settle surface is the right contract to extend rather than a
+`SystemState`/`CompositeState` pair to choose between.
+
+**Sequencing.** Annotation-first, exactly as §5.3: `SettableState` already
+covers what the credit reads, so the 17 sites are a mechanical retype and
+the `# type: ignore[arg-type]` at those call sites can be deleted
+afterwards — *those* deletions are the proof, because each one either
+disappears or becomes a real error to fix. Do it with §5.4: both jobs are
+"stop hand-maintaining a surface that a table or a Protocol can state once."
+
+### 5.9 New: three `getattr` accessors are now redundant — P3
+
+`_get_state_x` / `_get_state_activations` / `_get_state_free_state` in
+`_dynamics.py` exist to tolerate a state that might not carry the field.
+`StateLike` is now `SettableState`, so the field is guaranteed and the
+accessor hides a type error instead of surfacing one. Replacing them with
+direct reads is a small diff, but it needs one audit first: the lazy and
+compiled whole-graph paths pass duck-typed records from outside the
+protocol's coverage, and that is exactly the kind of assumption a
+mechanical sweep gets wrong. `_get_state_dual_vars` was **deleted** in this
+pass (zero callers; its `CompositeState` branch is inlined by PC-ALM and its
+"backwards compat" alias had no users in-tree — `AGENTS.md` grants no
+backwards compatibility).
+
 ### 5.5 Sequencing summary
 
 | Order | Item | Why here | State |
 |-------|------|----------|-------|
 | 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code | **done** |
 | 2nd | 5.2 | Small, testable, unblocks §4.1's precedent | **done** (`5ad96f85`) |
-| 3rd | 5.3 | Needs a decision, and wanted §5.1 settled first | open — **now unblocked** |
+| 3rd | 5.3 | Needs a decision, and wanted §5.1 settled first | **done** (Pass 8) |
 | 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | open |
 | 5th | 5.6, 5.7 | Both are decisions the driver exposed, not new work | open |
+| — | 5.8, 5.9 | Found by 5.3's own retype; annotation-first like 5.3 | open |
 
 5.2 was pulled forward because §4.1's lint check fails on day one otherwise —
 the plan says so explicitly, and it was right. 5.1 then followed, and the
@@ -788,10 +887,18 @@ the plan says so explicitly, and it was right. 5.1 then followed, and the
 turned out to be the binding design constraint rather than a formality: the
 driver shipped with **two** parameters.
 
-**Next in §5 is 5.3**, and it is now unblocked — the plan made it wait for
-5.1 because the driver is where the state type is passed most, and that
-reasoning is now spent. 5.3 is *a decision first* (write it down, then land it
-annotation-only), which makes it the cheapest remaining item in the section.
+5.3 landed as *a decision first* (Pass 8) and the sequencing logic held: the
+driver really is where the state type is passed most, and rewriting the ten
+loops' call sites in the same change would have multiplied the diff for no
+extra signal. The one thing the plan did not anticipate is that the decision
+could not be expressed as a plain annotation — pyright's invariance rule for
+mutable protocol members forced the surface read-only, with an explicit
+`set_state_field` write path. That is a TypeScript-style variance fact, not a
+modelling one, and it is now written down where the next reader will hit it.
+
+**Next in §5 is 5.4** (derive the registries). §5.6 and §5.7 stay open —
+they are decisions, not work, and 5.7 in particular should be taken with
+5.4's evidence about how much of the export surface is hand-kept.
 
 ---
 
@@ -799,7 +906,8 @@ annotation-only), which makes it the cheapest remaining item in the section.
 
 Phase A is **done**. Phase C is half done (1.2, 1.3 landed; 1.5's ratchet
 landed, its 116 seeds open; 1.6 still wants a re-measurement).
-Phase F is **half done**: 5.1 and 5.2 landed, 5.3 and 5.4 remain.
+Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
+(5.6/5.7 are the two decisions the driver exposed).
 
 | Phase | Items | Effort | Gate | State |
 |-------|-------|--------|------|-------|
@@ -808,12 +916,16 @@ Phase F is **half done**: 5.1 and 5.2 landed, 5.3 and 5.4 remain.
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2 **done**; 5.3, 5.4 open |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 open |
 
-**Recommended next step** (cheapest, unblocked, high value): **§5.3** — the
-state-algebra decision. It is annotation-first and needs no measurement, and
-§1.1's lesson says a decision written down before the code is the cheap part.
-§5.4 follows it.
+**Recommended next step** (cheapest, unblocked, high value): **§5.4** — derive
+the registries, i.e. generate `_GEOMETRY_DISPATCH` /
+`_GEOMETRY_FACTORIES` / `__all__` / `_LAZY` from the config factories so the
+`AGENTS.md` eight-step checklist and the wiring locks both become assertions
+rather than maintenance. §5.3 is landed; §5.4 is the last item in Phase F and
+it needs no measurement, only a decision about which surface becomes
+single-sourced first (recommendation: geometry, because it is the layer with
+both a lock *and* the checklist).
 
 **A hard constraint discovered in this pass, and it is a process rule, not a
 plan item: individual commands over ~15s are not affordable on this box.**
@@ -905,6 +1017,22 @@ move, and say so in the commit body.
   vs `ast.Expr`) and the parametrised classifier test caught it in 3s. The
   same shape as §0.6, at 1/100th the cost, because the scan is pure AST over
   a temp file — no fixture, no GPU, no settle loop.
+- **A type checker will tell you when a decision is not yet a decision.**
+  §5.3's contract could not be written as a plain annotation: pyright
+  rejects a Protocol with *mutable* members for two classes that spell the
+  same field differently, so the first cut came back with three errors and
+  the shape of the answer (read-only surface + explicit `set_state_field`
+  write path) in them. The alternative — silencing three errors and moving
+  on — would have shipped a contract that reads as complete and is not.
+
+- **A suppressed mismatch is a deferred defect, and its suppression is the
+  evidence.** §5.3 found 17 credit signatures naming `SystemState` that
+  every reference kernel violates, each silenced with
+  `# type: ignore[arg-type]` at the call site. Nothing about that is a
+  finding about the credit layer alone: it is the settle defect again, one
+  layer down, and the *count* (120 directives repo-wide) is what makes
+  §2.4's pyright ratchet worth running before any of it is fixed by hand.
+
 - **A threshold fixed without a measurement is a guess wearing a
   measurement's clothes.** §1.1 shipped a 0.78 floor last pass, justified
   by reasoning from a docstring. The curve shows local3 at 0.594 two

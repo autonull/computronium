@@ -14,6 +14,11 @@ from computronium.ontology.dynamics._dynamics import (
     StateDynamics,
     StateDynamicsConfig,
 )
+from computronium.ontology.dynamics._state import (
+    SettableState,
+    is_composite_state,
+    is_system_state,
+)
 
 DYNAMICS_REGISTRY: Final[dict[str, type[StateDynamics]]] = {
     "energy_minimization": EnergyMinimizationDynamics,
@@ -53,6 +58,9 @@ __all__ = [
     "PredictiveSettlingDynamics",
     "SpikeIntegrationDynamics",
     "StateDynamics",
+    "SettableState",
     "StateDynamicsConfig",
     "dynamics_from_config",
+    "is_composite_state",
+    "is_system_state",
 ]

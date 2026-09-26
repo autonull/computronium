@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.substrate import Substrate
-    from computronium.state import CompositeState
     from computronium.state.composite import ActivityValue
 
 from computronium.ontology._settle_kernel import (
@@ -31,12 +30,21 @@ from computronium.ontology.dynamics._settle_driver import (
     checkpointed_every,
     run_settle_loop,
 )
+from computronium.ontology.dynamics._state import (
+    SettableState,
+    set_state_field,
+)
+from computronium.ontology.dynamics._state import (
+    is_composite_state as _is_composite_state,
+)
 from computronium.ontology.geometry import layer_stack
 
 GainControlMode = Literal["none", "unit_rms", "spectral"]
 
-# Type alias for state-like objects (SystemState or CompositeState)
-type StateLike = object
+# Any state record the settle path accepts: SystemState, CompositeState, or
+# any other object exposing the surface. The SystemState-only fields are
+# genuinely absent on the z_t view, so those reads stay getattr-based.
+type StateLike = SettableState
 
 # Forward operator type: takes (input, weight) -> output
 type ForwardOp = Callable[[Tensor, Tensor], Tensor]
@@ -79,13 +87,6 @@ def _apply_gain_control(acts: list[Tensor], mode: GainControlMode) -> list[Tenso
 # ============================================================
 
 
-def _is_composite_state(state: StateLike) -> bool:
-    """Check if state is a CompositeState (has activity/plastic/substrate dicts)."""
-    return hasattr(state, "activity") and isinstance(
-        getattr(state, "activity", None), dict
-    )
-
-
 def _get_state_x(state: StateLike) -> Tensor | None:
     """Get input x from either SystemState or CompositeState."""
     return getattr(state, "x", None)
@@ -101,24 +102,10 @@ def _get_state_free_state(state: StateLike) -> list[Tensor] | Tensor | None:
     return getattr(state, "free_state", None)
 
 
-def _get_state_dual_vars(state: StateLike) -> list[Tensor] | None:
-    """Get dual_vars from either SystemState or CompositeState."""
-    if _is_composite_state(state):
-        activity = cast("CompositeState", state).activity
-        val = activity.get("dual_vars")
-        return val if isinstance(val, list) else None
-    val = getattr(state, "dual_vars", None)
-    return val if isinstance(val, list) else None
-
-
-# Backwards compat alias (used by external code)
-_get_state_dual_vars_compat = _get_state_dual_vars
-
-
 def _get_state_activity(state: StateLike) -> Mapping[str, ActivityValue] | None:
     """Get the activity dict from a CompositeState-shaped state, else None."""
     if _is_composite_state(state):
-        return cast("CompositeState", state).activity
+        return state.activity
     return None
 
 
@@ -163,22 +150,17 @@ def _create_output_state(
     spike_counts: list[Tensor] | None = None,
     spike_rasters: list[list[Tensor]] | None = None,
     dual_vars: list[Tensor] | None = None,
-) -> CompositeState:
-    """Create a new state of the same type with updated fields.
+) -> SettableState:
+    """Create a new state of the same algebra with updated fields.
 
-    The 5-D pipeline passes SystemState, the 6-D joint path passes
-    CompositeState; both are duck-typed here (circular imports forbid
-    importing them statically). Legacy SystemState results are cast to the
-    declared CompositeState contract.
+    The 5-D pipeline passes SystemState, the joint/plasticity path passes
+    CompositeState; the returned record is always the algebra that came in
+    (see ``_state.py`` for the decision that neither is canonical).
     """
     if _is_composite_state(state):
         from computronium.state import CompositeState
 
-        # Structural duck-typing: callers may pass either CompositeState
-        # implementation (computronium.state / core.joint.state) — circular
-        # imports forbid importing them here, hence the runtime check + cast.
-        composite = cast("CompositeState", state)
-        activity = dict(composite.activity)
+        activity = dict(state.activity)
         if x is not None:
             activity["x"] = x
         if output is not None:
@@ -200,41 +182,38 @@ def _create_output_state(
         result: dict[str, ActivityValue] = activity
         return CompositeState(
             activity=result,
-            plastic=composite.plastic,
-            substrate=composite.substrate,
+            plastic=state.plastic,
+            substrate=state.substrate,
         )
     else:
         # SystemState - create new instance with updated fields
         from computronium.ontology.system import SystemState
 
-        return cast(
-            "CompositeState",
-            SystemState(
-                x=x if x is not None else getattr(state, "x", None),
-                y=getattr(state, "y", None),
-                activations=activations
-                if activations is not None
-                else getattr(state, "activations", None),
-                free_state=free_state
-                if free_state is not None
-                else getattr(state, "free_state", None),
-                nudged_state=nudged_state
-                if nudged_state is not None
-                else getattr(state, "nudged_state", None),
-                pseudo_gradients=getattr(state, "pseudo_gradients", None),
-                energy=getattr(state, "energy", None),
-                loss=getattr(state, "loss", None),
-                metrics=dict(getattr(state, "metrics", {}) or {}),
-                spike_counts=spike_counts
-                if spike_counts is not None
-                else getattr(state, "spike_counts", None),
-                spike_rasters=spike_rasters
-                if spike_rasters is not None
-                else getattr(state, "spike_rasters", None),
-                dual_vars=dual_vars
-                if dual_vars is not None
-                else getattr(state, "dual_vars", None),
-            ),
+        return SystemState(
+            x=x if x is not None else getattr(state, "x", None),
+            y=getattr(state, "y", None),
+            activations=activations
+            if activations is not None
+            else getattr(state, "activations", None),
+            free_state=free_state
+            if free_state is not None
+            else getattr(state, "free_state", None),
+            nudged_state=nudged_state
+            if nudged_state is not None
+            else getattr(state, "nudged_state", None),
+            pseudo_gradients=getattr(state, "pseudo_gradients", None),
+            energy=getattr(state, "energy", None),
+            loss=getattr(state, "loss", None),
+            metrics=dict(getattr(state, "metrics", {}) or {}),
+            spike_counts=spike_counts
+            if spike_counts is not None
+            else getattr(state, "spike_counts", None),
+            spike_rasters=spike_rasters
+            if spike_rasters is not None
+            else getattr(state, "spike_rasters", None),
+            dual_vars=dual_vars
+            if dual_vars is not None
+            else getattr(state, "dual_vars", None),
         )
 
 
@@ -726,6 +705,21 @@ class StateDynamics(Protocol):
 
     The mutation contract below is enforced by the caller census AST lock
     (``tests/property/test_settle_caller_census.py``).
+
+    State algebra:
+        ``settle`` accepts and returns a ``SettableState`` — the structural
+        surface both ``SystemState`` (5-layer pipeline) and
+        ``CompositeState`` (z_t = activity/plastic/substrate) expose. It is
+        annotated with the surface, not with one algebra, because the
+        pipeline passes ``SystemState`` and every ``primitives/**`` kernel
+        passes ``CompositeState``; naming either one is what forced the
+        ``cast``s this contract removed. Fields outside that surface
+        (``energy``, ``dual_vars``, ``spike_counts``, ``spike_rasters``) are
+        ``SystemState``-only and are reached through the ``getattr``/
+        ``setattr`` accessors above. Writes to the surface go through
+        ``set_state_field`` because ``SettableState``'s members are
+        read-only properties. The decision and its rejected alternative
+        are recorded in ``_state.py``.
     """
 
     config: StateDynamicsConfig
@@ -733,12 +727,12 @@ class StateDynamics(Protocol):
     @abstractmethod
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Settle the network to a fixed point (or run single pass).
 
         Args:
@@ -762,7 +756,7 @@ class StateDynamics(Protocol):
         ...
 
     @abstractmethod
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Compute the energy of the current state.
 
         For energy-based dynamics (EqProp, Hopfield, PC), this is the
@@ -976,12 +970,12 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
     def settle(  # noqa: PLR0915
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Run settling iterations for full multi-layer EqProp dynamics."""
         if state.x is None:
             return state
@@ -1013,7 +1007,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
     def _setup_settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
@@ -1238,19 +1232,19 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 
     def _finalize_settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         all_acts: list[Tensor],
         target: Tensor | None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Finalize the state after settling."""
         if target is None:
-            state.free_state = all_acts
+            set_state_field(state, "free_state", all_acts)
         else:
-            state.nudged_state = all_acts
-        state.activations = all_acts
+            set_state_field(state, "nudged_state", all_acts)
+        set_state_field(state, "activations", all_acts)
         return state
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Compute free energy (Hopfield energy) for the current state."""
         acts = state.free_state
         if acts is None:
@@ -1289,12 +1283,12 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Predictive coding settling: minimize prediction error."""
         x = _get_state_x(state)
         if x is None:
@@ -1325,13 +1319,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
     def _settle_recurrent(
         self,
-        state: CompositeState,
+        state: SettableState,
         x: Tensor,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Standard predictive coding settling for recurrent geometries."""
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
@@ -1390,14 +1384,14 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
     def _settle_layered(
         self,
-        state: CompositeState,
+        state: SettableState,
         x: Tensor,
         geometry: Geometry,
         layered: LayeredParams,
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Layer-wise predictive coding settle over the geometry's Linear transitions.
 
         Each layer minimizes its prediction error against the layer below.
@@ -1530,13 +1524,13 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
 
     def _settle_tile(
         self,
-        state: CompositeState,
+        state: SettableState,
         x: Tensor,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Block-view relaxation over the tile mesh via the settle kernel."""
         kernel = SubstrateSettleKernel(
             substrate=substrate,
@@ -1613,7 +1607,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         """
         return self._free_energy_history
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
@@ -1681,12 +1675,12 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
@@ -1763,13 +1757,13 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         self._last_errors = eps
 
         if target is None:
-            state.free_state = states
+            set_state_field(state, "free_state", states)
         else:
-            state.nudged_state = states
-        state.activations = states
+            set_state_field(state, "nudged_state", states)
+        set_state_field(state, "activations", states)
         return state
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """PC energy of the last settle: ½ Σ ‖εᵢ‖²."""
         if self._last_errors is None:
             return torch.tensor(0.0)
@@ -1856,12 +1850,12 @@ class PCALMDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """PC-ALM primal-dual settling."""
         x = _get_state_x(state)
         if x is None:
@@ -1888,7 +1882,7 @@ class PCALMDynamics(_SettleTelemetry):
 
     def _setup_pcalm_settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None,
@@ -1992,40 +1986,36 @@ class PCALMDynamics(_SettleTelemetry):
 
     def _finalize_pcalm_settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         acts: list[Tensor],
         dual_vars: list[Tensor],
         target: Tensor | None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Finalize PC-ALM settling and write dual variables to state."""
         self._dual_vars = dual_vars
         dual_vars_for_state = [lam.detach() for lam in dual_vars]
 
         if target is None:
-            state.free_state = acts
+            set_state_field(state, "free_state", acts)
             if _is_composite_state(state):
-                cast("CompositeState", state).set_activity(
-                    "dual_vars_free", dual_vars_for_state
-                )
+                state.set_activity("dual_vars_free", dual_vars_for_state)
             else:
-                state.metrics = state.metrics or {}
-                state.metrics["dual_vars_free"] = len(dual_vars_for_state)
+                metrics = state.metrics or {}
+                set_state_field(state, "metrics", metrics)
+                metrics["dual_vars_free"] = len(dual_vars_for_state)
         else:
-            state.nudged_state = acts
+            set_state_field(state, "nudged_state", acts)
             if hasattr(state, "dual_vars"):
                 setattr(state, "dual_vars", dual_vars_for_state)
             if _is_composite_state(state):
-                cast("CompositeState", state).set_activity(
-                    "dual_vars", dual_vars_for_state
-                )
-                cast("CompositeState", state).set_activity(
-                    "dual_vars_nudged", dual_vars_for_state
-                )
+                state.set_activity("dual_vars", dual_vars_for_state)
+                state.set_activity("dual_vars_nudged", dual_vars_for_state)
             else:
-                state.metrics = state.metrics or {}
-                state.metrics["dual_vars"] = len(dual_vars_for_state)
-                state.metrics["dual_vars_nudged"] = len(dual_vars_for_state)
-        state.activations = acts
+                metrics = state.metrics or {}
+                set_state_field(state, "metrics", metrics)
+                metrics["dual_vars"] = len(dual_vars_for_state)
+                metrics["dual_vars_nudged"] = len(dual_vars_for_state)
+        set_state_field(state, "activations", acts)
         return state
 
     def _eager_relaxation(
@@ -2292,7 +2282,7 @@ class PCALMDynamics(_SettleTelemetry):
 
         return total / acts[0].shape[0]
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Compute the augmented Lagrangian energy at the settled state."""
         acts = state.free_state if state.free_state is not None else state.activations
         if acts is None:
@@ -2316,7 +2306,7 @@ class PCALMDynamics(_SettleTelemetry):
         # Need dual_vars from state activity or internal buffer
         dual_vars: list[Tensor] | None = None
         if _is_composite_state(state):
-            activity = cast("CompositeState", state).activity
+            activity = state.activity
             dual_vars_raw = activity.get("dual_vars") or activity.get(
                 "dual_vars_nudged"
             )
@@ -2363,12 +2353,12 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
@@ -2432,7 +2422,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
 
     def _settle_layered(
         self,
-        state: CompositeState,
+        state: SettableState,
         x: Tensor,
         layered: LayeredParams,
         substrate: Substrate,
@@ -2440,7 +2430,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         *,
         nudge_beta: float | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Layer-wise LIF settle over the geometry's Linear transitions.
 
         Drive is fixed within a layer (the previous layer's settled
@@ -2525,7 +2515,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
             spike_rasters=spike_rasters,
         )
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
@@ -2537,12 +2527,12 @@ class InstantaneousDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         # Single forward pass - no settling. Tile meshes route through the
         # block layout and consume the target in the nudged phase via the
         # output clamp (R11.1.4). For standard geometries, nudge the output
@@ -2582,13 +2572,13 @@ class InstantaneousDynamics(_SettleTelemetry):
         if acts:
             acts = _apply_gain_control(acts, self.config.gain_control)
         if target is None:
-            state.free_state = acts
+            set_state_field(state, "free_state", acts)
         else:
-            state.nudged_state = acts
-        state.activations = acts
+            set_state_field(state, "nudged_state", acts)
+        set_state_field(state, "activations", acts)
         return state
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         # Proxy: negative log-likelihood for instantaneous pass
         if state.loss is not None:
             return torch.as_tensor(state.loss)
@@ -2632,12 +2622,12 @@ class DiffusionDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
@@ -2758,7 +2748,7 @@ class DiffusionDynamics(_SettleTelemetry):
             energy += beta * (h - target_onehot).pow(2).sum()
         return energy
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Hopfield energy of the last settle's activation stack."""
         acts = state.free_state
         if acts is None:
@@ -2815,12 +2805,12 @@ class LazyStateDynamics(_SettleTelemetry):
 
     def settle(
         self,
-        state: CompositeState,
+        state: SettableState,
         geometry: Geometry,
         substrate: Substrate,
         target: Tensor | None = None,
         on_step: Callable[[int, float], None] | None = None,
-    ) -> CompositeState:
+    ) -> SettableState:
         """Sequential per-layer settle (Gauss–Seidel sweeps)."""
         params = self._layered(geometry)
         op = substrate.get_forward_operator()
@@ -2930,7 +2920,7 @@ class LazyStateDynamics(_SettleTelemetry):
             out = out + beta * (_one_hot(target, out) - out)
         return out
 
-    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+    def compute_energy(self, state: SettableState, geometry: Geometry) -> Tensor:
         """Hopfield energy of the settled state (shared with the EqProp family)."""
         acts = _get_state_free_state(state)
         if acts is None:
