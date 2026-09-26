@@ -443,20 +443,64 @@ makes it look.
 
 ### 4.4 Cross-verification as a product: parity between adjacent rungs
 
-The repo already verifies rung 1 against rung 0 for all 64 specs. Extend the
-same machinery one rung up, so that **every family with two implementations has
-a parity test between them**, and a family with three has two tests.
+**DONE for every rung that compiles, 2026-09-26 — and it found two defects on
+first run, one of them a test that certified the wrong thing.**
 
-- This is where the user's third purpose becomes a test suite. A silent
-  numerical defect in the triton rung is caught by the parity test against the
-  torch rung, exactly as a defect in the torch rung is caught against the
-  reference today.
+`test_all_implementations.test_kernel_parity` already checks rung 1 against rung 0
+for all 64 specs at the level of `step(case)`. This step checks the level below
+that: the kernel entry points themselves, triton against the torch expression
+they replace, with the tolerance the owning spec already carries.
+
+- **Landed as** `tests/acceleration/test_rung_parity.py`: parity for
+  `fa_feedback_projection_triton` (vs `error @ feedback`),
+  `fa_batched_outer_triton` (vs the batched outer product),
+  `fused_dual_primal_update` (vs `_eager_dual_primal_update`), `muon_orthogonalize`
+  (vs `newton_schulz5`) and `TritonEqPropOps.step` (vs the Euler–tanh step).
+  Membership is decided by `availability.compile_state`, so this file cannot
+  quietly pass a family whose rung is not running.
+- **Where the two rungs cannot be made bit-identical** (different reduction
+  order), the tolerance is the owning spec's, per family — not a global loosening.
+
+**Two defects, both found by the new tests and both real:**
+
+1. **`TritonEqPropOps.step`'s eager fallback disagreed with its own triton kernel.**
+   The kernel indexes the bias as `offsets % bias_n`, so a 16-element bias serves a
+   256-element state; the fallback did `pre_act + bias`, which either broadcasts
+   wrongly or raises `RuntimeError: The size of tensor a (256) must match the size
+   of tensor b (16)`. **Fixed** — the fallback now indexes the bias the way the
+   kernel does, so the two rungs agree on any bias width. This is the whole
+   argument for §4.4 in one defect: two implementations of one maths, one of
+   which was wrong, and no test that could see it.
+2. **The triton Muon rung is a different algorithm from the torch rung, and its
+   test was comparing it to a copy of itself.** `MEP_TritonOps.muon_orthogonalize`
+   runs the naive `0.5·X(3I − XᵀX)` iteration and its docstring claims "~1e-7
+   parity with the PyTorch reference". The torch rung is
+   `newton_schulz5` — the *quintic* `(3.4445, −4.7750, 2.0315)` schedule — whose
+   own docstring records why the naive form was replaced: "under-converges from
+   Frobenius normalization and measured orthonormality error ~0.85 on Gaussian
+   matrices". Meanwhile `test_muon_orthogonalize_equivalence` re-implemented the
+   naive iteration *as its "PyTorch reference"* and asserted 1e-4 agreement, so it
+   passed while proving nothing.
+   **Not fixed here; recorded.** Both tests now compare against `newton_schulz5`
+   and are marked `xfail(strict=True)` with the reason: a strict xfail fails the
+   moment someone fixes the rung, so the divergence cannot be forgotten. Measured
+   divergence on a random 64×48 input: `max_abs_diff` 0.22, cosine 0.91.
+   **This is the first item of §4.5** — the fix is a quintic triton rung (the
+   kernel already has the tiled Gram GEMM; it needs `A²` as well), and the
+   specification — "equal to `newton_schulz5`" — was written down by the reference
+   all along, which is §4.5's own instruction *write the torch expression first*.
+
 - **Done when** every reachable triton rung has a parity test against the rung
   below it, recorded with the same `ParityTolerance` the spec already carries,
-  and §0.3 item 4 holds.
-- Where the two rungs *cannot* be made bit-identical (different reduction
-  order), the tolerance is the spec's decision, recorded per family — not a
-  global loosening.
+  and §0.3 item 4 holds. **Met for the 5 rungs that compile.** The other 12 have no
+  rung to compare — they are §4.5's work, and `compile_state` is the switch that
+  will move them here.
+- **A third finding, recorded rather than fixed:** `ff` and `snn` have compiling
+  kernels (`_ff_goodness_kernel`, `_lif_step_kernel`) that **no spec reaches** —
+  no `kernel.py` imports `ff_kernels` or `snn_kernels`, so nothing verifies them
+  and nothing dispatches them. `test_rung_parity.UNWIRED_BUT_COMPILING` records
+  them by name; a third one appearing fails the test. The fix is §4.5/§4.6, and
+  the remedy is never deletion (§3).
 
 ### 4.5 Recover the specifications for the seven
 
@@ -710,7 +754,8 @@ trusting the field.
 | Layer B kernels that compile | 5 of 17 with a fixture; 4 of 13 without |
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
-| Parity tests between rung *n* and rung *n-1* | 1 level only (reference ↔ kernel) |
+| Parity tests between rung *n* and rung *n-1* | **two levels** — 64 specs at `step(case)`, plus 5 kernel entry points triton-vs-torch (§4.4) |
+| Adjacent-rung defects found by §4.4 | **2** — an EqProp fallback that disagreed with its kernel, and a triton Muon rung running a retired algorithm behind a tautological test |
 | Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
 | `PLW0717` findings | 79, opportunistic only (§7) |
 

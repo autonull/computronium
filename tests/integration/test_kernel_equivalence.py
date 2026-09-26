@@ -105,29 +105,30 @@ class TestMEPKernelsEquivalence:
 
     @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "the triton rung implements the naive 0.5*X(3I - X^T X) iteration; "
+            "the torch rung is newton_schulz5's quintic (3.4445, -4.7750, 2.0315), "
+            "which replaced it because the naive form under-converges "
+            "(orthonormality error ~0.85 on Gaussian matrices). This test used to "
+            "compare the triton rung against a copy of its own algorithm and passed; "
+            "TODO36 §4.4 §4.5. Fix the rung, then this xpasses."
+        ),
+    )
+    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_muon_orthogonalize_equivalence(self):
-        """Test Triton Muon NS matches PyTorch reference."""
+        """The Triton Muon rung must equal the torch rung it claims to accelerate."""
         torch.manual_seed(42)
 
         M, N = 256, 128
         W = torch.randn(M, N, device="cuda", dtype=torch.float32)
 
-        # Triton implementation
+        from computronium.core.optimization.strategies.update import newton_schulz5
+
         triton_out = MEP_TritonOps.muon_orthogonalize(W.clone(), ns_steps=5)
-
-        # PyTorch reference (from core MEP implementation)
-        ref_W = W.clone().T.contiguous() if M < N else W.clone()
-        transposed = M < N
-        base = ref_W.T.contiguous() if transposed else ref_W
-        out = base / base.norm().clamp(min=1e-4, max=1e4)
-
-        for _ in range(5):
-            WT_W = out.T @ out
-            out = out @ (  # ruff: ignore[non-augmented-assignment]
-                1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
-            )
-
-        ref_out = out.T if transposed else out
+        ref_out = newton_schulz5(W.clone(), steps=5)
 
         max_diff = (triton_out - ref_out).abs().max().item()
         rel_diff = max_diff / (ref_out.abs().max().item() + 1e-8)
@@ -324,8 +325,6 @@ class TestBackendNumericalParity:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_registered_backends_exist(self, algorithm):
         """Verify backends are registered for key algorithms."""
-        import computronium.acceleration.mep_kernels  # noqa: F401  (registers MEP)
-        import computronium.acceleration.triton_kernels  # noqa: F401  (registers EQPROP)
         from computronium.acceleration.kernel_backend import (
             AlgorithmFamily,
             HardwareTarget,

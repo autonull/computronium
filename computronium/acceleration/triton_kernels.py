@@ -97,8 +97,10 @@ class TritonEqPropOps:
                 )
                 return out
 
-        bias_val = bias if bias is not None else 0.0
-        return (1.0 - alpha) * h + alpha * torch.tanh(pre_act + bias_val)
+        if bias is None:
+            return (1.0 - alpha) * h + alpha * torch.tanh(pre_act)
+        index = torch.arange(h.numel(), device=bias.device) % bias.numel()
+        return (1.0 - alpha) * h + alpha * torch.tanh(pre_act + bias.flatten()[index])
 
     @classmethod
     def step_linear(
