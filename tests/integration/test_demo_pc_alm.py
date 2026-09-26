@@ -23,6 +23,7 @@ floor went from a 0.26-vs-0.25 sliver to a 0.49-vs-0.25 margin.
 
 from itertools import islice
 
+import pytest
 import torch
 
 from computronium import (
@@ -52,6 +53,7 @@ def _flatten(loader, cap=BATCH_CAP):
         yield x.view(x.size(0), -1), y
 
 
+@pytest.mark.timeout(600)  # 36s alone, over 120s under full-suite load
 def test_demo_pc_alm(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True)
     task.setup()

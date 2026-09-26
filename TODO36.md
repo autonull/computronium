@@ -557,12 +557,34 @@ thing that would verify it.
 
 ### 4.12 The timeout-marker policy
 
-`TODO35.md` §16-1, fourth round running. Five tests were marked by hand from
-one `--durations` run; nothing stops the next 100s test from appearing
-unmarked, and the failure mode is a `Timeout` that reads like a flake. A check
-over `--durations` output is the lock this class wants, and `TODO35.md` §14.4
-rule 1 held it back until a defect of that class was found by it — §15.3 found
-three, so it is unblocked.
+**DONE 2026-09-26** — on the half that can be checked, and the half that cannot
+is now written down rather than assumed. `TODO35.md` §16-1, fourth round running.
+Five tests were marked by hand from one `--durations` run; nothing stopped the
+next 100 s test from appearing unmarked, and the failure mode is a `Timeout` that
+reads like a flake.
+
+- **The plan's own full-suite run supplied the evidence.** `pytest tests/` on
+  2026-09-26: 4058 passed, 1 failed —
+  `tests/integration/test_demo_pc_alm.py::test_demo_pc_alm`, `Failed: Timeout
+  (>120.0s)` from inside a torch-inductor CPU graph, after **36 s when run
+  alone**. Not a logic failure and not a flake: an unmarked test whose walltime
+  depends on what else the machine is doing. That is the defect, caught by the
+  very mechanism the item is about.
+- **Landed as** `tests/test_timeout_marker_policy.py`. `KNOWN_LONG` is the list of
+  tests *observed* to exceed the 120 s default, and each must carry an explicit
+  `@pytest.mark.timeout` — so its budget is a decision on the test rather than a
+  surprise in a log. `test_demo_pc_alm` is annotated `600` with the measurement in
+  a comment. Two more tests guard the list against rot: a row must point at a test
+  that exists, and the global `timeout = 120` must still be the policy the list
+  was derived against.
+- **The limit, stated rather than papered over:** the *discovery* half cannot be a
+  static check. A newly slow test is still found by a full run's `--durations=25`
+  and added to `KNOWN_LONG` by hand. The lock makes the annotation enforceable
+  once a test is known; it does not make a test known. A `--durations`-driven gate
+  would need the suite's runtime budget to be a first-class input, which is a
+  larger piece of work than this item and is named in §8.13.
+- **The remedy for a row is a marker.** Never a deletion, never a `skip` to make
+  the number go away — the same rule as §3, for the same reason.
 
 ### 4.13 The knowledge layer's `__getattr__` population
 
@@ -689,6 +711,7 @@ trusting the field.
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | 1 level only (reference ↔ kernel) |
+| Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
 | `PLW0717` findings | 79, opportunistic only (§7) |
 
 ---
@@ -830,3 +853,13 @@ scheduled; they are the things measuring the ladder taught us.
     `resolve_available_rung(spec, requested)` that folds the two would be one call
     instead of two, at the cost of a dispatch that compiles kernels. Deliberately
     not done — the trade is recorded here rather than made silently.
+13. **§4.12's discovery half needs the suite's walltime budget as an input.** The
+    lock added in §4.12 can enforce an annotation but cannot notice a test that
+    has become slow. Doing so needs one of: a `--durations` JSON written by
+    `conftest.py` on every run with a committed baseline (cheap, but it makes
+    every run write a file, and it will churn on any machine-speed change); a
+    per-test walltime budget declared next to the test (verbose, 4000 tests); or
+    a sharded suite with a per-shard budget (a real change to how CI runs). The
+    first is a false-flip risk on shared hardware, the second is maintenance with
+    no payoff until a test is actually slow, and the third is a decision for
+    whoever owns CI. Not started; the choice is recorded rather than guessed.
