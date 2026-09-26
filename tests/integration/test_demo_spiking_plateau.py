@@ -248,6 +248,25 @@ def test_demo_spiking_plateau(emit_run_record) -> None:
 
     emit_run_record("F2", "spiking_plateau", record)
 
+    assert_claims(record)
+
+
+CAPABILITY = "f2_spiking_plateau"
+
+
+def assert_claims(record: dict) -> None:
+    """F2's claims, as a function of the record payload alone.
+
+    Called on the fresh record by the demo and, from the fast lane, against
+    the *committed* record by `test_claim_ownership_lock` -- so a claim that
+    stops holding is caught in seconds rather than at the next round close.
+    """
+    fractions = record["spike_fractions"]
+    norms = record["credit_norms"]
+    supervised = record["supervised_train_acc"]
+    readout = record["feature_readout"]
+    homeo = record["homeostatic_audit"]
+
     assert fractions["default"][1] < SILENT_FRACTION, (
         "default init must leave hidden layers silent (the confound)"
     )
@@ -267,8 +286,6 @@ def test_demo_spiking_plateau(emit_run_record) -> None:
     assert readout["stdp_trained"] < readout["random_init"] - 0.1, (
         "unsupervised STDP must degrade the readout (runaway gain)"
     )
-
-    homeo = record["homeostatic_audit"]
     assert all(
         abs(n - homeo["target"]) < 0.5 * homeo["target"] for n in homeo["row_norms"][1:]
     ), (

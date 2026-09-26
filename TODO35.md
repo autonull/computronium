@@ -1,10 +1,19 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open.** This document owns every open item as of
-`31be91a0`. `TODO34.md` keeps its 16 passes as the record of how the tree was
+Round 2 (see §11). `TODO34.md` keeps its 16 passes as the record of how the tree was
 made fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift this
 plan series has documented five times.
+
+**Round 2 closed**: §10.8-1 (with its mechanism *corrected* — the suite was
+never nondeterministic, it was environment-dependent, and the pin that claimed
+otherwise sat below the `import torch` that made it a no-op), §10.8-2,
+§10.8-3, §10.8-4, §1.2's measurement, and a `pre-commit` config that had never
+parsed. §1.2's three modules to zero is untouched. The finding of Round 2
+matches Round 1's: claims in this tree drift from the code silently, and the
+two that were wrong *about a defect* were wrong in the direction that made the
+defect look like bad luck.
 
 **Round 1 closed**: §1.1, §1.4, §1.6, §1.7, §1.8, §1.3 (PLW0717 89 → 81),
 §1.5 + §2.2, §2.1, §2.3 (decided, not moved), §3.1, §3.2, §3.3. Four new
@@ -523,3 +532,186 @@ answer changes.
 4. **Re-baseline the plan's own numbers.** §7's fast-lane figure and §2.5's
    "34 slow tests" are now measured (§10.5); §5.4's 2,079 pyright findings
    and §1.3's lint tallies in the tables above are the ones that went stale.
+
+---
+
+## 11. Round 2 — the mechanism, the owners, and the poisoned worker
+
+Round 2 took §10.8's four items and §1.2's measurement. Three are closed, one
+is measured and partly closed, and the round's real output is not a fix but a
+correction: **§10.3's mechanism was wrong, and it was wrong in the direction
+that mattered.** The demo suite was never nondeterministic. It was
+*environment-dependent*, and the difference is a fact about the machine, not
+about the code.
+
+### 11.1 §10.8-1 closed, and the mechanism corrected
+
+§10.3 said "thread-count-dependent float reduction" and read the second
+`-n 4` run's agreement as luck. It was neither luck nor nondeterminism.
+`scripts/probes/todo35_d16_determinism.py`, on one seeded arm of D16:
+
+| configuration | result |
+|---|---|
+| 2 calls in one process, 8 threads | bit-identical |
+| 2 separate processes, 8 threads | bit-identical |
+| 2 separate processes, 1 thread | bit-identical, and **≠ the 8-thread value** |
+| `mlp/adam` at 8 vs 1 thread | identical |
+| `mlp/muon` at 8 vs 1 thread | 0.92408 vs 0.92268 |
+| `attention/adam` at 8 vs 1 thread | 0.90054 vs 0.90034 |
+
+So the emit is a deterministic function of *(commit, seed, thread count)*, and
+the third factor was unpinned and unrecorded. The clincher is in the committed
+record itself: `d16`'s `attention/adam.seeds[0]` was `0.90034`, which is the
+**1-thread** value, while the suite it was emitted from ran at 8. A record
+emitted at a thread count the suite does not run at is internally valid and
+externally wrong, and nothing in the tree could say so.
+
+The pin existed. `tests/conftest.py` had carried
+`os.environ.setdefault("OMP_NUM_THREADS", "1")` for months — *below* its own
+`import torch`, where it is a no-op, because OpenMP reads the variable once at
+import. The suite has been running at 8 threads the whole time.
+
+Landed:
+
+- `tests/integration/conftest.py` pins it where it is needed, with a runtime
+  `torch.set_num_threads(PINNED_THREADS)` autouse session fixture. **Scoped to
+  the record-emitting tier on purpose**: an `OMP_NUM_THREADS=1` at the root
+  conftest was measured first and cost the fast lane **96s → 186s** for a
+  guarantee only the records need. The scoped pin leaves the fast lane out of
+  it (the pin lives in a directory `testpaths` does not include).
+- `torch_threads` is a fourth provenance key in every record, and
+  `test_determinism_thread_lock.py` reads it: 26 records, one assertion each,
+  plus a structural check that exactly one module pins the reduction order and
+  that it does so with a runtime call (the shape that cannot be a no-op).
+- All 29 records re-emitted under the pin, manifest re-pinned.
+
+**Cost of the whole item, measured:** slow tier 1351s, integration tier 222s,
+fast lane unaffected by the pin. The three figures whose data moved are
+`uaxis_coverage`, `uaxis_depth_frontier` and `depth_harvest`.
+
+### 11.2 The manifest was stale for a fourth figure set, and nobody noticed
+
+Re-pinning surfaced something §10.2 did not: at `4a90b238` the committed
+`manifest.json` did not match three of its own committed records
+(`uaxis_coverage`, `uaxis_depth_frontier`, `depth_harvest`). Round 1 re-pinned
+from a state no run held — the manifest was written before the slow pass that
+re-emitted those three records. The gallery lock could not have caught it,
+because the default profile's `integration` tier runs *before* the `slow` tier
+in `run_tiered_suite.sh`, so the lock always compares pre-slow-pass records
+against a post-slow-pass pin. Same class as the `pc_alm` pin: a claim retired
+by a commit that did not carry its guard.
+
+### 11.3 §10.8-2 closed: the cross-claims were all duplicates
+
+F4's eight ratchets against five other demos' records turned out to be
+*weaker or equal copies* of assertions the owning demos already make on their
+own fresh data — D14's own margins are 0.3 and 0.05 against F4's 0.2 and 0.2;
+D16's own `unit_rms` claims are the ones F4 was asserting. So the fix was
+deletion, not migration: F4 lost `_assert_record_ratchets` and its
+record-reading machinery, and each owning demo grew
+
+```python
+CAPABILITY = "d18_update_ladder"
+def assert_claims(record: dict) -> None: ...
+```
+
+called on the fresh record by the demo, and on the **committed** record by
+`tests/property/test_claim_ownership_lock.py` in the fast lane. Five claim
+families that were previously only reachable behind a `slow` marker nobody
+runs are now checked in 9s. The same file forbids a test from naming a record
+it does not own — the class, as a source scan over string literals with
+docstrings excluded (prose naming a record is not a read of it).
+
+Verified non-vacuous: swapping two arm means in a copy of D18's committed
+record fails the owner's own assertion, with its own message.
+
+### 11.4 §10.8-3 closed: one shadowed fixture, 37 failures
+
+`test_grpc_seam_subprocess.py`'s test class defined its own class-scoped
+`device` fixture, shadowing the shared one in `tests/conftest.py` that reads
+`cpu_only`. So `test_distributed_train_step_parity` — marked `cpu_only` *and*
+`xfail` — ran on CUDA, tripped TileGeometry's device-side assert, and left the
+context poisoned for every later CUDA call in that worker. Bisected to a
+single test by running each predecessor plus one victim; the CUDA assert is
+confirmed at `torch.manual_seed` → `torch.cuda.manual_seed_all` with
+`CUDA_ERROR_ASSERT`, i.e. the context was already dead on arrival.
+
+The shadow is deleted, which forced the class-scoped `system` / `test_batch`
+fixtures to function scope (a class-scoped fixture cannot depend on a
+function-scoped one). `tests/property/test_device_fixture_lock.py` keeps the
+class from coming back, scoped to `tests/integration/**` because that is the
+tier whose workers share a CUDA context with the demos and the gRPC workers.
+
+Result: **37 slow-tier failures → 0.** Verified per file, not in aggregate:
+the gRPC file is 12 passed / 1 xfailed, and the 33 downstream failures pass
+(`test_ontology_parity` 21, `test_continual_learning` 8, `test_mnist_smoke` 2,
+`test_quickstart`, `test_z3_redesign`).
+
+### 11.5 §10.8-4: the numbers, re-measured
+
+| quantity | §10.5 said | measured 2026-09-26 (this round) |
+|---|---|---|
+| pyright findings, repo-wide | 2,079 | **1,975** (210 files) |
+| ruff findings, repo-wide | 334 | **334** — at the ratchet baseline, no re-baseline needed |
+| fast lane | 96s / 3360 passed | **127s / 3397 passed** (+3 new lock files, ~10s of it the claim lock) |
+| integration tier | 285s | **222s** (1 failure at the time: the stale manifest) |
+| slow tier | 876s, 37 failed | **1351s, 37 failed** — all one poisoned context, now 0 |
+
+Lint by rule, repo-wide: `RUF105` 143, `PLW0717` 81, `E402` 32, `SIM102` 19,
+`PLR0913` 8, `TRY300` 6, the rest ≤5. §1.3's table said `RUF105` 148 /
+`PLW0717` 81 / `E402` 32 / `SIM102` 19 — the `RUF105` count was measured on
+`computronium/` only, and the repo-wide figure is 143.
+
+**§1.2's ranking, measured** (import fan-in × pyright findings, the two
+things the plan asked for):
+
+| module | fan-in | pyright |
+|---|---|---|
+| `ontology/credit.py` | 43 | 21 |
+| `core/pipeline.py` | 18 | 11 |
+| `core/trainer.py` | 22 | 7 |
+| `core/campaign/evaluation.py` | 16 | 6 |
+| `utils.py` | 35 | 7 |
+
+Fan-in alone is a bad sort key: the ten most-imported modules in the tree
+(`core/logging`, `acceleration/registry`, `ontology/geometry`, …) are all at
+zero findings, and the whole top of the table is modules nobody imports
+(`acceleration/kernels.py` 90, `models/deployments/rl.py` 80,
+`models/deployments/vision.py` 67). The three modules the plan names are the
+right three to fix and are untouched by this round.
+
+**The pre-commit hook was never running.** `.pre-commit-config.yaml` has
+carried `name: identity cards (C.1: every concrete primitive carded)` since it
+was written, and a plain YAML scalar cannot contain `": "` — the file does not
+parse. `pre-commit validate-config` failed; every hook in `AGENTS.md`'s gate
+section was inert. The name is quoted now, and the pyright hook is widened
+from one hardcoded directory (`computronium/ontology`) to changed files under
+`computronium/`, which is the second half of §1.2. Tests stay out of the hook:
+297 findings live in the legacy property suite, and a gate that fires on files
+you only opened is a gate people switch off.
+
+### 11.6 New items, for the next round
+
+1. **The gallery lock runs before the pass that changes what it locks.**
+   `run_tiered_suite.sh` runs `integration` (which holds the lock) before
+   `slow` (which re-emits seven of the records). Any re-pin therefore has to be
+   taken *after* the slow pass, by hand, and nothing records that the order
+   matters. The fix is a re-pin step in the runner, or moving the lock after
+   the slow pass.
+2. **`d15`, `d16`, `d19` are the demos whose data moves with the thread
+   count; the other 23 did not move at all** when re-emitted at 1 thread. That
+   is worth knowing before anyone re-litigates the pin's cost: only three
+   figures are thread-sensitive.
+3. **§6's flake has not recurred**, but the mechanism §10.3 blamed for it was
+   wrong, so the explanation is still missing. With the thread count now
+   recorded and the integration tier pinned, a recurrence has one fewer
+   variable in it.
+4. **The 8 remaining `device` fixtures** (in `tests/unit/**` and
+   `tests/slow/`) are outside the lock's scope and are unexamined. They cannot
+   currently poison anything — the fast and slow lanes are green — but the
+   lock's scope was drawn from one failure, not from a survey.
+5. **The claim-ownership lock imports five demo modules to run their claims**,
+   which costs 8.3s of the fast lane and executes their module-level data
+   loading. If the claim set grows, that cost grows with it; the alternative is
+   moving the claim functions into an importable module, at the cost of the
+   owner relationship being declared rather than structural.

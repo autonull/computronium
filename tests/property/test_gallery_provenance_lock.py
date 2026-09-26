@@ -24,12 +24,12 @@ This lock is deliberately in the fast lane and reads the *committed* records.
 after the demos run, which is a round-close concern; provenance that silently
 decays between round closes needs a per-commit gate.
 
-Not covered, and the reason this file is not the whole of §2.6: an
-environment fingerprint (torch/CUDA/python versions). The machinery already
-exists -- `computronium.utils.capture_environment()` and `deps_hash()` -- but
-backfilling it means re-emitting every record, i.e. re-running every demo, and
-hand-editing a version string into a record would be fabricating provenance
-rather than recording it. That belongs with §1.6's slow pass.
+`torch_threads` is the fourth key, and it is the one that is not a hash.
+TODO35 §10.3 measured that the demo numbers are a function of the OpenMP
+thread count, not of the seed alone: bit-identical across processes at a
+fixed count, ~1e-4 apart in accuracy between 1 and 8 threads. The key makes
+each record self-describing about the reduction it was computed under;
+`test_determinism_thread_lock.py` is what reads it.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from computronium.visualization.gallery import canonicalize_floats
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORDS_DIR = REPO_ROOT / "docs" / "figures" / "run_records"
 
-PROVENANCE_KEYS = {"git_commit", "config_sha256", "env_sha256"}
+PROVENANCE_KEYS = {"git_commit", "config_sha256", "env_sha256", "torch_threads"}
 _SHA = re.compile(r"[0-9a-f]{40}")
 
 

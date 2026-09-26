@@ -216,6 +216,21 @@ def test_demo_update_ladder(emit_run_record) -> None:
     print(f"walltime: {round(time.time() - t0, 1)} s (printed, never recorded)")
     emit_run_record("D18", "update_ladder", record)
 
+    assert_claims(record)
+
+
+CAPABILITY = "d18_update_ladder"
+
+
+def assert_claims(record: dict) -> None:
+    """D18's claims, as a function of the record payload alone.
+
+    Called on the fresh record by the demo and, from the fast lane, against
+    the *committed* record by `test_claim_ownership_lock` -- so a claim that
+    stops holding is caught in seconds rather than at the next round close.
+    """
+    arms = record["arms"]
+
     # Headline: UnitRMS trains ePC at both fragile widths, multi-seed.
     for name in ("epc_w32_unit_rms", "epc_w64_unit_rms"):
         assert arms[name]["mean"] < 45.0, (

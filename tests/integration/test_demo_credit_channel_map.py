@@ -4,14 +4,18 @@ The consolidated finding figure of the TODO12 repair program: the eight
 measured ways the credit signal fails, each with its landed lever or an
 honest OPEN cell. Two mechanisms are demonstrated LIVE at demo scale
 (the attenuating channel with the A4 repair, and the blocked channel);
-the rest are ratchet-locked against the pinned run records — F4 fails if
-any pinned mechanism regresses (D18, D16, F1, F2, D14).
+the rest are ratchet-locked by the demo that owns them (D18, D16, F1,
+F2, D14). F4 used to hold copies of those ratchets against the *other*
+demos' committed records — a cross-claim lock with no invalidation path,
+red for nineteen days before TODO35 §10.2 found it. Each claim now lives
+in the owning demo's `assert_claims`, which the fast lane runs against
+that demo's own committed record.
 
 The map (failure mode → repair → status):
 
 1. **Misaligned channel** (PEPITA fixed-B) — OPEN: diverges under every
-   landed lever (ratchet: D18 pepita_w32_unit_rms at the divergence
-   sentinel; five causes ruled out in TODO12's audit chain —
+   landed lever (ratchet: D18's own claim on
+   pepita_w32_unit_rms; five causes ruled out in TODO12's audit chain —
    feedback_scale, centered-e1, row space, hidden gain, output step
    shape). The faithful-forward-modulation realization is untested.
 2. **Attenuating channel** (ePC ~4×/layer decay) — REPAIRED (A4):
@@ -19,7 +23,7 @@ The map (failure mode → repair → status):
    (~1.0, asserted) and lifts depth-8 learning over the unnormalized
    arm at matched lr (asserted).
 3. **Unnormalized gain** (width fragility) — REPAIRED (A1): ratchet —
-   D18 ePC trains at both fragile widths under unit_rms while Muon at
+   D18's ePC trains at both fragile widths under unit_rms while Muon at
    its registered lr explodes (w64: 32.5 vs 101.2; w32: 42.5 vs 191.7).
 4. **Disconnected channel** (pure FF error-blindness) — REPAIRED
    (readout_error, landed pre-TODO12): carried by D13's ff_hybrid row.
@@ -29,22 +33,20 @@ The map (failure mode → repair → status):
 6. **Train/inference objective gap** (P2 frozen-error) — OPEN: C1
    pending (contrastive path works; epc_thermo×Muon trains LM; the
    untried cells remain).
-7. **Absent channel** (timing-STDP has no task term) — OPEN: F2
+7. **Absent channel** (timing-STDP has no task term) — OPEN: F2's
    ratchet — supervised_train_acc 0.048 ≈ chance; B5 (reward-modulated
    STDP) pending.
 8. **Low-rank credit** (the optimizer crutch) — REPAIRED for ePC-width,
-   mapped otherwise (A6): ratchets — D18 crutch-dead cells; D16
-   unit_rms vision-quick boundary (regime-shaped rung); D14 faithful
-   regime self-sufficient (mupc_beta10 0.828 at depth 20, no
+   mapped otherwise (A6): ratchets owned by D18 (crutch-dead cells),
+   D16 (unit_rms vision-quick boundary, regime-shaped rung) and D14
+   (faithful regime self-sufficient, mupc_beta10 at depth 20, no
    credit-side lever).
 
 Status codes in the figure: 2 = repair demonstrated live here, 1 =
 repair demonstrated in a pinned record, 0 = honest OPEN cell.
 """
 
-import json
 from itertools import islice
-from pathlib import Path
 
 import pytest
 import torch
@@ -78,9 +80,6 @@ LR = 0.2
 BETA = 0.5
 CHANCE = 0.1
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RECORDS_DIR = REPO_ROOT / "docs" / "figures" / "run_records"
-
 # status: 2 = live repair, 1 = pinned repair, 0 = open
 _ROWS: tuple[tuple[str, int], ...] = (
     ("misaligned (pepita fixed-B)", 0),
@@ -92,12 +91,6 @@ _ROWS: tuple[tuple[str, int], ...] = (
     ("absent (stdp no task term)", 0),
     ("low-rank (optimizer crutch)", 1),
 )
-
-
-def _load(capability: str) -> dict:
-    return json.loads((RECORDS_DIR / f"{capability}.json").read_text(encoding="utf-8"))[
-        "data"
-    ]
 
 
 def _flatten(loader, cap):
@@ -205,7 +198,7 @@ def _run_live_arms(substrate, config, train_data) -> dict:
     spc = _spc_system(substrate)
     spc_norms = _credit_norms(spc, substrate, train_data[0])
     print(f"spc norms {spc_norms}")
-    assert all(n == 0.0 for n in spc_norms[:-1]), (  # noqa: RUF069 — exact-zero IS the ratchet (F1 precedent)
+    assert all(n == 0.0 for n in spc_norms[:-1]), (  # ruff: ignore[RUF069] — exact-zero IS the ratchet (F1 precedent)
         "sPC hidden credit norms must be exactly zero (the blocked channel)"
     )
     assert all(n > 0 for n in norms_none[:-1]), (
@@ -222,63 +215,6 @@ def _run_live_arms(substrate, config, train_data) -> dict:
     }
 
 
-def _assert_record_ratchets() -> None:
-    """The pinned mechanisms must not regress (F4's ratchet locks)."""
-    d18 = _load("d18_update_ladder")["arms"]
-    assert d18["epc_w64_unit_rms"]["mean"] < d18["epc_w64_muon"]["mean"], (
-        "D18 ratchet: unit_rms must beat Muon on ePC w64 (crutch dead)"
-    )
-    assert d18["epc_w32_unit_rms"]["mean"] < d18["epc_w32_muon"]["mean"], (
-        "D18 ratchet: unit_rms must beat Muon on ePC w32 (crutch dead)"
-    )
-    assert d18["pepita_w32_unit_rms"]["mean"] > 1e4, (
-        "D18 ratchet: the PEPITA misaligned-channel cell stays diverged "
-        "(honest OPEN row until the faithful realization is tested)"
-    )
-    d16 = _load("d16_uaxis_coverage")["arms"]
-    # The D16 leg was inverted at 2927ef33 and this ratchet was not carried
-    # with it: `unit_rms` moved from the matched-with-Muon lr 0.02 cell
-    # (10-20x past the stability edge, an euclid-grid mislabel) to its
-    # per-element-displacement lr 1e-3, where it learns on every geometry.
-    # The claim F4 is guarding is therefore "it learns, and still trails
-    # Muon" -- not "the crutch stays dead". Asserting the superseded claim
-    # here left this test red for every run since, behind the `slow` marker.
-    for geo in ("mlp_d2_w64", "graph_grid8x4", "lattice3d"):
-        assert d16[f"{geo}/unit_rms"]["mean"] > CHANCE + 0.05, (
-            f"D16 ratchet: unit_rms trains on its own lr axis on {geo}"
-        )
-        assert d16[f"{geo}/unit_rms"]["mean"] < d16[f"{geo}/muon"]["mean"], (
-            f"D16 ratchet: unit_rms still trails Muon on {geo}"
-        )
-    f1 = _load("f1_failure_manifesto")["arms"]
-    assert f1["bp"]["train_acc"][0] - f1["bp"]["train_acc"][-1] > 0.4, (
-        "F1 ratchet: backprop decays through depth (the faithful-regime "
-        "attenuation contrast)"
-    )
-    assert f1["hebbian_runaway"]["norm_ratio"][-1] > 1e4, (
-        "F1 ratchet: the unnormalized local chain still runaways at depth 100"
-    )
-    assert f1["oja_collapse"]["readout_acc"][-1] < CHANCE + 0.15, (
-        "F1 ratchet: normalized Oja chain still collapses toward chance"
-    )
-    f2 = _load("f2_spiking_plateau")
-    assert f2["supervised_train_acc"] < CHANCE + 0.02, (
-        "F2 ratchet: timing-STDP supervised accuracy stays at chance "
-        "(the absent channel, B5 pending)"
-    )
-    d14 = _load("d14_jpc_faithful_depth")["arms"]
-    # Also superseded: D14's claim is its own figure title -- "muPC
-    # generalizes where default init memorizes; OrthoAdam lifts both inits"
-    # -- and the absolute 0.8 floor predates both the OrthoAdam cells
-    # (77f689ce) and the current re-emit, where mupc x plain Adam is 0.65.
-    assert d14["mupc_beta10"]["test"] > d14["default_beta10"]["test"] + 0.2, (
-        "D14 ratchet: the muPC init generalizes where the default init memorizes"
-    )
-    assert d14["mupc_ortho"]["test"] > d14["mupc_beta10"]["test"] + 0.2, (
-        "D14 ratchet: OrthoAdam lifts both inits at depth 20"
-    )
-
-
 @pytest.mark.slow
 @pytest.mark.timeout(600)
 def test_demo_credit_channel_map(emit_run_record) -> None:
@@ -290,7 +226,6 @@ def test_demo_credit_channel_map(emit_run_record) -> None:
     substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
     config = SystemTrainerConfig(max_epochs=1, device="cpu", seed=42)
 
-    _assert_record_ratchets()
     live = _run_live_arms(substrate, config, train_data)
 
     record = {

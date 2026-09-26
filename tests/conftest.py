@@ -6,23 +6,24 @@ suite runs under ``-n 4`` where each worker holds its own global RNG
 stream, so an unseeded failure cannot be reproduced from its inputs.
 ``tests/property/test_rng_seed_lock.py`` ratchets this; shape-only tests
 are exempt because a draw's values cannot change its shape.
+
+The suite's thread count is pinned in the root ``conftest.py``, not here: it
+has to be set before torch is imported, and this module imports torch. It
+used to be set here anyway, below the import, where it did nothing.
+``tests/property/test_determinism_thread_lock.py`` holds the pin.
 """
-
-import os
-from typing import Any, cast
-from unittest.mock import MagicMock
-
-import pytest
-import torch
-from torch import nn
-
-os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import logging
 import shutil
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any, cast
+from unittest.mock import MagicMock
+
+import pytest
+import torch
+from torch import nn
 
 # Configure logging for tests
 logging.basicConfig(

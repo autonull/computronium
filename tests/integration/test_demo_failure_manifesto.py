@@ -344,13 +344,28 @@ def test_demo_failure_manifesto(emit_run_record) -> None:
 
     emit_run_record("F1", "failure_manifesto", record)
 
-    _assert_manifesto(train_accs, ratios, readouts, credit_norms, epc)
+    assert_claims(record)
 
 
-def _assert_manifesto(acc, ratios, readouts, credit_norms, epc) -> None:
+CAPABILITY = "f1_failure_manifesto"
+
+
+def assert_claims(record: dict) -> None:
+    """F1's claims, as a function of the record payload alone.
+
+    Called on the fresh record by the demo and, from the fast lane, against
+    the *committed* record by `test_claim_ownership_lock` — so a claim that
+    stops holding is caught in seconds rather than at the next round close.
+    """
+    arms = record["arms"]
     accmap = {
-        name: dict(zip(TRAIN_DEPTHS, accs, strict=True)) for name, accs in acc.items()
+        name: dict(zip(TRAIN_DEPTHS, arms[name]["train_acc"], strict=True))
+        for name in ("bp", "spc", "spc_mupc")
     }
+    credit_norms = arms["spc"]["credit_norms"]
+    epc = arms["epc"]
+    ratios = arms["hebbian_runaway"]["norm_ratio"]
+    readouts = arms["oja_collapse"]["readout_acc"]
 
     assert accmap["bp"][8] < accmap["bp"][2] - 0.3, "backprop must decay with depth"
     assert accmap["bp"][8] < 0.3

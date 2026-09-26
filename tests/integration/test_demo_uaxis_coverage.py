@@ -323,7 +323,6 @@ def test_demo_uaxis_coverage(emit_run_record) -> None:
             grid[name][update] = mean
             print(f"{name:>12} {update:>8}: {mean:.3f} {accs} params={params}")
 
-    arms = record["arms"]
     record["figure"] = figure_spec(
         "D16 — the U-axis coverage map: OrthoAdam dominates the headline cells (the hybrid rule)",
         heatmap_panel(
@@ -343,15 +342,28 @@ def test_demo_uaxis_coverage(emit_run_record) -> None:
 
     emit_run_record("D16", "uaxis_coverage", record)
 
+    assert_claims(record)
+
+
+CAPABILITY = "d16_uaxis_coverage"
+
+
+def assert_claims(record: dict) -> None:
+    """D16's claims, as a function of the record payload alone.
+
+    Called on the fresh record by the demo and, from the fast lane, against
+    the *committed* record by `test_claim_ownership_lock` — so a claim that
+    stops holding is caught in seconds rather than at the next round close.
+    """
     param_values = list(record["params"].values())
     assert max(param_values) / min(param_values) < 1.25, (
         "geometries must be capacity-matched (D8–D12 convention)"
     )
-    for name in geometries:
-        _assert_geometry_claims(arms, name)
+    for name in _geometries():
+        _assert_geometry_claims(record["arms"], name)
     for name in ("mlp_d2_w64", "graph_grid8x4"):
-        muon = arms[f"{name}/muon"]["mean"]
-        spectral = arms[f"{name}/spectral"]["mean"]
+        muon = record["arms"][f"{name}/muon"]["mean"]
+        spectral = record["arms"][f"{name}/spectral"]["mean"]
         assert muon > spectral + 0.02, (
             f"{name}: Muon must clearly beat spectral ({muon:.3f} vs {spectral:.3f})"
         )

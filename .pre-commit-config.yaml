@@ -12,14 +12,20 @@ repos:
         language: system
         types: [python]
       - id: pyright
-        name: pyright (ontology strict gate)
-        entry: uv run pyright computronium/ontology
+        # Changed library files, the way the two ruff hooks above already are.
+        # The gate used to be one hardcoded directory (`computronium/ontology`),
+        # so a commit touching any other module was checked by nothing at all
+        # (TODO35 §1.2). Tests stay out: 297 findings live in the legacy
+        # property suite and a hook that fires on files you only opened is a
+        # hook people disable. Findings in an untouched module are Register C
+        # hygiene work; findings in a module you changed are yours.
+        name: "pyright (changed library files)"
+        entry: uv run pyright
         language: system
+        files: ^computronium/
         types: [python]
-        pass_filenames: false
-        always_run: true
       - id: identity-cards
-        name: identity cards (C.1: every concrete primitive carded)
+        name: "identity cards (C.1: every concrete primitive carded)"
         entry: uv run python scripts/generate_identity_cards.py --strict
         language: system
         pass_filenames: false

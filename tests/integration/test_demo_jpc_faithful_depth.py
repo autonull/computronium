@@ -227,6 +227,20 @@ def test_demo_jpc_faithful_depth(emit_run_record) -> None:
 
     emit_run_record("D14", "jpc_faithful_depth", record)
 
+    assert_claims(record)
+
+
+CAPABILITY = "d14_jpc_faithful_depth"
+
+
+def assert_claims(record: dict) -> None:
+    """D14's claims, as a function of the record payload alone.
+
+    Called on the fresh record by the demo and, from the fast lane, against
+    the *committed* record by `test_claim_ownership_lock` -- so a claim that
+    stops holding is caught in seconds rather than at the next round close.
+    """
+
     mupc = record["arms"]["mupc_beta10"]
     default = record["arms"]["default_beta10"]
     assert mupc["test"] > 5 * CHANCE, (

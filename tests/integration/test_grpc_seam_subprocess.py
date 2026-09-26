@@ -173,15 +173,18 @@ async def _run_single_process_step(  # ruff: ignore[unused-async]
 class TestGRPCSeamSubprocess:
     """Real-transport multi-process gRPC seam tests."""
 
-    @pytest.fixture(scope="class")
-    def device(self):
-        return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    @pytest.fixture(scope="class")
+    # No local `device` fixture: the shared one in tests/conftest.py is the
+    # single place that reads `cpu_only`. This class used to shadow it with a
+    # marker-blind copy, so `test_distributed_train_step_parity` ran on CUDA,
+    # tripped TileGeometry's device-side assert, and left the context poisoned
+    # -- 37 slow-tier failures in six other files, none of them its own
+    # (TODO35 §10.4). The class-scoped fixtures below went with it: a
+    # class-scoped fixture cannot depend on a function-scoped one.
+    @pytest.fixture
     def system(self, device):
         return _create_test_system(device)
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def test_batch(self, device):
         """Create a deterministic test batch."""
         torch.manual_seed(42)

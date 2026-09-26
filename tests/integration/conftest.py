@@ -21,6 +21,23 @@ if TYPE_CHECKING:
 
 RECORDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "figures" / "run_records"
 
+# The intra-op thread count every record in this directory is reduced under.
+# Float reduction order depends on it, and a seeded arm is only reproducible
+# at a fixed count: measured ~1e-4 of accuracy between 1 and 8 threads
+# (probe `scripts/probes/todo35_d16_determinism.py`). The pin is here, in the
+# tier that emits records, rather than in the environment for the whole suite
+# -- pinning process-wide cost the fast lane 96s -> 186s for a guarantee only
+# these records need. `test_determinism_thread_lock.py` holds both halves.
+PINNED_THREADS = 1
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _pin_reduction_threads() -> None:
+    """Fix the reduction order before any demo in this tier draws a number."""
+    import torch
+
+    torch.set_num_threads(PINNED_THREADS)
+
 
 def _git_commit() -> str:
     """HEAD of the repository, resolved against the repo root.
@@ -54,6 +71,20 @@ def _config_sha(data: dict) -> str:
     return hashlib.sha256(_canonical(canonicalize_floats(data)).encode()).hexdigest()
 
 
+def _torch_threads() -> int:
+    """The intra-op thread count the data was reduced under.
+
+    Float reduction order depends on it: a seeded arm is bit-identical
+    across processes at a fixed count and differs by ~1e-4 in accuracy
+    between 1 and 8 threads (probe
+    `scripts/probes/todo35_d16_determinism.py`). It is a precondition of
+    every number in the record, so it belongs beside them.
+    """
+    import torch
+
+    return int(torch.get_num_threads())
+
+
 def _env_sha() -> str:
     """Digest of the execution environment, excluding the commit.
 
@@ -84,6 +115,7 @@ def emit_run_record(request: pytest.FixtureRequest) -> Callable[[str, str, dict]
                 "git_commit": _git_commit(),
                 "config_sha256": _config_sha(data),
                 "env_sha256": _env_sha(),
+                "torch_threads": _torch_threads(),
             },
             "data": data,
         }
