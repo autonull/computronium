@@ -23,9 +23,18 @@ RECORDS_DIR = Path(__file__).resolve().parents[2] / "docs" / "figures" / "run_re
 
 
 def _git_commit() -> str:
+    """HEAD of the repository, resolved against the repo root.
+
+    Demos that ``monkeypatch.chdir`` into a tmp_path before emitting would
+    otherwise run git outside any work tree and silently record
+    ``"unknown"`` -- which is how d24's record lost its provenance.
+    """
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, timeout=10
+            ["git", "rev-parse", "HEAD"],
+            cwd=RECORDS_DIR.parents[2],
+            text=True,
+            timeout=10,
         ).strip()
     except OSError, subprocess.SubprocessError:
         return "unknown"
