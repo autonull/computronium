@@ -13,7 +13,7 @@ import time
 import traceback
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import torch
@@ -26,6 +26,9 @@ from computronium.execution._lifecycle import CheckpointManager, ExperimentArchi
 from computronium.execution.events import EventSink, NullEventSink
 from computronium.execution.monitoring import InterferenceMonitor
 from computronium.hyperopt.storage import HyperoptStorage
+
+if TYPE_CHECKING:
+    from computronium.hyperopt.eval_tiers import EvaluationConfig
 from computronium.tracking import ExperimentTracker
 from computronium.utils import count_parameters
 
@@ -484,7 +487,7 @@ class TrialRunner:
         return True
 
 
-def run_single_trial_task(
+def run_single_trial_task(  # ruff: ignore[too-many-arguments]
     task: str,
     model_name: str,
     config: dict[str, object],
@@ -492,17 +495,39 @@ def run_single_trial_task(
     quick_mode: bool = True,
     verbose: bool = False,
     event_sink: EventSink | None = None,
+    *,
+    device: str = "auto",
+    seed: int | None = None,
+    eval_cfg: EvaluationConfig | None = None,
 ) -> dict[str, float] | None:
     """
     Execute a single trial for a given task and model configuration.
     Wraps TrialRunner with storage and failure tracking.
+
+    Args:
+        task: Task name.
+        model_name: Model or rule name under test.
+        config: Sampled hyperparameters; ``config["epochs"]`` wins over
+            ``eval_cfg.epochs`` so a caller's explicit override survives.
+        storage_path: Database path, or ``None`` for a temporary one.
+        quick_mode: Ask the task for a reduced dataset.
+        verbose: Print progress and tracebacks.
+        event_sink: Telemetry sink for trial lifecycle events.
+        device: Training device.
+        seed: Reseed the global RNG before the trial. Optuna calls the
+            objective repeatedly for the same configuration during warmup, and
+            an unseeded trial returns a different objective value each time.
+        eval_cfg: Patience tier (epochs, batch size, sample budget) to run
+            under. The CLI's objective closure passes one, which is how a
+            trial's training budget follows the tier the operator selected.
     """
-    temp_dir, db_path = _setup_storage(storage_path)
-    storage: HyperoptStorage | None = None
-    """
-    Execute a single trial for a given task and model configuration.
-    Wraps TrialRunner with storage and failure tracking.
-    """
+    if seed is not None:
+        from computronium.utils import seed_everything
+
+        seed_everything(seed)
+
+    epochs, task_overrides = _tier_overrides(eval_cfg)
+    merged = {**task_overrides, **config}
     temp_dir, db_path = _setup_storage(storage_path)
     storage = None
 
@@ -514,10 +539,12 @@ def run_single_trial_task(
                 db_path,
                 task,
                 model_name,
-                config,
+                merged,
                 quick_mode,
                 verbose,
                 event_sink,
+                device=device,
+                epochs=epochs,
             )
         finally:
             _cleanup_trial(storage, temp_dir, verbose)
@@ -536,7 +563,25 @@ def run_single_trial_task(
         return None
 
 
-def _run_trial_task_inner(
+def _tier_overrides(
+    eval_cfg: EvaluationConfig | None,
+) -> tuple[int | None, dict[str, object]]:
+    """An evaluation tier as ``(epochs, task kwargs)`` for a trial to run under.
+
+    Returns ``(None, {})`` for no tier, so a caller that never had one behaves
+    exactly as before rather than inheriting a default budget nobody chose.
+    """
+    if eval_cfg is None:
+        return None, {}
+    task_kwargs: dict[str, object] = {"batch_size": eval_cfg.batch_size}
+    if eval_cfg.train_samples is not None:
+        task_kwargs["train_samples"] = eval_cfg.train_samples
+    if eval_cfg.val_samples is not None:
+        task_kwargs["val_samples"] = eval_cfg.val_samples
+    return eval_cfg.epochs, task_kwargs
+
+
+def _run_trial_task_inner(  # ruff: ignore[too-many-arguments]
     storage: HyperoptStorage,
     db_path: Path,
     task: str,
@@ -545,6 +590,9 @@ def _run_trial_task_inner(
     quick_mode: bool,
     verbose: bool,
     event_sink: EventSink | None,
+    *,
+    device: str = "auto",
+    epochs: int | None = None,
 ) -> dict[str, float] | None:
     """Trial body for :func:`run_single_trial_task`, with storage already open.
 
@@ -567,7 +615,7 @@ def _run_trial_task_inner(
     )
     runner = TrialRunner(
         storage=storage,
-        device="auto",
+        device=device,
         task=task,
         quick_mode=quick_mode,
         checkpoint_db_path=str(db_path),
@@ -576,7 +624,9 @@ def _run_trial_task_inner(
         event_sink=event_sink,
     )
 
-    # Override epochs if present
+    # The tier's budget is the floor; an explicit ``config["epochs"]`` wins.
+    if epochs is not None:
+        runner.epochs = epochs
     epochs_raw = config.get("epochs")
     if epochs_raw is not None:
         runner.epochs = int(epochs_raw)  # type: ignore[arg-type]

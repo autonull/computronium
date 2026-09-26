@@ -11,19 +11,27 @@ Two locks:
 * No source file may suppress ``undefined-name`` — the escape hatch that hid
   the defect is itself the thing being banned, so it cannot be reintroduced
   quietly alongside a new undefined name.
-* Every ``from computronium.<module> import <name>`` in the ontology and core
-  layers must name a symbol the target module actually defines. F821 cannot
+* Every ``from computronium.<module> import <name>`` in ``computronium/`` must
+  name a symbol the target module actually defines. F821 cannot
   see this: a name imported from a module that does not define it is a
   *valid* import to the linter and an ``ImportError`` at runtime.
   ``dispatch_train_step`` imported ``_run_contrastive_kernel_step`` from
   ``computronium.core.trainer`` and the branch had never run.
 
-  Three populations are out of the lock's reach, and saying so is the point:
-  package ``__init__`` re-export surfaces (``__all__``/``_LAZY`` — they have
-  their own locks), star-import shims, whose names are not statically
-  derivable at all, and ``TYPE_CHECKING``-block imports, which are pyright's
-  population and are checked as such by §1.2's per-commit gate. What is left
-  is the class that has no other gate: an import that fails at runtime.
+  Three populations are out of the lock's reach by construction, and saying
+  so is the point: package ``__init__`` re-export surfaces (``__all__`` /
+  ``_LAZY`` -- they have their own locks), star-import shims, whose names are
+  not statically derivable at all, and ``TYPE_CHECKING``-block imports, which
+  are pyright's population and are checked as such by the widened per-commit
+  gate. What is left is the class that has no other gate: an import that
+  fails at runtime.
+
+The lock covers the whole of ``computronium/``. It was scoped to ``core`` +
+``ontology`` for two rounds because 13 files failed it, and scoping a lock to
+dodge known failures is the arrangement TODO35 §0 warns about.
+``cli/export_trained_kernel.py`` was the last holdout; it is now a documented
+refusal that names its own blocker rather than an ``ImportError`` from a
+deleted name, so the exemption is gone with it.
 """
 
 from __future__ import annotations
@@ -39,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SCANNED = ("computronium", "tests", "scripts", "packages")
 # The layers the fast lane exercises; see the module docstring for what is
 # deliberately outside them.
-IMPORT_SCANNED = ("computronium/core", "computronium/ontology")
+IMPORT_SCANNED = ("computronium",)
 SUPPRESSION = "undefined-name"
 
 

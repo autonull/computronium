@@ -80,7 +80,7 @@ def run_verify(args: argparse.Namespace) -> None:
                 PatientLevel,
                 get_evaluation_config,
             )
-            from computronium.hyperopt.experiment import run_single_trial
+            from computronium.hyperopt.experiment import run_single_trial_task
 
             eval_cfg = get_evaluation_config(PatientLevel.STANDARD)
             if args.epochs:
@@ -92,9 +92,9 @@ def run_verify(args: argparse.Namespace) -> None:
                     min_epochs=eval_cfg.min_epochs,
                 )
 
-            result = run_single_trial(
+            result = run_single_trial_task(
+                task=task_name,
                 model_name=model_name,
-                task_name=task_name,
                 config=params,
                 eval_cfg=eval_cfg,
                 device="auto",

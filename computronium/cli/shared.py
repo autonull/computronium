@@ -154,11 +154,11 @@ def _make_objective(
         config = sample_config(trial, ctx.model, ctx.task, ctx.eval_cfg, ctx.quick_mode)
 
         # Run single trial
-        from computronium.hyperopt.experiment import run_single_trial
+        from computronium.hyperopt.experiment import run_single_trial_task
 
-        result = run_single_trial(
+        result = run_single_trial_task(
+            task=ctx.task,
             model_name=ctx.model,
-            task_name=ctx.task,
             config=config,
             eval_cfg=ctx.eval_cfg,
             device=ctx.device,

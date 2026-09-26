@@ -18,6 +18,7 @@ import signal
 import time
 import traceback
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import optuna
@@ -909,10 +910,13 @@ class ExecutionEngine:
         statistical tests, and high-level synthesis insights.
         """
         try:
-            from computronium.analysis.reporting import ReportOrchestrator
+            from computronium.analysis.reporting import generate_experiment_report
 
-            orchestrator = ReportOrchestrator(self.db_path, output_dir)
-            orchestrator.generate_reports()
+            path = Path(output_dir) / "experiment_report.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            generate_experiment_report(
+                self.db_path, self.tier_limit or "shallow", str(path)
+            )
         except (RuntimeError, OSError, ValueError, KeyError) as e:
             logger.error("Failed to generate reports: %s", e, exc_info=True)
 
