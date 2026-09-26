@@ -51,6 +51,7 @@ def _state(x: torch.Tensor) -> CompositeState:
 @pytest.mark.parametrize("diag,expected_rho", [((0.9, 0.7), 0.9), ((0.3, 0.3), 0.3)])
 def test_normal_matrix_rho_equals_sigma_max(diag, expected_rho):
     """Normal (diagonal) J: ρ(J) = σ_max(J); both estimators must agree."""
+    torch.manual_seed(0)
     J = torch.diag(torch.tensor(diag))
     z = _state(torch.randn(1, 2))
 
@@ -69,6 +70,7 @@ def test_nonnormal_jordan_block_not_conflated():
     The amplification estimator must report ~σ_max, never ρ, and the two
     exact metrics must stay strictly separated.
     """
+    torch.manual_seed(0)
     J = torch.tensor([[0.5, 10.0], [0.0, 0.5]])
     z = _state(torch.randn(1, 2))
     fn = _linear_transition(J)
@@ -89,6 +91,7 @@ def test_estimator_is_not_sigma_max_on_nonnormal():
     The estimator's ‖Jv‖ must never be reported as σ_max(J) for nonnormal J:
     it converges to the dominant eigenvalue magnitude (0.5) while ‖J‖₂ ≈ 10.02.
     """
+    torch.manual_seed(0)
     J = torch.tensor([[0.5, 10.0], [0.0, 0.5]])
     fn = _linear_transition(J)
     z = _state(torch.randn(1, 2))

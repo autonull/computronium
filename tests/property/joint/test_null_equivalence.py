@@ -53,6 +53,7 @@ def test_null_plasticity_equivalence():  # ruff: ignore[too-many-locals]
     The joint system with M=NullPlasticity must produce identical behavior
     to the original 5-D system for the same inputs and initial conditions.
     """
+    torch.manual_seed(0)
     system_5d, substrate, geometry, _dynamics, _credit, _update = _create_5d_system()
 
     # Build joint system with NullPlasticity

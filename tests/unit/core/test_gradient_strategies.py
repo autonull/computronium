@@ -130,6 +130,7 @@ class TestTargetPropGradient:
 
 class TestHebbianGradient:
     def test_local_hebbian_update(self) -> None:
+        torch.manual_seed(0)
         model = _HebbianModel(4, 8, 3)
         grad = HebbianGradient()
         x = torch.randn(2, 4)

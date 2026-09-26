@@ -104,46 +104,9 @@ class RobustnessEvaluator:
         metrics = {}
         scores = []
         try:  # noqa: PLR0915
-            # 1. Setup Task & Model
             task = create_task(self.task_name, device=self.device, quick_mode=True)
             task.setup()
-
-            model = create_model(
-                self.model_name,
-                input_dim=task.input_dim,
-                output_dim=task.output_dim,
-                hidden_dim=self.config.get("hidden_dim", 128),
-                num_layers=self.config.get("num_layers", 4),
-                device=self.device,
-            )
-
-            # Load weights if provided, else train briefly
-            if self.weights_path:
-                logger.info("Loading weights from %s", self.weights_path)
-                from computronium.core.checkpoint import load_checkpoint
-
-                checkpoint = load_checkpoint(
-                    self.weights_path, map_location=self.device
-                )
-                # Handle full checkpoint vs state_dict
-                if "model_state_dict" in checkpoint:
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                else:
-                    model.load_state_dict(checkpoint)
-            else:
-                logger.info(
-                    "No weights provided. Training from scratch for robustness check..."
-                )
-                trainer = task.create_trainer(
-                    model,
-                    lr=self.config.get("lr", 0.001),
-                    steps=self.config.get("steps", 20),
-                    batches_per_epoch=50,
-                    eval_batches=10,
-                )
-                # Train for a few epochs to get a baseline
-                for _ in range(3):
-                    trainer.train_epoch()
+            model = self._build_model(task)
 
             # 2. Run Tests
 
@@ -153,35 +116,8 @@ class RobustnessEvaluator:
             metrics["noise_score"] = noise_score
             logger.info("Noise Score: %s", noise_score)
 
-            # Test B: Input Perturbation (Random Noise)
-            # Only for vision/continuous inputs
             if task.task_type == DomainType.VISION:
-                perturb_score = self._test_input_perturbation(model, task)
-                scores.append(perturb_score)
-                metrics["perturbation_score"] = perturb_score
-                logger.info("Perturbation Score: %s", perturb_score)
-
-                # Test C: OOD Detection (Phase 6.2)
-                ood_score = self._test_ood_detection(model, task)
-                scores.append(ood_score)
-                metrics["ood_score"] = ood_score
-                logger.info("OOD Detection Score: %s", ood_score)
-
-                # Test D: Adversarial Attack (FGSM) (Phase 6.2)
-                adv_score = self._test_adversarial_attack(model, task)
-                scores.append(adv_score)
-                metrics["adversarial_fgsm"] = adv_score
-                logger.info("Adversarial Score (FGSM): %s", adv_score)
-
-                # Test E: PGD Attack (Phase 6.3)
-                pgd_score = self._test_pgd_attack(model, task)
-                scores.append(pgd_score)
-                metrics["adversarial_pgd"] = pgd_score
-                logger.info("Adversarial Score (PGD): %s", pgd_score)
-
-                # Optional: Interpretability Check
-                if self.output_dir:
-                    self._generate_saliency_maps(model, task)
+                self._run_vision_probes(model, task, scores, metrics)
 
             metrics["robustness_score"] = float(np.mean(scores)) if scores else 0.0
             return metrics  # ruff: ignore[try-consider-else]
@@ -189,6 +125,61 @@ class RobustnessEvaluator:
         except Exception as e:  # broad: best-effort
             logger.error("Robustness evaluation failed: %s", e, exc_info=True)
             return {"robustness_score": 0.0}
+
+    def _build_model(self, task) -> nn.Module:
+        """Load the configured weights, or train briefly to get a baseline."""
+        model = create_model(
+            self.model_name,
+            input_dim=task.input_dim,
+            output_dim=task.output_dim,
+            hidden_dim=self.config.get("hidden_dim", 128),
+            num_layers=self.config.get("num_layers", 4),
+            device=self.device,
+        )
+        if not self.weights_path:
+            logger.info(
+                "No weights provided. Training from scratch for robustness check..."
+            )
+            trainer = task.create_trainer(
+                model,
+                lr=self.config.get("lr", 0.001),
+                steps=self.config.get("steps", 20),
+                batches_per_epoch=50,
+                eval_batches=10,
+            )
+            for _ in range(3):
+                trainer.train_epoch()
+            return model
+
+        logger.info("Loading weights from %s", self.weights_path)
+        from computronium.core.checkpoint import load_checkpoint
+
+        checkpoint = load_checkpoint(self.weights_path, map_location=self.device)
+        model.load_state_dict(checkpoint.get("model_state_dict", checkpoint))
+        return model
+
+    def _run_vision_probes(
+        self, model: nn.Module, task, scores: list[float], metrics: dict
+    ) -> None:
+        """Probes that only make sense for vision/continuous inputs."""
+        probes = (
+            ("perturbation_score", self._test_input_perturbation, "Perturbation Score"),
+            ("ood_score", self._test_ood_detection, "OOD Detection Score"),
+            (
+                "adversarial_fgsm",
+                self._test_adversarial_attack,
+                "Adversarial Score (FGSM)",
+            ),
+            ("adversarial_pgd", self._test_pgd_attack, "Adversarial Score (PGD)"),
+        )
+        for key, probe, label in probes:
+            score = probe(model, task)
+            scores.append(score)
+            metrics[key] = score
+            logger.info("%s: %s", label, score)
+
+        if self.output_dir:
+            self._generate_saliency_maps(model, task)
 
     def _test_noise_injection(self, model: nn.Module, task: object) -> float:
         """

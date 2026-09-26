@@ -138,6 +138,7 @@ class TestGradientEquivalence:
         ΔW ∝ (free_pre @ free_post - nudged_pre @ nudged_post) / β
         This is fundamentally local - no weight transpose access required.
         """
+        torch.manual_seed(0)
         from computronium.ontology import SystemState
 
         system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)
@@ -191,6 +192,7 @@ class TestGradientEquivalence:
         Unlike backprop, EqProp computes gradients without ever reading W^T.
         This test ensures the pseudo-gradient computation only uses activations.
         """
+        torch.manual_seed(0)
         from computronium.ontology import SystemState
 
         system = self._create_mlp_system("thermodynamic_contrast", beta=0.5)

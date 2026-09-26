@@ -84,6 +84,7 @@ def test_lazy_registry_round_trip() -> None:
 
 
 def test_lazy_settle_monotone_and_nudges() -> None:
+    torch.manual_seed(0)
     from computronium.ontology.dynamics._dynamics import _compute_hopfield_energy
 
     dynamics = LazyStateDynamics(

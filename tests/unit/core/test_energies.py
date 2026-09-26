@@ -14,6 +14,7 @@ from computronium.core.energies import (
 
 class TestPredictionErrorEnergy:
     def test_non_negative(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         acts = [torch.randn(4, 10), h, torch.randn(4, 5)]
         preds = [torch.randn(4, 20), torch.randn(4, 5)]
@@ -21,6 +22,7 @@ class TestPredictionErrorEnergy:
         assert energy >= 0
 
     def test_zero_for_exact_match(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         out = torch.randn(4, 5)
         acts = [torch.randn(4, 10), h, out]
@@ -29,12 +31,14 @@ class TestPredictionErrorEnergy:
         assert energy <= 1e-6
 
     def test_single_layer(self) -> None:
+        torch.manual_seed(0)
         acts = [torch.randn(4, 8), torch.randn(4, 5)]
         preds = [torch.randn(4, 5)]
         energy = prediction_error_energy(acts, preds)
         assert energy >= 0
 
     def test_with_weights(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         out = torch.randn(4, 5)
         acts = [torch.randn(4, 10), h, out]
@@ -46,12 +50,14 @@ class TestPredictionErrorEnergy:
 
 class TestSupervisedEnergy:
     def test_non_negative(self) -> None:
+        torch.manual_seed(0)
         logits = torch.randn(4, 10)
         targets = torch.randint(0, 10, (4,))
         energy = supervised_energy(logits, targets)
         assert energy >= 0
 
     def test_default_loss_is_ce(self) -> None:
+        torch.manual_seed(0)
         logits = torch.randn(4, 10)
         targets = torch.randint(0, 10, (4,))
         energy = supervised_energy(logits, targets)
@@ -61,6 +67,7 @@ class TestSupervisedEnergy:
 
 class TestHybridEnergy:
     def test_non_negative(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         acts = [torch.randn(4, 10), h, torch.randn(4, 5)]
         preds = [torch.randn(4, 20), torch.randn(4, 5)]
@@ -70,6 +77,7 @@ class TestHybridEnergy:
         assert energy >= 0
 
     def test_supervised_weight_zero(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         out = torch.randn(4, 5)
         acts = [torch.randn(4, 10), h, out]
@@ -80,6 +88,7 @@ class TestHybridEnergy:
         assert energy <= 1e-6
 
     def test_supervised_weight_scales(self) -> None:
+        torch.manual_seed(0)
         h = torch.randn(4, 20)
         acts = [torch.randn(4, 10), h, torch.randn(4, 5)]
         preds = [torch.randn(4, 20), torch.randn(4, 5)]
@@ -113,27 +122,32 @@ class TestContrastiveEnergy:
 
 class TestMSEEnergy:
     def test_non_negative(self) -> None:
+        torch.manual_seed(0)
         pred = torch.randn(4, 10)
         target = torch.randn(4, 10)
         energy = mse_energy(pred, target)
         assert energy >= 0
 
     def test_zero_for_perfect_match(self) -> None:
+        torch.manual_seed(0)
         x = torch.randn(4, 10)
         assert mse_energy(x, x) <= 1e-6
 
 
 class TestNodeEnergy:
     def test_non_negative(self) -> None:
+        torch.manual_seed(0)
         assert node_energy(torch.randn(4, 20), reg_weight=1.0) >= 0
 
     def test_zero_for_zero_activity(self) -> None:
         assert node_energy(torch.zeros(4, 20), reg_weight=1.0) <= 1e-6
 
     def test_zero_reg_weight(self) -> None:
+        torch.manual_seed(0)
         assert node_energy(torch.randn(4, 20), reg_weight=0.0) <= 1e-6
 
     def test_scales_with_reg_weight(self) -> None:
+        torch.manual_seed(0)
         x = torch.randn(4, 20)
         e1 = node_energy(x, reg_weight=1.0)
         e2 = node_energy(x, reg_weight=2.0)

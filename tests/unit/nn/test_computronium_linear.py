@@ -254,6 +254,7 @@ class TestComputroniumLinearFastWeights:
 
     def test_fast_weights_modulates_output(self) -> None:
         """Fast weights should modulate output."""
+        torch.manual_seed(0)
         cl = ComputroniumLinear(
             10,
             5,
@@ -273,6 +274,7 @@ class TestComputroniumLinearFastWeights:
 
     def test_fast_weights_reset_psi(self) -> None:
         """reset_psi should reinitialize plastic state."""
+        torch.manual_seed(0)
         cl = ComputroniumLinear(
             10,
             5,

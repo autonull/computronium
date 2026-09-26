@@ -1,11 +1,12 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
-**Status**: **ACTIVE — 15 passes landed.** Complete: §0, §1.1–§1.5, §2.1, §2.2,
-§2.5, §2.7, §3.1, §4.1, §5.1, §5.2, §5.3, §5.8, and §5.4's dispatch half.
-Partly: §2.3 (tranche 1: 671 → 353 findings, ratchet live), §2.6 (provenance
-repaired; the environment fingerprint needs a re-emission pass), §3.2 (the
-reproducibility question answered per class; `checkpoints/` and `docs/archive/`
-remain). **The prioritised forward plan is in [Remaining Work](#remaining-work)
+**Status**: **ACTIVE — 16 passes landed.** Complete: §0, §1.1–§1.5, §2.1, §2.2,
+§2.5, §2.7, §3.1, §4.1, §5.1, §5.2, §5.3, §5.8, §5.4's dispatch half, and all
+**116** of §1.5's unseeded tests. Partly: §2.3 (tranche 2 opened: 671 → 349,
+ratchet live), §2.6 (provenance repaired; the environment fingerprint needs a
+re-emission pass), §3.2 (the reproducibility question answered per class;
+`checkpoints/` needs one word from the user and `docs/archive/` a policy).
+**The prioritised forward plan is in [Remaining Work](#remaining-work)
 — read that, not the section numbering.** §4 is unstarted and is the seed for a
 `TODO35.md`; the argument for and against splitting is recorded there, and the
 recommendation is to keep one document until §4 has a named consumer.
@@ -22,6 +23,59 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 16 — §1.5 closed (the 116), §2.3 tranche 2 opened, and a mesh loop that never ran
+
+**§1.5 is no longer a ratchet; it is a ban.** All **116** flagged tests across 42
+files now call `torch.manual_seed(0)` as their first statement, and
+`_BASELINE` is `{}`. The plan's estimate was right that it is mechanical
+(~2h, delegable) — and the interesting part is the *guard*, not the seeds:
+
+- **A zero baseline makes the §0.6 population assertion vacuous.** The old
+  `test_baseline_is_non_trivial` asserted "≥30 files and ≥100 flagged tests",
+  which is precisely what emptying the baseline destroys: the lock would now
+  pass for the reason §0.6 warns about — because the scan resolved nothing,
+  not because nothing is wrong. `test_scan_population_is_non_trivial`
+  re-expresses it against the population the *classifier* runs over
+  (2,773 test functions, 463 drawing from the global RNG), and the existing
+  `test_scan_classifiers` probe-the-probe pins the classifier itself.
+- **The seeding moved numerics, and the first two failures were the
+  interesting ones.** `test_free_accuracy_is_not_supervision_leaked` and
+  `test_every_dynamics_class_reports_its_horizon` had been passing on a
+  *particular* draw; both now pass on seed 0, which is the point. Neither
+  needed its threshold moved — the fix belonged in the test.
+- Two files needed `import torch` to be module-level rather than function-local
+  to satisfy the F821 lock, and `ruff`'s autofix then had a redefinition to
+  clean up: **the lock that §2.1 spent a pass strengthening caught the change
+  this pass made.** Repo-wide ruff count is unchanged at 353 across the whole
+  seeding sweep.
+
+**§2.3 tranche 2, the three worst try-clauses.** 353 → **349**.
+
+| File | Before | After | Note |
+|---|---|---|---|
+| `p2p/evolution.py` | 2 | **0** | 216-line `try:` (123 statements) split into six `_`-prefixed steps; pyright 16 → **0** |
+| `knowledge/causal.py` | 14 | **11** | `map_failure_manifold`'s 54-statement `try:` body extracted; its complexity `ruff: ignore` moved with it |
+| `execution/robustness.py` | 7 | 7 | `run()`'s 39-statement `try:` split into `_build_model` + a `_run_vision_probes` table; the try-clause finding drops 39 → 10 and three complexity findings move onto the extract, so the *count* is flat |
+
+**And extraction found a defect that reading would not have.**
+`P2PEvolution._evaluate` called `run_single_trial_task(..., job_id=...)`, and
+`job_id` **is not a parameter of that function** — it has not been since the
+signature was written. So every evaluation in the mesh loop raised
+`TypeError`, the broad `except Exception` logged it and slept, and the loop
+re-ran. §2.1's pattern in its purest form: an unexercised path whose only
+handler is the one that hides it, with zero tests on `p2p/`. Fixed by
+deleting the argument; the `job_id` value it computed was never read by
+anything.
+
+**The honest note on `robustness.py`**: that extraction is worth having and
+did not move the number. A ratchet counts, and a count cannot tell a
+readability win from a no-op — which is why the plan's rule is that the
+extraction is the deliverable and the count is the check. Two of three moved.
+
+Fast lane **3323 passed, 119 skipped, 26 xfailed, 1 xpassed in 99s**. The
+touched integration files (108 tests) pass; `test_continual_learning.py` is
+`slow` and is verified by `--with-slow` at round close.
 
 ### Pass 15 — §3.2: a calibration table that library code read from a gitignored directory
 
@@ -641,9 +695,10 @@ stream, so an unseeded test is not merely flaky, it is *unreproducible*.
   without a deterministic kernel, which is a different (and larger)
   investigation than a ratchet. No numeric assertion in the suite needs it;
   the seeding rule is the part that pays.
-- Remaining: seeding the 116. That is mechanical and safe to delegate in
-  batches — each is one `torch.manual_seed(0)` and a baseline-line delete.
-- Effort: ~1h, of which the ratchet is done.
+- **DONE (Pass 16)**: the 116 are seeded and `_BASELINE` is empty. The
+  population guard was re-expressed for that (see Pass 16), because the old
+  one asserted a property the fix destroys.
+- Effort: ~1h spent, of which the ratchet was the cheap half.
 
 ### 1.6 Re-baseline after the first real optimization — P2
 
@@ -776,6 +831,14 @@ worse than 32 honest findings. `SIM102` collapsible-if (19) is a *decision*, not
 a chore — 13 of the 19 are the `_validate_*` chains in `ontology/system.py`,
 where collapsing `if a: if b: raise` into `if a and b:` keeps behaviour and
 loses the one-branch-per-message structure the validators are read for.
+
+#### Tranche 2 — **opened (Pass 16)**: 353 → 349, and a mesh loop that never ran
+
+The three worst try-clauses, as the plan ordered. Full write-up in Pass 16;
+the transferable result is that **extracting the body is what surfaced a live
+crash** (`run_single_trial_task(job_id=…)`, a parameter that does not exist,
+swallowed by a broad `except` in a loop with no tests). A lint finding is a
+to-do list; the extraction it prompts is a probe.
 
 ### 2.4 pyright: 2079 findings — P2
 
@@ -1358,8 +1421,8 @@ started and should not until it has a consumer. The current phase table:
 |-------|-------|-------|
 | **A — determinism** | 1.1, 2.1, 1.4 | **done** — 2.1 `59d13f47`, 1.4 `fb6bb0f7`, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 + 5.2 `5ad96f85` |
-| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | 1.2, 1.3 **done**; 1.5 ratchet **done** (116 seeds open); **1.6 open** |
-| **D — structure** | 3.1, 3.2, 2.3, 2.4 | 3.1 **done** `b6151076`; 3.2 **partly done** `ceb4865a`; 2.3 tranche 1 **done** `09f73936` (671→353, ratchet live); **2.4 open** |
+| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | 1.2, 1.3, 1.5 **done** (1.5 fully: baseline empty, guard re-expressed); **1.6 open** |
+| **D — structure** | 3.1, 3.2, 2.3, 2.4 | 3.1 **done** `b6151076`; 3.2 **partly done** `ceb4865a`; 2.3 tranche 1 **done** `09f73936` (671→353), tranche 2 opened in Pass 16 (→349); **2.4 open** |
 | **E — presentation** | 4.2, 4.3, 4.4 | open; the TODO35 seed, see Remaining Work |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done**, export half deferred; 5.6–5.9 are decisions |
 
@@ -1391,11 +1454,10 @@ concrete next action, so no item here needs re-planning before starting.
 
 | # | Item | State | First move | Effort | Done when |
 |---|---|---|---|---|---|
-| 1 | **§2.4 pyright, top 3 modules by fan-in** | 2079 findings repo-wide; `AGENTS.md` keeps checking basic until a ratchet exists | count findings per module, pick the top 3, drive one to zero, add a *changed-files* pyright check to `pre-commit` next to ruff's | ~4h + ongoing | 3 modules report 0; pre-commit fails on a new error in a changed file |
-| 2 | **§3.2 `checkpoints/`** (24M) | no manifest, no seed, no config, **zero referrers** in code or docs | decide: delete, or write a manifest beside them. Do not leave it ambiguous | ~20min | directory either gone or self-describing |
+| 1 | **§2.4 pyright, top 3 modules by fan-in** | 2079 findings repo-wide; `AGENTS.md` keeps checking basic until a ratchet exists | count findings per module, pick the top 3, drive one to zero, add a *changed-files* pyright check to `pre-commit` next to ruff's. **Pass 16 shows the per-file method**: `p2p/evolution.py` went 16 → 0 inside an unrelated extraction, so the fan-in ranking is worth re-measuring rather than assuming | ~4h + ongoing | 3 modules report 0; pre-commit fails on a new error in a changed file |
+| 2 | **§3.2 `checkpoints/`** (24M) | no manifest, no seed, no config, **zero referrers**. Pass 16 dated them: 7–21 Aug, `epoch_N_val_*.pt` plus one `final_model.pt` + `metrics.json` from an LM demo | **delete** — it is a cwd-relative default dump (live code writes `<output_dir>/checkpoints/`), gitignored, and §2.6's own rule says a hand-written manifest for an unknown run is *fabricated* provenance, not recorded provenance. **Awaiting the user's word: it is 24M of undeletable-if-wrong data** | ~5min once decided | directory gone |
 | 3 | **§2.6 environment fingerprint** | `capture_environment()` / `deps_hash()` exist and are unused here | add `deps_hash()` to the record emitter, then re-emit every record in one slow pass (fold into §1.6) | ~1h + the slow pass | a drift lock can name which of code / config / environment moved |
-| 4 | **§2.3 tranche 2** (`PLW0717` 92, `E402` 32) | ratchet is live, so the list is now trustworthy | start with the 3 worst `try`-clauses as extraction exercises, not all 92 | ~3h | count falls under the ratchet without a new suppression |
-| 5 | **§1.5 the 116 unseeded value-asserting tests** | ratchet landed; the population is recorded, not fixed | batch by file; each is one `torch.manual_seed(0)` and a baseline-line delete | ~2h, delegable | `_BASELINE` empty |
+| 4 | **§2.3 tranche 2** (`PLW0717` 90, `E402` 32) | 3 of the worst done (Pass 16); the ratchet is live so the list is trustworthy | `knowledge/causal.py` still holds 4 (16/39/9/29 statements) and `hyperopt/experiment.py` 3 — the same extraction recipe, and `p2p` is the precedent for it finding a live bug | ~3h | count falls under the ratchet without a new suppression |
 
 ### Tier 2 — needs a quiet window, and one pass to amortise
 
@@ -1434,11 +1496,12 @@ keep one document until §4 has a named consumer.** If that consumer arrives
 with a requirement, split then, and move §4 plus §4.5's non-goals across whole
 rather than re-deriving them.
 
-### New items surfaced by passes 12–15, not yet in the numbered sections
+### New items surfaced by passes 12–16, not yet in the numbered sections
 
 | Item | Finding | Where it belongs |
 |---|---|---|
-| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved | a lock, or a one-line default change, when either script is next touched |
+| **`p2p/` has no tests** | the loop's only handler is `except Exception` + `sleep`, and a `TypeError` from a non-existent kwarg ran for the life of the module with nothing but a log line. The mesh feature is untested *and* its failure mode is silent by construction | a Tier-1 item: a stub-DHT test that drives `_evolution_loop` one iteration. `_build_model`/`_fetch_global_best`/`_evaluate` are now separately callable, which is what such a test needs |
+| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved. `checkpoints/` at the repo root is the same shape: a cwd-relative default dump | a lock, or a one-line default change, when either script is next touched. A single scan for `Path("<name>")` defaults in `scripts/` would cover the class |
 | `except OSError, subprocess.SubprocessError:` in `computronium/utils.py` | valid only on **Python 3.14+** (PEP 758, unparenthesised multiple exception types). The repo targets 3.14 and both ruff and pyright accept it — but the module will not *parse* on 3.13 | a note, not a defect: the target-version is declared and correct |
 | the lint ratchet's own version pin | first version **skipped** on a ruff mismatch, i.e. it switched itself off invisibly — the exact failure mode this plan warns about, committed by this plan. Now it fails with the remedy in the message | fixed, and the episode is the argument for the "make the claim executable" note below |
 
@@ -1623,6 +1686,24 @@ because provenance that decays between round closes needs a per-commit gate.
   code that *compiles and greps* is indistinguishable from live code until
   something resolves what actually loads. The lock is a filesystem comparison,
   not a type check, because that is the only question being asked.
+
+- **A lint finding is a to-do list; the extraction it prompts is a probe.**
+  §2.3's tranche 2 opened by splitting a 123-statement `try:` because ruff said
+  `PLW0717`, and the split revealed that the loop's only evaluation call passed
+  a keyword that does not exist — swallowed, every iteration, by the broad
+  `except` the finding was sitting inside. The rule was the vehicle, not the
+  payload. Cheapest possible instance of "a refactor that records what its
+  predecessors silently dropped", and it was found by *moving* code rather
+  than by reading it, which is the cheapest form of the plan's own theme.
+
+- **Closing a ratchet can delete the guard that made it trustworthy.** §1.5's
+  population assertion ("≥30 files, ≥100 flagged tests") existed precisely to
+  stop a lock that resolves nothing from passing. Emptying the baseline is the
+  *correct* end state, and it is also the exact state the guard was defending
+  against — so the guard had to be re-expressed against the population the
+  classifier runs over rather than the population it rejects. A ratchet's
+  termination condition is also a change to its meaning, and the two have to be
+  written in the same commit.
 
 - **A threshold fixed without a measurement is a guess wearing a
   measurement's clothes.** §1.1 shipped a 0.78 floor last pass, justified

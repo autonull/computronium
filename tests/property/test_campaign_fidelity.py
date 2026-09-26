@@ -351,6 +351,8 @@ class TestMetricHonesty:
         Under energy_minimization, nudged settle reaches target (high acc),
         but free settle accuracy should be at chance.
         """
+        import torch
+
         from computronium.core.system_trainer.joint import compose_joint_system
         from computronium.ontology import (
             CreditAssignmentConfig,
@@ -366,6 +368,7 @@ class TestMetricHonesty:
             SubstrateConfig,
         )
 
+        torch.manual_seed(0)
         substrate = DigitalSubstrate(SubstrateConfig.digital())
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(input_dim=8, output_dim=8, hidden_dims=(16,))
@@ -386,8 +389,6 @@ class TestMetricHonesty:
             credit=credit,
             update=update,
         )
-
-        import torch
 
         x = torch.randn(16, 8)
         y = torch.randint(0, 8, (16,))

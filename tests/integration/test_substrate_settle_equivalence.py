@@ -242,6 +242,7 @@ class TestSubstrateSettleEquivalence:
 
     def test_nudged_phase_equivalence(self, kernel, geometry, digital_substrate):
         """Nudged-phase equilibrium matches reference with target nudge."""
+        torch.manual_seed(0)
         init_acts = _get_init_acts(geometry, digital_substrate)
         target = torch.randint(0, 10, (init_acts[0].shape[0],))
         beta = 0.5
@@ -401,6 +402,7 @@ class TestSubstrateSettleWeightUpdateOperator:
 
     def test_digital_update_operator_is_sgd(self, geometry, digital_substrate):
         """Digital substrate update operator returns gradient (SGD semantics)."""
+        torch.manual_seed(0)
         kernel = _build_kernel_from_geometry(geometry, digital_substrate)
 
         params = extract_layered_params(geometry)
@@ -425,6 +427,7 @@ class TestSubstrateSettlePseudoGradient:
         self, geometry, digital_substrate
     ):
         """Kernel pseudo_gradient == ThermodynamicContrast.compute_pseudo_gradient."""
+        torch.manual_seed(0)
         kernel = _build_kernel_from_geometry(geometry, digital_substrate)
 
         init_acts = _get_init_acts(geometry, digital_substrate)
@@ -472,6 +475,7 @@ class TestProductionPathEquivalence:
 
     def test_dynamics_settle_matches_reference(self, geometry, digital_substrate):
         """Production EnergyMinimizationDynamics.settle() matches reference loop."""
+        torch.manual_seed(0)
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=20, step_size=0.1)
         )
@@ -514,6 +518,7 @@ class TestProductionPathEquivalence:
         self, geometry, digital_substrate
     ):
         """Production nudged phase matches reference."""
+        torch.manual_seed(0)
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(
                 max_steps=20, step_size=0.1, beta=0.5

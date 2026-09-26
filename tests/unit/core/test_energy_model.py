@@ -86,6 +86,7 @@ def test_ebm_trainer_dispatch() -> None:
 
 def test_ebm_fallback_metrics_valid() -> None:
     """Non-EnergyModel should get BPTT fallback with valid metrics."""
+    torch.manual_seed(0)
     model = torch.nn.Sequential(
         torch.nn.Linear(10, 20),
         torch.nn.ReLU(),

@@ -825,6 +825,7 @@ class TestDeviceManagement:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_cuda_consistency(self):
         """All estimators should work on CUDA if available."""
+        torch.manual_seed(0)
         from computronium.core.joint.transition import PlasticityConfig
         from computronium.state import (
             CompositeState,

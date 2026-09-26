@@ -91,6 +91,7 @@ class TestVision:
 
     def test_conv_equitile_train_step(self) -> None:
         """Test ConvTileNet training step."""
+        torch.manual_seed(0)
         config = ConvTileNetConfig(
             input_channels=1,
             input_size=28,
@@ -129,6 +130,7 @@ class TestVision:
     def test_vision_augmentation(self) -> None:
         """Test VisionAugmentation."""
         # Test without crop (preserves shape)
+        torch.manual_seed(0)
         aug = VisionAugmentation(
             random_crop=False,
             random_flip=True,

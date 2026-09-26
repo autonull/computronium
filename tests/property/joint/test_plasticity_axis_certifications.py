@@ -125,6 +125,7 @@ def test_null_plasticity_protocol_compliance():
 
 def test_null_plasticity_preserves_joint_invariants():
     """NullPlasticity should preserve joint system invariants."""
+    torch.manual_seed(0)
     context, geometry, _registry = _create_test_context(PlasticityConfig.null())
     plasticity = NullPlasticity()
 
@@ -194,6 +195,7 @@ class RoutingPlasticity:
 
 def test_routing_plasticity_axis_certification():
     """RoutingPlasticity should pass axis certification."""
+    torch.manual_seed(0)
     plasticity = RoutingPlasticity()
 
     # Config properties
@@ -290,6 +292,7 @@ class FastWeightPlasticity:
 
 def test_fast_weight_plasticity_axis_certification():
     """FastWeightPlasticity should pass axis certification."""
+    torch.manual_seed(0)
     plasticity = FastWeightPlasticity()
 
     assert plasticity.config.plasticity_type == "fast_weights"
@@ -431,6 +434,7 @@ class RuleStatePlasticity:
 
 def test_rule_state_plasticity_axis_certification():
     """RuleStatePlasticity should pass axis certification."""
+    torch.manual_seed(0)
     plasticity = RuleStatePlasticity()
 
     assert plasticity.config.plasticity_type == "rule_state"
@@ -540,6 +544,7 @@ def test_plasticity_config_in_system_config():
 
 def test_consolidation_with_plasticity_config():
     """Consolidation should respect plasticity config consolidation_config."""
+    torch.manual_seed(0)
     from computronium.core.joint import ConsolidationConfig, consolidate
 
     _context, _geometry, _registry = _create_test_context(
@@ -646,6 +651,7 @@ def test_zero_extension_null_plasticity():
     The zero-extension identity is asserted by sampling, not derived —
     not machine-checked (TODO18 2.3 taxonomy).
     """
+    torch.manual_seed(0)
     from computronium.core.system_trainer import compose_system
 
     substrate = DigitalSubstrate(SubstrateConfig.digital())
@@ -685,6 +691,7 @@ def test_zero_extension_null_plasticity():
 
 def test_zero_extension_null_vs_non_null():
     """Sampled numerical test (Level 4): NullPlasticity differs from non-null."""
+    torch.manual_seed(0)
     context_null, geometry_null, _ = _create_test_context(PlasticityConfig.null())
     context_routing, _, _ = _create_test_context(PlasticityConfig.routing(gate_dim=32))
 

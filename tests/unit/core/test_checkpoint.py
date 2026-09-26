@@ -61,6 +61,7 @@ def test_save_and_load_checkpoint(model_and_state, tmp_path_obj):
 
 def test_load_checkpoint_into_model(model_and_state, tmp_path_obj):
     """load_checkpoint_into_model restores model state."""
+    torch.manual_seed(0)
     model, state = model_and_state
     ckpt: Checkpoint = {"model_state_dict": state}
     path = tmp_path_obj / "test_model.pt"

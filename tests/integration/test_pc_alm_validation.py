@@ -98,6 +98,7 @@ class TestPCALMGradientEquivalence:
 
     def test_pcalm_produces_pseudo_gradients(self):
         """PC-ALM system should produce valid pseudo-gradients."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(depth=4, hidden_dim=64, max_steps=30)
         x = torch.randn(8, 784)
         y = torch.randint(0, 10, (8,))
@@ -141,6 +142,7 @@ class TestPCALMGradientEquivalence:
 
     def test_pcalm_depth_4_trains(self):
         """PC-ALM should train at depth 4 on MNIST-like data."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(depth=4, hidden_dim=128, max_steps=60)
         x = torch.randn(32, 784)
         y = torch.randint(0, 10, (32,))
@@ -226,6 +228,7 @@ class TestPCALMAdaptiveBudget:
 
     def test_adaptive_stops_early(self):
         """With loose convergence threshold, settle should stop before max_steps."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(
             depth=4,
             hidden_dim=64,
@@ -246,6 +249,7 @@ class TestPCALMAdaptiveBudget:
 
     def test_convergence_threshold_zero_uses_full_budget(self):
         """With very strict threshold, settle should use full max_steps."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(
             depth=4,
             hidden_dim=64,
@@ -264,6 +268,7 @@ class TestPCALMAdaptiveBudget:
     def test_fixed_vs_adaptive_steps(self):
         """Compare steps used with adaptive vs fixed budget."""
         # Loose threshold - should stop early
+        torch.manual_seed(0)
         system_adaptive = _create_pc_alm_system(
             depth=4,
             hidden_dim=64,
@@ -359,6 +364,7 @@ class TestPCALMEnergyTracking:
 
     def test_free_energy_history_recorded(self):
         """When track_free_energy_per_iter=True, energy history should be recorded."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(
             depth=4,
             hidden_dim=64,
@@ -379,6 +385,7 @@ class TestPCALMEnergyTracking:
 
     def test_augmented_lagrangian_decreases(self):
         """Augmented Lagrangian should generally decrease during relaxation (Lyapunov)."""
+        torch.manual_seed(0)
         system = _create_pc_alm_system(
             depth=4,
             hidden_dim=64,

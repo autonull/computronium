@@ -68,6 +68,7 @@ def test_forward_exposes_steps_and_convergence_probe_metrics():
 
 def test_forward_trajectory_path_still_works():
     """Visualization path returns (out, trajectory) and converges early."""
+    torch.manual_seed(0)
     model = _make(threshold=1.0, start=2, max_steps=20)
     out, trajectory = model(
         torch.randn(2, 8), return_trajectory=True, return_dynamics=True

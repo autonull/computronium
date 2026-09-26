@@ -378,6 +378,7 @@ class TestCAxisLocalGoodnessCredit:
         reference: the settle launch count makes CUDA slower here and
         the lock is a numerical-alignment check, not a training-path lock.
         """
+        torch.manual_seed(0)
         device = torch.device("cpu")
 
         credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
@@ -442,6 +443,7 @@ class TestCAxisTargetInversionCredit:
         is approximate by construction — measured 0.95-0.99 across pinned
         seeds, hence the 0.90 tolerance instead of 0.95.
         """
+        torch.manual_seed(0)
         device = torch.device("cpu")
 
         credit = TargetInversionCredit(CreditAssignmentConfig.target_inversion())
@@ -587,6 +589,7 @@ class TestUAxisRiemannianOrthogonalUpdate:
     )
     def test_orthogonality_preservation(self, seed: int) -> None:
         """Newton-Schulz orthogonalization: ||G^T G - I||_F < 1e-4."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -612,6 +615,7 @@ class TestUAxisSpectralConstrainedUpdate:
     @pytest.mark.parametrize("seed", [42, 123, 456, 789])
     def test_spectral_norm_bound(self, seed: int) -> None:
         """Apply update to weight matrix W. Max singular value σ_max ≤ 1.0 + 1e-5."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -641,6 +645,7 @@ class TestUAxisMeanNormUpdate:
     @pytest.mark.parametrize("seed", [42, 123, 456, 789])
     def test_fisher_whitening_direction_preserved(self, seed: int) -> None:
         """MeanNormUpdate: whitening preserves gradient direction (sign matches)."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -672,6 +677,7 @@ class TestUAxisElasticConsolidationUpdate:
     )
     def test_protected_parameter_immobility(self, seed: int) -> None:
         """EWC penalty: high Fisher params move toward old_params."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -736,6 +742,7 @@ class TestDAxisSpikeIntegration:
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
     def test_membrane_boundedness(self, seed: int) -> None:
         """Run settling for 50 steps with constant input. V < V_thresh strictly."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
@@ -775,6 +782,7 @@ class TestDAxisSpikeIntegration:
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
     def test_spike_counts_bounded_per_step(self, seed: int) -> None:
         """Per-(layer, step) spike totals are bounded by the neuron count."""
+        torch.manual_seed(0)
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()

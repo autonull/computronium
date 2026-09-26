@@ -82,6 +82,7 @@ def test_psi_moves_under_task_input(coordinate: str) -> None:
 
 
 def test_modulate_reaches_activations(coordinate: str) -> None:
+    torch.manual_seed(0)
     system = build_coordinate_system(coordinate)
     plasticity = system.plasticity
     psi0 = plasticity.initial_psi(system.context, batch_size=4)

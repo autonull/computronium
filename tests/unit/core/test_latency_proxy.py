@@ -67,6 +67,7 @@ def test_proxy_scales_with_depth_and_settle_steps() -> None:
 
 
 def test_proxy_ordering_matches_measured_walltime() -> None:
+    torch.manual_seed(0)
     systems = (
         ("shallow", _system((32,), max_steps=2)),
         ("deep", _system((64, 64, 64), max_steps=8)),

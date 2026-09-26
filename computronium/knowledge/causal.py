@@ -326,7 +326,7 @@ class CausalAnalyzer:
             logger.exception("Algorithm fingerprint computation failed")
             raise KnowledgeBaseError("Algorithm fingerprint computation failed") from e
 
-    def map_failure_manifold(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def map_failure_manifold(
         self,
         min_samples: int = 5,
     ) -> dict[str, dict[str, object]]:
@@ -341,116 +341,117 @@ class CausalAnalyzer:
         Returns:
             Dict of failure_cluster -> {error_pattern, algorithms, tasks, count, characteristics}
         """
-        try:  # noqa: PLR0915
-            import numpy as np
-            import pandas as pd
-            from sklearn.cluster import DBSCAN
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.preprocessing import StandardScaler
-
-            exps = self.list_experiments(limit=1000)
-            if not exps:
-                return {}
-
-            # Collect failed experiments
-            failed = []
-            for exp in exps:
-                metrics = json.loads(exp.get("metrics", "{}"))
-                config = json.loads(exp.get("config", "{}"))
-
-                # Consider failed if low accuracy or explicit error
-                acc = metrics.get("val_accuracy", 1.0)
-                error = metrics.get("error", config.get("error", ""))
-
-                if acc < 0.15 or error:
-                    failed.append({
-                        "model_family": exp.get("model_family", "unknown"),
-                        "task": exp.get("task", "unknown"),
-                        "accuracy": acc,
-                        "error": str(error),
-                        "config": config,
-                    })
-
-            if len(failed) < min_samples:
-                logger.warning("Not enough failed runs for manifold mapping")
-                return {}
-
-            df = pd.DataFrame(failed)
-
-            # Vectorize error messages
-            tfidf = TfidfVectorizer(max_features=50, stop_words="english")
-            error_texts = df["error"].fillna("").tolist()
-            if all(not e for e in error_texts):
-                # No error messages, use accuracy + config
-                X_config = pd.DataFrame(df["config"].tolist())
-                X_config = X_config.fillna(0)
-                scaler = StandardScaler()
-                X = scaler.fit_transform(X_config.select_dtypes(include=[np.number]))
-            else:
-                X_text = tfidf.fit_transform(error_texts).toarray()
-                # Add config features
-                X_config = pd.DataFrame(df["config"].tolist())
-                X_config = X_config.fillna(0)
-                numeric_cols = X_config.select_dtypes(include=[np.number]).columns
-                if len(numeric_cols) > 0:
-                    scaler = StandardScaler()
-                    X_config_scaled = scaler.fit_transform(X_config[numeric_cols])
-                    X = np.hstack([X_text, X_config_scaled])
-                else:
-                    X = X_text
-
-            # Cluster
-            clustering = DBSCAN(eps=0.5, min_samples=min_samples)
-            labels = clustering.fit_predict(X)
-
-            df["cluster"] = labels
-
-            # Analyze clusters
-            failure_manifold = {}
-            for cluster_id in np.unique(labels):
-                if cluster_id == -1:
-                    continue  # Noise
-
-                cluster_df = df[df["cluster"] == cluster_id]
-                if len(cluster_df) < min_samples:
-                    continue
-
-                # Characterize cluster
-                error_mode = (
-                    cluster_df["error"].mode().iloc[0]
-                    if not cluster_df["error"].mode().empty
-                    else "unknown"
-                )
-                algorithms = cluster_df["model_family"].value_counts().to_dict()
-                tasks = cluster_df["task"].value_counts().to_dict()
-                mean_acc = float(cluster_df["accuracy"].mean())
-
-                # Common config patterns
-                common_config = {}
-                for col in (
-                    cluster_df["config"].iloc[0].keys() if len(cluster_df) > 0 else []
-                ):
-                    vals = [c.get(col) for c in cluster_df["config"] if col in c]
-                    if vals:
-                        common_config[col] = max(set(vals), key=vals.count)
-
-                failure_manifold[f"cluster_{cluster_id}"] = {
-                    "error_pattern": error_mode,
-                    "algorithms": algorithms,
-                    "tasks": tasks,
-                    "count": len(cluster_df),
-                    "mean_accuracy": mean_acc,
-                    "common_config": common_config,
-                }
-
-            logger.info(
-                "Mapped failure manifold with %d clusters", len(failure_manifold)
-            )
-            return failure_manifold  # ruff: ignore[try-consider-else]
-
+        try:
+            return self._map_failure_manifold(min_samples)
         except Exception as e:
             logger.exception("Failure manifold mapping failed")
             raise KnowledgeBaseError("Failure manifold mapping failed") from e
+
+    def _map_failure_manifold(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+        self, min_samples: int
+    ) -> dict[str, dict[str, object]]:
+        import pandas as pd
+        from sklearn.cluster import DBSCAN
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.preprocessing import StandardScaler
+
+        exps = self.list_experiments(limit=1000)
+        if not exps:
+            return {}
+
+        # Collect failed experiments
+        failed = []
+        for exp in exps:
+            metrics = json.loads(exp.get("metrics", "{}"))
+            config = json.loads(exp.get("config", "{}"))
+
+            # Consider failed if low accuracy or explicit error
+            acc = metrics.get("val_accuracy", 1.0)
+            error = metrics.get("error", config.get("error", ""))
+
+            if acc < 0.15 or error:
+                failed.append({
+                    "model_family": exp.get("model_family", "unknown"),
+                    "task": exp.get("task", "unknown"),
+                    "accuracy": acc,
+                    "error": str(error),
+                    "config": config,
+                })
+
+        if len(failed) < min_samples:
+            logger.warning("Not enough failed runs for manifold mapping")
+            return {}
+
+        df = pd.DataFrame(failed)
+
+        # Vectorize error messages
+        tfidf = TfidfVectorizer(max_features=50, stop_words="english")
+        error_texts = df["error"].fillna("").tolist()
+        if all(not e for e in error_texts):
+            # No error messages, use accuracy + config
+            X_config = pd.DataFrame(df["config"].tolist())
+            X_config = X_config.fillna(0)
+            scaler = StandardScaler()
+            X = scaler.fit_transform(X_config.select_dtypes(include=[np.number]))
+        else:
+            X_text = tfidf.fit_transform(error_texts).toarray()
+            # Add config features
+            X_config = pd.DataFrame(df["config"].tolist())
+            X_config = X_config.fillna(0)
+            numeric_cols = X_config.select_dtypes(include=[np.number]).columns
+            if len(numeric_cols) > 0:
+                scaler = StandardScaler()
+                X_config_scaled = scaler.fit_transform(X_config[numeric_cols])
+                X = np.hstack([X_text, X_config_scaled])
+            else:
+                X = X_text
+
+        # Cluster
+        clustering = DBSCAN(eps=0.5, min_samples=min_samples)
+        labels = clustering.fit_predict(X)
+
+        df["cluster"] = labels
+
+        # Analyze clusters
+        failure_manifold = {}
+        for cluster_id in np.unique(labels):
+            if cluster_id == -1:
+                continue  # Noise
+
+            cluster_df = df[df["cluster"] == cluster_id]
+            if len(cluster_df) < min_samples:
+                continue
+
+            # Characterize cluster
+            error_mode = (
+                cluster_df["error"].mode().iloc[0]
+                if not cluster_df["error"].mode().empty
+                else "unknown"
+            )
+            algorithms = cluster_df["model_family"].value_counts().to_dict()
+            tasks = cluster_df["task"].value_counts().to_dict()
+            mean_acc = float(cluster_df["accuracy"].mean())
+
+            # Common config patterns
+            common_config = {}
+            for col in (
+                cluster_df["config"].iloc[0].keys() if len(cluster_df) > 0 else []
+            ):
+                vals = [c.get(col) for c in cluster_df["config"] if col in c]
+                if vals:
+                    common_config[col] = max(set(vals), key=vals.count)
+
+            failure_manifold[f"cluster_{cluster_id}"] = {
+                "error_pattern": error_mode,
+                "algorithms": algorithms,
+                "tasks": tasks,
+                "count": len(cluster_df),
+                "mean_accuracy": mean_acc,
+                "common_config": common_config,
+            }
+
+        logger.info("Mapped failure manifold with %d clusters", len(failure_manifold))
+        return failure_manifold  # ruff: ignore[try-consider-else]
 
     def generate_algorithm_phylogeny(
         self,

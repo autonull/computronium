@@ -89,6 +89,7 @@ class TestPartitionExactness:
         assert torch.equal(out["0.bias"], params["0.bias"])
 
     def test_bias_grads_routed_to_owner(self) -> None:
+        torch.manual_seed(0)
         params = _params()
         bias = torch.randn(6)
         out = RoleSplitUpdate(_config(("0.bias",))).step(

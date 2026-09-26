@@ -150,6 +150,7 @@ class TestMemoryScalingO1:
     )
     def test_eqprop_activation_memory_constant(self, depth, data):
         """EqProp activation memory should not grow dramatically with depth."""
+        torch.manual_seed(0)
         model = _create_native_eqprop_cuda(
             input_dim=64,
             hidden_dim=128,
@@ -188,6 +189,7 @@ class TestMemoryScalingO1:
     )
     def test_backprop_memory_grows_with_depth(self, depth, data):
         """Backprop activation memory should grow with depth."""
+        torch.manual_seed(0)
         num_layers = depth // 10
         model = _create_native_backprop_cuda(
             input_dim=64,
@@ -237,6 +239,7 @@ class TestDeepNetworkCreditAssignment:
     )
     def test_deep_network_gradient_flow(self, depth, data):
         """Gradients should flow through 100+ effective layers."""
+        torch.manual_seed(0)
         model = create_native_eqprop_mlp(
             input_dim=64,
             hidden_dim=64,
@@ -406,6 +409,7 @@ class TestNoiseDampingSelfHealing:
     @given(st.data())
     def test_noise_damping(self, data):
         """Injected noise should be damped to zero through relaxation."""
+        torch.manual_seed(0)
         model = create_native_eqprop_mlp(
             input_dim=64,
             hidden_dim=128,

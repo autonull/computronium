@@ -566,6 +566,7 @@ def test_null_plasticity_as_adapter():
 def test_joint_transition_with_null_plasticity():
     """Joint transition with NullPlasticity should match 5-D system."""
 
+    torch.manual_seed(0)
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
     dynamics = EnergyMinimizationDynamics(

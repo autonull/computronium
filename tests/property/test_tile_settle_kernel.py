@@ -57,6 +57,7 @@ def test_block_view_structure(block_view):
 
 def test_block_vs_per_edge_equivalence(block_view, tile_graph):
     """Assembled block matmul matches per-edge sum (Digital substrate)."""
+    torch.manual_seed(0)
     substrate = DigitalSubstrate()
     op = substrate.get_forward_operator()
 
@@ -87,6 +88,7 @@ def test_block_vs_per_edge_equivalence(block_view, tile_graph):
 
 def test_free_vs_nudged_contrast():
     """Settled nudged state differs from free at the output layer."""
+    torch.manual_seed(0)
     from computronium.ontology.system import SystemState
 
     m = create_native_tile_ep(

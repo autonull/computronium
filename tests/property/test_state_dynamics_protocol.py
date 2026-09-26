@@ -113,6 +113,7 @@ class TestActivationLayout:
     @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
     def test_settle_returns_layered_activations(self, dynamics_cls):
         """Settle should return activations in layered format: input, hidden..., output."""
+        torch.manual_seed(0)
         config = DYNAMICS_CONFIGS[dynamics_cls]()
         dynamics = dynamics_cls(config)
         geometry, substrate = _make_geometry_and_substrate()
@@ -380,6 +381,7 @@ class TestMutationContract:
     @pytest.mark.parametrize("dynamics_cls", DYNAMICS_CLASSES)
     def test_caller_must_use_returned_state(self, dynamics_cls):
         """The returned state should have correct activations; input state may be stale."""
+        torch.manual_seed(0)
         config = DYNAMICS_CONFIGS[dynamics_cls]()
         dynamics = dynamics_cls(config)
         geometry, substrate = _make_geometry_and_substrate()

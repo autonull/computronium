@@ -69,6 +69,7 @@ def _create_context_with_consolidatable() -> tuple[SystemContext, dict[str, Tens
 
 def test_consolidation_promotes_consolidatable():
     """Consolidation promotes consolidatable ψ to θ at episode boundaries."""
+    torch.manual_seed(0)
     context, original_theta = _create_context_with_consolidatable()
 
     z_final = CompositeState(
@@ -89,6 +90,7 @@ def test_consolidation_promotes_consolidatable():
 
 def test_consolidation_scale():
     """Consolidation respects promotion_scale."""
+    torch.manual_seed(0)
     context, original_theta = _create_context_with_consolidatable()
 
     z_final = CompositeState(
@@ -107,6 +109,7 @@ def test_consolidation_scale():
 
 def test_consolidation_resets_plastic():
     """Consolidation resets promoted plastic state if configured."""
+    torch.manual_seed(0)
     context, _ = _create_context_with_consolidatable()
 
     z_final = CompositeState(

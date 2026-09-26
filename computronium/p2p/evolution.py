@@ -10,6 +10,8 @@ import os
 import random
 import threading
 import time
+from dataclasses import dataclass, field
+from typing import cast
 
 from computronium.core.logging import get_logger
 from computronium.hyperopt.experiment import run_single_trial_task
@@ -23,6 +25,22 @@ __all__ = [
     "logger",
 ]
 logger = get_logger("P2PEvolution")
+
+
+@dataclass(frozen=True, slots=True)
+class _GlobalBest:
+    """The mesh's best record as one iteration of the loop sees it.
+
+    The zero value is "no global best", which is the state every field takes
+    before the first discovery: empty config, ``-inf`` score, generation 0.
+    """
+
+    record: dict | None = None
+    config: dict = field(default_factory=dict)
+    score: float = -float("inf")
+    model_name: str = "EqProp MLP"
+    gen: int = 0
+    parent_hash: str | None = None
 
 
 def get_config_hash(config: dict) -> str:
@@ -46,22 +64,22 @@ class P2PEvolution:
         bootstrap_ip: str | None = None,
         bootstrap_port: int = 8468,
         discovery_mode: str = "quick",
-        constraints: dict[str, object] | None = None,
+        constraints: dict | None = None,
         task: str = "shakespeare",
     ):
         self.bootstrap_nodes = [(bootstrap_ip, bootstrap_port)] if bootstrap_ip else []
-        self.dht = None
+        self.dht: DHTNode | None = None
         self.discovery_mode = discovery_mode
         self.constraints = constraints or {}
         self.task = task
 
         self.running = False
-        self.thread = None
+        self.thread: threading.Thread | None = None
 
         # State
-        self.local_best_config = None
+        self.local_best_config: dict | None = None
         self.local_best_score = -float("inf")
-        self.manual_queue = []  # Queue for manually injected genomes
+        self.manual_queue: list[dict] = []  # Manually injected genomes
 
         state = load_state()
         self.points = state.get("points", 0)
@@ -94,33 +112,36 @@ class P2PEvolution:
             except (OSError, AttributeError) as e:
                 self._log(f"Could not lower priority: {e}")
 
-        # Start DHT
-        try:  # noqa: PLR0915
-            # Try to bind to a port, with retries
-            base_port = 8468 + random.randint(0, 1000)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
-            for i in range(10):
-                try:
-                    local_port = base_port + i
-                    self.dht = DHTNode(
-                        port=local_port, bootstrap_nodes=self.bootstrap_nodes
-                    )
-                    self.dht.start()
-                    self._log(f"DHT started on port {local_port}")
-                    break
-                except Exception as e:  # broad: async/network best-effort
-                    self._log(f"Port {local_port} busy/failed, retrying... ({e})")
-                    if i == 9:
-                        raise  # Rethrow on last attempt
-                    time.sleep(0.5)
-
-        except Exception as e:  # broad: async/network best-effort
-            self._log(f"Failed to start DHT after retries: {e}")
+        if not self._start_dht():
             return
 
         self.running = True
         self.thread = threading.Thread(target=self._evolution_loop, daemon=True)
         self.thread.start()
         self._update_status("Starting P2P Mesh...")
+
+    def _start_dht(self) -> bool:
+        """Bind the DHT, retrying a handful of neighbouring ports.
+
+        Returns False (having logged) when every attempt failed; the caller
+        must not start the evolution loop without a mesh.
+        """
+        base_port = 8468 + random.randint(0, 1000)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+        for offset in range(10):
+            local_port = base_port + offset
+            try:
+                self.dht = DHTNode(
+                    port=local_port, bootstrap_nodes=self.bootstrap_nodes
+                )
+                self.dht.start()
+            except Exception as e:  # broad: async/network best-effort
+                self._log(f"Port {local_port} busy/failed, retrying... ({e})")
+                time.sleep(0.5)
+                continue
+            self._log(f"DHT started on port {local_port}")
+            return True
+        self._log("Failed to start DHT after retries")
+        return False
 
     def stop(self):
         self.running = False
@@ -176,227 +197,16 @@ class P2PEvolution:
         self._log(f"[OK]  Verification PASSED (Real: {real_score:.4f})")
         return True
 
-    def _evolution_loop(self):  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    def _evolution_loop(self):
         self._log("Joined P2P Mesh network.")
 
         while self.running:
-            try:  # noqa: PLR0915
-                # 1. Fetch Global Best
-                self._update_status("Syncing with Mesh...")
-                best_record = self.dht.get_best_model(self.task)
-
-                global_best_config = {}
-                global_best_score = -float("inf")
-                global_model_name = "EqProp MLP"  # Default starting point
-                global_gen = 0
-                parent_hash = None
-
-                if best_record:  # ruff: ignore[collapsible-if]
-                    # PROOF OF ACCURACY CHECK
-                    # 10% chance to verify if we haven't seen this hash before
-                    # For simplicity, just random check
-                    if random.random() < 0.1:  # ruff: ignore[suspicious-non-cryptographic-random-usage, collapsible-if]
-                        if not self._verify_model(best_record):
-                            self._log("Ignoring invalid global best.")
-                            best_record = None  # Discard it for this iteration
-
-                if best_record:
-                    global_best_config = best_record.get("config", {})
-                    global_best_score = best_record.get("score", -float("inf"))
-                    global_model_name = global_best_config.get(
-                        "model_name", global_model_name
-                    )
-                    global_gen = global_best_config.get("generation", 0)
-                    parent_hash = get_config_hash(global_best_config)
-
-                    self._log(
-                        f"Found global best: {global_best_score:.4f} (Gen {global_gen})"
-                    )
-                else:
-                    self._log("No global best found. Will seed new...")
-
-                # 2. Decide Strategy (Manual, New Arch, Crossover, or Mutate)
-                action = "mutate"
-                rnd = random.random()  # ruff: ignore[suspicious-non-cryptographic-random-usage]
-
-                # Check manual queue first
-                if self.manual_queue:
-                    action = "manual"
-                # Chance to switch architecture entirely (exploration)
-                elif rnd < 0.05:
-                    action = "new_arch"
-                # Chance to crossover if we have a local best compatible with global
-                elif (
-                    self.local_best_config
-                    and best_record
-                    and self.local_best_config.get("model_name") == global_model_name
-                    and rnd < 0.35
-                ):
-                    action = "crossover"
-                else:
-                    action = "mutate"
-
-                # 3. Prepare Genome
-                target_config = {}
-                target_model_name = global_model_name
-                next_gen = global_gen
-
-                if action == "manual":
-                    self._update_status("Evaluating Manual Design...")
-                    target_config = self.manual_queue.pop(0)
-                    target_model_name = target_config.get(
-                        "model_name", global_model_name
-                    )
-                    # Treat as a new branch or continuation depending on
-                    # if parent_id is set manually
-                    # If not set, we can assume it's a new line or a fork of global
-                    if "generation" not in target_config:
-                        target_config["generation"] = global_gen + 1
-                    next_gen = target_config["generation"]
-                    parent_hash = target_config.get("parent_id")  # Might be None
-
-                elif action == "new_arch":
-                    self._update_status("Exploring New Architecture...")
-                    # Pick random model from registry spaces
-                    available_models = get_available_models()
-                    target_model_name = random.choice(available_models)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
-                    space = get_search_space(target_model_name)
-                    target_config = space.sample()
-                    target_config["model_name"] = target_model_name
-                    next_gen = 0  # Reset generation for new species
-                    parent_hash = None
-                    self._log(f"Selected new architecture: {target_model_name}")
-
-                elif action == "crossover":
-                    self._update_status("Crossing Over Genomes...")
-                    space = get_search_space(global_model_name)
-                    target_config = space.crossover(
-                        global_best_config, self.local_best_config
-                    )
-                    target_config["model_name"] = global_model_name  # Persist name
-                    # Add small mutation to avoid stagnation
-                    target_config = space.mutate(target_config, mutation_rate=0.1)
-                    target_model_name = global_model_name
-                    # Take max generation of parents + 1
-                    local_gen = self.local_best_config.get("generation", 0)
-                    next_gen = max(global_gen, local_gen) + 1
-
-                else:  # Mutate
-                    self._update_status("Mutating Genome...")
-                    # Decide which parent to mutate
-                    # Favor global best, but sometimes use local best or random restart
-                    parent_config = global_best_config
-                    parent_model = global_model_name
-                    parent_gen = global_gen
-
-                    if not best_record:  # Bootstrap
-                        space = get_search_space(global_model_name)
-                        parent_config = space.sample()
-                        parent_config["model_name"] = global_model_name
-                        parent_gen = 0
-                        parent_hash = None
-                    elif self.local_best_config and random.random() < 0.3:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
-                        parent_config = self.local_best_config
-                        parent_model = parent_config.get("model_name", "EqProp MLP")
-                        parent_gen = parent_config.get("generation", 0)
-                        parent_hash = get_config_hash(parent_config)
-
-                    space = get_search_space(parent_model)
-                    target_config = space.mutate(parent_config)
-                    target_config["model_name"] = parent_model
-                    target_model_name = parent_model
-                    next_gen = parent_gen + 1
-
-                # Update Lineage Info
-                target_config["generation"] = next_gen
-                if parent_hash:
-                    target_config["parent_id"] = parent_hash
-
-                # Re-fetch space with constraints applied for final
-                # verification/mutation context
-                space = get_search_space(target_model_name)
-                if self.constraints:
-                    space = space.apply_constraints(self.constraints)
-                    # Mutate again with constrained space to ensure we are in bounds
-                    # Rate 0 just clamps if implemented or we can just assume
-                    # mutate clamps
-                    target_config = space.mutate(target_config, mutation_rate=0.0)
-
-                    # Manually clamp common keys if space.mutate doesn't enforce
-                    # stricter bounds on existing values
-                    if (
-                        "max_hidden" in self.constraints
-                        and "hidden_dim" in target_config
-                    ):
-                        target_config["hidden_dim"] = min(
-                            target_config["hidden_dim"], self.constraints["max_hidden"]
-                        )
-                    if (
-                        "max_layers" in self.constraints
-                        and "num_layers" in target_config
-                    ):
-                        target_config["num_layers"] = min(
-                            target_config["num_layers"], self.constraints["max_layers"]
-                        )
-                    if "max_steps" in self.constraints and "steps" in target_config:
-                        target_config["steps"] = min(
-                            target_config["steps"], self.constraints["max_steps"]
-                        )
-
-                # Apply Mode Settings (Quick vs Deep)
-                if self.discovery_mode == "quick":
-                    target_config["epochs"] = 1
-                    if "steps" in target_config:
-                        target_config["steps"] = min(target_config["steps"], 15)
-                elif self.discovery_mode == "deep":
-                    target_config["epochs"] = 5
-                    # Allow larger steps
-
-                # 4. Evaluate
-                self._update_status(f"Evaluating: {target_model_name} (Gen {next_gen})")
-
-                # Use Worker's logic to run job locally
-                job_id = random.randint(1000, 9999)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
-
-                metrics = run_single_trial_task(
-                    task=self.task,
-                    model_name=target_model_name,
-                    config=target_config,
-                    storage_path="results/hyperopt.db",
-                    job_id=job_id,
-                    quick_mode=(self.discovery_mode == "quick"),
-                )
-
-                if metrics:
-                    acc = metrics.get("accuracy", 0.0)
-                    self.jobs_done += 1
-                    self.points += 5
-                    save_state(self.points, self.jobs_done)
-
-                    self._log(
-                        f"Eval complete: {acc:.4f}"
-                        f" (Global Best: {global_best_score:.4f})"
-                    )
-
-                    # Update Local Best
-                    if acc > self.local_best_score:
-                        self.local_best_score = acc
-                        self.local_best_config = target_config
-                        self._log(f"New Local Best! ({acc:.4f})")
-
-                    # Publish if Global Best
-                    if acc > global_best_score:
-                        self._update_status("Publishing Discovery...")
-                        # Ensure model_name inside config
-                        target_config["model_name"] = target_model_name
-                        self.dht.publish_best_model(self.task, target_config, acc)
-                        self.points += 50
-                        save_state(self.points, self.jobs_done)
-                        self._log(f"[SUCCESS]  New Global Best Discovered! ({acc:.4f})")
-
-                else:
-                    self._log("Evaluation failed.")
-
+            try:
+                best = self._fetch_global_best()
+                action = self._choose_action(best)
+                config, model_name, next_gen = self._build_genome(action, best)
+                target_config = self._constrain_and_configure(config, model_name)
+                self._evaluate(target_config, model_name, next_gen, best.score)
             except Exception as e:  # broad: process/network loop
                 self._log(f"Evolution Loop Error: {e}")
                 import traceback
@@ -408,3 +218,170 @@ class P2PEvolution:
             if self.running:
                 self._update_status("Resting...")
                 time.sleep(2)
+
+    def _require_dht(self) -> DHTNode:
+        if self.dht is None:
+            raise RuntimeError("mesh is not started")
+        return self.dht
+
+    def _fetch_global_best(self) -> _GlobalBest:
+        self._update_status("Syncing with Mesh...")
+        best_record = self._require_dht().get_best_model(self.task)
+
+        if (
+            best_record is not None
+            and random.random() < 0.1  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            and not self._verify_model(best_record)
+        ):
+            self._log("Ignoring invalid global best.")
+            best_record = None
+
+        if not best_record:
+            self._log("No global best found. Will seed new...")
+            return _GlobalBest()
+
+        config = best_record.get("config", {})
+        score = best_record.get("score", -float("inf"))
+        gen = config.get("generation", 0)
+        self._log(f"Found global best: {score:.4f} (Gen {gen})")
+        return _GlobalBest(
+            record=best_record,
+            config=config,
+            score=score,
+            model_name=config.get("model_name", "EqProp MLP"),
+            gen=gen,
+            parent_hash=get_config_hash(config),
+        )
+
+    def _choose_action(self, best: _GlobalBest) -> str:
+        if self.manual_queue:
+            return "manual"
+        rnd = random.random()  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+        if rnd < 0.05:
+            return "new_arch"
+        if (
+            self.local_best_config
+            and best.record
+            and self.local_best_config.get("model_name") == best.model_name
+            and rnd < 0.35
+        ):
+            return "crossover"
+        return "mutate"
+
+    def _build_genome(self, action: str, best: _GlobalBest) -> tuple[dict, str, int]:
+        match action:
+            case "manual":
+                self._update_status("Evaluating Manual Design...")
+                config = self.manual_queue.pop(0)
+                model_name = config.get("model_name", best.model_name)
+                # A manual genome with no generation is a new line or a fork of
+                # the global best; an explicit one continues it.
+                config.setdefault("generation", best.gen + 1)
+                return config, model_name, config["generation"]
+            case "new_arch":
+                self._update_status("Exploring New Architecture...")
+                model_name = random.choice(get_available_models())  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+                config = get_search_space(model_name).sample()
+                config["model_name"] = model_name
+                self._log(f"Selected new architecture: {model_name}")
+                return config, model_name, 0
+            case "crossover":
+                local = self.local_best_config or {}
+                self._update_status("Crossing Over Genomes...")
+                space = get_search_space(best.model_name)
+                config = space.crossover(best.config, local)
+                config["model_name"] = best.model_name
+                config = space.mutate(config, mutation_rate=0.1)
+                local_gen = int(local.get("generation", 0))
+                return config, best.model_name, max(best.gen, local_gen) + 1
+            case _:
+                return self._mutate_genome(best)
+
+    def _mutate_genome(self, best: _GlobalBest) -> tuple[dict, str, int]:
+        self._update_status("Mutating Genome...")
+        parent_config = best.config
+        parent_model = best.model_name
+        parent_gen = best.gen
+        parent_hash = best.parent_hash
+
+        if not best.record:  # Bootstrap
+            space = get_search_space(best.model_name)
+            parent_config = space.sample()
+            parent_config["model_name"] = best.model_name
+            parent_gen = 0
+            parent_hash = None
+        elif self.local_best_config and random.random() < 0.3:  # ruff: ignore[suspicious-non-cryptographic-random-usage]
+            parent_config = self.local_best_config
+            parent_model = parent_config.get("model_name", "EqProp MLP")
+            parent_gen = parent_config.get("generation", 0)
+            parent_hash = get_config_hash(parent_config)
+
+        config = get_search_space(parent_model).mutate(parent_config)
+        config["model_name"] = parent_model
+        config["generation"] = parent_gen + 1
+        if parent_hash:
+            config["parent_id"] = parent_hash
+        return config, parent_model, parent_gen + 1
+
+    def _constrain_and_configure(self, config: dict, model_name: str) -> dict:
+        target = config
+        target["model_name"] = model_name
+
+        if self.constraints:
+            space = get_search_space(model_name).apply_constraints(self.constraints)
+            target = space.mutate(target, mutation_rate=0.0)
+            self._clamp(target)
+
+        if self.discovery_mode == "quick":
+            target["epochs"] = 1
+            if "steps" in target:
+                target["steps"] = min(cast("int", target["steps"]), 15)
+        elif self.discovery_mode == "deep":
+            target["epochs"] = 5
+
+        return target
+
+    def _clamp(self, config: dict) -> None:
+        """Bound the keys ``space.mutate`` does not enforce on existing values."""
+        for config_key, limit in (
+            ("hidden_dim", "max_hidden"),
+            ("num_layers", "max_layers"),
+            ("steps", "max_steps"),
+        ):
+            bound = self.constraints.get(limit)
+            if bound is not None and config_key in config:
+                config[config_key] = min(int(config[config_key]), int(bound))
+
+    def _evaluate(
+        self, target_config: dict, model_name: str, next_gen: int, global_best: float
+    ) -> None:
+        self._update_status(f"Evaluating: {model_name} (Gen {next_gen})")
+        metrics = run_single_trial_task(
+            task=self.task,
+            model_name=model_name,
+            config=target_config,
+            storage_path="results/hyperopt.db",
+            quick_mode=(self.discovery_mode == "quick"),
+        )
+
+        if not metrics:
+            self._log("Evaluation failed.")
+            return
+
+        acc = metrics.get("accuracy", 0.0)
+        self.jobs_done += 1
+        self.points += 5
+        save_state(self.points, self.jobs_done)
+        self._log(f"Eval complete: {acc:.4f} (Global Best: {global_best:.4f})")
+
+        if acc > self.local_best_score:
+            self.local_best_score = acc
+            self.local_best_config = target_config
+            self._log(f"New Local Best! ({acc:.4f})")
+
+        if acc > global_best:
+            self._update_status("Publishing Discovery...")
+            self._require_dht().publish_best_model(self.task, target_config, acc)
+            self.points += 50
+            save_state(self.points, self.jobs_done)
+            self._log(f"[SUCCESS]  New Global Best Discovered! ({acc:.4f})")

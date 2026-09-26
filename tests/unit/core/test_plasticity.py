@@ -118,6 +118,7 @@ class TestFastWeightPlasticity:
 
     def test_decay_property_zero_activity(self, context, device):
         """With zero activity, fast weights decay exponentially."""
+        torch.manual_seed(0)
         plasticity = FastWeightPlasticity(
             fast_weight_dim=512, decay=0.9, learning_rate=0.1
         )
@@ -144,6 +145,7 @@ class TestFastWeightPlasticity:
 
     def test_step_updates_fast_weights(self, context, device):
         """Step updates fast weights with decay + Hebbian update."""
+        torch.manual_seed(0)
         plasticity = FastWeightPlasticity(
             fast_weight_dim=512, decay=0.9, learning_rate=0.1
         )
@@ -184,6 +186,7 @@ class TestFastWeightPlasticity:
 
     def test_forward_modulation_changes_output(self, joint_system, device):
         """Fast weight modulation changes model output."""
+        torch.manual_seed(0)
         plasticity = joint_system.plasticity
         context = joint_system.context
         batch_size = 4
@@ -272,6 +275,7 @@ class TestRuleStatePlasticity:
     def test_step_updates_operator_logits(self, device):
         """step updates operator_logits and controller_state."""
         # Create context with correct input dim for RuleStatePlasticity
+        torch.manual_seed(0)
         joint = compose_joint_system(
             substrate=DigitalSubstrate(SubstrateConfig.digital(device=str(device))),
             geometry=FeedforwardGeometry(
@@ -344,6 +348,7 @@ class TestRoutingPlasticity:
 
     def test_step_updates_gate_logits(self, context, device):
         """step updates gate_logits and computes active_routes."""
+        torch.manual_seed(0)
         plasticity = RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01)
 
         batch_size = 4

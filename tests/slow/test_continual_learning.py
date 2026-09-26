@@ -274,6 +274,7 @@ class TestContinualJointSystem:
 
     def test_forward_with_psi_modulates_output(self, fast_weight_model, device):
         """Forward pass with psi should modulate the last hidden layer."""
+        torch.manual_seed(0)
         x = torch.randn(4, 784, device=device)
 
         # Get psi after some training
@@ -389,6 +390,7 @@ class TestOtherArms:
 
     def test_lwf_loss_computation(self, device):
         """Test LwF loss computes correctly."""
+        torch.manual_seed(0)
         model = create_backprop_arm(device=str(device))
         lwf_loss = LwFLoss(temperature=2.0, lambda_lwf=1.0)
 
@@ -410,6 +412,7 @@ class TestOtherArms:
 
     def test_synaptic_intelligence_tracking(self, device):
         """Test SI tracks importance and computes regularization."""
+        torch.manual_seed(0)
         model = create_backprop_arm(device=str(device))
         si = SynapticIntelligence(model, xi=0.1)
 
@@ -465,6 +468,7 @@ class TestCLMetrics:
 
     def test_compute_cl_metrics_forgetting(self, fast_weight_model, device):
         """Test forgetting computation."""
+        torch.manual_seed(0)
         task_loaders = []
         for task_id in range(CL_NUM_TASKS):
             dataset = TensorDataset(torch.randn(20, 784), torch.randint(0, 2, (20,)))
@@ -497,6 +501,7 @@ class TestCLMetrics:
 
     def test_compute_cl_metrics_backward_transfer(self, fast_weight_model, device):
         """Test backward transfer computation."""
+        torch.manual_seed(0)
         task_loaders = []
         for task_id in range(CL_NUM_TASKS):
             dataset = TensorDataset(torch.randn(20, 784), torch.randint(0, 2, (20,)))
@@ -811,6 +816,7 @@ class TestArmLearningRegression:
 
     def test_lwf_distillation_is_active(self, device):
         """LwF distillation must produce a non-trivial penalty on task > 0."""
+        torch.manual_seed(0)
         model, lwf = create_lwf_arm(
             CLConfig.input_dim, CLConfig.hidden_dim, CLConfig.output_dim, str(device)
         )

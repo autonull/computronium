@@ -566,6 +566,7 @@ async def test_various_geometries(  # ruff: ignore[unused-async]
 ) -> None:
     """Test gRPC seam with various tile mesh configurations (CPU only due to TileGeometry CUDA assert)."""
     # Force CPU for TileGeometry due to device-side assert in CUDA kernels
+    torch.manual_seed(0)
     cpu_device = torch.device("cpu")
     config = GeometryConfig(
         input_dim=INPUT_DIM,

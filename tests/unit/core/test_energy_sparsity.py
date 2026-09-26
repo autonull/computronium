@@ -16,6 +16,7 @@ class TestActivationSparsity:
 
     def test_returns_float_in_range(self):
         """Sparsity must be in [0, 1] for any model."""
+        torch.manual_seed(0)
         model = nn.Sequential(
             nn.Linear(10, 64), nn.ReLU(), nn.Linear(64, 32), nn.ReLU(), nn.Linear(32, 2)
         )
@@ -25,6 +26,7 @@ class TestActivationSparsity:
 
     def test_relu_gives_moderate_sparsity(self):
         """ReLU with random norm(0,1) input yields positive sparsity."""
+        torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(100, 256), nn.ReLU(), nn.Linear(256, 10))
         x = torch.randn(8, 100)
         sparsity = _estimate_activation_sparsity(model, x)
@@ -32,6 +34,8 @@ class TestActivationSparsity:
 
     def test_no_matching_modules_returns_zero(self):
         """Model without Linear/Conv/ReLU/GELU returns 0.0 sparsity."""
+
+        torch.manual_seed(0)
 
         class NoOpModel(nn.Module):
             def forward(self, x):
@@ -59,6 +63,7 @@ class TestEnergyTracker:
 
     def test_tracker_sets_profile(self):
         """EnergyTracker records a valid EnergyProfile."""
+        torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(10, 32), nn.ReLU(), nn.Linear(32, 2))
         x = torch.randn(4, 10)
 
@@ -87,6 +92,7 @@ class TestEnergyTracker:
 
     def test_conv_model_activation_sparsity(self):
         """_estimate_activation_sparsity works with Conv2d models directly."""
+        torch.manual_seed(0)
         model = nn.Sequential(
             nn.Conv2d(3, 8, 3),
             nn.ReLU(),
@@ -126,6 +132,7 @@ class TestEnergyTracker:
 
     def test_gelu_model(self):
         """EnergyTracker handles GELU activations."""
+        torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(20, 64), nn.GELU(), nn.Linear(64, 5))
         x = torch.randn(4, 20)
 

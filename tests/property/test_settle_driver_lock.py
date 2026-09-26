@@ -22,6 +22,8 @@ import ast
 from pathlib import Path
 from typing import cast
 
+import torch
+
 from computronium.ontology.dynamics._settle_driver import (
     SettleIterate,
     checkpointed_every,
@@ -131,7 +133,8 @@ class TestDriverUniquenessLock:
         not bounded by ``max_steps``: ``SpikeIntegrationDynamics``'s layered
         path integrates every layer against its own drive, so a settle
         executes ``max_steps`` per layer and the horizon counts them all."""
-        import torch
+
+        torch.manual_seed(0)
 
         from computronium.ontology.dynamics import DYNAMICS_REGISTRY
         from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig

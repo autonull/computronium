@@ -41,6 +41,7 @@ def test_relative_uses_error_reference():
 
 
 def test_beta_adaptive_is_unit_rms_error_reference():
+    torch.manual_seed(0)
     g = _grads()
     refs = [torch.randn(10), torch.randn(4), torch.zeros(2)]
     out = _apply_credit_norm(g, "beta_adaptive", refs)
@@ -50,6 +51,7 @@ def test_beta_adaptive_is_unit_rms_error_reference():
 
 
 def test_spectral_radius_one():
+    torch.manual_seed(0)
     g = _grads()
     out = _apply_credit_norm(g, "spectral", None)
     for i in (0, 1):

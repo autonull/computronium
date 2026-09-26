@@ -60,6 +60,7 @@ def _build(hidden_dims, credit, compiled: bool):
 
 
 def test_compiled_settle_matches_eager() -> None:
+    torch.manual_seed(0)
     credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
     )

@@ -14,6 +14,7 @@ from computronium.core.joint.state import JointTrajectoryRecorder
 
 def test_composite_state_mutability():
     """CompositeState uses mutable dicts for activity/plastic/substrate."""
+    torch.manual_seed(0)
     z = CompositeState(
         activity={"x": torch.randn(4, 10)},
         plastic={"psi": torch.randn(4, 20)},

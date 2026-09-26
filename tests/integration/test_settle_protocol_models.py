@@ -143,6 +143,7 @@ class TestTileAlgorithmSettleProtocol:
 
     def test_settle_universal_returns_telemetry(self, model):
         """_run_settle_universal returns (output, steps_taken, converged, telemetry)."""
+        torch.manual_seed(0)
         x = torch.randn(4, 20)
         out, steps_taken, converged, telemetry = _run_model_settle(
             model, x, max_steps=10
@@ -173,6 +174,7 @@ class TestTileAlgorithmSettleProtocol:
 
     def test_get_settle_telemetry(self, model):
         """get_settle_telemetry returns SettleTelemetry after settle_universal."""
+        torch.manual_seed(0)
         x = torch.randn(4, 20)
         _run_model_settle(model, x, max_steps=10)
         telemetry = model.get_settle_telemetry()
@@ -182,6 +184,7 @@ class TestTileAlgorithmSettleProtocol:
 
     def test_loose_threshold_early_convergence(self, model):
         """Loose convergence threshold triggers early stop."""
+        torch.manual_seed(0)
         model.convergence_threshold = 1.0
         x = torch.randn(4, 20)
         _state, steps_taken, converged, _telemetry = _run_model_settle(
@@ -266,6 +269,7 @@ class TestSettleProtocolMultiEpochLearning:
     )
     def test_multi_epoch_learning(self, model_cls, model_kwargs):
         """Model learns over multiple epochs (loss decreases, accuracy improves)."""
+        torch.manual_seed(0)
         if model_cls is TileAlgorithm:
             model = model_cls(**model_kwargs)
         else:

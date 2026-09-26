@@ -156,6 +156,7 @@ class TestThermodynamicVsBackpropLinear:
         device,
     ):
         """Cosine similarity >= 0.95 on linear regression."""
+        torch.manual_seed(0)
         cosines = []
         rel_errors = []
 
@@ -331,6 +332,7 @@ class TestFATheoretical:
         """FA routes the autograd top error through fixed feedback matrices:
         one pseudo-gradient per weight, shapes match, weights move, and the
         feedback matrices are fixed across calls."""
+        torch.manual_seed(0)
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
                 input_dim=8,
@@ -455,6 +457,7 @@ class TestBackpropIdentity:
 
     def test_bitwise_identical(self, device):  # ruff: ignore[too-many-locals]
         """Bitwise identical to autograd on same graph."""
+        torch.manual_seed(0)
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
                 input_dim=784,

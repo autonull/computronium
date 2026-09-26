@@ -297,6 +297,7 @@ def test_random_6d_coordinate_constructs_system():
 def test_null_plasticity_reproduces_5d_behavior():  # ruff: ignore[too-many-locals]
     """M=Null coordinates should reproduce 5-D behavior (Zero-Extension)."""
     # Create config with Null plasticity
+    torch.manual_seed(0)
     config = SystemConfig(
         substrate=SubstrateConfig.digital(),
         geometry=GeometryConfig.recurrent(

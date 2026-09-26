@@ -36,6 +36,7 @@ def test_sequential_settling_bounded_memory() -> None:
     bound. We assert the peak-allocated byte count stays flat after a warm-up
     call.
     """
+    torch.manual_seed(0)
     from computronium.core.local_learning.settling import energy_gradient_descent
 
     def run_once() -> None:

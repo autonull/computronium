@@ -29,6 +29,7 @@ class TestReplayBuffer:
 
     def test_balanced_eviction(self, device):
         """Eviction maintains balanced representation across tasks."""
+        torch.manual_seed(0)
         capacity = 100
         buffer = ReplayBuffer(capacity=capacity, input_shape=(784,), device=device)
 
@@ -100,6 +101,7 @@ class TestReplayBuffer:
 
     def test_task_id_preserved(self, device):
         """Sampled task_id matches added task_id."""
+        torch.manual_seed(0)
         buffer = ReplayBuffer(capacity=100, input_shape=(784,), device=device)
 
         for task_id in range(3):

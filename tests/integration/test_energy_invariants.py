@@ -499,6 +499,7 @@ class TestGradientEquivalence:
 
     def test_thermodynamic_contrast_limit(self):
         """ThermodynamicContrast approaches backprop as β→∞."""
+        torch.manual_seed(0)
         from computronium.ontology import (
             BackpropCredit,
             CreditAssignmentConfig,

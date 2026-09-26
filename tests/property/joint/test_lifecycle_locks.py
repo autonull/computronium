@@ -102,6 +102,7 @@ def _create_dummy_state_for_registry(
 
 def test_j1_null_plasticity_zero_extension():  # ruff: ignore[too-many-locals]
     """J1 (Level 4): Joint system with M=Null ≡ 5-D system (Zero-Extension Theorem)."""
+    torch.manual_seed(0)
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
     # 5-D system
@@ -248,6 +249,7 @@ class TestPlasticity:
 
 def test_j3_fast_plastic_only_via_plasticity():
     """J3: fast_plastic (ψ) variables only mutate through plasticity projection."""
+    torch.manual_seed(0)
     substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
@@ -412,6 +414,7 @@ def test_j4_substrate_adapter_preserves_constraints():
 
 def test_j5_consolidation_only_at_episode_boundary():
     """J5: Consolidatable ψ promoted to θ only at episode boundaries via consolidate()."""
+    torch.manual_seed(0)
     substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
@@ -660,6 +663,7 @@ def test_j6_dynamics_adapter_preserves_shape():
 def test_j7_trajectory_records_full_joint_state():
     """J7: JointTrajectory records activity, plastic, and substrate."""
 
+    torch.manual_seed(0)
     recorder = JointTrajectoryRecorder(
         max_steps=10, record_plastic=True, record_substrate=True
     )

@@ -31,6 +31,7 @@ class TestTaskMasking:
 
     def test_loss_computed_on_task_slice(self, fast_weight_model, device):
         """Loss computed only on task-relevant logits."""
+        torch.manual_seed(0)
         x = torch.randn(4, 784, device=device)
         y = torch.tensor([0, 1, 0, 1], device=device)  # Task 0 labels (0,1)
 
@@ -65,6 +66,7 @@ class TestTaskMasking:
 
     def test_different_tasks_different_slices(self, fast_weight_model, device):
         """Different tasks use different logit slices."""
+        torch.manual_seed(0)
         x = torch.randn(4, 784, device=device)
         y = torch.tensor([0, 1, 0, 1], device=device)  # ruff: ignore[unused-variable]
 
@@ -100,6 +102,7 @@ class TestPlasticStateManagement:
 
     def test_psi_updated_across_steps(self, fast_weight_model, device):
         """Psi updated across training steps."""
+        torch.manual_seed(0)
         x = torch.randn(4, 784, device=device)
         y = torch.randint(0, 2, (4,), device=device)
 

@@ -107,6 +107,7 @@ def test_composite_state_creation():
 
 def test_composite_state_clone():
     """Test CompositeState deep clone with detached tensors."""
+    torch.manual_seed(0)
     z = CompositeState(
         activity={"x": torch.randn(4, 10, requires_grad=True)},
         plastic={"psi": torch.randn(4, 10, requires_grad=True)},
