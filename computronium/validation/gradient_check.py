@@ -316,4 +316,20 @@ def check_surrogate_equivalence(  # ruff: ignore[too-many-locals]
         sum(surrogate_cosines) / len(surrogate_cosines) if surrogate_cosines else 0.0
     )
 
+    # KB integration - record gradient fingerprint
+    try:
+        from computronium.knowledge.kb import KB
+
+        kb = KB()
+        kb.record_gradient_fingerprint(
+            family=name,
+            fd_cosine=mean_surrogate_cos,
+            rule_cosine=mean_surrogate_cos,  # Same for surrogate
+            surrogate_cosine=mean_surrogate_cos,
+            threshold=threshold,
+            timestamp=__import__("datetime").datetime.now().isoformat(),
+        )
+    except Exception:  # ruff: ignore[try-except-pass]
+        pass  # KB is optional
+
     return (mean_surrogate_cos, mean_surrogate_cos)

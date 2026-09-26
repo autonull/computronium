@@ -163,6 +163,7 @@ class CoreTrainerDriver:
         batches_per_epoch: int | None = None,
         record_results: bool = _DEFAULT_RECORD,
         target_hardware: str | None = None,
+        allow_bptt_fallback: bool = True,
         max_epoch_time: float = 0.0,
     ) -> None:
         self.num_workers = num_workers
@@ -173,6 +174,7 @@ class CoreTrainerDriver:
         self.batches_per_epoch = batches_per_epoch
         self.record_results = record_results
         self.target_hardware = target_hardware
+        self.allow_bptt_fallback = allow_bptt_fallback
         self.max_epoch_time = max_epoch_time
 
     def train(  # ruff: ignore[too-many-locals]
@@ -185,6 +187,7 @@ class CoreTrainerDriver:
         epochs: int,
         device: str,
         propagator: str | None = None,
+        allow_bptt_fallback: bool | None = None,
     ) -> dict[str, object]:
         """Train one probe and return aggregated metrics.
 
@@ -206,6 +209,10 @@ class CoreTrainerDriver:
             device: Target device.
             propagator: Learning rule to force, when the model name's own rule
                 is not the one under test.
+            allow_bptt_fallback: Overrides the driver's setting. When false,
+                a probe whose credit route came out ``bptt`` is raised on:
+                an arm that silently ran backprop is a defect, and a bio
+                family that does it is a broken claim rather than a result.
 
         Returns:
             A metrics dict with ``final_acc``, ``epoch_time_s``, flops, memory,
@@ -380,6 +387,16 @@ class CoreTrainerDriver:
             # requested rather than as applied.
             "target_hardware": self.target_hardware,
         }
+        permit = (
+            self.allow_bptt_fallback
+            if allow_bptt_fallback is None
+            else allow_bptt_fallback
+        )
+        if not permit and metrics["training_path"] == "bptt":
+            raise RuntimeError(
+                f"probe {model}/{task} fell back to BPTT and the caller "
+                "forbade it (allow_bptt_fallback=False)"
+            )
         self._record(
             model=model,
             task=task,

@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from computronium.core.rules import consumable_config_keys, rule_for_name
 from computronium.hyperopt.search_space import get_rule_space, get_search_space
 
 if TYPE_CHECKING:
@@ -97,7 +98,7 @@ _SHALLOW_CAPS: dict[str, int] = {
 #   - fa       -> a Feedback-Alignment propagator (local random-feedback)
 #   - hebbian  -> a Contrastive-Hebbian propagator (synapse-local)
 _RULE_ACTIVATION: dict[str, dict[str, object]] = {
-    "eqprop": {"propagator": "eqprop"},
+    "eqprop": {"config": {"gradient_method": "equilibrium"}},
     "fa": {"propagator": "feedback_alignment"},
     "hebbian": {"propagator": "contrastive_hebbian_learning"},
 }
@@ -106,18 +107,16 @@ _RULE_ACTIVATION: dict[str, dict[str, object]] = {
 def _rule_activation_for(model: str, family: str) -> dict[str, object]:
     """Resolve the per-model rule activation for a family.
 
-    One field: the propagator, which is the rule the arm must run so a bio
-    family measures its own local cost. It used to be a second, per-family
-    ``config`` override -- eqprop's ``gradient_method="equilibrium"`` -- which
-    was a knob of the native zoo models and has no consumer on the System
-    path, so it made every eqprop probe report a phantom-knob defect while
-    changing nothing about the arm. ``model`` is retained because the rule a
-    model implies is not always the family's (an eqprop model asked to run the
-    FA propagator is running FA).
+    Two fields, and they say different kinds of thing. ``propagator`` names the
+    rule the arm must run, so a bio family measures its own local cost. A
+    ``config`` override is a knob forced onto the arm regardless of what the
+    space sampled; eqprop's ``gradient_method="equilibrium"`` was one, and it
+    is a parameter of the native zoo models rather than of the eqprop factory,
+    so the probe now reports it as a phantom knob instead of quietly holding
+    it. ``model`` is retained because the rule a model implies is not always
+    the family's.
     """
     activation = dict(_RULE_ACTIVATION.get(family, {}))
-    if not activation.get("propagator"):
-        activation["propagator"] = None
     logger.debug("rule activation for %s/%s: %s", family, model, activation)
     return activation
 
@@ -161,7 +160,9 @@ def _family_rule_key(family: str) -> str | None:
         return key
 
 
-def sample_config_for_space(space: dict[str, object]) -> dict[str, object]:
+def sample_config_for_space(
+    space: dict[str, object], consumable: frozenset[str] | None = None
+) -> dict[str, object]:
     """Sample one config from a ``{name: spec}`` space via uniform draws.
 
     Mirrors ``SearchSpace.sample`` (list → categorical choice, ``(min,max,'int')``
@@ -169,34 +170,26 @@ def sample_config_for_space(space: dict[str, object]) -> dict[str, object]:
     ``RULE_SPACES`` dict and a ``SearchSpace.params`` dict, so the sweep never
     needs an Optuna trial for a shallow breadth probe.
 
-    The space is intersected with what the arm can actually consume. The rule
-    spaces were written for the native zoo models Sprint 7.6.10 removed, and
-    the System path's rule systems read three of their keys; sampling the other
-    thirteen made every probe report a phantom-knob defect, which is a true
-    statement about a *declaration* and not about the arm. The phantom
-    diagnosis stays as the guard for the other direction -- a key added to a
-    space with no consumer is still caught, per probe.
+    A key with no consumer is sampled when ``consumable`` is ``None``, so the
+    probe's own phantom-knob diagnosis reports it; pass the arm's
+    ``consumable_config_keys`` to keep the report about the arm instead of
+    about the space. The spaces were written for the native zoo models Sprint
+    7.6.10 removed, so most of an eqprop space has no consumer and every probe
+    was reporting a statement about a *declaration*.
 
     Args:
         space: Parameter name → range tuple or discrete-choice list.
+        consumable: Keys the arm can be handed; ``None`` samples the whole
+            space and lets the probe report the rest as phantom.
 
     Returns:
         A config dict of sampled parameter values.
     """
     import numpy as np
 
-    from computronium.core.rules import RULE_SYSTEM_CONFIG_KEYS
-
-    dropped = sorted(set(space) - set(RULE_SYSTEM_CONFIG_KEYS))
-    if dropped:
-        logger.info(
-            "space declares %d knob(s) no rule system consumes, not sampled: %s",
-            len(dropped),
-            dropped,
-        )
     config: dict[str, object] = {}
     for name, spec in space.items():
-        if name not in RULE_SYSTEM_CONFIG_KEYS:
+        if consumable is not None and name not in consumable:
             continue
         if isinstance(spec, list):
             config[name] = np.random.choice(spec).item()
@@ -323,11 +316,16 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
     """
     activation = _rule_activation_for(model, family)
     propagator = activation.get("propagator")
+    # Bio families may not silently fall back to BPTT: a bio probe that ends
+    # up backprop-pathed is a defect, so the driver raises on it.
+    allow_bptt_fallback = family not in _RULE_ACTIVATION
     runs: list[dict[str, object]] = []
     n_total = 0
     n_ok = 0
     for probe_i in range(probes_per_rule):
-        config = _shallow_clamp(sample_config_for_space(space))
+        config = _shallow_clamp(
+            sample_config_for_space(space, consumable_config_keys(rule_for_name(model)))
+        )
         if activation.get("config"):
             config = {**config, **activation["config"]}
         probe_seed = seed + 10_000 * probe_i
@@ -348,6 +346,7 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
                 epochs=epochs,
                 device=device,
                 propagator=propagator,
+                allow_bptt_fallback=allow_bptt_fallback,
             )
         except Exception as exc:  # a broken probe must not kill the sweep
             logger.warning(

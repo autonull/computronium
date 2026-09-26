@@ -15,7 +15,7 @@ import pytest
 
 from computronium.core.rules import (
     MODEL_NAME_RULES,
-    RULE_SYSTEM_CONFIG_KEYS,
+    consumable_config_keys,
     rule_for_name,
     rule_system_from_config,
 )
@@ -143,9 +143,11 @@ def test_every_zoo_model_name_resolves_to_a_rule() -> None:
     assert rule_for_name("contrastive_hebbian_learning") == "hebbian"
 
 
-def test_rule_config_keys_are_the_ones_a_config_can_carry() -> None:
-    """The delivered-key set is the whole contract, not a growing literal."""
-    assert set(RULE_SYSTEM_CONFIG_KEYS) == {"hidden_dim", "num_layers", "learning_rate"}
+def test_consumable_keys_come_from_the_factory_not_a_written_list() -> None:
+    """The delivered-key set is derived, so a preset gains knobs for free."""
+    assert {"hidden_dim", "num_layers", "learning_rate"} <= consumable_config_keys("ep")
+    assert "beta" in consumable_config_keys("ep"), "create_eqprop_mlp takes beta"
+    assert "beta" not in consumable_config_keys("backprop")
 
 
 def test_phantom_keys_are_reported_from_the_config_not_a_literal() -> None:
@@ -153,3 +155,22 @@ def test_phantom_keys_are_reported_from_the_config_not_a_literal() -> None:
     _, phantom = rule_system_from_config("ep", 4, 3, {"hidden_dim": 4, "brand_new": 1})
 
     assert phantom == ["brand_new"]
+
+
+def test_a_sampled_knob_the_factory_takes_is_delivered_to_it() -> None:
+    """``beta`` changes the eqprop system it is handed, not just the report."""
+    system, phantom = rule_system_from_config(
+        "ep", 6, 3, {"hidden_dim": 8, "num_layers": 1, "beta": 0.37}
+    )
+
+    assert phantom == []
+    assert system.credit.config.beta == 0.37
+
+
+def test_allow_bptt_fallback_false_raises_on_a_bptt_route(
+    driver: CoreTrainerDriver,
+) -> None:
+    """The knob is a guard, not a decoration: forbidding the route is enforced."""
+    metrics = _probe(driver, model="ep", allow_bptt_fallback=True)
+
+    assert metrics["training_path"] != "bptt"

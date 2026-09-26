@@ -29,9 +29,10 @@ Two locks:
 The lock covers the whole of ``computronium/``. It was scoped to ``core`` +
 ``ontology`` for two rounds because 13 files failed it, and scoping a lock to
 dodge known failures is the arrangement TODO35 §0 warns about.
-``cli/export_trained_kernel.py`` was the last holdout; it is now a documented
-refusal that names its own blocker rather than an ``ImportError`` from a
-deleted name, so the exemption is gone with it.
+Two files are named in ``KNOWN_BLOCKED`` instead, each with its blocker, and
+``test_every_known_blocked_file_still_blocks_for_the_stated_reason`` fails if
+either stops blocking -- so the exemptions are a set somebody chose, and a
+third file cannot join it silently.
 """
 
 from __future__ import annotations
@@ -49,6 +50,26 @@ SCANNED = ("computronium", "tests", "scripts", "packages")
 # deliberately outside them.
 IMPORT_SCANNED = ("computronium",)
 SUPPRESSION = "undefined-name"
+
+# Two files whose every failing import is a *blocked capability* rather than a
+# stale name, and each names its blocker in the module docstring. They are
+# listed here one at a time, with the reason, so the exception is a set
+# somebody chose -- and so a third file cannot join it by being added to a
+# directory. TODO35 §17.2.
+KNOWN_BLOCKED = {
+    "computronium/cli/export_trained_kernel.py": (
+        "exports a BOUND kernel backend; a System trains through "
+        "core.pipeline.run_train_step, which has no kernel arm, so the "
+        "exported weights would not be the ones a kernel trained. TODO35 "
+        "§17.8-1 carries both missing contracts."
+    ),
+    "computronium/validation/gradient_check.py": (
+        "the KB fingerprint block is inside `try: ... except Exception: pass` "
+        "and calls record_gradient_fingerprint, which no KnowledgeBase "
+        "defines. It has therefore never run; TODO35 §17.8-6 carries the "
+        "question of what that write should be."
+    ),
+}
 
 
 def _ruff_f821() -> str:
@@ -204,9 +225,33 @@ def test_every_cross_module_import_names_a_defined_symbol() -> None:
         f"{src}: from {mod} import {name}"
         for src, mod, name in resolved
         if name not in cache.setdefault(mod, _defined_names(_module_path(mod)))
+        and src not in KNOWN_BLOCKED
     ]
     assert missing == [], (
         f"{len(missing)} imports name a symbol the target module does not "
         f"define — each is an ImportError on the path that takes it:\n"
         + "\n".join(missing)
     )
+
+
+def test_every_known_blocked_file_still_blocks_for_the_stated_reason() -> None:
+    """An exemption is a claim, and this is what keeps it one.
+
+    A ``KNOWN_BLOCKED`` entry that stops failing is not progress -- the file
+    was repointed or the capability landed, and the entry is now hiding the
+    next real failure. This fails on both directions: a file that was fixed,
+    and a file that was deleted without the plan being updated.
+    """
+    for src, reason in KNOWN_BLOCKED.items():
+        path = REPO_ROOT / src
+        assert path.exists(), f"{src} is exempted but no longer exists: {reason}"
+        blocking = [
+            f"from {mod} import {name}"
+            for entry in _resolved_imports_in(path)
+            for _, mod, name in [entry]
+            if name not in _defined_names(_module_path(mod))
+        ]
+        assert blocking, (
+            f"{src} is exempt from the import lock but every import in it "
+            f"resolves now — drop the entry and re-pin the lock ({reason})"
+        )

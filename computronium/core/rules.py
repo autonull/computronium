@@ -14,6 +14,7 @@ place.
 
 from __future__ import annotations
 
+import inspect
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 __all__ = [
     "MODEL_NAME_RULES",
     "RULES",
-    "RULE_SYSTEM_CONFIG_KEYS",
+    "consumable_config_keys",
     "routing_system",
     "rule_for",
     "rule_for_name",
@@ -179,19 +180,44 @@ def rule_for_name(name: str) -> str:
     return rule_for(name)
 
 
-RULE_SYSTEM_CONFIG_KEYS: Final[frozenset[str]] = frozenset({
-    "hidden_dim",
-    "num_layers",
-    "learning_rate",
+# A probe config's key names a factory parameter by the same name, except for
+# the depth/width pair, which the factories take as one ``hidden_dims`` tuple.
+_CONFIG_ALIASES: Final[Mapping[str, str]] = MappingProxyType({
+    "hidden_dim": "hidden_dims",
+    "num_layers": "hidden_dims",
+    "learning_rate": "lr",
 })
-"""The probe-config keys :func:`rule_system_from_config` can deliver.
 
-A sweep samples a config per rule, and the rule systems are deliberately
-narrow: an MLP over the task's flattened input whose credit assignment is
-the named rule. A sampled key outside this set has no consumer on the System
-path, which is a defect the sweep should see rather than a knob quietly
-discarded -- so the leftover keys are reported, not dropped.
-"""
+_SIZED: Final[frozenset[str]] = frozenset({
+    "input_dim",
+    "hidden_dims",
+    "output_dim",
+    "device",
+})
+
+
+def _factory(rule: str) -> Callable[..., System]:
+    try:
+        return RULE_SYSTEMS[rule]
+    except KeyError:
+        raise KeyError(
+            f"no learning-rule system for {rule!r}; known rules: {', '.join(RULES)}"
+        ) from None
+
+
+def consumable_config_keys(rule: str) -> frozenset[str]:
+    """The probe-config keys ``rule``'s factory can actually be handed.
+
+    Derived from the factory's signature rather than a written list, so a
+    parameter added to a preset is deliverable the day it is added. An earlier
+    version of this module named three keys by hand and consequently reported
+    ``beta`` and ``inference_steps`` as phantom knobs for the eqprop arm --
+    two knobs its factory has always taken.
+    """
+    params = inspect.signature(_factory(rule)).parameters
+    return frozenset(
+        key for key, target in _CONFIG_ALIASES.items() if target in params
+    ) | frozenset(p for p in params if p not in _SIZED)
 
 
 def rule_system_from_config(
@@ -206,12 +232,15 @@ def rule_system_from_config(
 ) -> tuple[System, list[str]]:
     """Build ``rule``'s system from a probe config, and report what it missed.
 
+    Every sampled key naming a parameter of the rule's factory is delivered to
+    it; the rest come back as phantom keys, because a sweep that samples a knob
+    nothing reads should say so rather than discard it.
+
     Args:
         rule: A name :func:`rule_for_name` accepts.
         input_dim: Flattened input width of the task.
         output_dim: Task output width.
-        config: A sampled probe config; only :data:`RULE_SYSTEM_CONFIG_KEYS`
-            is delivered, the rest is returned.
+        config: A sampled probe config.
         device: Device the system is built on.
         default_hidden_dim: Width used when the config names none.
         default_layers: Depth used when the config names none.
@@ -219,17 +248,21 @@ def rule_system_from_config(
     Returns:
         ``(system, phantom_keys)`` -- the composed system, and the sorted
         sampled keys it could not consume.
+
+    Raises:
+        KeyError: ``rule`` is not one of :data:`RULES`.
     """
+    factory = _factory(rule)
+    params = inspect.signature(factory).parameters
     width = int(config.get("hidden_dim", default_hidden_dim))
-    depth = int(config.get("num_layers", default_layers))
-    lr = float(config.get("learning_rate", 1e-3))
-    system = rule_system(
-        rule,
-        input_dim,
-        output_dim,
-        hidden_dims=(width,) * max(1, depth),
-        lr=lr,
-        device=device,
-    )
-    phantom = sorted(key for key in config if key not in RULE_SYSTEM_CONFIG_KEYS)
+    depth = max(1, int(config.get("num_layers", default_layers)))
+
+    knobs: dict[str, object] = {}
+    for key, value in config.items():
+        target = _CONFIG_ALIASES.get(key, key)
+        if target in params and target not in _SIZED:
+            knobs[target] = value
+
+    system = factory(input_dim, (width,) * depth, output_dim, **knobs, device=device)
+    phantom = sorted(key for key in config if key not in consumable_config_keys(rule))
     return system, phantom
