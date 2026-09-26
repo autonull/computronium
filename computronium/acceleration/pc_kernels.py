@@ -412,9 +412,15 @@ try:  # noqa: PLR0915
         BLOCK_IN: tl.constexpr,
         BLOCK_OUT: tl.constexpr,
     ):
-        """Contrastive weight update for PC."""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
+        """Contrastive weight update for PC: dW = lr * (nudged - free) / beta.
+
+        Launch with ``grid = (cdiv(D_out, BLOCK_OUT), cdiv(D_in, BLOCK_IN))`` — the
+        grid is row-major over ``delta``'s own ``[D_out, D_in]`` layout. The
+        transposed order looks plausible and silently writes nothing when
+        ``D_in`` is not a multiple of ``BLOCK_IN``.
+        """
+        pid_out = tl.program_id(0)
+        pid_in = tl.program_id(1)
 
         offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
         offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)

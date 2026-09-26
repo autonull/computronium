@@ -548,9 +548,10 @@ in question.
   `libdevice.sigmoid` → `tl.sigmoid` (2 kernels) and `tl.cosh`/`tl.sinh` →
   `libdevice.cosh`/`libdevice.sinh` in the complex substrate. **14 of 17 compile.**
 - **Done when** each of the 7 has a named torch reference in the test suite, and
-  the kernel either matches it or has a written reason it cannot. **3 of 7**
-  (`_ff_contrastive_update_kernel`, `_pc_prediction_kernel`,
-  `_pc_error_update_kernel`), and those 3 carried **five** defects between them.
+  the kernel either matches it or has a written reason it cannot. **4 of 7**
+  (`_ff_contrastive_update_kernel`, `_pc_contrastive_update_kernel`,
+  `_pc_prediction_kernel`, `_pc_error_update_kernel`), and those 4 carried **six**
+  defects between them.
 - **The 3 kernels still uncompilable**, after all of the above:
   - `_stdp_update_kernel`, `_contrastive_stdp_kernel` (snn) — `tl.dot` refuses
     `K < 8`; the spike-tensor contraction needs a reduction formulation, not a
@@ -585,16 +586,24 @@ in question.
      2.1e-6 of zero and the relative measure of that element is 0.48. For GELU only,
      the test keeps `max_abs_diff` (1e-4) and `min_cosine` (0.999) and drops the
      relative criterion, recorded in `_tolerance()` with the measurement.
+- **`_pc_contrastive_update_kernel`, fourth of the seven, same session.** Its
+  reference *is* the FF expression in the other order — `nudged - free` divided by
+  the nudge strength, which is `contrastive_primitives.contrastive_delta`'s
+  convention — so the two kernels now share one specification
+  (`tests/acceleration/test_contrastive_update_spec.py`, one reference, two
+  kernels) rather than two copies of it. It carried **the same transposed-grid
+  bug** as the FF kernel, with the same silent-half-write failure mode; fixed and
+  documented the same way.
 - **Still unspecified: `_three_factor_hebbian_update_kernel`,**
-  `_contrastive_hebbian_kernel`, `_pepita_contrastive_update_kernel` and
-  `_pc_contrastive_update_kernel` — they compile (thanks to the outer-product fix)
-  but have **no torch reference and no parity test**. They are the ones that most
-  need §4.5's discipline, because compiling is not being correct: the PC pair above
-  had two real defects the moment somebody wrote the equation down.
-  `UNWIRED_BUT_COMPILING` names their families; the next session should write each
-  reference from its docstring and its module's own torch path, in that order —
-  `pc_contrastive` first, since its reference is the same expression the FF pilot
-  already established.
+  `_contrastive_hebbian_kernel` and `_pepita_contrastive_update_kernel` — they
+  compile (thanks to the outer-product fix) but have **no torch reference and no
+  parity test**. They are the ones that most need §4.5's discipline, because
+  compiling is not being correct: of the four kernels specified so far, **four
+  carried defects** (a wrong contraction, a transposed grid twice, a silent TF32
+  dot, and a wrong derivative). The hebbian pair share the contrastive expression
+  already written down, so they are the cheapest remaining; the pepita one is
+  `lr`-scaled like the FF kernel but with different operands and should be read
+  from `ff_kernels`' own torch path first.
 
 ### 4.6 Then, and only then, wire the recovered rungs into the ladder
 
@@ -885,6 +894,7 @@ trusting the field.
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | **two levels** — 64 specs at `step(case)`, plus 5 kernel entry points triton-vs-torch (§4.4) |
 | Native-model names silently substituted by the EqProp fallback | **2 closed** (`directed_ep`, `lemma_mlp`); 1 open (`diff_target_prop`, no factory exists) |
+| Kernels specified against a written reference (§4.5) | **4 of 7**, carrying 6 defects: a wrong contraction, a transposed grid (×2), a silent TF32 `tl.dot`, a wrong derivative |
 | Adjacent-rung defects found by §4.4 | **2** — an EqProp fallback that disagreed with its kernel, and a triton Muon rung running a retired algorithm behind a tautological test |
 | Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
 | Modules excluded from the import lock by a module `__getattr__` | 10, enumerated and checked (§4.13) |

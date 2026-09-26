@@ -1,17 +1,21 @@
-"""The FF contrastive update's specification, written before the kernel (TODO36 §4.5).
+"""The contrastive-update specification, written before the kernels (TODO36 §4.5).
 
 Seven kernels in the tree compute a maths nobody wrote down anywhere except in the
 kernel itself, so there is no oracle to check them against. The rule this file
 follows is §4.5's: **write the torch expression first, as a test, and do not port
-from the kernel to the test.** The reference below is derived from the *docstring
-and the maths it names* — a batched outer product difference scaled by a learning
-rate — and is then verified against an explicit loop, so the reference itself is
-anchored to something other than the kernel.
+from the kernel to the test.** The reference is derived from the maths the kernels
+name — a difference of batched outer products, scaled by a learning rate and a
+nudge strength — and is verified against an explicit loop, so the reference itself
+is anchored to something other than the kernel.
 
-``_ff_contrastive_update_kernel`` is the pilot the plan names: its sibling
-``_ff_goodness_kernel`` already compiles and matches to 1.9e-5, so only the
-contrastive update is in question, and `algorithms/ff/` has a real reference above
-it.
+One expression, two kernels, because they are the same maths:
+
+* ``_ff_contrastive_update_kernel`` — ``dW = lr * (pos - neg) / B``; the FF
+  pilot the plan names, whose sibling ``_ff_goodness_kernel`` already compiles and
+  matches to 1.9e-5.
+* ``_pc_contrastive_update_kernel`` — the same difference in the opposite
+  (nudged − free) order, divided by the nudge strength ``beta``, which is
+  `contrastive_primitives.contrastive_delta`'s convention.
 """
 
 import pytest
@@ -20,6 +24,41 @@ import torch
 from computronium.acceleration.contrastive_primitives import batched_outer_product
 
 B, D_IN, D_OUT = 8, 16, 32
+
+
+def contrastive_delta_ref(
+    free_pre: torch.Tensor,
+    free_post: torch.Tensor,
+    other_pre: torch.Tensor,
+    other_post: torch.Tensor,
+    lr: float,
+    divisor: float = 1.0,
+) -> torch.Tensor:
+    """The expression every contrastive-update kernel in this file computes.
+
+    ``dW = lr * (other - free) / divisor``, where each term is a batched outer
+    product averaged over the batch. FF passes ``(pos, neg)``; PC passes
+    ``(nudged, free)`` with ``divisor=beta``.
+
+    Args:
+        free_pre: ``[B, D_in]`` layer input, subtracted.
+        free_post: ``[B, D_out]`` layer output, subtracted.
+        other_pre: ``[B, D_in]`` layer input, added.
+        other_post: ``[B, D_out]`` layer output, added.
+        lr: learning rate.
+        divisor: nudge strength; ``1.0`` when the kernel has no ``beta``.
+
+    Returns:
+        ``[D_out, D_in]`` weight delta.
+    """
+    return (
+        lr
+        * (
+            batched_outer_product(other_pre, other_post)
+            - batched_outer_product(free_pre, free_post)
+        )
+        / divisor
+    )
 
 
 def ff_contrastive_delta(
@@ -47,10 +86,7 @@ def ff_contrastive_delta(
     Returns:
         ``[D_out, D_in]`` weight delta.
     """
-    return lr * (
-        batched_outer_product(pre_pos, post_pos)
-        - batched_outer_product(pre_neg, post_neg)
-    )
+    return contrastive_delta_ref(pre_neg, post_neg, pre_pos, post_pos, lr)
 
 
 def _loop_reference(
@@ -139,3 +175,47 @@ def test_the_ff_contrastive_kernel_equals_its_specification(phases) -> None:
     from computronium.acceleration.registry import get
 
     assert_parity(got, expected, get("algorithm.ff").parity)
+
+
+def _pc_kernel(pre_free, post_free, pre_nudged, post_nudged, lr: float, beta: float):
+    import triton
+
+    from computronium.acceleration import pc_kernels
+
+    kernel = pc_kernels._pc_contrastive_update_kernel  # ruff: ignore[private-member-access]  (the rung under test)
+    if kernel is False:
+        pytest.skip("triton is unavailable, so the PC kernel was never defined")
+    delta = torch.empty(D_OUT, D_IN, device=pre_free.device, dtype=torch.float32)
+    kernel[triton.cdiv(D_OUT, 16), triton.cdiv(D_IN, 16)](
+        pre_free,
+        post_free,
+        pre_nudged,
+        post_nudged,
+        delta,
+        B,
+        D_IN,
+        D_OUT,
+        beta,
+        lr,
+        BLOCK_IN=16,
+        BLOCK_OUT=16,
+    )
+    return delta
+
+
+@pytest.mark.skipif(
+    not torch.cuda.is_available(), reason="a triton kernel needs a device tensor"
+)
+def test_the_pc_contrastive_kernel_equals_the_same_specification(phases) -> None:
+    """PC's rung is the FF maths in the other order, with the nudge strength divided out."""
+    pre_pos, post_pos, pre_neg, post_neg = (t.cuda() for t in phases)
+    lr, beta = 0.01, 0.5
+    expected = contrastive_delta_ref(pre_pos, post_pos, pre_neg, post_neg, lr, beta)
+    from computronium.acceleration.parity import assert_parity
+    from computronium.acceleration.registry import get
+
+    assert_parity(
+        _pc_kernel(pre_pos, post_pos, pre_neg, post_neg, lr, beta),
+        expected,
+        get("algorithm.pc").parity,
+    )
