@@ -24,6 +24,7 @@ from computronium.ontology._settle_kernel import (
     _one_hot,
     extract_layered_params,
 )
+from computronium.ontology.dynamics._registry import dynamics_backend
 from computronium.ontology.dynamics._settle_driver import (
     SettleIterate,
     checkpointed,
@@ -948,6 +949,7 @@ class _SettleTelemetry:
         self._converged = True
 
 
+@dynamics_backend("energy_minimization")
 class EnergyMinimizationDynamics(_SettleTelemetry):
     """Energy-based settling (Equilibrium Propagation, Hopfield, CHL).
 
@@ -1272,6 +1274,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
 # ============================================================
 
 
+@dynamics_backend("predictive_settling")
 class PredictiveSettlingDynamics(_SettleTelemetry):
     """Predictive coding settling (Rao & Ballard, Whittington & Bogacz).
 
@@ -1611,6 +1614,7 @@ class PredictiveSettlingDynamics(_SettleTelemetry):
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
+@dynamics_backend("error_predictive_coding")
 class ErrorPredictiveCodingDynamics(_SettleTelemetry):
     """Error-parameterized predictive coding (ePC) — Goemaere et al., "ePC: Fast
     and Deep Predictive Coding in Digital Simulation", arXiv:2505.20137 (ICML 2026).
@@ -1773,6 +1777,7 @@ class ErrorPredictiveCodingDynamics(_SettleTelemetry):
         return energy
 
 
+@dynamics_backend("pc_alm")
 class PCALMDynamics(_SettleTelemetry):
     """Augmented Lagrangian Predictive Coding (PC-ALM; Seely & Gould 2026,
     arXiv:2605.31022).
@@ -2333,6 +2338,7 @@ class PCALMDynamics(_SettleTelemetry):
         return self._free_energy_history
 
 
+@dynamics_backend("spike_integration")
 class SpikeIntegrationDynamics(_SettleTelemetry):
     """Spiking neuron integration (LIF, AdEx).
 
@@ -2519,6 +2525,7 @@ class SpikeIntegrationDynamics(_SettleTelemetry):
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
+@dynamics_backend("instantaneous")
 class InstantaneousDynamics(_SettleTelemetry):
     """Single-pass feedforward (Backprop, Forward-Forward)."""
 
@@ -2585,6 +2592,7 @@ class InstantaneousDynamics(_SettleTelemetry):
         return torch.tensor(0.0)
 
 
+@dynamics_backend("diffusion")
 class DiffusionDynamics(_SettleTelemetry):
     """Langevin dynamics over the geometry's Hopfield energy.
 
@@ -2761,6 +2769,7 @@ class DiffusionDynamics(_SettleTelemetry):
         return self._prior_energy(_energy_tensor(h), None)
 
 
+@dynamics_backend("lazy")
 class LazyStateDynamics(_SettleTelemetry):
     """Sequential (Gauss–Seidel) EqProp settle — lazy per-layer activation.
 

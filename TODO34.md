@@ -1,10 +1,13 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
-§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, and now
-**§5.3 (the state-algebra decision)** complete. §1.2–§1.4, §1.6, §2.3–§2.4,
-§2.6–§2.7, §3, §4.2–§4.4, §5.4 open. §5.4 is the only item left in Phase F.
-(§1.4's substance landed in `fb6bb0f7`, which also found §1.2b.)
+§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3, and
+now **§5.4's dispatch half** complete. §1.2–§1.4, §1.6, §2.3–§2.4, §2.6–§2.7,
+§3, §4.2–§4.4 open, plus §5.4's export half, §5.6, §5.7 and the new §5.8/§5.9.
+**Recommended next: §5.8** (the credit layer's retyping). (Pass 9 fixed a live
+dispatch gap — `update_from_config` could not build `natural_gradient` — and
+a vacuous registry test.) (§1.4's substance landed in `fb6bb0f7`, which also
+found §1.2b.)
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -18,6 +21,64 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 9 — §5.4 the registries are derived, and the first defect it found
+
+§5.4's claim was that hand-kept dispatch tables cost more than they look,
+because a wiring lock *and* an eight-step checklist exist only to police
+them. Three layers had the shape, and the estimate was wrong in the
+interesting direction: the tables were not just redundant, one of them was
+**wrong**.
+
+| Layer | Before | After |
+|-------|--------|-------|
+| Geometry | two tables (`_GEOMETRY_DISPATCH` + a factories-first overlay consulted in that order), 12 aliases | `@geometry_backend(*aliases, ctor=…)` on the class; one derived `GeometryBackend(cls, build)` registry |
+| Dynamics | `DYNAMICS_REGISTRY` dict in `__init__.py` | `@dynamics_backend(*keys)` on the class; `DYNAMICS_REGISTRY` built as classes are declared (`_registry.py`) |
+| Update | `_UPDATE_CLASSES` dict, 14 keys / 11 classes | `@update_backend(*keys)`; derived registry — **and one key added** |
+
+**The defect.** `NaturalGradientUpdate` shipped with a
+`ParameterUpdateConfig.natural_gradient()` factory, a registered primitive
+spec, an identity card and **no dispatch entry**: `update_from_config` raised
+`Unknown update_type: 'natural_gradient'` for a documented update type. It
+was invisible because the primitives' kernels call the class directly, and
+because `test_update_primitives_have_ontology_classes` had grown a special
+case that said so in a comment — *"natural_gradient is not in _UPDATE_CLASSES
+dispatch (gap in dispatch)"* — and instantiated the class around it. A
+hand-kept table's omission had been accommodated by the test meant to police
+it. Deriving the registry makes that state unrepresentable; the special case
+is deleted, and its deletion is the proof (per the plan's own rule: each
+suppression either disappears or becomes a real error to fix).
+
+**A second defect, in a test helper.** `_update_config_classmethods()` used
+`inspect.getmembers`, which yields *bound* methods, so its
+`isinstance(member, classmethod)` filter matched nothing and it returned `{}`
+— making `test_update_config_classmethods_cover_primitives` assert over an
+empty dict. A vacuous test that has been passing for as long as it has
+existed, in the one file whose job is registry completeness. Fixed by reading
+`vars()`; it now resolves **13** factories and is a real assertion. This is
+§0.6 and §2.5 restated for helpers: *a scan that resolves zero of N is worse
+than no scan*, and the population assertion that catches it (`assert
+classmethods`) belongs in the helper's own callers.
+
+Three new locks, all in the existing files (no new lock file — the invariants
+are the same ones, now provable against a derived source):
+`test_every_geometry_class_is_registered`, `test_registry_entries_come_from_this_module`,
+`test_every_dynamics_class_is_registered`, `test_every_update_class_is_registered`,
+`test_every_update_config_factory_dispatches`.
+
+**Deliberately not done — the export half of §5.4.** Root `__all__`, root
+`_LAZY` and the root `TYPE_CHECKING` block are still hand-written, and the
+wiring locks still police them. Deriving them is a different trade: the
+`TYPE_CHECKING` block exists *for pyright signal*, so a generated version
+would have to be generated-and-committed anyway, and the root lazy map's
+per-name module attribution is information the subpackage `__all__`s do not
+carry. The dispatch tables were worth deriving because the information
+genuinely lives on the class; the export lists are a publication surface, not
+a registry. Recorded as §5.4's open half with the reasoning, rather than
+attempted as a single risky change to `computronium/__init__.py`.
+
+`pyright` on all three touched modules: 0 errors. Fast lane: **3201 passed,
+119 skipped, 26 xfailed, 1 xpassed in 84s**.
 
 ### Pass 8 — §5.3 the state-algebra decision
 
@@ -784,7 +845,7 @@ annotation-first (no behaviour change), then migrate. Effort: ~1d including
 the decision. **Do not start before §5.1 lands** — the driver is where the
 state type is passed most, so doing them together multiplies the diff.
 
-### 5.4 Derive the registries; stop hand-synchronizing exports — P2
+### 5.4 Derive the registries; stop hand-synchronizing exports — P2 — **dispatch half DONE**
 
 **Evidence.** Adding one geometry primitive touches **seven** surfaces:
 `GeometryConfig.<factory>()`, `_GEOMETRY_DISPATCH`, `_GEOMETRY_FACTORIES`,
@@ -802,6 +863,26 @@ re-encoding a hand-written list.
 **Sequencing.** Same treatment as `ontology/dynamics` and the state
 primitives; reuse the corrected lock shape from §0.6 (assert against the
 table, never against source text). Effort: ~1d per layer.
+
+**Landed (Pass 9)** for the three layers whose dispatch information lives on
+the class: geometry, dynamics, update — each now registers itself with
+`@geometry_backend` / `@dynamics_backend` / `@update_backend`, and the
+hand-kept dicts are gone. Substrate needed nothing: it dispatches on a
+`SubstrateType` StrEnum through an exhaustive `match`, so the enum is already
+the single source.
+
+**Still open — the export half.** Root `__all__`, root `_LAZY`, root
+`TYPE_CHECKING` block and `ontology/__init__.py`'s lists. The wiring locks
+still police them, and that is the right interim state: they are *publication*
+surfaces (what a user can import) rather than registries (what the code can
+dispatch to), the `TYPE_CHECKING` block is deliberately literal so pyright
+sees real imports, and the root lazy map's per-name module attribution is
+not derivable from the subpackage `__all__`s. Generating them would mean
+generating-and-committing a file whose purpose is human/tool signal — a
+trade to be decided with a reader who wants the public API to be smaller,
+not by a refactor pass. **Do not start it before §5.8** (the credit layer's
+retyping) lands: both touch `ontology/**` annotations, and one diff is
+cheaper to review than two.
 
 ### 5.6 New: three more hand-written settle loops outside `StateDynamics` — P2
 
@@ -877,7 +958,7 @@ backwards compatibility).
 | 1st | 5.1 | Deletes duplication *and* a bug class; §2.2's contract lands as code | **done** |
 | 2nd | 5.2 | Small, testable, unblocks §4.1's precedent | **done** (`5ad96f85`) |
 | 3rd | 5.3 | Needs a decision, and wanted §5.1 settled first | **done** (Pass 8) |
-| 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | open |
+| 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | **dispatch half done** (Pass 9); export half open |
 | 5th | 5.6, 5.7 | Both are decisions the driver exposed, not new work | open |
 | — | 5.8, 5.9 | Found by 5.3's own retype; annotation-first like 5.3 | open |
 
@@ -916,16 +997,15 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 open |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
 
-**Recommended next step** (cheapest, unblocked, high value): **§5.4** — derive
-the registries, i.e. generate `_GEOMETRY_DISPATCH` /
-`_GEOMETRY_FACTORIES` / `__all__` / `_LAZY` from the config factories so the
-`AGENTS.md` eight-step checklist and the wiring locks both become assertions
-rather than maintenance. §5.3 is landed; §5.4 is the last item in Phase F and
-it needs no measurement, only a decision about which surface becomes
-single-sourced first (recommendation: geometry, because it is the layer with
-both a lock *and* the checklist).
+**Recommended next step** (cheapest, unblocked, high value): **§5.8** — retype
+the 17 `SystemState` annotations in `ontology/credit.py` onto `SettableState`
+and delete the `# type: ignore[arg-type]` that hid it. It is annotation-first
+like §5.3, needs no measurement, and each deleted suppression is a proof; it
+also has to land before §5.4's export half, since both touch `ontology/**`.
+After that, §5.4's export half is a *decision*, not a chore, and §5.6/§5.7
+are decisions the driver exposed.
 
 **A hard constraint discovered in this pass, and it is a process rule, not a
 plan item: individual commands over ~15s are not affordable on this box.**
@@ -1017,6 +1097,22 @@ move, and say so in the commit body.
   vs `ast.Expr`) and the parametrised classifier test caught it in 3s. The
   same shape as §0.6, at 1/100th the cost, because the scan is pure AST over
   a temp file — no fixture, no GPU, no settle loop.
+- **A hand-kept table does not fail; it accumulates accommodations.** The
+  clearest evidence in this plan is not the missing `natural_gradient` key
+  but what grew around it: a comment in a test saying "gap in dispatch" and
+  a branch that instantiated the class directly to route around it. A test
+  that works around the defect it exists to catch is a *louder* signal than
+  the defect, and nobody read it. When a lock needs a special case, the
+  special case is the finding.
+
+- **A helper can be the vacuous test.** `_update_config_classmethods()`
+  returned `{}` because `inspect.getmembers` yields bound methods — and its
+  caller asserted over that empty dict indefinitely. §0.6's lesson was
+  recorded about a lock that resolved 0 of 10 classes; the same class of bug
+  sat in a helper one level down, and the only thing that found it was
+  *fixing an unrelated table and asking why the numbers moved*. Assertions
+  on a scan's population belong in the test, not only in the scan.
+
 - **A type checker will tell you when a decision is not yet a decision.**
   §5.3's contract could not be written as a plain annotation: pyright
   rejects a Protocol with *mutable* members for two classes that spell the

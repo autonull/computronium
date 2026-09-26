@@ -463,12 +463,23 @@ _UPDATE_ONTOLOGY_CLASSES: dict[str, str] = {
 
 
 def _update_config_classmethods() -> dict[str, str]:
-    """Map config classmethod name -> update_type."""
+    """Map config classmethod name -> update_type.
+
+    Read from ``vars()``: ``inspect.getmembers`` yields *bound* methods, so
+    the ``isinstance(member, classmethod)`` filter silently matched nothing
+    and every caller of this helper asserted over an empty dict — including
+    ``test_update_config_classmethods_cover_primitives``, which had been
+    vacuous. §2.5's rule (a lock that resolves zero of N is worse than no
+    lock) applies to helpers as much as to locks.
+    """
     found: dict[str, str] = {}
-    for name, member in inspect.getmembers(ParameterUpdateConfig):
+    for name, member in vars(ParameterUpdateConfig).items():
         if name.startswith("_") or not isinstance(member, classmethod):
             continue
-        config = member.__func__(ParameterUpdateConfig)
+        try:
+            config = member.__func__(ParameterUpdateConfig)
+        except TypeError:
+            continue  # factory with required args (role_split) is not no-arg
         if isinstance(config, ParameterUpdateConfig):
             found[name] = config.update_type
     return found
@@ -492,6 +503,50 @@ def test_update_config_classmethods_cover_primitives() -> None:
                 f"{expected_primitive!r} but it's not registered. "
                 f"Available: {sorted(primitive_ids)}"
             )
+
+
+def test_every_update_config_factory_dispatches() -> None:
+    """Every documented ``update_type`` must resolve through the dispatcher.
+
+    ``NaturalGradientUpdate`` shipped with a config factory, a primitive spec
+    and no dispatch entry; ``update_from_config`` raised for it and a test
+    grew a special case to instantiate the class directly. The registry is
+    now derived from ``@update_backend`` (TODO34 §5.4), so this asserts the
+    pairing in both directions instead of accommodating a gap.
+    """
+    from computronium.ontology.update import _UPDATE_BACKENDS
+
+    classmethods = _update_config_classmethods()
+    assert classmethods, "no ParameterUpdateConfig factories found"
+    missing = {
+        update_type
+        for update_type in classmethods.values()
+        if update_type.lower() not in _UPDATE_BACKENDS
+    }
+    assert not missing, f"update types that cannot be dispatched: {missing}"
+    assert len(_UPDATE_BACKENDS) >= len(classmethods), (
+        f"registry has {len(_UPDATE_BACKENDS)} keys for {len(classmethods)} factories"
+    )
+
+
+def test_every_update_class_is_registered() -> None:
+    """A class the dispatcher cannot reach is dead code by another name."""
+    import computronium.ontology.update as update_module
+
+    declared = {
+        name
+        for name, member in vars(update_module).items()
+        if isinstance(member, type)
+        and name.endswith("Update")
+        and not name.startswith("_")
+        and name != "ParameterUpdate"
+        and member.__module__ == update_module.__name__
+    }
+    registered = {cls.__name__ for cls in update_module._UPDATE_BACKENDS.values()}
+    assert declared, "no update classes found — the scan is broken"
+    assert registered == declared, (
+        f"update classes not declared with @update_backend: {declared - registered}"
+    )
 
 
 def test_update_primitives_have_ontology_classes() -> None:
@@ -523,12 +578,7 @@ def test_update_primitives_have_ontology_classes() -> None:
             k for k, v in _UPDATE_CONFIG_METHODS.items() if v == spec.id
         )
         config = getattr(ParameterUpdateConfig, config_method)()
-        # natural_gradient is not in _UPDATE_CLASSES dispatch (gap in dispatch)
-        # Directly instantiate the ontology class with the config
-        if cls.__name__ == "NaturalGradientUpdate":
-            update = cls(config)
-        else:
-            update = update_from_config(config)
+        update = update_from_config(config)
         assert isinstance(update, cls), (
             f"{spec.id} -> update instantiation returned "
             f"{type(update).__name__}, expected {cls.__name__}"

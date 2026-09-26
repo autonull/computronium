@@ -1,6 +1,6 @@
 """Layer 3: StateDynamics — Forward Evolution & Settling."""
 
-from typing import TYPE_CHECKING, Final, cast
+from typing import TYPE_CHECKING, cast
 
 from computronium.ontology.dynamics._dynamics import (
     DiffusionDynamics,
@@ -14,23 +14,12 @@ from computronium.ontology.dynamics._dynamics import (
     StateDynamics,
     StateDynamicsConfig,
 )
+from computronium.ontology.dynamics._registry import DYNAMICS_REGISTRY
 from computronium.ontology.dynamics._state import (
     SettableState,
     is_composite_state,
     is_system_state,
 )
-
-DYNAMICS_REGISTRY: Final[dict[str, type[StateDynamics]]] = {
-    "energy_minimization": EnergyMinimizationDynamics,
-    "predictive_settling": PredictiveSettlingDynamics,
-    "error_predictive_coding": ErrorPredictiveCodingDynamics,
-    "spike_integration": SpikeIntegrationDynamics,
-    "instantaneous": InstantaneousDynamics,
-    "diffusion": DiffusionDynamics,
-    "lazy": LazyStateDynamics,
-    "pc_alm": PCALMDynamics,
-}
-
 
 if TYPE_CHECKING:
     from collections.abc import Callable

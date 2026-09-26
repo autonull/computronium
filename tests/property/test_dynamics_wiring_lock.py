@@ -6,7 +6,9 @@ if/elif chain, each discovered by the next ImportError. This lock makes
 skipping a surface impossible:
 
 1. every ``StateDynamicsConfig`` factory classmethod's ``dynamics_type``
-   is a ``DYNAMICS_REGISTRY`` key (and vice versa);
+   is a ``DYNAMICS_REGISTRY`` key (and vice versa), and every dynamics
+   class is in the registry at all (TODO34 §5.4 made the registry
+   derived, so "a class nothing dispatches to" is the drift left);
 2. every registry class round-trips ``to_spec`` → ``from_spec`` with its
    default config preserved exactly;
 3. every registry class appears in root ``__all__`` and ``_LAZY``;
@@ -17,6 +19,7 @@ skipping a surface impossible:
 import dataclasses
 from pathlib import Path
 
+import computronium.ontology.dynamics._dynamics as _dynamics_module
 from computronium import _LAZY
 from computronium.ontology.dynamics import (
     DYNAMICS_REGISTRY,
@@ -37,6 +40,25 @@ def _config_classmethods() -> dict[str, str]:
         if isinstance(config, StateDynamicsConfig):
             found[name] = config.dynamics_type
     return found
+
+
+def test_every_dynamics_class_is_registered() -> None:
+    """The registry is derived from ``@dynamics_backend`` (TODO34 §5.4), so a
+    class that forgets the decorator is invisible to every other assertion
+    here — nothing dispatches to it, and nothing fails."""
+    declared = {
+        name
+        for name, member in vars(_dynamics_module).items()
+        if isinstance(member, type)
+        and name.endswith("Dynamics")
+        and name != "StateDynamics"  # the Protocol, not an implementation
+        and member.__module__ == _dynamics_module.__name__
+    }
+    registered = {cls.__name__ for cls in DYNAMICS_REGISTRY.values()}
+    assert declared, "no dynamics classes found — the scan is broken"
+    assert registered == declared, (
+        f"dynamics classes not declared with @dynamics_backend: {declared - registered}"
+    )
 
 
 def test_config_classmethods_cover_the_registry() -> None:

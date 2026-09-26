@@ -585,8 +585,64 @@ class Geometry(Protocol):
         Returns:
             List of activations [input, layer1_out, layer2_out, ..., output]
         """
+
         out = self.forward(x, substrate)
         return [x, out]
+
+
+# ============================================================
+# Backend registry (derived — TODO34 §5.4)
+# ============================================================
+
+
+@dataclass(frozen=True, slots=True)
+class GeometryBackend:
+    """One registered implementation: the class, and how to build it."""
+
+    cls: type[Geometry]
+    build: Callable[[GeometryConfig], Geometry]
+
+
+_GEOMETRY_BACKENDS: dict[str, GeometryBackend] = {}
+
+
+def _plain_ctor[G: Geometry](cls: type[G]) -> Callable[[GeometryConfig], G]:
+    return cls
+
+
+def geometry_backend[G: Geometry](
+    *topology_types: str,
+    ctor: Callable[[GeometryConfig], Geometry] | None = None,
+) -> Callable[[type[G]], type[G]]:
+    """Register a Geometry implementation under its ``topology_type`` aliases.
+
+    The dispatch table is *derived* from the class declarations. It used to
+    be two hand-kept dicts (``_GEOMETRY_DISPATCH`` plus a
+    "factories-first" overlay consulted in that order) that had to be
+    updated in step with the classes, the ``GeometryConfig`` factory
+    classmethods and four export surfaces — seven touches per new topology,
+    and a wiring lock that existed only to police them.
+
+    A topology is now: this decorator on the class, one ``GeometryConfig``
+    factory, and the exports. ``ctor`` is for the two implementations whose
+    ``__init__`` takes more than the config; the builder is declared next to
+    the class it builds, not in a table at the bottom of the module.
+
+    Args:
+        topology_types: the aliases this class answers to.
+        ctor: construction from a config, when ``cls(config)`` is not it.
+    """
+
+    def register(cls: type[G]) -> type[G]:
+        backend = GeometryBackend(
+            cls=cls,
+            build=ctor if ctor is not None else _plain_ctor(cls),
+        )
+        for topology_type in topology_types:
+            _GEOMETRY_BACKENDS[topology_type] = backend
+        return cls
+
+    return register
 
 
 # ============================================================
@@ -594,6 +650,7 @@ class Geometry(Protocol):
 # ============================================================
 
 
+@geometry_backend("feedforward")
 class FeedforwardGeometry(nn.Module):
     """Standard feedforward DAG topology (MLP, CNN)."""
 
@@ -756,6 +813,7 @@ class _TransformerBlock(nn.Module):
         self.ffn2 = nn.Linear(4 * d, d, bias=False)
 
 
+@geometry_backend("causal_transformer")
 class TransformerGeometry(nn.Module):
     """Causal transformer language-model topology (G-axis).
 
@@ -890,6 +948,18 @@ class TransformerGeometry(nn.Module):
         return [self.embed, *self.blocks, self.head]
 
 
+def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
+    """Create RecurrentGeometry with its optional recurrent weight."""
+    hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
+    recurrent_weight = None
+    if config.recurrent_weight is not None:
+        recurrent_weight = torch.tensor(config.recurrent_weight)
+    return RecurrentGeometry(
+        config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
+    )
+
+
+@geometry_backend("recurrent", "recurrent_attractor", ctor=_make_recurrent_geometry)
 class RecurrentGeometry(nn.Module):
     """Recurrent attractor topology (Hopfield, EqProp MLPs).
 
@@ -1053,6 +1123,16 @@ class RecurrentGeometry(nn.Module):
         return acts
 
 
+def _make_tile_geometry(config: GeometryConfig) -> TileGeometry:
+    """Create TileGeometry with its tile parameters."""
+    return TileGeometry(
+        config,
+        neurons_per_tile=config.neurons_per_tile,
+        tiles_per_layer=config.tiles_per_layer,
+    )
+
+
+@geometry_backend("tile_mesh", "tile", ctor=_make_tile_geometry)
 class TileGeometry(nn.Module):
     """TileNet mesh topology: modular independent tiles with local boundaries and asynchronous routing.
 
@@ -1471,6 +1551,7 @@ class TileGeometry(nn.Module):
         return tile_hopfield_energy(self._block_view, acts, self.params)
 
 
+@geometry_backend("conv")
 class ConvGeometry(nn.Module):
     """Convolutional topology: shared kernels routed through the substrate operator.
 
@@ -1605,6 +1686,7 @@ class ConvGeometry(nn.Module):
         return [self._head]
 
 
+@geometry_backend("graph")
 class GraphGeometry(nn.Module):
     """Graph topology: message passing over an edge index.
 
@@ -1820,6 +1902,7 @@ class _AttentionBlock(nn.Module):
         self.ln2 = nn.LayerNorm(h)
 
 
+@geometry_backend("attention")
 class AttentionGeometry(nn.Module):
     """Attention topology: multi-head self-attention blocks.
 
@@ -2114,6 +2197,7 @@ class AttentionGeometry(nn.Module):
         return modules
 
 
+@geometry_backend("spatial_lattice")
 class SpatialLattice3DGeometry(nn.Module):
     """3D Spatial Lattice topology: local connectivity on a 3D grid.
 
@@ -2380,6 +2464,7 @@ class SpatialLattice3DGeometry(nn.Module):
         return modules
 
 
+@geometry_backend("nca")
 class NcaGeometry(nn.Module):
     """Neural cellular automaton: one shared cell MLP on a 2D grid (G-axis).
 
@@ -2583,6 +2668,7 @@ class NcaGeometry(nn.Module):
         return acts
 
 
+@geometry_backend("ntm")
 class NtmGeometry(nn.Module):
     """Neural Turing machine: LSTM controller + content-addressed external
     memory (G-axis; TODO.ntm_nca.md W8.5, r6 recipe).
@@ -2851,66 +2937,9 @@ class NtmGeometry(nn.Module):
         return [x, h, read, self._out(torch.cat([h, read], dim=-1))]
 
 
-# ============================================================
-# Geometry Dispatch
-# ============================================================
-
-# Dispatch table for geometry constructors
-_GEOMETRY_DISPATCH: dict[str, Callable[[GeometryConfig], Geometry]] = {
-    "ntm": NtmGeometry,
-    "recurrent": RecurrentGeometry,
-    "recurrent_attractor": RecurrentGeometry,
-    "tile_mesh": TileGeometry,
-    "tile": TileGeometry,
-    "conv": ConvGeometry,
-    "graph": GraphGeometry,
-    "attention": AttentionGeometry,
-    "spatial_lattice": SpatialLattice3DGeometry,
-    "nca": NcaGeometry,
-    "causal_transformer": TransformerGeometry,
-    "feedforward": FeedforwardGeometry,
-}
-
-
-def _make_recurrent_geometry(config: GeometryConfig) -> RecurrentGeometry:
-    """Create RecurrentGeometry with optional recurrent_weight."""
-    hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
-    recurrent_weight = None
-    if config.recurrent_weight is not None:
-        recurrent_weight = torch.tensor(config.recurrent_weight)
-    return RecurrentGeometry(
-        config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
-    )
-
-
-def _make_tile_geometry(config: GeometryConfig) -> TileGeometry:
-    """Create TileGeometry with tile parameters."""
-    return TileGeometry(
-        config,
-        neurons_per_tile=config.neurons_per_tile,
-        tiles_per_layer=config.tiles_per_layer,
-    )
-
-
-# Extended dispatch table for geometries requiring special construction
-_GEOMETRY_FACTORIES: dict[str, Callable[[GeometryConfig], Geometry]] = {
-    "recurrent": _make_recurrent_geometry,
-    "recurrent_attractor": _make_recurrent_geometry,
-    "tile_mesh": _make_tile_geometry,
-    "tile": _make_tile_geometry,
-}
-
-
 def geometry_from_config(config: GeometryConfig) -> Geometry:
     """Instantiate the geometry implementation named by ``config.topology_type``."""
-    topology_type = config.topology_type.lower()
-
-    # Try factory first (for geometries requiring special construction)
-    if topology_type in _GEOMETRY_FACTORIES:
-        return _GEOMETRY_FACTORIES[topology_type](config)
-
-    # Try direct class dispatch
-    if topology_type in _GEOMETRY_DISPATCH:
-        return _GEOMETRY_DISPATCH[topology_type](config)
-
-    raise ValueError(f"Unknown topology_type: {topology_type!r}")
+    backend = _GEOMETRY_BACKENDS.get(config.topology_type.lower())
+    if backend is None:
+        raise ValueError(f"Unknown topology_type: {config.topology_type!r}")
+    return backend.build(config)

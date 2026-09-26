@@ -14,6 +14,8 @@ from computronium.core.identity_card import AlgorithmIdentityCard
 from computronium.ontology.utils import _learnable_weight_names, apply_pseudo_gradients
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.ontology.geometry import Geometry
 
 
@@ -600,6 +602,33 @@ def _fresh_buffer(
     return buf
 
 
+_UPDATE_BACKENDS: dict[str, type[ParameterUpdate]] = {}
+
+
+def update_backend[T: ParameterUpdate](
+    *update_types: str,
+) -> Callable[[type[T]], type[T]]:
+    """Register a ParameterUpdate implementation under its ``update_type`` keys.
+
+    The table used to be hand-kept at the bottom of this module, which is
+    how ``NaturalGradientUpdate`` shipped with a config factory and a
+    primitive spec but no dispatch entry — ``update_from_config`` raised
+    for a documented update type, and a test grew a special case to
+    instantiate the class directly instead of fixing it (TODO34 §5.4).
+    Deriving the table from the class declarations makes that state
+    unrepresentable, and the pairing with ``ParameterUpdateConfig``'s
+    factories is proved by ``tests/property/test_registry_completeness_lock.py``.
+    """
+
+    def register(cls: type[T]) -> type[T]:
+        for update_type in update_types:
+            _UPDATE_BACKENDS[update_type] = cls  # type: ignore[assignment]
+        return cls
+
+    return register
+
+
+@update_backend("euclidean")
 class EuclideanUpdate:
     """Standard Euclidean update: plain SGD (optionally with momentum).
 
@@ -692,6 +721,7 @@ class EuclideanUpdate:
         }
 
 
+@update_backend("unit_rms")
 class UnitRMSUpdate:
     """Unit-RMS momentum: the magnitude-only ladder rung (TODO12 A1).
 
@@ -770,6 +800,7 @@ class UnitRMSUpdate:
         }
 
 
+@update_backend("local_adam")
 class LocalAdamUpdate:
     """Per-tensor scalar-second-moment Adam (LAMB-style; RESEARCH4 A1 rung).
 
@@ -858,6 +889,7 @@ class LocalAdamUpdate:
         self._t = int(t.item()) if t is not None else 0
 
 
+@update_backend("adam")
 class AdamUpdate:
     """Adam (Kingma & Ba 2015) on pseudo-gradients.
 
@@ -969,6 +1001,7 @@ class AdamUpdate:
         self._t = int(t.item()) if t is not None else 0
 
 
+@update_backend("ortho_adam")
 class OrthoAdamUpdate(AdamUpdate):
     """Orthogonalized Adam: Adam moments, Muon's matrix direction.
 
@@ -1069,6 +1102,7 @@ class OrthoAdamUpdate(AdamUpdate):
         return apply_pseudo_gradients(params, grads, apply, bias_grads)
 
 
+@update_backend("lion")
 class LionUpdate(AdamUpdate):
     """Lion (Chen et al. 2023): sign of the momentum interpolant.
 
@@ -1134,6 +1168,7 @@ class LionUpdate(AdamUpdate):
         self._t = int(t.item()) if t is not None else 0
 
 
+@update_backend("riemannian_orthogonal", "muon")
 class RiemannianOrthogonalUpdate:
     """Muon-style orthogonal update: orthogonalize the momentum buffer.
 
@@ -1238,6 +1273,7 @@ class RiemannianOrthogonalUpdate:
         }
 
 
+@update_backend("spectral_constrained", "spectral")
 class SpectralConstrainedUpdate:
     """Lipschitz-bounded update: constrain spectral norm of updates."""
 
@@ -1280,6 +1316,7 @@ class SpectralConstrainedUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
 
+@update_backend("mean_norm")
 class MeanNormUpdate:
     """Fisher-information geometry update (natural gradient)."""
 
@@ -1317,6 +1354,7 @@ class MeanNormUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
 
+@update_backend("natural_gradient")
 class NaturalGradientUpdate:
     """Fisher-information geometry update (natural gradient).
 
@@ -1403,6 +1441,7 @@ class NaturalGradientUpdate:
         self._momentum = {k: v.clone() for k, v in state.get("momentum", {}).items()}
 
 
+@update_backend("elastic_consolidation", "ewc")
 class ElasticConsolidationUpdate:
     """EWC-style importance-weighted update.
 
@@ -1488,6 +1527,7 @@ class ElasticConsolidationUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply, bias_grads)
 
 
+@update_backend("role_split")
 class RoleSplitUpdate:
     """Per-name dispatcher: the ``on_role`` rule on ``role_names``, the
     ``other`` rule on the rest (X-USU-001 hybrid primitive).
@@ -1574,24 +1614,6 @@ class RoleSplitUpdate:
         self._other.load_state(state.get("other", {}))
 
 
-_UPDATE_CLASSES: dict[str, type] = {
-    "role_split": RoleSplitUpdate,
-    "riemannian_orthogonal": RiemannianOrthogonalUpdate,
-    "muon": RiemannianOrthogonalUpdate,
-    "spectral_constrained": SpectralConstrainedUpdate,
-    "spectral": SpectralConstrainedUpdate,
-    "mean_norm": MeanNormUpdate,
-    "elastic_consolidation": ElasticConsolidationUpdate,
-    "ewc": ElasticConsolidationUpdate,
-    "euclidean": EuclideanUpdate,
-    "adam": AdamUpdate,
-    "ortho_adam": OrthoAdamUpdate,
-    "unit_rms": UnitRMSUpdate,
-    "local_adam": LocalAdamUpdate,
-    "lion": LionUpdate,
-}
-
-
 def update_from_config(config: ParameterUpdateConfig) -> ParameterUpdate:
     """Instantiate the update rule named by ``config.update_type``.
 
@@ -1599,7 +1621,10 @@ def update_from_config(config: ParameterUpdateConfig) -> ParameterUpdate:
     ``System.from_spec``; unknown values raise (no silent Euclidean
     fallback: a typo'd update_type must not masquerade as SGD).
     """
-    cls = _UPDATE_CLASSES.get(config.update_type.lower())
+    cls = _UPDATE_BACKENDS.get(config.update_type.lower())
     if cls is None:
         raise ValueError(f"Unknown update_type: {config.update_type!r}")
-    return cls(config)
+    # The registry stores concrete implementations behind the
+    # runtime-checkable Protocol; their common constructor shape is (config).
+    factory = cast("Callable[[ParameterUpdateConfig], ParameterUpdate]", cls)
+    return factory(config)

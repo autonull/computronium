@@ -9,8 +9,11 @@ surface impossible:
 1. every ``GeometryConfig`` factory classmethod's ``topology_type``
    dispatches through ``geometry_from_config`` and round-trips its
    config exactly;
-2. every alias literal in the dispatch body resolves to a geometry
-   class defined in ``geometry.py``;
+2. every alias in the derived backend registry resolves to a geometry
+   class defined in ``geometry.py``, and every geometry class is
+   registered (TODO34 §5.4 replaced two hand-kept dispatch tables with
+   ``@geometry_backend``, so "the tables forgot a class" is no longer a
+   state the code can be in);
 3. every geometry class defined in ``geometry.py`` appears in the
    ontology ``__all__``, root ``__all__``, root ``_LAZY``, and the root
    ``TYPE_CHECKING`` import block.
@@ -68,13 +71,11 @@ def test_config_classmethods_dispatch_and_round_trip() -> None:
 def _dispatch_aliases() -> set[str]:
     """Alias literals the dispatcher actually accepts.
 
-    Read from the dispatch tables rather than by scanning source text: the
-    dispatcher is table-driven, so a regex over its body found nothing and
-    the lock silently degraded to "covers 0 classes".
+    Read from the derived backend registry rather than by scanning source
+    text: the dispatcher is table-driven, so a regex over its body found
+    nothing and the lock silently degraded to "covers 0 classes" (§0.6).
     """
-    return set(geometry_module._GEOMETRY_FACTORIES) | set(
-        geometry_module._GEOMETRY_DISPATCH
-    )
+    return set(geometry_module._GEOMETRY_BACKENDS)
 
 
 def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
@@ -92,7 +93,7 @@ def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
             recurrent_weight=None,
         )
         resolved.add(type(geometry_from_config(config)).__name__)
-    assert aliases, "dispatch tables are empty"
+    assert aliases, "the backend registry is empty"
     assert resolved <= classes, (
         f"dispatch aliases resolve outside geometry.py: {resolved - classes}"
     )
@@ -100,6 +101,28 @@ def test_dispatch_aliases_resolve_to_geometry_classes() -> None:
         f"dispatch covers {len(resolved)} classes but geometry.py defines "
         f"{len(classes)}: {classes - resolved}"
     )
+
+
+def test_every_geometry_class_is_registered() -> None:
+    """The registry is derived from ``@geometry_backend`` — a class that
+    forgets the decorator is the drift §5.4 exists to remove, and it is
+    invisible to every other assertion here (nothing dispatches to it)."""
+    registered = {
+        backend.cls.__name__ for backend in geometry_module._GEOMETRY_BACKENDS.values()
+    }
+    classes = _geometry_classes()
+    assert registered == classes, (
+        f"geometry classes not declared with @geometry_backend: {classes - registered}"
+    )
+
+
+def test_registry_entries_come_from_this_module() -> None:
+    """A builder must be a class here or a module-level ``_make_*`` builder
+    beside it — never an import from somewhere that can register a topology
+    the wiring lock cannot see."""
+    for alias, backend in geometry_module._GEOMETRY_BACKENDS.items():
+        assert backend.cls.__module__ == geometry_module.__name__, alias
+        assert backend.build.__module__ == geometry_module.__name__, alias
 
 
 def test_geometry_classes_are_exported_everywhere() -> None:
