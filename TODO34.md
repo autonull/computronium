@@ -1,11 +1,11 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
 **Status**: **ACTIVE — 16 passes landed.** Complete: §0, §1.1–§1.5, §2.1, §2.2,
-§2.5, §2.7, §3.1, §4.1, §5.1, §5.2, §5.3, §5.8, §5.4's dispatch half, and all
-**116** of §1.5's unseeded tests. Partly: §2.3 (tranche 2 opened: 671 → 349,
-ratchet live), §2.6 (provenance repaired; the environment fingerprint needs a
-re-emission pass), §3.2 (the reproducibility question answered per class;
-`checkpoints/` needs one word from the user and `docs/archive/` a policy).
+§2.5, §2.7, §3.1, §3.2's reproducibility question *and* its `checkpoints/`
+decision, §4.1, §5.1, §5.2, §5.3, §5.8, §5.4's dispatch half, and all **116** of
+§1.5's unseeded tests. Partly: §2.3 (tranche 2 opened: 671 → 349, ratchet
+live), §2.6 (provenance repaired; the environment fingerprint needs a
+re-emission pass), §3.2 (`docs/archive/` needs a policy).
 **The prioritised forward plan is in [Remaining Work](#remaining-work)
 — read that, not the section numbering.** §4 is unstarted and is the seed for a
 `TODO35.md`; the argument for and against splitting is recorded there, and the
@@ -103,7 +103,7 @@ Three mutations are checked; the first two were missed by the first version.
 
 Also answered §3.2's actual question per class: `data/` (878M) is entirely
 public datasets fetched by the loaders, so "re-derivable from a seed + task id"
-is the wrong question for it; `checkpoints/` (24M) has **no** provenance and
+is the wrong question for it; `checkpoints/` (24M) had **no** provenance and
 **no** referrers, and is now the open item rather than a footnote.
 
 Fast lane **3323 passed**. The `data/` half of the question is closed by
@@ -1056,7 +1056,7 @@ class, because the answer differs sharply:
 | `data/` | 878M | **Yes, by construction** — every entry is a public dataset (CIFAR-10/100, SVHN, MNIST/Fashion/KMNIST, USPS, Citeseer, Cora) loaded through `domains/vision.py` with `download=` on the loader. Nothing here is *generated*, so the item's "seed + task id" framing is the wrong question for 878M of the repo. | implicit: any loader that names the dataset fetches it |
 | `artifacts/ruler_table.json` | 2.9K | **Yes, and it has to be — library code depends on it.** See below. | `scripts/probes/ruler_calibration.py` |
 | `artifacts/broad_map*` | 50M | Yes — campaign outputs, each from a `comp broad-map` / `comp continuous` invocation. | the run's own command |
-| `checkpoints/` | 24M | **No provenance at all** — `epoch_0_val_0.3416.pt`, no seed, no config, no manifest, and **no code or doc references them**. | nothing |
+| `checkpoints/` | 24M | **No provenance at all** — `epoch_0_val_0.3416.pt`, no seed, no config, no manifest, and **no code or doc references them**. **Deleted, Pass 17** (110 files). | nothing — it is gone |
 
 #### The finding: a gitignored calibration table that library code reads
 
@@ -1095,9 +1095,14 @@ two**, because it reconstructed the path from `campaign.__file__` instead of
 asking the code. `_ruler_table_path()` now exists so the lock reads the path
 the code opens; that is §0.6's lesson, and the cheapest possible instance of it.
 
-**Still open in this item**: `checkpoints/` (24M, zero provenance, zero
-referrers — either give them a manifest or delete them), and the `docs/archive/`
-decision above.
+**Closed in this item** (Pass 17): `checkpoints/` is **deleted** — 24M, 110
+files, zero provenance, zero referrers. A manifest was the other option and it
+is the wrong one: writing provenance for a run nobody can identify is the
+fabrication §2.6 refuses, in the one place where nothing would have caught it.
+The one artifact with a shape (`final_model.pt` + `metrics.json`, a real LM
+training curve, 14 steps, perplexity 35.2 → 24.7) was the only reason to keep
+the directory at all, and it is cheaper to re-run than to carry an
+unattributable file. **Still open**: the `docs/archive/` decision above.
 
 ### 3.3 Finish `TODO33`'s open item — P3
 
@@ -1455,7 +1460,7 @@ concrete next action, so no item here needs re-planning before starting.
 | # | Item | State | First move | Effort | Done when |
 |---|---|---|---|---|---|
 | 1 | **§2.4 pyright, top 3 modules by fan-in** | 2079 findings repo-wide; `AGENTS.md` keeps checking basic until a ratchet exists | count findings per module, pick the top 3, drive one to zero, add a *changed-files* pyright check to `pre-commit` next to ruff's. **Pass 16 shows the per-file method**: `p2p/evolution.py` went 16 → 0 inside an unrelated extraction, so the fan-in ranking is worth re-measuring rather than assuming | ~4h + ongoing | 3 modules report 0; pre-commit fails on a new error in a changed file |
-| 2 | **§3.2 `checkpoints/`** (24M) | no manifest, no seed, no config, **zero referrers**. Pass 16 dated them: 7–21 Aug, `epoch_N_val_*.pt` plus one `final_model.pt` + `metrics.json` from an LM demo | **delete** — it is a cwd-relative default dump (live code writes `<output_dir>/checkpoints/`), gitignored, and §2.6's own rule says a hand-written manifest for an unknown run is *fabricated* provenance, not recorded provenance. **Awaiting the user's word: it is 24M of undeletable-if-wrong data** | ~5min once decided | directory gone |
+| ~~2~~ | ~~**§3.2 `checkpoints/`** (24M)~~ | **DONE (Pass 17): deleted**, 110 files. It was a cwd-relative default dump (live code writes `<output_dir>/checkpoints/`), gitignored, dated 7–21 Aug, zero referrers. The decision was the plan's own: a manifest written for an unknown run is *fabricated* provenance, not recorded provenance (§2.6), so delete was the only honest option | — | directory gone |
 | 3 | **§2.6 environment fingerprint** | `capture_environment()` / `deps_hash()` exist and are unused here | add `deps_hash()` to the record emitter, then re-emit every record in one slow pass (fold into §1.6) | ~1h + the slow pass | a drift lock can name which of code / config / environment moved |
 | 4 | **§2.3 tranche 2** (`PLW0717` 90, `E402` 32) | 3 of the worst done (Pass 16); the ratchet is live so the list is trustworthy | `knowledge/causal.py` still holds 4 (16/39/9/29 statements) and `hyperopt/experiment.py` 3 — the same extraction recipe, and `p2p` is the precedent for it finding a live bug | ~3h | count falls under the ratchet without a new suppression |
 
@@ -1500,8 +1505,9 @@ rather than re-deriving them.
 
 | Item | Finding | Where it belongs |
 |---|---|---|
-| **`p2p/` has no tests** | the loop's only handler is `except Exception` + `sleep`, and a `TypeError` from a non-existent kwarg ran for the life of the module with nothing but a log line. The mesh feature is untested *and* its failure mode is silent by construction | a Tier-1 item: a stub-DHT test that drives `_evolution_loop` one iteration. `_build_model`/`_fetch_global_best`/`_evaluate` are now separately callable, which is what such a test needs |
-| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved. `checkpoints/` at the repo root is the same shape: a cwd-relative default dump | a lock, or a one-line default change, when either script is next touched. A single scan for `Path("<name>")` defaults in `scripts/` would cover the class |
+| **`p2p/` has no tests** | the loop's only handler is `except Exception` + `sleep`, and a `TypeError` from a non-existent kwarg ran for the life of the module with nothing but a log line. The mesh feature is untested *and* its failure mode is silent by construction | **deferred by decision (Pass 17), not dropped.** The refactor made `_fetch_global_best` / `_build_model` / `_evaluate` separately callable, which is what a stub-DHT test needs, so the cost when it is taken is small. It is deferred because `p2p` has no consumer, and this plan's rule is that work waits for one |
+| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved. `checkpoints/` at the repo root was the same shape — a cwd-relative default dump, now deleted (Pass 17) | a lock, or a one-line default change, when either script is next touched. A single scan for `Path("<name>")` defaults in `scripts/` would cover the class |
+| **load-dependent flake, cause unestablished** | `tests/property/test_deep_credit_trial.py::TestContrasts::test_contrasts_cover_deep_tier` failed **once** during Pass 17, in a property-tier run that took **217s** against a normal 75–95s. It then passed twice more (132s alone, 46s under `-n 4`) and the full tier passed (81s). The assertion is a *key-presence* check — `_contrasts_vs_gradient` returns an empty dict only when `len(config.seeds) < _MIN_CONTRAST_SEEDS`, and the test passes `seeds=(0, 1)` — so on the face of it it cannot fail from numerics, and the failure message was not captured. It is not in §1.5's flagged population (it draws nothing unseeded) | **do not "fix" it without the message.** The next occurrence must be captured with `-x --tb=long` and the run's walltime beside it. Two of the plan's own defects (0.4, 0.8) surfaced only because settle work shifted a stream; this one has no mechanism yet, and a guess would be exactly the "threshold fixed without a measurement" mistake |
 | `except OSError, subprocess.SubprocessError:` in `computronium/utils.py` | valid only on **Python 3.14+** (PEP 758, unparenthesised multiple exception types). The repo targets 3.14 and both ruff and pyright accept it — but the module will not *parse* on 3.13 | a note, not a defect: the target-version is declared and correct |
 | the lint ratchet's own version pin | first version **skipped** on a ruff mismatch, i.e. it switched itself off invisibly — the exact failure mode this plan warns about, committed by this plan. Now it fails with the remedy in the message | fixed, and the episode is the argument for the "make the claim executable" note below |
 
