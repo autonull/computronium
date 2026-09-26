@@ -16,8 +16,6 @@ import re
 import subprocess
 import sys
 
-import pytest
-
 BASELINE = 353
 RUFF_VERSION = "0.16.6"
 
@@ -43,13 +41,22 @@ def _measured() -> tuple[int, str]:
 
 
 def test_repo_wide_lint_count_does_not_regress() -> None:
-    """§2.3's gate: 'repo-wide lint trend down', asserted rather than tracked."""
+    """§2.3's gate: 'repo-wide lint trend down', asserted rather than tracked.
+
+    A ruff version change is *not* an exemption. The first version of this
+    test skipped on a mismatch, which is the plan's own failure mode — a gate
+    that switches itself off without anyone deciding to, and invisibly, since
+    the skip count is one line among 119. A new ruff legitimately moves the
+    count, so that is a **deliberate re-baseline**: update both constants in
+    the same commit and say in the body which rules changed.
+    """
     measured, version = _measured()
-    if version != f"ruff {RUFF_VERSION}":
-        pytest.skip(f"baseline measured with ruff {RUFF_VERSION}, running {version}")
+    upgrade = version != f"ruff {RUFF_VERSION}"
     assert measured <= BASELINE, (
-        f"repo-wide ruff findings {measured} exceed the {BASELINE} baseline; "
-        "fix or justify the new finding rather than raising the number"
+        f"repo-wide ruff findings {measured} exceed the {BASELINE} baseline"
+        f"{' (ruff version changed: ' + version + ')' if upgrade else ''}; "
+        "fix or justify the new finding, or re-baseline deliberately by "
+        "updating BASELINE and RUFF_VERSION together"
     )
 
 

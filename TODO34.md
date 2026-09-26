@@ -1,16 +1,14 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
-**Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
-§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3,
-**§5.4's dispatch half**, **§5.8**, **§3.1**, **§2.3's tranche 1**,
-**§2.7**, **§2.6** and **§3.2** complete or partly so. §1.2–§1.4, §1.6, §2.4,
-§3.2 (checkpoints, docs/archive), §4.2–§4.4 open, plus §5.4's export half, §5.6,
-§5.7, §5.9. **No unblocked work item is left in §5** — the rest are
-decisions; the cheapest remaining *work* is §1.6 (Pass 11 took §3.1). (Pass 9 fixed a
-live dispatch gap — `update_from_config` could not build `natural_gradient` —
-and a vacuous registry test; Pass 10 removed every credit-layer
-`type: ignore` and locked the `TYPE_CHECKING`-import hazard.) (§1.4's substance landed in `fb6bb0f7`, which also
-found §1.2b.)
+**Status**: **ACTIVE — 15 passes landed.** Complete: §0, §1.1–§1.5, §2.1, §2.2,
+§2.5, §2.7, §3.1, §4.1, §5.1, §5.2, §5.3, §5.8, and §5.4's dispatch half.
+Partly: §2.3 (tranche 1: 671 → 353 findings, ratchet live), §2.6 (provenance
+repaired; the environment fingerprint needs a re-emission pass), §3.2 (the
+reproducibility question answered per class; `checkpoints/` and `docs/archive/`
+remain). **The prioritised forward plan is in [Remaining Work](#remaining-work)
+— read that, not the section numbering.** §4 is unstarted and is the seed for a
+`TODO35.md`; the argument for and against splitting is recorded there, and the
+recommendation is to keep one document until §4 has a named consumer.
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -1353,72 +1351,133 @@ they are decisions, not work, and 5.7 in particular should be taken with
 
 ## Execution Order
 
-Phase A is **done**. Phase C is half done (1.2, 1.3 landed; 1.5's ratchet
-landed, its 116 seeds open; 1.6 still wants a re-measurement).
-Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
-(5.6/5.7 are the two decisions the driver exposed).
+Phases A, B and the deterministic half of C are done; D is half done; E has not
+started and should not until it has a consumer. The current phase table:
 
-| Phase | Items | Effort | Gate | State |
-|-------|-------|--------|------|-------|
-| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
-| **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
-| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 3.2 **partly done** (Pass 15); 2.3 tranche 1 **done** (Pass 12, 671→353, ratchet live); 2.4 open |
-| **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
+| Phase | Items | State |
+|-------|-------|-------|
+| **A — determinism** | 1.1, 2.1, 1.4 | **done** — 2.1 `59d13f47`, 1.4 `fb6bb0f7`, 1.1 (curve measured, floors re-derived) |
+| **B — contract** | 2.2, 2.5, 4.1 | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 + 5.2 `5ad96f85` |
+| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | 1.2, 1.3 **done**; 1.5 ratchet **done** (116 seeds open); **1.6 open** |
+| **D — structure** | 3.1, 3.2, 2.3, 2.4 | 3.1 **done** `b6151076`; 3.2 **partly done** `ceb4865a`; 2.3 tranche 1 **done** `09f73936` (671→353, ratchet live); **2.4 open** |
+| **E — presentation** | 4.2, 4.3, 4.4 | open; the TODO35 seed, see Remaining Work |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done**, export half deferred; 5.6–5.9 are decisions |
 
-**Pass 15's lesson, which generalises past §3.2.** Three of the last four
-passes turned on a claim that was asserted rather than measured, and in every
-case the measurement was cheap next to the claim: a wheel build (30s) proved
-the packaging dropped the table;
-`find_spec` (0.1s) proved `deployment.py` was unreachable; a count per rule (0.2s) proved an ignore suppressed nothing. The
-ratchet in Pass 12 and the wheel assertion in Pass 15 are the same instinct
-applied twice: when something claims to work, make the claim executable.
+**A hard constraint on this box, and it is a process rule rather than a plan
+item: individual commands over ~15s are not affordable.** Two demo probes
+(~85s each) were affordable exactly once, and a 200s demo run was killed three
+times — twice by the harness, once by OOM (§2.8). Everything inside 15s is
+cheap and safe; the fast lane excepted, use targeted `-k` runs and treat the
+tiered suite as a round-close, background-and-forget gate. **Design changes
+should prefer a *pre-measured* threshold from a probe log over a re-run to
+confirm it** — §1.1's floors came from the 200-step probe curve, so the demo
+never had to be re-executed to land them. The one exception this round was
+`uv build --wheel` (~30s), which bought a packaging defect no amount of
+reading would have found.
 
-**Recommended next step**: there is no unblocked *work* item left in §5 —
-what remains is §5.4's export half, §5.6 and §5.7, and all three are
-*decisions* rather than chores, which is the point at which this plan's
-remaining budget is better spent on the untouched sections: **§1.6**
-(re-baseline the cost table — arithmetic plus one slow pass, no design
-question) and **§2.4** (drive the top three modules by fan-in to zero).
-§3.1 is closed (Pass 11); §2.3's tranche 1 is closed and ratcheted (Pass 12),
-which leaves its remaining tranches to be driven by what the ratchet reports
-rather than by a static table here.
-§5.6/§5.7
-should be taken by whoever next touches `local_learning/settling.py` or the
-LIF horizon, since both are questions only that code can answer cheaply.
+The standing rule from §0 held throughout: every item was done against a green
+suite, not to rescue a flaky one, and each pass that moved numerics said so in
+its commit body.
 
-**Pass 11's finding worth carrying forward.** §3.1 was framed as a decision
-(rename or fold) and turned out to be a *measurement* — the module was already
-unreachable, so no design choice existed. Pass 11 also generalises the lock
-across `packages/*/src/`, because a uv workspace means the shadowing hazard
-exists in four package trees, not one, and every tree currently has zero
-violations.
+---
 
-**A hard constraint discovered in this pass, and it is a process rule, not a
-plan item: individual commands over ~15s are not affordable on this box.**
-Two demo probes (~85s each) were affordable exactly once, and the 200s demo
-run was killed three times — twice by the harness and once by OOM (§2.8).
-Everything measurable inside 15s is still cheap and safe: the fast lane
-excepted, use targeted `-k` runs and treat the tiered suite as a
-round-close, background-and-forget gate. **Design changes should therefore
-prefer a *pre-measured* threshold from a probe log over a re-run to confirm
-it** — §1.1's floors came from the 200-step probe curve, so the demo itself
-never had to be re-executed to land them.
+## Remaining Work
 
-Phase C's remaining item is §1.6 (re-baseline the cost table), which is
-arithmetic on `--durations=20` plus one slow pass, not a design question.
+Everything still open, ordered by *what it costs to be wrong*, not by section
+number. Effort is a first estimate, not a commitment; "first move" is the
+concrete next action, so no item here needs re-planning before starting.
 
-The standing rule from §0 held: 5.1 was done against a green suite, not to
-rescue a flaky one, and the driver kept the per-class science rather than
-absorbing it.
+### Tier 1 — cheap, and each closes a hole that is already open
+
+| # | Item | State | First move | Effort | Done when |
+|---|---|---|---|---|---|
+| 1 | **§2.4 pyright, top 3 modules by fan-in** | 2079 findings repo-wide; `AGENTS.md` keeps checking basic until a ratchet exists | count findings per module, pick the top 3, drive one to zero, add a *changed-files* pyright check to `pre-commit` next to ruff's | ~4h + ongoing | 3 modules report 0; pre-commit fails on a new error in a changed file |
+| 2 | **§3.2 `checkpoints/`** (24M) | no manifest, no seed, no config, **zero referrers** in code or docs | decide: delete, or write a manifest beside them. Do not leave it ambiguous | ~20min | directory either gone or self-describing |
+| 3 | **§2.6 environment fingerprint** | `capture_environment()` / `deps_hash()` exist and are unused here | add `deps_hash()` to the record emitter, then re-emit every record in one slow pass (fold into §1.6) | ~1h + the slow pass | a drift lock can name which of code / config / environment moved |
+| 4 | **§2.3 tranche 2** (`PLW0717` 92, `E402` 32) | ratchet is live, so the list is now trustworthy | start with the 3 worst `try`-clauses as extraction exercises, not all 92 | ~3h | count falls under the ratchet without a new suppression |
+| 5 | **§1.5 the 116 unseeded value-asserting tests** | ratchet landed; the population is recorded, not fixed | batch by file; each is one `torch.manual_seed(0)` and a baseline-line delete | ~2h, delegable | `_BASELINE` empty |
+
+### Tier 2 — needs a quiet window, and one pass to amortise
+
+| # | Item | State | First move | Effort | Done when |
+|---|---|---|---|---|---|
+| 6 | **§1.6 re-baseline the cost table** | the numbers in §1 are pre-§0.2; the suite got heavier when settles started running their full horizon | one `--with-slow` pass, `--durations=20`, rewrite the §1 table | ~30min of machine | the table matches a recorded run |
+| 7 | **§5.4's export half** | deliberately deferred: `__all__` / `_LAZY` / `TYPE_CHECKING` are a *publication* surface, not a registry | **do not start** without a reader who wants the public API smaller | ~1d | — |
+| 8 | **`docs/archive/` cold-store decision** (5.1M) | one archival pass already happened (`0c8e5a2a`); no policy recorded | write the policy in three lines and apply it | ~30min | the rule exists |
+
+### Tier 3 — decisions, not work. Take them with the code that can answer them.
+
+| # | Item | The question only that code can answer cheaply |
+|---|---|---|
+| 9 | **§5.6** `local_learning/settling.py`'s two hand-written loops | should `StateDynamicsConfig.max_steps` / `convergence_*` apply to model settling at all? If yes the driver is free; if no, write down that they are separate contracts |
+| 10 | **§5.7** the LIF horizon counts layers, not steps | per-layer sum (today), per-layer max, or separate `steps_used` / `layers` — then make the lock assert the choice |
+| 11 | **§5.9** three redundant `getattr` state accessors | audit the lazy and compiled whole-graph paths first; they pass duck-typed records from outside the protocol |
+| 12 | **§2.3 `SIM102`** (19 collapsible-ifs) | 13 are the `_validate_*` chains in `ontology/system.py`, where collapsing costs the one-branch-per-message structure. Probably **leave alone** — recorded so it is a decision, not an omission |
+
+### Tier 4 — the phase that has not started, and should not without a consumer
+
+**§4 (presentation layer): 4.2 live telemetry, 4.3 the read surface, 4.4 the
+renderer registry.** Deliberately last. 4.2 has a real substrate now (§0.4
+fixed `on_step`; §2.7's test proved an untested public path can be simply
+*wrong*), and §4.1's layering rule has a lock behind it. But every item needs a
+consumer, and the plan's own §4.5 forbids starting UI work before the layering
+check exists — it now does.
+
+**This is the seed for `TODO35.md`, and the split is recorded here so the
+decision is made once rather than drifted into.** The argument for splitting:
+§4 is feature work with a different success condition (a run you can watch),
+while everything above is hygiene with a different one (a claim you can prove).
+The argument against, and the reason it has not been done: two documents with
+overlapping open-item lists is the exact drift this plan has documented four
+times — a hand-kept table that accumulates accommodations. **Recommendation:
+keep one document until §4 has a named consumer.** If that consumer arrives
+with a requirement, split then, and move §4 plus §4.5's non-goals across whole
+rather than re-deriving them.
+
+### New items surfaced by passes 12–15, not yet in the numbered sections
+
+| Item | Finding | Where it belongs |
+|---|---|---|
+| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved | a lock, or a one-line default change, when either script is next touched |
+| `except OSError, subprocess.SubprocessError:` in `computronium/utils.py` | valid only on **Python 3.14+** (PEP 758, unparenthesised multiple exception types). The repo targets 3.14 and both ruff and pyright accept it — but the module will not *parse* on 3.13 | a note, not a defect: the target-version is declared and correct |
+| the lint ratchet's own version pin | first version **skipped** on a ruff mismatch, i.e. it switched itself off invisibly — the exact failure mode this plan warns about, committed by this plan. Now it fails with the remedy in the message | fixed, and the episode is the argument for the "make the claim executable" note below |
+
+### What was deliberately not done, and why
+
+- **Not optimisation.** The fast lane is ~95s; the two 200s+ demos are already
+  `slow`; and the suite got *heavier* because §0.2 made settles run their full
+  budget. Optimising walltime now would optimise the artifact a correctness
+  fix improved.
+- **Not more structure.** §5's remaining items are decisions (Tier 3). Three of
+  the last four passes were config and dead code, not architecture.
+- **Not `RUF105/106/103`.** Enabling them one at a time churns guard-rails;
+  the canonical directive migration is Register C work, as one change.
+- **Not `E402` per-site suppression.** 32 hand-written suppressions are worse
+  than 32 honest findings.
+
+### The through-line of the last four passes
+
+Three of them turned on a claim that was **asserted rather than measured**, and
+in every case the measurement was cheap next to the claim: a wheel build (~30s)
+proved the packaging dropped the ruler table; `find_spec` (0.1s) proved
+`deployment.py` was unreachable; a per-rule count (0.2s) proved an ignore
+suppressed nothing. Two of the three fixes would have shipped looking correct
+in the source tree.
+
+The general form, and the reason the ratchet and the wheel assertion are the
+same kind of object: **when something claims to work, make the claim
+executable.** The ratchet is that instinct applied to a count; the wheel
+assertion is it applied to packaging; `test_ruler_table_lock.py` is it applied
+to a path. Each is cheap, and each one of them found a real defect on its first
+run.
+
 
 ---
 
 ## Verification After Each Phase
 
 ```bash
-# Fast lane (measured 91s, 3167 passed) — the inner loop and the per-commit gate.
+# Fast lane (measured 95s, 3323 passed) — the inner loop and the per-commit gate.
 # A bare `uv run python -m pytest -q` runs exactly this (pyproject testpaths).
 uv run python -m pytest tests/unit tests/property tests/primitives \
     tests/algorithms tests/acceleration -q -n 4
@@ -1439,8 +1498,17 @@ uv run python -c "import optuna, scipy, torchvision, pytest"
 fast lane, so the explicit `--select F821` run above is for iterating on a
 fix, not for the gate.
 
+# The lint ratchet is a gate too: it fails if the repo-wide ruff count rises.
+uv run python -m pytest tests/property/test_lint_count_ratchet.py -q
+
 Re-pin `docs/figures/manifest.json` via the gallery lock whenever demo numerics
-move, and say so in the commit body.
+move, and say so in the commit body. The last three passes that touched pinned
+artifacts each stated the movement explicitly, including "none" — which is the
+claim worth making.
+
+Provenance has its own fast-lane lock over the *committed* records
+(`test_gallery_provenance_lock.py`), separate from the round-close gallery lock,
+because provenance that decays between round closes needs a per-commit gate.
 
 ---
 
@@ -1534,6 +1602,17 @@ move, and say so in the commit body.
   thing that is making it quiet actually doing anything". §5.4's argument about
   hand-kept tables applies to config tables with the same force — and the tell
   is always the same, a comment that has drifted from its key.
+
+- **This plan committed its own version of the failure it documents.** Pass 12's
+  lint ratchet *skipped* on a ruff-version mismatch — a gate that switches
+  itself off, invisibly, because the skip lands in a summary line shared with
+  119 others. It is the same defect as §5.4's special-cased test, written by
+  the same author that wrote down the rule. It now fails with the remedy in the
+  message, on the reasoning that a ruff upgrade legitimately moves the count and
+  should therefore be a **deliberate re-baseline** (both constants, one commit,
+  the body saying which rules changed) rather than an exemption. Worth more than
+  the fix: a rule you have just written is the one most likely to be written
+  from the shape of the rule rather than from the failure it prevents.
 
 - **An unreachable module is worse than a missing one.** §3.1's
   `deployment.py` was 1,633 lines of plausible-looking deployment code that
