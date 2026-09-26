@@ -1,7 +1,7 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open. Round 5 is closed (§17); a new session works from
-§17.8 and stops there. Everything before §17 is the record of why the decisions
+§17.8, and §17.9 before deleting anything. Everything before §17 is the record of why the decisions
 were made, not the work list. Round 4 closed at §15.
 `TODO34.md` keeps its 16 passes as the record of how the tree was made
 fast, provable and ready to be presented; its "Remaining Work" section is
@@ -10,14 +10,16 @@ this plan series has documented five times.
 
 **Round 5 closed**: §16-6 (the cross-module import lock covers all of
 `computronium/`, after two rounds of being scoped to dodge 13 known failures),
-§16-7, §16-2's probe half, and §0.2 item 3's first nine findings. The round's
-output is code and deletions: the probe driver trains again with a *measured*
-metrics contract, the broad sweep runs end to end for the first time since
-Sprint 7.6.10, and **~1,100 lines of Triton kernels that no code path had ever
-launched are gone** — five backends advertised a `HAS_TRITON_*` flag behind
-which nothing existed. A wall-clock metric in a run's records also broke
-bit-for-bit reproducibility on its first run, which is why resource accounting
-and model metrics are now separate structures.
+§16-7, and §16-2's probe half. The round's output is capability: the probe
+driver trains again with a *measured* metrics contract, and the broad sweep
+runs end to end for the first time since Sprint 7.6.10. A wall-clock metric in
+a run's records broke bit-for-bit reproducibility on its first run, which is
+why resource accounting and model metrics are now separate structures.
+
+**Read §17.9 before doing any further deletion in this tree.** This round
+deleted 16 Triton kernels and three code paths because a grep found no caller,
+and all of it was reverted: *not called* is not *not wanted*. The rule is
+there now so the next session does not spend the same hour.
 
 **Round 3 closed**: §1.2 (the three highest-fan-in modules are at 0 — and
 the third of them held an `ImportError` on a live branch that no test had
@@ -1635,3 +1637,57 @@ skipped / 5 xfailed / 1 xpassed. Dev-env smoke clean.
    them — a name that resolved to nothing. The population is worth
    enumerating once, by hand, in the module's docstring, so the exclusion is
    a list someone checked rather than a class nobody looked at.
+
+### 17.9 The rule this round earned by getting it wrong
+
+**Nothing in this tree is deleted for being unreachable.** Not dead code, not
+an unwired kernel, not a function whose only call site raises. `git revert` is
+the response to "this is wrong", not "this is unused".
+
+The finding that motivated the deletion was not wrong. A `grep` for each of
+those 16 kernel names over the tree returns its own definition and its own
+import and nothing else, and `HAS_TRITON_PC` and its four siblings were read
+by no one. The inference from that to "delete" was mine, and it was wrong for
+a reason a linter cannot see: **those kernels are a capability someone is
+mid-way through building.** PC, feed-forward, spiking, hebbian and the complex
+substrate all have a working torch path *and* an unwired Triton path, which is
+what a half-finished optimisation looks like from the outside. Deleting the
+faster half of five backends because the slower half currently runs is
+subtracting from the project, and no static reachability check in the tree
+contains the roadmap that says the fast half is next.
+
+Three rules, in the order they bite:
+
+1. **"0 importers" is not "dead".** §14.6 already recorded this for
+   documented entry points. It is wider: an unwired implementation is a
+   *claim about the future*, and no static import graph contains a claim about
+   the future. Same error, one level down.
+2. **A lint rule is not authority over what ships.** The deletion was
+   motivated by `PLW0717`, a complexity rule about a `try` block. It was
+   correct that the rule counted the optional-import guard. It was not that the
+   guard's contents should go. The extraction (move the kernels to
+   `_`-prefixed modules, guard one import) is the version that costs nothing;
+   it was available and I did not take it.
+3. **A knob nothing reads is not a reason to remove the knob.** The same
+   round deleted `allow_bptt_fallback` from two places for being unread, and
+   then deleted the export CLI because its missing capability made it look
+   like a wrapper around nothing. Both are now restored, and
+   `allow_bptt_fallback=False` *raises* on a `bptt` route — the knob was a
+   guard that had lost its enforcement.
+
+The number in the original commit message was also wrong: "~1,100 lines"
+counted the tile and FA kernel sets, which were **moved** to new files, not
+deleted. The deleted part was 895 lines, and the count being wrong in the
+direction that flattered the change is the part worth remembering.
+
+What survives from the extraction is the vocabulary it forced into the open:
+`consumable_config_keys` derives a rule's deliverable config keys from its
+factory signature, which is how `create_eqprop_mlp`'s `beta` and
+`inference_steps` — parameters it has always had — stopped being reported as
+phantom knobs. That is a real capability the round added, and it came out of
+the mistake.
+
+Cost of the correction, measured: `PLW0717` is back to 79 and the ratchet
+baseline to 334, which is the correct state. 2,638 fast-lane tests and 1,140
+across algorithms/primitives/acceleration/integration pass on the restored
+tree.
