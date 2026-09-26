@@ -240,6 +240,22 @@ def test_demo_update_ladder(emit_run_record) -> None:
             f"lr ({arms[name]['mean']:.2f}) — the crutch verdict is a "
             "matched-budget comparison, not an lr artifact"
         )
+        # How much of that margin is signal? Measured from the committed
+        # record's own per-seed values (TODO35 §1.8): the per-seed spread is
+        # 4-8% of the mean on the Muon arms and up to 17% on
+        # epc_w64_unit_rms, so the w64 margin (33.80 vs 37.14, 9%) is inside
+        # the seed band and the w32 margin (42.48 vs 45.25, 6%) is barely
+        # outside it. The verdict is asserted because it is the claim, but it
+        # is not a 3-seed statistical result, and SEEDS stays 3 for that
+        # reason — narrowing it would widen the band, not tighten the claim.
+        unit_spread = max(arms[name.replace("muon", "unit_rms")]["seeds"]) - min(
+            arms[name.replace("muon", "unit_rms")]["seeds"]
+        )
+        assert unit_spread < 0.25 * arms[name]["mean"], (
+            f"{name}: the UnitRMS arm's own seed spread ({unit_spread:.2f}) "
+            "has grown past a quarter of the Muon mean — the comparison is "
+            "no longer the same measurement the verdict was drawn from"
+        )
     # PEPITA control: the audit-backed structural runaway persists.
     assert arms["pepita_w32_unit_rms"]["mean"] > 100.0, (
         f"PEPITA w32 control must explode at HEAD (mean "

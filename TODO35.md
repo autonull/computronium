@@ -1,10 +1,17 @@
 # TODO35: The Proveable Remainder
 
 **Status**: **ACTIVE — open.** This document owns every open item as of
-`196eb4cd`. `TODO34.md` keeps its 16 passes as the record of how the tree was
+`31be91a0`. `TODO34.md` keeps its 16 passes as the record of how the tree was
 made fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift this
 plan series has documented five times.
+
+**Round 1 closed**: §1.1, §1.4, §1.6, §1.7, §1.8, §1.3 (PLW0717 89 → 81),
+§1.5 + §2.2, §2.1, §2.3 (decided, not moved), §3.1, §3.2, §3.3. Four new
+items were found by doing them and are in §10. The short version: the cheap
+tier was as full of holes as the plan claimed, and **three of the four new
+items are claims that had been silently wrong since a commit three weeks
+old** — the pattern this series exists to end keeps reproducing itself.
 
 Continues `TODO34` (test velocity, correctness hardening, the presentation
 layer). Where `TODO34` removed the defects, this one closes what the removal
@@ -322,3 +329,197 @@ pattern is worth more than any single fix in it.
 - **A closure that removes behaviour needs a behavioural test.** A
   seed-folding performance fix that changed results was caught by a golden-file
   regression test, not by the benchmark that motivated it.
+
+
+---
+
+## 10. Round 1 — what closed, and what closing it found
+
+Closed at `31be91a0`. The tables above stay as written: they are the audit,
+and an audit edited after the fact is a press release. This section is the
+receipt.
+
+### Closed
+
+| Item | What landed |
+|---|---|
+| §1.1 | `run_tiered_suite.sh` derives its tiers from `tests/` instead of a hand list, resolves the repo root from `$0`, and `tests/property/test_tier_coverage_lock.py` keeps the derivation honest — including the population assertion and a recursive (not top-level) test-file check, because `algorithms` and `primitives` hold subpackage suites |
+| §1.3 | PLW0717 **89 → 81**, no new suppressions. `knowledge/causal.py` 4 → 0, `hyperopt/experiment.py` 3 → 0. Ratchet baseline 353 → 334; pyright on `causal.py` 46 → 35 |
+| §1.4 | `rich` moved to a new `console` extra (and into `full`); dev carries it. The layering lock still passes |
+| §1.5 + §2.2 | `env_sha256` added to the run-record emitter and **read** by the provenance lock against the current environment. All 29 records re-emitted in the one slow pass, manifest re-pinned |
+| §1.6 | the pre-commit hook is `uv run python -m pytest` |
+| §1.7 | both ruler-table defaults point at `campaign._ruler_table_path()`; `test_script_path_defaults_lock.py` locks the *class* (a default shadowing a tracked file), scoped to shadowing precisely so that `results/foo` is not flagged |
+| §1.8 | spread measured from the committed record's own per-seed values — see below. **SEEDS stays 3** |
+| §2.1 | cost table re-baselined — see below |
+| §2.3 | decided: in-tree, no cold store; the 42-file move is **rejected** — see below |
+| §3.1 | decision written down: `local_learning/settling.py`'s docstring now says its duplication of the ontology settle contract is deliberate and why the driver's `SettleIterate` box would not transfer |
+| §3.2 | `_settle_steps_used` stays the total; `_settle_horizon` (a property over the config, so `InstantaneousDynamics` reports 1 and not a stale 0) and `_settle_layers` are reported beside it, campaign records carry them, and the driver lock asserts the bound the two imply |
+| §3.3 | the three `getattr` accessors are deleted; `SettableState` guarantees the fields, pyright on `_dynamics.py` is 0 |
+
+Plus, found by doing the above: **`cpu_only` was a declared marker read by
+nothing**, and the `device` fixture ignored it. It now forces CPU — see §10.2.
+
+### 10.1 §1.8's measurement, and the decision it forces
+
+Per-seed spread, read off the committed D18 record rather than a fresh run:
+
+| arm | mean | seeds | spread | rel |
+|---|---|---|---|---|
+| `epc_w32_muon` | 45.25 | 46.21 / 44.31 / 45.24 | 1.90 | 4.2% |
+| `epc_w32_unit_rms` | 42.48 | 41.67 / 41.91 / 43.85 | 2.18 | 5.1% |
+| `epc_w64_muon` | 37.14 | 35.89 / 36.58 / 38.94 | 3.05 | 8.2% |
+| `epc_w64_unit_rms` | 33.80 | 36.49 / 34.25 / 30.67 | 5.82 | **17.2%** |
+
+**The margin is inside the noise.** UnitRMS beats Muon by 9% at w64 (33.80 vs
+37.14) against a 17.2% per-seed spread on the UnitRMS arm itself, and by 6% at
+w32 against 5.1%. So `SEEDS 3 → 2` — the one lever `TODO34` identified — would
+make the claim *worse*, not cheaper: the band does not shrink with fewer
+samples, and the point estimate is unchanged. The lever is rejected on the
+measurement, and `SEEDS` stays 3.
+
+What the demo now asserts alongside the verdict is the band, not a stronger
+verdict: `max(seeds) - min(seeds) < 0.25 * muon_mean`, so if the UnitRMS arm's
+own spread grows past a quarter of the comparison it fails as *no longer the
+same measurement* rather than silently reporting a margin that means nothing.
+The honest statement of D18's H4 re-pin is "UnitRMS trains ePC at both widths
+and does not exceed Muon in 3 seeds", not "UnitRMS beats Muon".
+
+### 10.2 Three claims that had been wrong for weeks
+
+This is the finding of the round, and it is the §0 rule recurring in a new
+shape: the *test* was fine, the *claim it guarded* had been retired by a
+different commit and nobody carried the guard with it.
+
+- **`test_demo_credit_channel_map`'s ratchets were stale**, and had been
+  failing for every `slow` run since `2927ef33` — nineteen days. Two of its
+  three record assertions guarded claims their owning demos had already
+  retired: D16's claim was *inverted* (UnitRMS moved from a mislabelled
+  euclid-grid lr to its per-element-displacement lr, where it now learns on
+  every geometry — the old assertion demanded the "crutch stays dead"), and
+  D14's absolute 0.8 floor predates both the OrthoAdam cells at `77f689ce`
+  and the re-emit below. Both legs now assert the owning demo's current
+  claim. **A demo test asserting on *other demos' committed records* is a
+  cross-claim lock with no invalidation path** — the single sharpest new
+  defect class this round produced.
+- **`pc_alm`'s manifest pin was stale**, deliberately deferred by `3319f232`
+  ("needs a slow re-pin") and never done. The round-close gallery lock has
+  been red on that figure since.
+- **`D14`'s `mupc × Adam` cell moved 0.828 → 0.65**, which is the settle-horizon
+  fix finally reaching a record that had not been re-emitted since before it.
+  D14's own claims are relative and both still hold, so the claim survived the
+  numerics moving under it.
+
+All three were invisible because the demos that carry them are `slow`-marked,
+and §1.8's own text says the default profile no longer verifies the manifest
+pin they exist to verify. That is now measured, not suspected.
+
+### 10.3 The demo suite is not bit-reproducible under `-n 4` — NEW, open
+
+`d16` emitted under the tiered runner's `-n 4` differed from a single-process
+emit of the *same commit* on **15 of 36 arms**, by up to 2e-2 (e.g.
+`graph_grid8x4/muon` 0.4335 → 0.4229). The demo seeds every arm, so this is
+not RNG: it is thread-count-dependent float reduction.
+
+**It did not reproduce on the second `-n 4` run** — the re-verification pass
+at the end of this round left every record's data untouched. So what is
+established is weaker than "the suite is not reproducible" and stronger than
+"nothing is wrong": *some* runs produce different data for the same commit and
+seed, and nothing in the tree can tell which. The re-pinned manifest is built
+from single-process emits for that reason, and the second run agreeing with it
+is luck, not a guarantee.
+
+This is the gallery lock's own docstring's second branch — "or the demo became
+nondeterministic (a bug — fix it)" — arriving as an open question rather than a
+surprise at the next pin. It is a real project (pin torch's thread count in
+the emitter, or record it in the provenance so a mismatch is diagnosable) and
+it is not taken here.
+
+### 10.4 `test_grpc_seam_subprocess` poisons the CUDA context — NEW, open
+
+`test_various_geometries` is marked `cpu_only` and passed to `cuda` anyway,
+because the marker was declared and read by nothing. Fixing the `device`
+fixture (§1 extra) is necessary and **not sufficient**: the six tests pass in
+isolation and fail after the rest of their file, in every arrangement tried,
+with a sticky `cudaErrorAssert` reported 76 times downstream. Something in
+that file's worker poisons the context and no single test reproduces it.
+
+The scale is now measured: in the verification pass **all 37 slow-tier
+failures are one poisoned CUDA context**. `test_various_geometries` is the
+first casualty in its worker, and every later failure — 21 in
+`test_ontology_parity`, 8 in `test_continual_learning`, 2 in
+`test_mnist_smoke`, `test_quickstart`, and
+`test_evaluate_z3_persists_gate_histories_all_arms` — is an
+`AcceleratorError` raised by a perfectly innocent test that never touched
+TileGeometry. The poison is upstream, in a test that *passes*.
+
+Pre-existing (fails identically at `196eb4cd`), not caused by anything in this
+round, and left open rather than half-fixed: the honest state is that a
+single sticky CUDA assert costs the slow tier 37 of its tests, and the file
+that reports it cannot be trusted to report its own failures — it reports
+other tests' failures instead. The cheap half of a real fix is to run the
+slow tier with the GPU disabled, which would trade 37 false failures for
+slower runs; that is a decision for the next round, not a silent default.
+
+### 10.5 §2.1's re-baselined cost table (2026-09-26, `--with-slow`)
+
+Measured on the first pass; the two rows marked "re-verified" are the
+confirmation run after the fixes.
+
+| tier | walltime | result |
+|---|---|---|
+| acceleration | 17s | 139 passed, 71 skipped |
+| algorithms | 13s | 258 passed |
+| ceec | 7s | 125 passed |
+| graph | 10s | 55 passed |
+| integration | 193s → **285s** | 324 passed, 12 skipped, 5 xfailed, 1 xpassed. Re-verified green; the +92s is the `cpu_only` fix, which takes six geometry tests off the GPU — paid deliberately, since the alternative was 37 false failures |
+| platform | 14s | 17 passed |
+| primitives | 17s | 419 passed |
+| property | 77s | 1700 passed, 12 skipped, 25 xfailed, 1 xpassed (14 failed on the first pass = the two-key records, since re-emitted) |
+| unit | 37s | 844 passed, 36 skipped |
+| **fast total** | **~385s** | |
+| slow | 969s → 876s | 34 slow tests. First pass: 39 failed (F4's stale ratchets + the CUDA cascade). Re-verified: **37 failed, all of them one poisoned CUDA context** — see §10.4 |
+
+Fast lane (`testpaths`, `-n 4`): **96s, 3360 passed, 119 skipped, 26 xfailed,
+1 xpassed**. The suite is heavier than the plan's 93s/3323 figure and lighter
+than the pre-fix numbers, which is the expected direction: correctness fixes
+that make settles run their full budget buy walltime.
+
+### 10.6 §2.3, decided
+
+**`docs/archive/` is in-tree, dated directories, no cold store.** One
+archival pass has already happened (`0c8e5a2a`); the rule is now written
+rather than implied.
+
+**The 42-file `TODO*.md` move is rejected for this round.** The proposal's own
+question is "does a reader know which one is live", and the answer is already
+yes: exactly one file's Status line says ACTIVE, the series is sequential, and
+`TODO35.md` says it owns every open item. The move costs **128 cross-references**
+— including one in library code (`ontology/dynamics/_settle_driver.py`) and two
+in `docs/platform/` — for a tidiness gain the Status line already delivers.
+Re-open it if the root ever holds two ACTIVE plans; that is the moment the
+answer changes.
+
+### 10.7 Still open from the original tables
+
+- **§1.2** (pyright fan-in) — untouched. The measurement the plan asks for
+  first is still the first move: 2,079 findings repo-wide, ranking unmeasured.
+- **§1.9** — the two unwritten test-quality rules. Recommendation unchanged:
+  leave them unwritten and record that as the decision. But note §10.3: the
+  determinism rule this section declined to write is the one that would have
+  caught the xdist drift.
+- **§4** (presentation layer) — still unstarted, still without a consumer.
+- **§5, §6** — unchanged.
+
+### 10.8 New items, for whoever takes the next round
+
+1. **Make the demo suite bit-reproducible** (§10.3). Until then, a manifest
+   pin is only valid for the sharding it was emitted under, and the round-close
+   gate cannot tell the difference from real drift.
+2. **Stop asserting on other demos' records** (§10.2). Either each demo owns
+   its own claims in its own test, or a record carries a claim id and a lock
+   checks claim ↔ assertion. Nineteen days of red was the cost of the first
+   option being skipped.
+3. **Find what poisons CUDA in `test_grpc_seam_subprocess`** (§10.4).
+4. **Re-baseline the plan's own numbers.** §7's fast-lane figure and §2.5's
+   "34 slow tests" are now measured (§10.5); §5.4's 2,079 pyright findings
+   and §1.3's lint tallies in the tables above are the ones that went stale.
