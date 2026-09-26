@@ -1,4 +1,12 @@
-"""Shared test fixtures and configuration."""
+"""Shared test fixtures and configuration.
+
+Determinism: numeric assertions must seed locally
+(``torch.manual_seed`` or an explicit ``torch.Generator``), because the
+suite runs under ``-n 4`` where each worker holds its own global RNG
+stream, so an unseeded failure cannot be reproduced from its inputs.
+``tests/property/test_rng_seed_lock.py`` ratchets this; shape-only tests
+are exempt because a draw's values cannot change its shape.
+"""
 
 import os
 from typing import Any, cast

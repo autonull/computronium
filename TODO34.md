@@ -1,10 +1,11 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
-§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`) complete; §1.1's floor landed
-with its curve blocked on §2.8. **§5.1 (the settle driver) complete** — the
-flagship item of Phase F, and the only untouched high-leverage item left in
-§5. §1.2–§1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4, §5.3–§5.4 open.
+§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5 complete; §1.1's floor
+landed with its curve blocked on §2.8. **§5.1 (the settle driver) complete** —
+the flagship item of Phase F, and the only untouched high-leverage item left in
+§5. §1.2–§1.4, §1.6, §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4, §5.3–§5.4 open.
+(§1.4's substance landed in `fb6bb0f7`, which also found §1.2b.)
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -18,6 +19,17 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 7 — §1.1's curve and §1.5's ratchet
+
+The machine was quiet for the first time in three passes, so the one
+measurement §2.8 had blocked was taken (§1.1's table above), and the
+cheapest no-measurement item in Phase C was landed behind it (§1.5's
+ratchet). Both are recorded in their own sections; the transferable
+result is in Notes: **a defect fixed without a measurement is a defect
+whose threshold was guessed**, and the guess here would have been the
+0.78 floor the previous pass shipped — which the curve shows is *inside*
+the band, exactly as §1.1's own diagnosis said it was.
 
 ### Pass 6 — §5.1 the settle driver (flagship)
 
@@ -215,28 +227,39 @@ the slowest tier; both are now `slow` (§1.2, §1.3), leaving integration at
 ≈256s of real work.
 
 
-### 1.1 Fix the `ntm_local` oscillation BEFORE optimizing it — P0 — **partially landed**
+### 1.1 Fix the `ntm_local` oscillation BEFORE optimizing it — P0 — **DONE**
 
-`test_demo_ntm_local.py:12` documents the metric as *"oscillates 0.79–0.87
+`test_demo_ntm_local.py:12` documented the metric as *"oscillates 0.79–0.87
 (assert floor 0.80)"*. An assertion floor set **inside** an observed
 oscillation band is a flake waiting for a busy machine: the same class of
 defect as 0.4 and 0.8 above.
 
-- **Done**: the floor is now `0.78`, below the band's observed minimum, with
-  the band recorded in the docstring and the reasoning inline. This part needs
-  no measurement — the band is in the docstring already, and a threshold
-  *inside* a measured range is wrong regardless of what the range is.
-- **Not done**: the monotone-summary rewrite. `_run_local`/`_run_bptt` already
-  evaluate fresh-batch copy accuracy at 5 checkpoints and return `best_fg`,
-  which the demo test discards in favour of a final-iterate recompute — so the
-  curve is *already being computed* and thrown away. Returning the curve
-  instead of `best_fg` and asserting on the last-two-checkpoint mean is a
-  small, clean change, but choosing its floor needs a measurement.
-- **Blocked on measurement.** The bptt arm was measured (600/1200/1800/2400/
-  3000 → 0.781/0.896/0.906/0.969/0.979); the local3 arm did not finish. See
-  §2.7. The plan's instruction to "verify by running it 5× on a loaded
-  machine" is not currently affordable.
-- Effort: ~30 min once a machine is available.
+**The curve is now measured (200-step eval cadence, seed 0,
+`logs/todo34_s11_{bptt,local3}.log`, 83s / 93s per arm).**
+
+| step | 200 | 600 | 1000 | 1400 | 1600 | 1800 | 2000 | 2200 | 2400 | 2600 | 2800 | 3000 |
+|------|-----|-----|------|------|------|------|------|------|------|------|------|------|
+| bptt | 0.729 | 0.781 | 0.833 | 0.938 | 0.917 | 0.906 | 0.958 | 0.969 | 0.969 | 0.990 | 0.979 | 0.979 |
+| local3 | 0.500 | 0.521 | 0.573 | 0.812 | 0.865 | 0.844 | 0.729 | 0.708 | 0.750 | 0.854 | **0.594** | 0.833 |
+
+- **The tail-3 mean, not a checkpoint, is the claim.** local3's last three
+  200-step checkpoints are 0.854/0.594/0.833 — a floor on any single one of
+  them is a coin flip. At the test's 600-step cadence the tail-3 means are
+  bptt **0.918** and local3 **0.809**; the floors are 0.88 and 0.72, below
+  both. The runners now return the whole curve (`_FreshCurve` in
+  `scripts/probes/w8_ntm_copy.py`, `--eval-every` on the probe CLI), and the
+  test asserts the tail mean plus the arm ordering.
+- **`STEPS` is not a free lever, and this measurement says so.** local3
+  reaches its plateau at ~1600, but bptt is 0.906 at 1800 and 0.969 at 2400,
+  so the 0.88 bptt floor pins `STEPS >= 2400`. Cutting 3000 would be a
+  re-pin that buys ~40s, not a speedup — the same conclusion §1.2 reached
+  for the ladder. `STEPS` stays.
+- **The pinned figure did not move.** The record and its `figure_spec` keep
+  the final-iterate values (0.979 / 0.833, byte-identical to before), so
+  `manifest.json` is untouched and no re-pin is owed. The cost is recorded
+  as a known gap: the *figure* shows a noisier statistic than the *test*
+  claims. Closing it means emitting the tail mean in the record, which
+  re-pins the manifest and needs one quiet 200s demo run.
 
 ### 1.2 `test_demo_update_ladder` (183s) — P1 — **demoted to `slow`**
 
@@ -303,18 +326,39 @@ here instead; promote it to `AGENTS.md` §Testing only if it stays true.
   landed; the integration tier is ~528s of demo tests. Run it at round close.
 - Effort: ~15 min, most of it deciding what *not* to add.
 
-### 1.5 Determinism hygiene so timings mean something — P1
+### 1.5 Determinism hygiene so timings mean something — P1 — **ratchet landed**
 
 Two of the three flakes found (0.4, 0.8) surfaced only because settle work
 changed and shifted the global RNG stream. Under `-n 4` each worker has its own
 stream, so an unseeded test is not merely flaky, it is *unreproducible*.
 
-- `tests/conftest.py` already sets `OMP_NUM_THREADS=1`; add `torch.use_deterministic_algorithms`
-  guidance or an opt-in marker, and document that numeric assertions in tests
-  must seed locally.
-- Add a lint/convention check (see §2.5) banning bare `torch.randn` in tests
-  that assert on values.
-- Effort: ~1h.
+- `tests/conftest.py`'s module docstring now states the rule (numeric
+  assertions must seed locally; shape-only asserts are exempt because a
+  draw's values cannot change its shape) and points at the lock.
+- `tests/property/test_rng_seed_lock.py` ratchets it. A test is flagged only
+  when it calls a global `torch.<rand*|randint|randperm|normal>` directly,
+  nothing in the function or module seeds a generator, **and** it asserts on a
+  number (ordered comparison, `allclose`, `isclose`, `approx`). Measured
+  population: **334 unseeded tests, 116 flagged, across 42 files** — the
+  shape-only exemption is the difference between a useful rule and one that
+  gets switched off (§2.5's lesson).
+- It is a **ratchet, not a ban**: `_BASELINE` records what exists, new
+  entries fail, a shrunken baseline fails as stale, and a
+  `test_baseline_is_non_trivial` guard asserts the scan still sees ≥30
+  files / ≥100 tests — §0.6's lesson applied forward.
+- **The probe-the-probe earned its keep immediately.** The first version
+  detected module-level seeding only for bare `ast.Call` statements, missing
+  that `torch.manual_seed(0)` at module scope is an `ast.Expr`. The lock
+  would have flagged seeded modules as violations. Caught by a parametrised
+  case, not by reading.
+- **Not done**: `torch.use_deterministic_algorithms`. It is not opt-in here —
+  it is a global switch, and turning it on repo-wide will raise on any op
+  without a deterministic kernel, which is a different (and larger)
+  investigation than a ratchet. No numeric assertion in the suite needs it;
+  the seeding rule is the part that pays.
+- Remaining: seeding the 116. That is mechanical and safe to delegate in
+  batches — each is one `torch.manual_seed(0)` and a baseline-line delete.
+- Effort: ~1h, of which the ratchet is done.
 
 ### 1.6 Re-baseline after the first real optimization — P2
 
@@ -753,27 +797,37 @@ annotation-only), which makes it the cheapest remaining item in the section.
 
 ## Execution Order
 
-Phase A is **done except §1.1's measurement**, which is blocked by §2.8.
+Phase A is **done**. Phase C is half done (1.2, 1.3 landed; 1.5's ratchet
+landed, its 116 seeds open; 1.6 still wants a re-measurement).
 Phase F is **half done**: 5.1 and 5.2 landed, 5.3 and 5.4 remain.
 
 | Phase | Items | Effort | Gate | State |
 |-------|-------|--------|------|-------|
-| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | 2.1 **done**; 1.4 **done** (1.2b found: the runner skipped every slow test); 1.1 floor **done**, curve open |
+| **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
-| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | open — **re-measurement needed, see §2.8** |
+| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
 | **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2 **done**; 5.3, 5.4 open |
 
-**Recommended next step** (cheapest, unblocked, high value): **§1.1's
-curve**, now that the machine is quiet and the test that needs it is behind
-`slow` rather than in everyone's critical path. §2.8's blocker was load, not
-difficulty: a 3000-step local3 arm costs ~2 min alone. Measure it, cut
-`STEPS` to the knee, re-pin — the reduction the plan promised before the
-suite started growing again.
+**Recommended next step** (cheapest, unblocked, high value): **§5.3** — the
+state-algebra decision. It is annotation-first and needs no measurement, and
+§1.1's lesson says a decision written down before the code is the cheap part.
+§5.4 follows it.
 
-Phase C's second-cheapest item is **§1.5** (determinism hygiene), which is
-pure `tests/conftest.py` plus a ratchet and needs no measurement at all.
+**A hard constraint discovered in this pass, and it is a process rule, not a
+plan item: individual commands over ~15s are not affordable on this box.**
+Two demo probes (~85s each) were affordable exactly once, and the 200s demo
+run was killed three times — twice by the harness and once by OOM (§2.8).
+Everything measurable inside 15s is still cheap and safe: the fast lane
+excepted, use targeted `-k` runs and treat the tiered suite as a
+round-close, background-and-forget gate. **Design changes should therefore
+prefer a *pre-measured* threshold from a probe log over a re-run to confirm
+it** — §1.1's floors came from the 200-step probe curve, so the demo itself
+never had to be re-executed to land them.
+
+Phase C's remaining item is §1.6 (re-baseline the cost table), which is
+arithmetic on `--durations=20` plus one slow pass, not a design question.
 
 The standing rule from §0 held: 5.1 was done against a green suite, not to
 rescue a flaky one, and the driver kept the per-class science rather than
@@ -846,6 +900,18 @@ move, and say so in the commit body.
   behind a threshold (learning curves, cost tables, oscillation bands) belong in
   docstrings, or the next person re-inflates them blind. Every reduction in
   §0.9 and §1 carries its measurement for exactly that reason.
-- The web-UI removal also left a stale language-server index pointing at deleted
-  `computronium/ui/**` files; a clean LSP restart clears it. Nothing in the tree
-  references them.
+- **A probe-the-probe is cheaper than the fix it guards.** The RNG lock's
+  module-seeding detector was wrong on its first version (bare `ast.Call`
+  vs `ast.Expr`) and the parametrised classifier test caught it in 3s. The
+  same shape as §0.6, at 1/100th the cost, because the scan is pure AST over
+  a temp file — no fixture, no GPU, no settle loop.
+- **A threshold fixed without a measurement is a guess wearing a
+  measurement's clothes.** §1.1 shipped a 0.78 floor last pass, justified
+  by reasoning from a docstring. The curve shows local3 at 0.594 two
+  checkpoints before the end: the floor was inside the band the plan had
+  already diagnosed. The reasoning was sound and the number was still
+  wrong, because only a measurement knows where a band ends.
+- **The web-UI removal also left a stale language-server index** pointing at
+  `computronium/ui/**` files that no longer exist (`git ls-files
+  computronium/ui` is empty); it still reports `nicegui` import errors from
+  them. A clean LSP restart clears it. Nothing in the tree references them.

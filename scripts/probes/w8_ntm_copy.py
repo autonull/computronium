@@ -218,14 +218,39 @@ def _eval_perm(seed: int = 999, L: int = SEQ_LEN) -> Tensor | None:
     )
 
 
-def _run_bptt(steps: int, lr: float, seed: int = 0):
+class _FreshCurve:
+    """Fresh-batch copy accuracy sampled on a fixed step cadence.
+
+    The curve is the measured claim (TODO34 §1.1): a max-over-checkpoints
+    hides the oscillation a monotone tail exposes, and the gallery demo needs
+    the tail, not the peak.
+    """
+
+    def __init__(self, label: str, every: int):
+        self._label = label
+        self._every = max(every, 1)
+        self.acc: list[float] = []
+
+    def __call__(self, step: int, loss, controller, heads) -> None:
+        if step % self._every:
+            return
+        fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
+        self.acc.append(fg)
+        print(
+            f"{self._label} step {step}: loss {float(loss.detach()):.4f} "
+            f"copy-acc(fresh) {fg:.3f}",
+            flush=True,
+        )
+
+
+def _run_bptt(steps: int, lr: float, seed: int = 0, eval_every: int | None = None):
     torch.manual_seed(seed)
     controller = nn.LSTM(1 + MEM_WIDTH, HIDDEN, batch_first=True)
     heads = _Heads()
     params = list(controller.parameters()) + list(heads.parameters())
     opt = torch.optim.Adam(params, lr=lr)
     gen = torch.Generator().manual_seed(7)
-    best_fg = 0.0
+    curve = _FreshCurve("bptt", eval_every or steps // 5)
     for step in range(steps):
         bits = _batch(gen)
         perm = _draw_perm(bits.size(0), bits.size(1), gen)
@@ -237,15 +262,8 @@ def _run_bptt(steps: int, lr: float, seed: int = 0):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(params, 5.0)
         opt.step()
-        if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
-            best_fg = max(best_fg, fg)
-            print(
-                f"bptt step {step + 1}: loss {float(loss.detach()):.4f} "
-                f"copy-acc(fresh) {fg:.3f}",
-                flush=True,
-            )
-    return controller, heads, best_fg
+        curve(step + 1, loss, controller, heads)
+    return controller, heads, curve.acc
 
 
 def _greedy_copy_acc(controller, heads, bits: Tensor, perm: Tensor | None = None):
@@ -523,6 +541,7 @@ def _run_local(
     credit_controller: bool = False,
     writer_weight: float = 1.0,
     credit_read: bool = False,
+    eval_every: int | None = None,
 ):
     torch.manual_seed(seed)
     controller = nn.LSTM(1 + MEM_WIDTH, HIDDEN, batch_first=True)
@@ -531,7 +550,7 @@ def _run_local(
     opt = torch.optim.Adam(params, lr=lr)
     gen = torch.Generator().manual_seed(7)
     code = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    best_fg = 0.0
+    curve = _FreshCurve(label, eval_every or steps // 5)
     for step in range(steps):
         bits = _batch(gen)
         perm = _draw_perm(bits.size(0), bits.size(1), gen)
@@ -550,15 +569,8 @@ def _run_local(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(params, 5.0)
         opt.step()
-        if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
-            best_fg = max(best_fg, fg)
-            print(
-                f"{label} step {step + 1}: loss {float(loss.detach()):.4f} "
-                f"copy-acc(fresh) {fg:.3f}",
-                flush=True,
-            )
-    return controller, heads, best_fg
+        curve(step + 1, loss, controller, heads)
+    return controller, heads, curve.acc
 
 
 class _Muon(torch.optim.Optimizer):
@@ -588,7 +600,9 @@ class _Muon(torch.optim.Optimizer):
                     p.add_(g, alpha=-lr)
 
 
-def _run_local_muon(steps: int, lr: float, seed: int = 0):
+def _run_local_muon(
+    steps: int, lr: float, seed: int = 0, eval_every: int | None = None
+):
     torch.manual_seed(seed)
     controller = nn.LSTM(1 + MEM_WIDTH, HIDDEN, batch_first=True)
     heads = _Heads()
@@ -596,7 +610,7 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
     opt = _Muon(params, lr)
     gen = torch.Generator().manual_seed(7)
     code = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
-    best_fg = 0.0
+    curve = _FreshCurve("local-muon", eval_every or steps // 5)
     for step in range(steps):
         bits = _batch(gen)
         perm = _draw_perm(bits.size(0), bits.size(1), gen)
@@ -604,15 +618,8 @@ def _run_local_muon(steps: int, lr: float, seed: int = 0):
         opt.zero_grad()
         loss.backward()
         opt.step()
-        if (step + 1) % max(steps // 5, 1) == 0:
-            fg = _greedy_copy_acc(controller, heads, _eval_batch(), _eval_perm())
-            best_fg = max(best_fg, fg)
-            print(
-                f"local-muon step {step + 1}: loss {float(loss.detach()):.4f} "
-                f"copy-acc(fresh) {fg:.3f}",
-                flush=True,
-            )
-    return controller, heads, best_fg
+        curve(step + 1, loss, controller, heads)
+    return controller, heads, curve.acc
 
 
 def main() -> int:  # noqa: PLR0914 - probe harness
@@ -623,6 +630,7 @@ def main() -> int:  # noqa: PLR0914 - probe harness
     steps = int(opt.get("steps", 3000))
     seed = int(opt.get("seed", 0))
     lr = float(opt.get("lr", 1e-3))
+    every = int(opt["eval-every"]) if "eval-every" in opt else None
     # Q4 slot-identity fix: mem_slots <= mem_width gives exact one-hot
     # slot embeddings (default 8 = the validated r6 config).
     global MEM_WIDTH, REPEATS  # noqa: PLW0603 - probe CLI overrides module constants
@@ -636,10 +644,10 @@ def main() -> int:  # noqa: PLR0914 - probe harness
         f"width {MEM_WIDTH} repeats {REPEATS} task {TASK} arms {arms}"
     )
     run = {
-        "bptt": _run_bptt,
-        "local": _run_local,
+        "bptt": lambda steps, lr, seed: _run_bptt(steps, lr, seed, eval_every=every),
+        "local": lambda steps, lr, seed: _run_local(steps, lr, seed, eval_every=every),
         "local2": lambda steps, lr, seed: _run_local(
-            steps, lr, seed, writer="expected", label="local2"
+            steps, lr, seed, writer="expected", label="local2", eval_every=every
         ),
         "local3": lambda steps, lr, seed: _run_local(
             steps,
@@ -648,8 +656,11 @@ def main() -> int:  # noqa: PLR0914 - probe harness
             writer="expected",
             label="local3",
             credit_controller=True,
+            eval_every=every,
         ),
-        "local-muon": _run_local_muon,
+        "local-muon": lambda steps, lr, seed: _run_local_muon(
+            steps, lr, seed, eval_every=every
+        ),
         # §5.4 combined levers: (a) writer-loss re-weight x3 + (b) live-hc
         # value-channel supervision at the cued-read step.
         "local4": lambda steps, lr, seed: _run_local(
@@ -661,6 +672,7 @@ def main() -> int:  # noqa: PLR0914 - probe harness
             credit_controller=True,
             writer_weight=3.0,
             credit_read=True,
+            eval_every=every,
         ),
     }
     trained = None
