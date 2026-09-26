@@ -303,7 +303,7 @@ existing schema with `device: "cuda"` and a field that names the technology.
   `test_all_implementations.py`) and fails when rows exist but a rung lost
   coverage. **The rows are therefore local evidence, not committed artefacts** —
   the one thing §0.3 item 5 wants that this repo's `.gitignore` does not yet
-  allow. See §8.8.
+  allow. See §8.9.
 - **Done when** `artifacts/benchmarks/` has GPU rows for all 9, each beside its
   reference number, and §5 records the result honestly — including any site
   where triton is *slower*, which is a result and not a failure. **Met**; see §5.
@@ -578,7 +578,7 @@ place that must not make one.
   export map, and `NATIVE_MODEL_NAMES` in the sklearn/lightning layers — and two
   names for one factory (`pepita_mlp` / `lemma_mlp`) are exactly the kind of
   duplication §0.2 condemns. Collapsing them is a rename across the sklearn,
-  lightning, serialization and autoscientist call sites; it is §8.15, not a
+  lightning, serialization and autoscientist call sites; it is §8.8, not a
   side-effect of adding a predicate.
 
 ### 4.9 Bring the rule spaces back in line with the arms
