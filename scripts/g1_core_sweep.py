@@ -1,7 +1,7 @@
 """G1 core sweep (TODO27 Phase 3) — background AutoScientist campaign.
 
 Fresh KB (no prior-operator seeding beyond quarantine tags), ruler-eligible
-tasks only (``artifacts/ruler_table.json``), CEEC-governed execution, the
+tasks only (the packaged ruler table), CEEC-governed execution, the
 coverage proposer driving every iteration, and the surrogate retrained each
 iteration with a predicted-vs-measured reliability log.
 
@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from computronium.autoscientist.campaign import AutoScientistCampaign
+from computronium.autoscientist.campaign import AutoScientistCampaign, _ruler_table_path
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.knowledge import KnowledgeBase
 from computronium.utils import seed_everything
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("g1_sweep")
 
-RULER_TABLE = Path("artifacts/ruler_table.json")
+RULER_TABLE = _ruler_table_path()
 
 
 def ruler_eligible_tasks() -> list[str]:

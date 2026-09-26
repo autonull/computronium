@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from computronium.autoscientist.campaign import _ruler_table_path
 from computronium.visualization.atlas import main
 
 
@@ -20,7 +21,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
     parser.add_argument("--task", default="mnist")
     parser.add_argument(
-        "--ruler-table", type=Path, default=Path("artifacts/ruler_table.json")
+        "--ruler-table", type=Path, default=_ruler_table_path()
     )
     parser.add_argument(
         "--png",
