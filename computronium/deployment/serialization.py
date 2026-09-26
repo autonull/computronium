@@ -33,14 +33,6 @@ logger = get_logger()
 
 
 @dataclass(frozen=True, slots=True)
-class InferenceRequest:
-    """Request body for deployment prediction endpoint."""
-
-    data: list[list[float]] | list[float]
-    shape: list[int] | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class ModelInfo:
     """Metadata about an exported model."""
 

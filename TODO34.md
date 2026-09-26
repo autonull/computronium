@@ -1,11 +1,11 @@
 # TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
-§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3, and
-now **§5.4's dispatch half** and **§5.8** complete. §1.2–§1.4, §1.6,
+§2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3,
+**§5.4's dispatch half**, **§5.8** and **§3.1** complete. §1.2–§1.4, §1.6,
 §2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
 §5.7, §5.9. **No unblocked work item is left in §5** — the rest are
-decisions; the cheapest remaining *work* is §1.6 or §3.1. (Pass 9 fixed a
+decisions; the cheapest remaining *work* is §1.6 (Pass 11 took §3.1). (Pass 9 fixed a
 live dispatch gap — `update_from_config` could not build `natural_gradient` —
 and a vacuous registry test; Pass 10 removed every credit-layer
 `type: ignore` and locked the `TYPE_CHECKING`-import hazard.) (§1.4's substance landed in `fb6bb0f7`, which also
@@ -23,6 +23,31 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 11 — §3.1 the shadowed module, and a name that survived the split
+
+`computronium/deployment.py` and `computronium/deployment/` both existed. The
+package wins import resolution unconditionally — verified, not assumed, via
+`importlib.util.find_spec` — so the 1,633-line module was **unreachable from
+every import statement in the tree** while reading as a live part of the
+package.
+
+The decision the plan deferred ("fold the module into the package or rename it")
+did not need making: an AST sweep of the module's 29 top-level definitions
+against the package namespace resolved **27 of 29**, and the two exceptions are
+both non-defects. `_AppState` is private and independently reimplemented at
+`deployment/serialization.py:930`. `InferenceRequest` exists at
+`deployment/serialization.py:36` with **zero callers repo-wide** — dead in both
+copies, deleted. The module had been superseded by the split and then left
+behind; nothing imported it, nothing tested it, nothing noticed.
+
+Lock: `tests/property/test_module_shadowing_lock.py`, mutation-checked by
+dropping an empty `analysis/analysis.py` beside `analysis/` and watching it
+fail. It scans `computronium/` **and** every `packages/*/src/` tree (the
+workspace is a uv workspace, so the hazard is not confined to the main
+package), and carries the scan-population assertion §0.6 and §5.4 both earned.
+
+Fast lane: **3206 passed, 119 skipped, 26 xfailed, 1 xpassed in 99s**.
 
 ### Pass 10 — §5.8 the credit layer, and a NameError class ruff cannot see
 
@@ -689,12 +714,23 @@ correct behaviour, but it is manual and easy to skip.
 
 ## 3. Structure and Maintainability
 
-### 3.1 `computronium/deployment.py` shadows `computronium/deployment/` — P1
+### 3.1 `computronium/deployment.py` shadows `computronium/deployment/` — P1 — **DONE** (Pass 11)
 
-Both exist (3,408 lines total). A module and a package with the same name in
-one parent directory is an import-resolution footgun that no linter in the
-current set flags. Either fold the module into the package or rename it
-(`deployment_service.py`); decide by what the CLI actually imports.
+Both existed (3,408 lines total). **Measured, not assumed**: the package wins
+import resolution unconditionally (`importlib.util.find_spec` resolves to
+`computronium/deployment/__init__.py`), so the module was unreachable from
+every import statement in the tree. An AST sweep of its 29 top-level
+definitions against the package namespace resolved **27 of 29** — the two
+exceptions are `_AppState` (private, and reimplemented inside
+`serialization.py:930`) and `InferenceRequest`, which exists in
+`serialization.py:36` with zero callers in the whole repo. Both the module and
+the dead `InferenceRequest` dataclass are deleted. No caller, in
+`computronium/`, `tests/`, `scripts/`, `packages/` or the CLI, referenced
+anything the module alone provided.
+
+Lock: `tests/property/test_module_shadowing_lock.py` — no `X.py` may coexist
+with `X/` in the same parent directory, with the scan-population assertion
+(§0.6 / §5.4's lesson) so a scan that resolves nothing cannot pass.
 
 ### 3.2 Repository hygiene — P2
 
@@ -1035,7 +1071,7 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **A — determinism** | 1.1, 2.1, 1.4 | ~3h | fast lane green 5× in a row | **done** — 2.1, 1.4, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 lint check | ~3h | `F821` blocking; settle-horizon lock extended to all dynamics | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 `5ad96f85` |
 | **C — velocity** | 1.2, 1.3, 1.5, 1.6 | ~4h | integration tier < 300s, re-baselined cost table | 1.2, 1.3 **done**; 1.5 ratchet **done**; 1.6 open |
-| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | open |
+| **D — structure** | 3.1, 2.3 (mechanical), 2.4 (top 3 modules) | ~1d | repo-wide lint trend down; pyright ratchet active | 3.1 **done** (Pass 11); 2.3, 2.4 open |
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
 
@@ -1044,10 +1080,17 @@ what remains is §5.4's export half, §5.6 and §5.7, and all three are
 *decisions* rather than chores, which is the point at which this plan's
 remaining budget is better spent on the untouched sections: **§1.6**
 (re-baseline the cost table — arithmetic plus one slow pass, no design
-question), **§3.1** (`deployment.py` vs `deployment/`, a real import footgun
-nobody's linter flags), and **§2.3**'s mechanical lint tranche. §5.6/§5.7
+question) and **§2.3**'s mechanical lint tranche. §3.1 is closed (Pass 11).
+§5.6/§5.7
 should be taken by whoever next touches `local_learning/settling.py` or the
 LIF horizon, since both are questions only that code can answer cheaply.
+
+**Pass 11's finding worth carrying forward.** §3.1 was framed as a decision
+(rename or fold) and turned out to be a *measurement* — the module was already
+unreachable, so no design choice existed. Pass 11 also generalises the lock
+across `packages/*/src/`, because a uv workspace means the shadowing hazard
+exists in four package trees, not one, and every tree currently has zero
+violations.
 
 **A hard constraint discovered in this pass, and it is a process rule, not a
 plan item: individual commands over ~15s are not affordable on this box.**
@@ -1179,6 +1222,16 @@ move, and say so in the commit body.
   finding about the credit layer alone: it is the settle defect again, one
   layer down, and the *count* (120 directives repo-wide) is what makes
   §2.4's pyright ratchet worth running before any of it is fixed by hand.
+
+- **An unreachable module is worse than a missing one.** §3.1's
+  `deployment.py` was 1,633 lines of plausible-looking deployment code that
+  no import statement in the tree could reach, because a package of the same
+  name won resolution. It carried no test, so nothing in CI could object, and
+  its `__all__` read as the package's public surface. The duplicated names it
+  had drifted on (a dead `InferenceRequest` in both copies) are the tell: dead
+  code that *compiles and greps* is indistinguishable from live code until
+  something resolves what actually loads. The lock is a filesystem comparison,
+  not a type check, because that is the only question being asked.
 
 - **A threshold fixed without a measurement is a guess wearing a
   measurement's clothes.** §1.1 shipped a 0.78 floor last pass, justified
