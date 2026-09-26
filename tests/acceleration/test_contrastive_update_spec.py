@@ -44,6 +44,7 @@ from computronium.acceleration.contrastive_primitives import (
     contrastive_delta,
     contrastive_hebbian_update,
 )
+from computronium.acceleration.grid import grid_2d
 
 # D_in and D_out are deliberately not multiples of BLOCK (48 and 32 against 16),
 # so a kernel that reads one program id and stores the other leaves part of its
@@ -276,8 +277,6 @@ def _in_kernel_order(
 def _run(rung: Rung, *phase_tensors: torch.Tensor) -> torch.Tensor:
     import importlib
 
-    import triton
-
     kernel = getattr(
         importlib.import_module(f"computronium.acceleration.{rung.module}"), rung.attr
     )
@@ -286,10 +285,7 @@ def _run(rung: Rung, *phase_tensors: torch.Tensor) -> torch.Tensor:
     delta = torch.empty(
         D_OUT, D_IN, device=phase_tensors[0].device, dtype=torch.float32
     )
-    kernel[
-        # Grid is (out, in) to match the store, which is row-major over [D_out, D_in].
-        triton.cdiv(D_OUT, BLOCK), triton.cdiv(D_IN, BLOCK)
-    ](
+    kernel[grid_2d(D_OUT, D_IN, BLOCK, BLOCK)](
         *phase_tensors,
         delta,
         B,

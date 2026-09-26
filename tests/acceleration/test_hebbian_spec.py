@@ -177,10 +177,9 @@ def test_the_references_agree_with_each_other(hebbian_inputs) -> None:
 
 
 def _grid():
-    import triton
+    from computronium.acceleration.grid import grid_2d
 
-    # Row-major over delta's [D_out, D_in] layout: program 0 walks the output axis.
-    return (triton.cdiv(D_OUT, BLOCK), triton.cdiv(D_IN, BLOCK))
+    return grid_2d(D_OUT, D_IN, BLOCK, BLOCK)
 
 
 def _run_hebbian(pre, post, weight, lr, use_oja: bool) -> torch.Tensor:

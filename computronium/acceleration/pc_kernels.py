@@ -267,6 +267,8 @@ try:  # noqa: PLR0915
     import triton.language as tl
     from triton.language.extra import libdevice
 
+    from computronium.acceleration import grid
+
     @triton.jit
     def _pc_prediction_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         mu_ptr,
@@ -419,14 +421,9 @@ try:  # noqa: PLR0915
         transposed order looks plausible and silently writes nothing when
         ``D_in`` is not a multiple of ``BLOCK_IN``.
         """
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc_free = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
         acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
@@ -461,11 +458,7 @@ try:  # noqa: PLR0915
 
         delta = lr * (acc_nudged - acc_free) / beta
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
 
 except ImportError:

@@ -37,6 +37,8 @@ from __future__ import annotations
 import pytest
 import torch
 
+from computronium.acceleration.grid import grid_2d
+
 B, D_IN, D_OUT, BLOCK = 8, 48, 32, 16
 SCALE = 0.5
 
@@ -159,16 +161,13 @@ def test_a_zero_scale_is_a_zero_update(pepita_inputs) -> None:
 
 
 def _run(error, feedback, scale: float) -> torch.Tensor:
-    import triton
 
     from computronium.acceleration.ff_kernels import _pepita_error_modulation_kernel
 
     if _pepita_error_modulation_kernel is False:
         pytest.skip("triton is unavailable, so the PEPITA kernel was never defined")
     delta = torch.empty(D_OUT, D_IN, device=error.device, dtype=torch.float32)
-    _pepita_error_modulation_kernel[
-        triton.cdiv(D_OUT, BLOCK), triton.cdiv(D_IN, BLOCK)
-    ](
+    _pepita_error_modulation_kernel[grid_2d(D_OUT, D_IN, BLOCK, BLOCK)](
         error,
         feedback,
         delta,

@@ -293,6 +293,9 @@ try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 
+    from computronium.acceleration import grid
+    from computronium.acceleration.grid import grid_2d
+
     @triton.jit
     def _fa_feedback_projection_kernel(
         error_ptr,
@@ -360,14 +363,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Fused batched outer product for weight gradients."""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
@@ -385,11 +383,7 @@ try:  # noqa: PLR0915
             acc += post * pre
 
         acc = acc / B  # ruff: ignore[non-augmented-assignment]
-        tl.store(
-            grad_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            acc,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(grad_ptr, acc, D_in, offs_out, offs_in, mask_out, mask_in)
 
     TRITON_IMPORTED_FA = True
 except ImportError:
@@ -509,7 +503,7 @@ def fa_batched_outer_triton(
 
     BLOCK_IN = 64
     BLOCK_OUT = 64
-    grid = (math.ceil(D_in / BLOCK_IN), math.ceil(D_out / BLOCK_OUT))
+    grid = grid_2d(D_out, D_in, BLOCK_OUT, BLOCK_IN)
 
     _fa_batched_outer_kernel[grid](
         pre,

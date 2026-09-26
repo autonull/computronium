@@ -182,9 +182,9 @@ def test_ltp_and_ltd_are_different_quantities(spikes) -> None:
 
 
 def _grid():
-    import triton
+    from computronium.acceleration.grid import grid_2d
 
-    return (triton.cdiv(N_PRE, BLOCK), triton.cdiv(N_POST, BLOCK))
+    return grid_2d(N_POST, N_PRE, BLOCK, BLOCK)
 
 
 def _run_stdp(pre, post, a_plus: float, a_minus: float) -> torch.Tensor:

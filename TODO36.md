@@ -38,8 +38,11 @@ be mechanical (§4.2's flags, §4.5's outer-product fix, §4.5's own three remai
 kernels) each turned out to be hiding live defects — which is the argument for doing
 them in this order rather than later. §4.5 closed with **all 17 kernels compiling**
 and **eleven defects**, of which three were in a *torch* function that had no
-caller and so had never run. §5 holds the measurements; §8 holds the fifteen improvement opportunities
-that measuring produced.
+caller and so had never run. §5 holds the measurements; §8 holds the nineteen
+improvement opportunities that measuring produced; and **§9 holds what the process
+itself cost**, because the plan's own order was right and the way it was executed
+was not optimal — six defect *classes* are now enumerable, and that is a different
+proposition from six defects.
 
 
 ### 0.1 The goal, and the three purposes it serves
@@ -710,6 +713,22 @@ Corrected to the signature's own shapes, with the measurement re-recorded. This 
 §4.2's own warning taken one step further: *a wrong-but-well-typed argument is a
 compile error* — and a wrong-shaped one is not an error at all.
 
+#### The procedure, and the two things missing from it
+
+The rule that worked was §4.5's: *write the torch expression first, as a test*.
+What is now recorded as a **standing addition** (see §9.3):
+
+* **A shape table before the expression.** Inputs, output, and the contraction
+  axis, in three lines. One of the seven specifications had to be *derived* rather
+  than transcribed, and it cost four rewrites — not because the maths was hard but
+  because three records used three different names for the same contraction. The
+  shape table resolves that in one pass and is now part of the procedure.
+* **A scratch probe before the test file.** Run the kernel against a hand
+  expression and print the diff before deciding which of the two is wrong.
+
+And what the class count means for the future: **six defect classes, not eleven
+defects** — §9.1 has the table, and it is a finite audit list.
+
 #### What §4.5 does not do
 
 The seven are specified and verified against the rung below them, which is the
@@ -729,6 +748,9 @@ branch at the one hot site.
 - **Done when** the family appears in §0.3 item 5 with a GPU row, a parity test
   against the rung below it, and a status promoted through the existing ladder
   — not by editing the status by hand.
+- **Deliberately not next** (§9.5): the shared grid helper and the sweep for the
+  six defect classes come first, so §4.6 does not write six copies of a mistake
+  the plan has already decided to delete.
 - **Unblocked by §4.5 (2026-09-26), with one caveat.** Every rung §4.6 has to
   wire is now *specified and parity-clean*: `ff`, `pc`, `hebbian`, `pepita`, `snn`
   and `complex_substrate` all compile and all match the expression written down for
@@ -1076,6 +1098,11 @@ column says `none` rather than guessing.
 - **Optimising the 55 torch kernel modules as a goal in itself.** They are the
   reference the triton rung is verified against; but note §4.1's ranking may
   legitimately send effort there instead, if that is where the walltime is.
+  **This is not a licence to skip them.** §9.4 records the honest gap: those 55
+  modules have never been checked and can hide the same six defect classes §4.5
+  enumerated. An **audit** against that fixed list is a bounded question and is
+  not on this exclusion list; only *optimising* them is. The distinction is drawn
+  here so a later reader does not read this bullet as covering both.
 
 ---
 
@@ -1229,3 +1256,111 @@ scheduled; they are the things measuring the ladder taught us.
     rung below at a real size. §4.1's numbers predate every kernel this session
     touched, so **§4.1's ranking is now stale for the families it covers** and
     should be re-measured before §4.6 promotes anything.
+
+---
+
+## 9. What §4.5 cost, and how the next tranche should be run
+
+Written after §4.5 closed, because the plan's *order* was right and its *execution*
+was not optimal, and the difference is worth more than another kernel. Three
+questions, answered with the measurements rather than with taste: is the defect
+stream finite, where did the time go, and what changes.
+
+### 9.1 The defect classes are finite — there were six
+
+The yield of §4.5 was ~1.6 defects per kernel, which on its own reads like an
+open-ended stream. It is not, because **a class is checkable and a bug is not**.
+Every defect §4.5 found belongs to one of six, and the classes are the unit worth
+auditing:
+
+| class | kernels hit | how it hides | the cheap structural check |
+|---|---|---|---|
+| **transposed grid** | **6** | no error, no partial result — a region of the output is simply never written | one shared offsets helper, so the convention is not per-kernel |
+| rank-1 product written as `tl.dot` | 4 | won't compile at all, so it is *visible* — the cheapest class there is | `tl.dot` with `K == 1` is always a broadcast that wanted to be `*` |
+| batch axis never addressed | 2 | correct shape, correct dtype, plausible magnitude, wrong answer | a spec that reads one sample's worth |
+| torch twin never called | 1 | no caller ⇒ never run ⇒ never wrong *in front of anyone* | a coverage count over the primitives module |
+| silent TF32 `tl.dot` | 1 | cosine 1.0, 1.6e-2 from the fp32 expression | `input_precision="ieee"` wherever `tl.dot` appears |
+| wrong derivative / swapped branch | 2 | a plausible-looking number | finite differences, and a property that pins which time step is read |
+
+**One class is 6 of 11 defects and it is a single line.** Every kernel now repeats
+the grid convention *in a docstring*, which is documentation, not prevention — the
+prevention is a helper the kernel cannot get wrong. That is the highest-leverage
+item available anywhere in this plan and it has not been done.
+
+The tail of the hunt is therefore a **finite audit list, not a stream**, and §9.4
+is the one place where that claim is not yet backed by a measurement.
+
+### 9.2 Where the time actually went
+
+Not where it was spent on paper:
+
+| phase | cost | note |
+|---|---|---|
+| writing the four spec files | ~20–30 min each, fast | the structure repeated exactly; see 9.3.3 |
+| diagnosing the triton 3.8 broadcast miscompilation | **largest single cost** | found by bisecting an expression, not by reasoning. Every hypothesis formed was wrong |
+| the PEPITA specification | second largest, and **not maths** | a vocabulary failure — three records, two of them not type-correct; four rewrites |
+
+Two consequences worth carrying:
+
+1. **The two slow paths both had a cheap prophylactic.** The miscompilation needed a
+   probe and a bisection; the ambiguity needed a shape table. Neither needed more
+   thinking.
+2. **The yield was inflated by writing unwired code.** Eleven defects in rungs that
+   nothing dispatched. That is the strongest argument that §4.6 is cheap — and also
+   a warning that the highest-yield work remaining is auditing what already ships,
+   not adding what does not.
+
+### 9.3 Five changes, ranked by leverage
+
+1. **Kill the transposed-grid class structurally** (§9.1). A shared
+   `out_offs(...)` / `in_offs(...)` pair, so `program_id(0)` cannot be bound to
+   the wrong axis at the call site. 6 of 11 defects; one line each; the fix is to
+   delete six copies of the *possibility*, which is §0.2's own rule applied to a
+   defect class rather than to a registry.
+2. **A shape table before any expression, as a standing rule in §4.5.** Three
+   lines — inputs, output, contraction axis. This is what §4.5's one *derived*
+   specification needed and did not have, and it is the difference between one pass
+   and four. The maths was never the hard part; the vocabulary was.
+3. **A `KernelSpec` harness rather than N hand-written spec files.** All four files
+   share one skeleton: deliberately non-multiple shapes, a loop anchor, a torch-twin
+   pin, algebraic properties, a launch helper. That is a dataclass and a fixture.
+   Per-kernel cost drops from ~30 min to ~10, and the properties stop being
+   reinvented per family.
+4. **A 20-line scratch probe *before* the test file.** Run the kernel against a
+   hand expression, print the diff, and only then decide whether the kernel or the
+   reference is wrong. Adopted late in §4.5 and it was the single best habit of the
+   session: a 20-minute test-authoring debate became a 2-minute measurement.
+5. **Make `availability` launch, not only compile.** `warmup()` does not check
+   shapes, which is exactly how three hebbian fixtures reported `compiles` for
+   arguments no call site would pass (§8.18). A launch canary catches that class
+   for free at the cost of compilation time — a real trade, so it is 5th and named
+   rather than made.
+
+### 9.4 The open risk, stated rather than argued
+
+**The 55 torch `kernel.py` modules have never been checked, and they can hide the
+same six classes.** §4.5's evidence is about the *triton* rungs, several of which
+were unwired; it says nothing about the modules every training run actually
+dispatches. So "is the tail finite?" is currently supported by an argument — *the
+classes are enumerable, therefore the tail is finite* — and not by a measurement.
+
+That argument is good but it is not a number, and this plan has been willing to
+call an argument a result before and should not here. §7 excludes *optimising*
+those 55 modules; an **audit** for six named classes is not optimisation, and the
+distinction is deliberate: the audit answers a bounded question (§9.1's table) and
+changes no numerics unless it finds a defect.
+
+### 9.5 What the next tranche is
+
+**Not §4.6.** §4.6 is a wiring step and the rungs it wires are now tested, so it
+should be mechanical; starting it before 9.3.1 and 9.3.2 would mean writing six
+copies of a mistake the plan has already decided to delete.
+
+1. **One commit: 9.3.1 + 9.3.2.** The shared grid helper, and the shape-table rule
+   written into §4.5's procedure. Small, and it makes the class unrepeatable
+   rather than merely documented.
+2. **Then a bounded sweep for the six classes over the wired kernels** — a fixed
+   checklist, not an open search, so it ends. This is the measurement §9.4 is
+   missing.
+3. **Then §4.6**, with `rungbench` re-run first, because §4.1's numbers predate
+   every kernel §4.5 touched (§8.19).

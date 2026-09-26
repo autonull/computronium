@@ -23,6 +23,9 @@ try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 
+    from computronium.acceleration import grid
+    from computronium.acceleration.grid import grid_2d
+
     # ── Fused Tile Activity Update ─────────────────────────────────────────
     # Computes: activity = clamp(activity - step_size * importance * (error + lambda*activity + sum(feedback)))
     @triton.jit
@@ -154,14 +157,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Fused contrastive Hebbian weight update per tile."""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc_free = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
         acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
@@ -198,11 +196,7 @@ try:  # noqa: PLR0915
 
         delta = (lr / beta) * (acc_free - acc_nudged)
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     # ── Fused Hebbian Update ───────────────────────────────────────────────
     # Computes: delta = importance * (src.T @ dst) / B  # ruff: ignore[commented-out-code]
@@ -220,14 +214,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Fused Hebbian weight update per tile."""
-        pid_in = tl.program_id(0)
-        pid_out = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
@@ -258,18 +247,12 @@ try:  # noqa: PLR0915
                 )
                 post_sq += post * post
             post_sq = post_sq / B  # ruff: ignore[non-augmented-assignment]
-            weight = tl.load(
-                weight_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-                mask=mask_out[:, None] & mask_in[None, :],
-                other=0.0,
+            weight = grid.load_2d(
+                weight_ptr, D_in, offs_out, offs_in, mask_out, mask_in
             )
             delta = delta - post_sq * weight  # ruff: ignore[non-augmented-assignment]
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     # ── Tile Routing Kernels (MoT) ─────────────────────────────────────────
 
@@ -678,10 +661,7 @@ class TileKernelBackend:
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
-            grid = (
-                (D_in + BLOCK_IN - 1) // BLOCK_IN,
-                (D_out + BLOCK_OUT - 1) // BLOCK_OUT,
-            )
+            grid = grid_2d(D_out, D_in, BLOCK_OUT, BLOCK_IN)
 
             _tile_contrastive_update_kernel[grid](
                 src_free.data_ptr(),
@@ -730,10 +710,7 @@ class TileKernelBackend:
             delta = torch.empty(D_out, D_in, device=self._device, dtype=self._dtype)
             BLOCK_IN = 32
             BLOCK_OUT = 32
-            grid = (
-                (D_in + BLOCK_IN - 1) // BLOCK_IN,
-                (D_out + BLOCK_OUT - 1) // BLOCK_OUT,
-            )
+            grid = grid_2d(D_out, D_in, BLOCK_OUT, BLOCK_IN)
 
             _tile_hebbian_update_kernel[grid](
                 src.data_ptr(),

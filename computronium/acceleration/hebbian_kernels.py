@@ -289,6 +289,8 @@ try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 
+    from computronium.acceleration import grid
+
     @triton.jit
     def _hebbian_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_ptr,
@@ -304,14 +306,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Hebbian weight update with Oja's rule: Delta W = lr * (post.T @ pre / B - post^2 @ W)"""
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
@@ -340,20 +337,14 @@ try:  # noqa: PLR0915
                 post_sq += post * post
             post_sq = post_sq / B  # ruff: ignore[non-augmented-assignment]
 
-            weight = tl.load(
-                weight_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-                mask=mask_out[:, None] & mask_in[None, :],
-                other=0.0,
+            weight = grid.load_2d(
+                weight_ptr, D_in, offs_out, offs_in, mask_out, mask_in
             )
             acc = acc - post_sq * weight  # ruff: ignore[non-augmented-assignment]
 
         delta = lr * acc
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
     def _three_factor_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -369,14 +360,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Three-factor Hebbian: Delta W = lr * modulator * (post.T @ pre / B)"""
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
 
@@ -400,11 +386,7 @@ try:  # noqa: PLR0915
         acc = acc / B  # ruff: ignore[non-augmented-assignment]
         delta = lr * acc
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
     def _contrastive_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -422,14 +404,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """Contrastive Hebbian update."""
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc_free = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
         acc_nudged = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
@@ -464,11 +441,7 @@ try:  # noqa: PLR0915
 
         delta = lr * (acc_nudged - acc_free) / beta
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
 
 except ImportError:

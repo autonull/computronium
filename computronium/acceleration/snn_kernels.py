@@ -328,6 +328,8 @@ try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 
+    from computronium.acceleration import grid
+
     @triton.jit
     def _lif_step_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         v_ptr,
@@ -490,11 +492,9 @@ try:  # noqa: PLR0915
         Launch with ``grid = (cdiv(N_pre, BLOCK_PRE), cdiv(N_post, BLOCK_POST))``:
         the grid is row-major over ``delta``'s own ``[N_post, N_pre]`` layout.
         """
-        pid_pre = tl.program_id(0)
-        pid_post = tl.program_id(1)
-
-        offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
-        offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
+        offs_post, offs_pre, mask_post, mask_pre = grid.tile_2d(
+            N_post, N_pre, BLOCK_POST, BLOCK_PRE
+        )
         offs_t = tl.arange(0, BLOCK_T)
 
         delta = _stdp_phase_delta(
@@ -517,11 +517,7 @@ try:  # noqa: PLR0915
             BLOCK_T,
         )
 
-        tl.store(
-            delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
-            delta,
-            mask=(offs_post < N_post)[:, None] & (offs_pre < N_pre)[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, N_pre, offs_post, offs_pre, mask_post, mask_pre)
 
     @triton.jit
     def _contrastive_stdp_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -556,14 +552,10 @@ try:  # noqa: PLR0915
         Launch with ``grid = (cdiv(N_pre, BLOCK_PRE), cdiv(N_post, BLOCK_POST))``:
         the grid is row-major over ``delta``'s own ``[N_post, N_pre]`` layout.
         """
-        pid_pre = tl.program_id(0)
-        pid_post = tl.program_id(1)
-
-        offs_pre = pid_pre * BLOCK_PRE + tl.arange(0, BLOCK_PRE)
-        offs_post = pid_post * BLOCK_POST + tl.arange(0, BLOCK_POST)
+        offs_post, offs_pre, mask_post, mask_pre = grid.tile_2d(
+            N_post, N_pre, BLOCK_POST, BLOCK_PRE
+        )
         offs_t = tl.arange(0, BLOCK_T)
-        mask_pre = offs_pre < N_pre
-        mask_post = offs_post < N_post
         mask_t = offs_t < T - 1
 
         free = _stdp_phase_delta(
@@ -605,10 +597,14 @@ try:  # noqa: PLR0915
             BLOCK_T,
         )
 
-        tl.store(
-            delta_ptr + offs_post[:, None] * N_pre + offs_pre[None, :],
+        grid.store_2d(
+            delta_ptr,
             (nudged - free) / beta,
-            mask=mask_post[:, None] & mask_pre[None, :],
+            N_pre,
+            offs_post,
+            offs_pre,
+            mask_post,
+            mask_pre,
         )
 
 

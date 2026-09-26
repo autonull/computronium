@@ -532,6 +532,8 @@ try:  # noqa: PLR0915
     import triton
     import triton.language as tl
 
+    from computronium.acceleration import grid
+
     @triton.jit
     def _ff_goodness_kernel(
         pos_acts_ptr,
@@ -593,14 +595,9 @@ try:  # noqa: PLR0915
         program 0 walks the output axis. The transposed order looks plausible and
         silently writes nothing when ``D_in`` is not a multiple of ``BLOCK_IN``.
         """
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc_pos = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
         acc_neg = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
@@ -635,11 +632,7 @@ try:  # noqa: PLR0915
 
         delta = lr * (acc_pos - acc_neg)
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
     def _pepita_error_modulation_kernel(
@@ -669,14 +662,9 @@ try:  # noqa: PLR0915
         transposed order looks plausible and silently writes nothing when
         ``D_in`` is not a multiple of ``BLOCK_IN``.
         """
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         err = tl.zeros((BLOCK_OUT,), dtype=tl.float32)
         for b in range(B):
@@ -690,11 +678,7 @@ try:  # noqa: PLR0915
         acc = err[:, None] * tl.trans(fb)
         delta = scale * acc  # ruff: ignore[non-augmented-assignment]
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
     def _pepita_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -711,14 +695,9 @@ try:  # noqa: PLR0915
         BLOCK_OUT: tl.constexpr,
     ):
         """PEPITA contrastive update: Delta W = lr * (std_post.T @ std_pre - err_post.T @ err_pre) / B"""
-        pid_out = tl.program_id(0)
-        pid_in = tl.program_id(1)
-
-        offs_in = pid_in * BLOCK_IN + tl.arange(0, BLOCK_IN)
-        offs_out = pid_out * BLOCK_OUT + tl.arange(0, BLOCK_OUT)
-
-        mask_in = offs_in < D_in
-        mask_out = offs_out < D_out
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
 
         acc_std = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
         acc_err = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
@@ -753,11 +732,7 @@ try:  # noqa: PLR0915
 
         delta = lr * (acc_std - acc_err)
 
-        tl.store(
-            delta_ptr + offs_out[:, None] * D_in + offs_in[None, :],
-            delta,
-            mask=mask_out[:, None] & mask_in[None, :],
-        )
+        grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     HAS_TRITON_FF = True
 except ImportError:
