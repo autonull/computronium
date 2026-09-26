@@ -1,12 +1,23 @@
 # TODO35: The Proveable Remainder
 
-**Status**: **ACTIVE — open. Round 4 is closed (§15); a new session works from
-§16 and stops there. Everything before §15 is the record of why the decisions
-were made, not the work list. Round 3 closed at §12.
+**Status**: **ACTIVE — open. Round 5 is closed (§17); a new session works from
+§17.8 and stops there. Everything before §17 is the record of why the decisions
+were made, not the work list. Round 4 closed at §15.
 `TODO34.md` keeps its 16 passes as the record of how the tree was made
 fast, provable and ready to be presented; its "Remaining Work" section is
 replaced by a pointer here, because two live open-item lists is the drift
 this plan series has documented five times.
+
+**Round 5 closed**: §16-6 (the cross-module import lock covers all of
+`computronium/`, after two rounds of being scoped to dodge 13 known failures),
+§16-7, §16-2's probe half, and §0.2 item 3's first nine findings. The round's
+output is code and deletions: the probe driver trains again with a *measured*
+metrics contract, the broad sweep runs end to end for the first time since
+Sprint 7.6.10, and **~1,100 lines of Triton kernels that no code path had ever
+launched are gone** — five backends advertised a `HAS_TRITON_*` flag behind
+which nothing existed. A wall-clock metric in a run's records also broke
+bit-for-bit reproducibility on its first run, which is why resource accounting
+and model metrics are now separate structures.
 
 **Round 3 closed**: §1.2 (the three highest-fan-in modules are at 0 — and
 the third of them held an `ImportError` on a live branch that no test had
@@ -1371,3 +1382,256 @@ Fast lane 407s for 3,451 tests. `pyright` on the new modules: 0.
    not a kill, and it reads exactly like the failure §15.3 just closed, so the
    next person to see it will re-chase a solved problem. Aligning it with the
    marker policy (or setting it to 0) is a config change, not a lock.
+
+---
+
+## 17. Round 5 — three dead code paths, and the metrics contract they needed
+
+Closed against §16: **2 half-closed (the probe half completely, the export half
+converted into a stated boundary), 6 closed, 7 closed, 5 measured, 3 taken.**
+Item 3 of §0.2 (`PLW0717`) is taken as far as the arithmetic allows and
+§17.5 says why the rest should not be taken by extraction. The round's output
+is code: a driver that trains again, a sweep that runs, and **~1,100 lines of
+Triton kernels that no code path had ever launched, deleted.**
+
+State at `33224e09`.
+
+### 17.1 The probe driver trains again, and the metrics it reports are measured
+
+§16-2's probe half is closed. `CoreTrainerDriver` reached training through
+`CoreTrainer`, removed in Sprint 7.6.10, so **every call raised `ImportError`**
+— and nothing noticed, because the driver had no tests at all
+(`tests/unit/experiment/` did not exist; the tests `docs/archive/20260818/
+REFACTOR5.md` names were deleted with the directory). Three sweep scripts
+construct it, and `backprop_parity`'s bio-locality gate — which decides
+"local rule beats backprop" on `epoch_time` — had no numbers to gate on.
+
+The port composes the named learning rule's system and trains it. The metrics
+it could not invent, it now measures: `SystemTrainerConfig` has carried
+`track_flops`, `track_memory` and (new) `max_epoch_time` as configuration that
+**nothing read**, which is the `cpu_only` defect a third time.
+
+| metric | where it comes from |
+|---|---|
+| `epoch_time_s` | `perf_counter` around the epoch; always present, one clock pair |
+| `forward_flops` / `backward_flops` | `core.profiling.estimate_train_step_flops`, once per epoch |
+| `peak_memory_mb` | `torch.cuda.max_memory_allocated`, only on a CUDA run |
+| `epoch_time_budget_stopped` | the epoch that overran `max_epoch_time` |
+| `training_paths` | the credit route each step took, counted |
+
+**The first version put all five in the epoch metrics dict, and
+`test_geometry_execution_is_bit_for_bit_reproducible` failed on it.** That is
+the finding worth more than the feature: a run's metrics are a claim about the
+model and must be reproducible from a seed; wall time and peak memory are
+observations about the machine. They now live in `trainer.epoch_resources` as
+`EpochResource` records, and `test_resources_stay_out_of_the_reproducible_
+metrics_record` asserts the separation. An unmeasured metric is `None`, never
+`0`, and the probe reports which ones those were in
+`resource_metrics_unavailable` — the same distinction `_dominant_training_path`
+has been making, applied to numbers.
+
+`allow_bptt_fallback` is **deleted rather than ported** (also from
+`ExperimentConfig`, where it had been read by nothing since the trainer it
+configured was gone): a rule system has exactly one credit assignment, so there
+is no fallback to permit, and `training_path` is what proves the local rule
+engaged. An unnameable rule now raises with the known names rather than
+falling through to backprop. 17 tests, 6.2s.
+
+### 17.2 The export entry point is a stated boundary, and the import lock is whole-package
+
+`test_undefined_name_lock.py` was scoped to `core` + `ontology` for two rounds
+**because 13 files failed it** — the §0 violation §14.3 recorded and declined
+to discharge. It is discharged. Four of the last sites were ordinary repairs:
+
+- **`KB` → `KnowledgeBase`** in `gradient_check`. The method it fed,
+  `record_gradient_fingerprint`, exists nowhere in the tree, and the block's
+  `except Exception: pass` swallowed the `ImportError`, so it had never run
+  even once. Deleted, not repointed: writing a gradient fingerprint to the KB
+  needs an API decision.
+- **`ReportOrchestrator` → `generate_experiment_report`**, the function that
+  exists. `ExecutionEngine.generate_reports` runs every `report_interval`
+  trials, and `ImportError` was **not** in its except clause — so a live
+  Scientist++ run died there, on a path no test covered.
+- **`run_single_trial` → `run_single_trial_task`**, with the arguments its two
+  callers were already passing: an evaluation tier, a device, and a per-trial
+  **seed** (new, and wanted — Optuna re-evaluates a configuration during
+  warmup, and an unseeded trial returns a different objective each time). That
+  function also had a **duplicated body from a bad merge**: `_setup_storage`
+  ran twice and one temp dir leaked per trial.
+
+The fifth site is not a repair. `export_trained_kernel` exports a *bound*
+kernel backend, and §15.5's two contracts are both still missing: a `System`
+trains through `core.pipeline.run_train_step`, which has **no kernel arm**, and
+`set_model_ref` is per-family (`list[nn.Linear]` for FF and SNN,
+`(layers, activation)` for PC, a tile algorithm for TILE). So the 200-line
+argument parser and the whole `CoreTrainer` path are **deleted**, and the
+command now refuses and names the two contracts. An export would have
+serialised weights no kernel ran — an artifact that looks trained and is not.
+The `--explain` flag prints the blocker; `python -m
+computronium.cli.export_trained_kernel --explain` exits 1 with it.
+
+The lock's population is now `computronium/`, whole. **Cost: the scan went from
+4.2s to 25.4s**, which is the price of the scope and cheap against a class
+that shipped six real `ImportError`s.
+
+### 17.3 ~1,100 lines of Triton kernels that nothing launched
+
+§0.2 item 3 was to take `PLW0717` in bulk as extraction. Six kernel modules
+guarded their **entire body** with `try: import triton`, which is why the rule
+counted the optional-dependency policy as complexity. Extracting the tile and
+FA kernels into `_`-prefixed modules — so the guard is one import — showed the
+other four plus `complex_substrate` were never wired:
+
+| module | kernels | flag | referenced by |
+|---|---|---|---|
+| `pc_kernels` | 3 | `HAS_TRITON_PC` | nothing |
+| `ff_kernels` | 4 | `HAS_TRITON_FF` | nothing |
+| `snn_kernels` | 3 | `HAS_TRITON_SNN` | nothing |
+| `hebbian_kernels` | 3 | `HAS_TRITON_HEBBIAN` | nothing |
+| `substrates/complex_substrate` | 2 | `_HAS_TRITON` | nothing |
+
+A `grep` for each name over the tree returns its own definition and its own
+import, and nothing else. So five backends advertised a Triton path they had
+never taken, and the torch paths they actually run are complete. This is
+`TODO34` §2.1a's `NameError` class one level up: the flag existed, the code
+behind it did not, and nothing looked. Deleted, flags included. **The two live
+sets stay**: `tile_kernels` (7 kernels, 5 launch sites) and `fa_kernels`
+(2 kernels, 2 launch sites, a test).
+
+`PLW0717` is **81 → 72**. The 72 that remain are all in-function `try` blocks
+of 6–70 statements, and §17.5 says what to do about them.
+
+### 17.4 The sweep runs, and its tuning surface had been dead for two rounds
+
+Porting the driver was not enough: `python scripts/broad_sweep.py` still
+reported **0 of 2 probes ok**, every one flagged `phantom_knobs`. The cause is
+the diagnosis working correctly on the wrong subject. The rule spaces were
+written for the native zoo models Sprint 7.6.10 removed, and the System path's
+rule systems read **three** of an eqprop space's **eighteen** keys — so every
+probe sampled fifteen values nothing read, then reported a defect. That is a
+true statement about the *declaration*, not about the arm.
+
+Three fixes, all in the sweep's own code:
+
+- **`sample_config_for_space` intersects the space with
+  `RULE_SYSTEM_CONFIG_KEYS`**, logging the dropped keys once per space. The
+  phantom diagnosis stays as the guard for the other direction: a key added to
+  a space with no consumer is still caught, per probe.
+- **`param_count` is counted off the geometry that was built.** It came from
+  the zoo estimator, which describes whatever model the *name* resolves to — a
+  different architecture from the rule system the arm trains — and the sweep
+  gates its fair-comparison budget on that number. Before: eqprop 33,923 and
+  backprop 1,027 for the same `hidden_dim=128, num_layers=2`, which is not a
+  budget comparison, it is two different models.
+- **`_RULE_ACTIVATION`'s second field is deleted.** eqprop's
+  `gradient_method="equilibrium"` was a knob of the removed native models with
+  no consumer here.
+
+Result, `iris`, 1 probe per family: **6 probes, 6 ok, 6 live families, 3.7s.**
+Before this round the command raised `ImportError` on its first probe. Two
+families (`forward_only`, `predictive_coding`) resolve to the same pepita arm
+and now visibly produce identical rows — the aliasing in
+`_family_rule_key` is pre-existing and was previously hidden behind the crash.
+
+### 17.5 `PLW0717`: what is left, and why the rest is not an extraction
+
+The remaining 72 are `try` blocks whose *body* is the work: a 70-statement
+`try` in `cli/joint_validate.py`, 39 in `validation/tracks/_signal_probe.py`,
+28 in `mep/optimizers/strategies/update.py`. Extracting the body out of the
+`try` is mechanical and mostly cosmetic — it moves statements between two
+functions in the same file and produces no new capability. The
+`p2p` precedent was worth running because that extraction found a live crash;
+this one has not been shown to.
+
+The honest split: **9 of the original 81 were a repeated policy written six
+times** (§17.3), and removing the repetition was the whole win. The other 72
+are 72 separate local refactors whose value is unproven, at ~1,100 lines of
+mechanical churn in a tree that is mid-port. Take them as opportunistic
+work, not as a tranche.
+
+### 17.6 The other §16 items
+
+- **§16-7 closed.** `faulthandler_timeout = 0`. pytest-timeout is the kill and
+  its signal method already dumps the stack of the test it stops; the second
+  clock fired on every test that legitimately runs longer and read exactly
+  like the failure §15.3 closed.
+- **§16-5 measured, not re-pinned.** The integration tier ran in full. Every
+  re-emitted record differed from its committed form **only** in
+  `provenance.git_commit` — no demo's numerics moved. The slow tier and the
+  manifest were **not** re-run, and the record edits were reverted rather than
+  committed, because backfilling a pin without the pass that verifies it is
+  the §11.2 failure. §7's POST-SLOW step is still the thing that would verify
+  it.
+- **§16-1 unchanged and still unenforced.** The marker policy is still a
+  convention. `faulthandler_timeout = 0` removed the *misleading* signal, not
+  the missing guard; per §14.4 rule 1 no lock may be added without a defect of
+  that class found in the round that adds it, and none was.
+- **§16-4 unchanged.** The LM lane still has no training path.
+- **`CPU`:** `core/system_trainer/trainer.py` had `num_samples = 0` twice in
+  `train_epoch`, and `_resources.elapsed` needed a live clock because the
+  budget is checked *inside* the batch loop — a value written only at the end
+  of the epoch would make `max_epoch_time` unenforceable for exactly the
+  epochs that overrun it. Both found by the tests written for them.
+
+### 17.7 Numbers, measured
+
+| quantity | §15 said | Round 5 |
+|---|---|---|
+| pyright, repo-wide | 1,936 | **1,895** |
+| pyright, files this round touched | — | 26 → **23** |
+| ruff, repo-wide | 334 (re-baselined to 315 in §17.3's commit) | **315**, at the ratchet |
+| `PLW0717` | 81 | **72** |
+| dead Triton code | — | **~1,100 lines, 16 kernels, 5 flags** |
+| import lock scope | 2 of 15 layers | **all of `computronium/`** |
+| import lock cost | 4.2s | 25.4s |
+| tests | 3,433 fast-lane | 3,455 fast-lane (17 new: 9 probe, 8 trainer) |
+
+Test runs this round, all green: `tests/unit` 879 passed / 36 skipped;
+`tests/property` 1,756 passed / 12 skipped / 26 xfailed / 1 xpassed;
+`algorithms + primitives + acceleration + integration` 1,140 passed / 83
+skipped / 5 xfailed / 1 xpassed. Dev-env smoke clean.
+
+### 17.8 New items, for Round 6
+
+1. **A kernel arm on the System pipeline** (§17.2). Two contracts, both
+   named: `run_train_step` must be able to route through a `KernelBackend`,
+   and there must be one way to bind a `System`'s geometry to a backend across
+   the families whose `set_model_ref` signatures differ. Until both exist,
+   `export_trained_kernel` is a refusal and the tree's fastest paths are
+   unreachable from a composed system.
+2. **The zoo registry has no membership predicate.** `backprop_parity`'s
+   `_FAMILY_MODELS` names `standard_fa`, `dfa_deep`, `diff_target_prop`,
+   `fabricpc_graph_pcn`, `directed_ep` — real zoo arms that are not learning
+   rules, and that comparison is meaningless on the rule lane (it would
+   compare one MLP against itself). `resolve_native_model` "falls back to the
+   EqProp composition" for any unknown name, which is a silent substitution in
+   the one place that must not make one. **A registry with a `has_model(name)`
+   is the prerequisite**, and it is the same prerequisite
+   `scripts/p4lite_surrogate_sanity.py` (`quantized_looped_mlp`,
+   `noisy_looped_mlp`) and `preliminary_run.py` need — all three now raise
+   `KeyError` naming the rules, which is louder than the `ImportError` they
+   replaced and no more useful.
+3. **The rule spaces are two rounds out of date with the arms.**
+   `RULE_SPACES` has eight keys; `_RULE_FAMILIES` names eight families and two
+   of them (`hebbian`, `spiking`) have no space at all, so the sweep skips
+   them with a warning. Fifteen of eqprop's eighteen knobs and three of fa's
+   six are now unsampled rather than sampled-and-ignored. Either the rule
+   systems grow a way to consume them (`beta`, `max_steps`, `damping`,
+   `feedback_mode`, `use_spectral_norm` are all meaningful per rule) or the
+   spaces shrink to what is real. **This is a product decision per rule**, and
+   it is the same shape as §14.5's question: the sweep was measuring a
+   tuning surface that had stopped existing.
+4. **`forward_only` and `predictive_coding` are one arm under two names** in
+   `_family_rule_key`, and now visibly emit identical rows. A family whose
+   space and propagator are the same should be one family, or the alias
+   should be a documented equivalence rather than a dict entry.
+5. **The timeout-marker policy** (§16-1), and the LM lane (§16-4), both
+   unchanged for the fourth round running. §14.2's arithmetic still applies
+   to any remaining tranche: the next round should either take one of these
+   or state why not.
+6. **A `__getattr__`-based dead-KB check.** `computronium/knowledge/kb.py`
+   has a module `__getattr__` (line 745) whose names the import lock treats
+   as excluded because they are not statically derivable. `KB` was one of
+   them — a name that resolved to nothing. The population is worth
+   enumerating once, by hand, in the module's docstring, so the exclusion is
+   a list someone checked rather than a class nobody looked at.
