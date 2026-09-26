@@ -1,15 +1,20 @@
-# TODO34: Test Velocity, Correctness Hardening, and the Presentation Layer
+# TODO34: Test Velocity and Correctness Hardening
 
-**Status**: **ACTIVE — 16 passes landed.** Complete: §0, §1.1–§1.5, §2.1, §2.2,
-§2.5, §2.7, §3.1, §3.2's reproducibility question *and* its `checkpoints/`
-decision, §4.1, §5.1, §5.2, §5.3, §5.8, §5.4's dispatch half, and all **116** of
-§1.5's unseeded tests. Partly: §2.3 (tranche 2 opened: 671 → 349, ratchet
-live), §2.6 (provenance repaired; the environment fingerprint needs a
-re-emission pass), §3.2 (`docs/archive/` needs a policy).
-**The prioritised forward plan is in [Remaining Work](#remaining-work)
-— read that, not the section numbering.** §4 is unstarted and is the seed for a
-`TODO35.md`; the argument for and against splitting is recorded there, and the
-recommendation is to keep one document until §4 has a named consumer.
+**Status**: **CLOSED as a plan — 16 passes landed; its open items moved to
+`TODO35.md`.** Complete: §0, §1.1–§1.5, §2.1, §2.2, §2.5, §2.7, §3.1, §3.2's
+reproducibility question *and* its `checkpoints/` decision, §4.1, §5.1, §5.2,
+§5.3, §5.8, §5.4's dispatch half, and all **116** of §1.5's unseeded tests.
+Partly done and now carried forward: §2.3 (671 → 349, tranche 2 opened),
+§2.6 (provenance repaired; the environment fingerprint needs a re-emission
+pass), §3.2 (`docs/archive/` needs a policy).
+
+**Every open item lives in [`TODO35.md`](TODO35.md).** This document keeps the
+sixteen passes as the record of *how* the tree was made fast, provable and
+ready to be presented; the "Remaining Work" section at the foot is replaced by
+a pointer. The split was recorded one pass early as the plan's own argument for
+and against it — *"two documents with overlapping open-item lists is the exact
+drift this plan has documented four times"* — and it is made here on that
+reason, not because the work ran out.
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
 removed code, this one makes what remains *fast, provable, and ready to be
@@ -19,6 +24,11 @@ whatever UI comes after) will lean on.
 §5 (architectural refactors) is the highest-leverage section and the longest
 sounding; it is sequenced **last** on purpose. See its own risk notes before
 starting it.
+
+§4 (the presentation layer) is the one section that **moved rather than
+finished**. Its contract text stays here because that is where it was written
+and why; its three open items now live in `TODO35.md` §4 and are marked below,
+so no open-item list exists in two files.
 
 ---
 
@@ -1139,7 +1149,7 @@ domain core (no I/O, no network, no render imports)
   must not be import-time requirements of `import computronium`. Verify with a
   bare-env import test, which the `deploy`/`plot` extras make possible.
 
-### 4.2 Live telemetry is now a real channel — P1
+### 4.2 Live telemetry is now a real channel — P1 — **moved → `TODO35.md` §4**
 
 0.4 fixed `on_step` so it fires every settle step regardless of tracking
 settings. That is precisely the primitive a live view needs, and it was
@@ -1153,7 +1163,7 @@ silently dead until now.
 - This is the substrate for both a `comp watch` CLI and any future UI, and it
   is why fixing 0.4 mattered beyond the test suite.
 
-### 4.3 A stable read surface for every view — P1
+### 4.3 A stable read surface for every view — P1 — **moved → `TODO35.md` §4**
 
 `campaign_readers.py` (the read-only artifact loaders that survived the
 dashboard removal) is the correct shape: views read artifacts, they do not
@@ -1164,7 +1174,7 @@ recompute them. Before adding any view:
 - Make the WAL-cache correctness (0.5) part of that contract: a reader that
   can serve stale rows is worse than no reader.
 
-### 4.4 Renderer registry, mirroring the dispatch tables — P2
+### 4.4 Renderer registry, mirroring the dispatch tables — P2 — **moved → `TODO35.md` §4**
 
 0.6's lesson: a source-text-scraping lock silently degraded when dispatch
 became table-driven. When the renderer set grows, register backends in a table
@@ -1174,7 +1184,7 @@ against the **table**, not the source text. The same applies to the
 it is the pattern to copy, and the geometry wiring lock is now the reference
 test for how to lock it.
 
-### 4.5 Non-goals, written down so they survive — P0
+### 4.5 Non-goals, written down so they survive — P0 — **carried to `TODO35.md` §4**
 
 - No network/websocket dependency in the domain core.
 - No view-layer state that cannot be rebuilt from a run artifact.
@@ -1426,10 +1436,10 @@ started and should not until it has a consumer. The current phase table:
 |-------|-------|-------|
 | **A — determinism** | 1.1, 2.1, 1.4 | **done** — 2.1 `59d13f47`, 1.4 `fb6bb0f7`, 1.1 (curve measured, floors re-derived) |
 | **B — contract** | 2.2, 2.5, 4.1 | **done** — 2.2 `f06f7629`, 2.5 `0faecede`, 4.1 + 5.2 `5ad96f85` |
-| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | 1.2, 1.3, 1.5 **done** (1.5 fully: baseline empty, guard re-expressed); **1.6 open** |
-| **D — structure** | 3.1, 3.2, 2.3, 2.4 | 3.1 **done** `b6151076`; 3.2 **partly done** `ceb4865a`; 2.3 tranche 1 **done** `09f73936` (671→353), tranche 2 opened in Pass 16 (→349); **2.4 open** |
-| **E — presentation** | 4.2, 4.3, 4.4 | open; the TODO35 seed, see Remaining Work |
-| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done**, export half deferred; 5.6–5.9 are decisions |
+| **C — velocity** | 1.2, 1.3, 1.5, 1.6 | 1.2, 1.3, 1.5 **done** (1.5 fully: baseline empty, guard re-expressed); **1.6 open → `TODO35.md` §2.1** |
+| **D — structure** | 3.1, 3.2, 2.3, 2.4 | 3.1 **done** `b6151076`; 3.2 **partly done** `ceb4865a`; 2.3 tranche 1 **done** `09f73936` (671→353), tranche 2 opened in Pass 16 (→349); **2.3/2.4 open → `TODO35.md` §1.1–§1.2** |
+| **E — presentation** | 4.2, 4.3, 4.4 | open, and moved to `TODO35.md` §4 with its non-goals — still unstarted, still without a consumer |
+| **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done**, export half deferred; 5.6–5.9 are decisions → `TODO35.md` §3, §5 |
 
 **A hard constraint on this box, and it is a process rule rather than a plan
 item: individual commands over ~15s are not affordable.** Two demo probes
@@ -1451,95 +1461,28 @@ its commit body.
 
 ## Remaining Work
 
-Everything still open, ordered by *what it costs to be wrong*, not by section
-number. Effort is a first estimate, not a commitment; "first move" is the
-concrete next action, so no item here needs re-planning before starting.
+**Moved to [`TODO35.md`](TODO35.md), in one piece.** At closure this was: the
+pyright fan-in pass, lint tranche 2, the environment fingerprint, the cost
+table re-baseline, the `docs/archive/` policy, three deferred decisions
+(`local_learning`'s settle loops, the LIF horizon, the redundant state
+accessors), one decision not to act on (`SIM102`), the unstarted presentation
+layer, and the `p2p/` test gap. Each carries its own measured state and its
+own "first move" there, and none is duplicated in this file — the split is
+only worth anything if the list lives in exactly one place.
 
-### Tier 1 — cheap, and each closes a hole that is already open
+Two items are worth restating here because they are *process*, not tasks, and
+they apply to whoever picks `TODO35` up:
 
-| # | Item | State | First move | Effort | Done when |
-|---|---|---|---|---|---|
-| 1 | **§2.4 pyright, top 3 modules by fan-in** | 2079 findings repo-wide; `AGENTS.md` keeps checking basic until a ratchet exists | count findings per module, pick the top 3, drive one to zero, add a *changed-files* pyright check to `pre-commit` next to ruff's. **Pass 16 shows the per-file method**: `p2p/evolution.py` went 16 → 0 inside an unrelated extraction, so the fan-in ranking is worth re-measuring rather than assuming | ~4h + ongoing | 3 modules report 0; pre-commit fails on a new error in a changed file |
-| ~~2~~ | ~~**§3.2 `checkpoints/`** (24M)~~ | **DONE (Pass 17): deleted**, 110 files. It was a cwd-relative default dump (live code writes `<output_dir>/checkpoints/`), gitignored, dated 7–21 Aug, zero referrers. The decision was the plan's own: a manifest written for an unknown run is *fabricated* provenance, not recorded provenance (§2.6), so delete was the only honest option | — | directory gone |
-| 3 | **§2.6 environment fingerprint** | `capture_environment()` / `deps_hash()` exist and are unused here | add `deps_hash()` to the record emitter, then re-emit every record in one slow pass (fold into §1.6) | ~1h + the slow pass | a drift lock can name which of code / config / environment moved |
-| 4 | **§2.3 tranche 2** (`PLW0717` 90, `E402` 32) | 3 of the worst done (Pass 16); the ratchet is live so the list is trustworthy | `knowledge/causal.py` still holds 4 (16/39/9/29 statements) and `hyperopt/experiment.py` 3 — the same extraction recipe, and `p2p` is the precedent for it finding a live bug | ~3h | count falls under the ratchet without a new suppression |
+- **A lock's population assertion is part of the lock.** If the thing a lock
+  counts is what the fix removes, the guard moves with it, in the same commit.
+  §1.5's closure destroyed its own guard and the repair was part of the pass.
+- **Individual commands over ~15s are not affordable on this box.** Background
+  long runs, poll at ≤2min, and check for the pytest **summary line** rather
+  than the process: a killed background run leaves no trace, and `pgrep -f
+  <testname>` matches the polling command itself (§2.8).
 
-### Tier 2 — needs a quiet window, and one pass to amortise
-
-| # | Item | State | First move | Effort | Done when |
-|---|---|---|---|---|---|
-| 6 | **§1.6 re-baseline the cost table** | the numbers in §1 are pre-§0.2; the suite got heavier when settles started running their full horizon | one `--with-slow` pass, `--durations=20`, rewrite the §1 table | ~30min of machine | the table matches a recorded run |
-| 7 | **§5.4's export half** | deliberately deferred: `__all__` / `_LAZY` / `TYPE_CHECKING` are a *publication* surface, not a registry | **do not start** without a reader who wants the public API smaller | ~1d | — |
-| 8 | **`docs/archive/` cold-store decision** (5.1M) | one archival pass already happened (`0c8e5a2a`); no policy recorded | write the policy in three lines and apply it | ~30min | the rule exists |
-
-### Tier 3 — decisions, not work. Take them with the code that can answer them.
-
-| # | Item | The question only that code can answer cheaply |
-|---|---|---|
-| 9 | **§5.6** `local_learning/settling.py`'s two hand-written loops | should `StateDynamicsConfig.max_steps` / `convergence_*` apply to model settling at all? If yes the driver is free; if no, write down that they are separate contracts |
-| 10 | **§5.7** the LIF horizon counts layers, not steps | per-layer sum (today), per-layer max, or separate `steps_used` / `layers` — then make the lock assert the choice |
-| 11 | **§5.9** three redundant `getattr` state accessors | audit the lazy and compiled whole-graph paths first; they pass duck-typed records from outside the protocol |
-| 12 | **§2.3 `SIM102`** (19 collapsible-ifs) | 13 are the `_validate_*` chains in `ontology/system.py`, where collapsing costs the one-branch-per-message structure. Probably **leave alone** — recorded so it is a decision, not an omission |
-
-### Tier 4 — the phase that has not started, and should not without a consumer
-
-**§4 (presentation layer): 4.2 live telemetry, 4.3 the read surface, 4.4 the
-renderer registry.** Deliberately last. 4.2 has a real substrate now (§0.4
-fixed `on_step`; §2.7's test proved an untested public path can be simply
-*wrong*), and §4.1's layering rule has a lock behind it. But every item needs a
-consumer, and the plan's own §4.5 forbids starting UI work before the layering
-check exists — it now does.
-
-**This is the seed for `TODO35.md`, and the split is recorded here so the
-decision is made once rather than drifted into.** The argument for splitting:
-§4 is feature work with a different success condition (a run you can watch),
-while everything above is hygiene with a different one (a claim you can prove).
-The argument against, and the reason it has not been done: two documents with
-overlapping open-item lists is the exact drift this plan has documented four
-times — a hand-kept table that accumulates accommodations. **Recommendation:
-keep one document until §4 has a named consumer.** If that consumer arrives
-with a requirement, split then, and move §4 plus §4.5's non-goals across whole
-rather than re-deriving them.
-
-### New items surfaced by passes 12–16, not yet in the numbered sections
-
-| Item | Finding | Where it belongs |
-|---|---|---|
-| **`p2p/` has no tests** | the loop's only handler is `except Exception` + `sleep`, and a `TypeError` from a non-existent kwarg ran for the life of the module with nothing but a log line. The mesh feature is untested *and* its failure mode is silent by construction | **deferred by decision (Pass 17), not dropped.** The refactor made `_fetch_global_best` / `_build_model` / `_evaluate` separately callable, which is what a stub-DHT test needs, so the cost when it is taken is small. It is deferred because `p2p` has no consumer, and this plan's rule is that work waits for one |
-| cwd-relative defaults in scripts | `scripts/visualize_atlas.py:23` and `scripts/g1_core_sweep.py:36` default to `Path("artifacts/ruler_table.json")` — cwd-relative, the same shape as the `d24` provenance defect, and both now read a file that has moved. `checkpoints/` at the repo root was the same shape — a cwd-relative default dump, now deleted (Pass 17) | a lock, or a one-line default change, when either script is next touched. A single scan for `Path("<name>")` defaults in `scripts/` would cover the class |
-| **load-dependent flake, cause unestablished** | `tests/property/test_deep_credit_trial.py::TestContrasts::test_contrasts_cover_deep_tier` failed **once** during Pass 17, in a property-tier run that took **217s** against a normal 75–95s. It then passed twice more (132s alone, 46s under `-n 4`) and the full tier passed (81s). The assertion is a *key-presence* check — `_contrasts_vs_gradient` returns an empty dict only when `len(config.seeds) < _MIN_CONTRAST_SEEDS`, and the test passes `seeds=(0, 1)` — so on the face of it it cannot fail from numerics, and the failure message was not captured. It is not in §1.5's flagged population (it draws nothing unseeded) | **do not "fix" it without the message.** The next occurrence must be captured with `-x --tb=long` and the run's walltime beside it. Two of the plan's own defects (0.4, 0.8) surfaced only because settle work shifted a stream; this one has no mechanism yet, and a guess would be exactly the "threshold fixed without a measurement" mistake |
-| `except OSError, subprocess.SubprocessError:` in `computronium/utils.py` | valid only on **Python 3.14+** (PEP 758, unparenthesised multiple exception types). The repo targets 3.14 and both ruff and pyright accept it — but the module will not *parse* on 3.13 | a note, not a defect: the target-version is declared and correct |
-| the lint ratchet's own version pin | first version **skipped** on a ruff mismatch, i.e. it switched itself off invisibly — the exact failure mode this plan warns about, committed by this plan. Now it fails with the remedy in the message | fixed, and the episode is the argument for the "make the claim executable" note below |
-
-### What was deliberately not done, and why
-
-- **Not optimisation.** The fast lane is ~95s; the two 200s+ demos are already
-  `slow`; and the suite got *heavier* because §0.2 made settles run their full
-  budget. Optimising walltime now would optimise the artifact a correctness
-  fix improved.
-- **Not more structure.** §5's remaining items are decisions (Tier 3). Three of
-  the last four passes were config and dead code, not architecture.
-- **Not `RUF105/106/103`.** Enabling them one at a time churns guard-rails;
-  the canonical directive migration is Register C work, as one change.
-- **Not `E402` per-site suppression.** 32 hand-written suppressions are worse
-  than 32 honest findings.
-
-### The through-line of the last four passes
-
-Three of them turned on a claim that was **asserted rather than measured**, and
-in every case the measurement was cheap next to the claim: a wheel build (~30s)
-proved the packaging dropped the ruler table; `find_spec` (0.1s) proved
-`deployment.py` was unreachable; a per-rule count (0.2s) proved an ignore
-suppressed nothing. Two of the three fixes would have shipped looking correct
-in the source tree.
-
-The general form, and the reason the ratchet and the wheel assertion are the
-same kind of object: **when something claims to work, make the claim
-executable.** The ratchet is that instinct applied to a count; the wheel
-assertion is it applied to packaging; `test_ruler_table_lock.py` is it applied
-to a path. Each is cheap, and each one of them found a real defect on its first
-run.
-
+The verification commands below are unchanged and remain the gate for
+everything in `TODO35.md`.
 
 ---
 
