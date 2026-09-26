@@ -24,12 +24,18 @@ def make_case(
     device: str = "cpu",
     dtype: torch.dtype = torch.float32,
     seed: int = 0,
+    scale: int = 1,
 ) -> Case:
     generator = torch.Generator(device=device).manual_seed(seed)
 
-    # Input batch of 2, feature dim 8
-    input_dim = 8
-    state = torch.randn(2, input_dim, device=device, dtype=dtype, generator=generator)
+    batch = 2 * scale
+    input_dim = 8 * scale
+    output_dim = 4 * scale
+    neurons_per_tile = 4 * scale
+    tiles_per_layer = 2 * scale
+    state = torch.randn(
+        batch, input_dim, device=device, dtype=dtype, generator=generator
+    )
 
     # Create a fixed geometry for deterministic testing
     # Save/restore RNG state to ensure deterministic geometry creation
@@ -39,22 +45,22 @@ def make_case(
         geometry = TileGeometry(
             GeometryConfig.tile_mesh(
                 input_dim=input_dim,
-                output_dim=4,
+                output_dim=output_dim,
                 num_layers=3,
-                neurons_per_tile=4,
-                tiles_per_layer=2,
+                neurons_per_tile=neurons_per_tile,
+                tiles_per_layer=tiles_per_layer,
                 init_scale=0.1,
             )
-        )
+        ).to(device)
     finally:
         torch.set_rng_state(rng_state)
 
     config = {
         "input_dim": input_dim,
-        "output_dim": 4,
+        "output_dim": output_dim,
         "num_layers": 3,
-        "neurons_per_tile": 4,
-        "tiles_per_layer": 2,
+        "neurons_per_tile": neurons_per_tile,
+        "tiles_per_layer": tiles_per_layer,
         "init_scale": 0.1,
         "seed": seed,
     }

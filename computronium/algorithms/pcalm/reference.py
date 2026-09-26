@@ -41,7 +41,7 @@ def _make_pc_alm_system(config: _SystemConfig) -> Any:
             output_dim=config.output_dim,
             hidden_dims=config.hidden_dims,
         )
-    )
+    ).to(config.device)
     dynamics = PCALMDynamics(
         StateDynamicsConfig.pc_alm(
             max_steps=config.max_steps,

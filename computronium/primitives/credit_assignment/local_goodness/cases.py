@@ -24,16 +24,12 @@ def make_case(
     dtype: torch.dtype = torch.float32,
     seed: int = 0,
     local_objective: str = "ff",
+    scale: int = 1,
 ) -> Case:
     generator = torch.Generator(device=device).manual_seed(seed)
 
-    # Create weight matrices for a 3-layer network (784 -> 256 -> 128 -> 10)
-    # For testing, use smaller dims
-    weight_shapes = [
-        (4, 4),  # layer 0: 4 -> 4
-        (4, 4),  # layer 1: 4 -> 4
-        (4, 4),  # layer 2: 4 -> 4
-    ]
+    batch, width = 2 * scale, 4 * scale
+    weight_shapes = [(width, width)] * 3
     weights = [
         torch.randn(out_dim, in_dim, device=device, dtype=dtype, generator=generator)
         for out_dim, in_dim in weight_shapes
@@ -41,7 +37,7 @@ def make_case(
 
     # Free activations: [input, h1, h2, output]
     free_activations = [
-        torch.randn(2, 4, device=device, dtype=dtype, generator=generator)
+        torch.randn(batch, width, device=device, dtype=dtype, generator=generator)
         for _ in range(4)
     ]
 
@@ -49,7 +45,12 @@ def make_case(
     nudged_gen = torch.Generator(device=device).manual_seed(seed + 1)
     nudged_activations = [
         torch.randn(
-            2, 4, device=device, dtype=dtype, generator=nudged_gen, requires_grad=True
+            batch,
+            width,
+            device=device,
+            dtype=dtype,
+            generator=nudged_gen,
+            requires_grad=True,
         )
         for _ in range(4)
     ]
@@ -63,7 +64,7 @@ def make_case(
         "learned_feedback": False,
         "feedback_lr": 0.01,
         "feedback_update_every": 10,
-        "target": torch.randint(0, 4, (2,), device=device),
+        "target": torch.randint(0, width, (batch,), device=device),
         "seed": seed,
     }
 

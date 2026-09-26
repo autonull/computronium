@@ -204,6 +204,10 @@ comparing a triton rung against the rung below it. The speedup claims in
 **This is the first task in §4, not a footnote** — but read §4.1's framing
 before assuming what it is for. It ranks. It does not delete.
 
+**Superseded by §4.1 (2026-09-26).** The rows now exist —
+`artifacts/benchmarks/rungs/` — and §5.1 has the numbers. The 75 CPU rows
+described above are historical; nothing was deleted to make room.
+
 ---
 
 ## 2. The 16 unwired kernels: the triton rung five families do not have yet
@@ -265,14 +269,44 @@ unblock here.
 
 ### 4.1 Measure the rungs against each other — to rank, not to prune
 
-Because §1.6 says nobody has. For each of the 9 call sites, on a GPU, at three
-input sizes: wall time of the triton rung, wall time of the rung below it, and
-peak memory. Write the rows into `artifacts/benchmarks/` in the existing schema
-with `device: "cuda"` and a `backend` that names the technology.
+**DONE 2026-09-26.** Because §1.6 says nobody has. For each of the 9 call sites, on
+a GPU, at three input sizes: wall time of the triton rung, wall time of the rung
+below it, and peak memory. Write the rows into `artifacts/benchmarks/` in the
+existing schema with `device: "cuda"` and a field that names the technology.
 
+- **Landed as** `computronium/acceleration/rungbench.py`, run as
+  `uv run python -m computronium.acceleration.rungbench`. Rows land in
+  `artifacts/benchmarks/rungs/<spec id>.jsonl` — a subdirectory, so the
+  `artifacts/benchmarks/*.jsonl` glob in `test_all_implementations` keeps meaning
+  what it meant.
+- **Schema amendment (recorded, deliberate):** a row carries `rung`/`backend`
+  (`reference` | `kernel`) *and* a separate `technology` (`torch` |
+  `torch_compile` | `triton`). The plan text said "a `backend` that names the
+  technology"; overloading one field would have broken
+  `scripts/bench_dashboard.py`, which selects `backend == "kernel"`, for no gain —
+  two fields record both facts and neither lies.
+- **Three input sizes** come from a new keyword-only `scale: int = 1` on the seven
+  `cases.make_case` functions (default 1 ⇒ byte-identical to today's cases, so
+  parity and smoke tests are unaffected).
+- **The measurement could not be taken until this step, and that is the answer to
+  §1.6.** Every geometry-bearing `make_case` built its `nn.Linear` stack on CPU
+  and never moved it, so *any* `device="cuda"` run raised
+  `mat2 is on cpu, different from other tensors on cuda:0` — in the reference rung
+  as well as the kernel rung. `algorithms/pcalm/reference.py` had the same defect
+  in `_make_pc_alm_system`. Fixed by `.to(device)` at construction. 75 rows, all
+  CPU, was not a measurement gap; it was a broken GPU path nobody could reach.
+- **Locked by** `tests/acceleration/test_rung_bench_coverage.py`: every available
+  rung of every site must have a `status: "ok"`, `device: "cuda"` row, at three
+  scales, with a reference number at the same scale. Read-only, so it runs on a
+  CPU box. `artifacts/` is gitignored, so the lock *skips* when no rows have been
+  recorded (same policy as the microbench-evidence check in
+  `test_all_implementations.py`) and fails when rows exist but a rung lost
+  coverage. **The rows are therefore local evidence, not committed artefacts** —
+  the one thing §0.3 item 5 wants that this repo's `.gitignore` does not yet
+  allow. See §8.8.
 - **Done when** `artifacts/benchmarks/` has GPU rows for all 9, each beside its
   reference number, and §5 records the result honestly — including any site
-  where triton is *slower*, which is a result and not a failure.
+  where triton is *slower*, which is a result and not a failure. **Met**; see §5.
 - **What the numbers are for:** ranking *where triton is closest to winning*,
   so §4.5 and §4.6 spend effort on the families that will benefit first. A rung
   that loses today keeps its parity pair and its place in the ladder; it moves
@@ -281,7 +315,7 @@ with `device: "cuda"` and a `backend` that names the technology.
 - This step also settles a question §4.4 needs: whether a rung that is slower
   but bit-identical is worth promoting for verification value alone. That is a
   real trade and it deserves a recorded answer per family rather than a global
-  rule.
+  rule. **§5 records the per-family answer this step produced.**
 
 ### 4.2 One meaning for "available"
 
@@ -472,10 +506,74 @@ someone checked rather than a class nobody looked at.
 
 ## 5. Results (filled in as §4 lands; empty means not measured)
 
+Measured 2026-09-26, RTX 3080, triton 3.8.0, torch with CUDA, `float32`, seed 0,
+3 warmup + 5 timed iterations per (site, scale). Reproduce with §4.1's command;
+raw rows in `artifacts/benchmarks/rungs/`. `ratio` is median kernel-rung wall
+time ÷ median reference-rung wall time at the same scale, so **below 1.0 means
+the fast rung won**.
+
+### 5.1 §4.1 — the ladder, measured for the first time
+
+| site | declared technology | scale 1 | scale 8 | scale 32 | verdict |
+|---|---|---|---|---|---|
+| `pc_alm_settling` | triton | **0.60** | **0.58** | **0.73** | the one clear win |
+| `muon_newton_schulz` | triton | **0.71** | **0.67** | 1.26 | wins small, loses at 2048² |
+| `eqprop_forward_step` | triton | **0.84** | **0.84** | **0.91** | small consistent win |
+| `pcalm` | triton | 1.03 | 0.97 | 1.13 | noise — see below |
+| `local_goodness` | triton | 1.12 | 1.13 | **0.96** | loses until it wins |
+| `tile_mesh` | triton | 1.30 | 1.03 | 1.11 | loses |
+| `random_projections` | triton | 1.01 | 1.38 | 1.42 | loses, worse with size |
+| `energy_minimization` | torch_compile | 1.99 | 1.61 | 1.53 | compile loses |
+| `predictive_settling` | torch_compile | 4.86 | 4.29 | 5.00 | compile loses badly |
+
+Six answers fall out of that table, and only the first was expected.
+
+1. **Triton wins at 3 of 9 sites, and decisively at exactly one.** `pc_alm_settling`
+   is 0.58–0.73 across every size — the first rung in the tree with a measured
+   reason to exist. Per §4.1's ranking, that is where §4.5/§4.6 effort goes first.
+2. **Six of the nine kernel rungs are slower than the rung below them.** A
+   result, not a failure (§3): each keeps its parity pair. §0.3 item 5 is
+   satisfied by rows, not by wins.
+3. **The six spec sites are Python-overhead bound, so their ratios are not kernel
+   measurements.** Their reference rung costs ~1.0 ms at scale 1 *and* at scale
+   32; the floor is Python dispatch, not FLOPs. `tile_mesh` (1.17 → 3.34 ms) and
+   `muon` (0.74 → 14.98 ms) are the only two whose timing actually tracks size.
+   **Consequence for §4.1's ranking: the honest per-rung comparison needs a
+   scale where the work dominates, and for the other seven sites that means either
+   a much larger case or a loop that amortises dispatch.** Do not read the
+   near-1.0 ratios as "triton ≈ torch"; they are "both ≈ the interpreter".
+4. **`torch.compile` is a loss on both sites that use it** (1.5× to 5×), and it is
+   the technology `predictive_settling`'s spec declares while its `kernel.py`
+   actually imports six triton kernels — §1.5's defect, now with a number attached.
+5. **`pcalm`'s ratio is measurement of nothing.** `algorithms/pcalm/kernel.py`
+   delegates to `reference.step` in both branches, so its "triton" rung *is* the
+   reference rung; 1.03/0.97/1.13 is run-to-run noise and should be read as
+   "no triton work happens here". §4.6 is where that stops being true.
+6. **`predictive_settling` is the most valuable GPU row in the tree**, and not for
+   its speed: it is the site where the declared technology and the imported
+   technology disagree, and the first measurement anyone has taken of it.
+
+### 5.2 §4.1's open trade, answered per family
+
+§4.1 asked whether a rung that is slower but parity-clean is worth promoting for
+verification value alone. The measured answer, per family, recorded rather than
+globalised:
+
+| family | slower? | parity-clean? | answer |
+|---|---|---|---|
+| `pc_alm_settling` | no — it wins | yes | promote on speed; the usual case |
+| `muon`, `eqprop` | no at small sizes | yes | promote on speed, with a size caveat recorded |
+| `local_goodness`, `tile_mesh`, `random_projections` | yes | yes | **keep promoted for verification value** — the parity pair is the product (§0.2 purpose 3) and the speed deficit is one measurement on one card |
+| `energy_minimization`, `predictive_settling` (`torch_compile`) | yes, 1.5–5× | yes | keep, but the rung under test is the wrong one; see opportunity 2 below |
+| `pcalm` | n/a — no triton work | yes | unrankable until §4.6 gives it a real rung |
+
+### 5.3 The rest of the census
+
 | question | answer |
 |---|---|
-| Does triton beat torch anywhere? | **unmeasured** (§4.1) |
-| Is there a GPU benchmark row? | **no** — 75 rows, all `device: "cpu"` |
+| Does triton beat torch anywhere? | **yes, at 3 of 9 sites** (§5.1) — measured 2026-09-26 |
+| Is there a GPU benchmark row? | **yes** — 9 sites × 3 scales × 2 rungs in `artifacts/benchmarks/rungs/`; the 75 pre-existing rows are still all `device: "cpu"` |
+| Why were there no GPU rows before? | geometries were built on CPU and never moved, so every `device="cuda"` run raised a device mismatch; fixed in §4.1 |
 | `kernel.py` modules reaching a triton rung | 7 (9 call sites), behind 17 kernels |
 | GPU tests covering them | 19, all passing here |
 | `*KernelBackend` classes with a consumer | 0 of 13 (plus 10 contrastive, never registered) |
@@ -535,3 +633,59 @@ ask the question today. Write it in §4.3, when a rung can be named.
 - **Optimising the 55 torch kernel modules as a goal in itself.** They are the
   reference the triton rung is verified against; but note §4.1's ranking may
   legitimately send effort there instead, if that is where the walltime is.
+
+---
+
+## 8. Improvement opportunities found while measuring (§4.1)
+
+Written down so §4.2–§4.6 can inherit them rather than rediscover them. None is
+scheduled; they are the things measuring the ladder taught us.
+
+1. **The ratios for 7 of 9 sites are interpreter-bound, not kernel-bound.** Their
+   reference rung costs ~1 ms at every scale, so the number is Python dispatch
+   overhead. `rungbench` needs a `--loops N` that times N `step()` calls per
+   iteration, so the fixed floor divides out and the ratio measures the rung.
+   Until then, treat every non-`tile_mesh`, non-`muon` ratio in §5.1 as
+   "unmeasured, both rungs at the floor".
+2. **`kernel_technology` is a declaration, and it lies twice.** `predictive_settling`
+   declares `torch_compile` and imports six triton kernels; `energy_minimization`
+   declares `torch_compile` and pays 1.5–5× for it. §4.3 should *derive* the
+   technology from what the `kernel` module actually imports — the same
+   "measured, not declared" rule §4.2 applies to availability — so the field
+   cannot drift from the module it describes.
+3. **`pcalm/kernel.py` is a "triton" rung containing no triton.** Both branches
+   call `reference.step`. It is a rung in name only, and §5.1's 1.03/0.97/1.13 is
+   noise. Either §4.6 gives it real triton work or the spec should stop claiming
+   a technology the module does not have.
+4. **Only 7 of ~64 `cases.make_case` functions have a size knob.** The `scale`
+   parameter §4.1 added is the right shape, but it is 7 copies of one idea. The
+   deduplicated form is a single shared helper (a `CaseScale`/`scaled_geometry`
+   in the ontology layer) that the remaining ~57 case factories call — and without
+   it, no rung of those 57 can ever be compared at more than one size.
+5. **19 algorithm `reference.py` modules build their geometry on CPU and never
+   move it**, exactly as `pcalm` did. `pcalm` was fixed because §4.1 hit it; the
+   other 18 are latent. `tests/property/test_device_hygiene_gate.py` already
+   encodes "compose on CPU, then move the geometry, then step" for every
+   `(dynamics × credit × update)` cell — what it does not cover is the *case
+   factories*, which construct on CPU and depend on the caller moving the
+   geometry afterwards. Extending that gate with "`make_case(device="cuda")`
+   then `step()` raises nothing, for all 64 specs" turns §4.1's discovery into a
+   standing contract. Expect it to be red on arrival; that is the point, and it is
+   a *device* gate, not a compile gate, so nothing has to be deleted to satisfy it.
+6. **`scripts/bench_dashboard.py` globs `artifacts/benchmarks/*.jsonl`,**
+   non-recursively, so it cannot see `artifacts/benchmarks/rungs/`. Either
+   `rglob` or the new rows are invisible to the one tool that reads them.
+7. **`torch.compile` is a rung that has now lost twice.** Not a deletion argument
+   (§3) — but the ladder should record *why* a rung is there, and 1.5–5× slower
+   on micro-workloads is a reason a reader deserves to see next to the spec that
+   selects it.
+
+8. **The GPU rows are untracked, so §0.3 item 5's evidence cannot be reviewed in
+   a diff.** `.gitignore` excludes `artifacts/`, and all 75 pre-existing benchmark
+   rows are untracked for the same reason. For a *measurement* that is right; for
+   the one measurement the plan's completion criterion names, it means the
+   criterion is satisfied only on the box that produced it. Two honest options:
+   un-ignore `artifacts/benchmarks/rungs/` (9 small JSONL files, the first
+   benchmark evidence ever meant to be reviewed), or move the summary table that
+   §5.1 already is into a committed doc and let the raw rows stay local. The
+   second is cheaper and loses nothing; the first is what a reviewer would want.
