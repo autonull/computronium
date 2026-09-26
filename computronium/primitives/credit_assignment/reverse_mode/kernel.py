@@ -25,7 +25,11 @@ def step(case: Any) -> Any:
     # Use accelerated implementation (falls back to reference for GradientCredit)
     import torch
 
-    from computronium.ontology.credit import CreditAssignmentConfig, GradientCredit
+    from computronium.ontology.credit import (
+        CreditAssignmentConfig,
+        GradientCredit,
+        Phase,
+    )
     from computronium.state import CompositeState
 
     config = CreditAssignmentConfig.gradient(
@@ -49,7 +53,7 @@ def step(case: Any) -> Any:
         plastic={},
         substrate={},
     )
-    states: dict[str, CompositeState] = {"free": free_state, "nudged": nudged_state}  # type: ignore[assignment]
+    states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
     # Get geometry from case
     geometry = case.geometry
@@ -64,7 +68,7 @@ def step(case: Any) -> Any:
     torch.manual_seed(case.config.get("seed", 0))
     try:
         credit = GradientCredit(config)
-        grads = credit.compute_pseudo_gradient(states, loss, geometry)  # type: ignore[arg-type]
+        grads = credit.compute_pseudo_gradient(states, loss, geometry)
     finally:
         torch.set_rng_state(rng_state)
 

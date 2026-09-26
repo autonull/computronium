@@ -27,6 +27,7 @@ def step(case: Any) -> Any:
 
     from computronium.ontology.credit import (
         CreditAssignmentConfig,
+        Phase,
         TargetInversionCredit,
     )
     from computronium.state import CompositeState
@@ -61,7 +62,7 @@ def step(case: Any) -> Any:
         plastic={},
         substrate={},
     )
-    states = {"free": free_state, "nudged": nudged_state}
+    states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
     # Get loss
     nudged_output = case.nudged_activations[-1]
@@ -73,9 +74,7 @@ def step(case: Any) -> Any:
     torch.manual_seed(case.config.get("seed", 0))
     try:
         credit = TargetInversionCredit(config)
-        # Type ignore: CompositeState is structurally compatible with SystemState
-        # but not a subtype in the type system; runtime behavior is correct
-        grads = credit.compute_pseudo_gradient(states, loss, geometry)  # type: ignore[arg-type]
+        grads = credit.compute_pseudo_gradient(states, loss, geometry)
     finally:
         torch.set_rng_state(rng_state)
 

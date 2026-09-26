@@ -19,6 +19,9 @@ from computronium.ontology.dynamics._state import (
     SettableState,
     is_composite_state,
     is_system_state,
+    set_state_field,
+    state_dual_vars,
+    state_energy,
 )
 
 if TYPE_CHECKING:
@@ -52,4 +55,7 @@ __all__ = [
     "dynamics_from_config",
     "is_composite_state",
     "is_system_state",
+    "set_state_field",
+    "state_dual_vars",
+    "state_energy",
 ]

@@ -2,11 +2,13 @@
 
 **Status**: **ACTIVE** — §0 (`ff6528fb`), §2.1 (`59d13f47`), §2.2 (`f06f7629`),
 §2.5 (`0faecede`), §4.1 + §5.2 (`5ad96f85`), §1.1 + §1.5, §5.1, §5.3, and
-now **§5.4's dispatch half** complete. §1.2–§1.4, §1.6, §2.3–§2.4, §2.6–§2.7,
-§3, §4.2–§4.4 open, plus §5.4's export half, §5.6, §5.7 and the new §5.8/§5.9.
-**Recommended next: §5.8** (the credit layer's retyping). (Pass 9 fixed a live
-dispatch gap — `update_from_config` could not build `natural_gradient` — and
-a vacuous registry test.) (§1.4's substance landed in `fb6bb0f7`, which also
+now **§5.4's dispatch half** and **§5.8** complete. §1.2–§1.4, §1.6,
+§2.3–§2.4, §2.6–§2.7, §3, §4.2–§4.4 open, plus §5.4's export half, §5.6,
+§5.7, §5.9. **No unblocked work item is left in §5** — the rest are
+decisions; the cheapest remaining *work* is §1.6 or §3.1. (Pass 9 fixed a
+live dispatch gap — `update_from_config` could not build `natural_gradient` —
+and a vacuous registry test; Pass 10 removed every credit-layer
+`type: ignore` and locked the `TYPE_CHECKING`-import hazard.) (§1.4's substance landed in `fb6bb0f7`, which also
 found §1.2b.)
 
 Continues the series after `TODO33` (deprecated/legacy cleanup). Where `TODO33`
@@ -21,6 +23,45 @@ starting it.
 ---
 
 ## Summary of Completed Work
+
+### Pass 10 — §5.8 the credit layer, and a NameError class ruff cannot see
+
+`ontology/credit.py` named `SystemState` on **17** signatures while every
+`primitives/credit_assignment/*/{kernel,reference}.py` builds `CompositeState`
+per phase and silenced the mismatch with `# type: ignore[arg-type]`. All 37
+annotations now name `SettableState`; the two SystemState-only fields the
+credit reads (`energy` in `surrogate_objective`, `dual_vars` in the PC-ALM
+path) go through the new `state_energy` / `state_dual_vars` readers in
+`_state.py`, which return `None` on the z_t view instead of raising.
+
+**All four credit suppressions are deleted**, and two kernels needed a real
+fix rather than a deletion: `target_inversion/{kernel,reference}.py` and
+`reverse_mode/kernel.py` keyed their phase dicts with bare strings
+(`{"free": ..., "nudged": ...}`), which works at runtime only because
+`Phase` is a `StrEnum`. They now key with `Phase.FREE` / `Phase.NUDGED`.
+`pyright computronium/primitives/credit_assignment/`: **0 errors**, with no
+suppressions. A dead `free_state` local in the PC-ALM credit (flagged by
+`F841` in every repo-wide run) is gone.
+
+**The defect worth remembering.** The optional-field readers were first
+written as `TYPE_CHECKING` imports in `credit.py`, because the annotations
+were. Every PC-ALM run then raised `NameError: name 'state_dual_vars' is not
+defined` — 18 fast-lane failures. **`ruff`'s F821 cannot see this**: the
+binding exists as far as the linter is concerned, it is simply absent at
+runtime. The same trap fired one line earlier in `_state.py` itself
+(`Tensor` imported for typing, used in an `isinstance`), where the only thing
+that caught it was a behavioural test.
+
+New lock, `test_type_checking_imports_are_not_called_at_runtime` (scans all
+of `computronium/**` in ~3s): a name bound under `if TYPE_CHECKING:` and then
+*called* — or used as an `isinstance`/`issubclass` argument — is a finding.
+Two false-positive classes had to be excluded for it to be usable, and both
+exclusions are in the helper's docstring: attribute bases (`pd.DataFrame` in
+a string annotation is fine) and names re-imported at runtime inside a
+function. It is the general form of the 11-site `F821` silences in §2.1,
+which were the same mistake at module scope.
+
+Fast lane: **3204 passed, 119 skipped, 26 xfailed, 1 xpassed in 91s**.
 
 ### Pass 9 — §5.4 the registries are derived, and the first defect it found
 
@@ -917,7 +958,7 @@ correct. `TestDriverUniquenessLock` deliberately does **not** assert
 Decide: per-layer count summed (today), per-layer max, or separate
 `steps_used` / `layers` fields — and then make the lock assert it.
 
-### 5.8 New: the credit layer has §5.3's defect, suppressed — P2
+### 5.8 New: the credit layer has §5.3's defect, suppressed — P2 — **DONE** (Pass 10)
 
 Found while landing §5.3. `ontology/credit.py` annotates **17** signatures
 `SystemState` (`compute_pseudo_gradient(states: Mapping[Phase, SystemState])`,
@@ -930,12 +971,10 @@ such directives repo-wide, so this is the same debt class one layer down,
 and the settle surface is the right contract to extend rather than a
 `SystemState`/`CompositeState` pair to choose between.
 
-**Sequencing.** Annotation-first, exactly as §5.3: `SettableState` already
-covers what the credit reads, so the 17 sites are a mechanical retype and
-the `# type: ignore[arg-type]` at those call sites can be deleted
-afterwards — *those* deletions are the proof, because each one either
-disappears or becomes a real error to fix. Do it with §5.4: both jobs are
-"stop hand-maintaining a surface that a table or a Protocol can state once."
+**Landed (Pass 10).** All 37 annotations retyped, all four suppressions
+deleted, two kernels' string-keyed phase dicts fixed to `Phase.*`, and the
+resulting `TYPE_CHECKING`-import hazard locked. The sequencing note stands:
+this had to land before §5.4's export half, and did.
 
 ### 5.9 New: three `getattr` accessors are now redundant — P3
 
@@ -960,7 +999,8 @@ backwards compatibility).
 | 3rd | 5.3 | Needs a decision, and wanted §5.1 settled first | **done** (Pass 8) |
 | 4th | 5.4 | Mechanical, benefits from 5.1–5.3 having reduced the surface count | **dispatch half done** (Pass 9); export half open |
 | 5th | 5.6, 5.7 | Both are decisions the driver exposed, not new work | open |
-| — | 5.8, 5.9 | Found by 5.3's own retype; annotation-first like 5.3 | open |
+| — | 5.8 | Found by 5.3's own retype; annotation-first like 5.3 | **done** (Pass 10) |
+| — | 5.9 | Accessor cleanup exposed by 5.3 | open |
 
 5.2 was pulled forward because §4.1's lint check fails on day one otherwise —
 the plan says so explicitly, and it was right. 5.1 then followed, and the
@@ -999,13 +1039,15 @@ Phase F is **three-quarters done**: 5.1, 5.2 and 5.3 landed; 5.4 remains
 | **E — presentation** | 4.2, 4.3, 4.4 | ~1d | `comp watch` streams a live run headfully | open |
 | **F — architecture** | 5.1 → 5.2 → 5.3 → 5.4 | ~1w | 10 settle loops → 1 driver; Pareto in one layer; registries derived | 5.1, 5.2, 5.3 **done**; 5.4 dispatch half **done** |
 
-**Recommended next step** (cheapest, unblocked, high value): **§5.8** — retype
-the 17 `SystemState` annotations in `ontology/credit.py` onto `SettableState`
-and delete the `# type: ignore[arg-type]` that hid it. It is annotation-first
-like §5.3, needs no measurement, and each deleted suppression is a proof; it
-also has to land before §5.4's export half, since both touch `ontology/**`.
-After that, §5.4's export half is a *decision*, not a chore, and §5.6/§5.7
-are decisions the driver exposed.
+**Recommended next step**: there is no unblocked *work* item left in §5 —
+what remains is §5.4's export half, §5.6 and §5.7, and all three are
+*decisions* rather than chores, which is the point at which this plan's
+remaining budget is better spent on the untouched sections: **§1.6**
+(re-baseline the cost table — arithmetic plus one slow pass, no design
+question), **§3.1** (`deployment.py` vs `deployment/`, a real import footgun
+nobody's linter flags), and **§2.3**'s mechanical lint tranche. §5.6/§5.7
+should be taken by whoever next touches `local_learning/settling.py` or the
+LIF horizon, since both are questions only that code can answer cheaply.
 
 **A hard constraint discovered in this pass, and it is a process rule, not a
 plan item: individual commands over ~15s are not affordable on this box.**
@@ -1097,6 +1139,15 @@ move, and say so in the commit body.
   vs `ast.Expr`) and the parametrised classifier test caught it in 3s. The
   same shape as §0.6, at 1/100th the cost, because the scan is pure AST over
   a temp file — no fixture, no GPU, no settle loop.
+- **A binding that exists only for the type checker is not a binding.**
+  §5.8's first cut put the new readers in `TYPE_CHECKING` (they were used
+  in annotations) and every PC-ALM run raised `NameError`. `ruff` F821 — the
+  gate §2.1 spent a pass strengthening — is structurally incapable of
+  seeing it. The general rule took one small AST test to encode, and it
+  subsumes the 11 suppressed `F821`s of §2.1, which were the same mistake
+  at module scope. Linters check names; only a test can check *when* a name
+  exists.
+
 - **A hand-kept table does not fail; it accumulates accommodations.** The
   clearest evidence in this plan is not the missing `natural_gradient` key
   but what grew around it: a comment in a test saying "gap in dispatch" and

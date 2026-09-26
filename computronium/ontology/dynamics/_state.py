@@ -38,9 +38,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, TypeIs, runtime_checkable
 
-if TYPE_CHECKING:
-    from torch import Tensor
+from torch import Tensor
 
+if TYPE_CHECKING:
     from computronium.ontology.system import SystemState
     from computronium.state import CompositeState
 
@@ -88,6 +88,31 @@ def set_state_field(state: SettableState, name: str, value: object) -> None:
     setattr(state, name, value)
 
 
+def state_energy(state: object) -> Tensor | float | None:
+    """Read the settle energy — a ``SystemState`` field, absent on z_t.
+
+    Consumers that run before the pipeline sets it (and any caller holding
+    the z_t view) get ``None``, which is the honest answer: the field does
+    not exist there. Reached through ``getattr`` because the Protocol
+    declares the shared surface only.
+    """
+    value = getattr(state, "energy", None)
+    return value if isinstance(value, Tensor | float) else None
+
+
+def state_dual_vars(state: object) -> list[Tensor] | None:
+    """Read the PC-ALM duals, from the flat field or the z_t activity entry."""
+    value = getattr(state, "dual_vars", None)
+    if isinstance(value, list):
+        return value
+    activity = getattr(state, "activity", None)
+    if isinstance(activity, dict):
+        activity_value = activity.get("dual_vars_nudged") or activity.get("dual_vars")
+        if isinstance(activity_value, list):
+            return activity_value
+    return None
+
+
 def is_system_state(state: object) -> TypeIs[SystemState]:
     """Narrow to the flat 5-layer pipeline record."""
     from computronium.ontology.system import SystemState
@@ -112,4 +137,6 @@ __all__ = [
     "is_composite_state",
     "is_system_state",
     "set_state_field",
+    "state_dual_vars",
+    "state_energy",
 ]

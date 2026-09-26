@@ -13,14 +13,15 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.identity_card import AlgorithmIdentityCard
+from computronium.ontology.dynamics._state import state_dual_vars, state_energy
 from computronium.ontology.utils import _learnable_weight_names
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from computronium.ontology.dynamics._state import SettableState
     from computronium.ontology.geometry import Geometry, TransformerGeometry
     from computronium.ontology.substrate import Substrate
-    from computronium.ontology.system import SystemState
     from computronium.ontology.update import ParameterUpdate
 
 
@@ -507,7 +508,7 @@ class CreditAssignment(Protocol):
     @abstractmethod
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -527,8 +528,8 @@ class CreditAssignment(Protocol):
     # DEFAULT METHOD — non-breaking, only overridden by LocalGoodness/TargetInversion
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """Compute layer-local surrogate loss for gradient checking.
@@ -550,8 +551,8 @@ class _SurrogateUndefined:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         raise NotImplementedError(
@@ -674,7 +675,7 @@ class ThermodynamicContrast:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -742,13 +743,15 @@ class ThermodynamicContrast:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """Surrogate objective for EqProp: negative free energy difference."""
-        if free_state.energy is not None and nudged_state.energy is not None:
-            return torch.as_tensor(nudged_state.energy - free_state.energy)
+        free_energy = state_energy(free_state)
+        nudged_energy = state_energy(nudged_state)
+        if free_energy is not None and nudged_energy is not None:
+            return torch.as_tensor(nudged_energy - free_energy)
         return torch.tensor(0.0)
 
 
@@ -854,7 +857,7 @@ class RandomProjectionsCredit:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -952,8 +955,8 @@ class RandomProjectionsCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """Surrogate objective not defined for RandomProjectionsCredit."""
@@ -1139,7 +1142,7 @@ class LocalGoodnessCredit:
 
     @staticmethod
     def _pepita_covariate_stream(
-        free_state: SystemState, nudged_acts: list[Tensor]
+        free_state: SettableState, nudged_acts: list[Tensor]
     ) -> tuple[list[Tensor], int]:
         """PEPITA covariate stream and its offset into the settle acts.
 
@@ -1172,7 +1175,7 @@ class LocalGoodnessCredit:
 
     def _pepita_gradient(
         self,
-        free_state: SystemState,
+        free_state: SettableState,
         free_acts: list[Tensor],
         nudged_acts: list[Tensor],
         weight_names: list[str],
@@ -1220,7 +1223,7 @@ class LocalGoodnessCredit:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -1275,8 +1278,8 @@ class LocalGoodnessCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """Sum of layer-local goodness differences."""
@@ -1555,7 +1558,7 @@ class LocalContrastiveCredit:
 
     def compute_bias_pseudo_gradients(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> dict[str, Tensor]:
@@ -1591,7 +1594,7 @@ class LocalContrastiveCredit:
 
     def compute_pseudo_gradient(  # ruff: ignore[too-many-locals] — protocol axis assembly, kept linear
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -1660,8 +1663,8 @@ class LocalContrastiveCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         return torch.tensor(0.0)
@@ -1836,7 +1839,7 @@ class LocalContrastiveCredit:
         return gw
 
     def _tf_gradient_if_applicable(
-        self, free_state: SystemState, geometry: Geometry
+        self, free_state: SettableState, geometry: Geometry
     ) -> list[Tensor] | None:
         """Transformer-path dispatch: the label channel is the credit-owned
         injection (label_dim is an MLP-contract knob, unused here); None
@@ -1850,7 +1853,7 @@ class LocalContrastiveCredit:
 
     def _tf_gradient(
         self,
-        free_state: SystemState,
+        free_state: SettableState,
         geometry: Geometry,
     ) -> list[Tensor]:
         x = free_state.x
@@ -1953,7 +1956,7 @@ class TemporalTraceCredit(_SurrogateUndefined):
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -2195,7 +2198,7 @@ class TargetInversionCredit:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -2272,8 +2275,8 @@ class TargetInversionCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """Sum of layer-local target matching errors."""
@@ -2329,7 +2332,7 @@ class HomeostaticCredit(_SurrogateUndefined):
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -2411,25 +2414,26 @@ class PCALMCredit(_SurrogateUndefined):
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         # PC-ALM uses the NUDGED phase dual variables for weight updates
         # (free phase duals are zero when starting from feedforward pass)
         nudged_state = states.get(Phase.NUDGED)
-        free_state = states.get(Phase.FREE)
-
         if nudged_state is None:
             return []
 
         # Get dual variables from state (prefer dedicated field, fallback to metrics)
-        dual_vars = None
-        # First try the dedicated dual_vars field (set by PCALMDynamics for nudged phase)
-        if hasattr(nudged_state, "dual_vars") and nudged_state.dual_vars is not None:
-            dual_vars = nudged_state.dual_vars
+        # The dedicated field (set by PCALMDynamics for the nudged phase),
+        # read from whichever algebra carries it.
+        dual_vars = state_dual_vars(nudged_state)
         # Fallback to metrics for backward compatibility
-        elif hasattr(nudged_state, "metrics") and nudged_state.metrics:
+        if (
+            dual_vars is None
+            and hasattr(nudged_state, "metrics")
+            and nudged_state.metrics
+        ):
             dual_vars = nudged_state.metrics.get(
                 "dual_vars_nudged"
             ) or nudged_state.metrics.get("dual_vars")
@@ -2577,7 +2581,7 @@ class PepitaCredit:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -2603,7 +2607,7 @@ class PepitaCredit:
 
     def compute_bias_pseudo_gradients(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> dict[str, Tensor]:
@@ -2631,8 +2635,8 @@ class PepitaCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """The modulated second-pass CE — PEPITA's only real objective."""
@@ -2673,7 +2677,7 @@ class GradientCredit:
 
     def compute_pseudo_gradient(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
@@ -2698,7 +2702,7 @@ class GradientCredit:
 
     def compute_bias_pseudo_gradients(
         self,
-        states: Mapping[Phase, SystemState],
+        states: Mapping[Phase, SettableState],
         loss: Tensor | None,
         geometry: Geometry,
     ) -> dict[str, Tensor]:
@@ -2725,8 +2729,8 @@ class GradientCredit:
 
     def surrogate_objective(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
+        free_state: SettableState,
+        nudged_state: SettableState,
         geometry: Geometry,
     ) -> Tensor:
         """The nudged loss is the surrogate objective for true gradients."""
