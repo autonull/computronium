@@ -31,12 +31,22 @@ from computronium.core.construction import (
 )
 from computronium.models.native import (
     create_native_backprop_mlp,
+    create_native_diffusion_eqprop,
+    create_native_directed_ep,
     create_native_eqprop_mlp,
     create_native_fa_mlp,
+    create_native_finite_nudge_ep,
+    create_native_holomorphic_ep,
     create_native_lemma_mlp,
+    create_native_momentum_eqprop,
+    create_native_sparse_eqprop,
+    create_native_ternary_eqprop,
     create_native_tile_ep,
     create_native_tile_fa,
+    create_native_tile_gnn,
     create_native_tile_hebbian,
+    create_native_tile_pc,
+    create_native_tile_snn,
     create_native_tile_tp,
 )
 from computronium.utils import count_parameters
@@ -55,6 +65,7 @@ __all__ = [
     "bound_estimator",
     "build_model_kwargs",
     "estimate_param_count",
+    "has_model",
     "phantom_knobs",
     "resolve_native_model",
 ]
@@ -72,34 +83,79 @@ class ModuleFactory(Protocol):
 
 type NativeModelFactory = Callable[..., object]
 
+#: ``(name fragment, factory)`` in match order. The fragment is a substring of the
+#: zoo name, so ``standard_fa`` and ``direct_feedback_alignment`` both reach the FA
+#: factory. Order matters only where fragments overlap (``tile_fa`` before ``fa``).
 _NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = (
     ("backprop", create_native_backprop_mlp),
     ("pepita", create_native_lemma_mlp),
+    ("lemma", create_native_lemma_mlp),
     ("feedback_alignment", create_native_fa_mlp),
     ("tile_ep", create_native_tile_ep),
     ("tile_fa", create_native_tile_fa),
+    ("tile_gnn", create_native_tile_gnn),
+    ("tile_hebbian", create_native_tile_hebbian),
+    ("tile_pc", create_native_tile_pc),
+    ("tile_snn", create_native_tile_snn),
     ("tile_tp", create_native_tile_tp),
     ("hebbian", create_native_tile_hebbian),
+    ("directed_ep", create_native_directed_ep),
+    ("diffusion_eqprop", create_native_diffusion_eqprop),
+    ("finite_nudge", create_native_finite_nudge_ep),
+    ("holomorphic", create_native_holomorphic_ep),
+    ("momentum_eqprop", create_native_momentum_eqprop),
+    ("sparse_eqprop", create_native_sparse_eqprop),
+    ("ternary_eqprop", create_native_ternary_eqprop),
     ("fa", create_native_fa_mlp),
     ("eqprop", create_native_eqprop_mlp),
 )
 
+#: The canonical zoo names this registry answers to. A name outside this list may
+#: still resolve by fragment (``standard_fa`` does); use :func:`has_model` for the
+#: membership question rather than comparing against this tuple.
 NATIVE_MODEL_NAMES: tuple[str, ...] = (
     "backprop_mlp",
+    "directed_ep",
+    "diffusion_eqprop",
     "eqprop_mlp",
     "fa_mlp",
+    "finite_nudge_ep",
+    "holomorphic_ep",
+    "momentum_eqprop",
     "pepita_mlp",
+    "sparse_eqprop",
+    "ternary_eqprop",
     "tile_ep",
     "tile_fa",
+    "tile_gnn",
     "tile_hebbian",
+    "tile_pc",
+    "tile_snn",
     "tile_tp",
 )
+
+
+def has_model(name: str) -> bool:
+    """Whether ``name`` names a model this registry can build.
+
+    The membership predicate `resolve_native_model` used to lack: asking "is this
+    a known model?" had no answer, so every caller either guessed or caught the
+    wrong exception (TODO36 §4.8). Matching is by fragment, exactly as
+    :func:`resolve_native_model` matches, so the two cannot disagree.
+    """
+    key = name.lower()
+    return any(fragment in key for fragment, _ in _NATIVE_MODEL_FACTORIES)
 
 
 def resolve_native_model(name: str) -> NativeModelFactory:
     """Resolve a model name to its native 5-D composition factory.
 
-    Unknown names fall back to the EqProp composition.
+    An unknown name still falls back to the EqProp composition, which is a silent
+    substitution in the one place that must not make one. The registry now covers
+    every factory ``models.native`` exports, but ``diff_target_prop`` — named by
+    ``backprop_parity._FAMILY_MODELS`` — has no native factory at all, so raising
+    here is a product decision about that study rather than a mechanical fix
+    (TODO36 §4.8, §8.14). Use :func:`has_model` before calling.
     """
     key = name.lower()
     for fragment, factory in _NATIVE_MODEL_FACTORIES:

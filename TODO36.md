@@ -545,19 +545,41 @@ and it gates §4.6 for every family except those driven at the algorithm level.
 
 ### 4.8 A membership predicate for the zoo registry
 
+**PARTIAL 2026-09-26 — the predicate landed; the rename behind it did not.**
 `TODO35.md` §17.8-2. `backprop_parity._FAMILY_MODELS` names `standard_fa`,
 `dfa_deep`, `diff_target_prop`, `fabricpc_graph_pcn`, `directed_ep` — real zoo
-arms that are not learning rules, and whose comparison is meaningless on the
-rule lane (it would compare one MLP against itself).
-`resolve_native_model` "falls back to the EqProp composition" for any unknown
-name, a silent substitution in the one place that must not make one.
-`scripts/p4lite_surrogate_sanity.py` and `scripts/preliminary_run.py` need the
-same thing and now raise `KeyError` naming the rules, which is louder than the
-`ImportError` they replaced and no more useful.
+arms that are not learning rules, and whose comparison is meaningless on the rule
+lane (it would compare one MLP against itself). `resolve_native_model` "falls back
+to the EqProp composition" for any unknown name, a silent substitution in the one
+place that must not make one.
 
-- **First move:** `has_model(name)` on the zoo registry, then make
-  `resolve_native_model` raise on a miss. This is also a prerequisite for §4.6,
-  because wiring a rung means knowing which name asked for it.
+- **`has_model(name)` exists**, on the registry, matching by exactly the fragments
+  `resolve_native_model` matches — so the two cannot disagree. Locked by
+  `tests/unit/test_native_model_registry.py`, which also asserts membership and
+  resolution never contradict each other.
+- **The registry was found to be *incomplete*, which is the actual bug.** It
+  registered 9 fragments while `models.native` exports 18 factories, so two names
+  were being silently substituted today: **`directed_ep` ran as EqProp** despite
+  having `create_native_directed_ep`, and **`lemma_mlp` ran as EqProp** despite
+  having `create_native_lemma_mlp`. Both now reach their own factory. That is two
+  live silent substitutions closed by adding the rows that were missing — not by
+  renaming anything.
+- **`resolve_native_model` still falls back, and that is now a recorded decision
+  rather than an oversight.** Exactly one name in the tree still misses:
+  **`diff_target_prop`**, named by `_FAMILY_MODELS["target_prop"]`, has no native
+  factory anywhere in `models.native`. Raising on a miss would break that study, so
+  the question is not mechanical: is `diff_target_prop` a rule (and needs a
+  factory), or a zoo arm that does not belong on the rule lane at all (§4.8's own
+  framing)? That is a product decision about the parity study, and it is left to
+  whoever owns it. `has_model` is the tool for answering it: `has_model(
+  "diff_target_prop")` is `False` today, which is the fact the decision needs.
+- **Not done, and named:** the naming itself. Four lists still describe the zoo —
+  `_NATIVE_MODEL_FACTORIES`, `NATIVE_MODEL_NAMES`, `computronium/__init__.py`'s
+  export map, and `NATIVE_MODEL_NAMES` in the sklearn/lightning layers — and two
+  names for one factory (`pepita_mlp` / `lemma_mlp`) are exactly the kind of
+  duplication §0.2 condemns. Collapsing them is a rename across the sklearn,
+  lightning, serialization and autoscientist call sites; it is §8.15, not a
+  side-effect of adding a predicate.
 
 ### 4.9 Bring the rule spaces back in line with the arms
 
@@ -755,6 +777,7 @@ trusting the field.
 | Specs declaring `kernel_technology="triton"` | 54 |
 | Families where the name means more than one thing | 10 |
 | Parity tests between rung *n* and rung *n-1* | **two levels** — 64 specs at `step(case)`, plus 5 kernel entry points triton-vs-torch (§4.4) |
+| Native-model names silently substituted by the EqProp fallback | **2 closed** (`directed_ep`, `lemma_mlp`); 1 open (`diff_target_prop`, no factory exists) |
 | Adjacent-rung defects found by §4.4 | **2** — an EqProp fallback that disagreed with its kernel, and a triton Muon rung running a retired algorithm behind a tautological test |
 | Full-suite run (2026-09-26) | 4058 passed, 1 failed — one unmarked >120 s test (§4.12) |
 | `PLW0717` findings | 79, opportunistic only (§7) |
@@ -908,3 +931,11 @@ scheduled; they are the things measuring the ladder taught us.
     first is a false-flip risk on shared hardware, the second is maintenance with
     no payoff until a test is actually slow, and the third is a decision for
     whoever owns CI. Not started; the choice is recorded rather than guessed.
+14. **The zoo registry was incomplete rather than merely unlabelled**, which
+    reframes §4.8: the two silent EqProp substitutions (`directed_ep`,
+    `lemma_mlp`) were missing *rows*, not wrong names. One name remains —
+    `diff_target_prop` — and it has no factory to point at. Before the naming
+    cleanup (§8.15), someone should decide whether target propagation belongs on
+    the rule lane at all; if it does, `models/native` needs a
+    `create_native_diff_target_prop`, and if it does not, `_FAMILY_MODELS` should
+    stop naming it and `resolve_native_model` can raise.
