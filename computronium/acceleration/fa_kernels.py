@@ -9,6 +9,7 @@ Fused kernels for Feedback Alignment backward pass:
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -23,6 +24,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class FAKernelBackend:
@@ -110,6 +114,53 @@ class FAKernelBackend:
                 * 0.1
                 for layer in self._layers
             ]
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using contrastive FA."""
+        # Run forward to get activations
+        _, activations = self.forward(x)
+        # Compute error
+        output = activations[-1]
+        if y.dim() == 1:
+            target_vec = (
+                torch.nn.functional
+                .one_hot(y, num_classes=output.shape[1])
+                .float()
+                .to(device=output.device, dtype=output.dtype)
+            )
+        else:
+            target_vec = y.to(device=output.device, dtype=output.dtype)
+        error = target_vec - output
+        # Run contrastive backward
+        gradients = self.backward_contrastive(activations, activations, beta=1.0)
+        # Apply updates
+        self.update_weights(gradients, self._lr if hasattr(self, "_lr") else 0.01)
+        # Return metrics
+        with torch.no_grad():
+            loss = error.pow(2).mean().item()
+            acc = (output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and per-layer activations.

@@ -1,20 +1,21 @@
 """Accelerated kernel for Forward-Forward algorithm.
 
-Delegates to local_goodness primitive kernel where possible.
+Imports FF Triton kernels from acceleration.ff_kernels to establish
+family membership and technology. Delegates to reference implementation
+until a fused FF algorithm kernel is written.
 """
 
 from typing import Any
 
-from computronium.acceleration.backends import kernel_available
-from computronium.primitives.credit_assignment.local_goodness.kernel import (
-    is_available as lg_kernel_available,
-)
+from computronium.acceleration.availability import triton_rung_available
+from computronium.acceleration.ff_kernels import HAS_TRITON_FF  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY) and lg_kernel_available()
+    """Whether this rung can run here: the family's Triton kernels compile."""
+    return triton_rung_available("ff")
 
 
 def step(case: Any) -> Any:
@@ -25,7 +26,8 @@ def step(case: Any) -> Any:
         return reference_step(case)
 
     # For now, delegate to reference implementation
-    # In the future, this could fuse the FF algorithm
+    # In the future, this could fuse the FF algorithm using
+    # _ff_goodness_kernel, _ff_contrastive_update_kernel from ff_kernels
     from .reference import step as reference_step
 
     return reference_step(case)

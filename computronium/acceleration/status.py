@@ -41,8 +41,11 @@ _NONE = "none"
 #: ``acceleration/<name>_kernels`` -> the family whose rungs that module serves.
 #: Derived from the kernel module's imports at query time; this table only names
 #: the convention, so a module without an entry simply has no derived family.
+#: Also matches ``core/substrates/complex_substrate`` for the complex substrate family.
+#: Matches both module paths and import statements from acceleration kernel modules.
 _KERNEL_MODULE_FAMILY = re.compile(
-    r"computronium\.acceleration\.(\w+?_kernels|compile)"
+    r"computronium\.(?:acceleration\.(\w+?_kernels|compile)|core\.substrates\.(complex_substrate))|"
+    r"from computronium\.acceleration\.(\w+?_kernels) import"
 )
 
 #: Patterns to derive kernel technology from a kernel module's imports.
@@ -126,7 +129,8 @@ def family_of(spec: ImplementationSpec) -> str:
     found = _KERNEL_MODULE_FAMILY.findall(source)
     if not found:
         return _NONE
-    family = found[0]
+    # findall returns tuples when pattern has groups; pick first non-empty group
+    family = next((g for g in found[0] if g), "")
     return "torch_compile" if family == "compile" else family.removesuffix("_kernels")
 
 

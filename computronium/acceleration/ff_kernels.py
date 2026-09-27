@@ -5,6 +5,8 @@ Fused kernels for Forward-Forward goodness and PEPITA error-modulated updates.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -18,6 +20,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class FFKernelBackend:
@@ -66,6 +71,45 @@ class FFKernelBackend:
         self._layers = layers
         if activation is not None:
             self._activation = activation
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using FF positive/negative passes."""
+        # Positive pass
+        pos_output, pos_acts = self.forward_positive(x, y)
+        # Negative pass
+        neg_output, neg_acts = self.forward_negative(x, y)
+        # Compute updates
+        gradients = self.backward_contrastive(pos_acts, neg_acts, self._threshold)
+        # Apply updates
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            pos_goodness = (pos_output**2).sum(dim=1).mean().item()
+            neg_goodness = (neg_output**2).sum(dim=1).mean().item()
+            loss = neg_goodness - pos_goodness + self._threshold
+            acc = (pos_output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward_positive(self, x: Tensor, y: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Positive pass with label information.
@@ -323,6 +367,43 @@ class PEPITAKernelBackend:
         self._layers = layers
         if activation is not None:
             self._activation = activation
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using PEPITA standard/error-modulated passes."""
+        # Standard pass
+        std_output, std_acts = self.forward_standard(x)
+        # Error-modulated pass
+        err_output, err_acts = self.forward_error_modulated(x, y)
+        # Compute updates
+        gradients = self.backward(std_acts, err_acts)
+        # Apply updates
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            loss = (std_output - err_output).pow(2).mean().item()
+            acc = (std_output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward_standard(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Standard forward pass."""

@@ -5,6 +5,8 @@ Graph-parallel inference + PCN loss kernels.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -19,6 +21,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class PCKernelBackend:
@@ -73,6 +78,46 @@ class PCKernelBackend:
         self._layers = layers
         if activation is not None:
             self._activation = activation
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using PC contrastive learning."""
+        # Free phase
+        free_mu, _ = self.settle(x, y=None)
+        # Nudged phase
+        nudged_mu, telemetry = self.settle(x, y=y)
+        # Compute weight updates
+        gradients = self.backward(x, free_mu, nudged_mu)
+        # Apply updates
+        self.update_weights(gradients, self._eta_weight)
+        # Return metrics
+        with torch.no_grad():
+            output = nudged_mu[-1]
+            loss = telemetry.get("final_error", 0.0)
+            acc = (
+                (output.argmax(-1) == y).float().mean().item() if y is not None else 0.0
+            )
+        return {"loss": loss, "accuracy": acc}
 
     def init_states(self, x: Tensor) -> list[Tensor]:
         """Initialize state estimates (mu) for all layers."""
@@ -460,9 +505,9 @@ try:  # noqa: PLR0915
 
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
-
+    HAS_TRITON_PC = True
 except ImportError:
-    pass
+    HAS_TRITON_PC = False
 
 
-__all__ = ["PCKernelBackend"]
+__all__ = ["HAS_TRITON_PC", "PCKernelBackend"]

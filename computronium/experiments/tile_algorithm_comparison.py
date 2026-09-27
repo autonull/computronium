@@ -46,9 +46,7 @@ logger = logging.getLogger(__name__)
 class TileAlgorithmConfig:
     """Configuration for tile algorithm comparison."""
 
-    tasks: list[str] = field(
-        default_factory=lambda: ["mnist", "cifar10"]
-    )
+    tasks: list[str] = field(default_factory=lambda: ["mnist", "cifar10"])
     algorithms: list[str] = field(
         default_factory=lambda: ["ep", "fa", "tp", "pc", "hebbian", "snn", "backprop"]
     )

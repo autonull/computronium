@@ -23,6 +23,7 @@ from computronium.acceleration.kernels import EqPropKernel
 
 if TYPE_CHECKING:
     from computronium.acceleration.kernels import EqPropKernel as EqPropKernelType
+    from computronium.ontology import System
 
 
 class EqPropKernelBackend:
@@ -106,6 +107,39 @@ class EqPropKernelBackend:
         if layers:
             self._device = layers[0].weight.device
             self._dtype = layers[0].weight.dtype
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry.
+
+        Extracts the linear layers from the system's geometry and calls
+        ``set_model_ref`` with them.
+        """
+        # Try to get layers from geometry
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            # Geometry has params dict - extract Linear layers
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            # Sort by layer index if possible
+            if layers:
+                return layers
+        # Fallback: check for common attributes
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using the contrastive kernel."""
+        return self.contrastive_step(x, y)
 
     def _sync_weights_to_kernel(self) -> None:
         """Sync PyTorch layer weights to EqPropKernel's internal weights."""

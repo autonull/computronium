@@ -5,6 +5,8 @@ LIF dynamics + 3-factor STDP kernels for neuromorphic acceleration.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -19,6 +21,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class SNNKernelBackend:
@@ -71,6 +76,47 @@ class SNNKernelBackend:
 
     def set_model_ref(self, layers: list[torch.nn.Linear]) -> None:
         self._layers = layers
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using SNN STDP."""
+        # Run simulation with neuromodulator
+        neuromodulator = (
+            torch.nn.functional
+            .one_hot(y, num_classes=self._layers[-1].out_features)
+            .float()
+            .to(device=self._device, dtype=self._dtype)
+        )
+        spike_trains, voltage_traces, telemetry = self.simulate(x, y, neuromodulator)
+        # Compute STDP updates
+        gradients = self.stdp_update(spike_trains, voltage_traces, neuromodulator)
+        # Apply updates
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            loss = telemetry.get("loss", 0.0)
+            acc = telemetry.get("accuracy", 0.0)
+        return {"loss": loss, "accuracy": acc}
 
     def simulate(  # ruff: ignore[too-many-locals]
         self,
@@ -607,9 +653,9 @@ try:  # noqa: PLR0915
             mask_pre,
         )
 
-
+    HAS_TRITON_SNN = True
 except ImportError:
-    pass
+    HAS_TRITON_SNN = False
 
 
-__all__ = ["SNNKernelBackend"]
+__all__ = ["HAS_TRITON_SNN", "SNNKernelBackend"]

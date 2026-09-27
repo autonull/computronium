@@ -20,9 +20,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
     parser.add_argument("--task", default="mnist")
-    parser.add_argument(
-        "--ruler-table", type=Path, default=_ruler_table_path()
-    )
+    parser.add_argument("--ruler-table", type=Path, default=_ruler_table_path())
     parser.add_argument(
         "--png",
         type=Path,

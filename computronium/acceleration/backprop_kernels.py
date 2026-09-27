@@ -11,6 +11,8 @@ Memory complexity is O(L) because backprop stores an activation per layer.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor, nn
 
@@ -21,6 +23,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 _ACTIVATIONS = {
     "relu": nn.ReLU(),
@@ -65,6 +70,45 @@ class BackpropKernelBackend:
     def set_model_ref(self, layers: list[nn.Linear]) -> None:
         """Set reference to the model's linear layer stack."""
         self._layers = layers
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using backpropagation."""
+        # Forward pass
+        output, activations = self.forward(x)
+        # Compute error
+        error = torch.nn.functional.one_hot(y, num_classes=output.shape[1]).float().to(
+            device=output.device, dtype=output.dtype
+        ) - torch.softmax(output, dim=-1)
+        # Backward pass
+        gradients = self.backward(activations, error)
+        # Apply updates
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            loss = torch.nn.functional.cross_entropy(output, y).item()
+            acc = (output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and per-layer activations.

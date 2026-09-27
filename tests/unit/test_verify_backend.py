@@ -72,7 +72,10 @@ def _check_triton() -> bool:
     """Check Triton availability."""
     print("\n[Checking Triton]...")
     try:
-        from computronium.acceleration.triton_kernels import TRITON_IMPORTED, TritonEqPropOps
+        from computronium.acceleration.triton_kernels import (
+            TRITON_IMPORTED,
+            TritonEqPropOps,
+        )
 
         print(f"TRITON_IMPORTED: {TRITON_IMPORTED}")
         print(f"TritonEqPropOps.is_available(): {TritonEqPropOps.is_available()}")

@@ -5,6 +5,8 @@ Triton-accelerated kernels for MEP presets and O1MemoryEPv2.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -19,6 +21,9 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
 )
 from computronium.acceleration.triton_kernels import MEP_TritonOps
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class MEPKernelBackend:
@@ -69,6 +74,53 @@ class MEPKernelBackend:
 
     def set_model_ref(self, transition_modules: list[torch.nn.Module]) -> None:
         self._transition_modules = transition_modules
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        # For MEP, the geometry is expected to have transition_modules
+        if hasattr(system.geometry, "transition_modules"):
+            self.set_model_ref(system.geometry.transition_modules)
+        elif hasattr(system.geometry, "layers"):
+            self.set_model_ref(system.geometry.layers)
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using MEP contrastive learning."""
+        if not self._transition_modules:
+            return {"loss": 0.0, "accuracy": 0.0}
+        # Free phase: forward pass through transition modules
+        free_states = self._forward_chain(x)
+        # Nudged phase: forward pass with output nudging
+        nudged_states = self._forward_chain(x)
+        # Nudge output toward target
+        if y.dim() == 1:
+            target_vec = (
+                torch.nn.functional
+                .one_hot(y, num_classes=nudged_states[-1].shape[1])
+                .float()
+                .to(device=self._device, dtype=self._dtype)
+            )
+        else:
+            target_vec = y.to(device=self._device, dtype=self._dtype)
+        nudged_states[-1] = nudged_states[-1] + self._beta * (
+            target_vec - nudged_states[-1]
+        )
+        # Contrastive update
+        gradients = self.contrastive_update(free_states, nudged_states)
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            loss = (nudged_states[-1] - target_vec).pow(2).mean().item()
+            acc = (nudged_states[-1].argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
+
+    def _forward_chain(self, x: Tensor) -> list[Tensor]:
+        """Forward pass through chain of modules, returning per-layer activations."""
+        acts = [x]
+        h = x
+        for module in self._transition_modules:
+            h = module(h)
+            acts.append(h)
+        return acts
 
     # ============================================================
     # Muon: Newton-Schulz Orthogonalization
@@ -303,6 +355,52 @@ class O1MemoryEPv2KernelBackend:
 
     def set_model_ref(self, transition_modules: list[torch.nn.Module]) -> None:
         self._transition_modules = transition_modules
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        if hasattr(system.geometry, "transition_modules"):
+            self.set_model_ref(system.geometry.transition_modules)
+        elif hasattr(system.geometry, "layers"):
+            self.set_model_ref(system.geometry.layers)
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using O1Memory contrastive learning."""
+        if not self._transition_modules:
+            return {"loss": 0.0, "accuracy": 0.0}
+        # Free phase: forward pass through transition modules
+        free_states = self._forward_chain(x)
+        # Nudged phase: forward pass with output nudging
+        nudged_states = self._forward_chain(x)
+        # Nudge output toward target
+        if y.dim() == 1:
+            target_vec = (
+                torch.nn.functional
+                .one_hot(y, num_classes=nudged_states[-1].shape[1])
+                .float()
+                .to(device=self._device, dtype=self._dtype)
+            )
+        else:
+            target_vec = y.to(device=self._device, dtype=self._dtype)
+        nudged_states[-1] = nudged_states[-1] + self._beta * (
+            target_vec - nudged_states[-1]
+        )
+        # Contrastive update
+        gradients = self.compute_update(free_states, nudged_states)
+        self.update_weights(gradients, 1.0)
+        # Return metrics
+        with torch.no_grad():
+            loss = (nudged_states[-1] - target_vec).pow(2).mean().item()
+            acc = (nudged_states[-1].argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
+
+    def _forward_chain(self, x: Tensor) -> list[Tensor]:
+        """Forward pass through chain of modules, returning per-layer activations."""
+        acts = [x]
+        h = x
+        for module in self._transition_modules:
+            h = module(h)
+            acts.append(h)
+        return acts
 
     def settle_manual_o1(
         self,

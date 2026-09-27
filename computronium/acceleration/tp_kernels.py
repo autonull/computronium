@@ -5,6 +5,8 @@ Inverse network forward + target propagation kernels.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -17,6 +19,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class TPKernelBackend:
@@ -68,6 +73,64 @@ class TPKernelBackend:
         self._inverse_layers = inverse_layers
         if activation is not None:
             self._activation = activation
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        # For TP, the geometry should have forward and inverse layers
+        if hasattr(system.geometry, "forward_layers") and hasattr(
+            system.geometry, "inverse_layers"
+        ):
+            self.set_model_ref(
+                system.geometry.forward_layers, system.geometry.inverse_layers
+            )
+        elif hasattr(system.geometry, "layers"):
+            # Assume symmetric forward/inverse
+            layers = self._extract_layers(system.geometry)
+            if layers:
+                # Create inverse layers as transposes (simplified)
+                inverse_layers = []
+                for layer in reversed(layers):
+                    inv = torch.nn.Linear(
+                        layer.out_features, layer.in_features, bias=False
+                    )
+                    with torch.no_grad():
+                        inv.weight.copy_(layer.weight.T)
+                    inverse_layers.append(inv)
+                self.set_model_ref(layers, inverse_layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using Target Propagation."""
+        # Forward pass
+        output, fwd_acts = self.forward_forward(x)
+        # Compute targets
+        targets = self.compute_targets(y, fwd_acts)
+        # Inverse pass
+        inv_acts = self.forward_inverse(targets, fwd_acts)
+        # Compute weight updates
+        gradients = self.compute_updates(fwd_acts, inv_acts)
+        # Apply updates
+        self.update_weights(gradients, self._target_lr)
+        self.update_inverse_weights(gradients, self._inverse_lr)
+        # Return metrics
+        with torch.no_grad():
+            loss = torch.nn.functional.cross_entropy(output, y).item()
+            acc = (output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward_forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass through forward network."""

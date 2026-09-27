@@ -154,7 +154,9 @@ def _defines(module: str, name: str) -> bool:
 def bound_names(path: Path) -> frozenset[str]:
     """Every name ``path`` binds, imports included."""
     names, imports = _scanned(path)
-    return frozenset(names | {name for statement in imports for name in statement.names})
+    return frozenset(
+        names | {name for statement in imports for name in statement.names}
+    )
 
 
 @lru_cache(maxsize=1)

@@ -41,6 +41,8 @@ from computronium.state import PlasticityConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from computronium.acceleration.kernel_backend import KernelBackend
+
 # ============================================================
 # SystemState: Mutable state for 5-D pipeline
 # ============================================================
@@ -137,6 +139,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
     dynamics: TD
     credit: TC
     update: TU
+    _kernel_backend: KernelBackend | None
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step through the family-neutral pipeline."""
@@ -157,6 +160,14 @@ class System(Protocol[TS, TG, TD, TC, TU]):
         from computronium.core.pipeline import run_forward
 
         return run_forward(self.substrate, self.geometry, self.dynamics, x)
+
+    def attach_kernel_backend(self, backend: KernelBackend) -> None:
+        """Attach a kernel backend for accelerated training.
+
+        The backend will be bound to this system's geometry via
+        ``backend.bind_system(self)``.
+        """
+        ...
 
     def to_spec(self) -> dict[str, object]:
         """Serialize the System to a specification dictionary.
@@ -1152,8 +1163,12 @@ class _AdaptedSystem:
         self.update = update
         self._model = model
         self._optimizer: torch.optim.Optimizer | None = None
+        self._kernel_backend: KernelBackend | None = None
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        # Delegate to kernel backend if attached
+        if self._kernel_backend is not None:
+            return self._kernel_backend.train_step(x, y)
         model_train_step = cast(
             "Callable[[Tensor, Tensor], dict[str, float]] | None",
             getattr(self._model, "train_step", None),
@@ -1176,6 +1191,11 @@ class _AdaptedSystem:
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)
+
+    def attach_kernel_backend(self, backend: KernelBackend) -> None:
+        """Attach a kernel backend for accelerated training."""
+        backend.bind_system(self)
+        self._kernel_backend = backend
 
     def to_spec(self) -> dict[str, object]:
         return {

@@ -5,6 +5,8 @@ Batched outer product kernels for Hebbian and 3-factor learning rules.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -19,6 +21,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 
 class HebbianKernelBackend:
@@ -56,6 +61,45 @@ class HebbianKernelBackend:
     def set_model_ref(self, layers: list[torch.nn.Linear]) -> None:
         """Set reference to model layers."""
         self._layers = layers
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
+
+    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
+        """Extract linear layers from geometry."""
+        if hasattr(geometry, "params"):
+            layers = []
+            for name, param in geometry.params.items():
+                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
+                    layer = getattr(geometry, name.replace(".weight", ""))
+                    if isinstance(layer, torch.nn.Linear):
+                        layers.append(layer)
+            if layers:
+                return layers
+        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
+            return geometry.layers
+        return []
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using Hebbian learning."""
+        output, activations = self.forward(x)
+        # Hebbian update for each layer
+        gradients: dict[str, Tensor] = {}
+        for i in range(len(self._layers)):
+            pre = activations[i]
+            post = activations[i + 1]
+            layer_grads = self.hebbian_update(pre, post, i)
+            gradients.update(layer_grads)
+        # Apply updates
+        self.update_weights(gradients, self._learning_rate)
+        # Return metrics
+        with torch.no_grad():
+            loss = torch.nn.functional.cross_entropy(output, y).item()
+            acc = (output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
         """Forward pass returning output and activations."""
@@ -232,6 +276,32 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
     ) -> None:
         self._layers = layers
         self._out_layer = out_layer
+
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            # For ThreeFactor, we need the output layer separately
+            out_layer = layers[-1] if layers else None
+            hidden_layers = layers[:-1] if len(layers) > 1 else layers
+            self.set_model_ref(hidden_layers, out_layer)
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using 3-factor Hebbian learning."""
+        output, activations = self.forward(x)
+        # Compute output modulator (error signal)
+        output_modulator = torch.nn.functional.one_hot(
+            y, num_classes=output.shape[1]
+        ).float() - torch.softmax(output, dim=-1)
+        # Backward pass
+        gradients = self.backward(activations, output_modulator)
+        # Apply updates
+        self.update_weights(gradients, self._learning_rate)
+        # Return metrics
+        with torch.no_grad():
+            loss = torch.nn.functional.cross_entropy(output, y).item()
+            acc = (output.argmax(-1) == y).float().mean().item()
+        return {"loss": loss, "accuracy": acc}
 
     def backward(
         self,
@@ -443,9 +513,9 @@ try:  # noqa: PLR0915
 
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
-
+    HAS_TRITON_HEBBIAN = True
 except ImportError:
-    pass
+    HAS_TRITON_HEBBIAN = False
 
 
-__all__ = ["HebbianKernelBackend", "ThreeFactorKernelBackend"]
+__all__ = ["HAS_TRITON_HEBBIAN", "HebbianKernelBackend", "ThreeFactorKernelBackend"]

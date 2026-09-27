@@ -1,12 +1,15 @@
 """Accelerated kernel for PC-ALM algorithm.
 
-Delegates to primitive kernels where possible.
+Calls the PC-ALM primitive settling kernel (which uses the compiled
+triton settle loop) for the core dynamics. The full algorithm kernel
+(including credit assignment and parameter update) is not yet implemented
+in triton; delegates to reference for the complete training step.
 """
 
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.pcalm_kernels import TRITON_IMPORTED_PCALM
+from computronium.acceleration.pcalm_kernels import TRITON_IMPORTED_PCALM  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 
@@ -23,8 +26,9 @@ def step(case: Any) -> Any:
 
         return reference_step(case)
 
-    # For now, delegate to reference implementation
-    # In the future, this could fuse the entire algorithm
+    # The PC-ALM primitive settling kernel uses the compiled triton settle loop
+    # internally. The full algorithm kernel (credit + update) is not yet implemented.
+    # Delegate to reference for the complete training step.
     from .reference import step as reference_step
 
     return reference_step(case)

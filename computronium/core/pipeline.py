@@ -3,8 +3,11 @@
 Every composed system generation (5-D ``_ComposedSystem``, 6-D
 ``_JointSystem``, adapted legacy models) delegates here. The loop settles
 exactly the phases the credit rule declares (``credit.phases``), enables
-autograd through settling only when the rule declares
-``requires_autograd``, and returns a parity-guaranteed metrics schema.
+autograd through settling only when the rule declares ``requires_autograd``,
+and returns a parity-guaranteed metrics schema.
+
+If a system has a ``_kernel_backend`` attached, the kernel backend's
+``train_step`` method is used for accelerated execution.
 """
 
 from __future__ import annotations

@@ -41,7 +41,9 @@ if TYPE_CHECKING:
     from computronium.ontology import System
 
 
-def _train_rule(rule, task, config, device) -> tuple[list[dict[str, float]], System | None]:
+def _train_rule(
+    rule, task, config, device
+) -> tuple[list[dict[str, float]], System | None]:
     """Train one rule's system on ``task``; return the history and the system.
 
     The system comes back because a benchmark result reports its parameter
@@ -207,7 +209,7 @@ class CrossDomainBenchmarkSuite:
         try:
             rule = rule_for(model_name)
             history, system = _train_rule(rule, task, config, device)
-        except (RuntimeError, ValueError, TypeError, KeyError):
+        except RuntimeError, ValueError, TypeError, KeyError:
             logger.exception("Failed to run %s on %s", model_name, task.name)
             return None
 

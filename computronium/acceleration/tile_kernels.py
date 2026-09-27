@@ -5,6 +5,8 @@ Tile-parallel contrastive kernels extending core/tile/kernels.py.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
@@ -14,6 +16,9 @@ from computronium.acceleration.kernel_backend import (
     KernelConfig,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 # ──────────────────────────────────────────────
 # Triton Kernels for Tile Substrate
@@ -515,6 +520,21 @@ class TileKernelBackend:
         """Set reference to TileAlgorithm instance."""
         self._tile_algo = tile_algorithm
 
+    def bind_system(self, system: System) -> None:
+        """Bind the kernel to a System's geometry."""
+        # For Tile, the geometry is expected to be a TileMeshGeometry
+        if hasattr(system.geometry, "tile_algorithm"):
+            self.set_model_ref(system.geometry.tile_algorithm)
+        elif hasattr(system.geometry, "tile_mesh"):
+            self.set_model_ref(system.geometry.tile_mesh)
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using Tile contrastive learning."""
+        if self._tile_algo is None:
+            return {"loss": 0.0, "accuracy": 0.0}
+        # Delegate to tile algorithm's train_step
+        return self._tile_algo.train_step(x, y)
+
     def _launch_activity_update(
         self,
         activity: Tensor,
@@ -1015,8 +1035,215 @@ class TileKernelBackend:
 # Register backend for all HardwareTargets
 
 
+# =========================================================================
+# Standalone tensor launchers (for direct kernel access without backend)
+# =========================================================================
+
+
+def tile_activity_update(
+    activity: Tensor,
+    error: Tensor,
+    feedback: list[Tensor] | None,
+    step_size: float,
+    importance: float,
+    lambda_error: float,
+    clamp_min: float,
+    clamp_max: float,
+    clamp: bool,
+) -> Tensor:
+    """Launch fused tile activity update kernel.
+
+    Computes: activity = clamp(activity - step_size * importance * (error + lambda_error * activity + sum(feedback)))
+
+    Args:
+        activity: Tile activities [B, N]
+        error: Error signals [B, N]
+        feedback: List of feedback tensors [B, N] from other tiles
+        step_size: Step size for update
+        importance: Importance weighting
+        lambda_error: Leak/decay coefficient
+        clamp_min: Minimum clamp value
+        clamp_max: Maximum clamp value
+        clamp: Whether to apply clamping
+
+    Returns:
+        Updated activity [B, N]
+    """
+    if not TRITON_IMPORTED_TILE or activity.device.type != "cuda":
+        # PyTorch fallback
+        from computronium.core.tile.kernels import compute_activity_update
+
+        return compute_activity_update(
+            activity=activity,
+            error=error,
+            fwd_feedback=feedback or [],
+            importance=importance,
+            step_size=step_size,
+            lambda_error=lambda_error,
+            clamp_min=clamp_min,
+            clamp_max=clamp_max,
+            clamp=clamp,
+        )
+
+    B, N = activity.shape
+
+    if feedback:
+        num_fb = len(feedback)
+        fb_stack = torch.stack(feedback, dim=0)  # [num_fb, B, N]
+        fb_ptr = fb_stack.data_ptr()
+        fb_strides = torch.tensor(
+            [fb_stack.stride(0), fb_stack.stride(1), fb_stack.stride(2)],
+            device="cpu",
+            dtype=torch.int64,
+        )
+    else:
+        num_fb = 0
+        fb_ptr = 0
+        fb_strides = torch.zeros(3, dtype=torch.int64)
+
+    out = torch.empty_like(activity)
+    BLOCK_B = 16
+    BLOCK_N = 32
+    grid = ((B + BLOCK_B - 1) // BLOCK_B, (N + BLOCK_N - 1) // BLOCK_N)
+
+    _tile_activity_update_kernel[grid](
+        activity.data_ptr(),
+        error.data_ptr(),
+        fb_ptr,
+        fb_strides.data_ptr() if num_fb > 0 else 0,
+        num_fb,
+        out.data_ptr(),
+        step_size,
+        importance,
+        lambda_error,
+        clamp_min,
+        clamp_max,
+        clamp,
+        B,
+        N,
+        BLOCK_B=BLOCK_B,
+        BLOCK_N=BLOCK_N,
+    )
+    return out
+
+
+def tile_prediction(
+    inputs: list[Tensor],
+    bias: Tensor | None,
+) -> Tensor:
+    """Launch fused tile prediction kernel.
+
+    Computes: prediction = sum(inputs) + bias
+
+    Args:
+        inputs: List of input tensors [B, N]
+        bias: Optional bias tensor [N]
+
+    Returns:
+        Prediction tensor [B, N]
+    """
+    if not inputs:
+        if bias is not None:
+            return bias.unsqueeze(0)
+        return torch.empty(0, device=inputs[0].device if inputs else "cpu")
+
+    if not TRITON_IMPORTED_TILE or inputs[0].device.type != "cuda":
+        # PyTorch fallback
+        out = sum(inputs)
+        if bias is not None:
+            out = out + bias
+        return out
+
+    B, N = inputs[0].shape
+    num_inputs = len(inputs)
+
+    input_ptrs = [inp.data_ptr() for inp in inputs]
+    input_strides = torch.tensor(
+        [[inp.stride(0), inp.stride(1)] for inp in inputs],
+        device="cpu",
+        dtype=torch.int64,
+    )
+    bias_ptr = bias.data_ptr() if bias is not None else 0
+
+    out = torch.empty_like(inputs[0])
+    BLOCK_B = 16
+    BLOCK_N = 32
+    grid = ((B + BLOCK_B - 1) // BLOCK_B, (N + BLOCK_N - 1) // BLOCK_N)
+
+    _tile_prediction_kernel[grid](
+        input_ptrs,
+        input_strides.data_ptr(),
+        num_inputs,
+        bias_ptr,
+        out.data_ptr(),
+        B,
+        N,
+        BLOCK_B=BLOCK_B,
+        BLOCK_N=BLOCK_N,
+    )
+    return out
+
+
+def tile_contrastive_update(
+    src_free: Tensor,
+    dst_free: Tensor,
+    src_nudged: Tensor,
+    dst_nudged: Tensor,
+    lr: float,
+    beta: float,
+) -> Tensor:
+    """Launch fused contrastive Hebbian update kernel.
+
+    Computes: delta = lr/beta * (src_free.T @ dst_free - src_nudged.T @ dst_nudged) / B
+
+    Args:
+        src_free: Free pre-synaptic activations [B, D_in]
+        dst_free: Free post-synaptic activations [B, D_out]
+        src_nudged: Nudged pre-synaptic activations [B, D_in]
+        dst_nudged: Nudged post-synaptic activations [B, D_out]
+        lr: Learning rate
+        beta: Nudge strength
+
+    Returns:
+        Weight delta [D_out, D_in]
+    """
+    if not TRITON_IMPORTED_TILE or src_free.device.type != "cuda":
+        # PyTorch fallback
+        B = src_free.shape[0]
+        free = (dst_free.T @ src_free) / B
+        nudged = (dst_nudged.T @ src_nudged) / B
+        return lr * (nudged - free) / beta
+
+    B, D_in = src_free.shape
+    D_out = dst_free.shape[1]
+
+    delta = torch.empty(D_out, D_in, device=src_free.device, dtype=src_free.dtype)
+    BLOCK_IN = 16
+    BLOCK_OUT = 16
+    grid = ((D_out + BLOCK_OUT - 1) // BLOCK_OUT, (D_in + BLOCK_IN - 1) // BLOCK_IN)
+
+    _tile_contrastive_update_kernel[grid](
+        src_free.data_ptr(),
+        dst_free.data_ptr(),
+        src_nudged.data_ptr(),
+        dst_nudged.data_ptr(),
+        delta.data_ptr(),
+        B,
+        D_in,
+        D_out,
+        lr,
+        beta,
+        BLOCK_IN=BLOCK_IN,
+        BLOCK_OUT=BLOCK_OUT,
+    )
+    return delta
+
+
 __all__ = [
     "TRITON_IMPORTED_TILE",
     "TileKernelBackend",
     "TileShardedBackend",
+    "tile_activity_update",
+    "tile_contrastive_update",
+    "tile_prediction",
 ]

@@ -185,12 +185,11 @@ class VectorStore:
 
         results = []
         for score, idx in zip(scores[0], indices[0]):
-            if 0 <= idx < len(self.vector_ids):
-                if score >= min_similarity:
-                    entry_id = self.vector_ids[idx]
-                    results.append((entry_id, float(score)))
-                    if len(results) >= k:
-                        break
+            if 0 <= idx < len(self.vector_ids) and score >= min_similarity:
+                entry_id = self.vector_ids[idx]
+                results.append((entry_id, float(score)))
+                if len(results) >= k:
+                    break
         return results
 
     def _search_sklearn(
@@ -337,8 +336,8 @@ class VectorStore:
 
 __all__ = [
     "HAS_FAISS",
-    "HAS_SKLEARN",
     "HAS_SENTENCE_TRANSFORMERS",
+    "HAS_SKLEARN",
     "VectorBackend",
     "VectorStore",
     "VectorStoreConfig",

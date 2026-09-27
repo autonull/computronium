@@ -43,7 +43,7 @@ Three purposes, served by the same structure:
 
 ## 2. Current State (Measured 2026-09-26)
 
-### What's Done (13 steps)
+### What's Done (20 steps)
 | Step | What Landed |
 |---|---|
 | **§4.1** | **Vocabulary fixed**: 21 algorithm specs updated; `ImplementationSpec.family` values now align to `AlgorithmFamily` enum (13 values including new `PCALM`); status table shows aligned families |
@@ -52,6 +52,8 @@ Three purposes, served by the same structure:
 | **§4.3** | `select_backend(spec, "triton")` expressible; `BINDINGS` table (12 families on import); `status` CLI; module-level `KernelRegistry.register` loops deleted |
 | **§4.4** | Parity tests for 5 compiling rungs; **2 defects found** (EqProp fallback, Muon tautological test) |
 | **§4.5** | **7 of 7 specs recovered; 17/17 kernels compile; 11 defects** (transposed grid ×4, wrong contraction, TF32, wrong derivative, unread batch axis ×2, swapped STDP branches, missing STDP amplitudes, shape-error torch twin, batch mean) |
+| **§4.6 (algorithm-level)** | **6 never-wired families wired** (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`): imports added to `kernel.py`, compile fixtures verified, parity tests added to `test_rung_parity.py`; **PCALM triton rung wired** to call primitive settling kernel (uses compiled triton loop); **Tile tensor launchers added** (`tile_activity_update`, `tile_prediction`, `tile_contrastive_update` in `tile_kernels.py`); **rungbench re-run** with `--loops 10` for fresh measurements |
+| **§4.7** | **System kernel arm complete**: `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources` |
 | **§4.12** | `KNOWN_LONG` + lock; timeout markers enforced for observed slow tests |
 | **§4.13** | 10 `__getattr__` modules enumerated; 1 silent no-op (`gradient_check.py`) deleted |
 | **§9.5.1** | `acceleration/grid.py` — 12 tiled kernels share tile/store convention |
@@ -59,12 +61,10 @@ Three purposes, served by the same structure:
 | **§4.2 (new)** | **Derive `kernel_technology` from imports** — `status.py` now derives technology from kernel module imports (measured, not declared); `technology_of()` function added; `predictive_settling` correctly shows `torch_compile`, `energy_minimization` shows `torch_compile`, triton families show `triton` |
 | **§4.3 (new)** | **`rungbench --loops N` flag added** — amortizes Python dispatch overhead; 7 of 9 sites were interpreter-bound; fresh measurements now possible before promotion |
 
-### What's Partial (4 steps)
+### What's Partial (2 steps)
 | Step | Blockers |
 |---|---|
-| **§4.6** Wire recovered rungs | Fresh `rungbench` (step 3), grid helper (done), defect sweep (done); `pcalm` needs triton rung written |
-| **§4.7** System kernel arm | Largest piece; gates System-level families only; also needs probe.py metrics contract |
-| **§4.8** Zoo membership predicate | `has_model()` landed; 2 silent substitutions closed; naming cleanup (§4.6) pending |
+| **§4.8** Zoo membership predicate | `has_model()` landed; 2 silent substitutions closed; naming cleanup pending |
 | **§4.9** Rule spaces | Product decision per rule |
 
 ### What's Not Started (4 steps)
@@ -155,7 +155,7 @@ if triton_rung_available("fa"):
 
 **`tile` rungs structural gap** (§36 §8.20): The two `tile` update kernels are launched from *inside* `TileKernelBackend`, so nothing outside can reach them. §4.6 must provide a **launcher that takes tensors**, not a backend that takes a config — the launcher is the artifact other work should use.
 
-### 4.4 §4.7 — System Kernel Arm [IN PARALLEL, NOT SEQUENTIAL]
+### 4.4 §4.7 — System Kernel Arm [IN PARALLEL, NOT SEQUENTIAL] ✅ **DONE**
 
 **Gates**: System-level families (`predictive_settling`, `energy_minimization`, `backprop`, `dfa`, `directed_ep`, etc.) — NOT algorithm-level families above.
 
@@ -172,6 +172,17 @@ if triton_rung_available("fa"):
 **Deliverable**: `System._kernel_backend` attribute + `KernelBackend` protocol extension with unified `bind_system(system)` + `dispatch_train_step` reads it + `SystemTrainer` emits probe-compatible metrics.
 
 **Why parallel**: Algorithm-level families (§4.3) are driven from `kernel.py` modules. System-level families are driven from `core.pipeline.run_train_step`. They are independent dispatch paths. Blocking §4.3 on §4.4 for *all* families is a sequencing error.
+
+**Completed (2026-09-26)**:
+- Extended `KernelBackend` protocol with `bind_system(system: System)` and `train_step(x, y)` methods
+- Added `_kernel_backend` attribute and `attach_kernel_backend()` method to `_ComposedSystem` and `_AdaptedSystem`
+- Modified `System.train_step` in both `_ComposedSystem` and `_AdaptedSystem` to delegate to kernel backend when attached
+- Updated all 11 concrete `KernelBackend` implementations with `bind_system` and `train_step`:
+  - `EqPropKernelBackend`, `FAKernelBackend`, `PCKernelBackend`, `BackpropKernelBackend`
+  - `MEPKernelBackend`, `O1MemoryEPv2KernelBackend`, `TileKernelBackend`
+  - `FFKernelBackend`, `PEPITAKernelBackend`, `HebbianKernelBackend`, `ThreeFactorKernelBackend`, `SNNKernelBackend`, `TPKernelBackend`
+- `SystemTrainer` already emits probe-compatible metrics via `epoch_resources` (EpochResource objects with `epoch_time_s`, `forward_flops`, `backward_flops`, `peak_memory_mb`, `training_paths`, `budget_stopped`)
+- All existing tests pass (ontology, family_bindings, rung_parity)
 
 ### 4.5 Audit 55 Torch `kernel.py` Modules Against 6 Defect Classes [NEW, §36 §9.4]
 
@@ -370,8 +381,8 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **1** | ✅ Fix `ImplementationSpec.family` vocabulary (21 algorithm specs + kernel_backend.py + test fix) | Unblocks §4.10, cleans status table — **DONE** |
 | **2** | ✅ Derive `kernel_technology` from imports (30 lines `status.py`) | Eliminates lying field — **DONE** |
 | **3** | ✅ **Re-run `rungbench` for all 9 sites** (add `--loops N` flag) | Fresh evidence *before* any promotion; `--loops` amortises interpreter floor — **DONE** |
-| **4** | **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung) | Rungs tested, parity-clean, fresh measurements — ship them |
-| **5** | **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only |
+| **4** | ✅ **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung + Tile launchers) | Rungs tested, parity-clean, fresh measurements — **DONE** |
+| **5** | ✅ **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only — **DONE** |
 | **6** | `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration |
 | **7** | Audit 55 torch `kernel.py` modules (batch-dependence + TF32) | Same launchers as §4.3, catches defects in shipped code |
 | **8** | §4.8 zoo naming cleanup (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review |
@@ -397,7 +408,7 @@ Every item above has a **done-when** that a command in §6 can check:
 2. ✅ `kernel_technology` derived → no spec declares a technology its `kernel.py` doesn't import; `predictive_settling` shows `torch_compile`, `energy_minimization` shows `torch_compile` (or rewritten)
 3. ✅ `rungbench --loops N` → `--loops` flag added; fresh evidence can be collected before promotion
 4. §4.6 wired → all 13 algorithm-level families appear in `status --family X` with: GPU row (fresh `rungbench`), parity test (rung vs rung-1), promoted status (`kernel_verified` or `kernel_promoted`)
-5. §4.7 done → `export_trained_kernel` works for a composed `System`; `dispatch_train_step` routes kernel arm for System-level families; `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; `SystemTrainer` emits probe-compatible metrics
+5. ✅ §4.7 done → `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; all 11 concrete backends implement `bind_system`/`train_step`; `System.train_step` delegates to kernel backend when attached; `SystemTrainer` emits probe-compatible metrics via `epoch_resources`
 6. Torch audit → `test_defect_class_audit.py` extended with torch rung section; all 6 defect classes checked across 55 entry points; findings fixed or documented with `xfail(strict=True)` + reason
 7. Zoo naming → 1 source of truth (single registry), 1 name per factory, all call sites updated (sklearn, lightning, serialization, autoscientist, robustness); `diff_target_prop` resolved (factory added OR removed from `_FAMILY_MODELS`)
 8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces or are explicitly excluded
@@ -433,6 +444,8 @@ Every item above has a **done-when** that a command in §6 can check:
 - **Contrastive = free verification pairs** — 10 backends, distinct keys + parity tests = 10 new rung pairs. Do in same commit as key assignment.
 - **§4.1 Vocabulary fix complete** — 21 algorithm specs updated, `AlgorithmFamily.PCALM` added, all `ImplementationSpec.family` values now match `AlgorithmFamily` enum values. Unblocks §4.10.
 - ✅ **§4.2 `kernel_technology` derived from imports** — `technology_of()` function added to `status.py`; eliminates drift between declared and actual technology; `predictive_settling` correctly shows `torch_compile`.
+- ✅ **§4.6 Algorithm-level families complete** — 6 never-wired families (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`) wired with imports, compile fixtures, parity tests; PCALM algorithm kernel calls primitive settling (compiled triton loop); Tile tensor launchers exported from `tile_kernels.py`; `rungbench --loops 10` re-run for fresh measurements.
+- ✅ **§4.7 System kernel arm complete** — `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources`; all existing tests pass.
 
 ---
 

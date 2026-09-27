@@ -7,7 +7,6 @@ and _compiled_pcalm_settle. Provides uniform `step(case)` interface.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.pcalm_kernels import TRITON_IMPORTED_PCALM
 
 KERNEL_TECHNOLOGY = "triton"
 

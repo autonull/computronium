@@ -498,9 +498,7 @@ def _generate_report(
 def main():
     parser = argparse.ArgumentParser(description="Cross-Domain Transfer Experiment")
     parser.add_argument("--source", default="vision", help="Source domain")
-    parser.add_argument(
-        "--targets", default="tabular,vision", help="Target domains"
-    )
+    parser.add_argument("--targets", default="tabular,vision", help="Target domains")
     parser.add_argument("--source-tasks", default="cifar10", help="Source tasks")
     parser.add_argument(
         "--algorithms", default="ep,fa,pc,hebbian,backprop", help="Algorithms"

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
+from computronium.acceleration.kernel_backend import KernelBackend
 from computronium.core.system_trainer.spec import (
     _update_from_config as _spec_update_from_config,
 )
@@ -168,6 +169,17 @@ def compose_system[  # ruff: ignore[complex-structure]
         _training: bool = True
         # Attached training state (e.g. hyperopt mirrors trainer.optimizer here)
         optimizer: object | None = None
+        # Optional kernel backend for accelerated training
+        _kernel_backend: KernelBackend | None = None
+
+        def attach_kernel_backend(self, backend: KernelBackend) -> None:
+            """Attach a kernel backend for accelerated training.
+
+            The backend will be bound to this system's geometry via
+            ``backend.bind_system(self)``.
+            """
+            backend.bind_system(self)
+            self._kernel_backend = backend
 
         def to_spec(self) -> dict:
             """Serialize the System to a specification dictionary.
@@ -243,6 +255,9 @@ def compose_system[  # ruff: ignore[complex-structure]
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
+            # Delegate to kernel backend if attached
+            if self._kernel_backend is not None:
+                return self._kernel_backend.train_step(x, y)
             from computronium.core.pipeline import run_train_step
 
             return run_train_step(

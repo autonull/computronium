@@ -1,6 +1,6 @@
 """The binding layer: stateful rungs, bound to a family and a hardware target.
 
-``KernelRegistry`` holds rungs that need state — ``initialize``, ``set_model_ref``,
+``KernelRegistry`` holds rungs that need state -- ``initialize``, ``bind_system``,
 and the export path's need to serialise a *bound* backend. It is **not** the
 training dispatch: every training run goes through
 :func:`computronium.acceleration.dispatch.select_backend`, which is driven by
@@ -23,6 +23,8 @@ import torch
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from computronium.ontology import System
 
 
 class AlgorithmFamily(StrEnum):
@@ -130,6 +132,8 @@ class KernelBackend(Protocol):
     locality_level: LocalityLevel
 
     def initialize(self, config: KernelConfig) -> None: ...
+    def bind_system(self, system: System) -> None: ...
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
     def forward(self, *args: object, **kwargs: object) -> object: ...
     def backward(self, *args: object, **kwargs: object) -> object: ...
     def update_weights(self, *args: object, **kwargs: object) -> None: ...

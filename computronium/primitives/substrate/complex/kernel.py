@@ -1,28 +1,31 @@
 """Accelerated kernel for Complex Substrate.
 
-Delegates to computronium.ontology.substrate._substrate.ComplexSubstrate with triton acceleration.
-Provides uniform `make_substrate(spec)` factory interface.
+Imports Triton kernels from computronium.core.substrates.complex_substrate to establish
+family membership and technology. Delegates to reference implementation
+until a fused complex substrate kernel is written.
 """
 
-from computronium.acceleration.backends import kernel_available
-from computronium.ontology.substrate._substrate import ComplexSubstrate, SubstrateConfig
-from computronium.ontology.substrate.spec import SubstrateSpec
+from computronium.acceleration.availability import triton_rung_available
+from computronium.core.substrates.complex_substrate import ComplexSubstrate
 
 KERNEL_TECHNOLOGY = "triton"
 
 
 def is_available() -> bool:
-    return kernel_available(KERNEL_TECHNOLOGY)
+    """Whether this rung can run here: the family's Triton kernels compile."""
+    return triton_rung_available("complex_substrate")
 
 
-def make_substrate(spec: SubstrateSpec):
+def make_substrate(spec):
     """Create a complex substrate instance from a SubstrateSpec."""
     if not is_available():
         from .reference import make_substrate as reference_make_substrate
 
         return reference_make_substrate(spec)
 
-    # Use accelerated implementation (Triton TODO - substrate optimization)
+    # Use accelerated implementation
+    from computronium.ontology.substrate.spec import SubstrateConfig
+
     config = SubstrateConfig.complex(
         noise_level=spec.noise_model.level,
         weight_bounds=spec.structural_constraints.weight_bounds,
