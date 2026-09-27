@@ -101,7 +101,8 @@ from computronium.ontology.substrate import (
     substrate_from_config,
 )
 from computronium.ontology.system import (
-    FAMILY_TOLERANCES,
+    COORDINATE_TOLERANCES,
+    DEFAULT_TOLERANCES,
     ModelAdapter,
     System,
     SystemConfig,
@@ -234,7 +235,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "SystemConfig",
     "System",
     "SystemState",
-    "FAMILY_TOLERANCES",
+    "COORDINATE_TOLERANCES",
+    "DEFAULT_TOLERANCES",
     "ModelAdapter",
     # Utility functions
     "_learnable_weight_names",

@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.sparse_eqprop",
     kind="algorithm",
     name="Sparse Eqprop",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.sparse_eqprop.reference.step",
     kernel_entrypoint="computronium.algorithms.sparse_eqprop.kernel.step",
     kernel_technology="torch_compile",

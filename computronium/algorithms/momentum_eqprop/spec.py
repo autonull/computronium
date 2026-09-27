@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.momentum_eqprop",
     kind="algorithm",
     name="Momentum Eqprop",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.momentum_eqprop.reference.step",
     kernel_entrypoint="computronium.algorithms.momentum_eqprop.kernel.step",
     kernel_technology="torch_compile",

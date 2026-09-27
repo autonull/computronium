@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.tp",
     kind="algorithm",
     name="Target Propagation",
-    family="tp",
     reference_entrypoint="computronium.algorithms.tp.reference.step",
     kernel_entrypoint="computronium.algorithms.tp.kernel.step",
     kernel_technology="triton",

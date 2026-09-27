@@ -576,7 +576,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                         )
                         out = O
                     return out.T if transposed else out
-            except (RuntimeError, TypeError):
+            except RuntimeError, TypeError:
                 pass  # fall through to the PyTorch path
 
         # PyTorch fallback: quintic Newton-Schulz (newton_schulz5)

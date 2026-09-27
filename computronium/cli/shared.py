@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     import optuna
 
 __all__ = [
-    "FAMILY_MAP",
     "_BASELINE_MODELS",
     "_DB_PATH",
     "_STORAGE_URL",
@@ -45,21 +44,6 @@ def _set_storage(db_path_str: str | None = None) -> tuple[str, str]:
     return path, f"sqlite:///{path}"
 
 
-# Maps the CLI family label to the canonical ``family`` value used by the
-# hyperopt tooling. ``feedback_alignment`` → ``fa``.
-FAMILY_MAP: dict[str, str] = {
-    "eqprop": "eqprop",
-    "forward_only": "forward_only",
-    "feedback_alignment": "fa",
-    "tile": "tile",
-    "hebbian": "hebbian",
-    "predictive_coding": "predictive_coding",
-    "target_prop": "target_prop",
-    "spiking": "spiking",
-    "mep": "mep",
-    "backprop": "backprop",
-}
-
 # Models documented as intentional baselines (fail learns-gate; excluded from Phase 1 HPO)
 # See FIX.md §37 for rationale.
 _BASELINE_MODELS = frozenset({
@@ -87,9 +71,9 @@ _BASELINE_MODELS = frozenset({
 
 
 def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
-    """Return ``[(study_name, family, cli_family, [model_names]), ...]``.
+    """Return ``[(study_name, credit_type, cli_credit, [model_names]), ...]``.
 
-    ``cli_family`` is ``None`` in the per-model (``--models``) path.
+    ``cli_credit`` is ``None`` in the per-model (``--models``) path.
     """
     targets: list[tuple[str, str, str | None, list[str]]] = []
 
@@ -97,6 +81,21 @@ def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
         for m in models:
             targets.append((f"{m}_{args.task}", m, None, [m]))
+
+    if args.credit:
+        # Discover models that use this credit type
+        from computronium.acceleration.registry import all_specs
+        credit_models = []
+        for spec in all_specs():
+            if spec.kind == "algorithm":
+                # Check if the spec uses this credit type
+                for prim in spec.uses_primitives:
+                    if args.credit in prim:
+                        credit_models.append(spec.id.replace("algorithm.", ""))
+                        break
+        if credit_models:
+            for m in credit_models:
+                targets.append((f"{m}_{args.task}", args.credit, args.credit, [m]))
 
     return targets
 
@@ -113,7 +112,7 @@ class _TrialContext:
     """Captured state for building an Optuna trial objective."""
 
     model: str
-    family: str
+    credit_type: str
     task: str
     eval_cfg: EvaluationConfig
     quick_mode: bool
@@ -144,14 +143,20 @@ def _make_objective(
 
     def objective(trial: optuna.Trial):
         trial.set_user_attr("model_name", ctx.model)
-        trial.set_user_attr("family", ctx.family)
+        trial.set_user_attr("credit_type", ctx.credit_type)
         trial.set_user_attr("task", ctx.task)
         trial.set_user_attr("tier", ctx.tier_name)
 
         # Sample hyperparameters
-        from computronium.hyperopt import sample_config
+        from computronium.hyperopt import create_optuna_space
 
-        config = sample_config(trial, ctx.model, ctx.task, ctx.eval_cfg, ctx.quick_mode)
+        config = create_optuna_space(
+            trial,
+            ctx.model,
+            task_name=ctx.task,
+            evaluation_config=ctx.eval_cfg,
+            search_space=search_space,
+        )
 
         # Run single trial
         from computronium.hyperopt.experiment import run_single_trial_task

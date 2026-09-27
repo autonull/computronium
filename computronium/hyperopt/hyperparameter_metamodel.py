@@ -4,19 +4,30 @@ from typing import Protocol
 
 
 class ModelSpecProtocol(Protocol):
-    """Protocol for model specification objects used by the metamodel."""
+    """Protocol for model specification objects used by the metamodel.
+
+    Uses coordinate axes (credit_assignment_type, dynamics_type, etc.) instead of
+    the deprecated AlgorithmFamily enum. The sweep unions hyperparameters from
+    the coordinate's axis configs.
+    """
 
     @property
     def name(self) -> str: ...
 
     @property
-    def family(self) -> str: ...
-
-    @property
-    def model_type(self) -> str: ...
-
-    @property
     def credit_assignment_type(self) -> str: ...
+
+    @property
+    def dynamics_type(self) -> str: ...
+
+    @property
+    def topology_type(self) -> str: ...
+
+    @property
+    def update_type(self) -> str: ...
+
+    @property
+    def plasticity_type(self) -> str: ...
 
 
 __all__ = [
@@ -309,72 +320,56 @@ class HyperparameterMetamodel:
     def _determine_applicable_scopes(
         self, model_spec: ModelSpecProtocol
     ) -> set[HyperparamScope]:
-        """Determine which hyperparameter scopes apply to a model."""
-        applicable_scopes = {HyperparamScope.UNIVERSAL}
-        family = model_spec.family.lower()
-        model_type = model_spec.model_type.lower()
+        """Determine which hyperparameter scopes apply to a model.
 
-        # Direct family-to-scope mappings
-        family_scopes = {
-            "baseline": HyperparamScope.GRADIENT_BASED,
-            "backprop": HyperparamScope.GRADIENT_BASED,
-            "backpropagation": HyperparamScope.GRADIENT_BASED,
-            "eqprop": HyperparamScope.EQUILIBRIUM,
+        Uses the coordinate axes (credit_assignment_type, dynamics_type, etc.)
+        to determine applicable scopes, replacing the deprecated family-based logic.
+        """
+        applicable_scopes = {HyperparamScope.UNIVERSAL}
+        credit_type = model_spec.credit_assignment_type.lower()
+        dynamics_type = model_spec.dynamics_type.lower()
+        topology_type = model_spec.topology_type.lower()
+        plasticity_type = model_spec.plasticity_type.lower()
+
+        # Credit assignment type determines primary scope
+        credit_scopes = {
+            "equilibrium": HyperparamScope.EQUILIBRIUM,
+            "thermodynamic_contrast": HyperparamScope.EQUILIBRIUM,
             "hebbian": HyperparamScope.HEBBIAN,
-            "fa": HyperparamScope.FEEDBACK_ALIGNMENT,
+            "temporal_trace": HyperparamScope.HEBBIAN,
+            "random_projections": HyperparamScope.FEEDBACK_ALIGNMENT,
             "feedback_alignment": HyperparamScope.FEEDBACK_ALIGNMENT,
-            "mep": HyperparamScope.FORWARD_ONLY,
-            "forward_only": HyperparamScope.FORWARD_ONLY,
-            "forward-only": HyperparamScope.FORWARD_ONLY,
+            "local_goodness": HyperparamScope.FORWARD_ONLY,
+            "pepita": HyperparamScope.FORWARD_ONLY,
+            "target_inversion": HyperparamScope.TARGET_PROP,
             "target_prop": HyperparamScope.TARGET_PROP,
-            "target-prop": HyperparamScope.TARGET_PROP,
+            "gradient": HyperparamScope.GRADIENT_BASED,
+            "backprop": HyperparamScope.GRADIENT_BASED,
             "spiking": HyperparamScope.SPIKING,
             "predictive_coding": HyperparamScope.PREDICTIVE_CODING,
-            "predictive-coding": HyperparamScope.PREDICTIVE_CODING,
-            "tile": HyperparamScope.EQUILIBRIUM,
+            "predictive": HyperparamScope.PREDICTIVE_CODING,
         }
 
-        if family in family_scopes:
-            applicable_scopes.add(family_scopes[family])
-        elif family == "hybrid":
-            self._add_hybrid_scopes(model_type, applicable_scopes)
-        else:
-            self._add_fallback_scopes(model_spec, applicable_scopes)
+        if credit_type in credit_scopes:
+            applicable_scopes.add(credit_scopes[credit_type])
+
+        # Dynamics type can add additional scopes
+        if dynamics_type in {"energy_minimization", "diffusion"}:
+            applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
+        elif dynamics_type == "spike_integration":
+            applicable_scopes.add(HyperparamScope.SPIKING)
+        elif dynamics_type == "predictive_settling":
+            applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
+
+        # Plasticity type can add scopes
+        if plasticity_type in {"routing", "fast_weight"}:
+            applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
+
+        # Topology type for transformer
+        if "transformer" in topology_type or "attention" in topology_type:
+            applicable_scopes.add(HyperparamScope.TRANSFORMER)
 
         return applicable_scopes
-
-    def _add_hybrid_scopes(
-        self, model_type: str, applicable_scopes: set[HyperparamScope]
-    ) -> None:
-        """Add scopes for hybrid model types."""
-        if "fa" in model_type or "alignment" in model_type:
-            applicable_scopes.add(HyperparamScope.FEEDBACK_ALIGNMENT)
-        if "equilibrium" in model_type or "eq" in model_type:
-            applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-        if "hebbian" in model_type:
-            applicable_scopes.add(HyperparamScope.HEBBIAN)
-        applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
-
-    def _add_fallback_scopes(
-        self, model_spec: ModelSpecProtocol, applicable_scopes: set[HyperparamScope]
-    ) -> None:
-        """Add scopes based on credit_assignment_type when family not recognized."""
-        cat = model_spec.credit_assignment_type.lower()
-        match cat:
-            case "equilibrium":
-                applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
-            case "hebbian":
-                applicable_scopes.add(HyperparamScope.HEBBIAN)
-            case "target":
-                applicable_scopes.add(HyperparamScope.TARGET_PROP)
-            case "forward-only":
-                applicable_scopes.add(HyperparamScope.FORWARD_ONLY)
-            case "spiking":
-                applicable_scopes.add(HyperparamScope.SPIKING)
-            case "predictive-coding":
-                applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
-            case "gradient":
-                applicable_scopes.add(HyperparamScope.GRADIENT_BASED)
 
     def _filter_specs_by_scopes(
         self, applicable_scopes: set[HyperparamScope]
@@ -419,18 +414,21 @@ class HyperparameterMetamodel:
         self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
     ) -> dict[str, HyperparamSpec]:
         """Apply EqProp-specific constraints (limit depth due to computational cost)."""
-        family = model_spec.family.lower()
-        if family == "eqprop" or "eqprop" in model_spec.name.lower():
-            if "num_layers" in search_space:
-                layer_spec = self._spec_dict["num_layers"]
-                constrained_layers = HyperparamSpec(
-                    name=layer_spec.name,
-                    scope=layer_spec.scope,
-                    param_type=layer_spec.param_type,
-                    range_max=6,
-                    default=3,
-                )
-                search_space["num_layers"] = constrained_layers
+        credit_type = model_spec.credit_assignment_type.lower()
+        dynamics_type = model_spec.dynamics_type.lower()
+        if (
+            credit_type == "thermodynamic_contrast"
+            and dynamics_type == "energy_minimization"
+        ) and "num_layers" in search_space:
+            layer_spec = self._spec_dict["num_layers"]
+            constrained_layers = HyperparamSpec(
+                name=layer_spec.name,
+                scope=layer_spec.scope,
+                param_type=layer_spec.param_type,
+                range_max=6,
+                default=3,
+            )
+            search_space["num_layers"] = constrained_layers
         return search_space
 
     def _apply_small_task_constraints(
@@ -488,9 +486,13 @@ class HyperparameterMetamodel:
             "kmnist",
             "fashion_mnist",
         }
+        credit_type = model_spec.credit_assignment_type.lower()
+        topology_type = model_spec.topology_type.lower()
         is_vision_model = (
-            "vision" in model_spec.model_type.lower()
-            or model_spec.family in {"backprop", "eqprop", "fa", "tile"}
+            "vision" in topology_type
+            or credit_type
+            in {"gradient", "backprop", "thermodynamic_contrast", "random_projections"}
+            or topology_type in {"feedforward", "recurrent", "tile_mesh"}
         )
         if is_vision_model and "hidden_dim" in search_space and not is_small_task:
             hd_spec = search_space["hidden_dim"]
@@ -511,7 +513,8 @@ class HyperparameterMetamodel:
         self, model_spec: ModelSpecProtocol, search_space: dict[str, HyperparamSpec]
     ) -> dict[str, HyperparamSpec]:
         """Apply RL-specific learning rate constraints."""
-        is_rl_model = "rl" in model_spec.model_type.lower() or model_spec.family == "rl"
+        topology_type = model_spec.topology_type.lower()
+        is_rl_model = "rl" in topology_type
         if is_rl_model and "lr" in search_space:
             lr_spec = search_space["lr"]
             range_min = lr_spec.range_min
@@ -547,7 +550,7 @@ class HyperparameterMetamodel:
                 if key in self._spec_dict:
                     errors.append(
                         f"Hyperparameter '{key}' is not applicable to"
-                        f" {model_spec.name} (family: {model_spec.family})"
+                        f" {model_spec.name} (credit: {model_spec.credit_assignment_type}, dynamics: {model_spec.dynamics_type})"
                     )
 
         # Check for missing required params

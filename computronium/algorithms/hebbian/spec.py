@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.hebbian",
     kind="algorithm",
     name="Hebbian/STDP",
-    family="hebbian",
     reference_entrypoint="computronium.algorithms.hebbian.reference.step",
     kernel_entrypoint="computronium.algorithms.hebbian.kernel.step",
     kernel_technology="triton",

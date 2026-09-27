@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.fa",
     kind="algorithm",
     name="Feedback Alignment",
-    family="fa",
     reference_entrypoint="computronium.algorithms.fa.reference.step",
     kernel_entrypoint="computronium.algorithms.fa.kernel.step",
     kernel_technology="triton",

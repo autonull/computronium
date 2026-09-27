@@ -6,7 +6,7 @@ technology came from a spec field, its compilability from a module-level flag, i
 parity from a status enum, and its speed from a file in ``artifacts/`` nobody
 could tie back to a rung.
 
-    uv run python -m computronium.acceleration.status --family fa
+    uv run python -m computronium.acceleration.status --credit thermodynamic_contrast
 
 Every column is read from a source that can be re-derived — the spec registry,
 :mod:`computronium.acceleration.availability`, and the benchmark rows — and
@@ -32,21 +32,18 @@ if TYPE_CHECKING:
 
     from computronium.acceleration.spec import ImplementationSpec
 
-__all__ = ["RungStatus", "family_of", "gpu_rungs", "main", "rows", "technology_of"]
+__all__ = [
+    "RungStatus",
+    "coordinate_of",
+    "gpu_rungs",
+    "main",
+    "rows",
+    "technology_of",
+]
 
 BENCH_DIR = pathlib.Path("artifacts/benchmarks")
 
 _NONE = "none"
-
-#: ``acceleration/<name>_kernels`` -> the family whose rungs that module serves.
-#: Derived from the kernel module's imports at query time; this table only names
-#: the convention, so a module without an entry simply has no derived family.
-#: Also matches ``core/substrates/complex_substrate`` for the complex substrate family.
-#: Matches both module paths and import statements from acceleration kernel modules.
-_KERNEL_MODULE_FAMILY = re.compile(
-    r"computronium\.(?:acceleration\.(\w+?_kernels|compile)|core\.substrates\.(complex_substrate))|"
-    r"from computronium\.acceleration\.(\w+?_kernels) import"
-)
 
 #: Patterns to derive kernel technology from a kernel module's imports.
 #: Matched in order; first match wins. This replaces the declared
@@ -86,7 +83,7 @@ class RungStatus:
 
     Attributes:
         spec: the implementation id.
-        family: the acceleration family derived from the kernel module's imports.
+        coordinate: the coordinate (geometry, dynamics, credit, update, plasticity) derived from uses_primitives.
         rung: ``reference`` or ``kernel``.
         technology: what the rung is implemented in.
         compiles: ``yes``/``no``/``none`` — measured for a triton rung with a
@@ -97,7 +94,7 @@ class RungStatus:
     """
 
     spec: str
-    family: str
+    coordinate: str
     rung: str
     technology: str
     compiles: str
@@ -114,24 +111,152 @@ def _kernel_module_source(spec: ImplementationSpec) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
 
 
-def family_of(spec: ImplementationSpec) -> str:
-    """The acceleration family a spec's kernel rung belongs to.
+def _primitive_to_axis(primitive: str) -> tuple[str, str] | None:
+    """Map a primitive name to its axis and value."""
+    # Extract the primitive name from full ID like "primitive.state_dynamics.instantaneous_pass"
+    prim_name = primitive.split(".")[-1]
 
-    Derived from the kernel module's own imports — ``fa_kernels`` means the ``fa``
-    family, ``compile`` means ``torch_compile`` — because §4.3's whole point is
-    that a family name has one referent. ``none`` means the kernel module imports
-    no acceleration kernel module at all, which for a spec that declares
-    ``kernel_technology="triton"`` means the declaration is not delivered.
+    # credit_assignment primitives
+    credit_primitives = {
+        "thermodynamic_contrast": ("credit", "thermodynamic_contrast"),
+        "equilibrium": ("credit", "equilibrium"),
+        "random_projections": ("credit", "random_projections"),
+        "local_goodness": ("credit", "local_goodness"),
+        "pepita": ("credit", "pepita"),
+        "temporal_trace": ("credit", "temporal_trace"),
+        "target_inversion": ("credit", "target_inversion"),
+        "gradient": ("credit", "gradient"),
+        "backprop": ("credit", "gradient"),
+        "reverse_mode": ("credit", "gradient"),
+        "pc_alm": ("credit", "pc_alm"),
+    }
+    # state_dynamics primitives
+    dynamics_primitives = {
+        "energy_minimization": ("dynamics", "energy_minimization"),
+        "predictive_settling": ("dynamics", "predictive_settling"),
+        "spike_integration": ("dynamics", "spike_integration"),
+        "instantaneous_pass": ("dynamics", "instantaneous"),
+        "instantaneous": ("dynamics", "instantaneous"),
+        "diffusion": ("dynamics", "diffusion"),
+        "pc_alm": ("dynamics", "pc_alm"),
+        "pc_alm_settling": ("dynamics", "pc_alm"),
+    }
+    # geometry primitives
+    geometry_primitives = {
+        "feedforward": ("geometry", "feedforward"),
+        "recurrent": ("geometry", "recurrent"),
+        "recurrent_attractor": ("geometry", "recurrent_attractor"),
+        "tile_mesh": ("geometry", "tile_mesh"),
+        "tile": ("geometry", "tile_mesh"),
+        "attention": ("geometry", "attention"),
+        "spatial_lattice": ("geometry", "spatial_lattice"),
+        "graph": ("geometry", "graph"),
+        "conv": ("geometry", "conv"),
+        "nca": ("geometry", "nca"),
+        "ntm": ("geometry", "ntm"),
+        "causal_transformer": ("geometry", "causal_transformer"),
+    }
+    # update primitives
+    update_primitives = {
+        "euclidean": ("update", "euclidean"),
+        "adam": ("update", "adam"),
+        "ortho_adam": ("update", "ortho_adam"),
+        "lion": ("update", "lion"),
+        "riemannian_orthogonal": ("update", "riemannian_orthogonal"),
+        "spectral_constrained": ("update", "spectral_constrained"),
+        "mean_norm": ("update", "mean_norm"),
+        "elastic_consolidation": ("update", "elastic_consolidation"),
+    }
+    # plasticity primitives
+    plasticity_primitives = {
+        "null_plasticity": ("plasticity", "null"),
+        "routing": ("plasticity", "routing"),
+        "fast_weight": ("plasticity", "fast_weight"),
+        "substrate_coupled": ("plasticity", "substrate_coupled"),
+    }
+
+    if prim_name in credit_primitives:
+        return credit_primitives[prim_name]
+    if prim_name in dynamics_primitives:
+        return dynamics_primitives[prim_name]
+    if prim_name in geometry_primitives:
+        return geometry_primitives[prim_name]
+    if prim_name in update_primitives:
+        return update_primitives[prim_name]
+    if prim_name in plasticity_primitives:
+        return plasticity_primitives[prim_name]
+    return None
+
+
+def coordinate_of(spec: ImplementationSpec) -> str:
+    """The coordinate a spec's kernel rung targets.
+
+    Derived from the spec's ``uses_primitives`` which names the exact axes.
+    For primitive specs, uses the ``axis`` field. Returns a compact string
+    like "feedforward/instantaneous/gradient/euclidean/null".
     """
-    source = _kernel_module_source(spec)
-    if source is None:
-        return _NONE
-    found = _KERNEL_MODULE_FAMILY.findall(source)
-    if not found:
-        return _NONE
-    # findall returns tuples when pattern has groups; pick first non-empty group
-    family = next((g for g in found[0] if g), "")
-    return "torch_compile" if family == "compile" else family.removesuffix("_kernels")
+    axes = {
+        "geometry": "unknown",
+        "dynamics": "unknown",
+        "credit": "unknown",
+        "update": "unknown",
+        "plasticity": "null",
+    }
+
+    # For primitive specs, use the axis field
+    if spec.kind == "primitive" and spec.axis:
+        axis_map = {
+            "substrate": "substrate",
+            "geometry": "geometry",
+            "state_dynamics": "dynamics",
+            "plasticity": "plasticity",
+            "credit_assignment": "credit",
+            "parameter_update": "update",
+        }
+        axis_key = axis_map.get(spec.axis)
+        if axis_key and axis_key != "substrate":
+            # For primitives, we only know one axis
+            axes[axis_key] = spec.id.split(".")[-1]
+        return f"{axes['geometry']}/{axes['dynamics']}/{axes['credit']}/{axes['update']}/{axes['plasticity']}"
+
+    # For algorithm specs, use uses_primitives
+    for prim in spec.uses_primitives:
+        mapped = _primitive_to_axis(prim)
+        if mapped:
+            axis, value = mapped
+            axes[axis] = value
+
+    # Infer geometry from algorithm ID if not specified
+    if axes["geometry"] == "unknown":
+        spec_id = spec.id.lower()
+        if "tile" in spec_id:
+            axes["geometry"] = "tile_mesh"
+        elif any(
+            x in spec_id
+            for x in [
+                "eqprop",
+                "directed_ep",
+                "diffusion_eqprop",
+                "finite_nudge",
+                "momentum_eqprop",
+                "ternary_eqprop",
+                "sparse_eqprop",
+                "pc",
+                "pcalm",
+                "hebbian",
+                "snn",
+                "fast_weight",
+                "routing",
+            ]
+        ):
+            axes["geometry"] = "recurrent"
+        elif any(
+            x in spec_id
+            for x in ["fa", "dfa", "ff", "pepita", "tp", "backprop", "holomorphic_ep"]
+        ):
+            axes["geometry"] = "feedforward"
+
+    return f"{axes['geometry']}/{axes['dynamics']}/{axes['credit']}/{axes['update']}/{axes['plasticity']}"
 
 
 def technology_of(spec: ImplementationSpec) -> str:
@@ -185,7 +310,24 @@ def _compile_states() -> dict[str, str]:
     return {report.family: report.state.value for report in compile_report()}
 
 
-def _family_compiles(family: str) -> str:
+def _coordinate_compiles(coord: str) -> str:
+    """Check if any kernel for this coordinate compiles."""
+    # Map coordinate to compile report family
+    coord_to_family = {
+        "feedforward/instantaneous/gradient/euclidean/null": "backprop",
+        "recurrent/energy_minimization/thermodynamic_contrast/euclidean/null": "pc",
+        "feedforward/instantaneous/random_projections/euclidean/null": "fa",
+        "feedforward/instantaneous/local_goodness/euclidean/null": "ff",
+        "feedforward/instantaneous/pepita/euclidean/null": "pepita",
+        "feedforward/instantaneous/temporal_trace/euclidean/null": "hebbian",
+        "feedforward/instantaneous/target_inversion/euclidean/null": "tp",
+        "feedforward/predictive_settling/thermodynamic_contrast/euclidean/null": "pc",
+        "feedforward/spike_integration/temporal_trace/euclidean/null": "snn",
+        "tile_mesh/instantaneous/gradient/euclidean/null": "tile",
+    }
+    family = coord_to_family.get(coord)
+    if family is None:
+        return _NONE
     states = {
         report.state.value for report in compile_report() if report.family == family
     }
@@ -209,9 +351,9 @@ def rows(specs: Iterable[ImplementationSpec] | None = None) -> tuple[RungStatus,
     gpu = gpu_rungs()
     out: list[RungStatus] = []
     for spec in specs if specs is not None else all_specs():
-        family = family_of(spec)
+        coord = coordinate_of(spec)
         tech = technology_of(spec)
-        compiles = _family_compiles(family) if tech == "triton" else _NONE
+        compiles = _coordinate_compiles(coord) if tech == "triton" else _NONE
         for requested in ("reference", "kernel"):
             if requested == "kernel" and "kernel" not in spec.supported_backends:
                 continue
@@ -219,7 +361,7 @@ def rows(specs: Iterable[ImplementationSpec] | None = None) -> tuple[RungStatus,
             out.append(
                 RungStatus(
                     spec=spec.id,
-                    family=family,
+                    coordinate=coord,
                     rung=rung.rung,
                     technology=rung.technology or tech or _NONE,
                     compiles=compiles if rung.rung == "kernel" else "n/a",
@@ -249,19 +391,20 @@ def _spec_matches(spec: str, needle: str) -> bool:
 
 
 def _matches(row: RungStatus, needle: str) -> bool:
-    """Match the derived family or the technology, exactly.
+    """Match the coordinate or the technology, exactly.
 
-    Substring matching is how ``--family fa`` ends up reporting `fabric_pc`,
-    `fast_weight` and `dfa`; a name is a name. ``--spec`` is the substring search,
-    for when you know the id and not the family.
+    Substring matching on coordinate axes. ``--credit thermodynamic_contrast`` matches
+    all specs using thermodynamic contrast credit.
     """
     needle = needle.lower()
-    return needle in {row.family.lower(), row.technology.lower()}
+    # Check if needle matches any coordinate axis
+    coord_parts = row.coordinate.lower().split("/")
+    return needle in coord_parts or needle == row.technology.lower()
 
 
 _COLUMNS = (
     "spec",
-    "family",
+    "coordinate",
     "rung",
     "technology",
     "compiles",
@@ -291,14 +434,16 @@ def _render(table: Sequence[RungStatus]) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Print the rung table, optionally filtered to one family.
+    """Print the rung table, optionally filtered to one coordinate axis.
 
     Returns:
         ``0`` always; the table is a report, not a gate.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--family", default=None, help="exact derived family or technology, e.g. fa"
+        "--credit",
+        default=None,
+        help="exact credit assignment type, e.g. thermodynamic_contrast",
     )
     parser.add_argument(
         "--spec", default=None, help="spec id, segment-aware: 'algorithm.fa'"
@@ -312,8 +457,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     table = list(rows())
-    if args.family:
-        table = [row for row in table if _matches(row, args.family)]
+    if args.credit:
+        table = [row for row in table if _matches(row, args.credit)]
     if args.spec:
         table = [row for row in table if _spec_matches(row.spec, args.spec)]
     if args.status:

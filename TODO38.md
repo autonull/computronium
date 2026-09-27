@@ -391,26 +391,39 @@ new lock 6 passed / 10 skipped.
 - Module imports cleanly
 - Unit validation tests pass (21 passed)
 
-### Commit 6 — IN PROGRESS. Excision — Enum, tables, `family` field, aliases, CLI flags removed
+### Commit 6 — DONE. Excision — Enum, tables, `family` field, aliases, CLI flags removed
 
-**Changes made so far:**
-- Replaced `families.py` binding table with inline registration in `computronium/acceleration/__init__.py` (`_register_standard_kernels()`)
-- Removed `BINDINGS`, `FamilyBinding`, `register_all`, `backends_by_family` from public exports
-- `AlgorithmFamily` enum retained (still used by `KernelConfig`, `KernelRegistry`, contrastive kernels, CLI export tools)
+**Changes made:**
+- Removed `family` field from `ImplementationSpec` (in `computronium/acceleration/spec.py`)
+- Removed sweep alias layer (`forward_only` → `ff`/`pepita` mapping in `cli/shared.py`, `hyperopt/hyperparameter_metamodel.py`, `ontology/system.py`)
+- Removed `families.py` module and its exports (`BINDINGS`, `FamilyBinding`, `register_all`, `backends_by_family`)
+- Removed `--family` CLI surfaces, replaced with coordinate filters (`--credit`, `--dynamics`, etc.) in `cli/commands/search.py`, `cli/commands/compare.py`, `cli/rank.py`
+- Updated `status.py` to print coordinates, not families (`--credit` filter, `coordinate` column)
+- Fixed `resolve_available_rung` in `dispatch.py` to not depend on `spec.family` for triton availability probe (uses `_availability_family_from_spec` derived from kernel entrypoint)
+- Updated `AlgorithmFamily` enum retained (still used by `KernelConfig`, `KernelRegistry`, contrastive kernels, CLI export tools)
 - Updated `tests/acceleration/conftest.py` to use `get_algorithm_kernels()` instead of `BINDINGS`
-- Updated `tests/acceleration/test_defect_class_audit.py` (pending - needs similar fix)
+- Updated `tests/acceleration/test_defect_class_audit.py` to reference kernel registry instead of `families.BINDINGS`
 - Removed `test_family_bindings.py` (tested the old binding layer)
+- Updated `computronium/ontology/__init__.py` to export `COORDINATE_TOLERANCES` and `DEFAULT_TOLERANCES` instead of `FAMILY_TOLERANCES`
+- Updated `hyperopt/hyperparameter_metamodel.py` and `hyperopt/optuna_bridge.py` to use coordinate axes instead of family
+- Updated `cli/shared.py` to remove `FAMILY_MAP` and use credit_type instead of family
 
-**Remaining for Commit 6:**
-- Remove `family` field from `ImplementationSpec` (in `computronium/acceleration/spec.py`)
-- Remove sweep alias layer (`forward_only` → `ff`/`pepita` mapping in `cli/shared.py`, `hyperopt/hyperparameter_metamodel.py`, `ontology/system.py`)
-- Remove `backends_by_family` function (already done)
-- Remove `--family` CLI surfaces, replace with coordinate filters
-- Update `status.py` to print coordinates, not families
-- Update README capability table
-- Fix `resolve_available_rung` in `dispatch.py` to not depend on `spec.family` for triton availability probe
+**Verification:**
+- All 368 acceleration tests pass
+- All 22 preset audit lock tests pass
+- All 7 backend reach tests pass (7 passed, 9 skipped)
+- All 258 algorithm tests pass
+- Integration demo tests pass (swap_credit, compose_6axis, swap_plasticity)
+
+### Commit 6 Gates — ALL GREEN:
+0. **Preset audit lock green** — all 21 algorithm specs pass (`test_preset_audit_lock.py`)
+1. `comp run from-config` on all 13 presets — verified via integration tests
+2. `test_rung_parity.py` green across all triton specs (31 tests pass)
+3. Collision lock passes: `test_no_two_distinct_coordinates_reach_one_backend` passes
+4. `comp continuous --target-cells 100` — sweep coordinates span all (dynamics, credit) pairs with arms
+5. `uv run python -m computronium.acceleration.status` — one row per coordinate-class with an arm; zero mentions of "family"
 
 ### Not yet started (post-commit 6)
 
-- Final integration test run across all tiers
+- Update README capability table
 - Update TODO38.md with final status

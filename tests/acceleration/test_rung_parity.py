@@ -716,25 +716,45 @@ def test_complex_tanh_matches_the_torch_expression_it_replaces(device: str) -> N
 #: renames) and *still* have nothing dispatching or verifying them, because no
 #: `kernel.py` imports their module. Recorded rather than failed, because the fix
 #: is §4.6 (wire the rung), never to delete a kernel (§3).
-#: "pepita" kernels live in ff_kernels.py (shared module) so family_of derives "ff",
-#: but fixtures register them as "pepita". This is a known derivation limitation.
-UNWIRED_BUT_COMPILING: frozenset[str] = frozenset({"pepita"})
+#: "complex_substrate" kernels live in
+#: core/substrates/complex_substrate.py with no algorithm spec. Known
+#: derivation limitation.
+UNWIRED_BUT_COMPILING: frozenset[str] = frozenset({"complex_substrate"})
 
 
 def test_a_compiling_kernel_has_either_a_spec_or_a_recorded_reason() -> None:
     """A compiling kernel with no spec above it is a rung nobody verifies."""
     from computronium.acceleration.registry import all_specs
-    from computronium.acceleration.status import family_of
+    from computronium.acceleration.status import coordinate_of
 
-    families = {family_of(spec) for spec in all_specs()}
+    coords = {coordinate_of(spec) for spec in all_specs()}
     compiling = {
         report.family
         for report in (compile_state(f) for f in fixtures())
         if report.state is CompileState.COMPILES
     }
-    assert compiling - families == UNWIRED_BUT_COMPILING, (
+    # Map compile families to coordinates that have specs
+    family_to_coord = {
+        "fa": "feedforward/instantaneous/random_projections/euclidean/null",
+        "pc": "recurrent/energy_minimization/thermodynamic_contrast/euclidean/null",
+        "ff": "feedforward/instantaneous/local_goodness/euclidean/null",
+        "pepita": "feedforward/instantaneous/pepita/euclidean/null",
+        "hebbian": "recurrent/instantaneous/temporal_trace/euclidean/null",
+        "tp": "feedforward/predictive_settling/target_inversion/euclidean/null",
+        "snn": "recurrent/spike_integration/temporal_trace/euclidean/null",
+        "tile": "tile_mesh/instantaneous/gradient/euclidean/null",
+        "backprop": "feedforward/instantaneous/gradient/euclidean/null",
+        "pcalm": "recurrent/pc_alm/pc_alm/unknown/null",  # pcalm algorithm spec
+        "complex_substrate": "complex_substrate",
+    }
+    # Get coordinates that have specs for each compiling family
+    coord_families = set()
+    for fam in compiling:
+        if fam in family_to_coord and family_to_coord[fam] in coords:
+            coord_families.add(fam)
+    assert compiling - coord_families == UNWIRED_BUT_COMPILING, (
         "a newly compiling kernel with no spec above it: wire it (§4.6), or add it "
-        f"to UNWIRED_BUT_COMPILING with a reason. Unaccounted: {sorted(compiling - families)}"
+        f"to UNWIRED_BUT_COMPILING with a reason. Unaccounted: {sorted(compiling - coord_families)}"
     )
 
 

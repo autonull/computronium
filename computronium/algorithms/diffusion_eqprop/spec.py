@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.diffusion_eqprop",
     kind="algorithm",
     name="Diffusion Eqprop",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.diffusion_eqprop.reference.step",
     kernel_entrypoint="computronium.algorithms.diffusion_eqprop.kernel.step",
     kernel_technology="torch_compile",

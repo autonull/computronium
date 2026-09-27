@@ -110,7 +110,9 @@ MODEL_REGISTRY: tuple[ModelSpec, ...] = (
     ModelSpec("backprop_mlp", create_native_backprop_mlp, ("backprop",)),
     ModelSpec("lemma_mlp", create_native_lemma_mlp, ("lemma", "pepita")),
     ModelSpec("fa_mlp", create_native_fa_mlp, ("feedback_alignment", "fa")),
-    ModelSpec("diffusion_eqprop", create_native_diffusion_eqprop, ("diffusion_eqprop",)),
+    ModelSpec(
+        "diffusion_eqprop", create_native_diffusion_eqprop, ("diffusion_eqprop",)
+    ),
     ModelSpec("directed_ep", create_native_directed_ep, ("directed_ep",)),
     ModelSpec("momentum_eqprop", create_native_momentum_eqprop, ("momentum_eqprop",)),
     ModelSpec("sparse_eqprop", create_native_sparse_eqprop, ("sparse_eqprop",)),
@@ -129,15 +131,15 @@ MODEL_REGISTRY: tuple[ModelSpec, ...] = (
 
 
 #: Canonical zoo names — exactly one per factory. Derived from MODEL_REGISTRY.
-NATIVE_MODEL_NAMES: tuple[str, ...] = tuple(spec.canonical_name for spec in MODEL_REGISTRY)
+NATIVE_MODEL_NAMES: tuple[str, ...] = tuple(
+    spec.canonical_name for spec in MODEL_REGISTRY
+)
 
 
 #: Fragment-to-factory mapping for resolution — derived from MODEL_REGISTRY.
 #: Order preserves priority: longer fragments first so "tile_fa" matches before "fa".
 _NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = tuple(
-    (fragment, spec.factory)
-    for spec in MODEL_REGISTRY
-    for fragment in spec.fragments
+    (fragment, spec.factory) for spec in MODEL_REGISTRY for fragment in spec.fragments
 )
 
 

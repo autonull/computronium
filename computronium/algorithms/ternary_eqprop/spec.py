@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.ternary_eqprop",
     kind="algorithm",
     name="Ternary Eqprop",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.ternary_eqprop.reference.step",
     kernel_entrypoint="computronium.algorithms.ternary_eqprop.kernel.step",
     kernel_technology="torch_compile",

@@ -42,57 +42,154 @@ __all__ = [
 
 
 class _ModelView:
-    """Duck-typed view of a model for the hyperparameter metamodel."""
+    """Duck-typed view of a model for the hyperparameter metamodel.
 
-    __slots__ = ("_credit_assignment_type", "_family", "_model_type", "_name")
+    Uses coordinate axes (credit_assignment_type, dynamics_type, topology_type,
+    update_type, plasticity_type) instead of the deprecated family field.
+    """
+
+    __slots__ = (
+        "_credit_assignment_type",
+        "_dynamics_type",
+        "_name",
+        "_plasticity_type",
+        "_topology_type",
+        "_update_type",
+    )
 
     def __init__(
         self,
         name: str,
-        family: str,
-        model_type: str = "",
         credit_assignment_type: str = "",
+        dynamics_type: str = "",
+        topology_type: str = "",
+        update_type: str = "",
+        plasticity_type: str = "",
     ) -> None:
         self._name = name
-        self._family = family
-        self._model_type = model_type
         self._credit_assignment_type = credit_assignment_type
+        self._dynamics_type = dynamics_type
+        self._topology_type = topology_type
+        self._update_type = update_type
+        self._plasticity_type = plasticity_type
 
     @property
     def name(self) -> str:
         return self._name
 
     @property
-    def family(self) -> str:
-        return self._family
-
-    @property
-    def model_type(self) -> str:
-        return self._model_type
-
-    @property
     def credit_assignment_type(self) -> str:
         return self._credit_assignment_type
 
+    @property
+    def dynamics_type(self) -> str:
+        return self._dynamics_type
 
-_FAMILY_KEYWORDS: tuple[tuple[str, str], ...] = (
-    ("eqprop", "eqprop"),
-    ("backprop", "backprop"),
-    ("feedback_alignment", "fa"),
-    ("forward", "mep"),
-    ("hebbian", "hebbian"),
-    ("target_prop", "target_prop"),
-    ("spiking", "spiking"),
-    ("predictive", "predictive_coding"),
-    ("tile", "tile"),
+    @property
+    def topology_type(self) -> str:
+        return self._topology_type
+
+    @property
+    def update_type(self) -> str:
+        return self._update_type
+
+    @property
+    def plasticity_type(self) -> str:
+        return self._plasticity_type
+
+
+_CREDIT_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("thermodynamic_contrast", "thermodynamic_contrast"),
+    ("eqprop", "thermodynamic_contrast"),
+    ("equilibrium", "equilibrium"),
+    ("feedback_alignment", "random_projections"),
+    ("fa", "random_projections"),
+    ("dfa", "random_projections"),
+    ("forward", "local_goodness"),
+    ("ff", "local_goodness"),
+    ("pepita", "pepita"),
+    ("hebbian", "temporal_trace"),
+    ("stdp", "temporal_trace"),
+    ("target_prop", "target_inversion"),
+    ("target-prop", "target_inversion"),
+    ("spiking", "temporal_trace"),
+    ("snn", "temporal_trace"),
+    ("predictive", "thermodynamic_contrast"),
+    ("pc", "thermodynamic_contrast"),
+    ("backprop", "gradient"),
+    ("baseline", "gradient"),
+)
+
+_DYNAMICS_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("energy_minimization", "energy_minimization"),
+    ("eqprop", "energy_minimization"),
+    ("equilibrium", "energy_minimization"),
+    ("diffusion", "diffusion"),
+    ("spiking", "spike_integration"),
+    ("snn", "spike_integration"),
+    ("predictive", "predictive_settling"),
+    ("pc", "predictive_settling"),
+    ("instantaneous", "instantaneous"),
+    ("backprop", "instantaneous"),
+    ("ff", "instantaneous"),
+    ("fa", "instantaneous"),
+    ("tile", "instantaneous"),
+)
+
+_TOPOLOGY_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("feedforward", "feedforward"),
+    ("ff", "feedforward"),
+    ("fa", "feedforward"),
+    ("recurrent", "recurrent"),
+    ("eqprop", "recurrent"),
+    ("tile", "tile_mesh"),
+    ("transformer", "causal_transformer"),
+    ("attention", "causal_transformer"),
+)
+
+_UPDATE_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("muon", "ortho_adam"),
+    ("ortho", "ortho_adam"),
+    ("adam", "adam"),
+    ("lion", "lion"),
+    ("riemannian", "riemannian_orthogonal"),
+    ("spectral", "spectral_constrained"),
+    ("ewc", "elastic_consolidation"),
+    ("backprop", "euclidean"),
+    ("fa", "euclidean"),
+    ("eqprop", "euclidean"),
+)
+
+_PLASTICITY_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("routing", "routing"),
+    ("mep", "routing"),
+    ("fast_weight", "fast_weight"),
+    ("fast-weight", "fast_weight"),
+    ("o1memory", "fast_weight"),
 )
 
 
 def _model_view(model_name: str) -> _ModelView:
-    """Infer the metamodel's model view from the model name."""
+    """Infer the metamodel's model view from the model name using coordinate axes."""
     lowered = model_name.lower()
-    family = next((fam for key, fam in _FAMILY_KEYWORDS if key in lowered), "baseline")
-    return _ModelView(name=model_name, family=family)
+
+    def infer(keywords: tuple[tuple[str, str], ...], default: str) -> str:
+        return next((val for key, val in keywords if key in lowered), default)
+
+    credit = infer(_CREDIT_KEYWORDS, "gradient")
+    dynamics = infer(_DYNAMICS_KEYWORDS, "instantaneous")
+    topology = infer(_TOPOLOGY_KEYWORDS, "feedforward")
+    update = infer(_UPDATE_KEYWORDS, "euclidean")
+    plasticity = infer(_PLASTICITY_KEYWORDS, "null")
+
+    return _ModelView(
+        name=model_name,
+        credit_assignment_type=credit,
+        dynamics_type=dynamics,
+        topology_type=topology,
+        update_type=update,
+        plasticity_type=plasticity,
+    )
 
 
 def scalarize_objectives(

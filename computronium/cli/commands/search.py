@@ -5,7 +5,6 @@ import pathlib
 from typing import TYPE_CHECKING
 
 from computronium.cli.shared import (
-    FAMILY_MAP,
     _make_objective,
     _resolve_targets,
     _set_storage,
@@ -23,13 +22,23 @@ __all__ = ["add_search_subparsers", "run_search"]
 def add_search_subparsers(subparsers: argparse._SubParsersAction) -> None:
     """Add search subparser."""
     search_parser = subparsers.add_parser(
-        "search", help="Compute-matched HPO across a propagator family"
+        "search", help="Compute-matched HPO across a credit assignment type"
     )
     search_group = search_parser.add_mutually_exclusive_group()
     search_group.add_argument(
-        "--family",
-        choices=[*list(FAMILY_MAP), "all", "survivors"],
-        help="Propagator family to search (one study per family).",
+        "--credit",
+        choices=[
+            "thermodynamic_contrast",
+            "random_projections",
+            "local_goodness",
+            "pepita",
+            "temporal_trace",
+            "target_inversion",
+            "gradient",
+            "spiking",
+            "predictive_coding",
+        ],
+        help="Credit assignment type to search (one study per credit type).",
     )
     search_group.add_argument(
         "--models",
@@ -38,7 +47,7 @@ def add_search_subparsers(subparsers: argparse._SubParsersAction) -> None:
     search_parser.add_argument(
         "--survivors-csv",
         default="results/portfolio.csv",
-        help="Portfolio CSV read by --family survivors (Phase 1.2 gate)",
+        help="Portfolio CSV read by survivors (Phase 1.2 gate)",
     )
     search_parser.add_argument(
         "--task",
@@ -93,12 +102,12 @@ def add_search_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
 
 def run_search(args: argparse.Namespace) -> None:
-    """Compute-matched HPO across a propagator family."""
+    """Compute-matched HPO across a credit assignment type."""
+    from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
     from computronium.hyperopt import create_optuna_space, create_study
     from computronium.hyperopt.eval_tiers import get_evaluation_config
 
     # Override storage if --db provided
-    global _DB_PATH, _STORAGE_URL
     if getattr(args, "db", None):
         _DB_PATH, _STORAGE_URL = _set_storage(args.db)
         logger.info("Using storage: %s", _STORAGE_URL)
@@ -111,7 +120,7 @@ def run_search(args: argparse.Namespace) -> None:
     tier = _tier_for_args(args)
     eval_cfg = get_evaluation_config(tier)
 
-    for study_name, reg_family, cli_family, models in targets:
+    for study_name, reg_credit, cli_credit, models in targets:
         logger.info("Starting study: %s", study_name)
         study = create_study(study_name, storage=_STORAGE_URL)
 
@@ -119,7 +128,7 @@ def run_search(args: argparse.Namespace) -> None:
             logger.info("  Optimizing %s", model)
             ctx = _TrialContext(
                 model=model,
-                family=reg_family,
+                credit_type=reg_credit,
                 task=args.task,
                 eval_cfg=eval_cfg,
                 quick_mode=(tier == "smoke"),
@@ -127,8 +136,7 @@ def run_search(args: argparse.Namespace) -> None:
                 tier_name=tier.value,
             )
 
-            space = create_optuna_space(model, args.task)
-            objective = _make_objective(ctx, search_space=space)
+            objective = _make_objective(ctx)
 
             n_trials = args.budget or eval_cfg.n_trials
             study.optimize(objective, n_trials=n_trials, timeout=None)

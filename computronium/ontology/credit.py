@@ -477,7 +477,6 @@ class CreditAssignmentConfig:
             credit_norm=credit_norm,
         )
 
-
     @classmethod
     def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
         """Hyperparameter ranges owned by the credit_assignment axis.

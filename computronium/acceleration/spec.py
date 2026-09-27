@@ -85,7 +85,6 @@ class ImplementationSpec:
     axis: Axis | None = None
 
     # Algorithm metadata
-    family: str | None = None
     uses_primitives: tuple[str, ...] = ()
 
     # Self-documentation

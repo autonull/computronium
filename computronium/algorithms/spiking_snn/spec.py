@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.spiking_snn",
     kind="algorithm",
     name="Spiking SNN (STDP)",
-    family="snn",
     reference_entrypoint="computronium.algorithms.spiking_snn.reference.step",
     kernel_entrypoint="computronium.algorithms.spiking_snn.kernel.step",
     kernel_technology="triton",

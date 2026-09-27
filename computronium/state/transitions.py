@@ -116,7 +116,6 @@ class PlasticityConfig:
             consolidation_config={"conflict_threshold": conflict_threshold, **kwargs},
         )
 
-
     @classmethod
     def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
         """Hyperparameter ranges owned by the plasticity axis.

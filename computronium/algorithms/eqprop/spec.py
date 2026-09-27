@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.eqprop",
     kind="algorithm",
     name="Equilibrium Propagation",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.eqprop.reference.step",
     kernel_entrypoint="computronium.algorithms.eqprop.kernel.step",
     kernel_technology="triton",

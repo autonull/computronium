@@ -195,6 +195,61 @@ class RungResolution:
     reason: str | None = None
 
 
+def _availability_family_from_spec(spec: ImplementationSpec) -> str | None:
+    """Derive the availability family from the spec's kernel entrypoint module.
+
+    The availability fixtures are keyed by family names like "fa", "pc", "snn",
+    "ff", "pepita", "hebbian", "pcalm", "complex_substrate". These correspond
+    to the kernel module names.
+    """
+    if spec.kernel_entrypoint is None:
+        return None
+    module = spec.kernel_entrypoint.rsplit(".", 1)[0]
+    # The module is like "computronium.algorithms.fa.kernel" or "computronium.primitives.credit_assignment.random_projections.kernel"
+    # We need the algorithm/primitive name (the parent of "kernel")
+    parts = module.split(".")
+    if "algorithms" in parts:
+        # Algorithm spec: ...algorithms.<name>.kernel
+        idx = parts.index("algorithms")
+        if idx + 1 < len(parts):
+            algo_name = parts[idx + 1]
+    elif "primitives" in parts:
+        # Primitive spec: ...primitives.<axis>.<name>.kernel
+        idx = parts.index("primitives")
+        if idx + 2 < len(parts):
+            algo_name = parts[idx + 2]
+        else:
+            algo_name = parts[idx + 1] if idx + 1 < len(parts) else None
+    else:
+        algo_name = parts[-2] if len(parts) >= 2 else None
+
+    # Map algorithm/primitive names to availability family keys
+    name_to_family = {
+        "fa": "fa",
+        "dfa": "fa",
+        "eqprop": "pc",  # EqProp shares pc fixtures
+        "pcalm": "pcalm",
+        "pc": "pc",
+        "tile": "tile",
+        "hebbian": "hebbian",
+        "fast_weight": "hebbian",  # fast_weight uses hebbian kernels
+        "routing": "hebbian",  # routing uses hebbian kernels
+        "ff": "ff",
+        "pepita": "ff",  # pepita uses ff kernels
+        "tp": "tp",
+        "spiking_snn": "snn",
+        "local_goodness": "ff",
+        "pc_alm": "pc",
+        "random_projections": "fa",
+        "temporal_trace": "hebbian",
+        "target_inversion": "tp",
+        "thermodynamic_contrast": "pc",
+        "reverse_mode": "fa",  # backprop uses fa kernels
+        "complex": "complex_substrate",
+    }
+    return name_to_family.get(algo_name)
+
+
 def resolve_available_rung(
     spec: ImplementationSpec, requested: str = "auto"
 ) -> RungResolution:
@@ -203,8 +258,9 @@ def resolve_available_rung(
     :func:`resolve_rung` answers what the spec *has*; this answers what this
     machine can *run*, which is a different question and was a second call at
     every dispatch site. The triton rung is the case that matters: it compiles
-    per-family (TODO36 §4.2), so ``"triton"`` is satisfiable for one family on a
-    box and unsatisfiable for the next, and the spec cannot say which.
+    per-coordinate (TODO36 §4.2), so ``"triton"`` is satisfiable for one
+    coordinate on a box and unsatisfiable for the next, and the spec cannot say
+    which.
 
     A request for a rung the spec does not have still raises — that is a
     programming error, not a property of the machine. Only the *runtime*
@@ -223,27 +279,29 @@ def resolve_available_rung(
     selected = resolve_rung(spec, requested)
     if selected.technology != "triton" or selected.rung != "kernel":
         return RungResolution(selected=selected, requested=requested)
-    if spec.family is None:
+
+    family = _availability_family_from_spec(spec)
+    if family is None:
         return RungResolution(
             selected=_reference(spec),
             requested=requested,
             fell_back=True,
             reason=(
-                f"{spec.id} declares a triton rung with no family, so there is "
-                "nothing to compile-test it against; ran the reference rung"
+                f"{spec.id} declares a triton rung with no availability family, "
+                "so there is nothing to compile-test it against; ran the reference rung"
             ),
         )
     from computronium.acceleration.availability import triton_rung_available
 
-    if triton_rung_available(spec.family):
+    if triton_rung_available(family):
         return RungResolution(selected=selected, requested=requested)
     return RungResolution(
         selected=_reference(spec),
         requested=requested,
         fell_back=True,
         reason=(
-            f"{spec.id}'s triton rung does not compile here for family "
-            f"{spec.family}; ran the reference rung"
+            f"{spec.id}'s triton rung does not compile here for availability family "
+            f"{family}; ran the reference rung"
         ),
     )
 

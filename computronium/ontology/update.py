@@ -455,7 +455,6 @@ class ParameterUpdateConfig:
             sub_rules=RoleSplitSpec(on_role=on_role, other=other),
         )
 
-
     @classmethod
     def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
         """Hyperparameter ranges owned by the parameter_update axis.

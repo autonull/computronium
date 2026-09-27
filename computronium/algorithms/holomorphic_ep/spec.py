@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.holomorphic_ep",
     kind="algorithm",
     name="Holomorphic Ep",
-    family="eqprop",
     reference_entrypoint="computronium.algorithms.holomorphic_ep.reference.step",
     kernel_entrypoint="computronium.algorithms.holomorphic_ep.kernel.step",
     kernel_technology="torch_compile",

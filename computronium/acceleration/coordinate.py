@@ -236,7 +236,9 @@ def kernel_config_of(system: System, backend_cls: type) -> KernelConfig:
     )
 
 
-def sweep_hyperparameters(coordinate: DispatchKey) -> dict[str, tuple[float, float, str] | list]:
+def sweep_hyperparameters(
+    coordinate: DispatchKey,
+) -> dict[str, tuple[float, float, str] | list]:
     """Union of hyperparameters() from all primitives named by ``coordinate``.
 
     The sweep proposes a coordinate and unions the hyperparameters() of the
@@ -250,9 +252,9 @@ def sweep_hyperparameters(coordinate: DispatchKey) -> dict[str, tuple[float, flo
     Returns:
         Merged hyperparameter dict. Later axes override earlier on collision.
     """
-    from computronium.ontology.geometry import GeometryConfig
-    from computronium.ontology.dynamics import StateDynamicsConfig
     from computronium.ontology.credit import CreditAssignmentConfig
+    from computronium.ontology.dynamics import StateDynamicsConfig
+    from computronium.ontology.geometry import GeometryConfig
     from computronium.ontology.update import ParameterUpdateConfig
     from computronium.state import PlasticityConfig
 
@@ -279,6 +281,8 @@ def sweep_hyperparameters(coordinate: DispatchKey) -> dict[str, tuple[float, flo
     return merged
 
 
-def sweep_hyperparameters_from_system(system: System) -> dict[str, tuple[float, float, str] | list]:
+def sweep_hyperparameters_from_system(
+    system: System,
+) -> dict[str, tuple[float, float, str] | list]:
     """Convenience: sweep hyperparameters from a live system's coordinate."""
     return sweep_hyperparameters(key_of(system))

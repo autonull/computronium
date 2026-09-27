@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.ff",
     kind="algorithm",
     name="Forward-Forward",
-    family="ff",
     reference_entrypoint="computronium.algorithms.ff.reference.step",
     kernel_entrypoint="computronium.algorithms.ff.kernel.step",
     kernel_technology="triton",

@@ -127,7 +127,9 @@ def assert_parity(
     rtol = tolerance.max_rel_diff
 
     # Handle infinite rtol (e.g., for GELU where relative diff is meaningless near zero)
-    if rtol == float("inf") or (isinstance(rtol, float) and not torch.isfinite(torch.tensor(rtol))):
+    if rtol == float("inf") or (
+        isinstance(rtol, float) and not torch.isfinite(torch.tensor(rtol))
+    ):
         # Only check atol and cosine
         if report["max_abs_diff"] > atol:
             raise AssertionError(report)

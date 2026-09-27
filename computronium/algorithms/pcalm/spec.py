@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.pcalm",
     kind="algorithm",
     name="PC-ALM",
-    family="pcalm",
     reference_entrypoint="computronium.algorithms.pcalm.reference.step",
     kernel_entrypoint="computronium.algorithms.pcalm.kernel.step",
     kernel_technology="triton",

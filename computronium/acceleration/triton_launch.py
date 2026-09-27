@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,7 +29,7 @@ def _get_triton_exceptions() -> tuple[
     """Lazily import Triton exception classes."""
     try:
         import triton
-    except (ImportError, AttributeError):
+    except ImportError, AttributeError:
         # Triton not available or version mismatch - return dummy classes
         class OutOfResourcesError(Exception):
             pass
@@ -64,10 +64,10 @@ OutOfResourcesError, CompilationErrorError, InterpreterErrorError, TritonErrorEr
 
 
 def safe_triton_launch[T](
-    kernel_fn: "Callable[..., T]",
+    kernel_fn: Callable[..., T],
     *args,
     grid: tuple[int, ...] | None = None,
-    fallback_fn: "Callable[..., T] | None" = None,
+    fallback_fn: Callable[..., T] | None = None,
     kernel_name: str = "unknown",
     **kwargs,
 ) -> T:

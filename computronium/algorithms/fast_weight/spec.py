@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.fast_weight",
     kind="algorithm",
     name="Fast-Weight (6-D Joint)",
-    family="o1memory",
     reference_entrypoint="computronium.algorithms.fast_weight.reference.step",
     kernel_entrypoint="computronium.algorithms.fast_weight.kernel.step",
     kernel_technology="triton",

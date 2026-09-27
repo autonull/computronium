@@ -63,6 +63,7 @@ from computronium.acceleration.compile import (
     compile_settling_loop,
     get_compile_config,
 )
+from computronium.acceleration.contrastive_kernels import register_contrastive_kernels
 from computronium.acceleration.contrastive_primitives import (
     conductance_matmul,
     forward_forward_goodness,
@@ -79,7 +80,6 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     infer_algorithm_family,
 )
-from computronium.acceleration.contrastive_kernels import register_contrastive_kernels
 from computronium.core.utils.activations import (
     cross_entropy,
     get_backend,
@@ -89,25 +89,57 @@ from computronium.core.utils.activations import (
 )
 
 
-def _register_standard_kernels() -> None:
+def _register_standard_kernels() -> None:  # ruff: ignore[non-empty-init-module]
     """Register standard kernel backends with KernelRegistry.
 
     Replaces the former families.register_all() binding table. Each backend is
     registered explicitly so the registry contents don't depend on import order.
     """
     standard_kernels: tuple[tuple[AlgorithmFamily, str, str], ...] = (
-        (AlgorithmFamily.EQPROP, "computronium.acceleration.eqprop_kernel_backend", "EqPropKernelBackend"),
-        (AlgorithmFamily.BACKPROP, "computronium.acceleration.backprop_kernels", "BackpropKernelBackend"),
+        (
+            AlgorithmFamily.EQPROP,
+            "computronium.acceleration.eqprop_kernel_backend",
+            "EqPropKernelBackend",
+        ),
+        (
+            AlgorithmFamily.BACKPROP,
+            "computronium.acceleration.backprop_kernels",
+            "BackpropKernelBackend",
+        ),
         (AlgorithmFamily.FA, "computronium.acceleration.fa_kernels", "FAKernelBackend"),
-        (AlgorithmFamily.HEBBIAN, "computronium.acceleration.hebbian_kernels", "HebbianKernelBackend"),
+        (
+            AlgorithmFamily.HEBBIAN,
+            "computronium.acceleration.hebbian_kernels",
+            "HebbianKernelBackend",
+        ),
         (AlgorithmFamily.FF, "computronium.acceleration.ff_kernels", "FFKernelBackend"),
-        (AlgorithmFamily.PEPITA, "computronium.acceleration.ff_kernels", "PEPITAKernelBackend"),
+        (
+            AlgorithmFamily.PEPITA,
+            "computronium.acceleration.ff_kernels",
+            "PEPITAKernelBackend",
+        ),
         (AlgorithmFamily.TP, "computronium.acceleration.tp_kernels", "TPKernelBackend"),
         (AlgorithmFamily.PC, "computronium.acceleration.pc_kernels", "PCKernelBackend"),
-        (AlgorithmFamily.SNN, "computronium.acceleration.snn_kernels", "SNNKernelBackend"),
-        (AlgorithmFamily.TILE, "computronium.acceleration.tile_kernels", "TileKernelBackend"),
-        (AlgorithmFamily.MEP, "computronium.acceleration.mep_kernels", "MEPKernelBackend"),
-        (AlgorithmFamily.O1MEMORY, "computronium.acceleration.mep_kernels", "O1MemoryEPv2KernelBackend"),
+        (
+            AlgorithmFamily.SNN,
+            "computronium.acceleration.snn_kernels",
+            "SNNKernelBackend",
+        ),
+        (
+            AlgorithmFamily.TILE,
+            "computronium.acceleration.tile_kernels",
+            "TileKernelBackend",
+        ),
+        (
+            AlgorithmFamily.MEP,
+            "computronium.acceleration.mep_kernels",
+            "MEPKernelBackend",
+        ),
+        (
+            AlgorithmFamily.O1MEMORY,
+            "computronium.acceleration.mep_kernels",
+            "O1MemoryEPv2KernelBackend",
+        ),
     )
     for family, module_path, class_name in standard_kernels:
         backend_cls = getattr(importlib.import_module(module_path), class_name)
@@ -122,10 +154,22 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
     # This function is kept for backwards compatibility but the dispatch layer
     # now uses coordinate matching (select_backend_class) instead of family lookups.
     standard_kernels: tuple[tuple[str, str, str], ...] = (
-        ("eqprop", "computronium.acceleration.eqprop_kernel_backend", "EqPropKernelBackend"),
-        ("backprop", "computronium.acceleration.backprop_kernels", "BackpropKernelBackend"),
+        (
+            "eqprop",
+            "computronium.acceleration.eqprop_kernel_backend",
+            "EqPropKernelBackend",
+        ),
+        (
+            "backprop",
+            "computronium.acceleration.backprop_kernels",
+            "BackpropKernelBackend",
+        ),
         ("fa", "computronium.acceleration.fa_kernels", "FAKernelBackend"),
-        ("hebbian", "computronium.acceleration.hebbian_kernels", "HebbianKernelBackend"),
+        (
+            "hebbian",
+            "computronium.acceleration.hebbian_kernels",
+            "HebbianKernelBackend",
+        ),
         ("ff", "computronium.acceleration.ff_kernels", "FFKernelBackend"),
         ("pepita", "computronium.acceleration.ff_kernels", "PEPITAKernelBackend"),
         ("tp", "computronium.acceleration.tp_kernels", "TPKernelBackend"),
@@ -133,13 +177,18 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
         ("snn", "computronium.acceleration.snn_kernels", "SNNKernelBackend"),
         ("tile", "computronium.acceleration.tile_kernels", "TileKernelBackend"),
         ("mep", "computronium.acceleration.mep_kernels", "MEPKernelBackend"),
-        ("o1memory", "computronium.acceleration.mep_kernels", "O1MemoryEPv2KernelBackend"),
+        (
+            "o1memory",
+            "computronium.acceleration.mep_kernels",
+            "O1MemoryEPv2KernelBackend",
+        ),
     )
     out: dict[str, type] = {}
     for name, module_path, class_name in standard_kernels:
         out[name] = getattr(importlib.import_module(module_path), class_name)
     # Also include contrastive kernels
     from computronium.acceleration.contrastive_kernels import get_contrastive_kernels
+
     out.update(get_contrastive_kernels())
     return out
 
@@ -181,9 +230,7 @@ __all__ = [
     "get_backend",
     "get_compile_config",
     "get_dispatcher",
-    "get_kernel_classes",
     "get_optimal_backend",
-    "get_triton_ops",
     "infer_algorithm_family",
     "kernel_available",
     "pepita_error_modulation",

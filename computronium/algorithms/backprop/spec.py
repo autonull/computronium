@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.backprop",
     kind="algorithm",
     name="Backpropagation",
-    family="backprop",
     reference_entrypoint="computronium.algorithms.backprop.reference.step",
     kernel_entrypoint="computronium.algorithms.backprop.kernel.step",
     kernel_technology="torch_compile",

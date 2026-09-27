@@ -195,32 +195,23 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 # ============================================================
 
 
-# Family-specific tolerances for validation
-FAMILY_TOLERANCES: dict[str, tuple[float, float]] = {
-    "eqprop": (0.15, 1e-2),
-    "equilibrium": (0.15, 1e-2),
-    "ep": (0.15, 1e-2),
-    "chl": (0.15, 1e-2),
-    "fa": (0.1, 5e-3),
-    "feedback_alignment": (0.1, 5e-3),
-    "dfa": (0.1, 5e-3),
-    "forward_only": (0.05, 1e-3),
-    "ff": (0.05, 1e-3),
-    "pepita": (0.05, 1e-3),
-    "hebbian": (0.2, 1e-2),
-    "target_prop": (0.1, 5e-3),
-    "target_inversion": (0.1, 5e-3),
-    "spiking": (0.2, 1e-2),
-    "stdp": (0.2, 1e-2),
-    "snn": (0.2, 1e-2),
-    "predictive_coding": (0.1, 5e-3),
-    "pc": (0.1, 5e-3),
-    "backprop": (0.01, 1e-4),
-    "gradient": (0.01, 1e-4),
-    "mep": (0.1, 5e-3),
-    "tile": (0.1, 5e-3),
-    "default": (0.1, 1e-3),
+# Coordinate-based tolerances for validation
+# Keyed by (credit_type, dynamics_type) tuple for precise matching
+COORDINATE_TOLERANCES: dict[tuple[str, str], tuple[float, float]] = {
+    ("thermodynamic_contrast", "energy_minimization"): (0.15, 1e-2),  # EqProp
+    ("equilibrium", "energy_minimization"): (0.15, 1e-2),  # EqProp variants
+    ("thermodynamic_contrast", "predictive_settling"): (0.1, 5e-3),  # PC
+    ("local_goodness", "predictive_settling"): (0.05, 1e-3),  # FF/PEPITA
+    ("pepita", "instantaneous"): (0.05, 1e-3),  # PEPITA
+    ("local_goodness", "instantaneous"): (0.05, 1e-3),  # Forward-Forward
+    ("random_projections", "instantaneous"): (0.1, 5e-3),  # FA/DFA
+    ("temporal_trace", "instantaneous"): (0.2, 1e-2),  # Hebbian
+    ("temporal_trace", "spike_integration"): (0.2, 1e-2),  # SNN/STDP
+    ("target_inversion", "instantaneous"): (0.1, 5e-3),  # Target Prop
+    ("gradient", "instantaneous"): (0.01, 1e-4),  # Backprop
 }
+
+DEFAULT_TOLERANCES: tuple[float, float] = (0.1, 1e-3)
 
 
 # ============================================================
@@ -855,15 +846,15 @@ class ModelAdapter:
     def __init__(self, model: nn.Module):
         self.model = model
 
-    def _get_family_tolerances(self) -> tuple[float, float]:
-        """Get family-specific tolerances from the model's class name."""
-        family = type(self.model).__name__.lower()
-        if family in FAMILY_TOLERANCES:
-            return FAMILY_TOLERANCES[family]
-        for key, tol in FAMILY_TOLERANCES.items():
-            if key != "default" and key in family:
-                return tol
-        return FAMILY_TOLERANCES["default"]
+    def _get_coordinate_tolerances(self) -> tuple[float, float]:
+        """Get coordinate-specific tolerances from the adapted system's axes."""
+        # Build a temporary system to read the coordinate axes
+        system = self.to_system()
+        credit_type = system.credit.config.credit_type
+        dynamics_type = system.dynamics.config.dynamics_type
+        return COORDINATE_TOLERANCES.get(
+            (credit_type, dynamics_type), DEFAULT_TOLERANCES
+        )
 
     def to_system(
         self,
@@ -887,11 +878,6 @@ class ModelAdapter:
     def _infer_substrate(self) -> Substrate:
         # Priority 1: Model attributes
         substrate = self._infer_substrate_from_backend()
-        if substrate is not None:
-            return substrate
-
-        # Priority 3: Family tag heuristics
-        substrate = self._infer_substrate_from_family()
         if substrate is not None:
             return substrate
 
@@ -919,14 +905,6 @@ class ModelAdapter:
                 return OpticalSubstrate(SubstrateConfig.optical())
             if "quantum" in backend:
                 return QuantumSubstrate(SubstrateConfig.quantum())
-        return None
-
-    def _infer_substrate_from_family(self) -> Substrate | None:
-        family = type(self.model).__name__.lower()
-        if "spiking" in family or "snn" in family or "stdp" in family:
-            return NeuromorphicSubstrate(SubstrateConfig.neuromorphic())
-        if "tile" in family:
-            return DigitalSubstrate(SubstrateConfig.digital())
         return None
 
     _NON_FORWARD_LINEAR_MARKERS = ("feedback", "recurrent", "b_", "fa_")
@@ -1022,11 +1000,11 @@ class ModelAdapter:
             - "differences": dict of metric differences
             - "details": additional diagnostic info
         """
-        # Use family-specific tolerances if not explicitly provided
+        # Use coordinate-specific tolerances if not explicitly provided
         if rtol is None or atol is None:
-            family_rtol, family_atol = self._get_family_tolerances()
-            rtol = rtol if rtol is not None else family_rtol
-            atol = atol if atol is not None else family_atol
+            coord_rtol, coord_atol = self._get_coordinate_tolerances()
+            rtol = rtol if rtol is not None else coord_rtol
+            atol = atol if atol is not None else coord_atol
 
         # Generate test data if not provided
         if x is None:
@@ -1075,7 +1053,9 @@ class ModelAdapter:
                 "atol": atol,
                 "input_shape": tuple(x.shape),
                 "target_shape": tuple(y.shape),
-                "family": type(self.model).__name__.lower(),
+                "credit_type": system.credit.config.credit_type,
+                "dynamics_type": system.dynamics.config.dynamics_type,
+                "topology_type": system.geometry.config.topology_type,
             },
         }
 

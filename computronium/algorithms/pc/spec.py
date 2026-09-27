@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.pc",
     kind="algorithm",
     name="Predictive Coding",
-    family="pc",
     reference_entrypoint="computronium.algorithms.pc.reference.step",
     kernel_entrypoint="computronium.algorithms.pc.kernel.step",
     kernel_technology="triton",

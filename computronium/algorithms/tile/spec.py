@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.tile",
     kind="algorithm",
     name="TileNet",
-    family="tile",
     reference_entrypoint="computronium.algorithms.tile.reference.step",
     kernel_entrypoint="computronium.algorithms.tile.kernel.step",
     kernel_technology="triton",

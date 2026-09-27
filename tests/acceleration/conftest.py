@@ -43,7 +43,7 @@ def _compute_uncalled_twins() -> set[str]:
             continue
         try:
             tree = _parse(path)
-        except (SyntaxError, UnicodeDecodeError):
+        except SyntaxError, UnicodeDecodeError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):

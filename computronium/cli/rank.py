@@ -30,16 +30,16 @@ def view_rankings(args):
 
     # Prepare table
     data = []
-    headers = ["Rank", "Family", "Best Acc", "Gap", "Trials"]
+    headers = ["Rank", "Credit Type", "Best Acc", "Gap", "Trials"]
 
     for r in rankings:
-        if args.family and args.family.lower() not in r.family.lower():
+        if args.credit and args.credit.lower() not in r.credit_type.lower():
             continue
 
         gap_str = f"{r.gap_to_baseline:+.1f}%" if r.gap_to_baseline != 0 else "Base"
         data.append([
             f"#{r.rank}",
-            r.family,
+            r.credit_type,
             f"{r.best_value * 100:.2f}%",
             gap_str,
             r.n_trials,
@@ -51,7 +51,7 @@ def view_rankings(args):
 def main():
     parser = argparse.ArgumentParser(description="Bioplausible Leaderboard Viewer")
     parser.add_argument("--db", default="shallow_benchmark.db", help="Path to database")
-    parser.add_argument("--family", help="Filter by algorithm family")
+    parser.add_argument("--credit", help="Filter by credit assignment type")
 
     args = parser.parse_args()
     view_rankings(args)

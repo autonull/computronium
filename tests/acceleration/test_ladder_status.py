@@ -5,8 +5,7 @@ TODO36 §4.3 and §6.2. Three claims are locked here:
 * ``select_backend(spec, "triton")`` is expressible, and asking for a technology a
   spec does not use raises an error that names what it does have;
 * ``computronium.acceleration.status`` prints one line per rung, and
-  ``--family <name>`` prints the rungs of that family and nothing else — §4.3's
-  "one unambiguous answer per family";
+  ``--credit <name>`` prints the rungs of that credit type and nothing else;
 * ``resolve_available_rung`` answers the question the first two cannot — whether
   *this machine* can run the rung — and returns its fallback with a reason
   instead of making it silently (TODO37 §4.18).
@@ -20,6 +19,7 @@ import pytest
 from computronium.acceleration import status
 from computronium.acceleration.availability import triton_rung_available
 from computronium.acceleration.dispatch import (
+    _availability_family_from_spec,
     resolve_available_rung,
     resolve_rung,
     select_backend,
@@ -65,13 +65,15 @@ def test_auto_never_selects_an_unpromoted_kernel_rung() -> None:
         )
 
 
-@pytest.mark.parametrize("family", ["fa", "pcalm", "tile"])
-def test_status_family_filter_names_one_family(family: str) -> None:
-    """§4.3's done-when: one unambiguous answer per family."""
+@pytest.mark.parametrize(
+    "credit", ["random_projections", "thermodynamic_contrast", "temporal_trace"]
+)
+def test_status_credit_filter_names_one_credit(credit: str) -> None:
+    """One unambiguous answer per credit assignment type."""
     table = status.rows()
-    selected = [row for row in table if row.family == family]
-    assert selected, f"no rungs for family {family}"
-    assert {row.family for row in selected} == {family}
+    selected = [row for row in table if credit in row.coordinate]
+    assert selected, f"no rungs for credit {credit}"
+    assert all(credit in row.coordinate for row in selected)
 
 
 def test_every_spec_has_a_reference_row_and_a_kernel_row_when_declared() -> None:
@@ -97,12 +99,13 @@ def test_cli_table_has_a_line_per_rung(capsys: pytest.CaptureFixture[str]) -> No
     assert len(json.loads(out)) == len(status.rows())
 
 
-def test_cli_family_filter_is_a_report_not_a_substring_search(
+def test_cli_credit_filter_is_a_report_not_a_substring_search(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    out = _cli(capsys, "--family", "fa", "--json")
-    families = {row["family"] for row in json.loads(out)}
-    assert families == {"fa"}
+    out = _cli(capsys, "--credit", "random_projections", "--json")
+    coords = {row["coordinate"] for row in json.loads(out)}
+    # All rows should have random_projections credit
+    assert all("random_projections" in c for c in coords)
     assert not any("fabric" in row["spec"] for row in json.loads(out))
     by_spec = json.loads(_cli(capsys, "--spec", "algorithm.fa", "--json"))
     assert {row["spec"] for row in by_spec} == {"algorithm.fa"}
@@ -124,7 +127,8 @@ def test_resolve_available_rung_agrees_with_resolve_rung_where_it_can_run() -> N
     available = [
         s
         for s in TRITON_SPECS
-        if s.family and triton_rung_available(s.family) and s.family
+        if _availability_family_from_spec(s)
+        and triton_rung_available(_availability_family_from_spec(s))
     ]
     for spec in available:
         resolution = resolve_available_rung(spec, "triton")
@@ -136,34 +140,38 @@ def test_falling_back_is_exactly_the_case_it_claims_to_be() -> None:
     """``fell_back`` means the triton kernel rung could not be verified, and nothing else.
 
     Stated as an invariant over every triton spec rather than as "a fallback
-    happened", because which families fail to compile is a property of the box:
-    a test that needs an unavailable family to exist passes on a CPU runner and
+    happened", because which coordinates fail to compile is a property of the box:
+    a test that needs an unavailable coordinate to exist passes on a CPU runner and
     StopIterations on a GPU one, which is the same test meaning two things.
     """
     for spec in TRITON_SPECS:
         resolution = resolve_available_rung(spec, "triton")
-        verifiable = spec.family is not None and triton_rung_available(spec.family)
+        family = _availability_family_from_spec(spec)
+        verifiable = family is not None and triton_rung_available(family)
         assert resolution.fell_back is not verifiable, (spec.id, resolution.reason)
         assert (resolution.selected.rung == "kernel") is verifiable
         assert (resolution.reason is None) is verifiable
 
 
-def test_a_triton_spec_without_a_family_falls_back_rather_than_claiming_the_rung() -> (
+def test_a_triton_spec_without_availability_family_falls_back_rather_than_claiming_the_rung() -> (
     None
 ):
-    """No family means nothing to compile-test against, which is not a pass.
+    """No availability family means nothing to compile-test against, which is not a pass.
 
-    41 of the 54 triton specs are in this state today, which is why the branch
+    Triton specs without availability fixtures are in this state, which is why the branch
     exists at all: a rung nobody can verify is the rung TODO37 §4.1 was written
     about, and answering "available" for it would be the lying field again.
     """
-    spec = get("primitive.credit_assignment.local_goodness")
-    assert spec.kernel_technology == "triton" and spec.family is None
+    spec = get("primitive.credit_assignment.homeostatic")
+    assert (
+        spec.kernel_technology == "triton"
+        and _availability_family_from_spec(spec) is None
+    )
     resolution = resolve_available_rung(spec, "triton")
     assert resolution.fell_back
     assert resolution.selected.rung == "reference"
     assert resolution.reason is not None
-    assert "no family" in resolution.reason
+    assert "no availability family" in resolution.reason
 
 
 def test_a_reference_request_never_consults_availability() -> None:

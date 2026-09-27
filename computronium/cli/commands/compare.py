@@ -15,22 +15,22 @@ __all__ = ["add_compare_subparsers", "run_compare"]
 def add_compare_subparsers(subparsers: argparse._SubParsersAction) -> None:
     """Add compare subparser."""
     compare_parser = subparsers.add_parser(
-        "compare", help="Rank families from completed HPO studies into a CSV"
+        "compare", help="Rank credit types from completed HPO studies into a CSV"
     )
     compare_parser.add_argument(
         "--studies",
         required=False,
         default="",
-        help="Comma-separated study names (e.g. eqprop_digits_eqprop_mlp,fa_digits_eqprop). "
-        "If empty, --family/--task are used to discover studies.",
+        help="Comma-separated study names (e.g. thermodynamic_contrast_digits_eqprop_mlp,random_projections_digits_fa_mlp). "
+        "If empty, --credit/--task are used to discover studies.",
     )
     compare_parser.add_argument(
-        "--family",
-        help="Glob studies for this registry family (used when --studies omitted)",
+        "--credit",
+        help="Glob studies for this credit assignment type (used when --studies omitted)",
     )
     compare_parser.add_argument(
         "--task",
-        help="Task suffix to match when globbing via --family",
+        help="Task suffix to match when globbing via --credit",
     )
     compare_parser.add_argument(
         "--metric",
@@ -47,7 +47,7 @@ def add_compare_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
 
 def run_compare(args: argparse.Namespace) -> None:
-    """Rank families from completed HPO studies into a CSV."""
+    """Rank credit types from completed HPO studies into a CSV."""
     from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
     from computronium.hyperopt.comparison import compute_algorithm_rankings
 
@@ -62,8 +62,8 @@ def run_compare(args: argparse.Namespace) -> None:
         from computronium.hyperopt.storage import list_studies
 
         all_studies = list_studies(_STORAGE_URL)
-        if args.family:
-            all_studies = [s for s in all_studies if args.family in s]
+        if args.credit:
+            all_studies = [s for s in all_studies if args.credit in s]
         if args.task:
             all_studies = [s for s in all_studies if args.task in s]
         study_names = all_studies
@@ -85,7 +85,7 @@ def run_compare(args: argparse.Namespace) -> None:
             "rank",
             "study",
             "model",
-            "family",
+            "credit_type",
             "task",
             "value",
             "n_trials",
@@ -95,7 +95,7 @@ def run_compare(args: argparse.Namespace) -> None:
                 i,
                 row["study"],
                 row["model"],
-                row["family"],
+                row.get("credit_type", row.get("family", "")),
                 row["task"],
                 row["value"],
                 row["n_trials"],

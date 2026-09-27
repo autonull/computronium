@@ -9,7 +9,6 @@ SPEC = ImplementationSpec(
     id="algorithm.routing",
     kind="algorithm",
     name="Routing (6-D Joint)",
-    family="mep",
     reference_entrypoint="computronium.algorithms.routing.reference.step",
     kernel_entrypoint="computronium.algorithms.routing.kernel.step",
     kernel_technology="triton",

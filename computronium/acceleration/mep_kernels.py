@@ -18,7 +18,6 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
-    LinearView,
     LocalityLevel,
     linear_views,
 )

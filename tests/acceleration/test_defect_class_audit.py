@@ -416,7 +416,7 @@ UNCALLED = {
 def test_the_twin_census_is_a_fixed_list(uncalled_twins: set[str]) -> None:
     """Every exported torch twin with no in-tree caller, and nothing else.
 
-    `KernelBackend` classes bound in `families.BINDINGS` are absent because it
+    `KernelBackend` classes bound in the kernel registry are absent because it
     names them as strings, so an AST importer census would call them all
     uncalled; they are subtracted by name rather than by pattern, which is the
     honest way to keep this list readable. Every row that remains carries the
@@ -472,7 +472,7 @@ def _compute_ref_uncalled_twins() -> set[str]:
             continue
         try:
             tree = _parse(path)
-        except (SyntaxError, UnicodeDecodeError):
+        except SyntaxError, UnicodeDecodeError:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):
