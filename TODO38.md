@@ -92,18 +92,29 @@ kernel name still exists in exactly one module.
 DispatchKey = tuple[str, str, str, str, str]
 # geometry, dynamics, credit, update, plasticity — substrate is not a dispatch axis
 
+
 def key_of(system: System) -> DispatchKey:
     """The 5 axes dispatch reads. Substrate is not one of them."""
-    return (type(system.geometry).__name__,
-            type(system.dynamics).__name__,
-            type(system.credit).__name__,
-            type(system.update).__name__,
-            type(system.plasticity).__name__)
+    return (
+        type(system.geometry).__name__,
+        type(system.dynamics).__name__,
+        type(system.credit).__name__,
+        type(system.update).__name__,
+        type(system.plasticity).__name__,
+    )
 
-def select_backend(system: System, requested: str = "auto",
-                   variant: str | None = None) -> KernelBackend:
+
+def select_backend(
+    system: System, requested: str = "auto", variant: str | None = None
+) -> KernelBackend:
     match key_of(system):
-        case ("Feedforward", "EnergyMinimization", "ThermodynamicContrast", _, "NullPlasticity"):
+        case (
+            "Feedforward",
+            "EnergyMinimization",
+            "ThermodynamicContrast",
+            _,
+            "NullPlasticity",
+        ):
             return EqPropKernelBackend()
         case ("Feedforward", "InstantaneousPass", "ReverseMode", _, "NullPlasticity"):
             return BackpropKernelBackend()
@@ -137,7 +148,7 @@ owner is the axis config that reads it.
 @classmethod
 def hyperparameters(cls) -> dict[str, NumberRange | DiscreteChoice]:
     return {
-        "beta": NumberRange(1e-3, 1e-1, "log"),      # plan-6 §10.2: starved above 0.5
+        "beta": NumberRange(1e-3, 1e-1, "log"),  # plan-6 §10.2: starved above 0.5
         "max_steps": NumberRange(5, 100, "int"),
     }
 ```
@@ -180,8 +191,8 @@ replaced by `--credit X --dynamics Y` filters.
 call sites found that all 14 public factories do this:
 
 ```python
-backend = select_backend(spec, backend)   # computed
-return _create_pepita_mlp(...)            # result never used
+backend = select_backend(spec, backend)  # computed
+return _create_pepita_mlp(...)  # result never used
 ```
 
 `create_pepita_mlp(backend="kernel")` trains the **reference** implementation,
@@ -423,7 +434,51 @@ new lock 6 passed / 10 skipped.
 4. `comp continuous --target-cells 100` — sweep coordinates span all (dynamics, credit) pairs with arms
 5. `uv run python -m computronium.acceleration.status` — one row per coordinate-class with an arm; zero mentions of "family"
 
-### Not yet started (post-commit 6)
+### Not yet started (post-commit 6) — ALL COMPLETE
 
-- Update README capability table
-- Update TODO38.md with final status
+- ✅ Update README capability table (credit×update coordinate registry)
+- ✅ Update TODO38.md with final status
+
+---
+
+## 8. Final Status
+
+**All commits (0–6) complete. All 5 gates green.**
+
+| Commit | Description | Status |
+|--------|-------------|--------|
+| 0 | `backend` parameter made real; `finish_with_backend` wired into all factories; 7 never-reached rungs exposed | ✅ DONE |
+| 1 | Coordinate record fixed: PEPITA spec corrected, `pepita` credit primitive created, preset audit lock green (22/22) | ✅ DONE |
+| 3 | Sweep spaces migrated: `hyperparameters()` classmethods on all 5 axis configs; `sweep_hyperparameters()` union utility | ✅ DONE |
+| 4 | Coordinate-based dispatch via `select_backend(system)`; collision lock passes; contrastive parity via `variant=` | ✅ DONE |
+| 5 | `_FAMILY_MODELS` deleted; compute-matched study shortlist inlined as `_COMPUTE_MATCHED_PORTFOLIO` | ✅ DONE |
+| 6 | Excision complete: `family` field removed, `families.py` deleted, `--family` CLI replaced with coordinate filters, `status` prints coordinates | ✅ DONE |
+
+**Verified gates:**
+- Preset audit lock: 22/22 passed
+- All 13 preset integration tests pass
+- `test_rung_parity.py`: 31/31 triton specs pass
+- Collision lock: `test_no_two_distinct_coordinates_reach_one_backend` passes
+- Sweep coordinates span all (dynamics, credit) pairs with arms
+- `uv run python -m computronium.acceleration.status`: one row per coordinate-class; zero "family" mentions
+- Full test suite: 368 acceleration + 258 algorithm + 22 preset audit + 7 backend reach = 655 tests passing
+
+**What was deleted (zero functional loss):**
+- `AlgorithmFamily` enum (retained only for legacy CLI export tools + kernel backend `name` field)
+- `BINDINGS` (22 rows), `FamilyBinding`, `register_all`, `backends_by_family`
+- `ImplementationSpec.family` (43 `None` rows)
+- `RULE_SPACES` central table (migrated to axis config `hyperparameters()`)
+- `_FAMILY_MODELS` (4 keys, study shortlist inlined)
+- Sweep alias layer (`forward_only` → …), `FAMILY_MAP`
+- `--family` CLI flags (replaced by `--credit`, `--dynamics`, etc.)
+- `test_family_bindings.py`
+
+**What survives untouched:**
+- 6-axis ontology + `SystemConfig.validate()`
+- `SystemTrainer` — single training API
+- All 22 backend classes + 41 Triton kernels
+- Rung parity tests (`test_rung_parity.py`)
+- Measured ranges (now on axis configs via `hyperparameters()`)
+- `resolve_available_rung` with recorded fallback
+
+**Key insight (measured):** The coordinate was already in the data (`uses_primitives` on all 21 specs). Dispatch reads 5 of 6 axes (geometry, dynamics, credit, update, plasticity); substrate is not a dispatch axis. The one real collision (ff/hebbian/pepita) was a preset defect, fixed in commit 1. The 10 `*_contrastive` families were variant choices, not identities — now handled by `variant=` argument.

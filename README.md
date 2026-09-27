@@ -107,7 +107,7 @@ one.
 | **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee ([figure](docs/figures/d5_z3_frozen_theta.png)) |
 | **Multi-objective discovery** | `comp continuous --objectives` / `comp daemon --objectives` — configurable Pareto fronts across 20+ objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2), CEEC-governed claims |
 | **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) — TODO15 §13.3 / TODO16 §0.1 ([figure](docs/figures/d19_depth_harvest.png)) |
-| **Recipe cards** (`recipe_cards.py`) | Family→optimizer/geometry/config canonical-constructor registry — TODO16 §0.3 |
+| **Recipe cards** (`recipe_cards.py`) | Credit×Update→optimizer/geometry/config canonical-constructor registry — TODO16 §0.3 |
 | **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy — TODO16 §4 |
 | **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits — TODO16 §5 |
 | **P-axis expressiveness probes** (`scripts/probes/w17_e*.py`) | Fixed-θ ψ mechanisms verified at probe scale: Kolmogorov compression (short ψ unfolds 32×32 patterns, 2.66× ratio), NCA rule reconfiguration (K distinct patterns from one seed, θ SHA-invariant, 3 seeds), sequential composition over NTM tape (max/sum/median at O(1) depth); σ_max(J_F) stability-expressiveness frontier measured. E1 (deep chaotic unfolding) falsified with a mechanism boundary — composition-error compounding — TODO17 |
@@ -192,9 +192,7 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(
-                input_dim=784, output_dim=10, hidden_dims=(32,)
-            )
+            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
@@ -1404,7 +1402,7 @@ The acceleration layer now provides a **unified registry** of **64 implementatio
 | **Total** | **43** | **21** | **64** |
 
 Each `ImplementationSpec` carries:
-- **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm), `family`
+- **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm)
 - **Mathematics**: `summary`, `equations`, `invariants`, `notes`, `evidence_ids`, `tags`
 - **Kernel**: `supported_backends`, `kernel_technology` (compile/triton), `status` (reference_only/kernel_unverified/kernel_verified), `parity` tolerance
 - **Entrypoints**: `reference_entrypoint`, `kernel_entrypoint`, `cases_entrypoint`
@@ -1416,7 +1414,9 @@ from computronium.acceleration.dispatch import select_backend
 from computronium.acceleration.registry import get
 
 spec = get("primitive.state_dynamics.energy_minimization")
-backend = select_backend(spec, "auto")  # Returns "kernel" if status=kernel_verified, else "reference"
+backend = select_backend(
+    spec, "auto"
+)  # Returns "kernel" if status=kernel_verified, else "reference"
 ```
 
 **Status ladder** (each rung requires evidence before promotion):
@@ -1429,13 +1429,19 @@ backend = select_backend(spec, "auto")  # Returns "kernel" if status=kernel_veri
 ### Registry API
 
 ```python
-from computronium.acceleration.registry import all_specs, algorithms, primitives, get, list_by_axis
+from computronium.acceleration.registry import (
+    all_specs,
+    algorithms,
+    primitives,
+    get,
+    list_by_axis,
+)
 
-all_specs()           # → tuple[ImplementationSpec, ...] (all 64)
-algorithms()          # → 21 algorithm specs
-primitives()          # → 43 primitive specs
+all_specs()  # → tuple[ImplementationSpec, ...] (all 64)
+algorithms()  # → 21 algorithm specs
+primitives()  # → 43 primitive specs
 get("primitive.credit_assignment.random_projections")
-list_by_axis()        # → {axis: [spec_ids]} dict for CLI/docs filtering
+list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
 ```
 
 ---
