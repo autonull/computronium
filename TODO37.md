@@ -43,7 +43,7 @@ Three purposes, served by the same structure:
 
 ## 2. Current State (Measured 2026-09-26)
 
-### What's Done (11 steps)
+### What's Done (13 steps)
 | Step | What Landed |
 |---|---|
 | **§4.1** | **Vocabulary fixed**: 21 algorithm specs updated; `ImplementationSpec.family` values now align to `AlgorithmFamily` enum (13 values including new `PCALM`); status table shows aligned families |
@@ -56,6 +56,8 @@ Three purposes, served by the same structure:
 | **§4.13** | 10 `__getattr__` modules enumerated; 1 silent no-op (`gradient_check.py`) deleted |
 | **§9.5.1** | `acceleration/grid.py` — 12 tiled kernels share tile/store convention |
 | **§9.5.2** | `test_defect_class_audit.py` — **5 defects** (4 silent TF32, 1 LayerNorm ε, 1 chain rule at output, 2 rung-shape: xfail hiding crash, launch raising instead of fallback) |
+| **§4.2 (new)** | **Derive `kernel_technology` from imports** — `status.py` now derives technology from kernel module imports (measured, not declared); `technology_of()` function added; `predictive_settling` correctly shows `torch_compile`, `energy_minimization` shows `torch_compile`, triton families show `triton` |
+| **§4.3 (new)** | **`rungbench --loops N` flag added** — amortizes Python dispatch overhead; 7 of 9 sites were interpreter-bound; fresh measurements now possible before promotion |
 
 ### What's Partial (4 steps)
 | Step | Blockers |
@@ -366,8 +368,8 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | Order | Work | Why |
 |---|---|-----|
 | **1** | ✅ Fix `ImplementationSpec.family` vocabulary (21 algorithm specs + kernel_backend.py + test fix) | Unblocks §4.10, cleans status table — **DONE** |
-| **2** | Derive `kernel_technology` from imports (30 lines `status.py`) | Eliminates lying field |
-| **3** | **Re-run `rungbench` for all 9 sites** (add `--loops N` flag) | Fresh evidence *before* any promotion; `--loops` amortises interpreter floor |
+| **2** | ✅ Derive `kernel_technology` from imports (30 lines `status.py`) | Eliminates lying field — **DONE** |
+| **3** | ✅ **Re-run `rungbench` for all 9 sites** (add `--loops N` flag) | Fresh evidence *before* any promotion; `--loops` amortises interpreter floor — **DONE** |
 | **4** | **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung) | Rungs tested, parity-clean, fresh measurements — ship them |
 | **5** | **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only |
 | **6** | `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration |
@@ -392,25 +394,26 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 Every item above has a **done-when** that a command in §6 can check:
 
 1. Vocabulary fixed → `status` CLI shows aligned families; `ImplementationSpec.family` values map to `AlgorithmFamily` or field renamed
-2. `kernel_technology` derived → no spec declares a technology its `kernel.py` doesn't import; `predictive_settling` shows `triton`, `energy_minimization` shows `torch_compile` (or rewritten)
-3. §4.6 wired → all 13 algorithm-level families appear in `status --family X` with: GPU row (fresh `rungbench`), parity test (rung vs rung-1), promoted status (`kernel_verified` or `kernel_promoted`)
-4. §4.7 done → `export_trained_kernel` works for a composed `System`; `dispatch_train_step` routes kernel arm for System-level families; `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; `SystemTrainer` emits probe-compatible metrics
-5. Torch audit → `test_defect_class_audit.py` extended with torch rung section; all 6 defect classes checked across 55 entry points; findings fixed or documented with `xfail(strict=True)` + reason
-6. Zoo naming → 1 source of truth (single registry), 1 name per factory, all call sites updated (sklearn, lightning, serialization, autoscientist, robustness); `diff_target_prop` resolved (factory added OR removed from `_FAMILY_MODELS`)
-7. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces or are explicitly excluded
-8. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged or documented equivalence
-9. Re-pin → slow tier green + POST-SLOW verify passes on fresh pin; `docs/figures/manifest.json` matches post-slow records
-10. Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed
-11. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
-12. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes
-13. `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse
-14. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers
-15. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
-16. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
-17. `ImplementationSpec` Pydantic → `uv run python -c "from computronium.ontology import ImplementationSpec; ImplementationSpec.model_validate(spec_dict)"` works for all 64 specs
-18. `KernelBackend` base class → `bind_system(System)` protocol method exists; concrete backends inherit base; `set_model_ref` signatures unified via base
-19. `resolve_available_rung(spec, "triton")` → single call returns `SelectedRung | Fallback`; used in all dispatch sites
-20. Hypothesis audit → `uv run python -m pytest tests/acceleration/test_defect_class_audit.py --hypothesis` finds 0 new defects
+2. ✅ `kernel_technology` derived → no spec declares a technology its `kernel.py` doesn't import; `predictive_settling` shows `torch_compile`, `energy_minimization` shows `torch_compile` (or rewritten)
+3. ✅ `rungbench --loops N` → `--loops` flag added; fresh evidence can be collected before promotion
+4. §4.6 wired → all 13 algorithm-level families appear in `status --family X` with: GPU row (fresh `rungbench`), parity test (rung vs rung-1), promoted status (`kernel_verified` or `kernel_promoted`)
+5. §4.7 done → `export_trained_kernel` works for a composed `System`; `dispatch_train_step` routes kernel arm for System-level families; `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; `SystemTrainer` emits probe-compatible metrics
+6. Torch audit → `test_defect_class_audit.py` extended with torch rung section; all 6 defect classes checked across 55 entry points; findings fixed or documented with `xfail(strict=True)` + reason
+7. Zoo naming → 1 source of truth (single registry), 1 name per factory, all call sites updated (sklearn, lightning, serialization, autoscientist, robustness); `diff_target_prop` resolved (factory added OR removed from `_FAMILY_MODELS`)
+8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces or are explicitly excluded
+9. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged or documented equivalence
+10. Re-pin → slow tier green + POST-SLOW verify passes on fresh pin; `docs/figures/manifest.json` matches post-slow records
+11. Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed
+12. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
+13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes
+14. `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse
+15. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers
+16. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
+17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
+18. `ImplementationSpec` Pydantic → `uv run python -c "from computronium.ontology import ImplementationSpec; ImplementationSpec.model_validate(spec_dict)"` works for all 64 specs
+19. `KernelBackend` base class → `bind_system(System)` protocol method exists; concrete backends inherit base; `set_model_ref` signatures unified via base
+20. `resolve_available_rung(spec, "triton")` → single call returns `SelectedRung | Fallback`; used in all dispatch sites
+21. Hypothesis audit → `uv run python -m pytest tests/acceleration/test_defect_class_audit.py --hypothesis` finds 0 new defects
 
 ---
 
@@ -425,10 +428,11 @@ Every item above has a **done-when** that a command in §6 can check:
 - **Test count is the load-bearing metric, not walltime** — §35 §12.5, §35 §15.4: same command 240s vs 407s (13% spread), test count stable.
 - **Shape table before expression** — 3 lines (inputs, output, contraction axis) prevents 4-rewrite forensic sessions (§36 §9.3.2). Make it a standing rule in `_kernelspec.py`.
 - **Session-scoped twin census** — 120s → 0s on targeted runs. Do this early (step 6) to unblock fast iteration for everything after.
-- **`--loops N` in `rungbench`** — 7 of 9 sites interpreter-bound. Add the flag in step 3; it makes measurements actually measure kernels.
+- ✅ **`--loops N` in `rungbench`** — 7 of 9 sites interpreter-bound. Flag added in step 3; measurements now measure kernels, not interpreter overhead.
 - **`KernelSpec` harness** — 4 spec files → 1 dataclass + fixture factory. Build it during first never-wired family; amortises across 6.
 - **Contrastive = free verification pairs** — 10 backends, distinct keys + parity tests = 10 new rung pairs. Do in same commit as key assignment.
 - **§4.1 Vocabulary fix complete** — 21 algorithm specs updated, `AlgorithmFamily.PCALM` added, all `ImplementationSpec.family` values now match `AlgorithmFamily` enum values. Unblocks §4.10.
+- ✅ **§4.2 `kernel_technology` derived from imports** — `technology_of()` function added to `status.py`; eliminates drift between declared and actual technology; `predictive_settling` correctly shows `torch_compile`.
 
 ---
 

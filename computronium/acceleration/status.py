@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from computronium.acceleration.spec import ImplementationSpec
 
-__all__ = ["RungStatus", "family_of", "gpu_rungs", "main", "rows"]
+__all__ = ["RungStatus", "family_of", "gpu_rungs", "main", "rows", "technology_of"]
 
 BENCH_DIR = pathlib.Path("artifacts/benchmarks")
 
@@ -43,6 +43,37 @@ _NONE = "none"
 #: the convention, so a module without an entry simply has no derived family.
 _KERNEL_MODULE_FAMILY = re.compile(
     r"computronium\.acceleration\.(\w+?_kernels|compile)"
+)
+
+#: Patterns to derive kernel technology from a kernel module's imports.
+#: Matched in order; first match wins. This replaces the declared
+#: ``spec.kernel_technology`` with a measured value (§4.2).
+_KERNEL_TECHNOLOGY_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    # Direct triton imports
+    (re.compile(r"import triton\b|from triton\b"), "triton"),
+    # Direct cupy imports
+    (re.compile(r"import cupy\b|from cupy\b"), "cupy"),
+    # Import from acceleration kernel modules (which use triton)
+    (re.compile(r"from computronium\.acceleration\.\w+_kernels import"), "triton"),
+    # Import from availability (triton_rung_available)
+    (
+        re.compile(
+            r"from computronium\.acceleration\.availability import.*\btriton_rung_available\b"
+        ),
+        "triton",
+    ),
+    # Import from backends with kernel_available("triton") usage
+    (re.compile(r'kernel_available\s*\(\s*["\']triton["\']'), "triton"),
+    (
+        re.compile(
+            r"from computronium\.acceleration\.backends import.*\bkernel_available\b.*KERNEL_TECHNOLOGY"
+        ),
+        "triton",
+    ),
+    # Import from compile module -> torch_compile
+    (re.compile(r"from computronium\.acceleration\.compile import"), "torch_compile"),
+    # kernel_available with torch_compile
+    (re.compile(r'kernel_available\s*\(\s*["\']torch_compile["\']'), "torch_compile"),
 )
 
 
@@ -99,6 +130,31 @@ def family_of(spec: ImplementationSpec) -> str:
     return "torch_compile" if family == "compile" else family.removesuffix("_kernels")
 
 
+def technology_of(spec: ImplementationSpec) -> str:
+    """The kernel technology a spec's kernel rung uses.
+
+    Derived from the kernel module's own imports — same "measured, not declared"
+    rule as :func:`family_of`. Eliminates drift between declared
+    ``kernel_technology`` and actual implementation.
+
+    Returns:
+        One of: "triton", "torch_compile", "cupy", "torch" (reference), "none".
+    """
+    source = _kernel_module_source(spec)
+    if source is None:
+        return _NONE
+    for pattern, tech in _KERNEL_TECHNOLOGY_PATTERNS:
+        if pattern.search(source):
+            return tech
+    # Check for KERNEL_TECHNOLOGY constant as fallback
+    if "KERNEL_TECHNOLOGY" in source:
+        # Extract the value if it's a simple string assignment
+        match = re.search(r'KERNEL_TECHNOLOGY\s*=\s*["\']([^"\']+)["\']', source)
+        if match:
+            return match.group(1)
+    return "torch"
+
+
 def gpu_rungs() -> dict[tuple[str, str], float]:
     """Best (lowest) CUDA wall time per ``(spec id, rung)`` in the benchmark rows."""
     best: dict[tuple[str, str], float] = {}
@@ -150,9 +206,8 @@ def rows(specs: Iterable[ImplementationSpec] | None = None) -> tuple[RungStatus,
     out: list[RungStatus] = []
     for spec in specs if specs is not None else all_specs():
         family = family_of(spec)
-        compiles = (
-            _family_compiles(family) if spec.kernel_technology == "triton" else _NONE
-        )
+        tech = technology_of(spec)
+        compiles = _family_compiles(family) if tech == "triton" else _NONE
         for requested in ("reference", "kernel"):
             if requested == "kernel" and "kernel" not in spec.supported_backends:
                 continue
@@ -162,7 +217,7 @@ def rows(specs: Iterable[ImplementationSpec] | None = None) -> tuple[RungStatus,
                     spec=spec.id,
                     family=family,
                     rung=rung.rung,
-                    technology=rung.technology or _NONE,
+                    technology=rung.technology or tech or _NONE,
                     compiles=compiles if rung.rung == "kernel" else "n/a",
                     parity=_parity(spec, rung.rung),
                     gpu=("yes" if (spec.id, rung.rung) in gpu else _NONE),

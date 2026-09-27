@@ -246,7 +246,7 @@ def rung_sites() -> tuple[RungSite, ...]:
 
 
 def _time_rung(
-    rung: Rung, case: Case, *, device: str, warmup: int, iterations: int
+    rung: Rung, case: Case, *, device: str, warmup: int, iterations: int, loops: int = 1
 ) -> list[dict[str, Any]]:
     cuda = device != "cpu" and torch.cuda.is_available()
 
@@ -263,7 +263,8 @@ def _time_rung(
         if cuda:
             torch.cuda.reset_peak_memory_stats()
         start = time.perf_counter()
-        rung.step(case)
+        for _ in range(loops):
+            rung.step(case)
         _sync()
         elapsed = time.perf_counter() - start
         rows.append({
@@ -275,6 +276,7 @@ def _time_rung(
                 else _tensor_bytes(case) / (1024 * 1024)
             ),
             "iteration": iteration,
+            "loops": loops,
         })
     return rows
 
@@ -288,6 +290,7 @@ def measure(
     scales: Sequence[int] = DEFAULT_SCALES,
     warmup: int = 3,
     iterations: int = 5,
+    loops: int = 1,
 ) -> list[dict[str, Any]]:
     """Time every available rung of one site at each scale.
 
@@ -306,7 +309,12 @@ def measure(
             try:
                 timings = (
                     _time_rung(
-                        rung, case, device=device, warmup=warmup, iterations=iterations
+                        rung,
+                        case,
+                        device=device,
+                        warmup=warmup,
+                        iterations=iterations,
+                        loops=loops,
                     )
                     if available
                     else [{"status": "unavailable"}]
@@ -392,6 +400,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--scales", type=int, nargs="+", default=list(DEFAULT_SCALES))
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--iterations", type=int, default=5)
+    parser.add_argument(
+        "--loops",
+        type=int,
+        default=1,
+        help="inner loop repetitions per iteration to amortize Python dispatch overhead",
+    )
     parser.add_argument("--site", action="append", default=None)
     parser.add_argument("--output-dir", type=pathlib.Path, default=OUTPUT_DIR)
     parser.add_argument("--dry-run", action="store_true")
@@ -416,6 +430,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 scales=args.scales,
                 warmup=args.warmup,
                 iterations=args.iterations,
+                loops=args.loops,
             )
         )
 
