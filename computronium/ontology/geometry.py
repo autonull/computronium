@@ -509,7 +509,7 @@ class GeometryConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list[object]]:
         """Hyperparameter ranges owned by the geometry axis.
 
         These are the knobs the geometry config reads. The sweep unions the

@@ -103,8 +103,8 @@ def add_search_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
 def run_search(args: argparse.Namespace) -> None:
     """Compute-matched HPO across a credit assignment type."""
-    from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
-    from computronium.hyperopt import create_optuna_space, create_study
+    from computronium.cli.shared import _DB_PATH, _STORAGE_URL
+    from computronium.hyperopt import create_study
     from computronium.hyperopt.eval_tiers import get_evaluation_config
 
     # Override storage if --db provided

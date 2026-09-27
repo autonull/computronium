@@ -85,6 +85,7 @@ def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
     if args.credit:
         # Discover models that use this credit type
         from computronium.acceleration.registry import all_specs
+
         credit_models = []
         for spec in all_specs():
             if spec.kind == "algorithm":
