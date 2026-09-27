@@ -91,6 +91,9 @@ def test_contrastive_kernels_do_not_register_on_import() -> None:
     )
 
     for family in AlgorithmFamily:
+        # Only check families that have registered backends
+        if family not in KernelRegistry._backends:
+            continue
         if KernelRegistry.get(
             family, next(iter(KernelRegistry._backends[family]))
         ).__class__.__name__.endswith("ContrastiveKernel"):

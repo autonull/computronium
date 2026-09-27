@@ -38,6 +38,7 @@ class AlgorithmFamily(StrEnum):
     SNN = "snn"
     TILE = "tile"
     MEP = "mep"
+    PCALM = "pcalm"
     O1MEMORY = "o1memory"
     BACKPROP = "backprop"
 
