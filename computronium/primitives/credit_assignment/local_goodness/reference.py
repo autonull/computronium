@@ -4,18 +4,27 @@ Delegates to computronium.ontology.credit.LocalGoodnessCredit (the source of tru
 This wrapper provides the uniform `step(case)` interface for parity/microbench.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import torch
-from torch import nn
+if TYPE_CHECKING:
+    import torch
 
 from computronium.ontology.credit import (
     CreditAssignmentConfig,
     LocalGoodnessCredit,
     Phase,
 )
-from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 from computronium.ontology.system import SystemState
+
+
+def _recompute_activations(geometry, input_tensor: torch.Tensor) -> list[torch.Tensor]:
+    """Recompute activations by running forward pass through geometry."""
+    activations = [input_tensor]
+    x = input_tensor
+    for layer in geometry._layers:
+        x = layer(x)
+        activations.append(x)
+    return activations
 
 
 def step(case: Any) -> list[torch.Tensor]:
@@ -40,35 +49,25 @@ def step(case: Any) -> list[torch.Tensor]:
     )
     credit = LocalGoodnessCredit(config)
 
-    # Convert case to SystemState objects for free and nudged phases
+    # Recompute activations fresh for each call to maintain autograd graph
+    free_activations = _recompute_activations(case.geometry, case.free_activations[0])
+    nudged_activations = _recompute_activations(
+        case.geometry, case.nudged_activations[0]
+    )
+
+    # Convert to SystemState objects for free and nudged phases
     free_state = SystemState(
-        activations=case.free_activations,
-        x=case.free_activations[0],
+        activations=free_activations,
+        x=free_activations[0],
         y=case.config.get("target"),
     )
     nudged_state = SystemState(
-        activations=case.nudged_activations,
-        x=case.nudged_activations[0],
+        activations=nudged_activations,
+        x=nudged_activations[0],
         y=case.config.get("target"),
     )
 
-    # Build a geometry with the case's weights
-    weight_shapes = [w.shape for w in case.weights]
-    dims = (weight_shapes[0][1], *[s[0] for s in weight_shapes])
-    layers = nn.ModuleList()
-    for i in range(len(weight_shapes)):
-        layer = nn.Linear(dims[i], dims[i + 1], bias=False)
-        layer.weight.data = case.weights[i].clone()
-        layers.append(layer)
-
-    geometry = FeedforwardGeometry(
-        GeometryConfig.feedforward(
-            input_dim=dims[0],
-            output_dim=dims[-1],
-            hidden_dims=dims[1:-1],
-        ),
-        layers=layers,
-    )
+    geometry = case.geometry
 
     states = {
         Phase.FREE: free_state,

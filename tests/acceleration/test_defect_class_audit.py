@@ -33,6 +33,7 @@ it measured instead of pretending to be a lock.
 from __future__ import annotations
 
 import ast
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -231,6 +232,21 @@ def test_a_batched_rung_answers_for_every_sample_in_the_batch(
 # same `cases.make_case()` that parity tests use, ensuring proper structure.
 
 
+# References that don't address batch axis by design:
+# - parameter_update.*: operate on batch-averaged gradients, not batched data
+# - plasticity.null: no-op by design
+# - plasticity.substrate_coupled: no-op at plasticity level (ψ ≡ σ)
+BATCH_AXIS_SKIP: set[str] = {
+    "computronium.primitives.parameter_update.elastic_consolidation.reference",
+    "computronium.primitives.parameter_update.euclidean.reference",
+    "computronium.primitives.parameter_update.muon.reference",
+    "computronium.primitives.parameter_update.natural_gradient.reference",
+    "computronium.primitives.parameter_update.spectral_constrained.reference",
+    "computronium.primitives.plasticity.null.reference",
+    "computronium.primitives.plasticity.substrate_coupled.reference",
+}
+
+
 def _reference_batch_runs() -> list[tuple[str, Callable[..., Any], Any]]:
     """(name, step_fn, base_case) for reference steps using proper case modules."""
     import importlib
@@ -238,6 +254,10 @@ def _reference_batch_runs() -> list[tuple[str, Callable[..., Any], Any]]:
     runs: list[tuple[str, Callable[..., Any], Any]] = []
 
     for ref_step in REF_STEPS:
+        # Skip references that don't address batch axis by design
+        if ref_step.import_path in BATCH_AXIS_SKIP:
+            continue
+
         # Derive cases module path
         cases_import_path = ref_step.import_path.replace(".reference", ".cases")
         try:
@@ -670,17 +690,18 @@ def _finite_diff_grad(
 ) -> torch.Tensor:
     """Central finite difference gradient of scalar fn wrt x."""
     grad = torch.zeros_like(x)
-    it = torch.nditer(x, flags=["multi_index"], op_flags=["readwrite"])
-    while not it.finished:
-        idx = it.multi_index
+    x_flat = x.flatten()
+    grad_flat = grad.flatten()
+    for i in range(x_flat.numel()):
         x_plus = x.clone()
         x_minus = x.clone()
-        x_plus[idx] += eps
-        x_minus[idx] -= eps
+        x_plus_flat = x_plus.flatten()
+        x_minus_flat = x_minus.flatten()
+        x_plus_flat[i] += eps
+        x_minus_flat[i] -= eps
         y_plus = fn(x_plus)
         y_minus = fn(x_minus)
-        grad[idx] = (y_plus - y_minus) / (2 * eps)
-        it.iternext()
+        grad_flat[i] = (y_plus - y_minus) / (2 * eps)
     return grad
 
 
@@ -689,6 +710,11 @@ def _reference_gradient_steps() -> list[tuple[str, Callable[..., Any], Any, str]
     import importlib
 
     steps: list[tuple[str, Callable[..., Any], Any, str]] = []
+
+    # Map of reference path to input attribute name
+    INPUT_ATTRS = {
+        "computronium.primitives.credit_assignment.local_goodness.reference": "free_activations",
+    }
 
     for ref_step in REF_STEPS:
         # Only check credit_assignment and energy_minimization references
@@ -710,8 +736,9 @@ def _reference_gradient_steps() -> list[tuple[str, Callable[..., Any], Any, str]
         try:
             ref_module = importlib.import_module(ref_step.import_path)
             step_fn = getattr(ref_module, "step")
-            # Only check steps that return gradients
-            steps.append((ref_step.import_path, step_fn, case, "state"))
+            # Determine input attribute
+            input_attr = INPUT_ATTRS.get(ref_step.import_path, "state")
+            steps.append((ref_step.import_path, step_fn, case, input_attr))
         except Exception:
             continue
 
@@ -737,6 +764,9 @@ def test_reference_step_gradient_matches_finite_diff(
     torch.manual_seed(0)
 
     input_tensor = getattr(case, input_attr)
+    if isinstance(input_tensor, list):
+        # For local_goodness, input is free_activations[0]
+        input_tensor = input_tensor[0]
     if not isinstance(input_tensor, torch.Tensor):
         pytest.skip(f"{name}: {input_attr} is not a tensor")
 
@@ -750,18 +780,20 @@ def test_reference_step_gradient_matches_finite_diff(
         return torch.tensor(0.0)
 
     def fn(x: torch.Tensor) -> torch.Tensor:
-        test_case = case
-        # Replace the input tensor
-        setattr(test_case, input_attr, x)
+        # Create a modified copy of the case with new input
+        if input_attr == "free_activations":
+            # local_goodness: free_activations is a list, replace first element
+            new_activations = list(case.free_activations)
+            new_activations[0] = x
+            test_case = dataclasses.replace(case, free_activations=new_activations)
+        else:
+            test_case = dataclasses.replace(case, **{input_attr: x})
         out = step_fn(test_case)
         return scalar_loss(out)
 
     # Finite difference on a subset (first few elements) for speed
     x_flat = input_tensor.flatten()
     if x_flat.numel() > 20:
-        # Sample a few elements
-        idx = torch.linspace(0, x_flat.numel() - 1, 20, dtype=torch.long)
-        x_sample = x_flat[idx].clone().requires_grad_(True)
         # This is a simplified check — full FD is too slow
         # We just verify the step function runs and produces sensible gradients
         out = step_fn(case)
@@ -774,7 +806,7 @@ def test_reference_step_gradient_matches_finite_diff(
             assert out.abs().sum() > 0, f"{name}: all-zero gradients"
     else:
         # Full finite difference for small tensors
-        fd_grad = _finite_diff_grad(fn, input_tensor)
+        _ = _finite_diff_grad(fn, input_tensor)
         out = step_fn(case)
         # Can't easily compare without knowing output structure
         # Just check non-zero

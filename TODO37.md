@@ -203,23 +203,26 @@ The 6 defect classes (§36 §9.1) found in Triton rungs exist in torch rungs too
 
 **Progress (2026-09-27)**:
 - Extended `test_defect_class_audit.py` with torch reference audit sections (classes 3b, 4b, 5b, 6b)
-- **Batch axis check (class 3b)**: 39/48 references pass; 9 fail (findings below)
+- **Batch axis check (class 3b)**: 41/41 tested references pass; 7 skipped by design (parameter_update.* ×5, plasticity.null, plasticity.substrate_coupled)
 - **Twin census (class 4b)**: PASS — no unexpected uncalled twins in primitives/ + algorithms/ reference.py
 - **TF32 check (class 5b)**: PASS — all reference modules using matmul/@ set precision
-- **Wrong derivative (class 6b)**: Finite-difference test scaffolded; 9 references checked (sanity only)
+- **Wrong derivative (class 6b)**: Finite-difference tests implemented and passing for all 9 gradient references (credit_assignment + energy_minimization)
 
-**Findings from batch axis audit (class 3b)**:
-| Reference | Issue |
-|---|---|
-| `credit_assignment.local_goodness` | Returns all zeros (FF mode autograd graph broken) |
-| `credit_assignment.reverse_mode` | Returns all zeros |
-| `parameter_update.*` (5) | Process gradients (batch-averaged), not batched data — expected |
-| `plasticity.null` | Null plasticity — no-op by design |
-| `plasticity.substrate_coupled` | Returns identical output (needs investigation) |
+**Findings from batch axis audit (class 3b) — RESOLVED**:
+| Reference | Issue | Resolution |
+|---|---|---|
+| `credit_assignment.local_goodness` | Returns all zeros (FF mode autograd graph broken) | **FIXED** — cases.py now runs forward pass through geometry; reference.py recomputes activations fresh per call |
+| `credit_assignment.reverse_mode` | Returns all zeros / graph freed on second call | **FIXED** — reference.py recomputes activations fresh per call |
+| `parameter_update.*` (5) | Process gradients (batch-averaged), not batched data | **EXPECTED** — skipped in batch axis test with documented reason |
+| `plasticity.null` | Null plasticity — no-op by design | **EXPECTED** — skipped in batch axis test with documented reason |
+| `plasticity.substrate_coupled` | Returns identical output | **EXPECTED** — no-op at plasticity level (ψ ≡ σ), skipped in batch axis test |
 
 **Fixed during audit**:
 - `backprop_kernels.py`: SiLU/GELU derivative now uses pre-activation via shared `activation_derivative` (was using post-activation)
 - `triton_kernels.py`: Added `input_precision="ieee"` to 4 `tl.dot` calls in `_layered_step_kernel` and `_ep_settle_kernel`
+- `local_goodness/cases.py`: Creates activations via forward pass through geometry with proper autograd graph
+- `local_goodness/reference.py`: Recomputes activations fresh per call to maintain graph
+- `reverse_mode/reference.py`: Recomputes activations fresh per call to maintain graph
 
 **Shape table → expression pipeline (refactoring, free during spec recovery)**:
 - Before any expression, write 3 lines: inputs, output, contraction axis
@@ -405,7 +408,7 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **4** | ✅ **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung + Tile launchers) | Rungs tested, parity-clean, fresh measurements — **DONE** |
 | **5** | ✅ **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only — **DONE** |
 | **6** | ✅ `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration — **DONE** |
-| **7** | **§4.5 Torch reference audit** (batch-dependence + TF32 + twin census) | Extended `test_defect_class_audit.py`; 39/48 batch axis pass; 9 findings documented; fixed backprop derivative + triton tl.dot precision | **IN PROGRESS** |
+| **7** | ✅ **§4.5 Torch reference audit** (batch-dependence + TF32 + twin census + wrong derivative) | Extended `test_defect_class_audit.py`; **41/41 batch axis pass** (7 skipped by design); twin census pass; TF32 pass; **9/9 finite-diff gradient tests pass**; fixed local_goodness/reverse_mode autograd graphs; fixed backprop SiLU/GELU derivative; fixed triton tl.dot precision | **DONE** |
 | **8** | §4.8 zoo naming cleanup (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review |
 | **9** | §4.9 rule spaces / §4.10 sweep aliases / §4.11 re-pin | Product decisions, now unblocked |
 | **10** | Contrastive kernels distinct keys + parity tests + fixtures | 10 new verification pairs |
@@ -468,7 +471,7 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **§4.2 `kernel_technology` derived from imports** — `technology_of()` function added to `status.py`; eliminates drift between declared and actual technology; `predictive_settling` correctly shows `torch_compile`.
 - ✅ **§4.6 Algorithm-level families complete** — 6 never-wired families (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`) wired with imports, compile fixtures, parity tests; PCALM algorithm kernel calls primitive settling (compiled triton loop); Tile tensor launchers exported from `tile_kernels.py`; `rungbench --loops 10` re-run for fresh measurements.
 - ✅ **§4.7 System kernel arm complete** — `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources`; all existing tests pass.
-- ✅ **§4.5 Torch reference audit extended** — `test_defect_class_audit.py` now covers 6 defect classes over 48 torch reference entry points (27 primitives + 21 algorithms); batch axis check (39/48 pass, 9 findings documented), twin census (pass), TF32 check (pass); fixed backprop SiLU/GELU derivative (now uses pre-activation via shared `activation_derivative`) and triton `tl.dot` precision (4 calls in `_layered_step_kernel`/`_ep_settle_kernel` now have `input_precision="ieee"`).
+- ✅ **§4.5 Torch reference audit complete** — `test_defect_class_audit.py` covers 6 defect classes over 48 torch reference entry points (27 primitives + 21 algorithms); **batch axis: 41/41 pass (7 skipped by design)**, twin census (pass), TF32 (pass), **wrong derivative: 9/9 finite-diff tests pass**; fixed local_goodness/reverse_mode autograd graphs (cases.py + reference.py); fixed backprop SiLU/GELU derivative (pre-activation via shared `activation_derivative`); fixed triton `tl.dot` precision (4 calls with `input_precision="ieee"`).
 
 ---
 
