@@ -271,6 +271,7 @@ class TestSourceLock:
             f"credit signatures must name SettableState, not a state algebra: {offenders}"
         )
 
+    @pytest.mark.timeout(300)  # 6.7s measured, budget declared TODO37 §4.11
     def test_type_checking_imports_are_not_called_at_runtime(self):
         """A name imported under ``TYPE_CHECKING`` and then *called* is a
         NameError waiting for a path that reaches it.

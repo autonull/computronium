@@ -115,6 +115,7 @@ def _run(credit: Literal["ff", "pepita", "bp"], steps: int = 120) -> list[float]
     return losses
 
 
+@pytest.mark.timeout(300)  # 27.5s measured, budget declared TODO37 §4.11
 def test_bp_learns_structured_tokens():
     losses = _run("bp")
     import math

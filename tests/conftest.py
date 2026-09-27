@@ -7,6 +7,12 @@ stream, so an unseeded failure cannot be reproduced from its inputs.
 ``tests/property/test_rng_seed_lock.py`` ratchets this; shape-only tests
 are exempt because a draw's values cannot change its shape.
 
+Walltime: a test that outruns the global timeout declares a budget next to
+itself, and the end-of-run walltime report is what notices a test that grew
+into needing one — the discovery half of the policy in
+``tests/test_timeout_marker_policy.py``, which can census a marker but
+cannot see the absence of one.
+
 The suite's thread count is pinned in the root ``conftest.py``, not here: it
 has to be set before torch is imported, and this module imports torch. It
 used to be set here anyway, below the import, where it did nothing.
@@ -53,12 +59,132 @@ def pytest_addoption(parser: Any) -> None:
         default=False,
         help="Enable screenshot capture for visual verification",
     )
+    parser.addoption(
+        "--walltime-report",
+        metavar="PATH",
+        default=None,
+        help="Write every test's measured call seconds to PATH as a markdown table.",
+    )
 
 
 def pytest_configure(config: Any) -> None:
     config.addinivalue_line(
         "markers", "screenshots: mark test as capturing screenshots"
     )
+
+
+#: A test whose call phase runs longer than this with no declared budget is
+#: reported at the end of the run. Five seconds is roughly where a test stops
+#: being a check and becomes a cost: 4,000 tests at 0.05 s is a fast lane, and
+#: the point of the threshold is to keep the report short enough to be read.
+WALLTIME_DISCOVERY_S = 5.0
+
+#: nodeid -> measured call seconds, for tests carrying no ``timeout`` marker.
+#: A test that declares a budget has already made the decision, so it is not a
+#: discovery candidate however long it runs.
+_UNDECLARED_WALLTIME: dict[str, float] = {}
+
+
+def pytest_runtest_logreport(report: pytest.TestReport) -> None:
+    if report.when != "call" or "timeout" in report.keywords:
+        return
+    _UNDECLARED_WALLTIME[report.nodeid] = max(
+        _UNDECLARED_WALLTIME.get(report.nodeid, 0.0), report.duration
+    )
+
+
+def _walltime_section(terminalreporter: Any) -> list[str]:
+    """The undeclared tests that ran long, as a terminal-summary section.
+
+    Reported and not failed. A test crossing the threshold on a loaded machine
+    is not a policy violation — it is the policy working — and failing the run
+    over it would make the report something people suppress, which is the
+    outcome this file exists to prevent. The remedy for a row is a
+    ``@pytest.mark.timeout`` next to the test, recorded in
+    ``tests/test_timeout_marker_policy.py``.
+    """
+    slow = sorted(
+        (seconds, nodeid)
+        for nodeid, seconds in _UNDECLARED_WALLTIME.items()
+        if seconds > WALLTIME_DISCOVERY_S
+    )
+    if not slow:
+        return []
+    lines = [
+        f"tests over {WALLTIME_DISCOVERY_S}s with no @pytest.mark.timeout budget:",
+        "",
+    ]
+    lines += [
+        f"  {seconds:7.2f}s  {nodeid}  →  @pytest.mark.timeout({_budget_for(seconds)})"
+        for seconds, nodeid in reversed(slow)
+    ]
+    lines += [
+        "",
+        "Add the marker next to the test and the row to KNOWN_LONG "
+        "(tests/test_timeout_marker_policy.py).",
+    ]
+    return lines
+
+
+#: Budgets are drawn from this ladder, which is the vocabulary
+#: :data:`KNOWN_LONG` already speaks. A number computed to three significant
+#: figures off one measurement reads as precision the measurement does not have
+#: — and `3197` is what four times of headroom plus a floor produces.
+_WALLTIME_LADDER = (300, 600, 900, 1200, 1800, 3600)
+
+#: Headroom over the measurement, for machine speed and full-suite load. The
+#: policy exists because a 120 s kill is indistinguishable from a flake; a
+#: budget derived from one measurement with no headroom reintroduces exactly
+#: that, with the same test and a busier machine.
+_WALLTIME_HEADROOM = 4
+
+
+def _budget_for(seconds: float) -> int:
+    """The smallest ladder rung that leaves :data:`_WALLTIME_HEADROOM` over."""
+    needed = _WALLTIME_HEADROOM * seconds
+    return next(
+        (rung for rung in _WALLTIME_LADDER if rung >= needed), _WALLTIME_LADDER[-1]
+    )
+
+
+def _write_walltime_report(path: str) -> None:
+    """Every test's measured call seconds, slowest first.
+
+    Written on request rather than every run because it is a snapshot of one
+    machine on one day: the file that consumes it is a decision, and decisions
+    are made from a reading, not from whatever the last run happened to say.
+    """
+    rows = sorted(
+        ((seconds, nodeid) for nodeid, seconds in _UNDECLARED_WALLTIME.items()),
+        reverse=True,
+    )
+    lines = [
+        "# Measured test walltime",
+        "",
+        f"{len(rows)} tests with no declared budget, slowest first.",
+        "Regenerate with `pytest --walltime-report=<path>`.",
+        "",
+        "| seconds | nodeid |",
+        "|---:|---|",
+    ]
+    lines += [f"| {seconds:.2f} | `{nodeid}` |" for seconds, nodeid in rows]
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def pytest_terminal_summary(
+    terminalreporter: Any, exitstatus: int, config: Any
+) -> None:
+    if hasattr(config, "workerinput"):
+        return
+    report = config.getoption("--walltime-report", default=None)
+    if report:
+        _write_walltime_report(report)
+    section = _walltime_section(terminalreporter)
+    if section:
+        terminalreporter.write_sep("=", "walltime discovery", red=True)
+        terminalreporter.write_line("\n".join(section))
 
 
 @pytest.fixture

@@ -14,6 +14,7 @@ suite walltime): MNIST quick-mode, 1 epoch over the capped stream, hidden
 
 from itertools import islice
 
+import pytest
 import torch
 
 from computronium import (
@@ -50,6 +51,7 @@ def _flatten(loader, cap=BATCH_CAP):
         yield x.view(x.size(0), -1), y
 
 
+@pytest.mark.timeout(300)  # 20.6s measured, budget declared TODO37 §4.11
 def test_demo_swap_credit(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True)
     task.setup()

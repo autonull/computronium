@@ -18,6 +18,7 @@ episodes, 60 episodes/phase).
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from computronium.experiments.joint.temporal_psi_migration import (
@@ -38,6 +39,7 @@ CLOSED_FORM_COLLAPSE = 0.85
 MATCH_MARGIN = 0.05
 
 
+@pytest.mark.timeout(300)  # 16.7s measured, budget declared TODO37 §4.11
 def test_demo_temporal_psi_migration(emit_run_record) -> None:
     torch.manual_seed(0)
     config = MigrationDemoConfig()

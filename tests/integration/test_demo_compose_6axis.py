@@ -49,6 +49,7 @@ def _flatten(loader, cap=BATCH_CAP):
         yield x.view(x.size(0), -1), y
 
 
+@pytest.mark.timeout(300)  # 14.9s measured, budget declared TODO37 §4.11
 def test_demo_compose_6axis(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True)
     task.setup()

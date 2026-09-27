@@ -161,6 +161,7 @@ class TestPCALMDepthScaling:
     """Test PC-ALM depth scaling with InnocentiInit (paper claim: depth 1000 trainable)."""
 
     @pytest.mark.parametrize("depth", [10, 20, 50])
+    @pytest.mark.timeout(300)  # 7.9s measured, budget declared TODO37 §4.11
     def test_pcalm_depth_scaling(self, depth):
         """PC-ALM with InnocentiInit should train at increasing depths."""
         system = _create_pc_alm_system(
@@ -175,6 +176,7 @@ class TestPCALMDepthScaling:
             assert "loss" in result
             assert torch.isfinite(torch.tensor(result["loss"]))
 
+    @pytest.mark.timeout(300)  # 7.3s measured, budget declared TODO37 §4.11
     def test_pcalm_depth_100_no_explosion(self):
         """PC-ALM at depth 100 should not have gradient/activation explosion."""
         system = _create_pc_alm_system(

@@ -1,12 +1,15 @@
 """The dispatch names a technology, and the status table says one thing per rung.
 
-TODO36 §4.3 and §6.2. Two claims are locked here:
+TODO36 §4.3 and §6.2. Three claims are locked here:
 
 * ``select_backend(spec, "triton")`` is expressible, and asking for a technology a
   spec does not use raises an error that names what it does have;
 * ``computronium.acceleration.status`` prints one line per rung, and
   ``--family <name>`` prints the rungs of that family and nothing else — §4.3's
-  "one unambiguous answer per family".
+  "one unambiguous answer per family";
+* ``resolve_available_rung`` answers the question the first two cannot — whether
+  *this machine* can run the rung — and returns its fallback with a reason
+  instead of making it silently (TODO37 §4.18).
 """
 
 import json
@@ -15,7 +18,12 @@ from dataclasses import asdict
 import pytest
 
 from computronium.acceleration import status
-from computronium.acceleration.dispatch import resolve_rung, select_backend
+from computronium.acceleration.availability import triton_rung_available
+from computronium.acceleration.dispatch import (
+    resolve_available_rung,
+    resolve_rung,
+    select_backend,
+)
 from computronium.acceleration.registry import all_specs, get
 
 SPECS = all_specs()
@@ -105,3 +113,67 @@ def test_gpu_column_reflects_recorded_rows_only() -> None:
     gpu = status.gpu_rungs()
     for row in status.rows():
         assert (row.gpu == "yes") is ((row.spec, row.rung) in gpu)
+
+
+def test_resolve_available_rung_agrees_with_resolve_rung_where_it_can_run() -> None:
+    """The two agree on the box the triton rung compiles on, or one is a lie.
+
+    Without this, a broken availability check would make the new function fall
+    back everywhere and the tests below would pass for the wrong reason.
+    """
+    available = [
+        s
+        for s in TRITON_SPECS
+        if s.family and triton_rung_available(s.family) and s.family
+    ]
+    for spec in available:
+        resolution = resolve_available_rung(spec, "triton")
+        assert not resolution.fell_back, resolution.reason
+        assert resolution.selected.rung == "kernel"
+
+
+def test_falling_back_is_exactly_the_case_it_claims_to_be() -> None:
+    """``fell_back`` means the triton kernel rung could not be verified, and nothing else.
+
+    Stated as an invariant over every triton spec rather than as "a fallback
+    happened", because which families fail to compile is a property of the box:
+    a test that needs an unavailable family to exist passes on a CPU runner and
+    StopIterations on a GPU one, which is the same test meaning two things.
+    """
+    for spec in TRITON_SPECS:
+        resolution = resolve_available_rung(spec, "triton")
+        verifiable = spec.family is not None and triton_rung_available(spec.family)
+        assert resolution.fell_back is not verifiable, (spec.id, resolution.reason)
+        assert (resolution.selected.rung == "kernel") is verifiable
+        assert (resolution.reason is None) is verifiable
+
+
+def test_a_triton_spec_without_a_family_falls_back_rather_than_claiming_the_rung() -> (
+    None
+):
+    """No family means nothing to compile-test against, which is not a pass.
+
+    41 of the 54 triton specs are in this state today, which is why the branch
+    exists at all: a rung nobody can verify is the rung TODO37 §4.1 was written
+    about, and answering "available" for it would be the lying field again.
+    """
+    spec = get("primitive.credit_assignment.local_goodness")
+    assert spec.kernel_technology == "triton" and spec.family is None
+    resolution = resolve_available_rung(spec, "triton")
+    assert resolution.fell_back
+    assert resolution.selected.rung == "reference"
+    assert resolution.reason is not None
+    assert "no family" in resolution.reason
+
+
+def test_a_reference_request_never_consults_availability() -> None:
+    """The reference rung has no compile step, so there is nothing to measure."""
+    for spec in SPECS[:20]:
+        assert not resolve_available_rung(spec, "reference").fell_back
+
+
+def test_a_request_the_spec_lacks_still_raises_rather_than_falling_back() -> None:
+    """Only runtime availability falls back; a wrong request is a bug."""
+    spec = get("primitive.state_dynamics.energy_minimization")
+    with pytest.raises(ValueError, match="triton rung"):
+        resolve_available_rung(spec, "triton")

@@ -45,6 +45,7 @@ import itertools
 import time
 
 import numpy as np
+import pytest
 import torch
 
 from computronium.core.campaign.evaluation import (
@@ -379,6 +380,7 @@ def _assert_lr_matched(audit: dict) -> None:
     )
 
 
+@pytest.mark.timeout(300)  # 11.5s measured, budget declared TODO37 §4.11
 def test_demo_paxis_pareto(emit_run_record) -> None:
     # Mechanism-audit instruments (R11.5.5a): the primitives are currently
     # gain control / bias injection, not their advertised mechanisms.

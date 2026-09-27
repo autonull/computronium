@@ -159,6 +159,7 @@ def _run_arm(credit_name: str, update_name: str, train_data, seed: int) -> float
     ).fit()[-1]["train_acc"]
 
 
+@pytest.mark.timeout(300)  # 20.8s measured, budget declared TODO37 §4.11
 def test_demo_uaxis_muon_swap(emit_run_record) -> None:
     loader = _loader()
     torch.manual_seed(0)  # seed BEFORE the loader draw (D8 trap)

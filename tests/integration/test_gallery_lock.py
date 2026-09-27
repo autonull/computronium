@@ -15,6 +15,8 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from computronium.visualization.gallery import (
     DEMOS,
     canonicalize_floats,
@@ -61,6 +63,7 @@ def test_g_axis_demos_record_param_counts() -> None:
         assert counts, f"{name}: G-axis demo missing param_counts"
 
 
+@pytest.mark.timeout(300)  # 10.4s measured, budget declared TODO37 §4.11
 def test_figure_lock(tmp_path: Path) -> None:
     records = _records()
     assert set(records) == set(EXPECTED), (

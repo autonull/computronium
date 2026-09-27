@@ -105,19 +105,6 @@ class TestMEPKernelsEquivalence:
 
     @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "the triton rung implements the naive 0.5*X(3I - X^T X) iteration; "
-            "the torch rung is newton_schulz5's quintic (3.4445, -4.7750, 2.0315), "
-            "which replaced it because the naive form under-converges "
-            "(orthonormality error ~0.85 on Gaussian matrices). This test used to "
-            "compare the triton rung against a copy of its own algorithm and passed; "
-            "TODO36 §4.4 §4.5. Fix the rung, then this xpasses."
-        ),
-    )
-    @pytest.mark.skipif(not TRITON_IMPORTED, reason="Triton not available")
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_muon_orthogonalize_equivalence(self):
         """The Triton Muon rung must equal the torch rung it claims to accelerate."""
         torch.manual_seed(42)

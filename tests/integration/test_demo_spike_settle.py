@@ -25,6 +25,7 @@ entries, ≈ 1.8k total spikes, membrane max ≈ 0.92 < threshold 1.0.
 
 from itertools import islice
 
+import pytest
 import torch
 
 from computronium import (
@@ -59,6 +60,7 @@ def _flatten(loader, cap):
         yield x.view(x.size(0), -1), y
 
 
+@pytest.mark.timeout(300)  # 7.3s measured, budget declared TODO37 §4.11
 def test_demo_spike_settle(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()

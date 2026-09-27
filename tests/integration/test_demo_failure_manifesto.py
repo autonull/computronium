@@ -41,6 +41,7 @@ energy-based learning at depth.
 from itertools import islice
 from typing import Literal
 
+import pytest
 import torch
 
 from computronium import (
@@ -277,6 +278,7 @@ def _oja_arm() -> list[float]:
     return [_oja_readout(d, x_train, targets, x_eval, eval_targets) for d in OJA_DEPTHS]
 
 
+@pytest.mark.timeout(300)  # 15.0s measured, budget declared TODO37 §4.11
 def test_demo_failure_manifesto(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()

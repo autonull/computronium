@@ -14,6 +14,7 @@ Euclidean step 0.1 -> both learn (0.83-0.86 train, probe ≈0.91);
 spatial_lattice arm tested for spatial perturbation robustness.
 """
 
+import pytest
 import torch
 
 from computronium import (
@@ -70,6 +71,7 @@ def _probe_spatial_noise(system, batches, noise_level: float) -> float:
     return correct / total
 
 
+@pytest.mark.timeout(300)  # 19.7s measured, budget declared TODO37 §4.11
 def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
     task = create_task("mnist", device=DEVICE, quick_mode=True, batch_size=128)
     task.setup()

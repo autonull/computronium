@@ -15,6 +15,7 @@ device policy); the conv path is the demo suite's first FLOP-bound
 regime — measured 15x faster on CUDA (0.8 s vs 12.3 s per arm, 3080).
 """
 
+import pytest
 import torch
 
 from computronium import (
@@ -80,6 +81,7 @@ def _probe_accuracy(system, batches, shift: int) -> float:
     return correct / total
 
 
+@pytest.mark.timeout(300)  # 43.6s measured, budget declared TODO37 §4.11
 def test_demo_geometry_swap(emit_run_record) -> None:
     task = create_task("mnist", device=DEVICE, quick_mode=True, batch_size=128)
     task.setup()

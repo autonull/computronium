@@ -765,6 +765,7 @@ def _simple_activation() -> nn.Module:
 @pytest.mark.parametrize("device", ["cuda"])
 def test_fa_contrastive_compute_update_matches_torch_reference(device: str) -> None:
     """FA contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import FAContrastiveKernel
 
     kernel = FAContrastiveKernel()
@@ -822,12 +823,14 @@ def test_fa_contrastive_compute_update_matches_torch_reference(device: str) -> N
 
 @requires_cuda
 @pytest.mark.parametrize("device", ["cuda"])
-def test_hebbian_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+def test_hebbian_contrastive_compute_update_matches_torch_reference(
+    device: str,
+) -> None:
     """Hebbian contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import HebbianContrastiveKernel
     from computronium.acceleration.contrastive_primitives import (
         batched_outer_product,
-        contrastive_hebbian_update,
     )
 
     kernel = HebbianContrastiveKernel()
@@ -875,6 +878,7 @@ def test_hebbian_contrastive_compute_update_matches_torch_reference(device: str)
 @pytest.mark.parametrize("device", ["cuda"])
 def test_ff_contrastive_compute_update_matches_torch_reference(device: str) -> None:
     """FF contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import FFContrastiveKernel
 
     kernel = FFContrastiveKernel()
@@ -927,6 +931,7 @@ def test_ff_contrastive_compute_update_matches_torch_reference(device: str) -> N
 @pytest.mark.parametrize("device", ["cuda"])
 def test_pepita_contrastive_compute_update_matches_torch_reference(device: str) -> None:
     """PEPITA contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import PEPITAContrastiveKernel
 
     kernel = PEPITAContrastiveKernel()
@@ -976,8 +981,11 @@ def test_pepita_contrastive_compute_update_matches_torch_reference(device: str) 
 @pytest.mark.parametrize("device", ["cuda"])
 def test_pc_contrastive_compute_update_matches_torch_reference(device: str) -> None:
     """PC contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import PCContrastiveKernel
-    from computronium.acceleration.contrastive_primitives import contrastive_hebbian_update
+    from computronium.acceleration.contrastive_primitives import (
+        contrastive_hebbian_update,
+    )
 
     kernel = PCContrastiveKernel()
     layers = [l.to(device) for l in _simple_layers()]
@@ -1016,15 +1024,13 @@ def test_pc_contrastive_compute_update_matches_torch_reference(device: str) -> N
         )
         ref_updates[f"layers.{i}.weight"] = delta
         if layers[i].bias is not None:
-            bias_delta = (
-                contrastive_hebbian_update(
-                    free_post.mean(dim=0).unsqueeze(0),
-                    free_post.mean(dim=0).unsqueeze(0),
-                    nudged_post.mean(dim=0).unsqueeze(0),
-                    nudged_post.mean(dim=0).unsqueeze(0),
-                    0.01,
-                    0.5,
-                )
+            bias_delta = contrastive_hebbian_update(
+                free_post.mean(dim=0).unsqueeze(0),
+                free_post.mean(dim=0).unsqueeze(0),
+                nudged_post.mean(dim=0).unsqueeze(0),
+                nudged_post.mean(dim=0).unsqueeze(0),
+                0.01,
+                0.5,
             )
             # Simplified bias delta
             ref_updates[f"layers.{i}.bias"] = (
@@ -1042,8 +1048,11 @@ def test_pc_contrastive_compute_update_matches_torch_reference(device: str) -> N
 @pytest.mark.parametrize("device", ["cuda"])
 def test_tile_contrastive_compute_update_matches_torch_reference(device: str) -> None:
     """Tile contrastive kernel compute_update matches the torch reference it uses."""
+    torch.manual_seed(0)
     from computronium.acceleration.contrastive_kernels import TileContrastiveKernel
-    from computronium.acceleration.contrastive_primitives import contrastive_hebbian_update
+    from computronium.acceleration.contrastive_primitives import (
+        contrastive_hebbian_update,
+    )
 
     kernel = TileContrastiveKernel()
     layers = [l.to(device) for l in _simple_layers()]
@@ -1088,7 +1097,12 @@ def test_tile_contrastive_compute_update_matches_torch_reference(device: str) ->
 
     ref_updates = {}
     for i, (free_pre, free_post, nudged_pre, nudged_post) in enumerate(
-        zip(free_per_layer[:-1], free_per_layer[1:], nudged_per_layer[:-1], nudged_per_layer[1:])
+        zip(
+            free_per_layer[:-1],
+            free_per_layer[1:],
+            nudged_per_layer[:-1],
+            nudged_per_layer[1:],
+        )
     ):
         delta = contrastive_hebbian_update(
             free_pre, free_post, nudged_pre, nudged_post, 0.01, 0.5

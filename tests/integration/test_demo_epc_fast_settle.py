@@ -34,6 +34,7 @@ theorem is not asserted here — the two claims above are. Level 4 demo-scale ev
 
 from itertools import islice
 
+import pytest
 import torch
 
 from computronium import (
@@ -140,6 +141,7 @@ def _probe_arm(system, substrate, x, y) -> tuple[list[float], float | None]:
     return devs, free_eq_diff
 
 
+@pytest.mark.timeout(300)  # 7.6s measured, budget declared TODO37 §4.11
 def test_demo_epc_fast_settle(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()

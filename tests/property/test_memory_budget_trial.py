@@ -152,6 +152,7 @@ class TestFeasibilityGrid:
         ceiling = BUDGETS_MIB[2] * 1024 * 1024
         assert gradient <= ceiling < fa
 
+    @pytest.mark.timeout(300)  # 5.8s measured, budget declared TODO37 §4.11
     def test_never_commissionable_names_only_the_fully_walled_cells(self) -> None:
         result = run_trial(
             MemoryBudgetConfig(

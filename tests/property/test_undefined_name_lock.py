@@ -234,6 +234,7 @@ def _cross_module_imports() -> list[tuple[str, str, str]]:
     ]
 
 
+@pytest.mark.timeout(300)  # 37.2s measured, budget declared TODO37 §4.11
 def test_every_cross_module_import_names_a_defined_symbol() -> None:
     resolved = _cross_module_imports()
     assert len(resolved) >= 150, (

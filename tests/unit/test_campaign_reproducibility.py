@@ -10,6 +10,8 @@ import sqlite3
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+import pytest
+
 from computronium.autoscientist.bridge import ExperimentProposal
 from computronium.autoscientist.campaign import AutoScientistCampaign
 from computronium.utils import seed_everything
@@ -48,6 +50,7 @@ class _FakeProposer:
         return self._proposals
 
 
+@pytest.mark.timeout(300)  # 15.2s measured, budget declared TODO37 §4.11
 def test_geometry_execution_is_bit_for_bit_reproducible(tmp_path: Path) -> None:
     # One epoch is enough to prove the property: the claim is that two
     # identically-seeded executions emit identical metrics, not that the

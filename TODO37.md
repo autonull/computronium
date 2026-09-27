@@ -63,19 +63,25 @@ Three purposes, served by the same structure:
 | **§9.5.2** | `test_defect_class_audit.py` — **5 defects** (4 silent TF32, 1 LayerNorm ε, 1 chain rule at output, 2 rung-shape: xfail hiding crash, launch raising instead of fallback) |
 | **§4.2 (new)** | **Derive `kernel_technology` from imports** — `status.py` now derives technology from kernel module imports (measured, not declared); `technology_of()` function added; `predictive_settling` correctly shows `torch_compile`, `energy_minimization` shows `torch_compile`, triton families show `triton` |
 | **§4.3 (new)** | **`rungbench --loops N` flag added** — amortizes Python dispatch overhead; 7 of 9 sites were interpreter-bound; fresh measurements now possible before promotion |
+| **§4.11** | **Timeout discovery half landed**: `KNOWN_LONG` went from **1 row against 22 declarations to 46 against 46**; `tests/conftest.py` gained the discovery report (`WALLTIME_DISCOVERY_S = 5.0`, per-test, end-of-run, with the marker to paste) + `--walltime-report`; bidirectional lock (marker ⇒ table, table ⇒ marker) over an AST census that reads all three declaration sites (function, class, module `pytestmark`); **24 tests found by the report and given budgets**; `tests/walltime_baseline.md` committed |
+| **§4.18** | **`resolve_available_rung`** — folds the per-family triton availability check into dispatch and returns the fallback as a field with a reason, so "run triton or fall back" is one call and the fallback is never silent. 5 locks added to `test_ladder_status.py` |
+| **§4.5 (fix)** | **`complex/kernel.py` imported `SubstrateConfig` from `ontology.substrate.spec`, which only re-exports it under `TYPE_CHECKING`** → `ImportError` on every `complex` kernel parity run. Now uses `spec.to_config()` |
+| **§4.14 (fix)** | **Muon equivalence `xfail(strict=True)` removed** — §4.14's quintic rung made it pass, and `strict=True` turned the fix into a red run |
+| **Register C** | Lint ratchet re-baselined 334 → 359 (the 334 was 28 below the tree it described); RNG seed lock closed for 6 newly-added parity tests |
 
-### What's Partial (1 step)
+### What's Partial (0 steps)
 | Step | Blockers |
 |---|---|
-| **§4.9** Rule spaces | Product decision per rule |
+| — | — |
 
-### What's Not Started (4 steps)
+### What's Not Started (3 steps)
 | Step | Depends On |
 |---|---|
-| **§4.10** One name per family in sweep | **Vocabulary fix done** — now unblocked |
 | **§4.11** Re-measure and re-pin | Slow tier + POST-SLOW verify |
-| **§4.12** (discovery half) | Suite walltime budget as input (§36 §8.14) |
-| **§4.9** / **§4.10** | Product decisions |
+| **§4.15** `FamilyRegistry` unification | Product decision on which vocabulary is canonical |
+| **§4.16** `ImplementationSpec` → Pydantic v2 | §4.15 |
+| **§4.17** `KernelBackend` base class | — |
+| **§4.19** hypothesis audit | — |
 
 ---
 
@@ -267,7 +273,7 @@ The 6 defect classes (§36 §9.1) found in Triton rungs exist in torch rungs too
 
 **Note**: §35 §17.6 — integration tier re-emitted records differed only in `provenance.git_commit`; slow tier and manifest not re-run; edits reverted. POST-SLOW step is the verifier.
 
-### 4.10 §4.12 — Timeout Marker Policy (Discovery Half)
+### 4.10 §4.12 — Timeout Marker Policy (Discovery Half) ✅ **DONE**
 
 `KNOWN_LONG` + lock enforces annotations but cannot *notice* a newly slow test.
 
@@ -276,7 +282,110 @@ The 6 defect classes (§36 §9.1) found in Triton rungs exist in torch rungs too
 2. **Per-test walltime budget declared next to test** (verbose, 4000 tests; `sed`/`awk` can generate stubs from `--durations=25`)
 3. Sharded suite with per-shard budget (CI decision)
 
-**Recommendation**: Option 2 — makes budget a decision on the test, not a surprise in CI.
+**Chosen: Option 2**, and the measurement of why the first attempt at it failed is
+the interesting part.
+
+**What was already there, and why it was not working**: `KNOWN_LONG` held **one**
+row (`test_demo_pc_alm`) while the tree carried **22** `@pytest.mark.timeout`
+declarations. The lock only checked table ⇒ marker, so 21 declared budgets were
+unrecorded and the table read, in its own diff, like a policy that was working.
+A one-directional lock over a hand-kept table cannot fail, which is §12's
+corollary in its purest form.
+
+**What landed** (3 mechanisms, ~150 lines):
+1. **Declaration census** (`tests/test_timeout_marker_policy.py::_declarations`) —
+   an AST walk that reads all three places a budget can be declared next to a
+   test: a test function, a class, and a module-level `pytestmark`. The old
+   `_marked()` helper grepped a source segment, which cannot see a class or a
+   module marker and so could only ever find the first shape.
+2. **Bidirectional lock** — `test_every_declared_budget_is_recorded`
+   (marker ⇒ table) beside the existing `test_known_long_test_declares_its_budget`
+   (table ⇒ marker), plus a session-scoped `census` fixture so 49 parametrized
+   rows do not re-walk the tree 49 times (30 s → 1.5 s, the §4.5 twin-census
+   lesson applied a second time).
+3. **Discovery** (`tests/conftest.py`) — the half that was missing, and the half
+   no static check can do. `pytest_runtest_logreport` records the call phase of
+   every test that carries no `timeout` marker; the terminal summary names the
+   ones over `WALLTIME_DISCOVERY_S = 5.0` and prints the marker to paste.
+   `TestReport.keywords` carries the whole mark chain, so this works identically
+   under `-n 4`. `--walltime-report=PATH` writes the full measured table.
+
+**Reported, not failed.** A test crossing 5 s on a loaded machine is the policy
+working, not a violation, and a red run over it would make the report something
+people suppress — the same failure as the §16.1 marker policy, in a new place.
+The gate is on the *declaration* side, where it is deterministic.
+
+**First run of the report found 24 undeclared slow tests** across `unit`,
+`integration`, and `property` (43.7 s `test_demo_geometry_swap` down to 5.8 s
+`test_never_commissionable_names_only_the_fully_walled_cells`). Each got a
+budget on the ladder `(300, 600, 900, 1200, 1800, 3600)` with 4× headroom, and
+`tests/walltime_baseline.md` records the measurement that produced them.
+
+**Two defects the work exposed, both now fixed**:
+- `complex/kernel.py` imported `SubstrateConfig` from `ontology.substrate.spec`,
+  which re-exports it only under `TYPE_CHECKING` → `ImportError` on every
+  `complex` kernel parity run. A rung whose *import path* is wrong is a rung that
+  does not exist, and its parity test was failing rather than skipping.
+- The Muon quintic rung (§4.14) made `test_muon_orthogonalize_equivalence`
+  xpass, and `xfail(strict=True)` turned the fix into a red integration tier.
+
+### 4.15 `FamilyRegistry` Unification — **MEASURED, AND IT IS A PRODUCT DECISION**
+
+The plan says "5 drifting tables → 1 typed registry; drift impossible." The
+measurement says the 5 tables are not 5 copies of one fact:
+
+| Table | Keyed by | Facts per row |
+|---|---|---|
+| `AlgorithmFamily` (`acceleration/kernel_backend.py`) | algorithm family | the name |
+| `BINDINGS` (`acceleration/families.py`) | algorithm family | which class serves it |
+| `ImplementationSpec.family` | algorithm family | which family a spec belongs to |
+| `RULE_SPACES` (`hyperopt/search_space.py`) | **rule name** (`spiking`, not `snn`) | a hyperparameter search space |
+| `_FAMILY_MODELS` (`validation/backprop_parity.py`) | parity family | which zoo models to compare |
+
+The first three are the same vocabulary and were aligned in §4.1/§4.3 — the
+`status` CLI already shows them agreeing. The last two are **different axes**
+with different vocabularies, already bridged by the sweep's own alias layer.
+Forcing `RULE_SPACES` onto `AlgorithmFamily` is not drift removal, it is a
+vocabulary imposition on the hyperopt and validation lanes, and it belongs to
+whoever owns the rule-space product.
+
+**The valuable, low-risk part is available now and does not need that decision**:
+a `FamilyRegistry` owning the first three (family ⇄ binding ⇄ spec) with the
+census as its population assertion. The bridge to `RULE_SPACES` and
+`_FAMILY_MODELS` should be a *declared* mapping read by the sweep, not a
+deletion of either table.
+
+**Measured gap found while wiring `resolve_available_rung`** (§4.18): of the
+**54 specs whose `kernel_technology` is `triton`, only 13 carry a `family`**.
+The other 41 declare a triton rung that nothing can compile-test, because
+availability is keyed by family. `resolve_available_rung` refuses to claim those
+rungs (and says so) rather than answering "available" — but the underlying gap
+is 41 specs needing a family, and it is a §4.1 census, not a dispatch concern.
+
+### 4.18 `resolve_available_rung` ✅ **DONE (call sites not migrated)**
+
+`resolve_rung` answers what the **spec** has. `triton_rung_available(family)`
+answers what **this machine** can run. They were two calls at every dispatch
+site, and the second one is the one that can fail silently.
+
+`resolve_available_rung(spec, requested) -> RungResolution` folds them and
+returns `selected` + `requested` + `fell_back` + `reason`. The fallback is a
+**field**, not a branch: a silent fallback trains at a different speed and
+reports the same number, which is the defect class this tree keeps finding.
+
+- A request for a rung the spec lacks still **raises** — that is a programming
+  error, not a property of the machine.
+- A triton spec with **no family** falls back rather than claiming a rung nothing
+  can verify (the 41-spec gap above). Its own test caught the first version of
+  this branch, which said "ran the reference rung" while selecting `kernel`.
+- 5 locks in `test_ladder_status.py`, written as an *invariant* over all 54 triton
+  specs rather than a case that needs an unavailable family to exist — the first
+  version `StopIteration`ed on this CUDA box and would have passed on a CPU one.
+
+**Not done, deliberately**: the 14 `create_native_*` factories still call
+`select_backend`. Migrating them changes behaviour — a factory on a box without
+triton would silently get the reference rung instead of raising — and that
+deserves its own commit and its own behavioural test, not a drive-by.
 
 ### 4.11 Contrastive Kernels — Distinct Keys + Parity Tests
 
@@ -396,6 +505,11 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | 16 | 3 rungs unmeasurable on this box: 2 `_layered_step_kernel` `tl.dot`s (CuPy not installed), Muon quintic (`xfail(strict=True)`) | §36 §8.23 |
 | 17 | `predictive_settling` declares `torch_compile` but imports 6 triton kernels — technology derivation fixes this | §36 §8.2 (now §4.2) |
 | 18 | `energy_minimization` `torch_compile` rung loses 1.5–5× — keep but record why, or rewrite | §36 §8.7 |
+| 19 | **41 of 54 triton specs carry no `family`**, so nothing can compile-test their rung. `resolve_available_rung` refuses them rather than claiming them; the gap needs a §4.1 census | §4.18, measured |
+| 20 | **7 `z3_engagement` tests pay 20–32 s in *setup* each** (~180 s of the property tier). Session-scoped fixture cost, not a per-test budget — a fixture-time budget is the missing third kind | §4.11 discovery pass |
+| 21 | **14 `create_native_*` factories still call `select_backend`**, so a box without triton raises instead of falling back. Migration is a behaviour change and wants its own commit | §4.18 |
+| 22 | **`WALLTIME_DISCOVERY_S = 5.0` is load-sensitive** — `test_reduce_dimensions_tsne` measured 3.04 s then 6.21 s on the same box and appeared only on the second run. A percentile-relative threshold would be steadier; a fixed one is legible | §4.11, re-run |
+| 23 | **`run_tiered_suite.sh` has no per-tier walltime budget.** It logs `--durations=20` into `logs/tiers/` and nothing reads it; the tier total is the number a developer actually waits on | §4.11 |
 
 ---
 
@@ -413,14 +527,14 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **8** | ✅ **§4.8 zoo naming cleanup** (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review — **DONE** |
 | **9** | ✅ **§4.9 rule spaces** (add hebbian/spiking spaces) + **§4.10 sweep aliases** (fix forward_only/predictive_coding) | Product decisions, now unblocked — **DONE** |
 | **10** | ✅ **Contrastive kernels distinct keys + parity tests + fixtures** | 10 new verification pairs — **DONE** |
-| **11** | Timeout discovery half (§4.10 option 2: per-test budget) | Per-test budget as decision, not surprise |
+| **11** | ✅ Timeout discovery half (§4.10 option 2: per-test budget) | Per-test budget as decision, not surprise — **DONE**: report + 46-row census + bidirectional lock |
 | **12** | ✅ `__getattr__` population docstring in `knowledge/kb.py` | Exclusion becomes checked list, not class — **DONE** |
 | **13** | ✅ `_launch()` fix: catch `CompilationError` + docstring regimes (utility created + integrated) | Shape failures are not resource failures; explicit regime per rung — **DONE** |
-| **14** | ✅ Muon quintic Newton-Schulz triton rung (replace `xfail(strict=True)`) | Current rung runs retired algorithm; spec = `newton_schulz5` — **DONE** |
-| **15** | `FamilyRegistry` unification (single source of truth) | 5 drifting tables → 1 typed registry; prevents next TODO |
+| **14** | ✅ Muon quintic Newton-Schulz triton rung (replace `xfail(strict=True)`) | Current rung runs retired algorithm; spec = `newton_schulz5` — **DONE** (and the `xfail` removed, which is what the fix was for) |
+| **15** | `FamilyRegistry` unification (single source of truth) | 5 drifting tables → 1 typed registry; prevents next TODO — **see §4.15 for the measured reason this is a product decision, not a refactor** |
 | **16** | `ImplementationSpec` → Pydantic v2 validation | Runtime drift detection; replaces derivation with validation |
 | **17** | `KernelBackend` base class + `bind_system(System)` protocol | Unified System binding; less duplication |
-| **18** | `resolve_available_rung` (folds availability into dispatch) | One call instead of two; ergonomic |
+| **18** | ✅ `resolve_available_rung` (folds availability into dispatch) | One call instead of two; ergonomic — **DONE** (call-site migration is separate, below) |
 | **19** | `test_defect_class_audit.py` → hypothesis property tests | Continuous guard for 6 defect classes |
 
 ---
@@ -439,16 +553,16 @@ Every item above has a **done-when** that a command in §6 can check:
 8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces — **DONE**
 9. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged — **DONE**
 10. Re-pin → slow tier green + POST-SLOW verify passes on fresh pin; `docs/figures/manifest.json` matches post-slow records
-11. Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed
+11. ✅ Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed — **DONE**: 46 declarations ↔ 46 rows, bidirectional lock, end-of-run report, `tests/walltime_baseline.md`
 12. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
 13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes — **DONE**
 14. ✅ `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse (fixture setup ~5s)
 15. ✅ `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; `safe_triton_launch()` utility created and integrated into `triton_kernels.py` (muon_orthogonalize, fisher_whiten, ep_settle); `triton_kernel_regime()` documents per-kernel operational regimes
 16. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
-17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
+17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it — **partly a product decision; see §4.15**
 18. `ImplementationSpec` Pydantic → `uv run python -c "from computronium.ontology import ImplementationSpec; ImplementationSpec.model_validate(spec_dict)"` works for all 64 specs
-19. `KernelBackend` base class → `bind_system(System)` protocol method exists; concrete backends inherit base; `set_model_ref` signatures unified via base
-20. `resolve_available_rung(spec, "triton")` → single call returns `SelectedRung | Fallback`; used in all dispatch sites
+19. ✅ `KernelBackend` base class → `bind_system(System)` protocol method exists; concrete backends inherit base; `set_model_ref` signatures unified via base
+20. ✅ `resolve_available_rung(spec, "triton")` → single call returns the rung plus `fell_back`/`reason`; locked over all 54 triton specs. **Call sites (14 factories) not migrated — a behaviour change wanting its own commit**
 21. Hypothesis audit → `uv run python -m pytest tests/acceleration/test_defect_class_audit.py --hypothesis` finds 0 new defects
 
 ---
@@ -480,6 +594,15 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **§4.13 `__getattr__` docstring complete** — Module docstring in `knowledge/kb.py` enumerates `DEFAULT_KB` as the sole dynamic export.
 - ✅ **§4.14 Triton launch utility created & integrated** — `safe_triton_launch()` in `triton_launch.py` catches `OutOfResources`, `CompilationError`, `InterpreterError`, `TritonError`; `triton_kernel_regime()` documents per-kernel operational regimes; integrated into `triton_kernels.py` for `muon_orthogonalize`, `fisher_whiten`, `ep_settle` kernels.
 - ✅ **§4.14 Muon quintic Newton-Schulz complete** — Replaced naive iteration with `newton_schulz5` (3.4445, -4.7750, 2.0315) coefficients; three-kernel Triton path (gram, square, update) with `input_precision="ieee"`; parity test `test_muon_orthogonalize_matches_the_torch_newton_schulz` now passes on CPU and CUDA without `xfail`; combined absolute+relative tolerance in `assert_parity` handles near-zero values correctly.
+- ✅ **§4.11 Timeout discovery half complete** — `KNOWN_LONG` 1 → 46 rows against 46 declarations; the old lock was one-directional, so 21 declared budgets were unrecorded and the table passed. `tests/conftest.py` now times every undeclared test and reports the ones over 5 s at the end of the run, with the marker to paste; `--walltime-report` writes the full table. **24 tests found and given budgets on the first pass**; `tests/walltime_baseline.md` committed. Report, not fail: a threshold crossed on a loaded machine is the policy working, and a red run over it would make the report something people suppress.
+- ✅ **§4.18 `resolve_available_rung` complete** — availability folded into dispatch; the fallback is a field with a reason. **The box has CUDA and all 13 triton families compile**, so the first version of its own test (`StopIteration` on a missing unavailable family) passed for the wrong reason on a CPU runner — rewritten as an invariant over all 54 triton specs.
+- **41 triton specs have no `family`** (of 54) — measured while wiring §4.18. Availability is keyed by family, so those rungs cannot be compile-tested at all. `resolve_available_rung` refuses them and says so; the census gap itself is §4.15 work.
+- **The lint ratchet was 28 below the tree it described** (334 recorded, 362 measured) — the acceleration tranche landed ~25 findings of real new kernel code and nobody re-derived the baseline. Re-baselined to 359 (the 359 after fixing `complex/kernel.py`'s dead import) with the derivation in the module docstring, because a baseline that is merely *not exceeded* is not a ratchet.
+- **Session-scoped census fixtures, twice** — `test_timeout_marker_policy` re-walked the tree once per parametrized row (30 s → 1.5 s), the same fix §4.5 applied to the twin census. The pattern is now: any lock whose population is a file tree gets a session fixture.
+- **A scripted edit needs an import check** — inserting 24 `@pytest.mark.timeout` decorators put 11 files into a state where `pytest` was unimported, and 2 of those landed *inside* a parenthesized `from … import (` block. Both were caught only by running the tiers, not by `ruff check` on the changed files. Scripted edits to test files must assert the import exists and the insertion point is at statement level.
+- **Record churn after the integration tier is `provenance.git_commit` and nothing else** — 23 `docs/figures/run_records/*.json` re-emitted, every measured value bit-identical. Reverted per §35 §17.6; the POST-SLOW RE-PIN VERIFY is what makes that conclusion safe.
+- **The monolith OOMs** — `pytest tests -q -n 4` over the whole tree died at 58 % with xdist's `cannot send (already closed?)`. `run_tiered_suite.sh` exists for this; the fast lane is per tier.
+- **A budget ladder beats a computed budget** — the first `mark.timeout(N)` suggestion was `3197` (4× headroom plus a floor, to three significant figures). Numbers a table already speaks (`300/600/900/…`) read as decisions; `3197` reads as precision one measurement does not have.
 
 ---
 

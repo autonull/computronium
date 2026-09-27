@@ -131,6 +131,7 @@ def test_a_transposed_grid_is_detected_not_tolerated() -> None:
     why the convention is code and every one of the six spec files uses extents
     that are not multiples of their block.
     """
+    torch.manual_seed(0)
     pytest.importorskip("triton")
 
     from computronium.acceleration.hebbian_kernels import _hebbian_update_kernel

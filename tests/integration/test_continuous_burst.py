@@ -9,6 +9,8 @@ import time
 from argparse import Namespace
 from typing import TYPE_CHECKING, cast
 
+import pytest
+
 from computronium.autoscientist.broad_map import (
     ContinuousBudget,
     build_sweep,
@@ -62,6 +64,7 @@ def _cell_keys(root: Path) -> set[str]:
     return keys
 
 
+@pytest.mark.timeout(300)  # 7.3s measured, budget declared TODO37 §4.11
 def test_burst_measures_cells_and_writes_artifacts(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_everything(_SEED, deterministic=False)
@@ -83,6 +86,7 @@ def test_burst_measures_cells_and_writes_artifacts(tmp_path: Path) -> None:
     assert checkpoints, "burst must checkpoint on stop"
 
 
+@pytest.mark.timeout(300)  # 29.0s measured, budget declared TODO37 §4.11
 def test_second_burst_never_remeasures_cells(tmp_path: Path) -> None:
     root = tmp_path / "broad_map"
     seed_everything(_SEED, deterministic=False)
@@ -126,6 +130,7 @@ def test_budget_expiry_stops_burst(tmp_path: Path) -> None:
     assert summary["stop_reason"] == "soft"
 
 
+@pytest.mark.timeout(300)  # 19.1s measured, budget declared TODO37 §4.11
 def test_l1_maturation_promotes_front_cells_once(tmp_path: Path) -> None:
     from computronium.autoscientist.broad_map import (
         promote_candidates,

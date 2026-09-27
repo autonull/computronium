@@ -119,6 +119,7 @@ class TestSmokeAllTasks(unittest.TestCase):
     def test_vision_usps(self):
         self._test_task("usps", "vision")
 
+    @pytest.mark.timeout(300)  # 26.6s measured, budget declared TODO37 §4.11
     def test_vision_kmnist(self):
         try:
             self._test_task("kmnist", "vision")

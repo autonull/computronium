@@ -556,6 +556,7 @@ class TestCounterfactualAttribution:
 
 
 class TestCampaignCLI:
+    @pytest.mark.timeout(300)  # 9.6s measured, budget declared TODO37 §4.11
     def test_campaign_run_end_to_end(self, tmp_path: Path) -> None:
         """`comp campaign run` produces a queryable store via CampaignStack."""
         result = subprocess.run(

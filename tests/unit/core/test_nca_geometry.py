@@ -159,6 +159,7 @@ def _credit():
 
 
 class TestNcaDistillInit:
+    @pytest.mark.timeout(300)  # 7.6s measured, budget declared TODO37 §4.11
     def test_distill_then_grow(self) -> None:
         torch.manual_seed(0)
         geometry = _geometry(mask_prob=0.5, label_channels=CHANNELS)

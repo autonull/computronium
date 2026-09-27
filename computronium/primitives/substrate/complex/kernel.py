@@ -23,13 +23,6 @@ def make_substrate(spec):
 
         return reference_make_substrate(spec)
 
-    # Use accelerated implementation
-    from computronium.ontology.substrate.spec import SubstrateConfig
-
-    config = SubstrateConfig.complex(
-        noise_level=spec.noise_model.level,
-        weight_bounds=spec.structural_constraints.weight_bounds,
-        sparsity=spec.structural_constraints.sparsity,
-        device="cpu",
-    )
+    # Use accelerated implementation - convert SubstrateSpec to SubstrateConfig
+    config = spec.to_config()
     return ComplexSubstrate(config)
