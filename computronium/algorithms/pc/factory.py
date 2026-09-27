@@ -1,11 +1,11 @@
 """Public factory for Predictive Coding systems.
 
-Wraps computronium.core.presets.create_pc_mlp, adding backend selection.
+Wraps computronium.core.presets.create_pc_mlp, attaching the selected backend.
 """
 
 from typing import Any
 
-from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.dispatch import finish_with_backend
 from computronium.acceleration.registry import get
 from computronium.core.presets import create_pc_mlp as _create_pc_mlp
 
@@ -30,15 +30,16 @@ def create_pc_mlp(
         reference: force reference implementation
         kernel: force accelerated kernel
     """
-    spec = get("algorithm.pc")
-    backend = select_backend(spec, backend)
-
-    return _create_pc_mlp(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        lr=lr,
-        device=device,
-        beta=beta,
-        settle_steps=settle_steps,
+    return finish_with_backend(
+        _create_pc_mlp(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            lr=lr,
+            device=device,
+            beta=beta,
+            settle_steps=settle_steps,
+        ),
+        get("algorithm.pc"),
+        backend,
     )

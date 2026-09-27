@@ -32,9 +32,9 @@ def _compute_uncalled_twins() -> set[str]:
     This is the expensive AST walk over the entire repo. Doing it once per
     session instead of per-test saves ~120s on targeted runs.
     """
-    from computronium.acceleration.families import BINDINGS
+    from computronium.acceleration import get_algorithm_kernels
 
-    bound = {row.backend for row in BINDINGS}
+    bound = set(get_algorithm_kernels().keys())
     twins = _exported_twins()
     used: set[str] = set()
     skip_dirs = {".venv", "build", "__pycache__", ".pytest_cache", ".git"}
@@ -43,7 +43,7 @@ def _compute_uncalled_twins() -> set[str]:
             continue
         try:
             tree = _parse(path)
-        except SyntaxError, UnicodeDecodeError:
+        except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):

@@ -25,7 +25,9 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
+    LinearView,
     LocalityLevel,
+    linear_views,
 )
 
 if TYPE_CHECKING:
@@ -73,20 +75,8 @@ class BackpropKernelBackend:
         if layers:
             self.set_model_ref(layers)
 
-    def _extract_layers(self, geometry) -> list[nn.Linear]:
-        """Extract linear layers from geometry."""
-        if hasattr(geometry, "params"):
-            layers = []
-            for name, param in geometry.params.items():
-                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
-                    layer = getattr(geometry, name.replace(".weight", ""))
-                    if isinstance(layer, nn.Linear):
-                        layers.append(layer)
-            if layers:
-                return layers
-        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
-            return geometry.layers
-        return []
+    def _extract_layers(self, geometry) -> list[LinearView]:
+        return linear_views(geometry)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using backpropagation."""

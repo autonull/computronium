@@ -115,10 +115,10 @@ class Contract(StrEnum):
     COMPUTE_MATCHED = "compute_matched"
 
 
-# The families the plan shortlists for compute-matched parity (C1). Each maps
-# to registered model names that are prospected for the best config.
+# The C1 compute-matched parity portfolio: explicit model list per family.
+# This inlines the former _FAMILY_MODELS table (TODO38 commit 5).
 # `target_prop` removed: `diff_target_prop` has no native factory (TODO37 §4.8).
-_FAMILY_MODELS: dict[str, tuple[str, ...]] = {
+_COMPUTE_MATCHED_PORTFOLIO: dict[str, tuple[str, ...]] = {
     "backprop": ("backprop_mlp",),
     "fa": (
         "feedback_alignment",
@@ -764,11 +764,11 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
     """
     from computronium.experiment.probe import CoreTrainerDriver
 
-    wanted = families or tuple(_FAMILY_MODELS)
-    unknown = [f for f in wanted if f not in _FAMILY_MODELS]
+    wanted = families or tuple(_COMPUTE_MATCHED_PORTFOLIO)
+    unknown = [f for f in wanted if f not in _COMPUTE_MATCHED_PORTFOLIO]
     if unknown:
         raise ValueError(
-            f"unknown families: {unknown}; expected one of {sorted(_FAMILY_MODELS)}"
+            f"unknown families: {unknown}; expected one of {sorted(_COMPUTE_MATCHED_PORTFOLIO)}"
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -827,7 +827,7 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
         models[f"backprop_mlp@{depth}"] = baseline_metrics_dict
 
         for family in wanted:
-            for model_name in _FAMILY_MODELS[family]:
+            for model_name in _COMPUTE_MATCHED_PORTFOLIO[family]:
                 # The backprop reference already has its own family port (above);
                 # skip it inside other family lists to keep the report single-entry.
                 if model_name == "backprop_mlp":

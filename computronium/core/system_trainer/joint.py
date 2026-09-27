@@ -40,6 +40,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from computronium.acceleration.kernel_backend import KernelBackend
     from computronium.core.system_trainer.config import JointSystem
     from computronium.ontology import (
         CreditAssignment,
@@ -188,9 +189,12 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
         plasticity: TP
         credit: TC
         update: TU
+        _kernel_backend: KernelBackend | None = None
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
+            if self._kernel_backend is not None:
+                return self._kernel_backend.train_step(x, y)
             # Initialize ψ for this episode
             psi = self.plasticity.initial_psi(self.context, batch_size=x.shape[0])
             from computronium.core.pipeline import run_train_step
@@ -233,6 +237,16 @@ def compose_joint_system[  # ruff: ignore[complex-structure]
             from computronium.core.pipeline import run_forward
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
+
+        def attach_kernel_backend(self, backend: KernelBackend) -> None:
+            """Attach a kernel backend for accelerated training.
+
+            The 6-D counterpart of ``System.attach_kernel_backend``. The dataclass
+            is frozen, so the field is set through ``object.__setattr__`` for the
+            same reason the 5-D factory's mutable dataclass can assign directly.
+            """
+            backend.bind_system(self)
+            object.__setattr__(self, "_kernel_backend", backend)
 
         def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""

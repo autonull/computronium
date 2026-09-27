@@ -15,15 +15,21 @@ may name either.
 the policy rather than two that can disagree.
 
 Both answer what the *spec* has. :func:`resolve_available_rung` answers what
-this machine can run — the triton rung compiles per family, so the same request
-is satisfiable for one family and not the next, which no field on the spec can
-express. It returns the fallback alongside the rung rather than performing it
-quietly, because a fallback nobody sees trains at a different speed and reports
-the same number.
+this machine can run — the triton rung compiles per coordinate, so the same
+request is satisfiable for one coordinate and not the next, which no field on the
+spec can express. It returns the fallback alongside the rung rather than
+performing it quietly, because a fallback nobody sees trains at a different speed
+and reports the same number.
+
+:func:`finish_with_backend` is the decision *acted on*: every public factory ends
+there, so the ``backend`` argument a caller passes reaches the system instead of
+being computed and dropped.
 """
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+from computronium.core.logging import get_logger
 
 if TYPE_CHECKING:
     from computronium.acceleration.spec import (
@@ -31,11 +37,15 @@ if TYPE_CHECKING:
         ImplementationSpec,
         KernelTechnology,
     )
+    from computronium.ontology import System
+
+logger = get_logger()
 
 __all__ = [
     "PROMOTED_STATUSES",
     "RungResolution",
     "SelectedRung",
+    "finish_with_backend",
     "resolve_available_rung",
     "resolve_rung",
     "select_backend",
@@ -236,3 +246,104 @@ def resolve_available_rung(
             f"{spec.family}; ran the reference rung"
         ),
     )
+
+
+def _attachable(system: System, backend_cls: type) -> bool:
+    """Whether ``backend_cls`` can serve ``system`` as a *training* run.
+
+    Two independent requirements, and both are ordinary rather than exceptional.
+
+    A backend must have a ``train_step``: the contrastive kernels are op-level
+    and expose a fused update only, so they are reachable from a parity test via
+    ``variant=`` and not from a factory.
+
+    The system must be able to *take* a backend, i.e. its ``train_step`` must
+    consult one. ``create_ff_mlp`` is the case in point: it wraps the composed
+    system with its own layer stack, its own per-layer optimizers and a
+    classifier that is not an axis, and copies the geometry's parameters once at
+    construction. A backend that updates the geometry would train weights the
+    preset has stopped reading, so FF keeps the reference rung and says so.
+    """
+    return (
+        hasattr(backend_cls, "bind_system")
+        and hasattr(backend_cls, "train_step")
+        and callable(getattr(system, "attach_kernel_backend", None))
+    )
+
+
+def finish_with_backend(
+    system: System,
+    spec: ImplementationSpec,
+    requested: str = "auto",
+    *,
+    variant: str | None = None,
+) -> System:
+    """Resolve the rung, attach the backend it names, and return ``system``.
+
+    The one place a ``backend`` request becomes a running rung. Every public
+    factory calls this and returns its result, because a factory that computes
+    the selection and then returns the *unselected* system is a request honoured
+    in name only — the defect that let the family vocabulary drift for weeks
+    while nothing read it.
+
+    ``"auto"`` is conservative twice over: the rung must be promoted
+    (:data:`PROMOTED_STATUSES`) and the coordinate must have an arm. Either one
+    failing is logged and the system trains its reference rung, which is slower
+    and says so. An *explicit* request that cannot be honoured raises instead,
+    naming the coordinate — the caller asked for a rung and did not get one.
+
+    Args:
+        system: the composed system to attach to.
+        spec: the algorithm spec whose rung is being resolved.
+        requested: ``"auto"``, ``"reference"``, ``"kernel"``, or a technology.
+        variant: an orthogonal variant choice, e.g. ``"contrastive"``.
+
+    Returns:
+        ``system``, with the resolved backend attached when there is one.
+
+    Raises:
+        ValueError: if an explicit request names a rung the coordinate has no arm
+            for. ``"auto"`` never raises for that.
+    """
+    from computronium.acceleration.coordinate import (
+        DISPATCH_AXES,
+        kernel_config_of,
+        key_of,
+        select_backend_class,
+    )
+
+    resolution = resolve_available_rung(spec, requested)
+    coordinate = key_of(system)
+    named = dict(zip(DISPATCH_AXES, coordinate, strict=True))
+    context = {"spec": spec.id, "requested": requested, "coordinate": named}
+
+    if resolution.fell_back:
+        reason = resolution.reason
+        logger.warning(t"{reason}", extra={"reason": reason, **context})
+
+    backend_cls: type | None = None
+    if resolution.selected.rung == "kernel":
+        backend_cls = select_backend_class(coordinate, variant)
+        if backend_cls is not None and not _attachable(system, backend_cls):
+            kernel = backend_cls.__name__
+            served = type(system).__name__
+            logger.warning(
+                t"{kernel} cannot serve {served}; the reference rung is kept",
+                extra={"kernel": kernel, "system": served, **context},
+            )
+            backend_cls = None
+
+    if backend_cls is None:
+        if resolution.selected.rung == "kernel" and requested != "auto":
+            raise ValueError(
+                f"{spec.id} resolves to the kernel rung on request {requested!r} "
+                f"but no arm of the dispatch names this coordinate: {named}"
+            )
+        return system
+
+    attached = backend_cls()
+    attached.initialize(kernel_config_of(system, backend_cls))
+    system.attach_kernel_backend(attached)
+    kernel = backend_cls.__name__
+    logger.info(t"attached {kernel}", extra={"kernel": kernel, **context})
+    return system

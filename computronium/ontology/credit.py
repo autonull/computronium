@@ -478,6 +478,39 @@ class CreditAssignmentConfig:
         )
 
 
+    @classmethod
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+        """Hyperparameter ranges owned by the credit_assignment axis.
+
+        These are the knobs the credit config reads. The sweep unions the
+        hyperparameters() of all primitives named by a coordinate.
+        """
+        return {
+            "beta": (1e-3, 1.0, "log"),
+            "feedback_scale": (1e-3, 10.0, "log"),
+            "credit_norm": ["none", "relative", "rms", "beta_adaptive", "spectral"],
+            "local_objective": ["ff", "lemma"],
+            "orthogonal_init": [True, False],
+            "readout_error": [True, False],
+            "learned_feedback": [True, False],
+            "feedback_lr": (1e-3, 0.5, "log"),
+            "feedback_update_every": (1, 10, "int"),
+            "a_plus": (0.1, 5.0, "linear"),
+            "a_minus": (0.1, 5.0, "linear"),
+            "tau_pre": (0.1, 2.0, "linear"),
+            "tau_post": (0.1, 2.0, "linear"),
+            "homeostatic_target": (0.5, 2.0, "linear"),
+            "homeostatic_scaling": [True, False],
+            "ema_beta": (0.9, 0.999, "linear"),
+            "stream_norm": [True, False],
+            "contrast_threshold": (0.5, 10.0, "linear"),
+            "contrast_objective": ["gate", "hinge"],
+            "readout_scale": (0.1, 10.0, "log"),
+            "sequential_lr": (0.0, 1.0, "linear"),
+            "train_biases": [True, False],
+        }
+
+
 # ============================================================
 # CreditAssignment Protocol
 # ============================================================

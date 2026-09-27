@@ -30,6 +30,8 @@ Usage:
     >>> get_logger().info("CuPy: %s, Triton: %s", HAS_CUPY, TRITON_IMPORTED)
 """
 
+import importlib
+
 from computronium.acceleration.availability import (
     CompileState,
     compile_report,
@@ -68,11 +70,6 @@ from computronium.acceleration.contrastive_primitives import (
     phase_encode,
     target_propagation_target,
 )
-from computronium.acceleration.families import (
-    BINDINGS,
-    backends_by_family,
-    register_all,
-)
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -82,6 +79,7 @@ from computronium.acceleration.kernel_backend import (
     LocalityLevel,
     infer_algorithm_family,
 )
+from computronium.acceleration.contrastive_kernels import register_contrastive_kernels
 from computronium.core.utils.activations import (
     cross_entropy,
     get_backend,
@@ -91,39 +89,67 @@ from computronium.core.utils.activations import (
 )
 
 
-def get_kernel_classes() -> tuple[type[object], type[object]]:  # ruff: ignore[non-empty-init-module]
-    """Lazily import kernel classes to avoid circular imports."""
-    from computronium.acceleration.kernels import EqPropKernel as _EqPropKernel
-    from computronium.acceleration.kernels import (
-        EqPropKernelBPTT as _EqPropKernelBPTT,
+def _register_standard_kernels() -> None:
+    """Register standard kernel backends with KernelRegistry.
+
+    Replaces the former families.register_all() binding table. Each backend is
+    registered explicitly so the registry contents don't depend on import order.
+    """
+    standard_kernels: tuple[tuple[AlgorithmFamily, str, str], ...] = (
+        (AlgorithmFamily.EQPROP, "computronium.acceleration.eqprop_kernel_backend", "EqPropKernelBackend"),
+        (AlgorithmFamily.BACKPROP, "computronium.acceleration.backprop_kernels", "BackpropKernelBackend"),
+        (AlgorithmFamily.FA, "computronium.acceleration.fa_kernels", "FAKernelBackend"),
+        (AlgorithmFamily.HEBBIAN, "computronium.acceleration.hebbian_kernels", "HebbianKernelBackend"),
+        (AlgorithmFamily.FF, "computronium.acceleration.ff_kernels", "FFKernelBackend"),
+        (AlgorithmFamily.PEPITA, "computronium.acceleration.ff_kernels", "PEPITAKernelBackend"),
+        (AlgorithmFamily.TP, "computronium.acceleration.tp_kernels", "TPKernelBackend"),
+        (AlgorithmFamily.PC, "computronium.acceleration.pc_kernels", "PCKernelBackend"),
+        (AlgorithmFamily.SNN, "computronium.acceleration.snn_kernels", "SNNKernelBackend"),
+        (AlgorithmFamily.TILE, "computronium.acceleration.tile_kernels", "TileKernelBackend"),
+        (AlgorithmFamily.MEP, "computronium.acceleration.mep_kernels", "MEPKernelBackend"),
+        (AlgorithmFamily.O1MEMORY, "computronium.acceleration.mep_kernels", "O1MemoryEPv2KernelBackend"),
     )
-
-    return _EqPropKernel, _EqPropKernelBPTT
-
-
-def get_triton_ops() -> type[object] | None:  # ruff: ignore[non-empty-init-module]
-    """Lazily import Triton ops, returning None if unavailable."""
-    try:
-        from computronium.acceleration.triton_kernels import (
-            TritonEqPropOps as _TritonEqPropOps,
-        )
-    except ImportError:
-        return None
-    return _TritonEqPropOps
+    for family, module_path, class_name in standard_kernels:
+        backend_cls = getattr(importlib.import_module(module_path), class_name)
+        for hardware in HardwareTarget:
+            KernelRegistry.register(family, hardware, backend_cls)
+    # Also register contrastive kernels under their distinct family keys
+    register_contrastive_kernels()
 
 
 def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
     """Bind every family and return its backend class, keyed by family value."""
-    return backends_by_family()
+    # This function is kept for backwards compatibility but the dispatch layer
+    # now uses coordinate matching (select_backend_class) instead of family lookups.
+    standard_kernels: tuple[tuple[str, str, str], ...] = (
+        ("eqprop", "computronium.acceleration.eqprop_kernel_backend", "EqPropKernelBackend"),
+        ("backprop", "computronium.acceleration.backprop_kernels", "BackpropKernelBackend"),
+        ("fa", "computronium.acceleration.fa_kernels", "FAKernelBackend"),
+        ("hebbian", "computronium.acceleration.hebbian_kernels", "HebbianKernelBackend"),
+        ("ff", "computronium.acceleration.ff_kernels", "FFKernelBackend"),
+        ("pepita", "computronium.acceleration.ff_kernels", "PEPITAKernelBackend"),
+        ("tp", "computronium.acceleration.tp_kernels", "TPKernelBackend"),
+        ("pc", "computronium.acceleration.pc_kernels", "PCKernelBackend"),
+        ("snn", "computronium.acceleration.snn_kernels", "SNNKernelBackend"),
+        ("tile", "computronium.acceleration.tile_kernels", "TileKernelBackend"),
+        ("mep", "computronium.acceleration.mep_kernels", "MEPKernelBackend"),
+        ("o1memory", "computronium.acceleration.mep_kernels", "O1MemoryEPv2KernelBackend"),
+    )
+    out: dict[str, type] = {}
+    for name, module_path, class_name in standard_kernels:
+        out[name] = getattr(importlib.import_module(module_path), class_name)
+    # Also include contrastive kernels
+    from computronium.acceleration.contrastive_kernels import get_contrastive_kernels
+    out.update(get_contrastive_kernels())
+    return out
 
 
 # The one stated call site for the binding layer (TODO36 §4.3). Every family is
 # bound here, explicitly, so no kernel module registers as an import side effect
 # and the registry's contents cannot depend on which module was imported first.
-register_all()  # ruff: ignore[non-empty-init-module]  (the stated call site)
+_register_standard_kernels()  # ruff: ignore[non-empty-init-module]  (the stated call site)
 
 __all__ = [
-    "BINDINGS",
     "HAS_CUPY",
     "TRITON_IMPORTED",
     "AlgorithmFamily",
@@ -163,7 +189,6 @@ __all__ = [
     "pepita_error_modulation",
     "phase_encode",
     "profile_kernel",
-    "register_all",
     "softmax",
     "spectral_normalize",
     "target_propagation_target",

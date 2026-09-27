@@ -456,6 +456,27 @@ class ParameterUpdateConfig:
         )
 
 
+    @classmethod
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+        """Hyperparameter ranges owned by the parameter_update axis.
+
+        These are the knobs the update config reads. The sweep unions the
+        hyperparameters() of all primitives named by a coordinate.
+        """
+        return {
+            "step_size": (1e-5, 1.0, "log"),
+            "momentum": (0.0, 0.99, "linear"),
+            "ortho_steps": (0, 10, "int"),
+            "spectral_norm": (0.1, 10.0, "log"),
+            "fisher_damping": (1e-6, 1.0, "log"),
+            "ewc_lambda": (1e-1, 1e4, "log"),
+            "grad_clip": (0.1, 10.0, "log"),
+            "beta2": (0.9, 0.9999, "linear"),
+            "eps": (1e-10, 1e-4, "log"),
+            "ortho_lr": (1e-5, 1.0, "log"),
+        }
+
+
 # ============================================================
 # Role-split sub-rule pair
 # ============================================================

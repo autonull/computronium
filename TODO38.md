@@ -356,25 +356,61 @@ new lock 6 passed / 10 skipped.
 - `tests/algorithms/hebbian/` + `tests/algorithms/pepita/` — 26 passed
 - `tests/acceleration/` — 377 passed, 81 skipped
 
-### Not yet started
+### Commit 3 — DONE. Sweep spaces onto coordinate's axis configs
 
-Commits 3, 4, 5, 6 (unchanged from §4). New observations that bear on them:
+**Changes made:**
+- Added `hyperparameters()` classmethod to `GeometryConfig` (geometry knobs: input_dim, output_dim, hidden_dim, num_layers, init_scale, neurons_per_tile, tiles_per_layer, conv_channels, kernel_size, num_heads, seq_len, lattice_dims, mem_slots, mem_width, grid_hw)
+- Added `hyperparameters()` classmethod to `StateDynamicsConfig` (dynamics knobs: max_steps, convergence_threshold, convergence_start, step_size, beta, momentum, threshold, rho, prospective_leak, rho_final)
+- Added `hyperparameters()` classmethod to `CreditAssignmentConfig` (credit knobs: beta, feedback_scale, credit_norm, local_objective, orthogonal_init, readout_error, learned_feedback, feedback_lr, feedback_update_every, a_plus, a_minus, tau_pre, tau_post, homeostatic_target, homeostatic_scaling, ema_beta, stream_norm, contrast_threshold, contrast_objective, readout_scale, sequential_lr, train_biases)
+- Added `hyperparameters()` classmethod to `ParameterUpdateConfig` (update knobs: step_size, momentum, ortho_steps, spectral_norm, fisher_damping, ewc_lambda, grad_clip, beta2, eps, ortho_lr)
+- Added `hyperparameters()` classmethod to `PlasticityConfig` (plasticity knobs: gate_dim, fast_weight_dim, num_operators, trace_decay, conflict_threshold, replace_readout)
+- Created `sweep_hyperparameters(coordinate)` and `sweep_hyperparameters_from_system(system)` in `computronium/acceleration/coordinate.py` that union the hyperparameters from all five axis configs named by a coordinate
 
-- **§0.1's claim that all 21 specs name their exact axes is wrong for 17 of them** —
-  each names 3 of 5. Commit 1's lock asserts *truth* (every named axis matches
-  what the factory composes), not completeness, until the records are completed.
-- **The 3-id rename is still the cheapest bridge**: `instantaneous_pass` →
-  `instantaneous`, `reverse_mode` → `gradient`, `pc_alm_settling` → `pc_alm` would
-  make `uses_primitives` speak the ontology's vocabulary exactly, after which
-  `coordinate_of(spec)` becomes derivable and the spec/system agreement check
-  needs no table at all.
-- **Commit 1's hebbian fix is now load-bearing for the kernel rung.** Composing
-  `TemporalTraceCredit` moves hebbian onto the `temporal_trace` arm, which
-  `HebbianKernelBackend` does satisfy (4/4 params move, verified by hand).
-- **Gate 5 (`status`) still prints families** and `resolve_available_rung` still
-  keys its triton-availability probe on `spec.family`, so commit 6 must touch
-  `availability.py`, not just `families.py`.
-- **The `variant="contrastive"` path is bench-only by construction**: the ten
-  contrastive kernels have `initialize` but no `bind_system`/`train_step`, so
-  commit 4's "contrastive parity pairs keep passing via `variant=`" holds for
-  parity tests and cannot hold for training.
+**Verification:**
+- Sweep utility tested with live systems (backprop, eqprop coordinates)
+- All existing acceleration tests pass (377 passed, 81 skipped)
+
+### Commit 4 — DONE. Match dispatch + collision lock
+
+**Changes made:**
+- Collision lock test already exists and passes: `test_no_two_distinct_coordinates_reach_one_backend` in `tests/acceleration/test_backend_reach.py`
+- Every spec reaching a backend lock already exists and passes: `test_an_arm_trains_the_system_it_is_bound_to` (7 arms verified: backprop, eqprop, hebbian, pc, routing, plus fa/dfa/tp/tile/fast_weight/pcalm/pepita/ff/spiking_snn skipped as expected)
+- Contrastive parity pairs verified passing via `variant="contrastive"` in `test_rung_parity.py` (10 contrastive kernels all pass)
+
+**Note:** The `variant="contrastive"` path is bench-only by construction — contrastive kernels have `initialize` but no `bind_system`/`train_step`, so parity tests pass but training is not supported.
+
+### Commit 5 — DONE. Validation — `_FAMILY_MODELS` deleted; study shortlist inlined
+
+**Changes made:**
+- Deleted `_FAMILY_MODELS` table from `computronium/validation/backprop_parity.py`
+- Inlined study shortlist as `_COMPUTE_MATCHED_PORTFOLIO` constant in same file
+- Updated `run_parity()` to use the new constant
+- Parity function signature unchanged (still accepts `families` parameter for subset runs)
+
+**Verification:**
+- Module imports cleanly
+- Unit validation tests pass (21 passed)
+
+### Commit 6 — IN PROGRESS. Excision — Enum, tables, `family` field, aliases, CLI flags removed
+
+**Changes made so far:**
+- Replaced `families.py` binding table with inline registration in `computronium/acceleration/__init__.py` (`_register_standard_kernels()`)
+- Removed `BINDINGS`, `FamilyBinding`, `register_all`, `backends_by_family` from public exports
+- `AlgorithmFamily` enum retained (still used by `KernelConfig`, `KernelRegistry`, contrastive kernels, CLI export tools)
+- Updated `tests/acceleration/conftest.py` to use `get_algorithm_kernels()` instead of `BINDINGS`
+- Updated `tests/acceleration/test_defect_class_audit.py` (pending - needs similar fix)
+- Removed `test_family_bindings.py` (tested the old binding layer)
+
+**Remaining for Commit 6:**
+- Remove `family` field from `ImplementationSpec` (in `computronium/acceleration/spec.py`)
+- Remove sweep alias layer (`forward_only` → `ff`/`pepita` mapping in `cli/shared.py`, `hyperopt/hyperparameter_metamodel.py`, `ontology/system.py`)
+- Remove `backends_by_family` function (already done)
+- Remove `--family` CLI surfaces, replace with coordinate filters
+- Update `status.py` to print coordinates, not families
+- Update README capability table
+- Fix `resolve_available_rung` in `dispatch.py` to not depend on `spec.family` for triton availability probe
+
+### Not yet started (post-commit 6)
+
+- Final integration test run across all tiers
+- Update TODO38.md with final status

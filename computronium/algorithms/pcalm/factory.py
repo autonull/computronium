@@ -1,11 +1,11 @@
 """Public factory for PC-ALM systems.
 
-Wraps computronium.core.system_trainer.compose_joint_system, adding backend selection.
+Wraps computronium.core.system_trainer.compose_joint_system, attaching the selected backend.
 """
 
 from typing import Any
 
-from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.dispatch import finish_with_backend
 from computronium.acceleration.registry import get
 from computronium.core.system_trainer import compose_joint_system
 from computronium.ontology.credit import CreditAssignmentConfig, PCALMCredit
@@ -34,9 +34,6 @@ def create_pc_alm_mlp(
         reference: force reference implementation
         kernel: force accelerated kernel
     """
-    spec = get("algorithm.pcalm")
-    backend = select_backend(spec, backend)
-
     substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
@@ -56,11 +53,15 @@ def create_pc_alm_mlp(
     credit = PCALMCredit(CreditAssignmentConfig.pc_alm())
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
-    return compose_joint_system(
-        substrate=substrate,
-        geometry=geometry,
-        dynamics=dynamics,
-        plasticity=plasticity,
-        credit=credit,
-        update=update,
+    return finish_with_backend(
+        compose_joint_system(
+            substrate=substrate,
+            geometry=geometry,
+            dynamics=dynamics,
+            plasticity=plasticity,
+            credit=credit,
+            update=update,
+        ),
+        get("algorithm.pcalm"),
+        backend,
     )

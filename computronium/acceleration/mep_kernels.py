@@ -18,7 +18,9 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
+    LinearView,
     LocalityLevel,
+    linear_views,
 )
 from computronium.acceleration.triton_kernels import MEP_TritonOps
 
@@ -76,12 +78,16 @@ class MEPKernelBackend:
         self._transition_modules = transition_modules
 
     def bind_system(self, system: System) -> None:
-        """Bind the kernel to a System's geometry."""
-        # For MEP, the geometry is expected to have transition_modules
-        if hasattr(system.geometry, "transition_modules"):
-            self.set_model_ref(system.geometry.transition_modules)
-        elif hasattr(system.geometry, "layers"):
-            self.set_model_ref(system.geometry.layers)
+        """Bind the kernel to a System's geometry.
+
+        ``geometry.transition_modules`` exists but is a *method*, and a
+        ``hasattr`` check cannot tell a method from a value: the rung used to
+        store the bound method and fail on the first ``for module in ...``. The
+        geometry's parameters are the layer stack, so the views are the answer.
+        """
+        layers = linear_views(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using MEP contrastive learning."""
@@ -357,11 +363,10 @@ class O1MemoryEPv2KernelBackend:
         self._transition_modules = transition_modules
 
     def bind_system(self, system: System) -> None:
-        """Bind the kernel to a System's geometry."""
-        if hasattr(system.geometry, "transition_modules"):
-            self.set_model_ref(system.geometry.transition_modules)
-        elif hasattr(system.geometry, "layers"):
-            self.set_model_ref(system.geometry.layers)
+        """Bind the kernel to a System's geometry. See :meth:`MEPKernelBackend.bind_system`."""
+        layers = linear_views(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using O1Memory contrastive learning."""

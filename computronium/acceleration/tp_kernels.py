@@ -17,11 +17,29 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
+    LinearView,
     LocalityLevel,
+    linear_views,
 )
 
 if TYPE_CHECKING:
     from computronium.ontology import System
+
+
+def _transposed_inverse(layers: list[LinearView]) -> list[torch.nn.Linear]:
+    """The inverse network: each forward layer transposed, in reverse order.
+
+    A copy, deliberately. Target propagation updates the forward network *and* the
+    inverse network by different learning rates, and sharing storage would make
+    the two updates land on the same tensor.
+    """
+    inverse = []
+    for layer in reversed(layers):
+        mirror = torch.nn.Linear(layer.out_features, layer.in_features, bias=False)
+        with torch.no_grad():
+            mirror.weight.copy_(layer.weight.T)
+        inverse.append(mirror)
+    return inverse
 
 
 class TPKernelBackend:
@@ -83,35 +101,13 @@ class TPKernelBackend:
             self.set_model_ref(
                 system.geometry.forward_layers, system.geometry.inverse_layers
             )
-        elif hasattr(system.geometry, "layers"):
-            # Assume symmetric forward/inverse
+        else:
             layers = self._extract_layers(system.geometry)
             if layers:
-                # Create inverse layers as transposes (simplified)
-                inverse_layers = []
-                for layer in reversed(layers):
-                    inv = torch.nn.Linear(
-                        layer.out_features, layer.in_features, bias=False
-                    )
-                    with torch.no_grad():
-                        inv.weight.copy_(layer.weight.T)
-                    inverse_layers.append(inv)
-                self.set_model_ref(layers, inverse_layers)
+                self.set_model_ref(layers, _transposed_inverse(layers))
 
-    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
-        """Extract linear layers from geometry."""
-        if hasattr(geometry, "params"):
-            layers = []
-            for name, param in geometry.params.items():
-                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
-                    layer = getattr(geometry, name.replace(".weight", ""))
-                    if isinstance(layer, torch.nn.Linear):
-                        layers.append(layer)
-            if layers:
-                return layers
-        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
-            return geometry.layers
-        return []
+    def _extract_layers(self, geometry) -> list[LinearView]:
+        return linear_views(geometry)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using Target Propagation."""

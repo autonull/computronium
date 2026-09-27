@@ -117,6 +117,23 @@ class PlasticityConfig:
         )
 
 
+    @classmethod
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+        """Hyperparameter ranges owned by the plasticity axis.
+
+        These are the knobs the plasticity config reads. The sweep unions the
+        hyperparameters() of all primitives named by a coordinate.
+        """
+        return {
+            "gate_dim": (8, 512, "int"),
+            "fast_weight_dim": (64, 2048, "int"),
+            "num_operators": (2, 32, "int"),
+            "trace_decay": (0.5, 1.0, "linear"),
+            "conflict_threshold": (0.1, 0.9, "linear"),
+            "replace_readout": [True, False],
+        }
+
+
 # ============================================================
 # PlasticityPrimitive: Protocol for plasticity laws
 # ============================================================

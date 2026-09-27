@@ -22,19 +22,21 @@ SPEC = ImplementationSpec(
     status="kernel_verified",
     uses_primitives=(
         "primitive.state_dynamics.instantaneous_pass",
-        "primitive.credit_assignment.local_goodness",
+        "primitive.credit_assignment.temporal_trace",
         "primitive.parameter_update.euclidean",
     ),
-    summary="Hebbian learning: neurons that fire together, wire together.",
+    summary="Hebbian/STDP learning: neurons that fire together, wire together.",
     equations="""
     ΔW_l ∝ h_l h_{l-1}^T  # Hebbian
     ΔW_l ∝ (h_l - ⟨h_l⟩)(h_{l-1} - ⟨h_{l-1}⟩)^T  # Covariance
+    ΔW_l ∝ a_plus·postᵀ·pre_trace − a_minus·post_traceᵀ·pre  # STDP
     """,
     invariants=(
         "local weight updates only",
         "no global error signal required",
         "deterministic under fixed seed",
+        "spike-timing dependent plasticity (STDP) mechanism",
     ),
-    notes="Uses LocalGoodnessCredit as a proxy for Hebbian correlation.",
-    tags=("hebbian", "stdp", "local_learning", "correlation"),
+    notes="Uses TemporalTraceCredit for STDP-based credit assignment.",
+    tags=("hebbian", "stdp", "local_learning", "correlation", "temporal_trace"),
 )

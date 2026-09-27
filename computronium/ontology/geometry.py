@@ -508,6 +508,31 @@ class GeometryConfig:
             beta_init=beta_init,
         )
 
+    @classmethod
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+        """Hyperparameter ranges owned by the geometry axis.
+
+        These are the knobs the geometry config reads. The sweep unions the
+        hyperparameters() of all primitives named by a coordinate.
+        """
+        return {
+            "input_dim": (1, 8192, "int"),
+            "output_dim": (1, 8192, "int"),
+            "hidden_dim": (8, 4096, "log"),
+            "num_layers": (1, 12, "int"),
+            "init_scale": (1e-3, 10.0, "log"),
+            "neurons_per_tile": (2, 64, "int"),
+            "tiles_per_layer": (1, 8, "int"),
+            "conv_channels": (4, 256, "int"),
+            "kernel_size": (1, 7, "int"),
+            "num_heads": (1, 32, "int"),
+            "seq_len": (16, 4096, "int"),
+            "lattice_dims": (2, 32, "int"),
+            "mem_slots": (4, 128, "int"),
+            "mem_width": (4, 128, "int"),
+            "grid_hw": (4, 64, "int"),
+        }
+
 
 # ============================================================
 # Geometry Protocol

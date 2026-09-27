@@ -712,10 +712,10 @@ def create_hebbian_mlp(
     init_scale: float = 0.1,
     device: str = "cpu",
 ) -> System:
-    """Create a Hebbian MLP system (5-D coordinate).
+    """Create a Hebbian/STDP MLP system (5-D coordinate).
 
-    Hebbian learning uses local correlation-based weight updates
-    (neurons that fire together, wire together).
+    Hebbian learning uses spike-timing correlations (STDP):
+    neurons that fire together, wire together.
 
     Args:
         input_dim: Input dimension
@@ -727,12 +727,12 @@ def create_hebbian_mlp(
 
     Returns:
         A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
-        + LocalGoodnessCredit + EuclideanUpdate
+        + TemporalTraceCredit + EuclideanUpdate
     """
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)

@@ -402,7 +402,6 @@ UNCALLED = {
     "compare_memory_autograd_vs_kernel": "a measurement helper with no caller",
     "conductance_matmul": "a contrastive twin nothing calls",
     "forward_forward_goodness": "a contrastive twin nothing calls",
-    "get_contrastive_kernels": "the population helper §4.3 replaced",
     "phase_encode": "a contrastive twin nothing calls",
     "target_propagation_target": "a contrastive twin nothing calls",
     # §4.6: Tile tensor launchers exported from tile_kernels.py — launchers are
@@ -462,9 +461,9 @@ REF_UNCALLED = {
 
 def _compute_ref_uncalled_twins() -> set[str]:
     """Compute uncalled twins in reference modules (session-scoped)."""
-    from computronium.acceleration.families import BINDINGS
+    from computronium.acceleration import get_algorithm_kernels
 
-    bound = {row.backend for row in BINDINGS}
+    bound = set(get_algorithm_kernels().keys())
     twins = _exported_ref_twins()
     used: set[str] = set()
     skip_dirs = {".venv", "build", "__pycache__", ".pytest_cache", ".git"}
@@ -473,7 +472,7 @@ def _compute_ref_uncalled_twins() -> set[str]:
             continue
         try:
             tree = _parse(path)
-        except SyntaxError, UnicodeDecodeError:
+        except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Name):

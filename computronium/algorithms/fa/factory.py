@@ -1,11 +1,11 @@
 """Public factory for Feedback Alignment systems.
 
-Wraps computronium.core.presets.create_fa_mlp, adding backend selection.
+Wraps computronium.core.presets.create_fa_mlp, attaching the selected backend.
 """
 
 from typing import Any
 
-from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.dispatch import finish_with_backend
 from computronium.acceleration.registry import get
 from computronium.core.presets import create_fa_mlp as _create_fa_mlp
 
@@ -29,14 +29,15 @@ def create_fa_mlp(
         reference: force reference implementation
         kernel: force accelerated kernel
     """
-    spec = get("algorithm.fa")
-    backend = select_backend(spec, backend)
-
-    return _create_fa_mlp(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        lr=lr,
-        device=device,
-        feedback_scale=feedback_scale,
+    return finish_with_backend(
+        _create_fa_mlp(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            lr=lr,
+            device=device,
+            feedback_scale=feedback_scale,
+        ),
+        get("algorithm.fa"),
+        backend,
     )

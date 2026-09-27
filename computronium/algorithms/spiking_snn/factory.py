@@ -1,11 +1,11 @@
 """Public factory for Spiking SNN systems.
 
-Wraps computronium.core.presets.create_spiking_snn_mlp, adding backend selection.
+Wraps computronium.core.presets.create_spiking_snn_mlp, attaching the selected backend.
 """
 
 from typing import Any
 
-from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.dispatch import finish_with_backend
 from computronium.acceleration.registry import get
 from computronium.core.presets import create_spiking_snn_mlp as _create_spiking_snn_mlp
 
@@ -31,16 +31,17 @@ def create_spiking_snn_mlp(
         reference: force reference implementation
         kernel: force accelerated kernel
     """
-    spec = get("algorithm.spiking_snn")
-    backend = select_backend(spec, backend)
-
-    return _create_spiking_snn_mlp(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        lr=lr,
-        device=device,
-        max_steps=max_steps,
-        beta=beta,
-        threshold=threshold,
+    return finish_with_backend(
+        _create_spiking_snn_mlp(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            lr=lr,
+            device=device,
+            max_steps=max_steps,
+            beta=beta,
+            threshold=threshold,
+        ),
+        get("algorithm.spiking_snn"),
+        backend,
     )

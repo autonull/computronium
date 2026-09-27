@@ -546,6 +546,26 @@ class StateDynamicsConfig:
             rho_final=rho_final,
         )
 
+    @classmethod
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+        """Hyperparameter ranges owned by the state_dynamics axis.
+
+        These are the knobs the dynamics config reads. The sweep unions the
+        hyperparameters() of all primitives named by a coordinate.
+        """
+        return {
+            "max_steps": (1, 200, "int"),
+            "convergence_threshold": (1e-6, 1e-2, "log"),
+            "convergence_start": (1, 20, "int"),
+            "step_size": (1e-3, 1.0, "log"),
+            "beta": (1e-3, 1.0, "log"),
+            "momentum": (0.0, 0.99, "linear"),
+            "threshold": (0.1, 5.0, "linear"),
+            "rho": (0.1, 10.0, "log"),
+            "prospective_leak": (0.0, 1.0, "linear"),
+            "rho_final": (0.1, 10.0, "log"),
+        }
+
 
 # ============================================================
 # Compiled layered-settle loop (predictive_settling fast path)

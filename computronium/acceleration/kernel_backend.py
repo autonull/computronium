@@ -430,6 +430,102 @@ class KernelRegistry:
         cls._instances.clear()
 
 
+class LinearView:
+    """One dense layer of a geometry, presented the way a kernel backend reads it.
+
+    A backend wants a callable layer plus writable ``weight``/``bias`` and the
+    two widths. The ontology's geometries keep those tensors in
+    ``geometry.params`` under layer-indexed keys (``0.weight``, ``0.bias``,
+    ``2.weight``, …) and expose no submodules, so nine backends each looked for
+    a module the geometry does not have, found nothing, and went on to train a
+    *private* copy of the network — a rung that reported plausible metrics for
+    weights the system never read.
+
+    A view is not a copy. It is built around the geometry's own tensor, so an
+    in-place update on either side is visible to the other and
+    ``system.forward()`` reflects what the kernel learned. ``requires_grad`` is
+    cleared because a kernel rung does not backprop, and autograd's version
+    counter does not follow a write made through a second tensor object; the
+    reference rung, which does backprop, never sees these views.
+
+    Attributes:
+        weight: the geometry's weight tensor, shared.
+        bias: the geometry's bias tensor, shared; ``None`` for a bias-free layer.
+        source: the geometry parameter keys this view stands for.
+        in_features: the weight's second dimension.
+        out_features: the weight's first dimension.
+    """
+
+    __slots__ = ("bias", "in_features", "out_features", "source", "weight")
+
+    def __init__(
+        self, weight: Tensor, bias: Tensor | None, source: tuple[str, str]
+    ) -> None:
+        self.weight = weight
+        self.bias = bias
+        self.out_features, self.in_features = weight.shape
+        self.source = source
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return torch.nn.functional.linear(x, self.weight, self.bias)
+
+
+def _param_order(prefix: str) -> tuple[int, float | str]:
+    """Sort layer keys by their index when they have one, lexically otherwise."""
+    return (0, float(prefix)) if prefix.isdigit() else (1, prefix)
+
+
+def linear_views(geometry: object) -> list[LinearView]:
+    """A geometry's dense layers, as modules that *share its storage*.
+
+    Every kernel backend wants the same two things from a geometry: a callable
+    layer stack and writable weight and bias tensors. The ontology's geometries
+    provide the tensors — in ``geometry.params``, keyed by layer index as
+    ``0.weight``/``0.bias``/``2.weight``/… — and provide no submodules. Nine
+    backends each looked for a submodule the geometry does not have, found
+    nothing, and went on to train a *private* copy of the network: a rung that
+    reported plausible metrics for weights the system never read.
+
+    These are views, not copies. Each ``nn.Linear`` is constructed around the
+    geometry's own tensor, so an in-place update on either side is visible to the
+    other and ``system.forward()`` reflects what the kernel learned. The views
+    carry ``requires_grad=False`` because a kernel rung does not backprop, and
+    autograd's version counter does not follow a write through a second tensor
+    object; the reference rung, which does backprop, never sees these views.
+
+    Args:
+        geometry: an axis geometry, or anything else exposing ``params``.
+
+    Returns:
+        The dense layers in index order; empty when the geometry has none.
+    """
+    params = getattr(geometry, "params", None)
+    if params is None:
+        return list(getattr(geometry, "layers", []) or [])
+
+    grouped: dict[str, dict[str, Tensor]] = {}
+    for name, tensor in params.items():
+        prefix, _, role = name.rpartition(".")
+        if role in {"weight", "bias"}:
+            grouped.setdefault(prefix, {})[role] = tensor
+
+    views: list[LinearView] = []
+    for prefix in sorted(grouped, key=_param_order):
+        roles = grouped[prefix]
+        weight = roles.get("weight")
+        if weight is None or weight.dim() != 2:
+            continue
+        bias = roles.get("bias")
+        views.append(
+            LinearView(
+                weight=weight.requires_grad_(False),
+                bias=bias.requires_grad_(False) if bias is not None else None,
+                source=(f"{prefix}.weight", f"{prefix}.bias"),
+            )
+        )
+    return views
+
+
 def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:
     """Infer algorithm family from model registry name."""
     name = model_name.lower()
@@ -461,6 +557,8 @@ __all__ = [
     "KernelBackend",
     "KernelConfig",
     "KernelRegistry",
+    "LinearView",
     "LocalityLevel",
     "infer_algorithm_family",
+    "linear_views",
 ]

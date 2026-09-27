@@ -17,7 +17,9 @@ from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
     KernelConfig,
+    LinearView,
     LocalityLevel,
+    linear_views,
 )
 from computronium.acceleration.kernels import EqPropKernel
 
@@ -94,7 +96,7 @@ class EqPropKernelBackend:
 
     def set_model_ref(
         self,
-        layers: list[torch.nn.Linear],
+        layers: list[LinearView],
         activation: torch.nn.Module | None = None,
     ) -> None:
         """Bind the kernel to model's layer stack for weight sync.
@@ -119,23 +121,8 @@ class EqPropKernelBackend:
         if layers:
             self.set_model_ref(layers)
 
-    def _extract_layers(self, geometry) -> list[torch.nn.Linear]:
-        """Extract linear layers from geometry."""
-        if hasattr(geometry, "params"):
-            # Geometry has params dict - extract Linear layers
-            layers = []
-            for name, param in geometry.params.items():
-                if "weight" in name and hasattr(geometry, name.replace(".weight", "")):
-                    layer = getattr(geometry, name.replace(".weight", ""))
-                    if isinstance(layer, torch.nn.Linear):
-                        layers.append(layer)
-            # Sort by layer index if possible
-            if layers:
-                return layers
-        # Fallback: check for common attributes
-        if hasattr(geometry, "layers") and isinstance(geometry.layers, list):
-            return geometry.layers
-        return []
+    def _extract_layers(self, geometry) -> list[LinearView]:
+        return linear_views(geometry)
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using the contrastive kernel."""
@@ -162,6 +149,18 @@ class EqPropKernelBackend:
         kernel.weights[key] = xp.asarray(layer.weight.detach().cpu().numpy())
         if layer.bias is not None:
             kernel.biases[key] = xp.asarray(layer.bias.detach().cpu().numpy())
+
+    def _sync_layer_from_kernel(self, layer, key: str, to_torch, kernel) -> None:
+        """Write one kernel layer back into the system's layer, in place.
+
+        The mirror of :meth:`_sync_layer_to_kernel`, and the reason the kernel
+        rung moves the composed system's parameters at all: ``layer`` is a view
+        over ``geometry.params``, so copying into it is the update.
+        """
+        with torch.no_grad():
+            layer.weight.copy_(to_torch(kernel.weights[key]))
+            if layer.bias is not None:
+                layer.bias.copy_(to_torch(kernel.biases[key]))
 
     def _sync_weights_from_kernel(self) -> None:
         """Sync EqPropKernel's weights back to PyTorch layers."""

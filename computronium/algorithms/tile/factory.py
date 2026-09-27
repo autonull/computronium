@@ -1,11 +1,11 @@
 """Public factory for TileNet systems.
 
-Wraps computronium.core.presets.create_tile_mlp, adding backend selection.
+Wraps computronium.core.presets.create_tile_mlp, attaching the selected backend.
 """
 
 from typing import Any
 
-from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.dispatch import finish_with_backend
 from computronium.acceleration.registry import get
 from computronium.core.presets import create_tile_mlp as _create_tile_mlp
 
@@ -30,15 +30,16 @@ def create_tile_mlp(
         reference: force reference implementation
         kernel: force accelerated kernel
     """
-    spec = get("algorithm.tile")
-    backend = select_backend(spec, backend)
-
-    return _create_tile_mlp(
-        input_dim=input_dim,
-        hidden_dims=hidden_dims,
-        output_dim=output_dim,
-        lr=lr,
-        device=device,
-        neurons_per_tile=neurons_per_tile,
-        tiles_per_layer=tiles_per_layer,
+    return finish_with_backend(
+        _create_tile_mlp(
+            input_dim=input_dim,
+            hidden_dims=hidden_dims,
+            output_dim=output_dim,
+            lr=lr,
+            device=device,
+            neurons_per_tile=neurons_per_tile,
+            tiles_per_layer=tiles_per_layer,
+        ),
+        get("algorithm.tile"),
+        backend,
     )
