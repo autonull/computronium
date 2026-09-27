@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
-from computronium.acceleration.kernel_backend import KernelBackend
 from computronium.core.system_trainer.spec import (
     _update_from_config as _spec_update_from_config,
 )
@@ -34,6 +33,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from computronium.acceleration.kernel_backend import KernelBackend
     from computronium.ontology import (
         CreditAssignment,
         Geometry,
@@ -50,6 +50,7 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
         HomeostaticCredit,
         LocalContrastiveCredit,
         LocalGoodnessCredit,
+        PCALMCredit,
         PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
@@ -77,6 +78,8 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             return HomeostaticCredit(config)
         case "gradient" | "backprop":
             return BackpropCredit(config)
+        case "pc_alm":
+            return PCALMCredit(config)
         case other:
             raise ValueError(f"Unknown credit_type: {other!r}")
 

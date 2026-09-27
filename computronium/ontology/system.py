@@ -368,6 +368,10 @@ class SystemConfig:
         self._validate_pc_alm_dynamics()
         self._validate_residual_connections()
 
+        # Credit-Geometry compatibility
+        self._validate_local_contrastive_geometry()
+        self._validate_attention_geometry_compatibility()
+
         # Credit-Dynamics compatibility
         self._validate_thermodynamic_contrast_dynamics()
 
@@ -676,6 +680,37 @@ class SystemConfig:
                     "for proper sampling. Consider setting noise_level on substrate.",
                     UserWarning,
                     stacklevel=2,
+                )
+
+    def _validate_local_contrastive_geometry(self) -> None:
+        """LocalContrastiveCredit (local_goodness, forward_only, pepita) requires FeedforwardGeometry."""
+        if self.credit.credit_type in {
+            "local_goodness",
+            "forward_only",
+            "pepita",
+            "local_contrastive",
+        }:
+            geom_type = getattr(self.geometry, "config", self.geometry).topology_type
+            if geom_type not in {"feedforward", "feedforward_dag"}:
+                raise ValueError(
+                    f"LocalContrastiveCredit (credit_type={self.credit.credit_type!r}) "
+                    f"requires feedforward geometry, got {geom_type!r}"
+                )
+
+    def _validate_attention_geometry_compatibility(self) -> None:
+        """Attention geometry has specific credit/update compatibility requirements."""
+        geom_type = getattr(self.geometry, "config", self.geometry).topology_type
+        if geom_type == "attention":
+            # PEPITA and local_goodness credits have known shape issues with attention
+            if self.credit.credit_type in {
+                "pepita",
+                "local_goodness",
+                "local_contrastive",
+                "forward_only",
+            }:
+                raise ValueError(
+                    f"Attention geometry incompatible with {self.credit.credit_type!r} credit "
+                    f"(known shape mismatch in multi-head attention)"
                 )
 
     # --- Geometry-Substrate Validation Methods ---

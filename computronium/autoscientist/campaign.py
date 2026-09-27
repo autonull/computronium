@@ -58,7 +58,11 @@ if TYPE_CHECKING:
 
 from computronium.autoscientist.proposer import ExperimentProposer, cell_key
 from computronium.autoscientist.reasoner import HypothesisReasoner
-from computronium.core.exceptions import KnowledgeBaseError
+from computronium.core.exceptions import (
+    KnowledgeBaseError,
+    RuntimeDefectError,
+    StructuralVoidError,
+)
 from computronium.core.logging import get_logger
 from computronium.core.profiling import estimate_train_step_flops, get_gpu_memory_mb
 
@@ -952,12 +956,50 @@ class AutoScientistCampaign:
         coverage proposer never re-proposes a structurally impossible
         cell (rev 5 fix: the first sweep stalled re-proposing 4 rejected
         cells forever).
+
+        Structural voids (ontology boundaries) are logged as voids;
+        runtime defects (fixable bugs) are logged as defects.
         """
         try:
             self._execute_proposal(proposal, dry_run=True)
-        except Exception as e:  # broad: any compose/settle crash rejects
-            logger.exception("Dry-run gate rejected proposal on %s", proposal.task)
-            self._record_incompatible(proposal, str(e))
+        except StructuralVoidError:
+            # Re-raise structural voids — they're ontology boundaries
+            raise
+        except RuntimeDefectError:
+            # Re-raise runtime defects — they're fixable bugs
+            raise
+        except ValueError as e:
+            # Configuration/validation errors are structural voids
+            logger.info("Dry-run gate: structural void on %s: %s", proposal.task, e)
+            self._record_incompatible(proposal, f"structural_void: {e}")
+            return False
+        except RuntimeError as e:
+            # Check if it's a known structural void pattern
+            error_msg = str(e).lower()
+            if any(
+                keyword in error_msg
+                for keyword in [
+                    "incompatible",
+                    "requires feedforward",
+                    "attention geometry incompatible",
+                    "all-zero pseudo-gradient",
+                    "detached settle graph",
+                    "feedback/act width mismatch",
+                    "dual_vars.*shape.*constraints",
+                    "shape mismatch",
+                    "invalid for input of size",
+                ]
+            ):
+                logger.info("Dry-run gate: structural void on %s: %s", proposal.task, e)
+                self._record_incompatible(proposal, f"structural_void: {e}")
+                return False
+            # Unknown RuntimeError - treat as runtime defect
+            logger.exception("Dry-run gate: runtime defect on %s", proposal.task)
+            self._record_incompatible(proposal, f"runtime_defect: {e}")
+            return False
+        except Exception as e:  # broad: any other compose/settle crash
+            logger.exception("Dry-run gate: runtime defect on %s", proposal.task)
+            self._record_incompatible(proposal, f"runtime_defect: {e}")
             return False
         return True
 

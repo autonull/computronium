@@ -2013,10 +2013,26 @@ class AttentionGeometry(nn.Module):
         super().__init__()
         self.config = config
         self._num_heads = config.num_heads
-        self._head_dim = config.head_dim or (config.hidden_dims[0] // config.num_heads)
-        self._hidden_dim = (
-            config.hidden_dims[0] if config.hidden_dims else config.input_dim
-        )
+        hidden_dim = config.hidden_dims[0] if config.hidden_dims else config.input_dim
+
+        # Validate attention config (P1 fix for TODO39)
+        if hidden_dim % config.num_heads != 0:
+            raise ValueError(
+                f"AttentionGeometry: hidden_dim ({hidden_dim}) must be divisible by "
+                f"num_heads ({config.num_heads})"
+            )
+        if (
+            config.head_dim is not None
+            and config.head_dim * config.num_heads != hidden_dim
+        ):
+            raise ValueError(
+                f"AttentionGeometry: head_dim ({config.head_dim}) * num_heads "
+                f"({config.num_heads}) = {config.head_dim * config.num_heads} "
+                f"must equal hidden_dim ({hidden_dim})"
+            )
+
+        self._head_dim = config.head_dim or (hidden_dim // config.num_heads)
+        self._hidden_dim = hidden_dim
         self._dropout = config.attention_dropout
 
         # Input projection to hidden_dim

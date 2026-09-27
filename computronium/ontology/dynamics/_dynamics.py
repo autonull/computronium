@@ -262,6 +262,8 @@ class StateDynamicsConfig:
         gradient_checkpointing: Use gradient checkpointing to trade compute
             for memory during the primal-dual relaxation loop (PC-ALM only).
             Checkpoints every k steps where k = max_steps // 4.
+        max_energy: Maximum energy value before clamping (energy_minimization only).
+            Prevents numerical explosions in energy-based dynamics.
     """
 
     dynamics_type: str
@@ -281,6 +283,7 @@ class StateDynamicsConfig:
     warm_start_duals: bool = True
     rho_schedule: Literal["constant", "linear", "cosine"] = "constant"
     rho_final: float = 1.0
+    max_energy: float = 1e6
 
     @classmethod
     def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
@@ -296,6 +299,7 @@ class StateDynamicsConfig:
         gradient_checkpointing: bool = False,
         compiled: bool = False,
         gain_control: GainControlMode = "none",
+        max_energy: float = 1e6,
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="energy_minimization",
@@ -309,6 +313,7 @@ class StateDynamicsConfig:
             gradient_checkpointing=gradient_checkpointing,
             compiled=compiled,
             gain_control=gain_control,
+            max_energy=max_energy,
         )
 
     @classmethod
@@ -1175,6 +1180,19 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
     ) -> list[Tensor]:
         """Checkpointed settling path for memory efficiency."""
 
+        def _clamp_activations(acts: list[Tensor]) -> list[Tensor]:
+            """Clamp activation norms to respect max_energy budget."""
+            if self.config.max_energy <= 0:
+                return acts
+            num_layers = len(acts) - 1
+            max_layer_norm = (2.0 * self.config.max_energy / max(1, num_layers)) ** 0.5
+            clamped = []
+            for a in acts:
+                norms = a.norm(dim=-1, keepdim=True)
+                scale = (max_layer_norm / (norms + 1e-8)).clamp(max=1.0)
+                clamped.append(a * scale)
+            return clamped
+
         def _kernel_step(
             step: int,
         ) -> tuple[list[Tensor], list[Tensor] | None]:
@@ -1190,6 +1208,9 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
             acts, _ = iterate.value
             previous.value = acts[-1].detach()
             iterate.value = advance(step)
+            # Clamp activation norms to prevent energy explosion (TODO39 P0.3)
+            acts_clamped = _clamp_activations(iterate.value[0])
+            iterate.value = (acts_clamped, iterate.value[1])
             self._velocity = iterate.value[1]
 
         def _observe(step: int) -> bool:
@@ -1219,11 +1240,29 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         iterate = SettleIterate(all_acts)
         previous = SettleIterate(iterate.value[-1])
 
+        def _clamp_activations(acts: list[Tensor]) -> list[Tensor]:
+            """Clamp activation norms to respect max_energy budget."""
+            if self.config.max_energy <= 0:
+                return acts
+            # Self-energy = 0.5 * sum ||h||^2 across all layers
+            # Bound per-layer norm: sqrt(2 * max_energy / num_layers)
+            num_layers = len(acts) - 1  # exclude input
+            max_layer_norm = (2.0 * self.config.max_energy / max(1, num_layers)) ** 0.5
+            clamped = []
+            for a in acts:
+                # Clamp per-sample norm
+                norms = a.norm(dim=-1, keepdim=True)
+                scale = (max_layer_norm / (norms + 1e-8)).clamp(max=1.0)
+                clamped.append(a * scale)
+            return clamped
+
         def _step(step: int) -> None:
             previous.value = iterate.value[-1]
             new_acts, new_velocity = kernel.step(
                 iterate.value, beta, target, self._velocity
             )
+            # Clamp activation norms to prevent energy explosion (TODO39 P0.3)
+            new_acts = _clamp_activations(new_acts)
             if new_velocity is not None:
                 self._velocity = new_velocity
             iterate.value = new_acts
@@ -1252,6 +1291,8 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         """Track free energy and check convergence criteria."""
         if self._free_energy_history is not None or on_step is not None:
             energy_val = _compute_hopfield_energy(acts, geometry).item()
+            # Clamp energy to prevent numerical explosions (TODO39 P0.3)
+            energy_val = min(energy_val, self.config.max_energy)
             if self._free_energy_history is not None:
                 self._free_energy_history.append(energy_val)
             if on_step is not None:
@@ -2153,7 +2194,25 @@ class PCALMDynamics(_SettleTelemetry):
         num_layers: int,
     ) -> list[Tensor]:
         """Dual update: λ_l ← λ_l + step_size * (c_l + alpha * λ_l)."""
+        if len(dual_vars) != num_layers:
+            raise RuntimeError(
+                f"PCALM dual shape mismatch: dual_vars has {len(dual_vars)} "
+                f"layers but num_layers={num_layers}. "
+                f"constraints has {len(constraints)} layers."
+            )
+        if len(constraints) != num_layers:
+            raise RuntimeError(
+                f"PCALM constraint shape mismatch: constraints has {len(constraints)} "
+                f"layers but num_layers={num_layers}. "
+                f"dual_vars has {len(dual_vars)} layers."
+            )
         for i in range(num_layers):
+            if dual_vars[i].shape != constraints[i].shape:
+                raise RuntimeError(
+                    f"PCALM layer {i} shape mismatch: "
+                    f"dual_vars[{i}].shape={dual_vars[i].shape} "
+                    f"vs constraints[{i}].shape={constraints[i].shape}"
+                )
             dual_vars[i] = dual_vars[i] + step_size * (
                 constraints[i] + alpha * dual_vars[i]
             )
@@ -2171,12 +2230,29 @@ class PCALMDynamics(_SettleTelemetry):
         num_layers: int,
     ) -> list[Tensor]:
         """Primal update with top-down coupling."""
+        if len(constraints) != num_layers or len(dual_vars) != num_layers:
+            raise RuntimeError(
+                f"PCALM primal shape mismatch: constraints={len(constraints)}, "
+                f"dual_vars={len(dual_vars)}, num_layers={num_layers}"
+            )
         new_acts = [acts[0]]  # input layer clamped
         for i in range(num_layers):
+            if dual_vars[i].shape != constraints[i].shape:
+                raise RuntimeError(
+                    f"PCALM primal layer {i} shape mismatch: "
+                    f"dual_vars[{i}].shape={dual_vars[i].shape} "
+                    f"vs constraints[{i}].shape={constraints[i].shape}"
+                )
             primal_grad = constraints[i] + dual_vars[i] + current_rho * constraints[i]
 
             if i < num_layers - 1:
                 # Top-down coupling from layer i+1
+                if constraints[i + 1].shape != dual_vars[i + 1].shape:
+                    raise RuntimeError(
+                        f"PCALM top-down layer {i + 1} shape mismatch: "
+                        f"constraints[{i + 1}].shape={constraints[i + 1].shape} "
+                        f"vs dual_vars[{i + 1}].shape={dual_vars[i + 1].shape}"
+                    )
                 v = (
                     constraints[i + 1]
                     + dual_vars[i + 1]

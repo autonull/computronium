@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -853,26 +852,21 @@ class RandomProjectionsCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
         self._feedback_weights: dict[str, Tensor] = {}
-        self._inert_warned = False
 
     def _inert_zeros(self, geometry: Geometry, weight_names: list[str]) -> list[Tensor]:
-        """All-zeros pseudo-gradient with a once-per-instance inertness guard.
+        """All-zeros pseudo-gradient — raise so dry-run gate catches no-op runs.
 
-        The layered FA contract silently returns zeros when the settle graph
-        is detached or feedback shapes break the act-width chain; warn so
-        no-op runs are never mistaken for flat-learning runs (TODO16 §0.3).
+        The layered FA contract returns zeros when the settle graph is
+        detached or feedback shapes break the act-width chain. Raising here
+        makes the failure visible to the campaign's dry-run gate instead of
+        silently training a no-op (TODO16 §0.3; TODO39 P0.1).
         """
-        if not self._inert_warned:
-            self._inert_warned = True
-            warnings.warn(
-                f"{type(self).__name__}: layered FA contract returned an "
-                f"all-zero pseudo-gradient for {len(weight_names)} weights "
-                "(detached settle graph or feedback/act width mismatch) — "
-                "training is a no-op.",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+        raise RuntimeError(
+            f"{type(self).__name__}: layered FA contract would return "
+            f"all-zero pseudo-gradient for {len(weight_names)} weights "
+            "(detached settle graph or feedback/act width mismatch). "
+            "This coordinate cannot train — rejected at dry-run."
+        )
 
     def _init_feedback_weights(
         self, geometry: Geometry, device: torch.device | None = None

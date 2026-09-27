@@ -20,7 +20,9 @@ __all__ = [
     "NumericalInstabilityError",
     "PropagatorError",
     "RegistryError",
+    "RuntimeDefectError",
     "SpaceSignatureMismatchError",
+    "StructuralVoidError",
     "TileGraphError",
     "TrainingError",
     "TrialExecutionError",
@@ -113,3 +115,22 @@ CompositionError = IncompatibilityError
 
 class TrainingError(BioplausibleError):
     """A training step or epoch failed to execute."""
+
+
+class StructuralVoidError(BioplausibleError):
+    """A cell rejected by the dry-run gate due to structural incompatibility.
+
+    This represents an ontology boundary — a coordinate combination that is
+    fundamentally incompatible (e.g., LocalContrastiveCredit on non-feedforward
+    geometry, attention geometry with PEPITA credit). These are not bugs but
+    valid exclusions from the search space.
+    """
+
+
+class RuntimeDefectError(BioplausibleError):
+    """A cell that passed the dry-run gate but crashed at runtime.
+
+    This represents a fixable implementation bug (e.g., shape mismatch in
+    dual update, numerical explosion, zero-gradient detection). Unlike
+    StructuralVoidError, these indicate defects in the code that should be fixed.
+    """
