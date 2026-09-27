@@ -117,16 +117,6 @@ def test_pcalm_fused_update_matches_the_eager_dual_primal_update(device: str) ->
 
 
 @requires_cuda
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "known divergence, TODO36 §4.5: the triton rung runs the naive "
-        "0.5*X(3I - X^T X) iteration while the torch rung is newton_schulz5's "
-        "quintic, which replaced it because the naive form under-converges. "
-        "The old test compared the triton rung against a copy of its own "
-        "algorithm and passed; this one compares it to the rung it accelerates."
-    ),
-)
 @pytest.mark.parametrize("device", DEVICES)
 def test_muon_orthogonalize_matches_the_torch_newton_schulz(device: str) -> None:
     from computronium.acceleration.triton_kernels import MEP_TritonOps

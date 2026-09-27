@@ -10,6 +10,7 @@ import math
 import torch
 
 from computronium.acceleration.backends import HAS_CUPY, TRITON_IMPORTED
+from computronium.acceleration.triton_launch import safe_triton_launch
 
 
 class TritonEqPropOps:
@@ -356,6 +357,7 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     """
 
     _muon_gram_kernel = None
+    _muon_square_kernel = None
     _muon_update_kernel = None
     _dion_kernel = None
     _fisher_kernel = None
@@ -368,14 +370,15 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                 import triton
                 import triton.language as tl
 
-                # Newton-Schulz is inherently sequential across iterations, but
-                # each iteration decomposes into two tiled GEMMs:
-                #   1. Gram: A = X^T @ X            (N x N), reduce over rows of X
-                #   2. Apply: X = 0.5 * X @ (3I - A) (M x N), reduce over cols of A
-                # Two kernels are launched per iteration. ``input_precision``
-                # keeps the dot in true fp32 (TF32 would break the 1e-5 gate).
+                # Quintic Newton-Schulz (newton_schulz5) iteration per iteration:
+                #   A  = X^T @ X          (N x N), reduce over rows of X  [M x N]
+                #   A2 = A @ A            (N x N), reduce over cols of A
+                #   B  = b*A + c*A2       (N x N), element-wise
+                #   X  = a*X + X @ B      (M x N), reduce over cols of B
+                # Three kernels per iteration. ``input_precision="ieee"`` keeps
+                # the dot in true fp32 (TF32 would break the 1e-5 parity gate).
                 @triton.jit
-                def _ns_gram_kernel(
+                def _ns5_gram_kernel(
                     X_ptr,
                     A_ptr,
                     M,
@@ -409,12 +412,47 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                     )
 
                 @triton.jit
-                def _ns_update_kernel(
+                def _ns5_square_kernel(
+                    A_ptr,
+                    A2_ptr,
+                    N,
+                    BLOCK_N: tl.constexpr,
+                ):
+                    pid_i = tl.program_id(0)
+                    pid_j = tl.program_id(1)
+                    offs_i = pid_i * BLOCK_N + tl.arange(0, BLOCK_N)
+                    offs_j = pid_j * BLOCK_N + tl.arange(0, BLOCK_N)
+                    acc = tl.zeros((BLOCK_N, BLOCK_N), dtype=tl.float32)
+                    for k in range(0, N, BLOCK_N):
+                        offs_k = k + tl.arange(0, BLOCK_N)
+                        a = tl.load(
+                            A_ptr + offs_i[:, None] * N + offs_k[None, :],
+                            mask=(offs_i[:, None] < N) & (offs_k[None, :] < N),
+                            other=0.0,
+                        )
+                        b = tl.load(
+                            A_ptr + offs_k[:, None] * N + offs_j[None, :],
+                            mask=(offs_k[:, None] < N) & (offs_j[None, :] < N),
+                            other=0.0,
+                        )
+                        acc += tl.dot(a, b, input_precision="ieee")
+                    tl.store(
+                        A2_ptr + offs_i[:, None] * N + offs_j[None, :],
+                        acc,
+                        mask=(offs_i[:, None] < N) & (offs_j[None, :] < N),
+                    )
+
+                @triton.jit
+                def _ns5_update_kernel(
                     X_ptr,
                     A_ptr,
+                    A2_ptr,
                     O_ptr,
                     M,
                     N,
+                    a: tl.constexpr,
+                    b: tl.constexpr,
+                    c: tl.constexpr,
                     BLOCK_M: tl.constexpr,
                     BLOCK_N: tl.constexpr,
                 ):
@@ -430,37 +468,46 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                             mask=(offs_m[:, None] < M) & (offs_k[None, :] < N),
                             other=0.0,
                         )
-                        g = tl.load(
+                        a_ik = tl.load(
                             A_ptr + offs_k[:, None] * N + offs_n[None, :],
                             mask=(offs_k[:, None] < N) & (offs_n[None, :] < N),
                             other=0.0,
                         )
-                        acc += tl.dot(x, g, input_precision="ieee")
+                        a2_ik = tl.load(
+                            A2_ptr + offs_k[:, None] * N + offs_n[None, :],
+                            mask=(offs_k[:, None] < N) & (offs_n[None, :] < N),
+                            other=0.0,
+                        )
+                        # B = b*A + c*A2
+                        b_ik = b * a_ik + c * a2_ik
+                        acc += tl.dot(x, b_ik, input_precision="ieee")
                     x = tl.load(
                         X_ptr + offs_m[:, None] * N + offs_n[None, :],
                         mask=(offs_m[:, None] < M) & (offs_n[None, :] < N),
                         other=0.0,
                     )
-                    out = 0.5 * (3.0 * x - acc)
+                    out = a * x + acc
                     tl.store(
                         O_ptr + offs_m[:, None] * N + offs_n[None, :],
                         out,
                         mask=(offs_m[:, None] < M) & (offs_n[None, :] < N),
                     )
 
-                cls._muon_gram_kernel = _ns_gram_kernel
-                cls._muon_update_kernel = _ns_update_kernel
+                cls._muon_gram_kernel = _ns5_gram_kernel
+                cls._muon_square_kernel = _ns5_square_kernel
+                cls._muon_update_kernel = _ns5_update_kernel
             except ImportError:
                 cls._muon_gram_kernel = False
 
     @classmethod
     def muon_orthogonalize(cls, W: torch.Tensor, ns_steps: int = 5) -> torch.Tensor:
-        """Newton-Schulz orthogonalization with a Triton GEMM path.
+        """Quintic Newton-Schulz orthogonalization (newton_schulz5) with Triton GEMM path.
 
-        Mirrors the core ``MuonUpdate._newton_schulz`` convention (norm clamp
-        plus the ``X = 0.5 * X @ (3I - X^T X)`` iteration); the Triton path
-        splits each iteration into a tiled Gram GEMM and an update GEMM in
-        IEEE fp32, giving ~1e-7 parity with the PyTorch reference.
+        Mirrors the core ``newton_schulz5`` implementation (norm clamp plus the
+        quintic iteration ``X ← aX + X @ (bA + cA²)`` with A = XᵀX and the
+        (3.4445, −4.7750, 2.0315) coefficient schedule); the Triton path splits
+        each iteration into three tiled GEMMs in IEEE fp32, giving ~1e-7 parity
+        with the PyTorch reference.
         """
         # Transpose-wide convention matches the core reference: work on the
         # [[N, N]] Gram matrix of the smaller axis and transpose back at the end.
@@ -472,31 +519,72 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
         norm = out.norm().clamp(min=1e-4, max=1e4)
         out = out / norm  # ruff: ignore[non-augmented-assignment]
 
+        # Quintic Newton-Schulz coefficients
+        a, b, c = 3.4445, -4.7750, 2.0315
+
         if TRITON_IMPORTED and out.is_cuda and M >= 16 and N >= 16:
             try:  # noqa: PLR0915
                 import triton
 
                 cls._init_muon()
                 gram_kernel = cls._muon_gram_kernel
+                square_kernel = cls._muon_square_kernel
                 update_kernel = cls._muon_update_kernel
-                if gram_kernel and update_kernel:
+                if gram_kernel and square_kernel and update_kernel:
                     A = torch.empty(N, N, device=out.device, dtype=torch.float32)
+                    A2 = torch.empty(N, N, device=out.device, dtype=torch.float32)
                     O = torch.empty_like(out)  # ruff: ignore[ambiguous-variable-name]
                     grid_g = (triton.cdiv(N, 32), triton.cdiv(N, 32))
+                    grid_s = (triton.cdiv(N, 32), triton.cdiv(N, 32))
                     grid_u = (triton.cdiv(M, 32), triton.cdiv(N, 32))
                     for _ in range(ns_steps):
-                        gram_kernel[grid_g](out, A, M, N, BLOCK_M=32, BLOCK_N=32)
-                        update_kernel[grid_u](out, A, O, M, N, BLOCK_M=32, BLOCK_N=32)
+                        safe_triton_launch(
+                            gram_kernel,
+                            out,
+                            A,
+                            M,
+                            N,
+                            BLOCK_M=32,
+                            BLOCK_N=32,
+                            grid=grid_g,
+                            kernel_name="ns5_gram",
+                        )
+                        safe_triton_launch(
+                            square_kernel,
+                            A,
+                            A2,
+                            N,
+                            BLOCK_N=32,
+                            grid=grid_s,
+                            kernel_name="ns5_square",
+                        )
+                        safe_triton_launch(
+                            update_kernel,
+                            out,
+                            A,
+                            A2,
+                            O,
+                            M,
+                            N,
+                            a,
+                            b,
+                            c,
+                            BLOCK_M=32,
+                            BLOCK_N=32,
+                            grid=grid_u,
+                            kernel_name="ns5_update",
+                        )
                         out = O
                     return out.T if transposed else out
-            except RuntimeError, TypeError:
+            except (RuntimeError, TypeError):
                 pass  # fall through to the PyTorch path
 
+        # PyTorch fallback: quintic Newton-Schulz (newton_schulz5)
         for _ in range(ns_steps):
-            WT_W = out.T @ out
-            out = out @ (  # ruff: ignore[non-augmented-assignment]
-                1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
-            )
+            A = out.T @ out
+            A2 = A @ A
+            B = b * A + c * A2
+            out = a * out + out @ B
 
         return out.T if transposed else out
 
@@ -575,13 +663,16 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                 n = grad.numel()
                 BLOCK_SIZE = 1024
                 grid = ((n + BLOCK_SIZE - 1) // BLOCK_SIZE,)
-                cls._fisher_kernel[grid](
+                safe_triton_launch(
+                    cls._fisher_kernel,
                     grad,
                     fisher_diag,
                     out,
                     damping,
                     n_elements=n,
                     BLOCK_SIZE=BLOCK_SIZE,
+                    grid=grid,
+                    kernel_name="fisher_whiten",
                 )
                 return out
 
@@ -683,7 +774,8 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
 
                 out = torch.empty_like(h)
                 grid = ((M + BLOCK_M - 1) // BLOCK_M,)
-                cls._ep_settle_kernel[grid](
+                safe_triton_launch(
+                    cls._ep_settle_kernel,
                     h,
                     x_emb,
                     W1,
@@ -697,6 +789,8 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                     K=K,
                     H=H,
                     BLOCK_M=BLOCK_M,
+                    grid=grid,
+                    kernel_name="ep_settle",
                 )
                 return out
 

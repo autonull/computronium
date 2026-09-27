@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -64,9 +64,10 @@ OutOfResourcesError, CompilationErrorError, InterpreterErrorError, TritonErrorEr
 
 
 def safe_triton_launch[T](
-    kernel_fn: Callable[..., T],
+    kernel_fn: "Callable[..., T]",
     *args,
-    fallback_fn: Callable[..., T] | None = None,
+    grid: tuple[int, ...] | None = None,
+    fallback_fn: "Callable[..., T] | None" = None,
     kernel_name: str = "unknown",
     **kwargs,
 ) -> T:
@@ -82,20 +83,26 @@ def safe_triton_launch[T](
     On any Triton error, falls back to the provided fallback_fn or re-raises.
 
     Args:
-        kernel_fn: The compiled Triton kernel to launch
+        kernel_fn: The compiled Triton kernel (JITFunction) to launch
         *args: Positional arguments for the kernel
+        grid: Optional grid tuple for kernel launch (e.g., (grid_x, grid_y))
         fallback_fn: Optional fallback function (typically torch implementation)
         kernel_name: Name for logging
-        **kwargs: Keyword arguments for the kernel
+        **kwargs: Keyword arguments for the kernel (including block size constants)
 
     Returns:
-        Result from kernel_fn or fallback_fn
+        Result from kernel_fn or fallback_fn (typically None for in-place kernels)
 
     Raises:
         Exception: If no fallback_fn and kernel fails
     """
     try:
-        return kernel_fn(*args, **kwargs)
+        if grid is not None:
+            # Triton kernel launch with grid
+            kernel_fn[grid](*args, **kwargs)
+        else:
+            # Regular function call
+            kernel_fn(*args, **kwargs)
     except OutOfResourcesError as exc:
         msg = f"Triton kernel '{kernel_name}' out of resources: {exc}"
         logger.warning(msg)
@@ -124,6 +131,7 @@ def safe_triton_launch[T](
         if fallback_fn is not None:
             return fallback_fn(*args, **kwargs)
         raise
+    return None  # In-place kernels typically return None
 
 
 def triton_kernel_regime(kernel_name: str) -> dict[str, str]:
@@ -191,6 +199,18 @@ def triton_kernel_regime(kernel_name: str) -> dict[str, str]:
         "contrastive_stdp": {
             "works": "CUDA device, Triton 2.1+, valid spike train shapes",
             "falls_back": "CPU, no Triton, OOM",
+        },
+        "ns5_gram": {
+            "works": "CUDA device, Triton 2.1+, M>=16, N>=16",
+            "falls_back": "CPU, no Triton, small shapes, OOM",
+        },
+        "ns5_square": {
+            "works": "CUDA device, Triton 2.1+, N>=16",
+            "falls_back": "CPU, no Triton, small shapes, OOM",
+        },
+        "ns5_update": {
+            "works": "CUDA device, Triton 2.1+, M>=16, N>=16",
+            "falls_back": "CPU, no Triton, small shapes, OOM",
         },
     }
     return regimes.get(

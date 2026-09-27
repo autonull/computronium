@@ -415,8 +415,8 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **10** | ✅ **Contrastive kernels distinct keys + parity tests + fixtures** | 10 new verification pairs — **DONE** |
 | **11** | Timeout discovery half (§4.10 option 2: per-test budget) | Per-test budget as decision, not surprise |
 | **12** | ✅ `__getattr__` population docstring in `knowledge/kb.py` | Exclusion becomes checked list, not class — **DONE** |
-| **13** | ✅ `_launch()` fix: catch `CompilationError` + docstring regimes (utility created) | Shape failures are not resource failures; explicit regime per rung — **PARTIAL** |
-| **14** | Muon quintic Newton-Schulz triton rung (replace `xfail(strict=True)`) | Current rung runs retired algorithm; spec = `newton_schulz5` |
+| **13** | ✅ `_launch()` fix: catch `CompilationError` + docstring regimes (utility created + integrated) | Shape failures are not resource failures; explicit regime per rung — **DONE** |
+| **14** | ✅ Muon quintic Newton-Schulz triton rung (replace `xfail(strict=True)`) | Current rung runs retired algorithm; spec = `newton_schulz5` — **DONE** |
 | **15** | `FamilyRegistry` unification (single source of truth) | 5 drifting tables → 1 typed registry; prevents next TODO |
 | **16** | `ImplementationSpec` → Pydantic v2 validation | Runtime drift detection; replaces derivation with validation |
 | **17** | `KernelBackend` base class + `bind_system(System)` protocol | Unified System binding; less duplication |
@@ -443,7 +443,7 @@ Every item above has a **done-when** that a command in §6 can check:
 12. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
 13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes — **DONE**
 14. ✅ `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse (fixture setup ~5s)
-15. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers — **PARTIAL (utility created)**
+15. ✅ `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; `safe_triton_launch()` utility created and integrated into `triton_kernels.py` (muon_orthogonalize, fisher_whiten, ep_settle); `triton_kernel_regime()` documents per-kernel operational regimes
 16. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
 17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
 18. `ImplementationSpec` Pydantic → `uv run python -c "from computronium.ontology import ImplementationSpec; ImplementationSpec.model_validate(spec_dict)"` works for all 64 specs
@@ -478,7 +478,8 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **§4.9 Rule spaces complete** — Added `hebbian` and `spiking` rule spaces to `RULE_SPACES`; all 9 rule families now have search spaces.
 - ✅ **§4.10 Sweep aliases fixed** — `forward_only`→`ff` (`forward_forward`), `predictive_coding`→`pc` (`pc_alm`); removed aliases mapping both to `pepita`.
 - ✅ **§4.13 `__getattr__` docstring complete** — Module docstring in `knowledge/kb.py` enumerates `DEFAULT_KB` as the sole dynamic export.
-- 🔄 **§4.14 Triton launch utility created** — `safe_triton_launch()` in `triton_launch.py` catches `OutOfResources`, `CompilationError`, `InterpreterError`, `TritonError`; `triton_kernel_regime()` documents per-kernel operational regimes; integration into kernel launch sites pending.
+- ✅ **§4.14 Triton launch utility created & integrated** — `safe_triton_launch()` in `triton_launch.py` catches `OutOfResources`, `CompilationError`, `InterpreterError`, `TritonError`; `triton_kernel_regime()` documents per-kernel operational regimes; integrated into `triton_kernels.py` for `muon_orthogonalize`, `fisher_whiten`, `ep_settle` kernels.
+- ✅ **§4.14 Muon quintic Newton-Schulz complete** — Replaced naive iteration with `newton_schulz5` (3.4445, -4.7750, 2.0315) coefficients; three-kernel Triton path (gram, square, update) with `input_precision="ieee"`; parity test `test_muon_orthogonalize_matches_the_torch_newton_schulz` now passes on CPU and CUDA without `xfail`; combined absolute+relative tolerance in `assert_parity` handles near-zero values correctly.
 
 ---
 

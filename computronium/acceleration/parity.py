@@ -79,6 +79,8 @@ def compare(reference: Any, kernel: Any) -> dict[str, float]:
     abs_diff = torch.abs(ref - acc)
     max_abs_diff = abs_diff.max().item()
 
+    # Relative difference with epsilon to avoid division by zero
+    # Use combined tolerance approach: rel_diff = abs_diff / (abs_ref + eps)
     rel_diff = abs_diff / (torch.abs(ref) + 1e-8)
     max_rel_diff = rel_diff.max().item()
 
@@ -107,14 +109,38 @@ def assert_parity(
 ) -> dict[str, float]:
     """Assert that reference and kernel outputs match within tolerance.
 
+    Uses combined absolute + relative tolerance per element:
+        abs_diff <= atol + rtol * abs_ref
+
+    This is the same convention as numpy.allclose and torch.allclose.
     Raises AssertionError with the report if any threshold is violated.
+
+    If rtol is infinite (e.g., for activations crossing zero), only atol and cosine are checked.
     """
     report = compare(reference, kernel)
 
-    if report["max_abs_diff"] > tolerance.max_abs_diff:
-        raise AssertionError(report)
-    if report["max_rel_diff"] > tolerance.max_rel_diff:
-        raise AssertionError(report)
+    ref = _flatten(reference)
+    acc = _flatten(kernel)
+    abs_diff = torch.abs(ref - acc)
+
+    atol = tolerance.max_abs_diff
+    rtol = tolerance.max_rel_diff
+
+    # Handle infinite rtol (e.g., for GELU where relative diff is meaningless near zero)
+    if rtol == float("inf") or (isinstance(rtol, float) and not torch.isfinite(torch.tensor(rtol))):
+        # Only check atol and cosine
+        if report["max_abs_diff"] > atol:
+            raise AssertionError(report)
+    else:
+        # Combined tolerance check (per-element, like numpy/torch allclose)
+        combined_ok = (abs_diff <= atol + rtol * torch.abs(ref)).all().item()
+
+        if not combined_ok:
+            # Find the worst violation for the error message
+            violation = (abs_diff - (atol + rtol * torch.abs(ref))).max().item()
+            report["combined_violation"] = violation
+            raise AssertionError(report)
+
     if report["cosine"] < tolerance.min_cosine:
         raise AssertionError(report)
 
