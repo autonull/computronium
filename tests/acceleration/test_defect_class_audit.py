@@ -24,11 +24,14 @@ it measured instead of pretending to be a lock.
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 CUDA = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="a triton kernel needs a device tensor"
@@ -38,7 +41,7 @@ REPO = PACKAGE.parents[1]
 
 
 def _parse(path: Path) -> ast.Module:
-    return ast.parse(path.read_text())
+    return ast.parse(path.read_text(encoding="utf-8"))
 
 
 def _jit_functions() -> list[tuple[Path, ast.FunctionDef]]:
@@ -50,6 +53,10 @@ def _jit_functions() -> list[tuple[Path, ast.FunctionDef]]:
             ):
                 out.append((path, node))
     return out
+
+
+# Moved to tests/acceleration/conftest.py as session-scoped fixture uncalled_twins
+# to avoid re-parsing the repo on every test run (was ~120s).
 
 
 # ── class 1: transposed grid ────────────────────────────────────────────────
@@ -92,11 +99,11 @@ def _batched_two_sample_runs() -> list[tuple[str, Callable[..., torch.Tensor]]]:
     rungs are launched from inside their backend class and are named in
     `NOT_REACHABLE` below rather than quietly omitted.
     """
-    from test_contrastive_update_spec import RUNGS
+    from test_contrastive_update_spec import RUNGS, Rung
     from test_contrastive_update_spec import _run as run_contrastive
     from test_pepita_spec import D_IN, D_OUT
 
-    def contrastive(rung: object, pre: torch.Tensor, post: torch.Tensor):
+    def contrastive(rung: Rung, pre: torch.Tensor, post: torch.Tensor):
         return run_contrastive(rung, pre, post, pre + 1.0, post + 1.0)
 
     from test_hebbian_spec import (
@@ -127,7 +134,7 @@ def _batched_two_sample_runs() -> list[tuple[str, Callable[..., torch.Tensor]]]:
                 pre, post, pre + 1.0, post + 1.0, 0.5
             ),
         ),
-        ("fa_batched_outer", lambda pre, post: fa_batched_outer_triton(pre, post)),
+        ("fa_batched_outer", fa_batched_outer_triton),
         *[
             (
                 f"contrastive:{rung.spec_id}",
@@ -143,7 +150,7 @@ NOT_REACHABLE = ("tile:contrastive", "tile:hebbian")
 
 @CUDA
 @pytest.mark.parametrize(
-    ("name", "run"), _batched_two_sample_runs(), ids=lambda v: None
+    ("name", "run"), _batched_two_sample_runs(), ids=lambda _: None
 )
 def test_a_batched_rung_answers_for_every_sample_in_the_batch(
     name: str, run: Callable[..., torch.Tensor]
@@ -204,10 +211,16 @@ UNCALLED = {
     "get_contrastive_kernels": "the population helper §4.3 replaced",
     "phase_encode": "a contrastive twin nothing calls",
     "target_propagation_target": "a contrastive twin nothing calls",
+    # §4.6: Tile tensor launchers exported from tile_kernels.py — launchers are
+    # the artifact other work should use (§36 §8.20); they are reachable from
+    # TileKernelBackend but not directly imported by tests.
+    "tile_activity_update": "tile launcher; used via TileKernelBackend",
+    "tile_contrastive_update": "tile launcher; used via TileKernelBackend",
+    "tile_prediction": "tile launcher; used via TileKernelBackend",
 }
 
 
-def test_the_twin_census_is_a_fixed_list() -> None:
+def test_the_twin_census_is_a_fixed_list(uncalled_twins: set[str]) -> None:
     """Every exported torch twin with no in-tree caller, and nothing else.
 
     `KernelBackend` classes bound in `families.BINDINGS` are absent because it
@@ -217,26 +230,9 @@ def test_the_twin_census_is_a_fixed_list() -> None:
     reason it is still here — §3's rule is that nothing is deleted for being
     unreferenced, so a row is a question, not a defect.
     """
-    from computronium.acceleration.families import BINDINGS
-
-    bound = {row.backend for row in BINDINGS}
-    twins = _exported_twins()
-    used: set[str] = set()
-    for path in REPO.rglob("*.py"):
-        if "build/" in str(path):
-            continue
-        try:
-            tree = _parse(path)
-        except SyntaxError, UnicodeDecodeError:
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                used.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                used.add(node.attr)
-
-    uncalled = {n for n in twins if n not in used} - bound
-    assert uncalled == set(UNCALLED), uncalled.symmetric_difference(UNCALLED)
+    assert uncalled_twins == set(UNCALLED), uncalled_twins.symmetric_difference(
+        UNCALLED
+    )
 
 
 # ── class 5: a silent TF32 `tl.dot` ────────────────────────────────────────

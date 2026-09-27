@@ -383,7 +383,7 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **3** | ✅ **Re-run `rungbench` for all 9 sites** (add `--loops N` flag) | Fresh evidence *before* any promotion; `--loops` amortises interpreter floor — **DONE** |
 | **4** | ✅ **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung + Tile launchers) | Rungs tested, parity-clean, fresh measurements — **DONE** |
 | **5** | ✅ **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only — **DONE** |
-| **6** | `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration |
+| **6** | ✅ `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration — **DONE** |
 | **7** | Audit 55 torch `kernel.py` modules (batch-dependence + TF32) | Same launchers as §4.3, catches defects in shipped code |
 | **8** | §4.8 zoo naming cleanup (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review |
 | **9** | §4.9 rule spaces / §4.10 sweep aliases / §4.11 re-pin | Product decisions, now unblocked |
@@ -417,7 +417,7 @@ Every item above has a **done-when** that a command in §6 can check:
 11. Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed
 12. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
 13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes
-14. `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse
+14. ✅ `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse (fixture setup ~5s)
 15. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers
 16. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
 17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
@@ -438,7 +438,8 @@ Every item above has a **done-when** that a command in §6 can check:
 - **Adding a `Protocol` breaks 4 wiring locks** (they excluded by spelling name; now exclude any Protocol) — expect red on first Protocol after this.
 - **Test count is the load-bearing metric, not walltime** — §35 §12.5, §35 §15.4: same command 240s vs 407s (13% spread), test count stable.
 - **Shape table before expression** — 3 lines (inputs, output, contraction axis) prevents 4-rewrite forensic sessions (§36 §9.3.2). Make it a standing rule in `_kernelspec.py`.
-- **Session-scoped twin census** — 120s → 0s on targeted runs. Do this early (step 6) to unblock fast iteration for everything after.
+- **Session-scoped twin census** — 120s → ~5s on targeted runs. Done (step 6) to unblock fast iteration for everything after.
+- ✅ **`test_defect_class_audit.py` twin census moved to session-scoped fixture** — fixture setup now ~5s instead of 120s per run; `tests/acceleration/conftest.py` created with `uncalled_twins` fixture; `UNCALLED` set updated with 3 new tile launchers from §4.6.
 - ✅ **`--loops N` in `rungbench`** — 7 of 9 sites interpreter-bound. Flag added in step 3; measurements now measure kernels, not interpreter overhead.
 - **`KernelSpec` harness** — 4 spec files → 1 dataclass + fixture factory. Build it during first never-wired family; amortises across 6.
 - **Contrastive = free verification pairs** — 10 backends, distinct keys + parity tests = 10 new rung pairs. Do in same commit as key assignment.
