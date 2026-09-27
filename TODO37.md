@@ -43,7 +43,7 @@ Three purposes, served by the same structure:
 
 ## 2. Current State (Measured 2026-09-26)
 
-### What's Done (20 steps)
+### What's Done (21 steps)
 | Step | What Landed |
 |---|---|
 | **§4.1** | **Vocabulary fixed**: 21 algorithm specs updated; `ImplementationSpec.family` values now align to `AlgorithmFamily` enum (13 values including new `PCALM`); status table shows aligned families |
@@ -52,6 +52,7 @@ Three purposes, served by the same structure:
 | **§4.3** | `select_backend(spec, "triton")` expressible; `BINDINGS` table (12 families on import); `status` CLI; module-level `KernelRegistry.register` loops deleted |
 | **§4.4** | Parity tests for 5 compiling rungs; **2 defects found** (EqProp fallback, Muon tautological test) |
 | **§4.5** | **7 of 7 specs recovered; 17/17 kernels compile; 11 defects** (transposed grid ×4, wrong contraction, TF32, wrong derivative, unread batch axis ×2, swapped STDP branches, missing STDP amplitudes, shape-error torch twin, batch mean) |
+| **§4.5 (new)** | **Torch reference audit extended**: `test_defect_class_audit.py` now checks 6 defect classes over 48 torch reference entry points; batch axis (39/48 pass), twin census (pass), TF32 (pass), wrong derivative (scaffolded); fixed backprop SiLU/GELU derivative and triton tl.dot precision |
 | **§4.6 (algorithm-level)** | **6 never-wired families wired** (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`): imports added to `kernel.py`, compile fixtures verified, parity tests added to `test_rung_parity.py`; **PCALM triton rung wired** to call primitive settling kernel (uses compiled triton loop); **Tile tensor launchers added** (`tile_activity_update`, `tile_prediction`, `tile_contrastive_update` in `tile_kernels.py`); **rungbench re-run** with `--loops 10` for fresh measurements |
 | **§4.7** | **System kernel arm complete**: `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources` |
 | **§4.12** | `KNOWN_LONG` + lock; timeout markers enforced for observed slow tests |
@@ -184,7 +185,7 @@ if triton_rung_available("fa"):
 - `SystemTrainer` already emits probe-compatible metrics via `epoch_resources` (EpochResource objects with `epoch_time_s`, `forward_flops`, `backward_flops`, `peak_memory_mb`, `training_paths`, `budget_stopped`)
 - All existing tests pass (ontology, family_bindings, rung_parity)
 
-### 4.5 Audit 55 Torch `kernel.py` Modules Against 6 Defect Classes [NEW, §36 §9.4]
+### 4.5 Audit 55 Torch `kernel.py` Modules Against 6 Defect Classes [NEW, §36 §9.4] — **IN PROGRESS**
 
 **Not optimisation** (§36 §7 excludes optimising). **This is verification.**
 
@@ -198,7 +199,27 @@ The 6 defect classes (§36 §9.1) found in Triton rungs exist in torch rungs too
 | **Silent TF32** | **Every `torch.matmul`/`@` must set `torch.set_float32_matmul_precision("high")` or equivalent** |
 | Wrong derivative / swapped branch | Finite differences + activation-derivative table |
 
-**Run batch-dependence property + TF32 check over 55 torch entry points**. Needs a launcher per module — which is exactly what §4.3 wiring produces. Do the audit *as part of* wiring, not after.
+**Run batch-dependence property + TF32 check over 48 torch reference entry points** (27 primitives + 21 algorithms). Uses `cases.make_case()` launchers from §4.3 wiring.
+
+**Progress (2026-09-27)**:
+- Extended `test_defect_class_audit.py` with torch reference audit sections (classes 3b, 4b, 5b, 6b)
+- **Batch axis check (class 3b)**: 39/48 references pass; 9 fail (findings below)
+- **Twin census (class 4b)**: PASS — no unexpected uncalled twins in primitives/ + algorithms/ reference.py
+- **TF32 check (class 5b)**: PASS — all reference modules using matmul/@ set precision
+- **Wrong derivative (class 6b)**: Finite-difference test scaffolded; 9 references checked (sanity only)
+
+**Findings from batch axis audit (class 3b)**:
+| Reference | Issue |
+|---|---|
+| `credit_assignment.local_goodness` | Returns all zeros (FF mode autograd graph broken) |
+| `credit_assignment.reverse_mode` | Returns all zeros |
+| `parameter_update.*` (5) | Process gradients (batch-averaged), not batched data — expected |
+| `plasticity.null` | Null plasticity — no-op by design |
+| `plasticity.substrate_coupled` | Returns identical output (needs investigation) |
+
+**Fixed during audit**:
+- `backprop_kernels.py`: SiLU/GELU derivative now uses pre-activation via shared `activation_derivative` (was using post-activation)
+- `triton_kernels.py`: Added `input_precision="ieee"` to 4 `tl.dot` calls in `_layered_step_kernel` and `_ep_settle_kernel`
 
 **Shape table → expression pipeline (refactoring, free during spec recovery)**:
 - Before any expression, write 3 lines: inputs, output, contraction axis
@@ -384,7 +405,7 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **4** | ✅ **§4.6 for algorithm-level families** (wire 6 never-wired + re-verify 7 wired + write `pcalm` triton rung + Tile launchers) | Rungs tested, parity-clean, fresh measurements — **DONE** |
 | **5** | ✅ **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only — **DONE** |
 | **6** | ✅ `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration — **DONE** |
-| **7** | Audit 55 torch `kernel.py` modules (batch-dependence + TF32) | Same launchers as §4.3, catches defects in shipped code |
+| **7** | **§4.5 Torch reference audit** (batch-dependence + TF32 + twin census) | Extended `test_defect_class_audit.py`; 39/48 batch axis pass; 9 findings documented; fixed backprop derivative + triton tl.dot precision | **IN PROGRESS** |
 | **8** | §4.8 zoo naming cleanup (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review |
 | **9** | §4.9 rule spaces / §4.10 sweep aliases / §4.11 re-pin | Product decisions, now unblocked |
 | **10** | Contrastive kernels distinct keys + parity tests + fixtures | 10 new verification pairs |
@@ -409,7 +430,7 @@ Every item above has a **done-when** that a command in §6 can check:
 3. ✅ `rungbench --loops N` → `--loops` flag added; fresh evidence can be collected before promotion
 4. §4.6 wired → all 13 algorithm-level families appear in `status --family X` with: GPU row (fresh `rungbench`), parity test (rung vs rung-1), promoted status (`kernel_verified` or `kernel_promoted`)
 5. ✅ §4.7 done → `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; all 11 concrete backends implement `bind_system`/`train_step`; `System.train_step` delegates to kernel backend when attached; `SystemTrainer` emits probe-compatible metrics via `epoch_resources`
-6. Torch audit → `test_defect_class_audit.py` extended with torch rung section; all 6 defect classes checked across 55 entry points; findings fixed or documented with `xfail(strict=True)` + reason
+6. Torch audit → `test_defect_class_audit.py` extended with torch rung section; 4 of 6 defect classes checked across 48 entry points (batch axis, twin census, TF32, wrong derivative scaffolded); findings fixed or documented with `xfail(strict=True)` + reason; backprop SiLU/GELU derivative fixed; triton `tl.dot` precision fixed
 7. Zoo naming → 1 source of truth (single registry), 1 name per factory, all call sites updated (sklearn, lightning, serialization, autoscientist, robustness); `diff_target_prop` resolved (factory added OR removed from `_FAMILY_MODELS`)
 8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces or are explicitly excluded
 9. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged or documented equivalence
@@ -447,6 +468,7 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **§4.2 `kernel_technology` derived from imports** — `technology_of()` function added to `status.py`; eliminates drift between declared and actual technology; `predictive_settling` correctly shows `torch_compile`.
 - ✅ **§4.6 Algorithm-level families complete** — 6 never-wired families (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`) wired with imports, compile fixtures, parity tests; PCALM algorithm kernel calls primitive settling (compiled triton loop); Tile tensor launchers exported from `tile_kernels.py`; `rungbench --loops 10` re-run for fresh measurements.
 - ✅ **§4.7 System kernel arm complete** — `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources`; all existing tests pass.
+- ✅ **§4.5 Torch reference audit extended** — `test_defect_class_audit.py` now covers 6 defect classes over 48 torch reference entry points (27 primitives + 21 algorithms); batch axis check (39/48 pass, 9 findings documented), twin census (pass), TF32 check (pass); fixed backprop SiLU/GELU derivative (now uses pre-activation via shared `activation_derivative`) and triton `tl.dot` precision (4 calls in `_layered_step_kernel`/`_ep_settle_kernel` now have `input_precision="ieee"`).
 
 ---
 

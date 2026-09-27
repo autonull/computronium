@@ -16,6 +16,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
+from computronium.acceleration.activations import (
+    activation_derivative,
+    activation_from_name,
+)
 from computronium.acceleration.contrastive_primitives import batched_outer_product
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -26,13 +30,6 @@ from computronium.acceleration.kernel_backend import (
 
 if TYPE_CHECKING:
     from computronium.ontology import System
-
-_ACTIVATIONS = {
-    "relu": nn.ReLU(),
-    "silu": nn.SiLU(),
-    "tanh": nn.Tanh(),
-    "gelu": nn.GELU(),
-}
 
 
 class BackpropKernelBackend:
@@ -54,7 +51,7 @@ class BackpropKernelBackend:
     def __init__(self) -> None:
         self._config: KernelConfig | None = None
         self._layers: list[nn.Linear] = []
-        self._activation: nn.Module = nn.ReLU()
+        self._activation_name: str = "relu"
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
 
@@ -64,8 +61,7 @@ class BackpropKernelBackend:
         is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
-        activation_name = config.extra.get("activation", "relu")
-        self._activation = _ACTIVATIONS.get(str(activation_name), nn.ReLU())
+        self._activation_name = str(config.extra.get("activation", "relu"))
 
     def set_model_ref(self, layers: list[nn.Linear]) -> None:
         """Set reference to the model's linear layer stack."""
@@ -110,49 +106,58 @@ class BackpropKernelBackend:
             acc = (output.argmax(-1) == y).float().mean().item()
         return {"loss": loss, "accuracy": acc}
 
-    def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
-        """Forward pass returning output and per-layer activations.
+    def forward(self, x: Tensor) -> tuple[Tensor, tuple[list[Tensor], list[Tensor]]]:
+        """Forward pass returning output and per-layer pre/post activations.
 
         Returns:
-            ``(output, activations)`` where ``activations = [x, h1, ..., out]``.
+            ``(output, (pre_activations, post_activations))`` where:
+            - ``pre_activations[i]`` is the pre-activation input to layer i's activation (or layer output for last layer)
+            - ``post_activations[i]`` is the post-activation output of layer i
+            - ``post_activations[0] == x`` (input)
         """
         x = x.to(device=self._device, dtype=self._dtype)
         if x.dim() > 2:
             x = x.view(x.size(0), -1)
 
-        activations: list[Tensor] = [x]
+        pre_activations: list[Tensor] = []
+        post_activations: list[Tensor] = [x]
         h = x
+        activation = activation_from_name(self._activation_name)
+
         for i, layer in enumerate(self._layers):
-            h = layer(h)
-            if i < len(self._layers) - 1:
-                h = self._activation(h)
-            activations.append(h)
-        return activations[-1], activations
+            pre = layer(h)
+            pre_activations.append(pre)
+            h = activation(pre) if i < len(self._layers) - 1 else pre
+            post_activations.append(h)
+
+        return post_activations[-1], (pre_activations, post_activations)
 
     def backward(
         self,
-        activations: list[Tensor],
+        activations: tuple[list[Tensor], list[Tensor]],
         error: Tensor,
     ) -> dict[str, Tensor]:
         """Manual backprop: compute weight and bias gradients.
 
         Args:
-            activations: ``[x, h1, ..., out]`` from :meth:`forward`.
+            activations: ``(pre_activations, post_activations)`` from :meth:`forward`.
             error: Output error (``output - target``) ``[B, D_out]``.
 
         Returns:
             Dict mapping ``layers.<i>.weight`` / ``layers.<i>.bias`` to gradients.
         """
+        pre_activations, post_activations = activations
         weight_grads: dict[str, Tensor] = {}
         bias_grads: dict[str, Tensor] = {}
         propagated = error
 
         for i in reversed(range(len(self._layers))):
-            h_prev = activations[i]
+            h_prev = post_activations[i]
 
             if i < len(self._layers) - 1:
-                h_curr = activations[i + 1]
-                propagated = propagated * _activation_deriv(h_curr, self._activation)  # ruff: ignore[non-augmented-assignment]
+                # Use PRE-activation for derivative (input to activation function)
+                pre = pre_activations[i]
+                propagated *= activation_derivative(pre, self._activation_name)
 
             weight_grads[f"layers.{i}.weight"] = batched_outer_product(
                 h_prev, propagated
@@ -189,19 +194,6 @@ class BackpropKernelBackend:
     def get_settle_telemetry(self) -> dict[str, object] | None:
         """Backprop has no settling dynamics."""
         return None
-
-
-def _activation_deriv(h: Tensor, activation: nn.Module) -> Tensor:
-    if isinstance(activation, nn.SiLU):
-        sig = torch.sigmoid(h)
-        return sig * (1 + h * (1 - sig))
-    if isinstance(activation, nn.Tanh):
-        return 1 - h**2
-    if isinstance(activation, nn.GELU):
-        cdf = 0.5 * (1 + torch.erf(h / 1.4142))
-        pdf = torch.exp(-(h**2) / 2) / 2.5066
-        return cdf + h * pdf
-    return (h > 0).to(h.dtype)
 
 
 # Register backend for all HardwareTargets

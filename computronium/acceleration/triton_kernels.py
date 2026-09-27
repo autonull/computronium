@@ -239,7 +239,9 @@ class TritonEqPropOps:
                 offs_h = tl.arange(0, H)
                 w1 = tl.load(w1_ptr + offs_h[:, None] * K + offs_k[None, :])
                 b1 = tl.load(b1_ptr + offs_h)
-                ffn = tl.dot(h_norm, tl.trans(w1))  # (BLOCK_M, H)
+                ffn = tl.dot(
+                    h_norm, tl.trans(w1), input_precision="ieee"
+                )  # (BLOCK_M, H)
                 ffn = libdevice.tanh(ffn + b1[None, :])
                 tl.store(
                     ffnhid_ptr + offs_m[:, None] * H + offs_h[None, :],
@@ -250,7 +252,9 @@ class TritonEqPropOps:
                 # ffn_out = ffn @ W2^T + b2; W2 is (K, H)  # ruff: ignore[commented-out-code]
                 w2 = tl.load(w2_ptr + offs_k[:, None] * H + offs_h[None, :])
                 b2 = tl.load(b2_ptr + offs_k)
-                ffn_out = tl.dot(ffn, tl.trans(w2))  # (BLOCK_M, K)
+                ffn_out = tl.dot(
+                    ffn, tl.trans(w2), input_precision="ieee"
+                )  # (BLOCK_M, K)
                 ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
                 # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)  # ruff: ignore[commented-out-code]
@@ -639,9 +643,9 @@ class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
                         h_norm = h_centered / std[:, None]
 
                         # FFN
-                        ffn = tl.dot(h_norm, tl.trans(W1))
+                        ffn = tl.dot(h_norm, tl.trans(W1), input_precision="ieee")
                         ffn = libdevice.tanh(ffn + b1[None, :])
-                        ffn_out = tl.dot(ffn, tl.trans(W2))
+                        ffn_out = tl.dot(ffn, tl.trans(W2), input_precision="ieee")
                         ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
                         # Residual update
