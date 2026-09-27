@@ -315,6 +315,35 @@ RULE_SPACES: dict[str, dict[str, NumberRange | DiscreteChoice]] = {
         "convergence_threshold": (1e-4, 1e-2, "log"),
         "convergence_start": (2, 10, "int"),
     },
+    "hebbian": {
+        # Hebbian/STDP local learning (HebbianKernelBackend, ThreeFactorKernelBackend)
+        # use_oja: whether to apply Oja's subtraction term for weight normalization
+        # learning_rate: Hebbian update scale
+        "learning_rate": (1e-4, 1e-1, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+        "use_oja": [True, False],
+    },
+    "spiking": {
+        # Spiking STDP (SNNKernelBackend)
+        # num_steps: simulation time steps
+        # tau_mem: membrane time constant (ms)
+        # tau_syn: synaptic time constant (ms)
+        # spike_threshold: firing threshold
+        # refractory_period: refractory period (ms)
+        # dt: simulation time step (ms)
+        # spike_grad: surrogate gradient type
+        "learning_rate": (1e-4, 1e-1, "log"),
+        "hidden_dim": (32, 512, "log"),
+        "num_layers": (1, 4, "int"),
+        "num_steps": (20, 200, "int"),
+        "tau_mem": (5.0, 50.0, "linear"),
+        "tau_syn": (1.0, 20.0, "linear"),
+        "spike_threshold": (0.5, 2.0, "linear"),
+        "refractory_period": (1.0, 5.0, "linear"),
+        "dt": (0.5, 2.0, "linear"),
+        "spike_grad": ["surrogate", "straight_through"],
+    },
 }
 
 

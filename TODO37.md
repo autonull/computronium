@@ -411,11 +411,11 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **6** | ✅ `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration — **DONE** |
 | **7** | ✅ **§4.5 Torch reference audit** (batch-dependence + TF32 + twin census + wrong derivative) | Extended `test_defect_class_audit.py`; **41/41 batch axis pass** (7 skipped by design); twin census pass; TF32 pass; **9/9 finite-diff gradient tests pass**; fixed local_goodness/reverse_mode autograd graphs; fixed backprop SiLU/GELU derivative; fixed triton tl.dot precision | **DONE** |
 | **8** | ✅ **§4.8 zoo naming cleanup** (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review — **DONE** |
-| **9** | §4.9 rule spaces / §4.10 sweep aliases / §4.11 re-pin | Product decisions, now unblocked |
+| **9** | ✅ **§4.9 rule spaces** (add hebbian/spiking spaces) + **§4.10 sweep aliases** (fix forward_only/predictive_coding) | Product decisions, now unblocked — **DONE** |
 | **10** | ✅ **Contrastive kernels distinct keys + parity tests + fixtures** | 10 new verification pairs — **DONE** |
 | **11** | Timeout discovery half (§4.10 option 2: per-test budget) | Per-test budget as decision, not surprise |
-| **12** | `__getattr__` population docstring in `knowledge/kb.py` | Exclusion becomes checked list, not class |
-| **13** | `_launch()` fix: catch `CompilationError` + docstring regimes | Shape failures are not resource failures; explicit regime per rung |
+| **12** | ✅ `__getattr__` population docstring in `knowledge/kb.py` | Exclusion becomes checked list, not class — **DONE** |
+| **13** | ✅ `_launch()` fix: catch `CompilationError` + docstring regimes (utility created) | Shape failures are not resource failures; explicit regime per rung — **PARTIAL** |
 | **14** | Muon quintic Newton-Schulz triton rung (replace `xfail(strict=True)`) | Current rung runs retired algorithm; spec = `newton_schulz5` |
 | **15** | `FamilyRegistry` unification (single source of truth) | 5 drifting tables → 1 typed registry; prevents next TODO |
 | **16** | `ImplementationSpec` → Pydantic v2 validation | Runtime drift detection; replaces derivation with validation |
@@ -436,14 +436,14 @@ Every item above has a **done-when** that a command in §6 can check:
 5. ✅ §4.7 done → `System._kernel_backend` attribute exists; `KernelBackend.bind_system(system)` protocol method exists; all 11 concrete backends implement `bind_system`/`train_step`; `System.train_step` delegates to kernel backend when attached; `SystemTrainer` emits probe-compatible metrics via `epoch_resources`
 6. Torch audit → `test_defect_class_audit.py` extended with torch rung section; 4 of 6 defect classes checked across 48 entry points (batch axis, twin census, TF32, wrong derivative scaffolded); findings fixed or documented with `xfail(strict=True)` + reason; backprop SiLU/GELU derivative fixed; triton `tl.dot` precision fixed
 7. Zoo naming → 1 source of truth (single registry), 1 name per factory, all call sites updated (sklearn, lightning, serialization, autoscientist, robustness); `diff_target_prop` resolved (factory added OR removed from `_FAMILY_MODELS`)
-8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces or are explicitly excluded
-9. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged or documented equivalence
+8. Rule spaces → sweep samples only consumable knobs per rule; no family skipped for want of space; `hebbian`/`spiking` have spaces — **DONE**
+9. Sweep aliases → family count = distinct arm count; `forward_only`/`predictive_coding` merged — **DONE**
 10. Re-pin → slow tier green + POST-SLOW verify passes on fresh pin; `docs/figures/manifest.json` matches post-slow records
 11. Timeout discovery → per-test walltime budget declared next to each test in `KNOWN_LONG`; lock enforces it; `--durations=25` baseline committed
 12. Contrastive kernels → distinct keys in `BINDINGS` (e.g., `fa_contrastive`, `hebbian_contrastive`, `pc_contrastive`); testable via `select_backend(spec, "triton")`; parity tests exist; compile fixtures in `availability.py`
-13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes
+13. `__getattr__` docstring → `knowledge/kb.py` module docstring enumerates `__getattr__` population; `test_getattr_population_is_enumerated` passes — **DONE**
 14. ✅ `test_defect_class_audit.py` performance → twin census moved to session-scoped fixture; targeted run no longer dominated by 120s parse (fixture setup ~5s)
-15. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers
+15. `_launch()` fix → catches `CompilationError` (shape failures) in addition to `OutOfResources`; docstring states which regime each rung covers — **PARTIAL (utility created)**
 16. 3 unmeasurable rungs documented → `energy_minimization`/`predictive_settling` (CuPy), Muon quintic regimes recorded in module docstrings
 17. `FamilyRegistry` → single registry class with typed `FamilySpec`; all 5 old tables deleted; `status` CLI / sweep / zoo all read from it
 18. `ImplementationSpec` Pydantic → `uv run python -c "from computronium.ontology import ImplementationSpec; ImplementationSpec.model_validate(spec_dict)"` works for all 64 specs
@@ -475,6 +475,10 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **§4.5 Torch reference audit complete** — `test_defect_class_audit.py` covers 6 defect classes over 48 torch reference entry points (27 primitives + 21 algorithms); **batch axis: 41/41 pass (7 skipped by design)**, twin census (pass), TF32 (pass), **wrong derivative: 9/9 finite-diff tests pass**; fixed local_goodness/reverse_mode autograd graphs (cases.py + reference.py); fixed backprop SiLU/GELU derivative (pre-activation via shared `activation_derivative`); fixed triton `tl.dot` precision (4 calls with `input_precision="ieee"`).
 - ✅ **§4.8 Zoo naming cleanup complete** — single source of truth (`MODEL_REGISTRY`) in `param_estimator.py`; `pepita_mlp`/`lemma_mlp` consolidated to `lemma_mlp` (alias `pepita` retained); `diff_target_prop` removed from `_FAMILY_MODELS` (no native factory); all call sites updated.
 - ✅ **§4.10 Contrastive kernels complete** — 10 contrastive kernels given distinct family keys (`fa_contrastive`, `hebbian_contrastive`, etc.) in `AlgorithmFamily`; registered in `BINDINGS`; parity tests added to `test_rung_parity.py` (10 new verification pairs).
+- ✅ **§4.9 Rule spaces complete** — Added `hebbian` and `spiking` rule spaces to `RULE_SPACES`; all 9 rule families now have search spaces.
+- ✅ **§4.10 Sweep aliases fixed** — `forward_only`→`ff` (`forward_forward`), `predictive_coding`→`pc` (`pc_alm`); removed aliases mapping both to `pepita`.
+- ✅ **§4.13 `__getattr__` docstring complete** — Module docstring in `knowledge/kb.py` enumerates `DEFAULT_KB` as the sole dynamic export.
+- 🔄 **§4.14 Triton launch utility created** — `safe_triton_launch()` in `triton_launch.py` catches `OutOfResources`, `CompilationError`, `InterpreterError`, `TritonError`; `triton_kernel_regime()` documents per-kernel operational regimes; integration into kernel launch sites pending.
 
 ---
 

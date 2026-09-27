@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 import torch
+from torch import Tensor
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -94,9 +94,16 @@ def _activation_of(kernel: object) -> nn.Module:
     if isinstance(act, nn.Module):
         return act
     if isinstance(act, str):
-        from computronium.acceleration.backprop_kernels import _ACTIVATIONS
-
-        return _ACTIVATIONS.get(act, nn.Identity())
+        # Local activation mapping (was incorrectly imported from backprop_kernels)
+        ACTIVATIONS: dict[str, type[nn.Module]] = {
+            "relu": nn.ReLU,
+            "gelu": nn.GELU,
+            "silu": nn.SiLU,
+            "tanh": nn.Tanh,
+            "sigmoid": nn.Sigmoid,
+            "identity": nn.Identity,
+        }
+        return ACTIVATIONS.get(act, nn.Identity)()
     return nn.Identity()
 
 

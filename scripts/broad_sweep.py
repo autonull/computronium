@@ -136,8 +136,9 @@ _RULE_FAMILIES = frozenset({
     "eqprop",
     "backprop",
     "fa",
-    "forward_only",
-    "predictive_coding",
+    "ff",
+    "pepita",
+    "pc",
     "spiking",
     "hebbian",
     "target_prop",
@@ -148,8 +149,8 @@ def _family_rule_key(family: str) -> str | None:
     """Return the RULE_SPACES key to sample for a family, if one exists."""
     aliases: dict[str, str] = {
         "fa": "feedback_alignment",
-        "forward_only": "pepita",
-        "predictive_coding": "pepita",
+        "ff": "forward_forward",
+        "pc": "pc_alm",
     }
     key = aliases.get(family, family)
     try:

@@ -3,6 +3,10 @@ Upgraded KnowledgeBase with SQLite + Vector Store
 
 Provides hybrid structured + embedding search for AutoScientist.
 Integrates surrogate models, symbolic regression, causal discovery.
+
+Module `__getattr__` Population (for import lock exclusion):
+- `DEFAULT_KB` — lazy singleton accessor for the default KnowledgeBase instance
+  (resolves via `_get_default_kb()`). Only this name is dynamically exported.
 """
 
 import asyncio
