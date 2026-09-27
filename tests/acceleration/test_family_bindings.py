@@ -84,20 +84,55 @@ def test_no_kernel_module_registers_on_import() -> None:
     assert offenders == []
 
 
-def test_contrastive_kernels_do_not_register_on_import() -> None:
-    """They share a `(family, hardware)` key; binding them would displace."""
+def test_contrastive_kernels_register_under_distinct_keys() -> None:
+    """Contrastive kernels now have distinct family keys and coexist with standard backends."""
     from computronium.acceleration.contrastive_kernels import (
         get_contrastive_kernel,
     )
 
-    for family in AlgorithmFamily:
-        # Only check families that have registered backends
+    # Standard families should resolve to standard backends, not contrastive kernels
+    standard_families = {
+        AlgorithmFamily.FA,
+        AlgorithmFamily.HEBBIAN,
+        AlgorithmFamily.FF,
+        AlgorithmFamily.PEPITA,
+        AlgorithmFamily.TP,
+        AlgorithmFamily.PC,
+        AlgorithmFamily.SNN,
+        AlgorithmFamily.TILE,
+        AlgorithmFamily.MEP,
+        AlgorithmFamily.O1MEMORY,
+    }
+    for family in standard_families:
         if family not in KernelRegistry._backends:
             continue
-        if KernelRegistry.get(
-            family, next(iter(KernelRegistry._backends[family]))
-        ).__class__.__name__.endswith("ContrastiveKernel"):
-            pytest.fail(f"{family} resolves to a contrastive kernel by default")
+        backend = KernelRegistry.get(family, next(iter(KernelRegistry._backends[family])))
+        assert not backend.__class__.__name__.endswith("ContrastiveKernel"), (
+            f"{family} resolves to a contrastive kernel by default"
+        )
+
+    # Contrastive families should resolve to contrastive kernels
+    contrastive_families = {
+        AlgorithmFamily.FA_CONTRASTIVE,
+        AlgorithmFamily.HEBBIAN_CONTRASTIVE,
+        AlgorithmFamily.FF_CONTRASTIVE,
+        AlgorithmFamily.PEPITA_CONTRASTIVE,
+        AlgorithmFamily.TP_CONTRASTIVE,
+        AlgorithmFamily.PC_CONTRASTIVE,
+        AlgorithmFamily.SNN_CONTRASTIVE,
+        AlgorithmFamily.TILE_CONTRASTIVE,
+        AlgorithmFamily.MEP_CONTRASTIVE,
+        AlgorithmFamily.O1MEMORY_CONTRASTIVE,
+    }
+    for family in contrastive_families:
+        if family not in KernelRegistry._backends:
+            continue
+        backend = KernelRegistry.get(family, next(iter(KernelRegistry._backends[family])))
+        assert backend.__class__.__name__.endswith("ContrastiveKernel"), (
+            f"{family} does not resolve to a contrastive kernel"
+        )
+
+    # Helper function still works for standard families (for backwards compat)
     assert get_contrastive_kernel(AlgorithmFamily.FA) is not None
 
 

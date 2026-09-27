@@ -15,6 +15,7 @@ knobs.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, cast
 
 from computronium.core.construction import (
@@ -58,6 +59,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "KNOBS",
+    "MODEL_REGISTRY",
     "NATIVE_MODEL_NAMES",
     "InstantiateEstimator",
     "ParamEstimateError",
@@ -83,55 +85,59 @@ class ModuleFactory(Protocol):
 
 type NativeModelFactory = Callable[..., object]
 
-#: ``(name fragment, factory)`` in match order. The fragment is a substring of the
-#: zoo name, so ``standard_fa`` and ``direct_feedback_alignment`` both reach the FA
-#: factory. Order matters only where fragments overlap (``tile_fa`` before ``fa``).
-_NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = (
-    ("backprop", create_native_backprop_mlp),
-    ("pepita", create_native_lemma_mlp),
-    ("lemma", create_native_lemma_mlp),
-    ("feedback_alignment", create_native_fa_mlp),
-    ("tile_ep", create_native_tile_ep),
-    ("tile_fa", create_native_tile_fa),
-    ("tile_gnn", create_native_tile_gnn),
-    ("tile_hebbian", create_native_tile_hebbian),
-    ("tile_pc", create_native_tile_pc),
-    ("tile_snn", create_native_tile_snn),
-    ("tile_tp", create_native_tile_tp),
-    ("hebbian", create_native_tile_hebbian),
-    ("directed_ep", create_native_directed_ep),
-    ("diffusion_eqprop", create_native_diffusion_eqprop),
-    ("finite_nudge", create_native_finite_nudge_ep),
-    ("holomorphic", create_native_holomorphic_ep),
-    ("momentum_eqprop", create_native_momentum_eqprop),
-    ("sparse_eqprop", create_native_sparse_eqprop),
-    ("ternary_eqprop", create_native_ternary_eqprop),
-    ("fa", create_native_fa_mlp),
-    ("eqprop", create_native_eqprop_mlp),
+
+@dataclass(frozen=True, slots=True)
+class ModelSpec:
+    """Single source of truth for a native model.
+
+    Attributes:
+        canonical_name: The authoritative zoo name (one per factory).
+        factory: The construction callable.
+        fragments: Substrings that resolve to this factory (for alias support).
+                   First fragment is the primary; order matters for overlapping matches.
+    """
+
+    canonical_name: str
+    factory: NativeModelFactory
+    fragments: tuple[str, ...]
+
+
+#: Single source of truth: one row per native factory.
+#: Canonical names are unique; fragments enable alias resolution (e.g. "pepita" -> lemma_mlp).
+#: Order matters: more specific fragments must come before generic substrings (e.g. "feedback_alignment" before "eqprop",
+#: "momentum_eqprop" before "eqprop", "diffusion_eqprop" before "eqprop").
+MODEL_REGISTRY: tuple[ModelSpec, ...] = (
+    ModelSpec("backprop_mlp", create_native_backprop_mlp, ("backprop",)),
+    ModelSpec("lemma_mlp", create_native_lemma_mlp, ("lemma", "pepita")),
+    ModelSpec("fa_mlp", create_native_fa_mlp, ("feedback_alignment", "fa")),
+    ModelSpec("diffusion_eqprop", create_native_diffusion_eqprop, ("diffusion_eqprop",)),
+    ModelSpec("directed_ep", create_native_directed_ep, ("directed_ep",)),
+    ModelSpec("momentum_eqprop", create_native_momentum_eqprop, ("momentum_eqprop",)),
+    ModelSpec("sparse_eqprop", create_native_sparse_eqprop, ("sparse_eqprop",)),
+    ModelSpec("ternary_eqprop", create_native_ternary_eqprop, ("ternary_eqprop",)),
+    ModelSpec("finite_nudge_ep", create_native_finite_nudge_ep, ("finite_nudge",)),
+    ModelSpec("holomorphic_ep", create_native_holomorphic_ep, ("holomorphic",)),
+    ModelSpec("eqprop_mlp", create_native_eqprop_mlp, ("eqprop",)),
+    ModelSpec("tile_ep", create_native_tile_ep, ("tile_ep",)),
+    ModelSpec("tile_fa", create_native_tile_fa, ("tile_fa",)),
+    ModelSpec("tile_gnn", create_native_tile_gnn, ("tile_gnn",)),
+    ModelSpec("tile_hebbian", create_native_tile_hebbian, ("tile_hebbian", "hebbian")),
+    ModelSpec("tile_pc", create_native_tile_pc, ("tile_pc",)),
+    ModelSpec("tile_snn", create_native_tile_snn, ("tile_snn",)),
+    ModelSpec("tile_tp", create_native_tile_tp, ("tile_tp",)),
 )
 
-#: The canonical zoo names this registry answers to. A name outside this list may
-#: still resolve by fragment (``standard_fa`` does); use :func:`has_model` for the
-#: membership question rather than comparing against this tuple.
-NATIVE_MODEL_NAMES: tuple[str, ...] = (
-    "backprop_mlp",
-    "directed_ep",
-    "diffusion_eqprop",
-    "eqprop_mlp",
-    "fa_mlp",
-    "finite_nudge_ep",
-    "holomorphic_ep",
-    "momentum_eqprop",
-    "pepita_mlp",
-    "sparse_eqprop",
-    "ternary_eqprop",
-    "tile_ep",
-    "tile_fa",
-    "tile_gnn",
-    "tile_hebbian",
-    "tile_pc",
-    "tile_snn",
-    "tile_tp",
+
+#: Canonical zoo names — exactly one per factory. Derived from MODEL_REGISTRY.
+NATIVE_MODEL_NAMES: tuple[str, ...] = tuple(spec.canonical_name for spec in MODEL_REGISTRY)
+
+
+#: Fragment-to-factory mapping for resolution — derived from MODEL_REGISTRY.
+#: Order preserves priority: longer fragments first so "tile_fa" matches before "fa".
+_NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = tuple(
+    (fragment, spec.factory)
+    for spec in MODEL_REGISTRY
+    for fragment in spec.fragments
 )
 
 
@@ -152,10 +158,8 @@ def resolve_native_model(name: str) -> NativeModelFactory:
 
     An unknown name still falls back to the EqProp composition, which is a silent
     substitution in the one place that must not make one. The registry now covers
-    every factory ``models.native`` exports, but ``diff_target_prop`` — named by
-    ``backprop_parity._FAMILY_MODELS`` — has no native factory at all, so raising
-    here is a product decision about that study rather than a mechanical fix
-    (TODO36 §4.8, §8.14). Use :func:`has_model` before calling.
+    every factory ``models.native`` exports. Use :func:`has_model` before calling
+    if the fallback is not desired.
     """
     key = name.lower()
     for fragment, factory in _NATIVE_MODEL_FACTORIES:

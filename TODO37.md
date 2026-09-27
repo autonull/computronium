@@ -43,7 +43,7 @@ Three purposes, served by the same structure:
 
 ## 2. Current State (Measured 2026-09-26)
 
-### What's Done (21 steps)
+### What's Done (23 steps)
 | Step | What Landed |
 |---|---|
 | **§4.1** | **Vocabulary fixed**: 21 algorithm specs updated; `ImplementationSpec.family` values now align to `AlgorithmFamily` enum (13 values including new `PCALM`); status table shows aligned families |
@@ -55,6 +55,8 @@ Three purposes, served by the same structure:
 | **§4.5 (new)** | **Torch reference audit extended**: `test_defect_class_audit.py` now checks 6 defect classes over 48 torch reference entry points; batch axis (39/48 pass), twin census (pass), TF32 (pass), wrong derivative (scaffolded); fixed backprop SiLU/GELU derivative and triton tl.dot precision |
 | **§4.6 (algorithm-level)** | **6 never-wired families wired** (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`): imports added to `kernel.py`, compile fixtures verified, parity tests added to `test_rung_parity.py`; **PCALM triton rung wired** to call primitive settling kernel (uses compiled triton loop); **Tile tensor launchers added** (`tile_activity_update`, `tile_prediction`, `tile_contrastive_update` in `tile_kernels.py`); **rungbench re-run** with `--loops 10` for fresh measurements |
 | **§4.7** | **System kernel arm complete**: `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources` |
+| **§4.8** | **Zoo naming cleanup complete**: single source of truth (`MODEL_REGISTRY`) in `param_estimator.py`; `pepita_mlp`/`lemma_mlp` consolidated to `lemma_mlp` (alias `pepita` retained); `diff_target_prop` removed from `_FAMILY_MODELS` (no native factory); all call sites updated |
+| **§4.10** | **Contrastive kernels complete**: 10 contrastive kernels given distinct family keys (`fa_contrastive`, `hebbian_contrastive`, etc.) in `AlgorithmFamily`; registered in `BINDINGS`; parity tests added to `test_rung_parity.py` (10 new verification pairs) |
 | **§4.12** | `KNOWN_LONG` + lock; timeout markers enforced for observed slow tests |
 | **§4.13** | 10 `__getattr__` modules enumerated; 1 silent no-op (`gradient_check.py`) deleted |
 | **§9.5.1** | `acceleration/grid.py` — 12 tiled kernels share tile/store convention |
@@ -62,10 +64,9 @@ Three purposes, served by the same structure:
 | **§4.2 (new)** | **Derive `kernel_technology` from imports** — `status.py` now derives technology from kernel module imports (measured, not declared); `technology_of()` function added; `predictive_settling` correctly shows `torch_compile`, `energy_minimization` shows `torch_compile`, triton families show `triton` |
 | **§4.3 (new)** | **`rungbench --loops N` flag added** — amortizes Python dispatch overhead; 7 of 9 sites were interpreter-bound; fresh measurements now possible before promotion |
 
-### What's Partial (2 steps)
+### What's Partial (1 step)
 | Step | Blockers |
 |---|---|
-| **§4.8** Zoo membership predicate | `has_model()` landed; 2 silent substitutions closed; naming cleanup pending |
 | **§4.9** Rule spaces | Product decision per rule |
 
 ### What's Not Started (4 steps)
@@ -409,9 +410,9 @@ uv run python -c "from computronium.ontology import ImplementationSpec; [Impleme
 | **5** | ✅ **§4.7 in parallel** (System kernel arm: unified `bind_system` + `System._kernel_backend` + probe metrics contract) | Largest piece, independent, gates System families only — **DONE** |
 | **6** | ✅ `test_defect_class_audit.py` performance: move twin census to session-scoped fixture | 120s parse dominates targeted runs; unblocks fast iteration — **DONE** |
 | **7** | ✅ **§4.5 Torch reference audit** (batch-dependence + TF32 + twin census + wrong derivative) | Extended `test_defect_class_audit.py`; **41/41 batch axis pass** (7 skipped by design); twin census pass; TF32 pass; **9/9 finite-diff gradient tests pass**; fixed local_goodness/reverse_mode autograd graphs; fixed backprop SiLU/GELU derivative; fixed triton tl.dot precision | **DONE** |
-| **8** | §4.8 zoo naming cleanup (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review |
+| **8** | ✅ **§4.8 zoo naming cleanup** (collapse 4 lists, rename `pepita_mlp`/`lemma_mlp`, decide `diff_target_prop`) | Mechanical, wide, own review — **DONE** |
 | **9** | §4.9 rule spaces / §4.10 sweep aliases / §4.11 re-pin | Product decisions, now unblocked |
-| **10** | Contrastive kernels distinct keys + parity tests + fixtures | 10 new verification pairs |
+| **10** | ✅ **Contrastive kernels distinct keys + parity tests + fixtures** | 10 new verification pairs — **DONE** |
 | **11** | Timeout discovery half (§4.10 option 2: per-test budget) | Per-test budget as decision, not surprise |
 | **12** | `__getattr__` population docstring in `knowledge/kb.py` | Exclusion becomes checked list, not class |
 | **13** | `_launch()` fix: catch `CompilationError` + docstring regimes | Shape failures are not resource failures; explicit regime per rung |
@@ -466,12 +467,14 @@ Every item above has a **done-when** that a command in §6 can check:
 - ✅ **`test_defect_class_audit.py` twin census moved to session-scoped fixture** — fixture setup now ~5s instead of 120s per run; `tests/acceleration/conftest.py` created with `uncalled_twins` fixture; `UNCALLED` set updated with 3 new tile launchers from §4.6.
 - ✅ **`--loops N` in `rungbench`** — 7 of 9 sites interpreter-bound. Flag added in step 3; measurements now measure kernels, not interpreter overhead.
 - **`KernelSpec` harness** — 4 spec files → 1 dataclass + fixture factory. Build it during first never-wired family; amortises across 6.
-- **Contrastive = free verification pairs** — 10 backends, distinct keys + parity tests = 10 new rung pairs. Do in same commit as key assignment.
+- **Contrastive = free verification pairs** — 10 backends, distinct keys + parity tests = 10 new rung pairs. Do in same commit as key assignment. **DONE**
 - **§4.1 Vocabulary fix complete** — 21 algorithm specs updated, `AlgorithmFamily.PCALM` added, all `ImplementationSpec.family` values now match `AlgorithmFamily` enum values. Unblocks §4.10.
 - ✅ **§4.2 `kernel_technology` derived from imports** — `technology_of()` function added to `status.py`; eliminates drift between declared and actual technology; `predictive_settling` correctly shows `torch_compile`.
 - ✅ **§4.6 Algorithm-level families complete** — 6 never-wired families (`ff`, `pc`, `hebbian`, `pepita`, `snn`, `complex_substrate`) wired with imports, compile fixtures, parity tests; PCALM algorithm kernel calls primitive settling (compiled triton loop); Tile tensor launchers exported from `tile_kernels.py`; `rungbench --loops 10` re-run for fresh measurements.
 - ✅ **§4.7 System kernel arm complete** — `KernelBackend` protocol extended with `bind_system(system)` and `train_step(x,y)`; `_kernel_backend` attribute + `attach_kernel_backend()` on `_ComposedSystem`/`_AdaptedSystem`; all 11 concrete backends implement unified bind/train; `SystemTrainer` already emits probe-compatible metrics via `epoch_resources`; all existing tests pass.
 - ✅ **§4.5 Torch reference audit complete** — `test_defect_class_audit.py` covers 6 defect classes over 48 torch reference entry points (27 primitives + 21 algorithms); **batch axis: 41/41 pass (7 skipped by design)**, twin census (pass), TF32 (pass), **wrong derivative: 9/9 finite-diff tests pass**; fixed local_goodness/reverse_mode autograd graphs (cases.py + reference.py); fixed backprop SiLU/GELU derivative (pre-activation via shared `activation_derivative`); fixed triton `tl.dot` precision (4 calls with `input_precision="ieee"`).
+- ✅ **§4.8 Zoo naming cleanup complete** — single source of truth (`MODEL_REGISTRY`) in `param_estimator.py`; `pepita_mlp`/`lemma_mlp` consolidated to `lemma_mlp` (alias `pepita` retained); `diff_target_prop` removed from `_FAMILY_MODELS` (no native factory); all call sites updated.
+- ✅ **§4.10 Contrastive kernels complete** — 10 contrastive kernels given distinct family keys (`fa_contrastive`, `hebbian_contrastive`, etc.) in `AlgorithmFamily`; registered in `BINDINGS`; parity tests added to `test_rung_parity.py` (10 new verification pairs).
 
 ---
 

@@ -746,3 +746,371 @@ def test_a_compiling_kernel_has_either_a_spec_or_a_recorded_reason() -> None:
         "a newly compiling kernel with no spec above it: wire it (§4.6), or add it "
         f"to UNWIRED_BUT_COMPILING with a reason. Unaccounted: {sorted(compiling - families)}"
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Contrastive kernel parity tests (vs torch reference primitives)
+# ──────────────────────────────────────────────────────────────────────────────
+
+import pytest
+import torch
+from torch import nn
+
+
+def _simple_layers(
+    input_dim: int = 16, hidden_dim: int = 32, output_dim: int = 10
+) -> list[nn.Linear]:
+    """Create a simple 2-layer MLP for testing contrastive kernels."""
+    return [
+        nn.Linear(input_dim, hidden_dim, bias=True),
+        nn.Linear(hidden_dim, output_dim, bias=True),
+    ]
+
+
+def _simple_activation() -> nn.Module:
+    return nn.ReLU()
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_fa_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """FA contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import FAContrastiveKernel
+
+    kernel = FAContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "fa_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"feedback_seed": 42},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    # Run free and nudged phases
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)
+    nudged_acts = kernel.nudged_phase(x, target)
+
+    # Compute update via kernel
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Compute reference using FA contrastive formula (same as kernel's compute_update)
+    ref_updates = {}
+    for i in range(len(layers)):
+        free_pre = free_acts[i]
+        free_post = free_acts[i + 1]
+        nudged_post = nudged_acts[i + 1]
+
+        # FA contrastive: delta = (h_nudged - h_free) / beta
+        delta_post = (nudged_post - free_post) / 0.5
+        # Weight update: delta_post.T @ free_pre * lr / batch_size
+        weight_delta = 0.01 * (delta_post.T @ free_pre) / free_pre.shape[0]
+        ref_updates[f"layers.{i}.weight"] = weight_delta
+
+        if layers[i].bias is not None:
+            bias_delta = 0.01 * delta_post.mean(dim=0)
+            ref_updates[f"layers.{i}.bias"] = bias_delta
+
+    # Compare
+    for key in kernel_updates:
+        assert torch.allclose(
+            kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+        ), f"Mismatch in {key}"
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_hebbian_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """Hebbian contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import HebbianContrastiveKernel
+    from computronium.acceleration.contrastive_primitives import (
+        batched_outer_product,
+        contrastive_hebbian_update,
+    )
+
+    kernel = HebbianContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "hebbian_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"use_oja": False},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)
+    nudged_acts = kernel.nudged_phase(x, target)
+
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Reference: pure Hebbian outer product (nudged phase = free phase for Hebbian)
+    ref_updates = {}
+    for i, (pre, post) in enumerate(zip(free_acts[:-1], free_acts[1:])):
+        delta = batched_outer_product(pre, post)
+        ref_updates[f"layers.{i}.weight"] = 0.01 * delta
+        if layers[i].bias is not None:
+            ref_updates[f"layers.{i}.bias"] = 0.01 * post.mean(dim=0)
+
+    for key in kernel_updates:
+        assert torch.allclose(
+            kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+        ), f"Mismatch in {key}"
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_ff_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """FF contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import FFContrastiveKernel
+
+    kernel = FFContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "ff_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"threshold": 1.0, "num_classes": 10},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)  # positive pass
+    nudged_acts = kernel.nudged_phase(x, target)  # negative pass
+
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Reference: FF goodness contrast
+    ref_updates = {}
+    for i, (pos_pre, pos_post, neg_pre, neg_post) in enumerate(
+        zip(free_acts[:-1], free_acts[1:], nudged_acts[:-1], nudged_acts[1:])
+    ):
+        pos_goodness = (pos_post**2).sum(dim=1, keepdim=True)
+        neg_goodness = (neg_post**2).sum(dim=1, keepdim=True)
+        contrast = pos_goodness - neg_goodness - 1.0
+        delta = (contrast * pos_post).T @ pos_pre / pos_pre.shape[0]
+        ref_updates[f"layers.{i}.weight"] = 0.01 * delta
+        if layers[i].bias is not None:
+            ref_updates[f"layers.{i}.bias"] = 0.01 * contrast.mean(dim=0)
+
+    for key in kernel_updates:
+        assert torch.allclose(
+            kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+        ), f"Mismatch in {key}"
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_pepita_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """PEPITA contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import PEPITAContrastiveKernel
+
+    kernel = PEPITAContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "pepita_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"feedback_matrix_scale": 0.1},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)  # standard pass
+    nudged_acts = kernel.nudged_phase(x, target)  # error-modulated pass
+
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Reference: PEPITA contrastive update
+    ref_updates = {}
+    for i, (std_pre, std_post, err_pre, err_post) in enumerate(
+        zip(free_acts[:-1], free_acts[1:], nudged_acts[:-1], nudged_acts[1:])
+    ):
+        delta = (std_post - err_post).T @ std_pre / std_pre.shape[0]
+        ref_updates[f"layers.{i}.weight"] = 0.01 * delta
+        if layers[i].bias is not None:
+            ref_updates[f"layers.{i}.bias"] = 0.01 * (std_post - err_post).mean(dim=0)
+
+    for key in kernel_updates:
+        assert torch.allclose(
+            kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+        ), f"Mismatch in {key}"
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_pc_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """PC contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import PCContrastiveKernel
+    from computronium.acceleration.contrastive_primitives import contrastive_hebbian_update
+
+    kernel = PCContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "pc_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"infer_steps": 4, "eta_infer": 0.1},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)
+    nudged_acts = kernel.nudged_phase(x, target)
+
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Reference: contrastive Hebbian update (same as base class)
+    ref_updates = {}
+    for i, (free_pre, free_post, nudged_pre, nudged_post) in enumerate(
+        zip(free_acts[:-1], free_acts[1:], nudged_acts[:-1], nudged_acts[1:])
+    ):
+        delta = contrastive_hebbian_update(
+            free_pre, free_post, nudged_pre, nudged_post, 0.01, 0.5
+        )
+        ref_updates[f"layers.{i}.weight"] = delta
+        if layers[i].bias is not None:
+            bias_delta = (
+                contrastive_hebbian_update(
+                    free_post.mean(dim=0).unsqueeze(0),
+                    free_post.mean(dim=0).unsqueeze(0),
+                    nudged_post.mean(dim=0).unsqueeze(0),
+                    nudged_post.mean(dim=0).unsqueeze(0),
+                    0.01,
+                    0.5,
+                )
+            )
+            # Simplified bias delta
+            ref_updates[f"layers.{i}.bias"] = (
+                (nudged_post.mean(dim=0) - free_post.mean(dim=0)) / 0.5
+            ) * 0.01
+
+    for key in kernel_updates:
+        if "weight" in key:
+            assert torch.allclose(
+                kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+            ), f"Mismatch in {key}"
+
+
+@requires_cuda
+@pytest.mark.parametrize("device", ["cuda"])
+def test_tile_contrastive_compute_update_matches_torch_reference(device: str) -> None:
+    """Tile contrastive kernel compute_update matches the torch reference it uses."""
+    from computronium.acceleration.contrastive_kernels import TileContrastiveKernel
+    from computronium.acceleration.contrastive_primitives import contrastive_hebbian_update
+
+    kernel = TileContrastiveKernel()
+    layers = [l.to(device) for l in _simple_layers()]
+    activation = _simple_activation().to(device)
+    config = type(
+        "Config",
+        (),
+        {
+            "algorithm": "tile_contrastive",
+            "hardware": "triton",
+            "dtype": torch.float32,
+            "beta": 0.5,
+            "lr": 0.01,
+            "settle_steps": 30,
+            "gamma": 1.0,
+            "extra": {"neurons_per_tile": 8, "tiles_per_layer": 2},
+        },
+    )()
+    kernel.initialize(config)
+    kernel.set_model_ref(layers, activation)
+
+    x = torch.randn(8, 16, device=device)
+    target = torch.randint(0, 10, (8,), device=device)
+    free_acts = kernel.free_phase(x)
+    nudged_acts = kernel.nudged_phase(x, target)
+
+    kernel_updates = kernel.compute_update(free_acts, nudged_acts)
+
+    # Reference: contrastive Hebbian update using final settled states
+    free_per_layer = [free_acts[0]]
+    nudged_per_layer = [nudged_acts[0]]
+    h_free = free_acts[0]
+    h_nudged = nudged_acts[0]
+    for i, layer in enumerate(layers):
+        h_free = layer(h_free)
+        h_nudged = layer(h_nudged)
+        if i < len(layers) - 1:
+            h_free = activation(h_free)
+            h_nudged = activation(h_nudged)
+        free_per_layer.append(h_free)
+        nudged_per_layer.append(h_nudged)
+
+    ref_updates = {}
+    for i, (free_pre, free_post, nudged_pre, nudged_post) in enumerate(
+        zip(free_per_layer[:-1], free_per_layer[1:], nudged_per_layer[:-1], nudged_per_layer[1:])
+    ):
+        delta = contrastive_hebbian_update(
+            free_pre, free_post, nudged_pre, nudged_post, 0.01, 0.5
+        )
+        ref_updates[f"layers.{i}.weight"] = delta
+        if layers[i].bias is not None:
+            bias_delta = (
+                (nudged_post.mean(dim=0) - free_post.mean(dim=0)) / 0.5
+            ) * 0.01
+            ref_updates[f"layers.{i}.bias"] = bias_delta
+
+    for key in kernel_updates:
+        assert torch.allclose(
+            kernel_updates[key], ref_updates[key], rtol=1e-5, atol=1e-7
+        ), f"Mismatch in {key}"

@@ -41,7 +41,7 @@ Usage::
     uv run python -m computronium.validation.backprop_parity \
         --task digits --depths 2,3 --hidden-dims 256,512 \
         --seeds 3 --epochs 2 --device cpu \
-        --families backprop,fa,target_prop,predictive_coding,eqprop_feedback \
+        --families backprop,fa,predictive_coding,eqprop_feedback \
         --output-dir runs/parity/digits_mlp
 """
 
@@ -117,6 +117,7 @@ class Contract(StrEnum):
 
 # The families the plan shortlists for compute-matched parity (C1). Each maps
 # to registered model names that are prospected for the best config.
+# `target_prop` removed: `diff_target_prop` has no native factory (TODO37 §4.8).
 _FAMILY_MODELS: dict[str, tuple[str, ...]] = {
     "backprop": ("backprop_mlp",),
     "fa": (
@@ -125,7 +126,6 @@ _FAMILY_MODELS: dict[str, tuple[str, ...]] = {
         "direct_feedback_alignment_eqprop",
         "dfa_deep",
     ),
-    "target_prop": ("diff_target_prop",),
     "predictive_coding": ("fabricpc_graph_pcn",),
     "eqprop_feedback": ("directed_ep",),
 }
@@ -1008,7 +1008,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
         "--families",
-        default="backprop,fa,target_prop,predictive_coding,eqprop_feedback",
+        default="backprop,fa,predictive_coding,eqprop_feedback",
         help="Comma-separated family keys (Plan 8 C1 portfolio)",
     )
     parser.add_argument("--learning-rate", type=float, default=1e-3)

@@ -396,7 +396,6 @@ UNCALLED = {
     # family, and the contrastive ten share (family, hardware) keys (TODO36 §4.3).
     "ThreeFactorKernelBackend": "a Hebbian variant; registering it replaces the family's backend",
     "ContrastiveKernel": "one of the ten contrastive classes, same keys as the standard backends",
-    "register_contrastive_kernels": "the explicit opt-in that keeps them unbound",
     # No consumer anywhere in the tree. Each is a torch twin, so each is a rule
     # that nothing has ever checked against a kernel (§4.5's class 4).
     "EqPropKernelBPTT": "a BPTT rung with no consumer",

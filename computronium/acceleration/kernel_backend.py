@@ -43,6 +43,17 @@ class AlgorithmFamily(StrEnum):
     PCALM = "pcalm"
     O1MEMORY = "o1memory"
     BACKPROP = "backprop"
+    # Contrastive kernel families (distinct from standard backends for coexistence)
+    FA_CONTRASTIVE = "fa_contrastive"
+    HEBBIAN_CONTRASTIVE = "hebbian_contrastive"
+    FF_CONTRASTIVE = "ff_contrastive"
+    PEPITA_CONTRASTIVE = "pepita_contrastive"
+    TP_CONTRASTIVE = "tp_contrastive"
+    PC_CONTRASTIVE = "pc_contrastive"
+    SNN_CONTRASTIVE = "snn_contrastive"
+    TILE_CONTRASTIVE = "tile_contrastive"
+    MEP_CONTRASTIVE = "mep_contrastive"
+    O1MEMORY_CONTRASTIVE = "o1memory_contrastive"
 
 
 class HardwareTarget(StrEnum):

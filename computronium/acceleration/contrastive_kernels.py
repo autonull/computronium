@@ -250,7 +250,7 @@ class FAContrastiveKernel(BaseContrastiveKernel):
     Uses fixed random feedback weights B for error propagation in nudged phase.
     """
 
-    name = AlgorithmFamily.FA
+    name = AlgorithmFamily.FA_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
     _update_sign = 1  # Hebbian-style: delta is a descent direction, W += delta
@@ -354,7 +354,7 @@ class HebbianContrastiveKernel(BaseContrastiveKernel):
     Single forward pass modulated by a third factor (neuromodulator).
     """
 
-    name = AlgorithmFamily.HEBBIAN
+    name = AlgorithmFamily.HEBBIAN_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
     _update_sign = 1
@@ -409,7 +409,7 @@ class HebbianContrastiveKernel(BaseContrastiveKernel):
 class FFContrastiveKernel(BaseContrastiveKernel):
     """Forward-Forward contrastive kernel (Positive vs Negative passes)."""
 
-    name = AlgorithmFamily.FF
+    name = AlgorithmFamily.FF_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
     _update_sign = 1
@@ -460,7 +460,7 @@ class FFContrastiveKernel(BaseContrastiveKernel):
 class PEPITAContrastiveKernel(BaseContrastiveKernel):
     """PEPITA contrastive kernel (Standard vs Error-modulated passes)."""
 
-    name = AlgorithmFamily.PEPITA
+    name = AlgorithmFamily.PEPITA_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
     _update_sign = 1
@@ -532,7 +532,7 @@ class PEPITAContrastiveKernel(BaseContrastiveKernel):
 class TPContrastiveKernel(BaseContrastiveKernel):
     """Target Propagation contrastive kernel (Forward vs Inverse target)."""
 
-    name = AlgorithmFamily.TP
+    name = AlgorithmFamily.TP_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = False
 
@@ -605,7 +605,7 @@ class TPContrastiveKernel(BaseContrastiveKernel):
 class PCContrastiveKernel(BaseContrastiveKernel):
     """Predictive Coding contrastive kernel (Free vs Clamped inference)."""
 
-    name = AlgorithmFamily.PC
+    name = AlgorithmFamily.PC_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = True
 
@@ -679,7 +679,7 @@ class PCContrastiveKernel(BaseContrastiveKernel):
 class SNNContrastiveKernel(BaseContrastiveKernel):
     """Spiking STDP contrastive kernel (Pre/Post spike timing)."""
 
-    name = AlgorithmFamily.SNN
+    name = AlgorithmFamily.SNN_CONTRASTIVE
     supported_dtypes = (torch.float32,)
     requires_settle = True
 
@@ -812,7 +812,7 @@ class SNNContrastiveKernel(BaseContrastiveKernel):
 class TileContrastiveKernel(BaseContrastiveKernel):
     """Tile substrate contrastive kernel (Tile-parallel free/nudged settle)."""
 
-    name = AlgorithmFamily.TILE
+    name = AlgorithmFamily.TILE_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = True
 
@@ -895,7 +895,7 @@ class MEPContrastiveKernel(BaseContrastiveKernel):
     we use a simple forward pass through the chain with output nudging.
     """
 
-    name = AlgorithmFamily.MEP
+    name = AlgorithmFamily.MEP_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = True
 
@@ -989,7 +989,7 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
     we use a simple forward pass through the chain with output nudging.
     """
 
-    name = AlgorithmFamily.O1MEMORY
+    name = AlgorithmFamily.O1MEMORY_CONTRASTIVE
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     requires_settle = True
 
@@ -1115,35 +1115,55 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
 
 # Map algorithm family to contrastive kernel class
 _CONTRASTIVE_KERNEL_CLASSES: dict[AlgorithmFamily, type] = {
-    AlgorithmFamily.FA: FAContrastiveKernel,
-    AlgorithmFamily.HEBBIAN: HebbianContrastiveKernel,
-    AlgorithmFamily.FF: FFContrastiveKernel,
-    AlgorithmFamily.PEPITA: PEPITAContrastiveKernel,
-    AlgorithmFamily.TP: TPContrastiveKernel,
-    AlgorithmFamily.PC: PCContrastiveKernel,
-    AlgorithmFamily.SNN: SNNContrastiveKernel,
-    AlgorithmFamily.TILE: TileContrastiveKernel,
-    AlgorithmFamily.MEP: MEPContrastiveKernel,
-    AlgorithmFamily.O1MEMORY: O1MemoryContrastiveKernel,
+    AlgorithmFamily.FA_CONTRASTIVE: FAContrastiveKernel,
+    AlgorithmFamily.HEBBIAN_CONTRASTIVE: HebbianContrastiveKernel,
+    AlgorithmFamily.FF_CONTRASTIVE: FFContrastiveKernel,
+    AlgorithmFamily.PEPITA_CONTRASTIVE: PEPITAContrastiveKernel,
+    AlgorithmFamily.TP_CONTRASTIVE: TPContrastiveKernel,
+    AlgorithmFamily.PC_CONTRASTIVE: PCContrastiveKernel,
+    AlgorithmFamily.SNN_CONTRASTIVE: SNNContrastiveKernel,
+    AlgorithmFamily.TILE_CONTRASTIVE: TileContrastiveKernel,
+    AlgorithmFamily.MEP_CONTRASTIVE: MEPContrastiveKernel,
+    AlgorithmFamily.O1MEMORY_CONTRASTIVE: O1MemoryContrastiveKernel,
+}
+
+
+# Map standard algorithm family to contrastive family
+_STANDARD_TO_CONTRASTIVE: dict[AlgorithmFamily, AlgorithmFamily] = {
+    AlgorithmFamily.FA: AlgorithmFamily.FA_CONTRASTIVE,
+    AlgorithmFamily.HEBBIAN: AlgorithmFamily.HEBBIAN_CONTRASTIVE,
+    AlgorithmFamily.FF: AlgorithmFamily.FF_CONTRASTIVE,
+    AlgorithmFamily.PEPITA: AlgorithmFamily.PEPITA_CONTRASTIVE,
+    AlgorithmFamily.TP: AlgorithmFamily.TP_CONTRASTIVE,
+    AlgorithmFamily.PC: AlgorithmFamily.PC_CONTRASTIVE,
+    AlgorithmFamily.SNN: AlgorithmFamily.SNN_CONTRASTIVE,
+    AlgorithmFamily.TILE: AlgorithmFamily.TILE_CONTRASTIVE,
+    AlgorithmFamily.MEP: AlgorithmFamily.MEP_CONTRASTIVE,
+    AlgorithmFamily.O1MEMORY: AlgorithmFamily.O1MEMORY_CONTRASTIVE,
 }
 
 
 def get_contrastive_kernel(algorithm: AlgorithmFamily) -> BaseContrastiveKernel | None:
-    """Get a contrastive kernel instance for the given algorithm."""
-    cls = _CONTRASTIVE_KERNEL_CLASSES.get(algorithm)
+    """Get a contrastive kernel instance for the given standard algorithm family.
+
+    Maps standard family keys (e.g., ``fa``) to their contrastive counterparts
+    (e.g., ``fa_contrastive``) for backwards compatibility.
+    """
+    contrastive_family = _STANDARD_TO_CONTRASTIVE.get(algorithm)
+    if contrastive_family is None:
+        return None
+    cls = _CONTRASTIVE_KERNEL_CLASSES.get(contrastive_family)
     if cls is None:
         return None
     return cls()
 
 
 def register_contrastive_kernels() -> None:
-    """Bind every contrastive kernel over its family's standard backend.
+    """Register every contrastive kernel under its distinct contrastive family key.
 
-    Not called on import, and deliberately not part of
-    :func:`computronium.acceleration.families.register_all`: these classes share
-    a ``(family, hardware)`` key with the standard backends, so registering them
-    would displace ``FAKernelBackend`` and friends for the whole family. A
-    consumer that wants the contrastive path asks for it by name.
+    These are now registered under distinct family keys (e.g., ``fa_contrastive``)
+    so they coexist with standard backends in the registry and can be tested
+    independently. Called explicitly by ``register_all`` in ``families.py``.
     """
     for algorithm, cls in _CONTRASTIVE_KERNEL_CLASSES.items():
         for hardware in HardwareTarget:
@@ -1154,6 +1174,7 @@ def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
     """Import and return all contrastive kernels (triggers self-registration).
 
     Mirrors ``get_algorithm_kernels()`` pattern for standard kernels.
+    Keys are the contrastive family values (e.g., "fa_contrastive").
     """
     from computronium.acceleration.contrastive_kernels import (
         FAContrastiveKernel,
@@ -1169,16 +1190,16 @@ def get_contrastive_kernels() -> dict[str, type[BaseContrastiveKernel]]:
     )
 
     return {
-        "fa": FAContrastiveKernel,
-        "hebbian": HebbianContrastiveKernel,
-        "ff": FFContrastiveKernel,
-        "pepita": PEPITAContrastiveKernel,
-        "tp": TPContrastiveKernel,
-        "pc": PCContrastiveKernel,
-        "snn": SNNContrastiveKernel,
-        "tile": TileContrastiveKernel,
-        "mep": MEPContrastiveKernel,
-        "o1memory": O1MemoryContrastiveKernel,
+        "fa_contrastive": FAContrastiveKernel,
+        "hebbian_contrastive": HebbianContrastiveKernel,
+        "ff_contrastive": FFContrastiveKernel,
+        "pepita_contrastive": PEPITAContrastiveKernel,
+        "tp_contrastive": TPContrastiveKernel,
+        "pc_contrastive": PCContrastiveKernel,
+        "snn_contrastive": SNNContrastiveKernel,
+        "tile_contrastive": TileContrastiveKernel,
+        "mep_contrastive": MEPContrastiveKernel,
+        "o1memory_contrastive": O1MemoryContrastiveKernel,
     }
 
 

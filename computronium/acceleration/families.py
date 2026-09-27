@@ -23,6 +23,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 
+from computronium.acceleration.contrastive_kernels import register_contrastive_kernels
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -119,6 +120,57 @@ BINDINGS: tuple[FamilyBinding, ...] = (
         "computronium.acceleration.mep_kernels",
         "O1MemoryEPv2KernelBackend",
     ),
+    # Contrastive kernel families (distinct keys for coexistence with standard backends)
+    FamilyBinding(
+        AlgorithmFamily.FA_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "FAContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.HEBBIAN_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "HebbianContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.FF_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "FFContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.PEPITA_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "PEPITAContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.TP_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "TPContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.PC_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "PCContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.SNN_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "SNNContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.TILE_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "TileContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.MEP_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "MEPContrastiveKernel",
+    ),
+    FamilyBinding(
+        AlgorithmFamily.O1MEMORY_CONTRASTIVE,
+        "computronium.acceleration.contrastive_kernels",
+        "O1MemoryContrastiveKernel",
+    ),
 )
 
 
@@ -136,6 +188,8 @@ def register_all() -> tuple[FamilyBinding, ...]:
         backend_cls = getattr(importlib.import_module(binding.module), binding.backend)
         for hardware in HardwareTarget:
             KernelRegistry.register(binding.family, hardware, backend_cls)
+    # Also register contrastive kernels under their distinct family keys
+    register_contrastive_kernels()
     return BINDINGS
 
 
