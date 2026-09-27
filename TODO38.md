@@ -126,7 +126,11 @@ def select_backend(system: System, requested: str = "auto",
 
 `RULE_SPACES` holds measured working regions (e.g. eqprop's `lr ~ 0.05–0.1,
 beta ~ 0.01–0.1`, from TODO plan-6 §8.6 probes). **These migrate, they do not
-vanish:**
+vanish** — and the union is over the coordinate's *axis configs*, not its
+primitives alone: `backprop`'s space is `learning_rate, weight_decay,
+hidden_dim, num_layers`, and the last two are geometry knobs. The plan §1
+statement "the primitives' own hyperparameters" was wrong by half. A knob's
+owner is the axis config that reads it.
 
 ```python
 # on the primitive/dynamics class that owns the knob
@@ -172,7 +176,28 @@ replaced by `--credit X --dynamics Y` filters.
 
 ## 4. Commit Sequence
 
-**0. Fix the coordinate's record, then trust it.** The audit found the collision
+**0. Make `backend` real, or delete the parameter.** The audit of the dispatch's
+call sites found that all 14 public factories do this:
+
+```python
+backend = select_backend(spec, backend)   # computed
+return _create_pepita_mlp(...)            # result never used
+```
+
+`create_pepita_mlp(backend="kernel")` trains the **reference** implementation,
+silently, while its docstring promises the accelerated rung. The dispatch layer
+is decoration at every public entry point — which is why the family vocabulary
+could drift for weeks without anyone noticing: **nothing reads it.** The wiring
+to fix this already exists (TODO37 §4.7's `attach_kernel_backend()`); the
+factories just never call it. Fix: one shared helper
+(`finish_with_backend(system, spec, requested)`) called from every factory;
+`backend="auto"` keeps its conservative meaning (kernel only when
+`triton_rung_available`), so CPU boxes are unaffected. **Risk, named:** this
+commit converts invisible defects into visible ones — rungs that were never
+reached may fail their first real attach. That is the commit working, not
+failing, and the parity suite is what tells us which.
+
+**1. Fix the coordinate's record, then trust it.** The audit found the collision
 the design depends on is real, and it is a *preset* defect, not a spec defect:
 
 - `create_hebbian_mlp` composes `LocalGoodnessCredit` — byte-identical to FF.
@@ -188,11 +213,11 @@ the design depends on is real, and it is a *preset* defect, not a spec defect:
   would also have caught the false `pcalm` checkbox (§0.2): spec says triton,
   factory must reach a non-reference rung.
 
-**1. Knobs onto primitives.** Move each `RULE_SPACES` entry to the owning
+**3. Sweep spaces onto the coordinate's axis configs.** Move each `RULE_SPACES` entry to the owning
 class's `hyperparameters()`. Sweep unions from coordinates. Old table becomes a
 thin compatibility read, then dies. *No dispatch change yet — fully reversible.*
 
-**2. Match dispatch + collision lock.** `select_backend(system)` switches to
+**4. Match dispatch + collision lock.** `select_backend(system)` switches to
 coordinate matching, keyed on the 5 dispatch axes read from `uses_primitives`
 (commit 0's lock guarantees they match the factories). Locks, in this order:
 - **No coordinate resolves to two arms** (the decidable test §0.1 makes possible:
@@ -202,10 +227,10 @@ coordinate matching, keyed on the 5 dispatch axes read from `uses_primitives`
 - Contrastive parity pairs keep passing via `variant=`, proving the 10 removed
   enum values cost nothing.
 
-**3. Validation.** `_FAMILY_MODELS` deleted; study shortlist inlined. Parity
+**5. Validation.** `_FAMILY_MODELS` deleted; study shortlist inlined. Parity
 pairing stays coordinate-local.
 
-**4. Excision.** Enum, tables, `family` field, aliases, CLI flags removed;
+**6. Excision.** Enum, tables, `family` field, aliases, CLI flags removed;
 `status` prints coordinates; README capability table updated. Specs' 43
 `family=None` rows: field gone, nothing to migrate.
 
