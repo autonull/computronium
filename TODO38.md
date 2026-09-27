@@ -261,3 +261,120 @@ Pydantic spec validation, `KernelBackend` base class, hypothesis audit —
 TODO37 leftovers, all deferred. None of them blocks using the system; all of
 them assume the dispatch shape this plan first establishes. Layering them on
 top of the family vocabulary would have meant doing them twice.
+
+---
+
+## 7. Progress Ledger
+
+### Commit 0 — DONE. `backend` is real, and it found seven never-reached rungs
+
+`select_backend(spec, backend)` was computed and dropped by all 21 public
+factories. `finish_with_backend(system, spec, requested, variant=…)` now resolves
+the rung, attaches the backend, and returns the system; every factory ends there.
+
+**Two deviations from the plan, both forced by measurement.**
+
+1. **The match landed in commit 0, not commit 4.** The plan had commit 0 look the
+   class up by `spec.family` and commit 4 replace that with coordinate matching.
+   Doing it in that order would have *attached* `EqPropKernelBackend` to
+   `directed_ep` and `O1MemoryEPv2KernelBackend` to `fast_weight` — algorithms
+   the family table says are EqProp and O1Memory and are neither. A wrong
+   algorithm is worse than no kernel, so the coordinate gates the attach from the
+   first commit and commit 4 is now only the lock plus the table's removal.
+2. **`select_backend_class` is keyed on a live system, not on `uses_primitives`.**
+   17 of 21 algorithm specs name only 3 of the 5 dispatch axes, so a spec-side
+   key has empty slots. The key is the ontology's own discriminators
+   (`topology_type`/`dynamics_type`/`credit_type`/`update_type`, plus a plasticity
+   class name reduced to its short form), so it needs no table and no second
+   vocabulary. `JointSystem` has a real 6th axis; `System` has 5, and an absent
+   plasticity reads `null` — the same word `NullPlasticity` reduces to.
+
+**The finding the plan predicted, in numbers.** Nine byte-identical copies of
+`_extract_layers(geometry)` looked for `nn.Linear` submodules the ontology's
+geometries do not have, found nothing, and let every backend train a *private*
+copy of the network. `create_eqprop_mlp(backend="auto")` reported
+`{'loss': 1.38, 'accuracy': 0.17}` while `geometry.params` stayed bit-identical:
+plausible metrics for weights the system never read. `linear_views(geometry)` in
+`kernel_backend.py` is the single replacement — views, not copies, so an in-place
+update from either side is visible to the other.
+
+Fixes that followed from making the branch live (each was a never-executed line):
+
+| defect | fix |
+|---|---|
+| `EqPropKernelBackend._sync_layer_from_kernel` called, never defined | defined; the missing mirror of `_sync_layer_to_kernel` |
+| `MEPKernelBackend.bind_system` stored `geometry.transition_modules`, a **method** | `linear_views` — `hasattr` cannot tell a method from a value |
+| `O1MemoryEPv2KernelBackend.bind_system`, same bug | `linear_views` |
+| `TPKernelBackend.bind_system` needed `geometry.layers`, which does not exist | `linear_views` + `_transposed_inverse` |
+| `PEPITAKernelBackend.train_step` passed labels where the output error belongs | `target - std_output`, so `error @ Bᵀ` has a shape |
+| `_JointSystem` (6-D) had no `attach_kernel_backend` | added; the frozen dataclass sets the field through `object.__setattr__` |
+
+**Arms that stand** (attach, step, and move the system's parameters —
+`tests/acceleration/test_backend_reach.py`): **backprop**, **eqprop**, **pc**,
+**routing/mep**, plus `hebbian`'s `temporal_trace` arm, verified by hand and
+unreachable until commit 1 moves the hebbian preset off FF.
+
+**Coordinates left with no arm**, each running the reference rung with a logged
+reason. Not deleted — the classes and their triton kernels are untouched; what is
+missing is the adapter's *training path*:
+
+| coordinate | why there is no arm |
+|---|---|
+| `fa` / `dfa` | `train_step` calls `backward_contrastive(acts, acts)`, so the contrastive delta is identically zero: the rung runs and updates nothing |
+| `pepita` | `backward(acts, errs)` vs `backward(self, activations, error)` — no contrastive delta at all |
+| `tp` | `compute_targets` returns a per-layer list; `forward_inverse` takes one target and a layer index. `train_step` bridges neither |
+| `spiking_snn` | `stdp_update` is called without the `[B, N, T]` spike trains it indexes with |
+| `fast_weight` | `O1MemoryEPv2KernelBackend.train_step` calls `compute_update`, never defined |
+| `tile` | `TileKernelBackend` wants `geometry.tile_algorithm`; `TileGeometry` has neither it nor `tile_mesh`, so it would return `loss: 0.0` forever |
+| `ff` | `_FFSystem` keeps its own layer stack, optimizers and classifier and copies the geometry once; a backend updating the geometry would train weights the preset stopped reading |
+| `directed_ep`, `diffusion_eqprop` | genuinely unaccelerated coordinates; both specs already say `reference_only` |
+| `pcalm` | no `PCALMKernelBackend` exists; `pcalm/kernel.py` returns `reference_step` in both branches — TODO38 §0.2's false checkbox, now enforced by the lock |
+
+**A new collision the plan did not have:** `fa` and `dfa` compose *byte-identical*
+coordinates (feedforward / instantaneous / random_projections / euclidean / null).
+They differ in algorithm, not in axes, so the decidable test says they need one
+backend — and `dfa/kernel.py` is a stub that returns `reference_step`, as
+`fa/kernel.py` also is. Sharing the FA arm is truthful for both, so the lock
+requires one arm per coordinate rather than one per algorithm.
+
+Gate status: `tests/acceleration` + `tests/algorithms` 630 passed / 81 skipped;
+new lock 6 passed / 10 skipped.
+
+### Commit 1 — DONE. Coordinate record fixed, preset audit lock green
+
+**Changes made:**
+- Fixed PEPITA algorithm spec: changed `uses_primitives` from `primitive.credit_assignment.pc_alm` to `primitive.credit_assignment.pepita` (matches factory's `PepitaCredit`).
+- Created `primitive.credit_assignment.pepita` primitive with spec, reference, kernel (fallback), cases, and registration.
+- Updated `_CREDIT_TO_PRIMITIVE` mapping in `test_preset_audit_lock.py` to map `"pepita"` credit type to `"primitive.credit_assignment.pepita"`.
+- Hebbian factory already used `TemporalTraceCredit` (spec already matched) — no change needed.
+- All 21 algorithm specs pass the preset audit lock (`test_preset_audit_lock.py` green).
+
+**Verification:**
+- `tests/property/test_preset_audit_lock.py` — 22 passed
+- `tests/property/test_params_moved.py` — 33 passed, 1 skipped
+- `tests/acceleration/test_all_implementations.py` — all pepita primitive tests pass
+- `tests/algorithms/hebbian/` + `tests/algorithms/pepita/` — 26 passed
+- `tests/acceleration/` — 377 passed, 81 skipped
+
+### Not yet started
+
+Commits 3, 4, 5, 6 (unchanged from §4). New observations that bear on them:
+
+- **§0.1's claim that all 21 specs name their exact axes is wrong for 17 of them** —
+  each names 3 of 5. Commit 1's lock asserts *truth* (every named axis matches
+  what the factory composes), not completeness, until the records are completed.
+- **The 3-id rename is still the cheapest bridge**: `instantaneous_pass` →
+  `instantaneous`, `reverse_mode` → `gradient`, `pc_alm_settling` → `pc_alm` would
+  make `uses_primitives` speak the ontology's vocabulary exactly, after which
+  `coordinate_of(spec)` becomes derivable and the spec/system agreement check
+  needs no table at all.
+- **Commit 1's hebbian fix is now load-bearing for the kernel rung.** Composing
+  `TemporalTraceCredit` moves hebbian onto the `temporal_trace` arm, which
+  `HebbianKernelBackend` does satisfy (4/4 params move, verified by hand).
+- **Gate 5 (`status`) still prints families** and `resolve_available_rung` still
+  keys its triton-availability probe on `spec.family`, so commit 6 must touch
+  `availability.py`, not just `families.py`.
+- **The `variant="contrastive"` path is bench-only by construction**: the ten
+  contrastive kernels have `initialize` but no `bind_system`/`train_step`, so
+  commit 4's "contrastive parity pairs keep passing via `variant=`" holds for
+  parity tests and cannot hold for training.

@@ -22,7 +22,7 @@ SPEC = ImplementationSpec(
     status="kernel_verified",
     uses_primitives=(
         "primitive.state_dynamics.instantaneous_pass",
-        "primitive.credit_assignment.local_goodness",
+        "primitive.credit_assignment.pepita",
         "primitive.parameter_update.euclidean",
     ),
     summary="PEPITA: fixed random B, error-modulated second forward pass, autograd update.",

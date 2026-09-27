@@ -713,6 +713,7 @@ def _reference_gradient_steps() -> list[tuple[str, Callable[..., Any], Any, str]
     # Map of reference path to input attribute name
     INPUT_ATTRS = {
         "computronium.primitives.credit_assignment.local_goodness.reference": "free_activations",
+        "computronium.primitives.credit_assignment.pepita.reference": "free_activations",
     }
 
     for ref_step in REF_STEPS:
