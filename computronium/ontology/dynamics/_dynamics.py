@@ -552,7 +552,7 @@ class StateDynamicsConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list[object]]:
         """Hyperparameter ranges owned by the state_dynamics axis.
 
         These are the knobs the dynamics config reads. The sweep unions the
@@ -1291,8 +1291,19 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         """Track free energy and check convergence criteria."""
         if self._free_energy_history is not None or on_step is not None:
             energy_val = _compute_hopfield_energy(acts, geometry).item()
-            # Clamp energy to prevent numerical explosions (TODO39 P0.3)
-            energy_val = min(energy_val, self.config.max_energy)
+            # Clamp energy to prevent numerical explosions (TODO39 P0.3) - symmetric clamp
+            max_e = self.config.max_energy
+            clamped_val = max(-max_e, min(energy_val, max_e))
+            if clamped_val != energy_val:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Energy clamped: %s -> %s (max_energy=%s). Consider reducing step_size or increasing max_energy.",
+                    energy_val,
+                    clamped_val,
+                    max_e,
+                )
+            energy_val = clamped_val
             if self._free_energy_history is not None:
                 self._free_energy_history.append(energy_val)
             if on_step is not None:
@@ -1329,7 +1340,18 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
         if isinstance(acts, list):
             # Use hidden + output layers
             energy_val = _compute_hopfield_energy(acts, geometry)
-            return energy_val
+            max_e = self.config.max_energy
+            clamped = energy_val.clamp(-max_e, max_e)
+            if not torch.allclose(clamped, energy_val):
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Energy clamped in compute_energy: %s -> %s (max_energy=%s)",
+                    energy_val.item(),
+                    clamped.item(),
+                    max_e,
+                )
+            return clamped
         return (acts**2).mean()
 
     def get_free_energy_history(self) -> list[float] | None:
