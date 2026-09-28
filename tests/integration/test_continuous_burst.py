@@ -252,9 +252,7 @@ def test_nan_loss_cells_never_promote(tmp_path: Path) -> None:
                 extra={},
             )
         )
-    assert (
-        promote_candidates(root / "kb.sqlite", "mnist", 5) == []
-    )
+    assert promote_candidates(root / "kb.sqlite", "mnist", 5) == []
 
 
 def _seed_synthetic_kb(root: Path) -> None:

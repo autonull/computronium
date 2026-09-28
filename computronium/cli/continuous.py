@@ -365,7 +365,9 @@ def _run_burst(args: argparse.Namespace) -> None:
                     print("No more novel cells to propose.")
                     break
                 proposed += len(proposals)
-                print(f"\nIteration {iteration}: {len(proposals)} proposals (total: {proposed})")
+                print(
+                    f"\nIteration {iteration}: {len(proposals)} proposals (total: {proposed})"
+                )
                 for i, p in enumerate(proposals):
                     geo = p.geometry or {}
                     dyn = p.dynamics or "?"
@@ -374,7 +376,9 @@ def _run_burst(args: argparse.Namespace) -> None:
                     topo = geo.get("topology_type", "?")
                     depth = geo.get("depth", "?")
                     hidden = geo.get("hidden_dim", "?")
-                    print(f"  {i+1}. dyn={dyn} credit={credit} update={update} | topo={topo} depth={depth} hidden={hidden}")
+                    print(
+                        f"  {i + 1}. dyn={dyn} credit={credit} update={update} | topo={topo} depth={depth} hidden={hidden}"
+                    )
             print(f"\nTotal proposed: {proposed} cells")
             return
         run_burst(

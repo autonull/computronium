@@ -295,17 +295,40 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 init_scale=init_scale,
             )
         case "spatial_lattice":
-            # Constrain lattice_dims from param_budget to avoid blowups
+            # Constrain lattice_dims and hidden_dims from param_budget to avoid blowups
             lattice_dims = _as_int_tuple(geometry.get("lattice_dims"), (4, 4, 4))
+            constrained_hidden_dims = hidden_dims
             if param_budget > 0:
-                lattice_dims = _constrain_spatial_lattice_dims(
-                    lattice_dims, hidden_dims, input_dim, output_dim, param_budget
-                )
+                # Iteratively reduce both lattice and hidden dims until under budget
+                for _ in range(3):  # Max 3 iterations should converge
+                    lattice_dims = _constrain_spatial_lattice_dims(
+                        lattice_dims,
+                        constrained_hidden_dims,
+                        input_dim,
+                        output_dim,
+                        param_budget,
+                    )
+                    estimated = _estimate_spatial_lattice_params(
+                        lattice_dims, constrained_hidden_dims, input_dim, output_dim
+                    )
+                    if estimated <= param_budget:
+                        break
+                    # Reduce hidden dimensions to fit budget
+                    min_hidden = max(
+                        1, param_budget // (input_dim * 4 + output_dim * 4 + 100)
+                    )
+                    constrained_hidden_dims = tuple(
+                        min(h, min_hidden) for h in constrained_hidden_dims
+                    )
+                else:
+                    # Final safety: force absolute minimum if still over budget
+                    constrained_hidden_dims = (1,) * len(constrained_hidden_dims)
+                    lattice_dims = (1, 1, 1)
             return GeometryConfig.spatial_lattice(
                 input_dim=input_dim,
                 output_dim=output_dim,
                 lattice_dims=lattice_dims,
-                hidden_dims=hidden_dims,
+                hidden_dims=constrained_hidden_dims,
                 connectivity_radius=_as_int(geometry.get("connectivity_radius"), 1),
                 init_scale=init_scale,
             )
@@ -538,7 +561,7 @@ def _build_substrate_config(substrate_name: str, dynamics: str):
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
 
-    # Diffusion dynamics requires substrate noise > 0 for proper sampling
-    if dynamics == "diffusion":
+    # Diffusion and spike_integration dynamics require substrate noise > 0
+    if dynamics in {"diffusion", "spike_integration"}:
         return factory(noise_level=0.05)
     return factory()

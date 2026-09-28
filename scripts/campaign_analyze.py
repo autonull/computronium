@@ -61,6 +61,18 @@ class VoidStats:
     examples: list[str]
 
 
+@dataclass
+class DefectStats:
+    combo: str
+    dynamics: str
+    credit: str
+    update: str
+    topology: str
+    defect_type: str  # "nan_loss", "exploding_loss", "very_low_acc"
+    value: float
+    count: int
+
+
 def load_experiments(kb_path: Path, task: str) -> list[dict]:
     """Load all experiment entries from KB."""
     conn = sqlite3.connect(kb_path)
@@ -75,7 +87,9 @@ def load_experiments(kb_path: Path, task: str) -> list[dict]:
     for row in rows:
         metrics = json.loads(row["metrics"]) if row["metrics"] else {}
         hp = json.loads(row["hyperparameters"]) if row["hyperparameters"] else {}
-        geometry = hp.get("geometry", {}) if isinstance(hp.get("geometry"), dict) else {}
+        geometry = (
+            hp.get("geometry", {}) if isinstance(hp.get("geometry"), dict) else {}
+        )
         exps.append({
             "id": row["id"],
             "metrics": metrics,
@@ -94,7 +108,7 @@ def load_voids(kb_path: Path, task: str) -> list[dict]:
     conn = sqlite3.connect(kb_path)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT dynamics, credit, \"update\", topology, category, error FROM structural_voids WHERE task = ?",
+        'SELECT dynamics, credit, "update", topology, category, error FROM structural_voids WHERE task = ?',
         (task,),
     ).fetchall()
     conn.close()
@@ -103,7 +117,9 @@ def load_voids(kb_path: Path, task: str) -> list[dict]:
 
 def analyze_clamps(exps: list[dict]) -> list[ClampStats]:
     """Analyze energy clamp frequency by (dynamics, credit, update)."""
-    groups: dict[tuple[str, str, str], dict[str, int]] = defaultdict(lambda: {"total": 0, "clamps": 0})
+    groups: dict[tuple[str, str, str], dict[str, int]] = defaultdict(
+        lambda: {"total": 0, "clamps": 0}
+    )
 
     for exp in exps:
         key = (exp["dynamics"], exp["credit"], exp["update"])
@@ -113,10 +129,14 @@ def analyze_clamps(exps: list[dict]) -> list[ClampStats]:
             groups[key]["clamps"] += 1
 
     stats = []
-    for (dyn, cred, upd), counts in sorted(groups.items(), key=lambda x: -x[1]["clamps"] / max(x[1]["total"], 1)):
+    for (dyn, cred, upd), counts in sorted(
+        groups.items(), key=lambda x: -x[1]["clamps"] / max(x[1]["total"], 1)
+    ):
         rate = counts["clamps"] / max(counts["total"], 1)
         if counts["total"] >= 1:  # Only report if we have data
-            stats.append(ClampStats(dyn, cred, upd, counts["total"], counts["clamps"], rate))
+            stats.append(
+                ClampStats(dyn, cred, upd, counts["total"], counts["clamps"], rate)
+            )
     return stats
 
 
@@ -131,14 +151,16 @@ def analyze_spectral(exps: list[dict]) -> list[SpectralStats]:
 
     stats = []
     for dyn, srs in sorted(groups.items(), key=lambda x: -max(x[1])):
-        stats.append(SpectralStats(
-            dynamics=dyn,
-            max_sr=max(srs),
-            avg_sr=sum(srs) / len(srs),
-            count=len(srs),
-            over_1=sum(1 for s in srs if s > 1.0),
-            over_05=sum(1 for s in srs if s > 0.5),
-        ))
+        stats.append(
+            SpectralStats(
+                dynamics=dyn,
+                max_sr=max(srs),
+                avg_sr=sum(srs) / len(srs),
+                count=len(srs),
+                over_1=sum(1 for s in srs if s > 1.0),
+                over_05=sum(1 for s in srs if s > 0.5),
+            )
+        )
     return stats
 
 
@@ -153,13 +175,15 @@ def analyze_params(exps: list[dict], budget: int) -> list[ParamStats]:
 
     stats = []
     for topo, pcs in sorted(groups.items(), key=lambda x: -max(x[1])):
-        stats.append(ParamStats(
-            topology=topo,
-            max_params=max(pcs),
-            avg_params=sum(pcs) // len(pcs),
-            over_budget=sum(1 for p in pcs if p > budget * 1.5),
-            budget=budget,
-        ))
+        stats.append(
+            ParamStats(
+                topology=topo,
+                max_params=max(pcs),
+                avg_params=sum(pcs) // len(pcs),
+                over_budget=sum(1 for p in pcs if p > budget * 1.5),
+                budget=budget,
+            )
+        )
     return stats
 
 
@@ -184,7 +208,12 @@ def analyze_pareto(exps: list[dict]) -> ParetoStats:
     for i, (acc_i, wt_i) in enumerate(points):
         dominated = False
         for j, (acc_j, wt_j) in enumerate(points):
-            if i != j and acc_j >= acc_i and wt_j <= wt_i and (acc_j > acc_i or wt_j < wt_i):
+            if (
+                i != j
+                and acc_j >= acc_i
+                and wt_j <= wt_i
+                and (acc_j > acc_i or wt_j < wt_i)
+            ):
                 dominated = True
                 break
         if not dominated:
@@ -199,6 +228,64 @@ def analyze_pareto(exps: list[dict]) -> ParetoStats:
     return ParetoStats(len(pareto), acc_range, wt_range, spread)
 
 
+def analyze_numerical_defects(exps: list[dict]) -> list[DefectStats]:
+    """Detect numerical defects: NaN loss, exploding loss, very low accuracy."""
+    groups: dict[tuple[str, str, str, str], list[dict]] = defaultdict(list)
+    
+    for exp in exps:
+        key = (exp["dynamics"], exp["credit"], exp["update"], exp["topology"])
+        groups[key].append(exp)
+    
+    defects = []
+    for (dyn, cred, upd, topo), exps_list in groups.items():
+        if len(exps_list) < 1:
+            continue
+        
+        nan_count = 0
+        exploding_count = 0
+        very_low_acc_count = 0
+        
+        for exp in exps_list:
+            metrics = exp["metrics"]
+            loss = metrics.get("final_loss", 0)
+            acc = metrics.get("final_accuracy", 0)
+            
+            if isinstance(loss, float) and loss != loss:  # NaN
+                nan_count += 1
+            elif isinstance(loss, float) and loss > 100:
+                exploding_count += 1
+            elif acc < 0.05:
+                very_low_acc_count += 1
+        
+        if nan_count > 0:
+            defects.append(DefectStats(
+                combo=f"{dyn}|{cred}|{upd}|{topo}",
+                dynamics=dyn, credit=cred, update=upd, topology=topo,
+                defect_type="nan_loss", value=float(nan_count), count=nan_count
+            ))
+        if exploding_count > 0:
+            # Get max exploding loss for this combo
+            max_loss = max(
+                exp["metrics"].get("final_loss", 0) 
+                for exp in exps_list 
+                if isinstance(exp["metrics"].get("final_loss", 0), float) and exp["metrics"].get("final_loss", 0) > 100
+            )
+            defects.append(DefectStats(
+                combo=f"{dyn}|{cred}|{upd}|{topo}",
+                dynamics=dyn, credit=cred, update=upd, topology=topo,
+                defect_type="exploding_loss", value=max_loss, count=exploding_count
+            ))
+        if very_low_acc_count > 0 and len(exps_list) == very_low_acc_count:
+            # All runs for this combo have very low accuracy
+            defects.append(DefectStats(
+                combo=f"{dyn}|{cred}|{upd}|{topo}",
+                dynamics=dyn, credit=cred, update=upd, topology=topo,
+                defect_type="very_low_acc", value=0.0, count=very_low_acc_count
+            ))
+    
+    return defects
+
+
 def analyze_voids(voids: list[dict]) -> list[VoidStats]:
     """Summarize voids by category."""
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -207,7 +294,10 @@ def analyze_voids(voids: list[dict]) -> list[VoidStats]:
 
     stats = []
     for cat, items in sorted(groups.items(), key=lambda x: -len(x[1])):
-        examples = [f"{v['dynamics']}|{v['credit']}|{v['update']}|{v['topology']}" for v in items[:3]]
+        examples = [
+            f"{v['dynamics']}|{v['credit']}|{v['update']}|{v['topology']}"
+            for v in items[:3]
+        ]
         stats.append(VoidStats(cat, len(items), examples))
     return stats
 
@@ -225,6 +315,7 @@ def find_worst_combos(exps: list[dict], top_n: int = 3) -> list[dict]:
     for combo, accs in groups.items():
         if len(accs) >= 1:
             import statistics
+
             results.append({
                 "dynamics": combo[0],
                 "credit": combo[1],
@@ -237,11 +328,22 @@ def find_worst_combos(exps: list[dict], top_n: int = 3) -> list[dict]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Analyze campaign KB for continuous discovery loop")
-    parser.add_argument("--root", type=Path, required=True, help="Campaign root (contains kb.sqlite)")
+    parser = argparse.ArgumentParser(
+        description="Analyze campaign KB for continuous discovery loop"
+    )
+    parser.add_argument(
+        "--root", type=Path, required=True, help="Campaign root (contains kb.sqlite)"
+    )
     parser.add_argument("--task", default="mnist", help="Task name")
-    parser.add_argument("--budget", type=int, default=25000, help="Parameter budget for blowup detection")
-    parser.add_argument("--json", action="store_true", help="Output JSON instead of human-readable")
+    parser.add_argument(
+        "--budget",
+        type=int,
+        default=25000,
+        help="Parameter budget for blowup detection",
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Output JSON instead of human-readable"
+    )
     args = parser.parse_args()
 
     kb_path = args.root / "kb.sqlite"
@@ -263,6 +365,7 @@ def main():
     pareto_stats = analyze_pareto(exps)
     void_stats = analyze_voids(voids)
     worst_combos = find_worst_combos(exps)
+    defect_stats = analyze_numerical_defects(exps)
 
     if args.json:
         output = {
@@ -272,14 +375,15 @@ def main():
             "pareto": asdict(pareto_stats),
             "voids": [asdict(s) for s in void_stats],
             "worst_combos": worst_combos,
+            "defects": [asdict(s) for s in defect_stats],
         }
         print(json.dumps(output, indent=2))
         return 0
 
     # Human-readable output
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"CAMPAIGN ANALYSIS: {args.root} (task={args.task})")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Total experiments: {len(exps)}")
     print(f"Total voids: {len(voids)}")
     print(f"Parameter budget: {args.budget}")
@@ -290,7 +394,9 @@ def main():
     if clamp_warnings:
         print(f"⚠️  {len(clamp_warnings)} combos exceed 20% clamp rate:")
         for s in clamp_warnings:
-            print(f"   {s.dynamics} × {s.credit} × {s.update}: {s.clamp_rate:.1%} ({s.clamp_count}/{s.total_cells})")
+            print(
+                f"   {s.dynamics} × {s.credit} × {s.update}: {s.clamp_rate:.1%} ({s.clamp_count}/{s.total_cells})"
+            )
     else:
         print("✅ All clamp rates < 20%")
 
@@ -300,7 +406,9 @@ def main():
     if spectral_warnings:
         print(f"⚠️  {len(spectral_warnings)} dynamics have spectral_radius > 1.0:")
         for s in spectral_warnings:
-            print(f"   {s.dynamics}: max={s.max_sr:.4f}, avg={s.avg_sr:.4f}, >1.0: {s.over_1}/{s.count}")
+            print(
+                f"   {s.dynamics}: max={s.max_sr:.4f}, avg={s.avg_sr:.4f}, >1.0: {s.over_1}/{s.count}"
+            )
     else:
         print("✅ All spectral radii < 1.0")
 
@@ -310,15 +418,21 @@ def main():
     if param_warnings:
         print(f"⚠️  {len(param_warnings)} topologies exceed 1.5x budget:")
         for s in param_warnings:
-            print(f"   {s.topology}: max={s.max_params:,}, avg={s.avg_params:,}, >1.5x: {s.over_budget}")
+            print(
+                f"   {s.topology}: max={s.max_params:,}, avg={s.avg_params:,}, >1.5x: {s.over_budget}"
+            )
     else:
         print("✅ All param counts within 1.5x budget")
 
     # Pareto
     print(f"\n--- PARETO FRONT ---")
     print(f"   Front size: {pareto_stats.front_size}")
-    print(f"   Accuracy range: {pareto_stats.accuracy_range[0]:.4f} – {pareto_stats.accuracy_range[1]:.4f}")
-    print(f"   Walltime range: {pareto_stats.walltime_range[0]:.1f}s – {pareto_stats.walltime_range[1]:.1f}s")
+    print(
+        f"   Accuracy range: {pareto_stats.accuracy_range[0]:.4f} – {pareto_stats.accuracy_range[1]:.4f}"
+    )
+    print(
+        f"   Walltime range: {pareto_stats.walltime_range[0]:.1f}s – {pareto_stats.walltime_range[1]:.1f}s"
+    )
     print(f"   Spread: {pareto_stats.spread_pct:.1f} percentage points")
     if pareto_stats.spread_pct < 20:
         print("   ⚠️  Low spread — consider objective-space bias in driver")
@@ -333,11 +447,22 @@ def main():
     # Worst combos
     print(f"\n--- TOP {len(worst_combos)} WORST COMBOS (by median accuracy) ---")
     for i, w in enumerate(worst_combos, 1):
-        print(f"   {i}. {w['dynamics']} × {w['credit']} × {w['update']}: median_acc={w['median_accuracy']:.4f} (n={w['count']})")
+        print(
+            f"   {i}. {w['dynamics']} × {w['credit']} × {w['update']}: median_acc={w['median_accuracy']:.4f} (n={w['count']})"
+        )
 
-    print(f"\n{'='*60}")
+    # Numerical defects
+    print(f"\n--- NUMERICAL DEFECTS ---")
+    if defect_stats:
+        print(f"⚠️  {len(defect_stats)} combos have numerical defects:")
+        for s in defect_stats:
+            print(f"   {s.defect_type}: {s.combo} (count={s.count}, value={s.value})")
+    else:
+        print("✅ No numerical defects detected")
+
+    print(f"\n{'=' * 60}")
     print("NEXT: Apply fixes for ⚠️ items, then re-run burst")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     return 0
 

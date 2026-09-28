@@ -372,12 +372,15 @@ class StratifiedRandomDriver:
         self._reload_covered()
         # Balance tracked per (dynamics, credit, update) triple
         self.balance: dict[tuple[str, str, str], int] = {}
+        # Topology balance per triple for fair topology sampling
+        self._topology_balance: dict[tuple[str, str, str], dict[str, int]] = {}
         # Pre-compute viable topologies per triple for efficient proposal
         self._viable_topos_per_triple: dict[tuple[str, str, str], list[str]] = {}
         for d in GRID_DYNAMICS:
             for c in GRID_CREDITS:
                 for u in GRID_UPDATES:
                     self.balance[d, c, u] = 0
+                    self._topology_balance[d, c, u] = {}
                     if viable is not None:
                         topos = [
                             t for t in GRID_TOPOLOGIES if cell_key(d, c, u, t) in viable
@@ -387,6 +390,8 @@ class StratifiedRandomDriver:
                         topos = list(GRID_TOPOLOGIES)
                     if topos:
                         self._viable_topos_per_triple[d, c, u] = topos
+                        for t in topos:
+                            self._topology_balance[d, c, u][t] = 0
         # Objective-space coverage tracking (Phase 2)
         self._objective_bins: dict[str, int] = {}
         self._family_avg: dict[tuple[str, str, str], list[float]] = {}
@@ -546,16 +551,27 @@ class StratifiedRandomDriver:
                 # No viable topologies for this triple — mark as exhausted
                 self.balance[triple] = 10**9
                 continue
-            # Objective-space bias: iterate through ALL viable topologies, prefer under-explored bins
+            # Balanced topology sampling: combine objective-space bias with topology fairness
+            # Score = objective_score * (1 - topology_bias) + rng_noise
+            # where topology_bias penalizes over-sampled topologies for this triple
+            topo_balances = self._topology_balance[triple]
+            min_topo_count = min(topo_balances.values()) if topo_balances else 0
+            
             best_topology = None
             best_score = -1.0
             for topology in viable_topos:
                 key = cell_key(dynamics, credit, update, topology)
                 if key in self.seen or key in self.quarantined:
                     continue
-                score = self._score_proposal(dynamics, credit, update, topology)
-                if score > best_score:
-                    best_score = score
+                # Objective-space score (higher = more under-explored)
+                obj_score = self._score_proposal(dynamics, credit, update, topology)
+                # Topology fairness: penalize topologies that have been sampled more for this triple
+                topo_count = topo_balances.get(topology, 0)
+                topo_fairness = 1.0 / (1.0 + topo_count - min_topo_count)
+                # Combined score: 70% objective-space, 30% topology fairness
+                combined_score = 0.7 * obj_score + 0.3 * topo_fairness + self.rng.random() * 0.01
+                if combined_score > best_score:
+                    best_score = combined_score
                     best_topology = topology
             if best_topology is None:
                 # All viable topologies for this triple are seen/quarantined — mark exhausted
@@ -566,6 +582,8 @@ class StratifiedRandomDriver:
             self.seen.add(key)
             stratum_count = self.balance[dynamics, credit, update]
             self.balance[dynamics, credit, update] += 1
+            # Update topology balance for fair sampling
+            self._topology_balance[triple][topology] += 1
             maturity_tags = ["maturity:l0"]
             if self.burst_tag is not None:
                 maturity_tags.append(self.burst_tag)

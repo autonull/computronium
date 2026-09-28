@@ -124,9 +124,10 @@ def probe_spectral_radius(
     instrument on σ_max(J) — not a certified radius. Returns 0.0 on any
     settle failure (the failure itself is a gate/void signal).
 
-    For stochastic dynamics (e.g., diffusion), the global RNG seed is fixed
-    before each settle call to isolate the deterministic Jacobian from
-    sampling noise.
+    For stochastic dynamics (e.g., diffusion), the global RNG state is
+    saved/restored around each settle call to isolate the deterministic
+    Jacobian from sampling noise. This is more robust than manual_seed
+    because it handles CUDA RNG state and any intermediate RNG consumption.
     """
     import torch
 
@@ -137,10 +138,16 @@ def probe_spectral_radius(
     if device is not None:
         x_base = x_base.to(device)
 
+    # Capture clean RNG state once; restore before each settle for
+    # deterministic noise across base/perturbed runs.
+    cpu_rng_state = torch.random.get_rng_state()
+    cuda_rng_state = torch.cuda.get_rng_state() if torch.cuda.is_available() else None
+
     def activity(x: torch.Tensor) -> torch.Tensor:
-        # Fix global RNG seed for stochastic dynamics (e.g., diffusion)
-        # so that finite-difference Jacobian measures deterministic flow.
-        torch.manual_seed(0)
+        # Restore pristine RNG state so each settle sees identical noise.
+        torch.random.set_rng_state(cpu_rng_state)
+        if cuda_rng_state is not None:
+            torch.cuda.set_rng_state(cuda_rng_state)
         state = CompositeState(activity={"x": x}, plastic={}, substrate={})
         settled = system.dynamics.settle(
             state, system.geometry, system.substrate, target=None
@@ -158,7 +165,16 @@ def probe_spectral_radius(
             v = torch.randn(x_base.shape, generator=rng)
             v /= v.norm() + 1e-8
             jv = (activity(x_base + eps * v) - base) / eps
-            amps.append(jv.norm().item())
+            amp = jv.norm().item()
+            # Stochastic dynamics (diffusion) can produce huge artifacts when
+            # finite-difference noise doesn't perfectly cancel; treat as failure.
+            if amp > 1000.0:
+                logger.warning(
+                    "Spectral probe produced implausible amplitude %.2f (stochastic dynamics artifact); returning 0.0",
+                    amp,
+                )
+                return 0.0
+            amps.append(amp)
         return sum(amps) / len(amps)
     except (RuntimeError, TypeError, ValueError) as e:
         logger.warning("Spectral probe failed: %s", e)
@@ -896,8 +912,12 @@ class AutoScientistCampaign:
                     i + 1,
                     len(proposals),
                     proposal.task,
-                    dyn, credit, update,
-                    topo, depth, hidden,
+                    dyn,
+                    credit,
+                    update,
+                    topo,
+                    depth,
+                    hidden,
                 )
                 if self.ceec is not None and not self._dry_run_gate(proposal):
                     # Dry-run gate rejected the proposal: no pre-registration,

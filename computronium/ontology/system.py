@@ -402,7 +402,10 @@ class SystemConfig:
 
     def _validate_recurrent_geometry_dynamics(self) -> None:
         """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
-        if self.geometry.topology_type in {"recurrent", "recurrent_attractor"} and self.dynamics.dynamics_type not in {
+        if self.geometry.topology_type in {
+            "recurrent",
+            "recurrent_attractor",
+        } and self.dynamics.dynamics_type not in {
             "energy_minimization",
             "predictive_settling",
             "error_predictive_coding",

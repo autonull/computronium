@@ -175,6 +175,7 @@ class CreditAssignmentConfig:
     contrast_objective: Literal["gate", "hinge"] = "gate"
     readout_scale: float = 1.0
     sequential_lr: float = 0.0
+    grad_clip: float = 1.0  # Per-parameter gradient clipping for pseudo-gradients
 
     @classmethod
     def local_contrastive(
@@ -335,6 +336,7 @@ class CreditAssignmentConfig:
         tau_post: float = 0.9,
         homeostatic_scaling: bool = False,
         homeostatic_target: float = 1.0,
+        grad_clip: float = 1.0,
     ) -> CreditAssignmentConfig:
         """Potentiation/depression weights must differ: the rate-coded
         surrogate correlates the same (pre, post) activity pair in both
@@ -359,6 +361,7 @@ class CreditAssignmentConfig:
             tau_post=tau_post,
             homeostatic_scaling=homeostatic_scaling,
             homeostatic_target=homeostatic_target,
+            grad_clip=grad_clip,
         )
 
     @classmethod
@@ -405,6 +408,7 @@ class CreditAssignmentConfig:
         *,
         gamma: float = 0.05,
         feedback_matrix: Tensor | None = None,
+        grad_clip: float = 1.0,
     ) -> CreditAssignmentConfig:
         """Published PEPITA (Dellaferrera & Kreiman 2022, arXiv 2201.11665).
 
@@ -424,6 +428,7 @@ class CreditAssignmentConfig:
             local_objective="ff",
             orthogonal_init=False,
             feedback_scale=gamma,
+            grad_clip=grad_clip,
         )
 
     @classmethod
@@ -2130,7 +2135,7 @@ class TemporalTraceCredit(_SurrogateUndefined):
         stdp_grad = -(pot - dep)
         if self.config.homeostatic_scaling:
             stdp_grad += self._homeostatic_scale(name, geometry)
-        return stdp_grad
+        return self._clip_grads([stdp_grad])[0]
 
     def _homeostatic_scale(self, name: str, geometry: Geometry) -> Tensor:
         """Synaptic scaling (gain control): pull each incoming row toward
@@ -2141,6 +2146,19 @@ class TemporalTraceCredit(_SurrogateUndefined):
         w = geometry.params[name].detach()
         row_norms = w.norm(dim=1, keepdim=True)
         return w * (1 - self.config.homeostatic_target / (row_norms + 1e-8))
+
+    def _clip_grads(self, grads: list[Tensor]) -> list[Tensor]:
+        """Per-parameter gradient clipping."""
+        clip = getattr(self.config, "grad_clip", 1.0)
+        if clip is None or clip <= 0 or not grads:
+            return grads
+        clipped = []
+        for g in grads:
+            gn = g.norm()
+            if gn > clip:
+                g = g * (clip / (gn + 1e-8))
+            clipped.append(g)
+        return clipped
 
     def _rate_stdp_grads(
         self,
@@ -2171,7 +2189,7 @@ class TemporalTraceCredit(_SurrogateUndefined):
                 self.config.a_plus * causal - self.config.a_minus * anticausal_w
             )
             grads.append(stdp_grad)
-        return grads
+        return self._clip_grads(grads)
 
     def compute_stdp_window(
         self,
@@ -2608,6 +2626,19 @@ class PepitaCredit:
         self.config = config or CreditAssignmentConfig.pepita()
         self._substrate: Substrate | None = None
 
+    def _clip_grads(self, grads: list[Tensor]) -> list[Tensor]:
+        """Per-parameter gradient clipping."""
+        clip = getattr(self.config, "grad_clip", 1.0)
+        if clip is None or clip <= 0 or not grads:
+            return grads
+        clipped = []
+        for g in grads:
+            gn = g.norm()
+            if gn > clip:
+                g = g * (clip / (gn + 1e-8))
+            clipped.append(g)
+        return clipped
+
     def set_substrate(self, substrate: Substrate) -> None:
         """Register the system's substrate (wired by ``compose_system``)."""
         self._substrate = substrate
@@ -2662,7 +2693,7 @@ class PepitaCredit:
                 geometry.forward(x_tilde, substrate), y
             )
         grads = torch.autograd.grad(loss2, params)
-        return list(grads)
+        return self._clip_grads(list(grads))
 
     def compute_bias_pseudo_gradients(
         self,

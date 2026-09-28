@@ -18,13 +18,22 @@ from pathlib import Path
 
 def run_analysis(root: Path, task: str, budget: int) -> dict:
     """Run campaign_analyze.py and return JSON output."""
-    result = subprocess.run([
-        sys.executable, "scripts/campaign_analyze.py",
-        "--root", str(root),
-        "--task", task,
-        "--budget", str(budget),
-        "--json"
-    ], capture_output=True, text=True, cwd=Path(__file__).parent.parent)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/campaign_analyze.py",
+            "--root",
+            str(root),
+            "--task",
+            task,
+            "--budget",
+            str(budget),
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parent.parent,
+    )
 
     if result.returncode != 0:
         print(f"Analysis failed: {result.stderr}", file=sys.stderr)
@@ -41,9 +50,15 @@ def format_entry(analysis: dict, command: str, fixes: str, investigated: str) ->
     n_exps = sum(s["total_cells"] for s in analysis.get("clamps", []))
     n_voids = sum(s["count"] for s in analysis.get("voids", []))
 
-    clamp_warnings = [s for s in analysis.get("clamps", []) if s.get("clamp_rate", 0) > 0.2]
-    spectral_warnings = [s for s in analysis.get("spectral", []) if s.get("over_1", 0) > 0]
-    param_warnings = [s for s in analysis.get("params", []) if s.get("over_budget", 0) > 0]
+    clamp_warnings = [
+        s for s in analysis.get("clamps", []) if s.get("clamp_rate", 0) > 0.2
+    ]
+    spectral_warnings = [
+        s for s in analysis.get("spectral", []) if s.get("over_1", 0) > 0
+    ]
+    param_warnings = [
+        s for s in analysis.get("params", []) if s.get("over_budget", 0) > 0
+    ]
 
     lines = [
         f"## {today} — Iteration (auto)",
@@ -62,7 +77,9 @@ def format_entry(analysis: dict, command: str, fixes: str, investigated: str) ->
         lines.append(f"- No energy clamp warnings")
 
     if spectral_warnings:
-        lines.append(f"- ⚠️ {len(spectral_warnings)} dynamics have spectral_radius > 1.0")
+        lines.append(
+            f"- ⚠️ {len(spectral_warnings)} dynamics have spectral_radius > 1.0"
+        )
     else:
         lines.append(f"- No spectral radius explosions")
 
@@ -71,7 +88,9 @@ def format_entry(analysis: dict, command: str, fixes: str, investigated: str) ->
     else:
         lines.append(f"- No param blowups")
 
-    lines.append(f"- Pareto spread: {analysis.get('pareto', {}).get('spread_pct', 0):.1f} pp")
+    lines.append(
+        f"- Pareto spread: {analysis.get('pareto', {}).get('spread_pct', 0):.1f} pp"
+    )
 
     if fixes:
         lines.append("")
@@ -96,8 +115,12 @@ def main():
     parser.add_argument("--budget", type=int, default=25000, help="Parameter budget")
     parser.add_argument("--command", required=True, help="Full command that was run")
     parser.add_argument("--fixes", default="", help="Semicolon-separated fixes applied")
-    parser.add_argument("--investigated", default="", help="Semicolon-separated investigations")
-    parser.add_argument("--dry-run", action="store_true", help="Print entry without writing")
+    parser.add_argument(
+        "--investigated", default="", help="Semicolon-separated investigations"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print entry without writing"
+    )
     args = parser.parse_args()
 
     analysis = run_analysis(args.root, args.task, args.budget)

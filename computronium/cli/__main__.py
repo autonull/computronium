@@ -13,7 +13,11 @@ Usage::
 from __future__ import annotations
 
 import sys
+import warnings
 from typing import TYPE_CHECKING
+
+# Suppress informational UserWarnings (geometry/substrate hints, etc.)
+warnings.filterwarnings("ignore", category=UserWarning)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

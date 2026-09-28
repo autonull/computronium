@@ -48,25 +48,30 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
 }
 
 # Adaptive step_size overrides per (dynamics_type, credit_type) combo.
-# Reduces energy clamp frequency for problematic combinations.
+# Reduces energy clamp frequency and numerical instability for problematic combinations.
 # Key: (dynamics_type, credit_type) -> step_size multiplier (applied to base step_size)
 _STEP_SIZE_OVERRIDES: dict[tuple[str, str], float] = {
     ("energy_minimization", "random_projections"): 0.1,
     ("energy_minimization", "gradient"): 0.5,
-    ("energy_minimization", "thermodynamic_contrast"): 0.1,
-    ("energy_minimization", "pepita"): 0.1,
-    ("energy_minimization", "temporal_trace"): 0.05,
+    ("energy_minimization", "thermodynamic_contrast"): 0.001,
+    ("energy_minimization", "pepita"): 0.01,
+    (
+        "energy_minimization",
+        "temporal_trace",
+    ): 0.005,  # More aggressive for exploding loss
     ("energy_minimization", "target_inversion"): 0.1,
     ("diffusion", "random_projections"): 0.05,
     ("diffusion", "spectral_constrained"): 0.1,
     ("diffusion", "homeostatic"): 0.1,
-    ("diffusion", "temporal_trace"): 0.005,
+    ("diffusion", "temporal_trace"): 0.001,  # Very aggressive for 93M explosion
     ("diffusion", "target_inversion"): 0.1,
-    ("lazy", "temporal_trace"): 0.01,
-    ("lazy", "thermodynamic_contrast"): 0.1,
+    ("lazy", "temporal_trace"): 0.005,  # More aggressive for exploding loss
+    ("lazy", "thermodynamic_contrast"): 0.05,  # More aggressive
     ("lazy", "random_projections"): 0.1,
     ("lazy", "local_contrastive"): 0.05,
-    ("instantaneous", "temporal_trace"): 0.1,
+    ("instantaneous", "temporal_trace"): 0.01,  # More aggressive for 1M explosion
+    ("instantaneous", "pepita"): 0.01,  # For NaN loss
+    ("spike_integration", "temporal_trace"): 0.01,  # For exploding loss
     ("predictive_settling", "thermodynamic_contrast"): 0.5,
 }
 
