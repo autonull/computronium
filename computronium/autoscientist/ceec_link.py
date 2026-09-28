@@ -130,7 +130,7 @@ class CEECLink:
                 notes=proposal.hypothesis[:120],
             ),
         )
-        logger.info(
+        logger.debug(
             "CEEC ledger: %s %s (gate=%s)", run.experiment_id, run.status, run.outcome
         )
         return run

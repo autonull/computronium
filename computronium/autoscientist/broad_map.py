@@ -141,8 +141,8 @@ class ContinuousBudget:
         return replace(self, done=self.done + n)
 
 
-def _substrate_from_name(name: str):
-    """Create SubstrateConfig from substrate name."""
+def _substrate_from_name(name: str, dynamics: str | None = None):
+    """Create SubstrateConfig from substrate name, adding noise for diffusion dynamics."""
     from computronium.ontology.substrate._substrate import SubstrateConfig
 
     name_lower = name.lower()
@@ -158,6 +158,9 @@ def _substrate_from_name(name: str):
         "complex": SubstrateConfig.complex,
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
+    # Diffusion dynamics requires substrate noise > 0 for proper sampling
+    if dynamics == "diffusion":
+        return factory(noise_level=0.05)
     return factory()
 
 
@@ -222,7 +225,7 @@ def enumerate_constraint_voids(
 
     kb_path.parent.mkdir(parents=True, exist_ok=True)
 
-    substrate = _substrate_from_name(substrate_name)
+    # Substrate will be created per-dynamics inside the loop
     viable: set[str] = set()
 
     # Load known voids from KB
@@ -251,6 +254,7 @@ def enumerate_constraint_voids(
     now = time.time()
     for dynamics in GRID_DYNAMICS:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
+        substrate = _substrate_from_name(substrate_name, dynamics)
         for credit in GRID_CREDITS:
             ccfg = getattr(CreditAssignmentConfig, credit)()
             for update in GRID_UPDATES:
@@ -600,7 +604,7 @@ class StratifiedRandomDriver:
                     tags=["autoscientist", "broad_map", *maturity_tags, key],
                 )
             )
-        logger.info(
+        logger.debug(
             "Broad-map driver: %d novel cells (%d attempts, balance sample %s)",
             len(proposals),
             attempts,

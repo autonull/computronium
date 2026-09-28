@@ -53,6 +53,7 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
 _STEP_SIZE_OVERRIDES: dict[tuple[str, str], float] = {
     ("energy_minimization", "random_projections"): 0.1,
     ("energy_minimization", "gradient"): 0.5,
+    ("energy_minimization", "thermodynamic_contrast"): 0.2,
     ("diffusion", "random_projections"): 0.05,
     ("diffusion", "spectral_constrained"): 0.1,
     ("diffusion", "homeostatic"): 0.1,

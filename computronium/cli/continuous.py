@@ -227,6 +227,11 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="comp continuous", description=__doc__)
     _add_common_flags(parser)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="only propose cells without executing (shows experiment space diversity)",
+    )
     sub = parser.add_subparsers(dest="command")
     unquarantine = sub.add_parser(
         "unquarantine", help="release cells quarantined by a resolved defect"
@@ -345,6 +350,32 @@ def _run_burst(args: argparse.Namespace) -> None:
         campaign, driver = build_sweep(task_args)
         if args.loop:
             _run_forever(task_args, campaign, driver)
+            return
+        if getattr(args, "dry_run", False):
+            # Dry run: just propose and show what would be run
+            print(f"\n=== Dry run for task: {task} ===")
+            target_cells = args.target_cells or args.cells_per_iter
+            proposed = 0
+            for iteration in range(1, args.max_iterations + 1):
+                n_proposals = min(args.cells_per_iter, target_cells - proposed)
+                if n_proposals <= 0:
+                    break
+                proposals = driver.propose_batch(n_proposals=n_proposals)
+                if not proposals:
+                    print("No more novel cells to propose.")
+                    break
+                proposed += len(proposals)
+                print(f"\nIteration {iteration}: {len(proposals)} proposals (total: {proposed})")
+                for i, p in enumerate(proposals):
+                    geo = p.geometry or {}
+                    dyn = p.dynamics or "?"
+                    credit = p.credit or "?"
+                    update = p.update or "?"
+                    topo = geo.get("topology_type", "?")
+                    depth = geo.get("depth", "?")
+                    hidden = geo.get("hidden_dim", "?")
+                    print(f"  {i+1}. dyn={dyn} credit={credit} update={update} | topo={topo} depth={depth} hidden={hidden}")
+            print(f"\nTotal proposed: {proposed} cells")
             return
         run_burst(
             campaign,

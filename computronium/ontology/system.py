@@ -401,20 +401,20 @@ class SystemConfig:
     # --- Geometry-Dynamics Validation Methods ---
 
     def _validate_recurrent_geometry_dynamics(self) -> None:
-        """Recurrent geometry requires energy-based, PC-family, or instantaneous dynamics."""
-        if self.geometry.topology_type in {"recurrent", "recurrent_attractor"}:
-            if self.dynamics.dynamics_type not in {
-                "energy_minimization",
-                "predictive_settling",
-                "error_predictive_coding",
-                "pc_alm",
-                "instantaneous",
-            }:
-                raise ValueError(
-                    f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
-                    f"requires energy-based, PC-family, or instantaneous dynamics, "
-                    f"got {self.dynamics.dynamics_type!r}"
-                )
+        """Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics."""
+        if self.geometry.topology_type in {"recurrent", "recurrent_attractor"} and self.dynamics.dynamics_type not in {
+            "energy_minimization",
+            "predictive_settling",
+            "error_predictive_coding",
+            "pc_alm",
+            "diffusion",
+            "instantaneous",
+        }:
+            raise ValueError(
+                f"Recurrent geometry (topology_type={self.geometry.topology_type!r}) "
+                f"requires energy-based, PC-family, diffusion, or instantaneous dynamics, "
+                f"got {self.dynamics.dynamics_type!r}"
+            )
 
     def _validate_nonlayered_geometry_dynamics(self) -> None:
         """Non-layered geometries cannot host settling dynamics."""

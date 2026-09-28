@@ -123,6 +123,10 @@ def probe_spectral_radius(
     dimension-changing, so ρ(J) is undefined; this is a lower-bound
     instrument on σ_max(J) — not a certified radius. Returns 0.0 on any
     settle failure (the failure itself is a gate/void signal).
+
+    For stochastic dynamics (e.g., diffusion), the global RNG seed is fixed
+    before each settle call to isolate the deterministic Jacobian from
+    sampling noise.
     """
     import torch
 
@@ -134,6 +138,9 @@ def probe_spectral_radius(
         x_base = x_base.to(device)
 
     def activity(x: torch.Tensor) -> torch.Tensor:
+        # Fix global RNG seed for stochastic dynamics (e.g., diffusion)
+        # so that finite-difference Jacobian measures deterministic flow.
+        torch.manual_seed(0)
         state = CompositeState(activity={"x": x}, plastic={}, substrate={})
         settled = system.dynamics.settle(
             state, system.geometry, system.substrate, target=None
@@ -862,7 +869,7 @@ class AutoScientistCampaign:
             self._record_iteration(proposals, [], insights)
             return []
 
-        logger.info("Proposed %d experiments", len(proposals))
+        logger.debug("Proposed %d experiments", len(proposals))
 
         # Human approval gate
         if self.human_approval_gate:
@@ -877,12 +884,20 @@ class AutoScientistCampaign:
         results = []
         if not dry_run:
             for i, proposal in enumerate(proposals):
+                geo = proposal.geometry or {}
+                dyn = proposal.dynamics or "?"
+                credit = proposal.credit or "?"
+                update = proposal.update or "?"
+                topo = geo.get("topology_type", "?")
+                depth = geo.get("depth", "?")
+                hidden = geo.get("hidden_dim", "?")
                 logger.info(
-                    "Executing proposal %d/%d: %s on %s",
+                    "Executing %d/%d | %s | dyn=%s credit=%s update=%s | topo=%s depth=%s hidden=%s",
                     i + 1,
                     len(proposals),
-                    proposal.model,
                     proposal.task,
+                    dyn, credit, update,
+                    topo, depth, hidden,
                 )
                 if self.ceec is not None and not self._dry_run_gate(proposal):
                     # Dry-run gate rejected the proposal: no pre-registration,
@@ -895,6 +910,14 @@ class AutoScientistCampaign:
                     self._post_ledger(experiment, proposal, result)
                     if self.knowledge_base:
                         self._update_knowledge_base(proposal, result)
+                    logger.info(
+                        "Result: acc=%.4f loss=%.4f params=%d spectral=%.3f walltime=%.1fs",
+                        result.get("final_accuracy", 0.0),
+                        result.get("final_loss", 0.0),
+                        result.get("param_count", 0),
+                        result.get("spectral_radius", 0.0),
+                        result.get("walltime_s", 0.0),
+                    )
                 except (
                     Exception
                 ) as e:  # broad: a failing trial must not stop the campaign
@@ -924,7 +947,7 @@ class AutoScientistCampaign:
         if self.ceec is None:
             return None
         experiment = self.ceec.pre_register(proposal)
-        logger.info("Pre-registered %s in CEEC ledger", experiment.id)
+        logger.debug("Pre-registered %s in CEEC ledger", experiment.id)
         return experiment
 
     def _post_ledger(

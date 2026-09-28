@@ -154,7 +154,7 @@ class SystemTrainer:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(self.config.device)
-        logger.info("SystemTrainer using device: %s", self.device)
+        logger.debug("SystemTrainer using device: %s", self.device)
 
     def _set_seed(self) -> None:
         torch.manual_seed(self.config.seed)
@@ -367,7 +367,7 @@ class SystemTrainer:
 
     def fit(self) -> list[dict[str, float]]:
         """Run the training loop to ``config.max_epochs`` total epochs."""
-        logger.info(
+        logger.debug(
             "Starting training for %d epochs (from epoch %d)",
             self.config.max_epochs,
             self.current_epoch,
@@ -378,7 +378,7 @@ class SystemTrainer:
             self.train_epoch()
 
         self._harvest_finalize()
-        logger.info("Training complete")
+        logger.debug("Training complete")
         return self.history
 
     def close(self) -> None:
@@ -388,7 +388,7 @@ class SystemTrainer:
                 self.system.geometry.cpu()
         if hasattr(self, "device") and self.device.type == "cuda":
             torch.cuda.empty_cache()
-        logger.info("SystemTrainer resources cleaned up")
+        logger.debug("SystemTrainer resources cleaned up")
 
     def __enter__(self) -> SystemTrainer:  # ruff: ignore[non-self-return-type]
         return self
