@@ -140,7 +140,7 @@ def _build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--output", help="Output file path")
     export_parser.add_argument("--db", help="SQLite database path")
 
-    # report
+    # report (commissioned campaigns - R5b-F Stage 1)
     report_parser = subparsers.add_parser(
         "report",
         help="Render the static discovery report (HTML + JSON, R5b-F Stage 1)",
@@ -156,6 +156,30 @@ def _build_parser() -> argparse.ArgumentParser:
     report_parser.add_argument(
         "--output-dir",
         help="Output directory (default: <campaign-dir>/records)",
+    )
+
+    # kb-report (continuous discovery campaigns - TODO40 P1.1)
+    kb_report_parser = subparsers.add_parser(
+        "kb-report",
+        help="Render KB-based campaign report from continuous discovery (HTML + JSON)",
+    )
+    kb_report_parser.add_argument(
+        "--root",
+        type=Path,
+        required=True,
+        help="Continuous campaign root directory (contains kb.sqlite)",
+    )
+    kb_report_parser.add_argument(
+        "--task", default="mnist", help="Task to filter (default: mnist)"
+    )
+    kb_report_parser.add_argument(
+        "--objectives",
+        default="accuracy,walltime_s,param_count",
+        help="Comma-separated objectives for Pareto front",
+    )
+    kb_report_parser.add_argument(
+        "--output-dir",
+        help="Output directory (default: <root>/report)",
     )
 
     return parser
@@ -531,6 +555,22 @@ def _render_discovery_report(args) -> int:
     return 0
 
 
+def _render_kb_report(args) -> int:
+    """Render the KB-based campaign report from continuous discovery."""
+    from computronium.core.campaign.kb_report import build_kb_report
+
+    objectives = [o.strip() for o in args.objectives.split(",") if o.strip()]
+    report = build_kb_report(args.root, task=args.task, objectives=objectives)
+    out_dir = Path(args.output_dir or (args.root / "report"))
+    json_path, html_path = report.write(out_dir)
+    print(
+        f"KB campaign report: {len(report.pareto_front)} Pareto points, "
+        f"{report.kb_stats.get('total_experiments', 0)} experiments, "
+        f"{report.kb_stats.get('total_voids', 0)} voids -> {json_path} + {html_path}"
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for ``comp campaign``."""
     args = _build_parser().parse_args(argv)
@@ -547,6 +587,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "checkpoint": _manage_checkpoints,
         "export": _export_campaign,
         "report": _render_discovery_report,
+        "kb-report": _render_kb_report,
     }
     handler = handlers.get(args.subcommand)
     if handler is None:
