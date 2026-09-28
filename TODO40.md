@@ -454,3 +454,30 @@ All P0-P2 items verified:
 3. **Sophisticated Pareto predictor** — Current family-average is simple mean; consider per-topology or ML-based predictor
 4. **Deprecate legacy `run_deep_tier`** — Legacy front-stable path (≥2 bursts) coexists with L1→L2; unify
 5. **Daemon test flakiness** — `test_daemon_client_round_trips_live_daemon` has race condition (pre-existing, not TODO40)
+
+---
+## 17. Campaign-Driven Fixes (2026-09-27, Post-TODO40)
+
+After running verification campaigns, the following low-performers were identified and fixed:
+
+| Issue | Root Cause | Fix |
+|-------|------------|-----|
+| Diffusion dynamics spectral_radius ~254K | Substrate noise_level=0 for digital substrate | `_build_substrate_config()` adds `noise_level=0.05` for diffusion |
+| Tile mesh 768K params vs 25K budget | Fixed neurons_per_tile=48, tiles_per_layer=4 | `build_geometry_config()` auto-sizes from `param_budget` |
+| Energy clamp warnings not tracked in KB | No counter in dynamics; KB report looked for `energy_clamped` bool | Added `_energy_clamp_count` to `_SettleTelemetry`, increment in settle loop & `compute_energy`; KB report reads `energy_clamp_count > 0` |
+| Substrate not passed to cell composition | `compose_cell_system` hardcoded `DigitalSubstrate()` | Added `substrate` param to `compose_proposal_system` → `compose_cell_system` |
+
+**Verification commands run:**
+```bash
+# Diffusion fix
+uv run comp continuous --budget 30s --target-cells 5 --substrate digital --root artifacts/verify_campaign_XX
+# → Diffusion warning still shows during void enumeration (expected), but cells execute with noise
+
+# Tile mesh fix  
+uv run comp continuous --budget 30s --target-cells 3 --param_budget 25000 --root artifacts/verify_campaign_XX
+# → Tile mesh cells now respect param budget (auto-sized neurons_per_tile/tiles_per_layer)
+
+# Energy clamp tracking
+uv run comp continuous --budget 30s --target-cells 3 --root artifacts/verify_campaign_XX
+# → KB report shows clamp_count and clamp_rate per (dynamics, credit, update) triple
+```
