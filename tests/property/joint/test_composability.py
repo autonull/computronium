@@ -158,33 +158,83 @@ PLASTICITY_FACTORIES = {
 def create_random_system_config() -> SystemConfig:  # ruff: ignore[too-many-locals]
     """Create a random valid 6-D SystemConfig."""
     # Use only compatible combinations to avoid validation errors
+    # (substrate, dynamics, credit, update, allowed_geometries) - known compatible
     compatible_combinations = [
-        # (substrate, dynamics, credit, update) - known compatible
-        ("digital", "energy_minimization", "thermodynamic_contrast", "euclidean"),
-        ("digital", "energy_minimization", "random_projections", "euclidean"),
-        ("digital", "energy_minimization", "local_goodness", "euclidean"),
-        ("digital", "energy_minimization", "temporal_trace", "euclidean"),
-        ("digital", "energy_minimization", "target_inversion", "euclidean"),
-        ("digital", "energy_minimization", "gradient", "euclidean"),
-        ("analog", "energy_minimization", "thermodynamic_contrast", "euclidean"),
-        ("ternary", "energy_minimization", "thermodynamic_contrast", "euclidean"),
+        (
+            "digital",
+            "energy_minimization",
+            "thermodynamic_contrast",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
+        (
+            "digital",
+            "energy_minimization",
+            "random_projections",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
+        (
+            "digital",
+            "energy_minimization",
+            "local_goodness",
+            "euclidean",
+            ["feedforward"],
+        ),
+        (
+            "digital",
+            "energy_minimization",
+            "temporal_trace",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
+        (
+            "digital",
+            "energy_minimization",
+            "target_inversion",
+            "euclidean",
+            ["feedforward"],
+        ),
+        (
+            "digital",
+            "energy_minimization",
+            "gradient",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
+        (
+            "analog",
+            "energy_minimization",
+            "thermodynamic_contrast",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
+        (
+            "ternary",
+            "energy_minimization",
+            "thermodynamic_contrast",
+            "euclidean",
+            ["feedforward", "recurrent"],
+        ),
         (
             "sparse",
             "energy_minimization",
             "thermodynamic_contrast",
             "spectral_constrained",
+            ["feedforward", "recurrent"],
         ),
         (
             "complex",
             "energy_minimization",
             "thermodynamic_contrast",
             "riemannian_orthogonal",
+            ["feedforward", "recurrent"],
         ),
     ]
 
     combo = random.choice(compatible_combinations)
-    substrate_name, dynamics_name, credit_name, update_name = combo
-    geometry_name = random.choice(list(GEOMETRY_FACTORIES.keys()))
+    substrate_name, dynamics_name, credit_name, update_name, allowed_geometries = combo
+    geometry_name = random.choice(allowed_geometries)
     plasticity_name = random.choice(list(PLASTICITY_FACTORIES.keys()))
 
     _, substrate_config = SUBSTRATE_FACTORIES[substrate_name]()
