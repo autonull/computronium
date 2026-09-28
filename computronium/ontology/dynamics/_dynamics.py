@@ -962,11 +962,14 @@ class _SettleTelemetry:
     _settle_steps_used: int = 0
     _settle_layers: int = 1
     _converged: bool = False
+    _energy_clamp_count: int = 0
 
     def _note_settle_start(self) -> None:
         self._converged = False
         self._settle_steps_used = 0
         self._settle_layers = 1
+        # Note: _energy_clamp_count accumulates across free/nudged phases per cell
+        # Reset only at cell initialization (in __init__)
 
     @property
     def _settle_horizon(self) -> int:
@@ -1303,6 +1306,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                     clamped_val,
                     max_e,
                 )
+                self._energy_clamp_count += 1
             energy_val = clamped_val
             if self._free_energy_history is not None:
                 self._free_energy_history.append(energy_val)
@@ -1351,6 +1355,7 @@ class EnergyMinimizationDynamics(_SettleTelemetry):
                     clamped.item(),
                     max_e,
                 )
+                self._energy_clamp_count += 1
             return clamped
         return (acts**2).mean()
 

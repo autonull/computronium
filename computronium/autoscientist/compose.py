@@ -128,6 +128,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     *,
     input_dim: int,
     output_dim: int,
+    param_budget: int = 0,
 ) -> GeometryConfig:
     """Build a ``GeometryConfig`` from a proposal's geometry dict.
 
@@ -137,6 +138,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
             the proposal topology's own extras. Unknown keys raise.
         input_dim: Task input dimension.
         output_dim: Task output dimension.
+        param_budget: Optional parameter budget to constrain geometry size.
     """
     topology = str(geometry.get("topology_type", "feedforward"))
     if topology not in _TOPOLOGY_KEYS:
@@ -161,6 +163,29 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     init_scale = _as_float(geometry.get("init_scale"), 0.1)
     hidden_dims = (hidden,) * depth
 
+    # Compute tile_mesh params from param_budget if not explicitly set
+    if topology == "tile_mesh" and param_budget > 0:
+        # tile_mesh params ≈ input_dim * neurons_per_tile + (num_layers-1) * neurons_per_tile * tiles_per_layer * neurons_per_tile + neurons_per_tile * tiles_per_layer * output_dim
+        # Simplified: estimate neurons_per_tile and tiles_per_layer to fit budget
+        npt = _as_int(geometry.get("neurons_per_tile"), 0)
+        tpl = _as_int(geometry.get("tiles_per_layer"), 0)
+        if npt == 0 or tpl == 0:
+            # Estimate: each tile has npt neurons, tpl tiles per layer
+            # Total params ≈ input_dim * npt + depth * npt * tpl * npt + npt * tpl * output_dim
+            # For small budget, use smaller tiles
+            if param_budget < 50000:
+                npt = 16
+                tpl = 2
+            elif param_budget < 100000:
+                npt = 32
+                tpl = 3
+            else:
+                npt = 48
+                tpl = 4
+    else:
+        npt = _as_int(geometry.get("neurons_per_tile"), 48)
+        tpl = _as_int(geometry.get("tiles_per_layer"), 4)
+
     match topology:
         case "feedforward":
             return GeometryConfig.feedforward(
@@ -184,8 +209,8 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 input_dim=input_dim,
                 output_dim=output_dim,
                 num_layers=depth,
-                neurons_per_tile=_as_int(geometry.get("neurons_per_tile"), 48),
-                tiles_per_layer=_as_int(geometry.get("tiles_per_layer"), 4),
+                neurons_per_tile=npt,
+                tiles_per_layer=tpl,
                 init_scale=init_scale,
             )
         case "attention":
@@ -270,6 +295,8 @@ def compose_proposal_system(
     dynamics: str | None = None,
     credit: str | None = None,
     update: str | None = None,
+    substrate: str = "digital",
+    param_budget: int = 0,
     device: str = "cpu",
 ) -> System:
     """Compose the training system for a proposal.
@@ -289,6 +316,8 @@ def compose_proposal_system(
             input_dim=input_dim,
             output_dim=output_dim,
             lr=lr,
+            substrate=substrate,
+            param_budget=param_budget,
         )
     base_hidden = _as_int((geometry or {}).get("hidden_dim"), 64)
     factory = resolve_native_model(model)
@@ -300,7 +329,7 @@ def compose_proposal_system(
 
     configs = extract_config(system)
     configs["geometry"] = build_geometry_config(
-        geometry, input_dim=input_dim, output_dim=output_dim
+        geometry, input_dim=input_dim, output_dim=output_dim, param_budget=0
     )
     return compose_system_from_configs(
         configs["substrate"],  # type: ignore[arg-type]
@@ -337,6 +366,8 @@ def compose_cell_system(
     input_dim: int,
     output_dim: int,
     lr: float = 1e-3,
+    substrate: str = "digital",
+    param_budget: int = 0,
 ) -> System:
     """Compose a full grid cell (dynamics × credit × update × topology).
 
@@ -346,13 +377,14 @@ def compose_cell_system(
     """
     from computronium.ontology import (  # ruff: ignore[import-outside-top-level] (avoid import cycle)
         CreditAssignmentConfig,
-        DigitalSubstrate,
         ParameterUpdateConfig,
         StateDynamicsConfig,
     )
     from computronium.ontology.system import SystemConfig
 
-    gcfg = build_geometry_config(geometry, input_dim=input_dim, output_dim=output_dim)
+    gcfg = build_geometry_config(
+        geometry, input_dim=input_dim, output_dim=output_dim, param_budget=param_budget
+    )
     try:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         ccfg = getattr(CreditAssignmentConfig, credit)()
@@ -389,20 +421,47 @@ def compose_cell_system(
             credit_norm=ccfg.credit_norm,
         )
 
+    # Build substrate config - use noise for diffusion dynamics
+    substrate_config = _build_substrate_config(substrate, dynamics)
+
     # Cross-axis hard constraints are the single source of truth (TODO28:
     # the campaign path previously skipped validate(), executing cells
     # validate() forbids — e.g. spike × thermodynamic_contrast at chance).
     SystemConfig(
-        substrate=DigitalSubstrate().config,
+        substrate=substrate_config,
         geometry=gcfg,
         dynamics=dcfg,
         credit=ccfg,
         update=ucfg,
     ).validate()
     return compose_system_from_configs(
-        DigitalSubstrate().config,
+        substrate_config,
         gcfg,
         dcfg,
         ccfg,
         ucfg,
     )
+
+
+def _build_substrate_config(substrate_name: str, dynamics: str):
+    """Build substrate config, adding noise for diffusion dynamics."""
+    from computronium.ontology.substrate._substrate import SubstrateConfig
+
+    name_lower = substrate_name.lower()
+    factory_map = {
+        "digital": SubstrateConfig.digital,
+        "analog": SubstrateConfig.analog,
+        "memristive": SubstrateConfig.memristive,
+        "neuromorphic": SubstrateConfig.neuromorphic,
+        "optical": SubstrateConfig.optical,
+        "quantum": SubstrateConfig.quantum,
+        "sparse": SubstrateConfig.sparse,
+        "ternary": SubstrateConfig.ternary,
+        "complex": SubstrateConfig.complex,
+    }
+    factory = factory_map.get(name_lower, SubstrateConfig.digital)
+
+    # Diffusion dynamics requires substrate noise > 0 for proper sampling
+    if dynamics == "diffusion":
+        return factory(noise_level=0.05)
+    return factory()

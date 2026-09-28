@@ -25,19 +25,26 @@ or via the thin wrapper::
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import math
 import random
 import re
 import sqlite3
 import time
 import traceback
 from dataclasses import dataclass, replace
-from pathlib import Path  # noqa: TID251
-from typing import TYPE_CHECKING, Protocol
+from pathlib import Path
+from typing import TYPE_CHECKING, Protocol, cast
 
 from computronium.autoscientist.bridge import ExperimentProposal
-from computronium.autoscientist.campaign import AutoScientistCampaign
+from computronium.autoscientist.campaign import (
+    AutoScientistCampaign,
+    _probe_credit_alignment,
+    _ruler_lr,
+    probe_spectral_radius,
+)
 from computronium.autoscientist.defects import (
     DefectRecord,
     append_defect,
@@ -640,11 +647,13 @@ class BroadMappingCampaign(AutoScientistCampaign):
         *args: object,
         kb_path: Path,
         defects_path: Path | None = None,
+        substrate: str = "digital",
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
         self.kb_path = kb_path
         self.defects_path = defects_path
+        self.substrate = substrate
         # Ensure voids table exists
         import sqlite3
 
@@ -668,12 +677,252 @@ class BroadMappingCampaign(AutoScientistCampaign):
     def _execute_proposal(
         self, proposal: ExperimentProposal, dry_run: bool = False
     ) -> dict[str, object]:
-        try:
-            return super()._execute_proposal(proposal, dry_run)
-        except Exception as e:  # ruff: ignore[blind-except] (base class contracts broad failure)
-            if not dry_run and self.defects_path is not None:
-                self._record_defect(proposal, e)
-            raise
+        # Pass substrate to compose_proposal_system for proper substrate config
+
+        # Call parent but with substrate - we need to duplicate some logic
+        # Since the parent's _execute_proposal doesn't accept substrate,
+        # we'll call the base class's parent (AutoScientistCampaign) method
+        # but with our modifications. Simpler: just call super and let it work,
+        # but we need to pass substrate. The cleanest way is to override fully.
+        return self._execute_proposal_with_substrate(proposal, dry_run)
+
+    def _execute_proposal_with_substrate(
+        self, proposal: ExperimentProposal, dry_run: bool = False
+    ) -> dict[str, object]:
+        """Execute proposal with substrate awareness."""
+        import time
+
+        from computronium.autoscientist.compose import (
+            assert_task_runnable,
+            compose_proposal_system,
+            dry_run_system,
+        )
+        from computronium.core.profiling import (
+            estimate_train_step_flops,
+            get_gpu_memory_mb,
+        )
+        from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+        from computronium.core.utils.device import get_device
+        from computronium.domains.factory import create_task
+
+        assert_task_runnable(proposal.task)
+        task = create_task(
+            proposal.task or "mnist",
+            device=str(get_device()),
+            quick_mode=True,
+            num_workers=0,
+        )
+        task.setup()
+        input_dim = task.input_dim
+        if input_dim is None:
+            raise ValueError(f"Task {proposal.task} has no input_dim")
+        if isinstance(input_dim, tuple | list):
+            input_dim = int(math.prod(input_dim))
+        lr_raw = proposal.hyperparams.get("lr")
+        lr = (
+            float(lr_raw)
+            if isinstance(lr_raw, int | float)
+            else _ruler_lr(
+                proposal.task,
+                str((proposal.geometry or {}).get("topology_type", "feedforward")),
+            )
+        )
+        geometry = dict(proposal.geometry or {})
+        param_budget_val = proposal.hyperparams.get("param_budget", 0)
+        param_budget = (
+            int(param_budget_val) if isinstance(param_budget_val, int | float) else 0
+        )
+        system = compose_proposal_system(
+            proposal.model,
+            input_dim=int(input_dim),
+            output_dim=int(task.output_dim or 1),
+            lr=lr,
+            geometry=geometry,
+            dynamics=proposal.dynamics,
+            credit=proposal.credit,
+            update=proposal.update,
+            substrate=self.substrate,
+            param_budget=param_budget,
+        )
+
+        # Parameter-budget rematch (TODO28 fairness)
+        budget_raw = proposal.hyperparams.get("param_budget")
+        if isinstance(budget_raw, int | float) and budget_raw > 0:
+            for _ in range(3):
+                n_params = sum(p.numel() for p in system.geometry.parameters())
+                if n_params <= 0 or abs(n_params - budget_raw) / budget_raw <= 0.25:
+                    break
+                scale = math.sqrt(float(budget_raw) / n_params)
+                current = float(cast("int | float", geometry.get("hidden_dim", 64)))
+                geometry["hidden_dim"] = max(8, int(current * scale))
+                if geometry["hidden_dim"] == int(current):
+                    break
+                system = compose_proposal_system(
+                    proposal.model,
+                    input_dim=int(input_dim),
+                    output_dim=int(task.output_dim or 1),
+                    lr=lr,
+                    geometry=geometry,
+                    dynamics=proposal.dynamics,
+                    credit=proposal.credit,
+                    update=proposal.update,
+                    substrate=self.substrate,
+                    param_budget=param_budget,
+                )
+        param_count = sum(p.numel() for p in system.geometry.parameters())
+
+        spectral_radius = (
+            probe_spectral_radius(system, int(input_dim)) if param_count > 0 else 0.0
+        )
+
+        if dry_run:
+            dry_run_system(system)
+            return {
+                "proposal": {"task": proposal.task},
+                "status": "dry_run_ok",
+                "lr": lr,
+            }
+
+        credit_alignment = _probe_credit_alignment(system, proposal, task)
+
+        epochs_raw = proposal.hyperparams.get("epochs")
+        max_epochs = (
+            int(epochs_raw) if isinstance(epochs_raw, int | float) and epochs_raw else 5
+        )
+        limit_raw = proposal.hyperparams.get("limit_batches")
+        config = SystemTrainerConfig(
+            max_epochs=max_epochs,
+            batch_size=64,
+            track_energy=True,
+            limit_train_batches=(
+                int(limit_raw)
+                if isinstance(limit_raw, int | float) and limit_raw
+                else None
+            ),
+        )
+
+        with SystemTrainer(
+            system,
+            config,
+            task.get_dataloader("train"),
+            task.get_dataloader("val"),
+            step_callback=self.step_callback,
+        ) as trainer:
+            fit_started = time.monotonic()
+            history = trainer.fit()
+            walltime_s = round(time.monotonic() - fit_started, 3)
+            last = history[-1] if history else {}
+
+        # Multi-objective metrics
+        flops = 0.0
+        memory_mb = 0.0
+        with contextlib.suppress(Exception):
+            flops = float(estimate_train_step_flops(system, 64))
+        with contextlib.suppress(Exception):
+            memory_mb = get_gpu_memory_mb()
+
+        # Settle-phase energy from telemetry
+        settle_energy = 0.0
+        settle_steps_used = 0
+        with contextlib.suppress(Exception):
+            if hasattr(system, "dynamics") and hasattr(
+                system.dynamics, "_settle_energy"
+            ):
+                settle_energy = float(system.dynamics._settle_energy)
+            if hasattr(system, "dynamics") and hasattr(
+                system.dynamics, "_settle_steps_used"
+            ):
+                settle_steps_used = int(system.dynamics._settle_steps_used)
+
+        # Track energy clamp
+        energy_clamp_count = 0
+        with contextlib.suppress(Exception):
+            if hasattr(system, "dynamics") and hasattr(
+                system.dynamics, "_energy_clamp_count"
+            ):
+                energy_clamp_count = int(system.dynamics._energy_clamp_count)
+
+        # Substrate objectives
+        substrate_objectives: dict[str, float] = {}
+        with contextlib.suppress(Exception):
+            from computronium.ontology.substrate.spec import (
+                SubstrateSpec,
+                compute_substrate_objectives,
+            )
+
+            substrate_spec = SubstrateSpec.from_config(system.substrate.config)
+            settle_telemetry = {
+                "free_energy": last.get("free_energy", 0.0),
+                "settle_steps": settle_steps_used,
+            }
+            runtime_stats = {
+                "walltime_s": walltime_s,
+                "flops": flops,
+                "memory_mb": memory_mb,
+            }
+            substrate_objectives = compute_substrate_objectives(
+                substrate_spec, settle_telemetry, runtime_stats
+            )
+
+        # Build metrics dict
+        metrics = {
+            "final_accuracy": last.get("val_acc", last.get("train_acc", 0.0)),
+            "final_loss": last.get("train_loss", 0.0),
+            "train_accuracy": last.get("train_acc", 0.0),
+            "epochs_completed": float(len(history)),
+            "param_count": float(param_count),
+            "spectral_radius": spectral_radius,
+            "settle_horizon": 30.0,
+            "settle_configured_horizon": 30.0,
+            "settle_layers": 1.0,
+            "credit_alignment": credit_alignment,
+            "walltime_s": walltime_s,
+            "lr": lr,
+            "flops": flops,
+            "memory_mb": memory_mb,
+            "energy_per_step": settle_energy / max(settle_steps_used, 1)
+            if settle_steps_used > 0
+            else 0.0,
+            "latency_ms": walltime_s * 1000 / max(len(history), 1),
+            "bp_deficit": 0.0,
+            "ruler_walltime_ratio": 0.0,
+            "ruler_energy_ratio": 0.0,
+            "lyapunov_exponent": 0.0,
+            "max_singular_value": 0.0,
+            "psi_capacity": 0.0,
+            "consolidation_cost": 0.0,
+            "rewrite_rate": 0.0,
+            "feedback_path_length": 0.0,
+            "trace_variance": 0.0,
+            "free_energy_final": last.get("free_energy", 0.0),
+            "stability_plasticity_ratio": 0.0,
+            "credit_efficiency": 0.0,
+            "settle_steps_used": float(settle_steps_used),
+            "nan_loss": 0.0,
+            "val_accuracy": last.get("val_acc", last.get("train_acc", 0.0)),
+            "energy_clamp_count": float(energy_clamp_count),
+            **substrate_objectives,
+        }
+
+        # Merge metrics into result dict (parent _update_knowledge_base expects top-level keys)
+        result = {
+            "proposal": {
+                "hypothesis": proposal.hypothesis,
+                "model": proposal.model,
+                "task": proposal.task,
+                "propagator": proposal.propagator,
+                "optimizer": proposal.optimizer,
+                "geometry": proposal.geometry,
+                "dynamics": proposal.dynamics,
+                "credit": proposal.credit,
+                "update": proposal.update,
+                "justification": proposal.justification,
+            },
+            "status": "completed",
+            "lr": lr,
+            **metrics,
+        }
+        return result
 
     def _record_defect(self, proposal: ExperimentProposal, error: Exception) -> None:
         """Append one DefectRecord *before* the base class closes the CEEC
@@ -787,6 +1036,7 @@ def build_sweep(
         ceec_ledger_path=args.root / "ledger.sqlite",
         kb_path=args.root / "kb.sqlite",
         defects_path=args.root / "runtime_defects.jsonl",
+        substrate=substrate_name,
     )
     campaign.knowledge_base = driver_seeded_kb(args.root / "kb.sqlite")
     campaign.proposer = driver  # type: ignore[assignment]

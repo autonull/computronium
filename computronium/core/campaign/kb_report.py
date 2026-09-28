@@ -455,7 +455,7 @@ def _extract_clamps(kb_path: Path, task: str | None) -> list[ClampSummary]:
             continue
 
         triple = (dynamics, credit, update)
-        clamped = metrics.get("energy_clamped", False)
+        clamped = metrics.get("energy_clamp_count", 0) > 0
 
         if triple not in by_triple:
             by_triple[triple] = {"total": 0, "clamped": 0}
