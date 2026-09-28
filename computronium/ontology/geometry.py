@@ -1218,7 +1218,18 @@ def _make_tile_geometry(config: GeometryConfig) -> TileGeometry:
     )
 
 
-@geometry_backend("tile_mesh", "tile", ctor=_make_tile_geometry)
+def _make_tile_mesh_geometry(config: GeometryConfig) -> TileGeometry:
+    """Create TileGeometry for tile_mesh topology with fixed tiles_per_layer."""
+    return TileGeometry(
+        config,
+        neurons_per_tile=config.neurons_per_tile,
+        tiles_per_layer=config.tiles_per_layer,
+        use_tile_mesh_build=True,
+    )
+
+
+@geometry_backend("tile", ctor=_make_tile_geometry)
+@geometry_backend("tile_mesh", ctor=_make_tile_mesh_geometry)
 class TileGeometry(nn.Module):
     """TileNet mesh topology: modular independent tiles with local boundaries and asynchronous routing.
 
@@ -1248,6 +1259,7 @@ class TileGeometry(nn.Module):
         neurons_per_tile: int = 48,
         tiles_per_layer: int = 4,
         use_skip_connections: bool = False,
+        use_tile_mesh_build: bool = False,
     ):
         super().__init__()
         self.config = config
@@ -1258,14 +1270,24 @@ class TileGeometry(nn.Module):
             self._graph = tile_graph
         else:
             self._graph = TileGraph()
-            self._graph.build_layered(
-                input_dim=config.input_dim,
-                output_dim=config.output_dim,
-                neurons_per_tile=neurons_per_tile,
-                num_hidden_layers=max(config.num_layers - 2, 1),
-                tiles_per_layer=tiles_per_layer,
-                use_skip_connections=use_skip_connections,
-            )
+            if use_tile_mesh_build:
+                self._graph.build_tile_mesh(
+                    input_dim=config.input_dim,
+                    output_dim=config.output_dim,
+                    neurons_per_tile=neurons_per_tile,
+                    num_layers=config.num_layers,
+                    tiles_per_layer=tiles_per_layer,
+                    use_skip_connections=use_skip_connections,
+                )
+            else:
+                self._graph.build_layered(
+                    input_dim=config.input_dim,
+                    output_dim=config.output_dim,
+                    neurons_per_tile=neurons_per_tile,
+                    num_hidden_layers=max(config.num_layers - 2, 1),
+                    tiles_per_layer=tiles_per_layer,
+                    use_skip_connections=use_skip_connections,
+                )
 
         self._build_projections()
         self._build_tile_params()

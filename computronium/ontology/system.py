@@ -363,6 +363,7 @@ class SystemConfig:
         self._validate_tile_mesh_dynamics()
         self._validate_nca_ntm_geometry()
         self._validate_diffusion_dynamics_credit()
+        self._validate_diffusion_dynamics_geometry()
         self._validate_spike_integration_credit()
         self._validate_predictive_settling_credit()
         self._validate_pc_alm_dynamics()
@@ -466,6 +467,15 @@ class SystemConfig:
                     f"Diffusion dynamics produce a non-differentiable settled "
                     f"state; gradient/backprop credit "
                     f"(credit_type={self.credit.credit_type!r}) is unsupported"
+                )
+
+    def _validate_diffusion_dynamics_geometry(self) -> None:
+        """Diffusion dynamics requires energy-based geometry (recurrent)."""
+        if self.dynamics.dynamics_type == "diffusion":
+            if self.geometry.topology_type not in {"recurrent", "recurrent_attractor"}:
+                raise ValueError(
+                    f"Diffusion dynamics requires recurrent geometry, "
+                    f"got {self.geometry.topology_type!r}"
                 )
 
     def _validate_spike_integration_credit(self) -> None:

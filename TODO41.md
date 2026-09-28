@@ -14,12 +14,23 @@
 | 2 | **Fixed driver stratification to use pre-computed viable topologies** | `computronium/autoscientist/broad_map.py` | Modified `StratifiedRandomDriver` to pre-compute viable topologies per (dynamics, credit, update) triple during init, avoiding random sampling of non-viable topologies. Driver now iterates through ALL viable topologies for a triple when scoring proposals, ensuring efficient exploration. |
 | 3 | **Added KB path storage in driver** | `computronium/autoscientist/broad_map.py` | Driver now stores `_kb_path` and `_kb` references to avoid re-creating KnowledgeBase instances in `_load_objective_coverage()` and `_reload_covered()`. |
 | 4 | **Updated `driver_seeded_kb()` and `next_burst_tag()` to accept shared KB** | `computronium/autoscientist/broad_map.py` | Both functions now accept an optional pre-created `KnowledgeBase` instance, avoiding redundant initialization. |
+| 5 | **Fixed diffusion spectral radius explosions** | `computronium/ontology/system.py` | Added `_validate_diffusion_dynamics_geometry()` to restrict diffusion to recurrent geometries only (voids feedforward, etc.). Diffusion with feedforward was fundamentally unstable (spectral_radius ~300K). |
+| 6 | **Fixed spatial_lattice param blowup** | `computronium/autoscientist/compose.py` | Added `_constrain_spatial_lattice_dims()` to auto-constrain `lattice_dims` from `param_budget`. Default (4,4,4) gave ~3.8M params; now fits budget. |
+| 7 | **Fixed tile_mesh param blowup & energy clamps** | `computronium/core/tile/topology.py`, `computronium/ontology/geometry.py` | Added `TileGraph.build_tile_mesh()` with fixed `tiles_per_layer` for all layers. Registered separate `tile_mesh` backend. Param count 641K → 27K (at 25K budget). |
+| 8 | **Added dynamics step_size override for diffusion** | `computronium/autoscientist/compose.py` | Added `_DYNAMICS_STEP_SIZE_OVERRIDES` with `"diffusion": 0.001` for stable Langevin dynamics. |
+| 9 | **Added update step_size overrides for diffusion** | `computronium/ontology/update.py` | Added `("diffusion", "spectral_constrained"): 0.1` and `("diffusion", "homeostatic"): 0.1` to `_STEP_SIZE_OVERRIDES`. |
+| 10 | **Documented structural voids** | `COORDINATE_VOIDS.md` | Created file documenting PCALM×recurrent, Lazy×non-feedforward, Diffusion×feedforward, SpatialLattice×default voids. |
 
 ### Verification
 - All integration tests pass: `pytest tests/integration/test_continuous_burst.py -q` ✅ (8 passed)
 - Campaign readers pass: `pytest tests/unit/test_campaign_readers.py -k "not daemon" -q` ✅ (7 passed)
 - Dev-env smoke test passes ✅
 - Format & lint pass ✅
+- Verification burst (60s, 10 cells): 8 completed, 0 failed, 3940 structural voids, 0 defects
+  - No energy clamp warnings
+  - No spectral radius explosions (max 0.34)
+  - No param blowups (tile_mesh 27K, spatial_lattice ~29K)
+  - Diffusion voided for non-recurrent geometries (structural boundary)
 
 ---
 
@@ -372,6 +383,12 @@ A cell is **measurement-grade (L2)** only if:
 8. **Pre-computed viable topologies only works with `viable` frozenset** — If `viable=None` (no void enumeration), the driver falls back to random sampling. Ensure void enumeration runs first or add fallback logic.
 
 9. **KB report generation creates new KB instance** — `build_kb_report()` in `core/campaign/kb_report.py` creates its own `KnowledgeBase`, adding another VectorStore initialization. Consider passing shared KB or making VectorStore a singleton per DB path.
+
+10. **Energy clamp tracking not persisted to KB** — Energy clamp warnings appear in logs but `energy_clamp_count` in KB metrics is 0. Need to wire `_SettleTelemetry._energy_clamp_count` to experiment metrics.
+
+11. **Tile mesh spectral radius still elevated** — Tile mesh cells show spectral_radius ~0.3-0.4 (vs <0.1 for feedforward). Investigate if tile connectivity causes transient amplification.
+
+12. **Spatial lattice accuracy low** — Spatial lattice cells ~10% accuracy. May need substrate-aware config (neuromorphic substrate with sparsity).
 
 ---
 

@@ -109,6 +109,106 @@ class TileGraph:
                         # Only add if not already connected
                         self._add_edge(src_id, dst_id)
 
+    def build_tile_mesh(
+        self,
+        input_dim: int,
+        output_dim: int,
+        neurons_per_tile: int,
+        num_layers: int,
+        tiles_per_layer: int,
+        use_skip_connections: bool = False,
+    ) -> None:
+        """Build a tile mesh with fixed tiles_per_layer for all layers.
+
+        Unlike build_layered, this creates exactly tiles_per_layer tiles per layer
+        (including input/output), with input/output projections handling dim mapping.
+        """
+        total_layers = num_layers + 1  # input + hidden layers + output = num_layers + 1
+
+        tile_id = 0
+
+        # Input layer: tiles_per_layer tiles
+        for tile_col in range(tiles_per_layer):
+            tile = TileState(
+                id=tile_id,
+                neurons=neurons_per_tile,
+                layer_id=0,
+                pos_x=0.0,
+                pos_y=(
+                    (float(tile_col) / max(1, tiles_per_layer - 1))
+                    if tiles_per_layer > 1
+                    else 0.5
+                ),
+                is_input=True,
+                is_output=False,
+            )
+            self.tiles[tile_id] = tile
+            tile_id += 1
+        self.input_tile_ids = list(range(tiles_per_layer))
+        self.layer_ids.append(self.input_tile_ids.copy())
+
+        # Hidden layers: (num_layers - 1) layers of tiles_per_layer tiles each
+        for layer_idx in range(1, num_layers):
+            layer_tile_ids: list[int] = []
+            for tile_col in range(tiles_per_layer):
+                tile = TileState(
+                    id=tile_id,
+                    neurons=neurons_per_tile,
+                    layer_id=layer_idx,
+                    pos_x=float(layer_idx) / max(1, total_layers - 1),
+                    pos_y=(
+                        (float(tile_col) / max(1, tiles_per_layer - 1))
+                        if tiles_per_layer > 1
+                        else 0.5
+                    ),
+                    is_input=False,
+                    is_output=False,
+                )
+                self.tiles[tile_id] = tile
+                layer_tile_ids.append(tile_id)
+                tile_id += 1
+            self.layer_ids.append(layer_tile_ids)
+
+        # Output layer: tiles_per_layer tiles (last one may have fewer neurons)
+        layer_tile_ids: list[int] = []
+        for tile_col in range(tiles_per_layer):
+            # Last output tile gets the remainder neurons
+            if tile_col == tiles_per_layer - 1:
+                actual_neurons = output_dim
+            else:
+                actual_neurons = neurons_per_tile
+            tile = TileState(
+                id=tile_id,
+                neurons=actual_neurons,
+                layer_id=num_layers,
+                pos_x=1.0,
+                pos_y=(
+                    (float(tile_col) / max(1, tiles_per_layer - 1))
+                    if tiles_per_layer > 1
+                    else 0.5
+                ),
+                is_input=False,
+                is_output=True,
+            )
+            self.tiles[tile_id] = tile
+            layer_tile_ids.append(tile_id)
+            tile_id += 1
+        self.output_tile_ids = layer_tile_ids
+        self.layer_ids.append(layer_tile_ids)
+
+        # Connect adjacent layers densely
+        for layer_idx in range(len(self.layer_ids) - 1):
+            for src_id in self.layer_ids[layer_idx]:
+                for dst_id in self.layer_ids[layer_idx + 1]:
+                    self._add_edge(src_id, dst_id)
+
+        # Add skip connections (every 2 layers) if enabled
+        if use_skip_connections and len(self.layer_ids) > 2:
+            for layer_idx in range(len(self.layer_ids) - 2):
+                for src_id in self.layer_ids[layer_idx]:
+                    for dst_id in self.layer_ids[layer_idx + 2]:
+                        self._add_edge(src_id, dst_id)
+
     def build_custom(
         self,
         n_tiles: int,

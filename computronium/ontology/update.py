@@ -54,6 +54,8 @@ _STEP_SIZE_OVERRIDES: dict[tuple[str, str], float] = {
     ("energy_minimization", "random_projections"): 0.1,
     ("energy_minimization", "gradient"): 0.5,
     ("diffusion", "random_projections"): 0.05,
+    ("diffusion", "spectral_constrained"): 0.1,
+    ("diffusion", "homeostatic"): 0.1,
 }
 
 

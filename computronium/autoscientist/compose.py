@@ -39,6 +39,13 @@ __all__ = [
 
 logger = get_logger(__name__)
 
+# Dynamics step_size overrides for stable settling.
+# Key: dynamics_type -> step_size value (replaces default)
+_DYNAMICS_STEP_SIZE_OVERRIDES: Final[dict[str, float]] = {
+    "diffusion": 0.001,  # Lower step_size for stable Langevin dynamics
+}
+
+
 #: ``task -> "run" | "fenced"`` compatibility gate (P1.4). Fenced lanes fail
 #: with a reason instead of silently degrading to another task.
 TASK_COMPAT: Final[dict[str, str]] = {
@@ -92,12 +99,77 @@ def _as_float(value: object, default: float) -> float:
     return float(value) if isinstance(value, int | float) else default
 
 
-def _as_int_tuple(value: object, default: tuple[int, ...]) -> tuple[int, ...]:
+def _as_int_tuple(value: object, default: tuple[int, int, int]) -> tuple[int, int, int]:
     if isinstance(value, list | tuple) and all(
         isinstance(v, int | float) for v in value
     ):
-        return tuple(int(v) for v in value)
+        result = tuple(int(v) for v in value)
+        if len(result) != 3:
+            return default
+        return result  # type: ignore[return-value]
     return default
+
+
+def _estimate_spatial_lattice_params(
+    lattice_dims: tuple[int, int, int],
+    hidden_dims: tuple[int, ...],
+    input_dim: int,
+    output_dim: int,
+) -> int:
+    """Estimate parameter count for spatial_lattice geometry."""
+    d, h, w = lattice_dims
+    num_sites = d * h * w
+    first_hidden = hidden_dims[0] if hidden_dims else output_dim
+
+    # Input projection: input_dim -> num_sites * first_hidden
+    input_proj_params = input_dim * num_sites * first_hidden
+
+    # Site weights and biases per layer
+    site_weight_params = 0
+    site_bias_params = 0
+    prev_hidden = first_hidden
+    for hidden in hidden_dims:
+        site_weight_params += num_sites * hidden * prev_hidden
+        site_bias_params += num_sites * hidden
+        prev_hidden = hidden
+
+    # Output projection: num_sites * last_hidden -> output_dim
+    output_proj_params = num_sites * prev_hidden * output_dim
+
+    return (
+        input_proj_params + site_weight_params + site_bias_params + output_proj_params
+    )
+
+
+def _constrain_spatial_lattice_dims(
+    lattice_dims: tuple[int, int, int],
+    hidden_dims: tuple[int, ...],
+    input_dim: int,
+    output_dim: int,
+    param_budget: int,
+) -> tuple[int, int, int]:
+    """Constrain lattice_dims to fit within param_budget."""
+    estimated = _estimate_spatial_lattice_params(
+        lattice_dims, hidden_dims, input_dim, output_dim
+    )
+    if estimated <= param_budget:
+        return lattice_dims
+
+    # Progressively reduce lattice dimensions until we fit
+    d, h, w = lattice_dims
+    # Try reducing each dimension
+    for new_d in range(max(1, d), 0, -1):
+        for new_h in range(max(1, h), 0, -1):
+            for new_w in range(max(1, w), 0, -1):
+                new_dims = (new_d, new_h, new_w)
+                new_estimated = _estimate_spatial_lattice_params(
+                    new_dims, hidden_dims, input_dim, output_dim
+                )
+                if new_estimated <= param_budget:
+                    return new_dims
+
+    # Fallback: minimal lattice
+    return (1, 1, 1)
 
 
 def assert_task_runnable(task_name: str | None) -> None:
@@ -223,12 +295,16 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 init_scale=init_scale,
             )
         case "spatial_lattice":
+            # Constrain lattice_dims from param_budget to avoid blowups
+            lattice_dims = _as_int_tuple(geometry.get("lattice_dims"), (4, 4, 4))
+            if param_budget > 0:
+                lattice_dims = _constrain_spatial_lattice_dims(
+                    lattice_dims, hidden_dims, input_dim, output_dim, param_budget
+                )
             return GeometryConfig.spatial_lattice(
                 input_dim=input_dim,
                 output_dim=output_dim,
-                lattice_dims=_as_int_tuple(  # type: ignore[arg-type]
-                    geometry.get("lattice_dims"), (4, 4, 4)
-                ),
+                lattice_dims=lattice_dims,
                 hidden_dims=hidden_dims,
                 connectivity_radius=_as_int(geometry.get("connectivity_radius"), 1),
                 init_scale=init_scale,
@@ -386,7 +462,8 @@ def compose_cell_system(
         geometry, input_dim=input_dim, output_dim=output_dim, param_budget=param_budget
     )
     try:
-        dcfg = getattr(StateDynamicsConfig, dynamics)()
+        dynamics_step_size = _DYNAMICS_STEP_SIZE_OVERRIDES.get(dynamics, 0.1)
+        dcfg = getattr(StateDynamicsConfig, dynamics)(step_size=dynamics_step_size)
         ccfg = getattr(CreditAssignmentConfig, credit)()
         update_factory = getattr(ParameterUpdateConfig, update)
         kwargs = (
