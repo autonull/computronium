@@ -7,7 +7,7 @@ dynamics family receives an equal share of proposals — the data shape a
 high-dimensional visualization (UMAP/t-SNE) needs.
 
 Epistemic rule (TODO28 §1): dry-run-rejected cells are **structural voids**,
-not experiments. They are recorded to ``structural_voids.jsonl`` (and marked
+not experiments. They are recorded in the KB's structural_voids table (and marked
 covered in the KB) but never pre-registered in the CEEC ledger. Every cell
 that passes the gate is pre-registered, executed, and ledgered as usual.
 
@@ -123,17 +123,18 @@ class ContinuousBudget:
 
 
 def enumerate_constraint_voids(
-    kb_path: Path, voids_path: Path, *, task: str
+    kb_path: Path, task: str
 ) -> set[str]:
     """Walk the full grid product through ``SystemConfig.validate()``.
 
     Constraint rejections are structural voids (TODO28): enumerate every
     dynamics × credit × update × topology combination cheaply — no GPU,
-    no training — writing each rejection to ``structural_voids.jsonl`` and
+    no training — writing each rejection to KB's voids table and
     returning the viable cell keys. The sampler then draws only viable
     cells, so governed budget is never spent proposing known-rejected
     coordinates.
     """
+    import sqlite3
     from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -144,19 +145,31 @@ def enumerate_constraint_voids(
 
     substrate = DigitalSubstrate().config
     viable: set[str] = set()
-    fresh_rows: list[str] = []
-    known = (
-        {
-            (r["dynamics"], r["credit"], r["update"], r["topology"])
-            for r in (
-                json.loads(line)
-                for line in voids_path.read_text(encoding="utf-8").splitlines()
-                if line.strip()
-            )
-        }
-        if voids_path.exists()
-        else set()
-    )
+
+    # Load known voids from KB
+    conn = sqlite3.connect(kb_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS structural_voids (
+            dynamics TEXT NOT NULL,
+            credit TEXT NOT NULL,
+            "update" TEXT NOT NULL,
+            topology TEXT NOT NULL,
+            category TEXT NOT NULL,
+            error TEXT,
+            task TEXT NOT NULL,
+            timestamp REAL NOT NULL,
+            PRIMARY KEY (dynamics, credit, "update", topology, task)
+        );
+    """)
+    known_rows = conn.execute(
+        'SELECT dynamics, credit, "update", topology FROM structural_voids WHERE task = ?',
+        (task,),
+    ).fetchall()
+    known = set(known_rows)
+    conn.close()
+
+    fresh_rows: list[tuple] = []
+    now = time.time()
     for dynamics in GRID_DYNAMICS:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         for credit in GRID_CREDITS:
@@ -178,29 +191,29 @@ def enumerate_constraint_voids(
                             update=ucfg,
                         ).validate()
                     except ValueError as exc:
-                        fresh_rows.append(
-                            json.dumps({
-                                "timestamp": time.time(),
-                                "task": task,
-                                "dynamics": dynamics,
-                                "credit": credit,
-                                "update": update,
-                                "topology": topology,
-                                "category": classify_void(str(exc)),
-                                "error": str(exc)[:300],
-                            })
-                            + "\n"
-                        )
+                        category = classify_void(str(exc))
+                        fresh_rows.append((
+                            dynamics, credit, update, topology,
+                            category, str(exc)[:300], task, now
+                        ))
                     else:
                         viable.add(cell_key(dynamics, credit, update, topology))
+
     if fresh_rows:
-        voids_path.parent.mkdir(parents=True, exist_ok=True)
-        with voids_path.open("a", encoding="utf-8") as fh:
-            fh.writelines(fresh_rows)
+        conn = sqlite3.connect(kb_path)
+        conn.executemany(
+            """INSERT OR IGNORE INTO structural_voids
+               (dynamics, credit, "update", topology, category, error, task, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            fresh_rows,
+        )
+        conn.commit()
+        conn.close()
+
     logger.info(
         "Constraint enumeration: %d viable / %d void cells (%d new)",
         len(viable),
-        len(fresh_rows),
+        len(known) + len(fresh_rows),
         len(fresh_rows),
     )
     return viable
@@ -501,7 +514,7 @@ def classify_void(error: str) -> str:
 class BroadMappingCampaign(AutoScientistCampaign):
     """Campaign with the two side-channel ledgers (TODO29):
 
-    - dry-run-rejected cells → ``structural_voids.jsonl`` (ontology
+    - dry-run-rejected cells → KB structural_voids table (ontology
       boundaries; never ledgered);
     - gate-passing runtime crashes → ``runtime_defects.jsonl``
       (implementation defects; CEEC-failed by the base class, cell
@@ -514,13 +527,31 @@ class BroadMappingCampaign(AutoScientistCampaign):
     def __init__(
         self,
         *args: object,
-        voids_path: Path,
+        kb_path: Path,
         defects_path: Path | None = None,
         **kwargs: object,
     ) -> None:
         super().__init__(*args, **kwargs)  # type: ignore[arg-type]
-        self.voids_path = voids_path
+        self.kb_path = kb_path
         self.defects_path = defects_path
+        # Ensure voids table exists
+        import sqlite3
+        conn = sqlite3.connect(kb_path)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS structural_voids (
+                dynamics TEXT NOT NULL,
+                credit TEXT NOT NULL,
+                "update" TEXT NOT NULL,
+                topology TEXT NOT NULL,
+                category TEXT NOT NULL,
+                error TEXT,
+                task TEXT NOT NULL,
+                timestamp REAL NOT NULL,
+                PRIMARY KEY (dynamics, credit, "update", topology, task)
+            );
+        """)
+        conn.commit()
+        conn.close()
 
     def _execute_proposal(
         self, proposal: ExperimentProposal, dry_run: bool = False
@@ -568,18 +599,25 @@ class BroadMappingCampaign(AutoScientistCampaign):
     def _record_incompatible(self, proposal: ExperimentProposal, error: str) -> None:
         super()._record_incompatible(proposal, error)
         geometry = proposal.geometry or {}
-        row = {
-            "timestamp": time.time(),
-            "task": proposal.task,
-            "dynamics": proposal.dynamics,
-            "credit": proposal.credit,
-            "update": proposal.update,
-            "topology": geometry.get("topology_type"),
-            "category": classify_void(error),
-            "error": error[:300],
-        }
-        with self.voids_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row) + "\n")
+        import sqlite3
+        conn = sqlite3.connect(self.kb_path)
+        conn.execute(
+            """INSERT OR IGNORE INTO structural_voids
+               (dynamics, credit, "update", topology, category, error, task, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                proposal.dynamics,
+                proposal.credit,
+                proposal.update,
+                geometry.get("topology_type"),
+                classify_void(error),
+                error[:300],
+                proposal.task,
+                time.time(),
+            ),
+        )
+        conn.commit()
+        conn.close()
         logger.info(
             "Structural void: %s|%s|%s|%s",
             proposal.dynamics,
@@ -587,6 +625,7 @@ class BroadMappingCampaign(AutoScientistCampaign):
             proposal.update,
             geometry.get("topology_type"),
         )
+
 
 
 def driver_seeded_kb(kb_path: Path) -> KnowledgeBase:
@@ -605,7 +644,6 @@ def build_sweep(
 
     viable = enumerate_constraint_voids(
         args.root / "kb.sqlite",
-        args.root / "structural_voids.jsonl",
         task=args.task,
     )
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
@@ -632,7 +670,7 @@ def build_sweep(
         db_path=args.root / "campaign" / "campaign.db",
         branch_name="broad_mapping_sweep",
         ceec_ledger_path=args.root / "ledger.sqlite",
-        voids_path=args.root / "structural_voids.jsonl",
+        kb_path=args.root / "kb.sqlite",
         defects_path=args.root / "runtime_defects.jsonl",
     )
     campaign.knowledge_base = driver_seeded_kb(args.root / "kb.sqlite")
@@ -645,6 +683,7 @@ class BurstDriver(Protocol):
     concrete ``StratifiedRandomDriver`` to observe the propose phase)."""
 
     cells: int
+    task: str
 
     def propose_batch(
         self, n_proposals: int, recent_results: list[dict[str, object]] | None = None
@@ -792,7 +831,7 @@ def run_burst(
         _BURST_STOP_REASONS[stop_reason],
         completed,
         failed,
-        _count_lines(campaign.voids_path),
+        _count_voids(campaign.kb_path, driver.task),
         len(
             read_defects(campaign.defects_path)
             if campaign.defects_path is not None
@@ -813,7 +852,7 @@ def run_burst(
         _BURST_STOP_REASONS[stop_reason],
         completed,
         failed,
-        _count_lines(campaign.voids_path),
+        _count_voids(campaign.kb_path, driver.task),
         len(
             read_defects(campaign.defects_path)
             if campaign.defects_path is not None
@@ -834,6 +873,18 @@ def _count_lines(path: Path) -> int:
         return 0
     with path.open(encoding="utf-8") as fh:
         return sum(1 for _ in fh)
+
+
+def _count_voids(kb_path: Path, task: str) -> int:
+    import sqlite3
+    conn = sqlite3.connect(kb_path)
+    cur = conn.execute(
+        "SELECT COUNT(*) FROM structural_voids WHERE task = ?",
+        (task,),
+    )
+    count = cur.fetchone()[0]
+    conn.close()
+    return count
 
 
 # --- Epistemic maturation (TODO29 Phase 4): Spark → Survivor → Claim ------
@@ -1016,29 +1067,24 @@ def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_Cell
     return rows
 
 
-def _void_keys(voids_path: Path) -> frozenset[str]:
-    if not voids_path.exists():
-        return frozenset()
-    keys = set()
-    for line in voids_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        if r.get("dynamics") and r.get("credit") and r.get("update"):
-            keys.add(
-                cell_key(
-                    str(r["dynamics"]),
-                    str(r["credit"]),
-                    str(r["update"]),
-                    str(r["topology"]),
-                )
-            )
+def _void_keys(kb_path: Path, task: str) -> frozenset[str]:
+    import sqlite3
+    conn = sqlite3.connect(kb_path)
+    cur = conn.execute(
+        "SELECT dynamics, credit, update, topology FROM structural_voids WHERE task = ?",
+        (task,),
+    )
+    keys = {
+        cell_key(str(d), str(c), str(u), str(t))
+        for d, c, u, t in cur.fetchall()
+    }
+    conn.close()
     return frozenset(keys)
 
 
 def promote_candidates(
     kb_path: Path,
-    voids_path: Path,
+    task: str,
     k: int,
     objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
 ) -> list[_Candidate]:
@@ -1079,7 +1125,7 @@ def promote_candidates(
     if not per_cell:
         return []
     front = pareto_top(pd.DataFrame(per_cell), k=len(per_cell), objectives=objectives)
-    void_keys = _void_keys(voids_path)
+    void_keys = _void_keys(kb_path, task)
     candidates: list[_Candidate] = []
     for key in (str(v) for v in front["key"]):
         group = by_key[key]
@@ -1261,7 +1307,7 @@ def run_l1_maturation(
     objectives = parse_objectives(obj_spec)
     candidates = promote_candidates(
         args.root / "kb.sqlite",
-        args.root / "structural_voids.jsonl",
+        args.task,
         args.maturation,
         objectives=objectives,
     )

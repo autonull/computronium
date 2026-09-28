@@ -112,6 +112,21 @@ class KnowledgeBase(SqliteStore):  # ruff: ignore[too-many-public-methods] (lega
             model_path TEXT
         );
         """,
+        2: """
+        CREATE TABLE IF NOT EXISTS structural_voids (
+            dynamics TEXT NOT NULL,
+            credit TEXT NOT NULL,
+            "update" TEXT NOT NULL,
+            topology TEXT NOT NULL,
+            category TEXT NOT NULL,
+            error TEXT,
+            task TEXT NOT NULL,
+            timestamp REAL NOT NULL,
+            PRIMARY KEY (dynamics, credit, "update", topology, task)
+        );
+        CREATE INDEX IF NOT EXISTS idx_voids_task ON structural_voids(task);
+        CREATE INDEX IF NOT EXISTS idx_voids_category ON structural_voids(category);
+        """,
     }
 
     def __init__(
