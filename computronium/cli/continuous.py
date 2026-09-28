@@ -54,7 +54,7 @@ def _grep_error_pattern(pattern: str, root: Path) -> bool:
     import subprocess  # ruff: ignore[suspicious-subprocess-import] (grep fixed string, no shell)
 
     try:
-        result = subprocess.run(  # noqa: S603,S607 (fixed command, no shell)
+        result = subprocess.run(  # ruff: ignore[S603,start-process-with-partial-path] (fixed command, no shell)
             ["grep", "-r", "-F", "--include=*.py", pattern, str(root / "computronium")],
             capture_output=True,
             text=True,
@@ -109,13 +109,17 @@ def _unquarantine_fixed(root: Path) -> int:
                     status="resolved",
                 ),
             )
-            logger.info("Defect %s auto-resolved (pattern not found in codebase)", defect_id)
+            logger.info(
+                "Defect %s auto-resolved (pattern not found in codebase)", defect_id
+            )
             released += 1
         else:
             logger.info("Defect %s still present in codebase", defect_id)
 
     if released:
-        print(f"Auto-released {released} defect(s) whose error pattern no longer exists in codebase")
+        print(
+            f"Auto-released {released} defect(s) whose error pattern no longer exists in codebase"
+        )
     else:
         print("No defects auto-released (all patterns still found in codebase)")
 
@@ -169,7 +173,15 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-iterations", type=int, default=200)
     parser.add_argument("--cells-per-iter", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--task", default="mnist")
+    parser.add_argument(
+        "--task", default="mnist", help="single task name (use --tasks for multi-task)"
+    )
+    parser.add_argument(
+        "--tasks",
+        type=str,
+        default=None,
+        help="comma-separated task names for multi-task bursts (e.g., mnist,cifar10,spiral)",
+    )
     parser.add_argument("--seed", type=int, default=20260915)
     parser.add_argument("--hidden-dim", type=int, default=64)
     parser.add_argument("--depth", type=int, default=2)
@@ -195,26 +207,22 @@ def _build_parser() -> argparse.ArgumentParser:
     unquarantine = sub.add_parser(
         "unquarantine", help="release cells quarantined by a resolved defect"
     )
+    _add_common_flags(unquarantine)
     unquarantine.add_argument("--defect", help="defect id (sha256[:12])")
     unquarantine.add_argument(
         "--unquarantine-fixed",
         action="store_true",
         help="auto-release all defects whose error pattern no longer exists in codebase",
     )
-    unquarantine.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
     deep_tier = sub.add_parser(
         "deep-tier",
         help="promote front-stable cells to claim-grade L2 re-runs (seeds × epochs)",
     )
-    deep_tier.add_argument("--maturation", type=int, default=0, help="run L1→L2 pipeline: promote N front cells to L1 (epochs=3) then L2 (full epochs, seeds=3)")
-    deep_tier.add_argument("--top", type=int, default=5, help="max cells to promote (legacy L2-only)")
-    deep_tier.add_argument("--epochs", type=int, default=10, help="epochs per L2 run")
-    deep_tier.add_argument("--seeds", type=int, default=3, help="fresh seeds per cell")
-    deep_tier.add_argument("--task", default=None, help="filter candidates by task")
-    deep_tier.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
+    _add_common_flags(deep_tier)
     deep_tier.add_argument(
-        "--seed", type=int, default=20260915, help="base seed (seed i = base + i)"
+        "--top", type=int, default=5, help="max cells to promote (legacy L2-only)"
     )
+    deep_tier.add_argument("--seeds", type=int, default=3, help="fresh seeds per cell")
     deep_tier.add_argument(
         "--dry-run",
         action="store_true",
@@ -253,7 +261,7 @@ def _install_sigterm(handler: Callable[[], object] | None = None) -> None:
     signal.signal(signal.SIGTERM, _terminate)
 
 
-def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: missing-type-function-argument (internal, typed by build_sweep)
+def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # ruff: ignore[missing-type-function-argument] (internal, typed by build_sweep)
     _install_sigterm()
     try:
         _loop_bursts(args, campaign, driver)
@@ -275,6 +283,17 @@ def _tee_log(log_path: Path) -> None:
     logging.getLogger().addHandler(handler)
 
 
+def _parse_tasks(args: argparse.Namespace) -> list[str]:
+    """Parse task(s) from args, supporting both --task and --tasks."""
+    tasks_attr = getattr(args, "tasks", None)
+    if tasks_attr is not None:
+        return [t.strip() for t in tasks_attr.split(",") if t.strip()]
+    task_attr = getattr(args, "task", None)
+    if task_attr is not None:
+        return [task_attr]
+    return ["mnist"]
+
+
 def _burst(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
     _install_sigterm()
@@ -288,29 +307,54 @@ def _burst(args: argparse.Namespace) -> int:
 
 
 def _run_burst(args: argparse.Namespace) -> None:
-    (args.root / "campaign").mkdir(parents=True, exist_ok=True)
+    tasks = _parse_tasks(args)
+    for task in tasks:
+        task_root = args.root / task
+        (task_root / "campaign").mkdir(parents=True, exist_ok=True)
     seed_everything(args.seed, deterministic=False)
-    campaign, driver = build_sweep(args)
-    if args.loop:
-        _run_forever(args, campaign, driver)
-        return
-    run_burst(
-        campaign, driver, budget_from_args(args), max_iterations=args.max_iterations
-    )
-    if args.maturation:
-        run_l1_maturation(args, campaign, driver.burst_tag)
+
+    for task in tasks:
+        task_root = args.root / task
+        task_args = argparse.Namespace(**vars(args))
+        task_args.task = task
+        task_args.root = task_root
+        campaign, driver = build_sweep(task_args)
+        if args.loop:
+            _run_forever(task_args, campaign, driver)
+            return
+        run_burst(
+            campaign,
+            driver,
+            budget_from_args(task_args),
+            max_iterations=args.max_iterations,
+        )
+        if args.maturation:
+            run_l1_maturation(task_args, campaign, driver.burst_tag)
 
 
 def _deep_tier(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
-    root: Path = args.root
     from computronium.autoscientist.objectives import parse_objectives
 
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     objectives = parse_objectives(obj_spec)
 
-    # L1→L2 maturation pipeline (TODO40 P0.4)
-    if args.maturation > 0:
+    tasks = _parse_tasks(args)
+    if len(tasks) > 1:
+        logger.warning("deep-tier with multiple tasks: running on each task separately")
+
+    for task in tasks:
+        task_root = args.root / task
+        logger.info("Running deep-tier for task: %s", task)
+        _deep_tier_single(task, task_root, args, objectives)
+    return 0
+
+
+def _deep_tier_single(
+    task: str, root: Path, args: argparse.Namespace, objectives
+) -> int:
+    maturation = getattr(args, "maturation", 0)
+    if maturation > 0:
         from computronium.autoscientist.broad_map import (
             promote_candidates,
             run_l1_maturation,
@@ -318,20 +362,24 @@ def _deep_tier(args: argparse.Namespace) -> int:
 
         candidates = promote_candidates(
             root / "kb.sqlite",
-            args.task or "mnist",
-            args.maturation,
+            task,
+            maturation,
             objectives=objectives,
         )
         if not candidates:
-            logger.info("Deep tier (L1→L2): no promotion candidates on the burst front.")
+            logger.info(
+                "Deep tier (L1→L2): no promotion candidates on the burst front."
+            )
             return 0
-        if args.dry_run:
+        if getattr(args, "dry_run", False):
             for c in candidates:
                 print(
                     f"{c.key}  acc={c.accuracy:.3f}  "
-                    f"planned: L1 epochs=3 → L2 {args.seeds} seeds × {args.epochs} epochs"
+                    f"planned: L1 epochs=3 → L2 {getattr(args, 'seeds', 3)} seeds × {getattr(args, 'epochs', 10)} epochs"
                 )
-            print(f"{len(candidates)} candidate(s); {len(candidates) * (1 + args.seeds)} CEEC experiments")
+            print(
+                f"{len(candidates)} candidate(s); {len(candidates) * (1 + getattr(args, 'seeds', 3))} CEEC experiments"
+            )
             return 0
 
         # Build campaign for L1
@@ -350,11 +398,11 @@ def _deep_tier(args: argparse.Namespace) -> int:
         # L1: epochs=3 (reuse run_l1_maturation with modified args)
         l1_args = argparse.Namespace(
             root=root,
-            task=args.task or "mnist",
+            task=task,
             maturation=len(candidates),
             epochs=3,
-            objectives=obj_spec,
-            seed=args.seed,
+            objectives=getattr(args, "objectives", "accuracy,walltime_s"),
+            seed=getattr(args, "seed", 20260915),
         )
         l1_results = run_l1_maturation(l1_args, l1_campaign, burst_tag="l1_promotion")
 
@@ -376,33 +424,38 @@ def _deep_tier(args: argparse.Namespace) -> int:
         from computronium.autoscientist.broad_map import (
             run_deep_tier as run_deep_tier_fn,
         )
+
         l2_rows = run_deep_tier_fn(
             root,
             l2_campaign,
-            task=args.task,
+            task=task,
             top=len(l1_results),
-            epochs=args.epochs,
-            seeds=args.seeds,
-            seed=args.seed,
+            epochs=getattr(args, "epochs", 10),
+            seeds=getattr(args, "seeds", 3),
+            seed=getattr(args, "seed", 20260915),
             objectives=objectives,
         )
-        print(f"deep-tier (L1→L2): {len(l2_rows)} claim-grade L2 row(s) in {root / 'maturation.jsonl'}")
+        print(
+            f"deep-tier (L1→L2): {len(l2_rows)} claim-grade L2 row(s) in {root / 'maturation.jsonl'}"
+        )
         return 0
 
     # Legacy L2-only path (front-stable across ≥2 bursts)
-    if args.dry_run:
+    if getattr(args, "dry_run", False):
         from computronium.autoscientist.broad_map import _deep_tier_candidates
 
         plan = _deep_tier_candidates(
-            root / "kb.sqlite", args.top, args.task, objectives=objectives
+            root / "kb.sqlite", getattr(args, "top", 5), task, objectives=objectives
         )
         for candidate in plan:
             print(
                 f"{candidate.key}  acc={candidate.accuracy:.3f}  "
                 f"front_bursts={candidate.front_bursts}  "
-                f"planned: {args.seeds} seeds × {args.epochs} epochs"
+                f"planned: {getattr(args, 'seeds', 3)} seeds × {getattr(args, 'epochs', 10)} epochs"
             )
-        print(f"{len(plan)} candidate(s); {len(plan) * args.seeds} CEEC experiments")
+        print(
+            f"{len(plan)} candidate(s); {len(plan) * getattr(args, 'seeds', 3)} CEEC experiments"
+        )
         return 0
     campaign = BroadMappingCampaign(
         knowledge_base=None,
@@ -418,11 +471,11 @@ def _deep_tier(args: argparse.Namespace) -> int:
     rows = run_deep_tier(
         root,
         campaign,
-        task=args.task,
-        top=args.top,
-        epochs=args.epochs,
-        seeds=args.seeds,
-        seed=args.seed,
+        task=task,
+        top=getattr(args, "top", 5),
+        epochs=getattr(args, "epochs", 10),
+        seeds=getattr(args, "seeds", 3),
+        seed=getattr(args, "seed", 20260915),
         objectives=objectives,
     )
     print(f"deep-tier: {len(rows)} claim-grade row(s) in {root / 'maturation.jsonl'}")
@@ -431,18 +484,34 @@ def _deep_tier(args: argparse.Namespace) -> int:
 
 def _unquarantine(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
+    tasks = _parse_tasks(args)
+    total_released = 0
+    for task in tasks:
+        task_root = args.root / task
+        if args.unquarantine_fixed:
+            released = _unquarantine_fixed(task_root)
+            total_released += released
+            logger.info("Task %s: auto-released %d defect(s)", task, released)
+        else:
+            if not args.defect:
+                print(
+                    "Error: --defect is required unless --unquarantine-fixed is used",
+                    flush=True,
+                )
+                return 1
+            resolved = resolve_defect(task_root / _DEFECTS_NAME, args.defect)
+            if resolved == 0:
+                print(
+                    f"defect {args.defect} not found (or already resolved) in task {task}",
+                    flush=True,
+                )
+                continue
+            print(
+                f"defect {args.defect} resolved in task {task}; affected cells re-open for the next burst"
+            )
+            total_released += resolved
     if args.unquarantine_fixed:
-        return _unquarantine_fixed(args.root)
-
-    if not args.defect:
-        print("Error: --defect is required unless --unquarantine-fixed is used", flush=True)
-        return 1
-
-    resolved = resolve_defect(args.root / _DEFECTS_NAME, args.defect)
-    if resolved == 0:
-        print(f"defect {args.defect} not found (or already resolved)", flush=True)
-        return 1
-    print(f"defect {args.defect} resolved; affected cells re-open for the next burst")
+        print(f"Total auto-released across {len(tasks)} task(s): {total_released}")
     return 0
 
 

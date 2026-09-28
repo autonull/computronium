@@ -1,6 +1,6 @@
 # TODO40: Campaign/Autoscientist Improvement Loop
 
-**Status**: 🔄 IN PROGRESS — Core loop working; P0.1-P0.4 complete; P1.1 complete; P1.2/P2 queued
+**Status**: 🔄 IN PROGRESS — Core loop working; P0.1-P0.4 complete; P1.1-P1.2 complete; **P2.1 complete**; P2.2/P2.3 queued
 
 ---
 
@@ -89,7 +89,7 @@
 
 | # | Improvement | Why | Effort |
 |---|-------------|-----|--------|
-| 8 | **Multi-task bursts** | Current: single task per burst. Add `--tasks mnist,cifar10,spiral` to interleave; KB tracks per-task voids/results. | L |
+| 8 | **Multi-task bursts** | Current: single task per burst. Add `--tasks mnist,cifar10,spiral` to interleave; KB tracks per-task voids/results. | L | ✅ **DONE** |
 | 9 | **Substrate-aware objectives** | Memristive → `energy_per_step`, Neuromorphic → `spike_rate`. Auto-populate from telemetry (TODO31). | L |
 | 10 | **Distributed bursts** | Multiple GPUs / machines pointing at same `--root` (with file locking). `comp daemon --port 8940` for WebSocket monitoring. | XL |
 
@@ -199,7 +199,7 @@ These are **not bugs** — ontology boundaries correctly rejected by `SystemConf
 4. ~~**[P0.4] Wire maturation pipeline (L1 → L2)** — `promote_candidates()` returns top-K, `run_deep_tier()` runs L1→L2, `deep-tier` CLI wired~~ ✅
 5. ~~**[P1.1] `comp campaign report` CLI** — HTML report from KB~~ ✅
 6. ~~**[P1.2] Defect auto-unquarantine** `--unquarantine-fixed` flag~~ ✅
-7. **[P2.1] Multi-task burst** — `--tasks` argument
+7. ~~**[P2.1] Multi-task burst** — `--tasks` argument~~ ✅
 
 ---
 
@@ -315,10 +315,17 @@ uv run comp continuous --budget 120s --target-cells 20 \
 - Implementation: grep codebase for error pattern; if pattern no longer exists, auto-release affected cells
 - Usage: `comp continuous unquarantine --unquarantine-fixed --root artifacts/broad_map`
 
-**P2.1: Multi-task bursts**
-- Add `--tasks mnist,cifar10,spiral` argument to `comp continuous`
-- KB schema needs per-task void/results tracking
-- Driver should interleave tasks or run separate bursts per task
+**P2.1: Multi-task bursts** ✅ **COMPLETED**
+- Added `--tasks mnist,cifar10,spiral` argument to `comp continuous` (and subcommands `deep-tier`, `unquarantine`)
+- Implementation runs sequential bursts per task with isolated KB/campaign directories: `--root artifacts/broad_map/mnist`, `--root artifacts/broad_map/cifar10`, etc.
+- Each task gets its own structural void enumeration, KB, and campaign — maintains isolation and resume-safety
+- Files modified:
+  - `computronium/cli/continuous.py` — Added `--tasks` flag, `_parse_tasks()` helper, multi-task loops in `_run_burst()`, `_deep_tier()`, `_unquarantine()`
+  - `computronium/autoscientist/broad_map.py` — Added `kb_path.parent.mkdir(parents=True, exist_ok=True)` in `enumerate_constraint_voids()` for robust directory creation
+  - `tests/integration/test_continuous_burst.py` — Updated test to use task-specific subdirectories
+- Usage: `comp continuous --tasks mnist,cifar10,spiral --budget 5m --target-cells 50 --root artifacts/broad_map`
+- Usage (deep-tier): `comp continuous deep-tier --tasks mnist,cifar10 --maturation 5 --root artifacts/broad_map`
+- Usage (unquarantine): `comp continuous unquarantine --tasks mnist,cifar10 --unquarantine-fixed --root artifacts/broad_map`
 
 **Additional improvements identified during implementation:**
 1. Maturation pipeline runs full batches (no `limit_batches`) — add `--limit-batches` support for L1/L2 to speed up verification

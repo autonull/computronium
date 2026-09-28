@@ -122,9 +122,7 @@ class ContinuousBudget:
         return replace(self, done=self.done + n)
 
 
-def enumerate_constraint_voids(
-    kb_path: Path, task: str
-) -> set[str]:
+def enumerate_constraint_voids(kb_path: Path, task: str) -> set[str]:
     """Walk the full grid product through ``SystemConfig.validate()``.
 
     Constraint rejections are structural voids (TODO28): enumerate every
@@ -143,6 +141,8 @@ def enumerate_constraint_voids(
         StateDynamicsConfig,
     )
     from computronium.ontology.system import SystemConfig
+
+    kb_path.parent.mkdir(parents=True, exist_ok=True)
 
     substrate = DigitalSubstrate().config
     viable: set[str] = set()
@@ -194,8 +194,14 @@ def enumerate_constraint_voids(
                     except ValueError as exc:
                         category = classify_void(str(exc))
                         fresh_rows.append((
-                            dynamics, credit, update, topology,
-                            category, str(exc)[:300], task, now
+                            dynamics,
+                            credit,
+                            update,
+                            topology,
+                            category,
+                            str(exc)[:300],
+                            task,
+                            now,
                         ))
                     else:
                         viable.add(cell_key(dynamics, credit, update, topology))
@@ -570,6 +576,7 @@ class BroadMappingCampaign(AutoScientistCampaign):
         self.defects_path = defects_path
         # Ensure voids table exists
         import sqlite3
+
         conn = sqlite3.connect(kb_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS structural_voids (
@@ -634,6 +641,7 @@ class BroadMappingCampaign(AutoScientistCampaign):
         super()._record_incompatible(proposal, error)
         geometry = proposal.geometry or {}
         import sqlite3
+
         conn = sqlite3.connect(self.kb_path)
         conn.execute(
             """INSERT OR IGNORE INTO structural_voids
@@ -910,6 +918,7 @@ def _count_lines(path: Path) -> int:
 
 def _count_voids(kb_path: Path, task: str) -> int:
     import sqlite3
+
     conn = sqlite3.connect(kb_path)
     cur = conn.execute(
         "SELECT COUNT(*) FROM structural_voids WHERE task = ?",
@@ -1102,15 +1111,13 @@ def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_Cell
 
 def _void_keys(kb_path: Path, task: str) -> frozenset[str]:
     import sqlite3
+
     conn = sqlite3.connect(kb_path)
     cur = conn.execute(
         'SELECT dynamics, credit, "update", topology FROM structural_voids WHERE task = ?',
         (task,),
     )
-    keys = {
-        cell_key(str(d), str(c), str(u), str(t))
-        for d, c, u, t in cur.fetchall()
-    }
+    keys = {cell_key(str(d), str(c), str(u), str(t)) for d, c, u, t in cur.fetchall()}
     conn.close()
     return frozenset(keys)
 

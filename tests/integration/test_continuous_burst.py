@@ -164,9 +164,7 @@ def test_l1_maturation_promotes_front_cells_once(tmp_path: Path) -> None:
     ]
     assert len(l1_tags) >= 1
     # Promotion is idempotent: the front cell now carries an L1 row.
-    assert (
-        promote_candidates(root / "kb.sqlite", root / "structural_voids.jsonl", 5) == []
-    )
+    assert promote_candidates(root / "kb.sqlite", "digits", 5) == []
 
 
 def test_loop_smoke_exhaustion_and_sigterm(monkeypatch, tmp_path: Path) -> None:
@@ -179,7 +177,7 @@ def test_loop_smoke_exhaustion_and_sigterm(monkeypatch, tmp_path: Path) -> None:
 
     calls: list[ContinuousBudget] = []
 
-    def fake_run_burst(campaign, driver, budget, *, max_iterations):  # noqa: ANN001, ARG001
+    def fake_run_burst(campaign, driver, budget, *, max_iterations):  # ruff: ignore[ANN001, ARG001]
         calls.append(budget)
         if len(calls) == 1:
             return {"stop_reason": "soft"}
@@ -315,7 +313,7 @@ def _seed_synthetic_kb(root: Path) -> None:
             )
 
 
-def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> None:  # noqa: ANN001
+def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> None:  # ruff: ignore[ANN001]
     from computronium.autoscientist.broad_map import (
         _deep_tier_candidates,
         _load_measured_cells,
@@ -324,24 +322,29 @@ def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> No
     from computronium.cli.continuous import _deep_tier
 
     root = tmp_path / "broad_map"
-    _seed_synthetic_kb(root)
+    # Create task-specific subdirectory to match multi-task structure
+    task_root = root / "mnist"
+    task_root.mkdir(parents=True)
+    _seed_synthetic_kb(task_root)
 
-    candidates = _deep_tier_candidates(root / "kb.sqlite", 5, None)
+    candidates = _deep_tier_candidates(task_root / "kb.sqlite", 5, "mnist")
     assert [c.key for c in candidates] == [
         "energy_minimization|prediction|euclidean|feedforward"
     ]
     assert candidates[0].front_bursts == 2
 
-    flags = _seed_sensitivity_flags(_load_measured_cells(root / "kb.sqlite"))
+    flags = _seed_sensitivity_flags(
+        _load_measured_cells(task_root / "kb.sqlite", "mnist")
+    )
     assert len(flags) == 1
     assert flags[0]["cell"] == "instantaneous|null|euclidean|feedforward"
     assert float(flags[0]["spread"]) > 0.2  # type: ignore[arg-type]
 
     args = Namespace(
-        root=root, task=None, top=5, epochs=10, seeds=3, seed=_SEED, dry_run=True
+        root=root, task="mnist", top=5, epochs=10, seeds=3, seed=_SEED, dry_run=True
     )
     assert _deep_tier(args) == 0
     out = capsys.readouterr().out
     assert "energy_minimization|prediction|euclidean|feedforward" in out
     assert "3 CEEC experiments" in out
-    assert not (root / "maturation.jsonl").exists()  # dry-run writes nothing
+    assert not (task_root / "maturation.jsonl").exists()  # dry-run writes nothing
