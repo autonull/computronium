@@ -508,7 +508,9 @@ def _extract_walltimes(kb_path: Path, task: str | None) -> list[WalltimeSummary]
             by_dynamics.setdefault(dynamics, []).append(walltime)
 
     summaries = []
-    for dynamics, times in sorted(by_dynamics.items(), key=lambda x: -sum(x[1]) / len(x[1])):
+    for dynamics, times in sorted(
+        by_dynamics.items(), key=lambda x: -sum(x[1]) / len(x[1])
+    ):
         summaries.append(
             WalltimeSummary(
                 dynamics=dynamics,
@@ -525,9 +527,9 @@ def _get_kb_stats(kb_path: Path) -> dict:
     """Get KB statistics."""
     conn = _connect(kb_path)
     stats = {}
-    stats["total_entries"] = conn.execute(
-        "SELECT COUNT(*) FROM knowledge"
-    ).fetchone()[0]
+    stats["total_entries"] = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[
+        0
+    ]
     stats["total_experiments"] = conn.execute(
         "SELECT COUNT(*) FROM experiments"
     ).fetchone()[0]
@@ -759,8 +761,8 @@ def _render_html(report: KBReport) -> str:
         "<body>",
         "<h1>KB Campaign Report</h1>",
         '<p class="note">Generated from continuous discovery KB at '
-        f'<code>{escape(report.campaign_root)}</code> for task '
-        f'<code>{escape(report.task)}</code>.</p>',
+        f"<code>{escape(report.campaign_root)}</code> for task "
+        f"<code>{escape(report.task)}</code>.</p>",
         # Summary
         '<section class="section" id="summary">',
         "<h2>Summary</h2>",
@@ -811,13 +813,19 @@ def _render_html(report: KBReport) -> str:
                 [
                     "L1 (epochs=3)",
                     str(report.maturation.l1_cells),
-                    ", ".join(f"<code>{escape(k)}</code>" for k in report.maturation.l1_keys[:5])
+                    ", ".join(
+                        f"<code>{escape(k)}</code>"
+                        for k in report.maturation.l1_keys[:5]
+                    )
                     + ("..." if len(report.maturation.l1_keys) > 5 else ""),
                 ],
                 [
                     "L2 (full epochs × seeds)",
                     str(report.maturation.l2_cells),
-                    ", ".join(f"<code>{escape(k)}</code>" for k in report.maturation.l2_keys[:5])
+                    ", ".join(
+                        f"<code>{escape(k)}</code>"
+                        for k in report.maturation.l2_keys[:5]
+                    )
                     + ("..." if len(report.maturation.l2_keys) > 5 else ""),
                 ],
             ],

@@ -370,9 +370,15 @@ def compose_cell_system(
     # Auto-propagate beta from dynamics to credit for EqProp and PC-ALM families.
     # EnergyMinimizationDynamics.beta must match ThermodynamicContrast.beta
     # (or PCALMCredit.beta) for correct gradient scaling.
-    if dcfg.dynamics_type == "energy_minimization" and ccfg.credit_type == "thermodynamic_contrast":
+    if (
+        dcfg.dynamics_type == "energy_minimization"
+        and ccfg.credit_type == "thermodynamic_contrast"
+    ):
         ccfg = CreditAssignmentConfig.thermodynamic_contrast(beta=dcfg.beta)
-    elif dcfg.dynamics_type == "pc_alm" and ccfg.credit_type in {"pc_alm", "thermodynamic_contrast"}:
+    elif dcfg.dynamics_type == "pc_alm" and ccfg.credit_type in {
+        "pc_alm",
+        "thermodynamic_contrast",
+    }:
         ccfg = CreditAssignmentConfig(
             credit_type=ccfg.credit_type,
             beta=dcfg.beta,

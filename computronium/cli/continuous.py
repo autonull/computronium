@@ -54,8 +54,8 @@ def _grep_error_pattern(pattern: str, root: Path) -> bool:
     import subprocess  # ruff: ignore[suspicious-subprocess-import] (grep fixed string, no shell)
 
     try:
-        result = subprocess.run(  # ruff: ignore[S603,start-process-with-partial-path] (fixed command, no shell)
-            ["grep", "-r", "-F", "--include=*.py", pattern, str(root / "computronium")],
+        result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true,start-process-with-partial-path] (fixed command, no shell)
+            ["/usr/bin/grep", "-r", "-F", "--include=*.py", pattern, str(root / "computronium")],
             capture_output=True,
             text=True,
             timeout=30,
@@ -202,7 +202,17 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         "--substrate",
         type=str,
         default="digital",
-        choices=["digital", "analog", "memristive", "neuromorphic", "optical", "quantum", "sparse", "ternary", "complex"],
+        choices=[
+            "digital",
+            "analog",
+            "memristive",
+            "neuromorphic",
+            "optical",
+            "quantum",
+            "sparse",
+            "ternary",
+            "complex",
+        ],
         help="substrate type for the campaign (affects auto-populated objectives)",
     )
 
