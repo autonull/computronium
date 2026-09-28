@@ -135,6 +135,7 @@ def enumerate_constraint_voids(
     coordinates.
     """
     import sqlite3
+
     from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -286,21 +287,17 @@ class StratifiedRandomDriver:
                     self.balance[d, c, u] = 0
         # Objective-space coverage tracking (Phase 2)
         self._objective_bins: dict[str, int] = {}
+        self._family_avg: dict[tuple[str, str, str], list[float]] = {}
         self._obj_min: list[float] = []
         self._obj_max: list[float] = []
         self._load_objective_coverage(kb_path)
 
-    def _load_objective_coverage(self, kb_path: Path) -> None:
-        """Seed objective-space bins from existing KB measurements."""
-        if not kb_path.exists() or len(self.objectives) < 2:
-            return
-        import numpy as np
-
-        from computronium.knowledge import KnowledgeBase
-
-        kb = KnowledgeBase(kb_path)
-        obj_names = [o.name.value for o in self.objectives]
+    def _extract_objective_points(
+        self, kb: KnowledgeBase, obj_names: list[str]
+    ) -> tuple[list[list[float]], dict[tuple[str, str, str], list[list[float]]]]:
+        """Extract objective points and family-grouped points from KB."""
         points: list[list[float]] = []
+        family_points: dict[tuple[str, str, str], list[list[float]]] = {}
         for entry in kb.query():
             if not str(entry.topic).startswith("experiment:"):
                 continue
@@ -314,6 +311,36 @@ class StratifiedRandomDriver:
                     break
             else:
                 points.append(pt)
+                hp = entry.hyperparameters
+                if hp.get("dynamics") and hp.get("credit") and hp.get("update"):
+                    fam = (str(hp["dynamics"]), str(hp["credit"]), str(hp["update"]))
+                    family_points.setdefault(fam, []).append(pt)
+        return points, family_points
+
+    def _compute_family_averages(
+        self, family_points: dict[tuple[str, str, str], list[list[float]]]
+    ) -> dict[tuple[str, str, str], list[float]]:
+        """Compute average objective values per family."""
+        import numpy as np
+
+        family_avg: dict[tuple[str, str, str], list[float]] = {}
+        for fam, fam_pts in family_points.items():
+            if len(fam_pts) >= 1:
+                fam_arr = np.array(fam_pts)
+                family_avg[fam] = fam_arr.mean(axis=0).tolist()
+        return family_avg
+
+    def _load_objective_coverage(self, kb_path: Path) -> None:
+        """Seed objective-space bins from existing KB measurements."""
+        if not kb_path.exists() or len(self.objectives) < 2:
+            return
+        import numpy as np
+
+        from computronium.knowledge import KnowledgeBase
+
+        kb = KnowledgeBase(kb_path)
+        obj_names = [o.name.value for o in self.objectives]
+        points, family_points = self._extract_objective_points(kb, obj_names)
         if not points:
             return
         arr = np.array(points)
@@ -326,6 +353,8 @@ class StratifiedRandomDriver:
         logger.info(
             "Objective-space coverage: %d bins populated", len(self._objective_bins)
         )
+        # Build family predictor: average objective values per (dynamics, credit, update)
+        self._family_avg = self._compute_family_averages(family_points)
 
     def _bin_point(self, pt: list[float]) -> str:
         """Quantize a point in objective space to a bin key."""
@@ -349,12 +378,17 @@ class StratifiedRandomDriver:
         """
         if not self._objective_bins or len(self.objectives) < 2:
             return self.rng.random()  # No bias if no objective data
-        # Predict objective values based on (dynamics, credit, update) family
-        # For now, use family averages from KB; fallback to random
-        # We don't have a predictor yet, so use balance as proxy
-        # Cells from under-sampled strata are more likely to be in novel objective regions
-        stratum_count = self.balance.get((dynamics, credit, update), 0)
-        return 1.0 / (1.0 + stratum_count) + self.rng.random() * 0.1
+        # Predict objective values using family averages from KB
+        fam = (dynamics, credit, update)
+        pred_pt = self._family_avg.get(fam)
+        if pred_pt is None:
+            # No family data yet: fall back to stratum balance
+            stratum_count = self.balance.get(fam, 0)
+            return 1.0 / (1.0 + stratum_count) + self.rng.random() * 0.1
+        # Bin the predicted point and score by inverse occupancy
+        bin_key = self._bin_point(pred_pt)
+        bin_count = self._objective_bins.get(bin_key, 0)
+        return 1.0 / (1.0 + bin_count) + self.rng.random() * 0.01
 
     def _reload_covered(self, kb_path: Path) -> None:
         """Seed the seen-set from the KB coverage matrix (structural voids
@@ -625,7 +659,6 @@ class BroadMappingCampaign(AutoScientistCampaign):
             proposal.update,
             geometry.get("topology_type"),
         )
-
 
 
 def driver_seeded_kb(kb_path: Path) -> KnowledgeBase:
@@ -1071,7 +1104,7 @@ def _void_keys(kb_path: Path, task: str) -> frozenset[str]:
     import sqlite3
     conn = sqlite3.connect(kb_path)
     cur = conn.execute(
-        "SELECT dynamics, credit, update, topology FROM structural_voids WHERE task = ?",
+        'SELECT dynamics, credit, "update", topology FROM structural_voids WHERE task = ?',
         (task,),
     )
     keys = {

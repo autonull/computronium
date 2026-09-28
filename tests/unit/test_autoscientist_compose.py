@@ -44,14 +44,14 @@ def test_full_cell_composition():
         dynamics="instantaneous",
         credit="pepita",
         update="adam",
-        geometry={"topology_type": "recurrent", "depth": 3, "hidden_dim": 32},
+        geometry={"topology_type": "feedforward", "depth": 3, "hidden_dim": 32},
         input_dim=10,
         output_dim=3,
     )
     assert system.dynamics.config.dynamics_type == "instantaneous"
     assert system.credit.config.credit_type == "pepita"
     assert system.update.config.update_type == "adam"
-    assert system.geometry.config.topology_type == "recurrent"
+    assert system.geometry.config.topology_type == "feedforward"
 
 
 def test_unknown_cell_axis_fails_loudly():

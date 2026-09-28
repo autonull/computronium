@@ -123,7 +123,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "deep-tier",
         help="promote front-stable cells to claim-grade L2 re-runs (seeds × epochs)",
     )
-    deep_tier.add_argument("--top", type=int, default=5, help="max cells to promote")
+    deep_tier.add_argument("--maturation", type=int, default=0, help="run L1→L2 pipeline: promote N front cells to L1 (epochs=3) then L2 (full epochs, seeds=3)")
+    deep_tier.add_argument("--top", type=int, default=5, help="max cells to promote (legacy L2-only)")
     deep_tier.add_argument("--epochs", type=int, default=10, help="epochs per L2 run")
     deep_tier.add_argument("--seeds", type=int, default=3, help="fresh seeds per cell")
     deep_tier.add_argument("--task", default=None, help="filter candidates by task")
@@ -224,6 +225,88 @@ def _deep_tier(args: argparse.Namespace) -> int:
 
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     objectives = parse_objectives(obj_spec)
+
+    # L1→L2 maturation pipeline (TODO40 P0.4)
+    if args.maturation > 0:
+        from computronium.autoscientist.broad_map import (
+            promote_candidates,
+            run_l1_maturation,
+        )
+
+        candidates = promote_candidates(
+            root / "kb.sqlite",
+            args.task or "mnist",
+            args.maturation,
+            objectives=objectives,
+        )
+        if not candidates:
+            logger.info("Deep tier (L1→L2): no promotion candidates on the burst front.")
+            return 0
+        if args.dry_run:
+            for c in candidates:
+                print(
+                    f"{c.key}  acc={c.accuracy:.3f}  "
+                    f"planned: L1 epochs=3 → L2 {args.seeds} seeds × {args.epochs} epochs"
+                )
+            print(f"{len(candidates)} candidate(s); {len(candidates) * (1 + args.seeds)} CEEC experiments")
+            return 0
+
+        # Build campaign for L1
+        l1_campaign = BroadMappingCampaign(
+            knowledge_base=None,
+            output_dir=str(root / "campaign"),
+            db_path=root / "campaign" / "campaign.db",
+            branch_name="deep_tier_l1",
+            ceec_ledger_path=root / "ledger.sqlite",
+            kb_path=root / "kb.sqlite",
+            defects_path=root / "runtime_defects.jsonl",
+        )
+        l1_campaign.knowledge_base = driver_seeded_kb(root / "kb.sqlite")
+        (root / "campaign").mkdir(parents=True, exist_ok=True)
+
+        # L1: epochs=3 (reuse run_l1_maturation with modified args)
+        l1_args = argparse.Namespace(
+            root=root,
+            task=args.task or "mnist",
+            maturation=len(candidates),
+            epochs=3,
+            objectives=obj_spec,
+            seed=args.seed,
+        )
+        l1_results = run_l1_maturation(l1_args, l1_campaign, burst_tag="l1_promotion")
+
+        if not l1_results:
+            logger.info("Deep tier: no L1 re-runs completed.")
+            return 0
+
+        # L2: full epochs, seeds=3
+        l2_campaign = BroadMappingCampaign(
+            knowledge_base=None,
+            output_dir=str(root / "campaign"),
+            db_path=root / "campaign" / "campaign.db",
+            branch_name="deep_tier_l2",
+            ceec_ledger_path=root / "ledger.sqlite",
+            kb_path=root / "kb.sqlite",
+            defects_path=root / "runtime_defects.jsonl",
+        )
+        l2_campaign.knowledge_base = driver_seeded_kb(root / "kb.sqlite")
+        from computronium.autoscientist.broad_map import (
+            run_deep_tier as run_deep_tier_fn,
+        )
+        l2_rows = run_deep_tier_fn(
+            root,
+            l2_campaign,
+            task=args.task,
+            top=len(l1_results),
+            epochs=args.epochs,
+            seeds=args.seeds,
+            seed=args.seed,
+            objectives=objectives,
+        )
+        print(f"deep-tier (L1→L2): {len(l2_rows)} claim-grade L2 row(s) in {root / 'maturation.jsonl'}")
+        return 0
+
+    # Legacy L2-only path (front-stable across ≥2 bursts)
     if args.dry_run:
         from computronium.autoscientist.broad_map import _deep_tier_candidates
 
@@ -239,14 +322,15 @@ def _deep_tier(args: argparse.Namespace) -> int:
         print(f"{len(plan)} candidate(s); {len(plan) * args.seeds} CEEC experiments")
         return 0
     campaign = BroadMappingCampaign(
-        knowledge_base=driver_seeded_kb(root / "kb.sqlite"),
+        knowledge_base=None,
         output_dir=str(root / "campaign"),
         db_path=root / "campaign" / "campaign.db",
         branch_name="deep_tier",
         ceec_ledger_path=root / "ledger.sqlite",
-        voids_path=root / "structural_voids.jsonl",
+        kb_path=root / "kb.sqlite",
         defects_path=root / "runtime_defects.jsonl",
     )
+    campaign.knowledge_base = driver_seeded_kb(root / "kb.sqlite")
     (root / "campaign").mkdir(parents=True, exist_ok=True)
     rows = run_deep_tier(
         root,

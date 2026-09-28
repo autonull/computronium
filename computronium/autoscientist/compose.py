@@ -358,7 +358,7 @@ def compose_cell_system(
         ccfg = getattr(CreditAssignmentConfig, credit)()
         update_factory = getattr(ParameterUpdateConfig, update)
         kwargs = (
-            {"step_size": lr}
+            {"step_size": lr, "dynamics": dynamics, "credit": credit}
             if "step_size" in inspect.signature(update_factory).parameters
             else {}
         )
@@ -366,6 +366,23 @@ def compose_cell_system(
     except AttributeError as exc:
         msg = f"Unknown cell axis: {exc.args[0]!r} is not a config factory"
         raise ProposalComposeError(msg) from exc
+
+    # Auto-propagate beta from dynamics to credit for EqProp and PC-ALM families.
+    # EnergyMinimizationDynamics.beta must match ThermodynamicContrast.beta
+    # (or PCALMCredit.beta) for correct gradient scaling.
+    if dcfg.dynamics_type == "energy_minimization" and ccfg.credit_type == "thermodynamic_contrast":
+        ccfg = CreditAssignmentConfig.thermodynamic_contrast(beta=dcfg.beta)
+    elif dcfg.dynamics_type == "pc_alm" and ccfg.credit_type in {"pc_alm", "thermodynamic_contrast"}:
+        ccfg = CreditAssignmentConfig(
+            credit_type=ccfg.credit_type,
+            beta=dcfg.beta,
+            feedback_matrix=ccfg.feedback_matrix,
+            local_objective=ccfg.local_objective,
+            orthogonal_init=ccfg.orthogonal_init,
+            feedback_scale=ccfg.feedback_scale,
+            credit_norm=ccfg.credit_norm,
+        )
+
     # Cross-axis hard constraints are the single source of truth (TODO28:
     # the campaign path previously skipped validate(), executing cells
     # validate() forbids — e.g. spike × thermodynamic_contrast at chance).
