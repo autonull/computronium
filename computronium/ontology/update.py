@@ -53,10 +53,21 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
 _STEP_SIZE_OVERRIDES: dict[tuple[str, str], float] = {
     ("energy_minimization", "random_projections"): 0.1,
     ("energy_minimization", "gradient"): 0.5,
-    ("energy_minimization", "thermodynamic_contrast"): 0.2,
+    ("energy_minimization", "thermodynamic_contrast"): 0.1,
+    ("energy_minimization", "pepita"): 0.1,
+    ("energy_minimization", "temporal_trace"): 0.05,
+    ("energy_minimization", "target_inversion"): 0.1,
     ("diffusion", "random_projections"): 0.05,
     ("diffusion", "spectral_constrained"): 0.1,
     ("diffusion", "homeostatic"): 0.1,
+    ("diffusion", "temporal_trace"): 0.005,
+    ("diffusion", "target_inversion"): 0.1,
+    ("lazy", "temporal_trace"): 0.01,
+    ("lazy", "thermodynamic_contrast"): 0.1,
+    ("lazy", "random_projections"): 0.1,
+    ("lazy", "local_contrastive"): 0.05,
+    ("instantaneous", "temporal_trace"): 0.1,
+    ("predictive_settling", "thermodynamic_contrast"): 0.5,
 }
 
 
