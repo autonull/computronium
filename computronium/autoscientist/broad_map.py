@@ -378,8 +378,11 @@ class StratifiedRandomDriver:
                         topos = [
                             t for t in GRID_TOPOLOGIES if cell_key(d, c, u, t) in viable
                         ]
-                        if topos:
-                            self._viable_topos_per_triple[d, c, u] = topos
+                    else:
+                        # Fallback: use all topologies when no viable set provided
+                        topos = list(GRID_TOPOLOGIES)
+                    if topos:
+                        self._viable_topos_per_triple[d, c, u] = topos
         # Objective-space coverage tracking (Phase 2)
         self._objective_bins: dict[str, int] = {}
         self._family_avg: dict[tuple[str, str, str], list[float]] = {}
@@ -528,10 +531,10 @@ class StratifiedRandomDriver:
         max_proposals = min(n_proposals, self.cells)
         while len(proposals) < max_proposals and attempts < 200:
             attempts += 1
-            # Stratification: the least-proposed (dynamics, credit, update) triple is next.
-            (dynamics, credit, update) = min(
-                self.balance, key=lambda k: (self.balance[k], self.rng.random())
-            )
+            # Stratification: pick uniformly from least-proposed (dynamics, credit, update) triples.
+            min_balance = min(self.balance.values())
+            min_triples = [k for k, v in self.balance.items() if v == min_balance]
+            dynamics, credit, update = self.rng.choice(min_triples)
             triple = (dynamics, credit, update)
             # Get pre-computed viable topologies for this triple
             viable_topos = self._viable_topos_per_triple.get(triple, [])

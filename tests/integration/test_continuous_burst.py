@@ -177,7 +177,7 @@ def test_loop_smoke_exhaustion_and_sigterm(monkeypatch, tmp_path: Path) -> None:
 
     calls: list[ContinuousBudget] = []
 
-    def fake_run_burst(campaign, driver, budget, *, max_iterations):  # ruff: ignore[ANN001, ARG001]
+    def fake_run_burst(campaign, driver, budget, *, max_iterations):  # ruff: ignore[missing-type-function-argument, unused-function-argument]
         calls.append(budget)
         if len(calls) == 1:
             return {"stop_reason": "soft"}
@@ -253,7 +253,7 @@ def test_nan_loss_cells_never_promote(tmp_path: Path) -> None:
             )
         )
     assert (
-        promote_candidates(root / "kb.sqlite", root / "structural_voids.jsonl", 5) == []
+        promote_candidates(root / "kb.sqlite", "mnist", 5) == []
     )
 
 
@@ -313,7 +313,7 @@ def _seed_synthetic_kb(root: Path) -> None:
             )
 
 
-def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> None:  # ruff: ignore[ANN001]
+def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> None:  # ruff: ignore[missing-type-function-argument]
     from computronium.autoscientist.broad_map import (
         _deep_tier_candidates,
         _load_measured_cells,

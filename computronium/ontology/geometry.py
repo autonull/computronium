@@ -1318,9 +1318,16 @@ class TileGeometry(nn.Module):
             bias = nn.Parameter(torch.zeros(tile.neurons))
             _set_param_name(bias, f"tile_bias_{tid}")
             self._tile_biases[str(tid)] = bias
+            # Account for dense fan-in from tiles_per_layer source tiles in prev layer
+            tiles_per_layer = getattr(self.config, "tiles_per_layer", 1)
+            fan_in_scale = math.sqrt(max(1, tiles_per_layer))
             for src_id in tile.bwd_neighbors:
                 src = self._graph.tiles[src_id]
-                bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
+                bound = (
+                    1.0 / (math.sqrt(src.neurons) * fan_in_scale)
+                    if src.neurons > 0
+                    else 0.0
+                )
                 w = torch.empty(tile.neurons, src.neurons).uniform_(-bound, bound)
                 param = nn.Parameter(w)
                 _set_param_name(param, f"tile_weight_{src_id}_{tid}")
