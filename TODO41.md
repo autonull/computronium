@@ -4,6 +4,25 @@
 
 ---
 
+## 0. Progress Summary (2026-09-28)
+
+### Completed Fixes
+
+| # | Fix | File | Description |
+|---|-----|------|-------------|
+| 1 | **Fixed multiple VectorStore initializations** | `computronium/autoscientist/broad_map.py`, `computronium/cli/continuous.py` | Created a single shared `KnowledgeBase` instance in `build_sweep()` and passed it to `StratifiedRandomDriver`, `BroadMappingCampaign`, and `next_burst_tag()`. The `NearestNeighbors` index now initializes **once per campaign** instead of 5+ times. |
+| 2 | **Fixed driver stratification to use pre-computed viable topologies** | `computronium/autoscientist/broad_map.py` | Modified `StratifiedRandomDriver` to pre-compute viable topologies per (dynamics, credit, update) triple during init, avoiding random sampling of non-viable topologies. Driver now iterates through ALL viable topologies for a triple when scoring proposals, ensuring efficient exploration. |
+| 3 | **Added KB path storage in driver** | `computronium/autoscientist/broad_map.py` | Driver now stores `_kb_path` and `_kb` references to avoid re-creating KnowledgeBase instances in `_load_objective_coverage()` and `_reload_covered()`. |
+| 4 | **Updated `driver_seeded_kb()` and `next_burst_tag()` to accept shared KB** | `computronium/autoscientist/broad_map.py` | Both functions now accept an optional pre-created `KnowledgeBase` instance, avoiding redundant initialization. |
+
+### Verification
+- All integration tests pass: `pytest tests/integration/test_continuous_burst.py -q` ✅ (8 passed)
+- Campaign readers pass: `pytest tests/unit/test_campaign_readers.py -k "not daemon" -q` ✅ (7 passed)
+- Dev-env smoke test passes ✅
+- Format & lint pass ✅
+
+---
+
 ## 1. The Loop Philosophy
 
 ```
@@ -345,6 +364,14 @@ A cell is **measurement-grade (L2)** only if:
 5. **Deprecate legacy `run_deep_tier`** — Unify with L1→L2 pipeline
 
 6. **Daemon stability** — Fix race condition in `test_daemon_client_round_trips_live_daemon`
+
+### Issues Identified During TODO41
+
+7. **Driver RNG tiebreaker bias** — When all (dynamics, credit, update) triples have balance=0, the `min(..., key=lambda k: (balance, rng.random()))` tiebreaker may not provide uniform distribution. Consider shuffling the balance dict items before min() or using a different selection strategy for the initial burst.
+
+8. **Pre-computed viable topologies only works with `viable` frozenset** — If `viable=None` (no void enumeration), the driver falls back to random sampling. Ensure void enumeration runs first or add fallback logic.
+
+9. **KB report generation creates new KB instance** — `build_kb_report()` in `core/campaign/kb_report.py` creates its own `KnowledgeBase`, adding another VectorStore initialization. Consider passing shared KB or making VectorStore a singleton per DB path.
 
 ---
 

@@ -330,6 +330,7 @@ class StratifiedRandomDriver:
 
     def __init__(  # ruff: ignore[too-many-arguments] (driver mirrors sweep axes)
         self,
+        kb: KnowledgeBase,  # Shared KB instance
         kb_path: Path,
         *,
         task: str,
@@ -362,19 +363,29 @@ class StratifiedRandomDriver:
         self.objectives = objectives
         self.seen: set[str] = set()
         self.quarantined: frozenset[str] = frozenset()
-        self._reload_covered(kb_path)
+        self._kb = kb  # Shared KB reference
+        self._kb_path = kb_path
+        self._reload_covered()
         # Balance tracked per (dynamics, credit, update) triple
         self.balance: dict[tuple[str, str, str], int] = {}
+        # Pre-compute viable topologies per triple for efficient proposal
+        self._viable_topos_per_triple: dict[tuple[str, str, str], list[str]] = {}
         for d in GRID_DYNAMICS:
             for c in GRID_CREDITS:
                 for u in GRID_UPDATES:
                     self.balance[d, c, u] = 0
+                    if viable is not None:
+                        topos = [
+                            t for t in GRID_TOPOLOGIES if cell_key(d, c, u, t) in viable
+                        ]
+                        if topos:
+                            self._viable_topos_per_triple[d, c, u] = topos
         # Objective-space coverage tracking (Phase 2)
         self._objective_bins: dict[str, int] = {}
         self._family_avg: dict[tuple[str, str, str], list[float]] = {}
         self._obj_min: list[float] = []
         self._obj_max: list[float] = []
-        self._load_objective_coverage(kb_path)
+        self._load_objective_coverage()
 
     def _extract_objective_points(
         self, kb: KnowledgeBase, obj_names: list[str]
@@ -414,15 +425,13 @@ class StratifiedRandomDriver:
                 family_avg[fam] = fam_arr.mean(axis=0).tolist()
         return family_avg
 
-    def _load_objective_coverage(self, kb_path: Path) -> None:
+    def _load_objective_coverage(self) -> None:
         """Seed objective-space bins from existing KB measurements."""
-        if not kb_path.exists() or len(self.objectives) < 2:
+        if not self._kb_path.exists() or len(self.objectives) < 2:
             return
         import numpy as np
 
-        from computronium.knowledge import KnowledgeBase
-
-        kb = KnowledgeBase(kb_path)
+        kb = self._kb
         obj_names = [o.name.value for o in self.objectives]
         points, family_points = self._extract_objective_points(kb, obj_names)
         if not points:
@@ -474,7 +483,7 @@ class StratifiedRandomDriver:
         bin_count = self._objective_bins.get(bin_key, 0)
         return 1.0 / (1.0 + bin_count) + self.rng.random() * 0.01
 
-    def _reload_covered(self, kb_path: Path) -> None:
+    def _reload_covered(self) -> None:
         """Seed the seen-set from the KB coverage matrix (structural voids
         included: a void is covered — it can never execute) and the
         quarantine set from the defect stream (TODO29: cells with an open
@@ -486,11 +495,9 @@ class StratifiedRandomDriver:
                     "Quarantine seed: %d cells with open defects",
                     len(self.quarantined),
                 )
-        if not kb_path.exists():
+        if not self._kb_path.exists():
             return
-        from computronium.knowledge import KnowledgeBase
-
-        kb = KnowledgeBase(kb_path)
+        kb = self._kb
         for entry in kb.query():
             hp = entry.hyperparameters
             if not (hp.get("dynamics") and hp.get("credit") and hp.get("update")):
@@ -518,30 +525,34 @@ class StratifiedRandomDriver:
     ) -> list[ExperimentProposal]:
         proposals: list[ExperimentProposal] = []
         attempts = 0
-        while len(proposals) < min(n_proposals, self.cells) and attempts < 200:
+        max_proposals = min(n_proposals, self.cells)
+        while len(proposals) < max_proposals and attempts < 200:
             attempts += 1
             # Stratification: the least-proposed (dynamics, credit, update) triple is next.
             (dynamics, credit, update) = min(
                 self.balance, key=lambda k: (self.balance[k], self.rng.random())
             )
-            # Objective-space bias: sample multiple topologies, prefer under-explored bins
+            triple = (dynamics, credit, update)
+            # Get pre-computed viable topologies for this triple
+            viable_topos = self._viable_topos_per_triple.get(triple, [])
+            if not viable_topos:
+                # No viable topologies for this triple — mark as exhausted
+                self.balance[triple] = 10**9
+                continue
+            # Objective-space bias: iterate through ALL viable topologies, prefer under-explored bins
             best_topology = None
             best_score = -1.0
-            for topology in self.rng.choices(
-                GRID_TOPOLOGIES, k=min(3, len(GRID_TOPOLOGIES))
-            ):
+            for topology in viable_topos:
                 key = cell_key(dynamics, credit, update, topology)
-                if (
-                    key in self.seen
-                    or key in self.quarantined
-                    or (self.viable is not None and key not in self.viable)
-                ):
+                if key in self.seen or key in self.quarantined:
                     continue
                 score = self._score_proposal(dynamics, credit, update, topology)
                 if score > best_score:
                     best_score = score
                     best_topology = topology
             if best_topology is None:
+                # All viable topologies for this triple are seen/quarantined — mark exhausted
+                self.balance[triple] = 10**9
                 continue
             topology = best_topology
             key = cell_key(dynamics, credit, update, topology)
@@ -989,8 +1000,10 @@ class BroadMappingCampaign(AutoScientistCampaign):
         )
 
 
-def driver_seeded_kb(kb_path: Path) -> KnowledgeBase:
+def driver_seeded_kb(kb_path: Path, kb: KnowledgeBase | None = None) -> KnowledgeBase:
     """Shared KB so gate rejections mark coordinates covered across resumes."""
+    if kb is not None:
+        return kb
     from computronium.knowledge import KnowledgeBase
 
     return KnowledgeBase(kb_path)
@@ -1002,18 +1015,23 @@ def build_sweep(
     """Shared construction used by the sweep script and ``comp continuous``:
     void enumeration, stratified driver, defect-wired campaign."""
     from computronium.autoscientist.objectives import parse_objectives
+    from computronium.knowledge import KnowledgeBase
 
     substrate_name = getattr(args, "substrate", "digital")
+    kb_path = args.root / "kb.sqlite"
     viable = enumerate_constraint_voids(
-        args.root / "kb.sqlite",
+        kb_path,
         task=args.task,
         substrate_name=substrate_name,
     )
+    # Create shared KB instance once
+    shared_kb = KnowledgeBase(kb_path)
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     base_objectives = parse_objectives(obj_spec)
     objectives = _auto_objectives_for_substrate(substrate_name, base_objectives)
     driver = StratifiedRandomDriver(
-        args.root / "kb.sqlite",
+        shared_kb,
+        kb_path,
         task=args.task,
         cells=args.cells_per_iter,
         epochs=args.epochs,
@@ -1025,7 +1043,7 @@ def build_sweep(
         limit_batches=getattr(args, "limit_batches", 0) or 0,
         viable=frozenset(viable),
         defects_path=args.root / "runtime_defects.jsonl",
-        burst_tag=next_burst_tag(args.root / "kb.sqlite"),
+        burst_tag=next_burst_tag(kb_path, shared_kb),
         objectives=objectives,
     )
     campaign = BroadMappingCampaign(
@@ -1034,11 +1052,11 @@ def build_sweep(
         db_path=args.root / "campaign" / "campaign.db",
         branch_name="broad_mapping_sweep",
         ceec_ledger_path=args.root / "ledger.sqlite",
-        kb_path=args.root / "kb.sqlite",
+        kb_path=kb_path,
         defects_path=args.root / "runtime_defects.jsonl",
         substrate=substrate_name,
     )
-    campaign.knowledge_base = driver_seeded_kb(args.root / "kb.sqlite")
+    campaign.knowledge_base = driver_seeded_kb(kb_path, shared_kb)
     campaign.proposer = driver  # type: ignore[assignment]
     return campaign, driver
 
@@ -1318,17 +1336,16 @@ class _Candidate:
     front_bursts: int = 0
 
 
-def next_burst_tag(kb_path: Path) -> str:
+def next_burst_tag(kb_path: Path, kb: KnowledgeBase | None = None) -> str:
     """``burst:<utc-date>-<seq>`` for the next burst, derived from the tags
     already recorded in the KB (append-safe across resumes)."""
     from datetime import UTC, datetime
 
-    from computronium.knowledge import KnowledgeBase
-
     date = datetime.now(UTC).strftime("%Y-%m-%d")
     seq = 0
     if kb_path.exists():
-        for entry in KnowledgeBase(kb_path).query():
+        kb_instance = kb if kb is not None else KnowledgeBase(kb_path)
+        for entry in kb_instance.query():
             for tag in entry.tags:
                 if not tag.startswith("burst:"):
                     continue

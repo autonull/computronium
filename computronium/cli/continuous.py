@@ -55,14 +55,21 @@ def _grep_error_pattern(pattern: str, root: Path) -> bool:
 
     try:
         result = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true,start-process-with-partial-path] (fixed command, no shell)
-            ["/usr/bin/grep", "-r", "-F", "--include=*.py", pattern, str(root / "computronium")],
+            [
+                "/usr/bin/grep",
+                "-r",
+                "-F",
+                "--include=*.py",
+                pattern,
+                str(root / "computronium"),
+            ],
             capture_output=True,
             text=True,
             timeout=30,
             check=False,
         )
         return result.returncode == 0 and result.stdout.strip() != ""
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+    except subprocess.TimeoutExpired, FileNotFoundError, OSError:
         # If grep fails or times out, assume pattern might exist (conservative)
         return True
 
