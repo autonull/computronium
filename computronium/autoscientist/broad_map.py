@@ -351,6 +351,8 @@ class StratifiedRandomDriver:
         defects_path: Path | None = None,
         burst_tag: str | None = None,
         objectives: tuple[ObjectiveSpec, ...] = DEFAULT_OBJECTIVES,
+        input_dim: int = 784,
+        output_dim: int = 10,
     ) -> None:
         # Sampling RNG, not security-sensitive (S311).
         self.rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] (sampling, not crypto)
@@ -366,6 +368,8 @@ class StratifiedRandomDriver:
         self.defects_path = defects_path
         self.burst_tag = burst_tag
         self.objectives = objectives
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.seen: set[str] = set()
         self.quarantined: frozenset[str] = frozenset()
         self._kb = kb  # Shared KB reference
@@ -591,17 +595,13 @@ class StratifiedRandomDriver:
             if self.burst_tag is not None:
                 maturity_tags.append(self.burst_tag)
 
-            # Compute auto-sized geometry parameters for dry-run display
-            # Use the same logic as build_geometry_config for consistency
-            from computronium.autoscientist.compose import _auto_size_geometry
+            # Sample from all valid geometry configs for this topology to explore depth/width diversity
+            from computronium.autoscientist.compose import _get_all_valid_geometry_configs
 
-            input_dim = (
-                256  # Default for MNIST (784 flattened) - will be adjusted at execution
+            valid_configs = _get_all_valid_geometry_configs(
+                topology, self.param_budget, self.input_dim, self.output_dim
             )
-            output_dim = 10  # Default for MNIST
-            hidden_dims, computed_depth = _auto_size_geometry(
-                topology, self.param_budget, input_dim, output_dim, self.depth
-            )
+            hidden_dims, computed_depth = self.rng.choice(valid_configs)
             computed_hidden = hidden_dims[0] if hidden_dims else 64
 
             proposals.append(
@@ -1072,6 +1072,7 @@ def build_sweep(
     """Shared construction used by the sweep script and ``comp continuous``:
     void enumeration, stratified driver, defect-wired campaign."""
     from computronium.autoscientist.objectives import parse_objectives
+    from computronium.domains.registry import resolve_task
     from computronium.knowledge import KnowledgeBase
 
     substrate_name = getattr(args, "substrate", "digital")
@@ -1087,6 +1088,8 @@ def build_sweep(
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
     base_objectives = parse_objectives(obj_spec)
     objectives = _auto_objectives_for_substrate(substrate_name, base_objectives)
+    # Resolve task dims once for driver dry-run display
+    task_spec = resolve_task(args.task)
     driver = StratifiedRandomDriver(
         shared_kb,
         kb_path,
@@ -1103,6 +1106,8 @@ def build_sweep(
         defects_path=args.root / "runtime_defects.jsonl",
         burst_tag=next_burst_tag(kb_path, shared_kb),
         objectives=objectives,
+        input_dim=task_spec.input_dim,
+        output_dim=task_spec.output_dim,
     )
     campaign = BroadMappingCampaign(
         knowledge_base=None,

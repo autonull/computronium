@@ -271,21 +271,83 @@ def _auto_size_geometry(
             # Conservative estimate
             return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
 
-    # Try depth from 1 to 6, find best hidden
-    best_hidden = 32
-    best_depth = max(depth, 1)
+    # Find all valid (depth, hidden) combinations within budget
+    valid_configs: list[tuple[int, int]] = []  # (depth, hidden)
     for d in range(1, 7):
         lo, hi = 8, 512
+        best_h_for_d = 0
         while lo <= hi:
             mid = (lo + hi) // 2
             if estimate_params(mid, d) <= param_budget:
-                best_hidden = mid
-                best_depth = d
+                best_h_for_d = mid
                 lo = mid + 1
             else:
                 hi = mid - 1
+        if best_h_for_d >= 8:
+            valid_configs.append((d, best_h_for_d))
 
-    return (best_hidden,) * best_depth, best_depth
+    if not valid_configs:
+        # Fallback: minimal config
+        return (8,) * max(depth, 1), max(depth, 1)
+
+    # Pick the config that maximizes hidden * depth (total capacity) rather than just depth
+    # This favors balanced depth/width over extreme depth
+    best_d, best_h = max(valid_configs, key=lambda x: x[0] * x[1])
+
+    return (best_h,) * best_d, best_d
+
+
+def _get_all_valid_geometry_configs(
+    topology: str, param_budget: int, input_dim: int, output_dim: int
+) -> list[tuple[tuple[int, ...], int]]:
+    """Return all valid (hidden_dims, depth) combinations within budget for exploration diversity."""
+    if param_budget <= 0:
+        return [((64,) * d, d) for d in range(1, 7)]
+
+    def estimate_params(h: int, d: int) -> int:
+        if topology in {"feedforward", "recurrent"}:
+            return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
+        elif topology == "attention":
+            return 4 * h * h * d
+        elif topology == "ntm":
+            return h * h + 16 * 8 + h * output_dim
+        elif topology == "causal_transformer":
+            return 4 * h * h * d
+        elif topology == "tile_mesh":
+            npt = h
+            tpl = max(d, 1)
+            return input_dim * npt + max(d - 1, 0) * npt * tpl * npt + npt * tpl * output_dim
+        elif topology == "spatial_lattice":
+            lattice_volume = 4 * 4 * 4
+            return input_dim * lattice_volume * h + h * output_dim
+        elif topology == "nca":
+            grid_area = 16 * 16
+            return h * h * grid_area
+        elif topology == "conv":
+            kernel_size = 3
+            in_channels = 3
+            return in_channels * h * kernel_size * kernel_size + h * output_dim
+        elif topology == "graph":
+            num_nodes = 32
+            return h * h * num_nodes
+        else:
+            return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
+
+    valid_configs = []
+    for d in range(1, 7):
+        lo, hi = 8, 512
+        best_h_for_d = 0
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if estimate_params(mid, d) <= param_budget:
+                best_h_for_d = mid
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        if best_h_for_d >= 8:
+            valid_configs.append(((best_h_for_d,) * d, d))
+
+    return valid_configs if valid_configs else [((8,) * 1, 1)]
 
 
 def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
