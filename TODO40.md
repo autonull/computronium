@@ -432,3 +432,25 @@ The AutoScientist continuous discovery loop is now production-ready with:
 - Campaign diffing for result comparison
 - Multi-task and distributed burst support
 - Comprehensive reporting and monitoring
+
+---
+## 16. Post-Completion Verification (2026-09-27)
+
+All P0-P2 items verified:
+
+| Check | Command | Result |
+|-------|---------|--------|
+| Dev-env smoke | `uv run python -c "import optuna, scipy, torchvision, pytest"` | ✅ Pass |
+| Format check | `uv run ruff format --check` | ✅ Pass |
+| Lint check (changed files) | `uv run ruff check --fix` | ✅ Pass |
+| Type check (changed files) | `uv run pyright` | ✅ Pass (0 errors) |
+| Integration tests | `uv run pytest tests/integration/test_continuous_burst.py -q` | ✅ 8 passed |
+| Campaign readers | `uv run pytest tests/unit/test_campaign_readers.py -k "not daemon" -q` | ✅ 7 passed |
+
+### Follow-up Items (Deferred to Future Work)
+
+1. **Maturation `--limit-batches` support** — L1/L2 currently run full epochs; add flag for faster verification
+2. **Expand `_STEP_SIZE_OVERRIDES`** — Energy clamp still occurs for non-overridden combos; grow map from campaign data
+3. **Sophisticated Pareto predictor** — Current family-average is simple mean; consider per-topology or ML-based predictor
+4. **Deprecate legacy `run_deep_tier`** — Legacy front-stable path (≥2 bursts) coexists with L1→L2; unify
+5. **Daemon test flakiness** — `test_daemon_client_round_trips_live_daemon` has race condition (pre-existing, not TODO40)
