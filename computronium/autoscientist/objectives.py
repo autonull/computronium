@@ -31,6 +31,28 @@ class Objective(StrEnum):
     ENERGY_PER_STEP = "energy_per_step"
     LATENCY_MS = "latency_ms"
 
+    # Substrate-aware objectives (Substrate axis) — TODO31 Phase 3.6 / TODO40 P2.2
+    ENERGY_PER_OP = "energy_per_op"
+    IR_DROP_VARIANCE = "ir_drop_variance"
+    WRITE_ENERGY_PJ = "write_energy_pj"
+    ENDURANCE_CYCLES = "endurance_cycles"
+    SPIKE_RATE = "spike_rate"
+    EVENT_DENSITY = "event_density"
+    SYNAPTIC_OPS_PER_SAMPLE = "synaptic_ops_per_sample"
+    SPIKE_ENERGY_PJ = "spike_energy_pj"
+    PHASE_NOISE = "phase_noise"
+    OPTICAL_POWER_MW = "optical_power_mw"
+    INSERTION_LOSS_DB = "insertion_loss_db"
+    PHASE_SHIFTER_ENERGY_PJ = "phase_shifter_energy_pj"
+    GATE_FIDELITY = "gate_fidelity"
+    COHERENCE_TIME_US = "coherence_time_us"
+    SHOT_NOISE = "shot_noise"
+    QUBIT_COUNT = "qubit_count"
+    THERMAL_NOISE_VARIANCE = "thermal_noise_variance"
+    NONLINEARITY_ERROR = "nonlinearity_error"
+    DRIFT_RATE = "drift_rate"
+    PRECISION_BITS = "precision_bits"
+
     # Ruler-relative objectives (Task axis)
     BP_DEFICIT = "bp_deficit"
     RULER_WALLTIME_RATIO = "ruler_walltime_ratio"
@@ -148,6 +170,86 @@ def normalize_credit_efficiency(x: float) -> float:
     return x / (1.0 + x)
 
 
+def normalize_energy_per_op(x: float) -> float:
+    return 1.0 / (1.0 + x / 1e-12)
+
+
+def normalize_ir_drop_variance(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_write_energy_pj(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_endurance_cycles(x: float) -> float:
+    return x / (1.0 + x / 1e12)
+
+
+def normalize_spike_rate(x: float) -> float:
+    return 1.0 / (1.0 + x / 1e3)
+
+
+def normalize_event_density(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_synaptic_ops_per_sample(x: float) -> float:
+    return 1.0 / (1.0 + x / 1e6)
+
+
+def normalize_spike_energy_pj(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_phase_noise(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_optical_power_mw(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_insertion_loss_db(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_phase_shifter_energy_pj(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_gate_fidelity(x: float) -> float:
+    return x
+
+
+def normalize_coherence_time_us(x: float) -> float:
+    return x / (1.0 + x / 1e3)
+
+
+def normalize_shot_noise(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_qubit_count(x: float) -> float:
+    return x / (1.0 + x / 1e3)
+
+
+def normalize_thermal_noise_variance(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_nonlinearity_error(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_drift_rate(x: float) -> float:
+    return 1.0 / (1.0 + x)
+
+
+def normalize_precision_bits(x: float) -> float:
+    return x / (1.0 + x / 32)
+
+
 DEFAULT_NORMALIZERS: dict[Objective, Callable[[float], float]] = {
     Objective.ACCURACY: normalize_accuracy,
     Objective.WALLTIME_S: normalize_walltime,
@@ -156,6 +258,26 @@ DEFAULT_NORMALIZERS: dict[Objective, Callable[[float], float]] = {
     Objective.MEMORY_MB: normalize_memory_mb,
     Objective.ENERGY_PER_STEP: normalize_energy_per_step,
     Objective.LATENCY_MS: normalize_latency_ms,
+    Objective.ENERGY_PER_OP: normalize_energy_per_op,
+    Objective.IR_DROP_VARIANCE: normalize_ir_drop_variance,
+    Objective.WRITE_ENERGY_PJ: normalize_write_energy_pj,
+    Objective.ENDURANCE_CYCLES: normalize_endurance_cycles,
+    Objective.SPIKE_RATE: normalize_spike_rate,
+    Objective.EVENT_DENSITY: normalize_event_density,
+    Objective.SYNAPTIC_OPS_PER_SAMPLE: normalize_synaptic_ops_per_sample,
+    Objective.SPIKE_ENERGY_PJ: normalize_spike_energy_pj,
+    Objective.PHASE_NOISE: normalize_phase_noise,
+    Objective.OPTICAL_POWER_MW: normalize_optical_power_mw,
+    Objective.INSERTION_LOSS_DB: normalize_insertion_loss_db,
+    Objective.PHASE_SHIFTER_ENERGY_PJ: normalize_phase_shifter_energy_pj,
+    Objective.GATE_FIDELITY: normalize_gate_fidelity,
+    Objective.COHERENCE_TIME_US: normalize_coherence_time_us,
+    Objective.SHOT_NOISE: normalize_shot_noise,
+    Objective.QUBIT_COUNT: normalize_qubit_count,
+    Objective.THERMAL_NOISE_VARIANCE: normalize_thermal_noise_variance,
+    Objective.NONLINEARITY_ERROR: normalize_nonlinearity_error,
+    Objective.DRIFT_RATE: normalize_drift_rate,
+    Objective.PRECISION_BITS: normalize_precision_bits,
     Objective.SPECTRAL_RADIUS: normalize_spectral_radius,
     Objective.LYAPUNOV_EXPONENT: normalize_lyapunov_exponent,
     Objective.MAX_SINGULAR_VALUE: normalize_max_singular_value,
@@ -180,6 +302,26 @@ OBJECTIVE_DIRECTION: dict[Objective, Literal["maximize", "minimize"]] = {
     Objective.MEMORY_MB: "minimize",
     Objective.ENERGY_PER_STEP: "minimize",
     Objective.LATENCY_MS: "minimize",
+    Objective.ENERGY_PER_OP: "minimize",
+    Objective.IR_DROP_VARIANCE: "minimize",
+    Objective.WRITE_ENERGY_PJ: "minimize",
+    Objective.ENDURANCE_CYCLES: "maximize",
+    Objective.SPIKE_RATE: "minimize",
+    Objective.EVENT_DENSITY: "minimize",
+    Objective.SYNAPTIC_OPS_PER_SAMPLE: "minimize",
+    Objective.SPIKE_ENERGY_PJ: "minimize",
+    Objective.PHASE_NOISE: "minimize",
+    Objective.OPTICAL_POWER_MW: "minimize",
+    Objective.INSERTION_LOSS_DB: "minimize",
+    Objective.PHASE_SHIFTER_ENERGY_PJ: "minimize",
+    Objective.GATE_FIDELITY: "maximize",
+    Objective.COHERENCE_TIME_US: "maximize",
+    Objective.SHOT_NOISE: "minimize",
+    Objective.QUBIT_COUNT: "maximize",
+    Objective.THERMAL_NOISE_VARIANCE: "minimize",
+    Objective.NONLINEARITY_ERROR: "minimize",
+    Objective.DRIFT_RATE: "minimize",
+    Objective.PRECISION_BITS: "maximize",
     Objective.BP_DEFICIT: "minimize",
     Objective.RULER_WALLTIME_RATIO: "minimize",
     Objective.RULER_ENERGY_RATIO: "minimize",
@@ -201,6 +343,26 @@ OBJECTIVE_AXIS: dict[Objective, str] = {
     Objective.PARAM_COUNT: "G",
     Objective.FLOPS: "G",
     Objective.MEMORY_MB: "G",
+    Objective.ENERGY_PER_OP: "S",
+    Objective.IR_DROP_VARIANCE: "S",
+    Objective.WRITE_ENERGY_PJ: "S",
+    Objective.ENDURANCE_CYCLES: "S",
+    Objective.SPIKE_RATE: "S",
+    Objective.EVENT_DENSITY: "S",
+    Objective.SYNAPTIC_OPS_PER_SAMPLE: "S",
+    Objective.SPIKE_ENERGY_PJ: "S",
+    Objective.PHASE_NOISE: "S",
+    Objective.OPTICAL_POWER_MW: "S",
+    Objective.INSERTION_LOSS_DB: "S",
+    Objective.PHASE_SHIFTER_ENERGY_PJ: "S",
+    Objective.GATE_FIDELITY: "S",
+    Objective.COHERENCE_TIME_US: "S",
+    Objective.SHOT_NOISE: "S",
+    Objective.QUBIT_COUNT: "S",
+    Objective.THERMAL_NOISE_VARIANCE: "S",
+    Objective.NONLINEARITY_ERROR: "S",
+    Objective.DRIFT_RATE: "S",
+    Objective.PRECISION_BITS: "S",
     Objective.SPECTRAL_RADIUS: "D",
     Objective.LYAPUNOV_EXPONENT: "D",
     Objective.MAX_SINGULAR_VALUE: "D",
@@ -216,8 +378,8 @@ OBJECTIVE_AXIS: dict[Objective, str] = {
     Objective.RULER_ENERGY_RATIO: "task",
     Objective.WALLTIME_S: "cost",
     Objective.LATENCY_MS: "cost",
-    Objective.STABILITY_PLASTICITY_RATIO: "D",  # Dynamics/Plasticity cross-axis
-    Objective.CREDIT_EFFICIENCY: "C",  # Credit axis
+    Objective.STABILITY_PLASTICITY_RATIO: "D",
+    Objective.CREDIT_EFFICIENCY: "C",
 }
 
 

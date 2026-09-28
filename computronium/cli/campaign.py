@@ -182,6 +182,36 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output directory (default: <root>/report)",
     )
 
+    # diff (continuous discovery campaigns - TODO40 P1.3)
+    diff_parser = subparsers.add_parser(
+        "diff",
+        help="Compare two continuous discovery campaign runs (KB roots)",
+    )
+    diff_parser.add_argument(
+        "--root-a",
+        type=Path,
+        required=True,
+        help="First campaign root directory",
+    )
+    diff_parser.add_argument(
+        "--root-b",
+        type=Path,
+        required=True,
+        help="Second campaign root directory",
+    )
+    diff_parser.add_argument(
+        "--task", default="mnist", help="Task to filter (default: mnist)"
+    )
+    diff_parser.add_argument(
+        "--objectives",
+        default="accuracy,walltime_s,param_count",
+        help="Comma-separated objectives for Pareto front",
+    )
+    diff_parser.add_argument(
+        "--output",
+        help="Output file (default: stdout)",
+    )
+
     return parser
 
 
@@ -571,6 +601,316 @@ def _render_kb_report(args) -> int:
     return 0
 
 
+# --- Diff helpers --------------------------------------------------------------
+
+
+def _get_all_cell_keys(root: Path, task: str) -> set[str]:
+    """Get all viable cell keys from KB experiments."""
+    import sqlite3
+
+    from computronium.core.campaign.kb_report import _build_per_cell_best
+
+    kb_path = root / "kb.sqlite"
+    if not kb_path.exists():
+        return set()
+    conn = sqlite3.connect(kb_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT * FROM knowledge WHERE topic LIKE ? AND source = 'experiment'",
+        (f"experiment:{task}",),
+    ).fetchall()
+    conn.close()
+    cells = _build_per_cell_best(rows)
+    return {c["key"] for c in cells}
+
+
+def _diff_summary_stats(report_a, report_b) -> list[str]:
+    """Diff summary statistics."""
+    lines = ["1. SUMMARY STATS", "-" * 40]
+    stats_a = report_a.kb_stats
+    stats_b = report_b.kb_stats
+    for key in ["total_entries", "total_experiments", "total_voids"]:
+        val_a = stats_a.get(key, 0)
+        val_b = stats_b.get(key, 0)
+        delta = val_b - val_a
+        sign = "+" if delta > 0 else ""
+        lines.append(f"  {key}: {val_a} -> {val_b} ({sign}{delta})")
+    lines.append(
+        f"  Pareto front size: {len(report_a.pareto_front)} -> {len(report_b.pareto_front)} "
+        f"({'+' if len(report_b.pareto_front) > len(report_a.pareto_front) else ''}"
+        f"{len(report_b.pareto_front) - len(report_a.pareto_front)})"
+    )
+    lines.append("")
+    return lines
+
+
+def _diff_viable_cells(report_a, report_b, args) -> list[str]:
+    """Diff viable cells."""
+    lines = ["2. NEW VIABLE CELLS (in B, not in A)", "-" * 40]
+    cells_a = _get_all_cell_keys(args.root_a, args.task)
+    cells_b = _get_all_cell_keys(args.root_b, args.task)
+    new_cells = cells_b - cells_a
+    removed_cells = cells_a - cells_b
+
+    if new_cells:
+        lines.append(f"  New cells in B: {len(new_cells)}")
+        for key in sorted(new_cells)[:10]:
+            lines.append(f"    + {key}")
+        if len(new_cells) > 10:
+            lines.append(f"    ... and {len(new_cells) - 10} more")
+    else:
+        lines.append("  No new cells")
+
+    if removed_cells:
+        lines.append(f"  Cells removed: {len(removed_cells)}")
+        for key in sorted(removed_cells)[:5]:
+            lines.append(f"    - {key}")
+    lines.append("")
+    return lines
+
+
+def _diff_pareto_front(report_a, report_b) -> list[str]:
+    """Diff Pareto front changes."""
+    keys_a = {p.key for p in report_a.pareto_front}
+    keys_b = {p.key for p in report_b.pareto_front}
+    front_new = keys_b - keys_a
+    front_lost = keys_a - keys_b
+    front_common = keys_a & keys_b
+
+    lines = ["3. PARETO FRONT CHANGES", "-" * 40]
+    lines.extend(
+        _format_front_section("New on front", front_new, report_b.pareto_front, "+")
+    )
+    lines.extend(
+        _format_front_section("Lost from front", front_lost, report_a.pareto_front, "-")
+    )
+    lines.extend(_format_common_front_changes(front_common, report_a, report_b))
+    lines.append("")
+    return lines
+
+
+def _format_front_section(
+    title: str, keys: set[str], front: list, prefix: str
+) -> list[str]:
+    """Format a front section (new/lost)."""
+    lines = []
+    if keys:
+        lines.append(f"  {title}: {len(keys)}")
+        for key in sorted(keys):
+            pt = next((p for p in front if p.key == key), None)
+            if pt:
+                lines.append(
+                    f"    {prefix} {key} (acc={pt.accuracy:.3f}, walltime={pt.walltime_s:.1f}s, params={pt.param_count:,})"
+                )
+    else:
+        lines.append(f"  No {title.lower()}")
+    return lines
+
+
+def _format_common_front_changes(keys: set[str], report_a, report_b) -> list[str]:
+    """Format changes for common front cells."""
+    lines = []
+    if not keys:
+        return lines
+    lines.append(f"  Common front cells: {len(keys)}")
+    for key in sorted(keys):
+        pt_a = next((p for p in report_a.pareto_front if p.key == key), None)
+        pt_b = next((p for p in report_b.pareto_front if p.key == key), None)
+        if pt_a and pt_b:
+            acc_diff = pt_b.accuracy - pt_a.accuracy
+            wt_diff = pt_b.walltime_s - pt_a.walltime_s
+            if abs(acc_diff) > 0.001 or abs(wt_diff) > 0.1:
+                lines.append(
+                    f"    ~ {key}: acc {pt_a.accuracy:.3f}->{pt_b.accuracy:.3f} ({acc_diff:+.3f}), "
+                    f"walltime {pt_a.walltime_s:.1f}->{pt_b.walltime_s:.1f}s ({wt_diff:+.1f}s)"
+                )
+    return lines
+
+
+def _diff_voids(report_a, report_b) -> list[str]:
+    """Diff structural voids."""
+    lines = ["4. STRUCTURAL VOIDS", "-" * 40]
+    void_cats_a = {v.category: v.count for v in report_a.voids}
+    void_cats_b = {v.category: v.count for v in report_b.voids}
+    all_cats = set(void_cats_a.keys()) | set(void_cats_b.keys())
+    for cat in sorted(all_cats):
+        count_a = void_cats_a.get(cat, 0)
+        count_b = void_cats_b.get(cat, 0)
+        delta = count_b - count_a
+        if delta != 0:
+            sign = "+" if delta > 0 else ""
+            lines.append(f"  {cat}: {count_a} -> {count_b} ({sign}{delta})")
+    lines.append("")
+    return lines
+
+
+def _diff_clamps(report_a, report_b) -> list[str]:
+    """Diff energy clamp frequency."""
+    lines = ["5. ENERGY CLAMP FREQUENCY CHANGES", "-" * 40]
+    clamps_a = {(c.dynamics, c.credit, c.update): c for c in report_a.clamps}
+    clamps_b = {(c.dynamics, c.credit, c.update): c for c in report_b.clamps}
+    all_triples = set(clamps_a.keys()) | set(clamps_b.keys())
+
+    clamp_changes = []
+    for triple in sorted(all_triples):
+        ca = clamps_a.get(triple)
+        cb = clamps_b.get(triple)
+        if ca and cb:
+            rate_diff = cb.clamp_rate - ca.clamp_rate
+            if abs(rate_diff) > 0.01:
+                clamp_changes.append((triple, ca, cb, rate_diff))
+        elif cb and not ca:
+            clamp_changes.append((triple, None, cb, cb.clamp_rate))
+
+    if clamp_changes:
+        for triple, ca, cb, rate_diff in sorted(
+            clamp_changes, key=lambda x: -abs(x[3])
+        )[:10]:
+            dynamics, credit, update = triple
+            if ca:
+                lines.append(
+                    f"  {dynamics}|{credit}|{update}: {ca.clamp_rate:.1%} -> {cb.clamp_rate:.1%} "
+                    f"({rate_diff:+.1%}) [{ca.total_cells}->{cb.total_cells} cells]"
+                )
+            else:
+                lines.append(
+                    f"  {dynamics}|{credit}|{update}: NEW - {cb.clamp_rate:.1%} "
+                    f"[{cb.total_cells} cells]"
+                )
+    else:
+        lines.append("  No significant clamp frequency changes")
+    lines.append("")
+    return lines
+
+
+def _diff_walltimes(report_a, report_b) -> list[str]:
+    """Diff walltime by dynamics family."""
+    lines = ["6. WALLTIME CHANGES BY DYNAMICS FAMILY", "-" * 40]
+    wt_a = {w.dynamics: w for w in report_a.walltimes}
+    wt_b = {w.dynamics: w for w in report_b.walltimes}
+    all_dyn = set(wt_a.keys()) | set(wt_b.keys())
+
+    for dyn in sorted(all_dyn):
+        wa = wt_a.get(dyn)
+        wb = wt_b.get(dyn)
+        if wa and wb:
+            mean_diff = wb.mean_walltime_s - wa.mean_walltime_s
+            if abs(mean_diff) > 0.5:
+                sign = "+" if mean_diff > 0 else ""
+                lines.append(
+                    f"  {dyn}: {wa.mean_walltime_s:.1f}s -> {wb.mean_walltime_s:.1f}s "
+                    f"({sign}{mean_diff:.1f}s) [{wa.cells}->{wb.cells} cells]"
+                )
+        elif wb and not wa:
+            lines.append(f"  {dyn}: NEW - {wb.mean_walltime_s:.1f}s [{wb.cells} cells]")
+    lines.append("")
+    return lines
+
+
+def _diff_maturation(report_a, report_b) -> list[str]:
+    """Diff maturation pipeline."""
+    lines = ["7. MATURATION PIPELINE", "-" * 40]
+    m_a, m_b = report_a.maturation, report_b.maturation
+    lines.append(
+        f"  L0: {m_a.l0_cells} -> {m_b.l0_cells} ({m_b.l0_cells - m_a.l0_cells:+d})"
+    )
+    lines.append(
+        f"  L1: {m_a.l1_cells} -> {m_b.l1_cells} ({m_b.l1_cells - m_a.l1_cells:+d})"
+    )
+    lines.append(
+        f"  L2: {m_a.l2_cells} -> {m_b.l2_cells} ({m_b.l2_cells - m_a.l2_cells:+d})"
+    )
+    new_l1 = set(m_b.l1_keys) - set(m_a.l1_keys)
+    new_l2 = set(m_b.l2_keys) - set(m_a.l2_keys)
+    if new_l1:
+        lines.append(f"  New L1 cells: {', '.join(sorted(new_l1)[:5])}")
+    if new_l2:
+        lines.append(f"  New L2 cells: {', '.join(sorted(new_l2)[:5])}")
+    lines.append("")
+    return lines
+
+
+def _diff_defects(report_a, report_b) -> list[str]:
+    """Diff defect quarantine."""
+    lines = ["8. DEFECT QUARANTINE CHANGES", "-" * 40]
+    d_a, d_b = report_a.defects, report_b.defects
+    lines.append(
+        f"  Open defects: {d_a.open_defects} -> {d_b.open_defects} "
+        f"({d_b.open_defects - d_a.open_defects:+d})"
+    )
+    lines.append(
+        f"  Resolved defects: {d_a.resolved_defects} -> {d_b.resolved_defects} "
+        f"({d_b.resolved_defects - d_a.resolved_defects:+d})"
+    )
+    lines.append(
+        f"  Quarantined cells: {d_a.quarantined_cells} -> {d_b.quarantined_cells} "
+        f"({d_b.quarantined_cells - d_a.quarantined_cells:+d})"
+    )
+
+    all_defect_types = set(d_a.defect_types.keys()) | set(d_b.defect_types.keys())
+    fixed_types = []
+    new_types = []
+    for dtype in sorted(all_defect_types):
+        count_a = d_a.defect_types.get(dtype, 0)
+        count_b = d_b.defect_types.get(dtype, 0)
+        if count_b < count_a:
+            fixed_types.append((dtype, count_a, count_b))
+        elif count_b > count_a:
+            new_types.append((dtype, count_a, count_b))
+
+    if fixed_types:
+        lines.append("  Fixed defect types:")
+        for dtype, count_a, count_b in fixed_types:
+            lines.append(f"    - {dtype}: {count_a} -> {count_b} (resolved)")
+    if new_types:
+        lines.append("  New/increased defect types:")
+        for dtype, count_a, count_b in new_types:
+            lines.append(f"    + {dtype}: {count_a} -> {count_b}")
+    return lines
+
+
+def _diff_kb_campaigns(args) -> int:
+    """Compare two continuous discovery KB campaigns."""
+    from computronium.core.campaign.kb_report import build_kb_report
+
+    objectives = [o.strip() for o in args.objectives.split(",") if o.strip()]
+
+    print("Comparing campaigns:")
+    print(f"  A: {args.root_a}")
+    print(f"  B: {args.root_b}")
+    print(f"  Task: {args.task}")
+    print(f"  Objectives: {objectives}")
+    print()
+
+    report_a = build_kb_report(args.root_a, task=args.task, objectives=objectives)
+    report_b = build_kb_report(args.root_b, task=args.task, objectives=objectives)
+
+    output_lines = []
+    output_lines.append("=" * 80)
+    output_lines.append(f"CAMPAIGN DIFF: {args.root_a} -> {args.root_b}")
+    output_lines.append("=" * 80)
+    output_lines.append("")
+
+    output_lines.extend(_diff_summary_stats(report_a, report_b))
+    output_lines.extend(_diff_viable_cells(report_a, report_b, args))
+    output_lines.extend(_diff_pareto_front(report_a, report_b))
+    output_lines.extend(_diff_voids(report_a, report_b))
+    output_lines.extend(_diff_clamps(report_a, report_b))
+    output_lines.extend(_diff_walltimes(report_a, report_b))
+    output_lines.extend(_diff_maturation(report_a, report_b))
+    output_lines.extend(_diff_defects(report_a, report_b))
+
+    result = "\n".join(output_lines)
+
+    if args.output:
+        Path(args.output).write_text(result, encoding="utf-8")
+        print(f"Diff written to {args.output}")
+    else:
+        print(result)
+
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for ``comp campaign``."""
     args = _build_parser().parse_args(argv)
@@ -588,6 +928,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "export": _export_campaign,
         "report": _render_discovery_report,
         "kb-report": _render_kb_report,
+        "diff": _diff_kb_campaigns,
     }
     handler = handlers.get(args.subcommand)
     if handler is None:

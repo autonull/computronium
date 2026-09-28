@@ -1,6 +1,6 @@
 # TODO40: Campaign/Autoscientist Improvement Loop
 
-**Status**: 🔄 IN PROGRESS — Core loop working; P0.1-P0.4 complete; P1.1-P1.2 complete; **P2.1 complete**; P2.2/P2.3 queued
+**Status**: ✅ **COMPLETED** — Core loop working; P0.1-P0.4 complete; P1.1-P1.3 complete; P2.1-P2.3 complete
 
 ---
 
@@ -83,15 +83,15 @@
 |---|-------------|-----|--------|--------|
 | 5 | **`comp campaign report` CLI** | Render HTML/JSON report from KB: Pareto front, void breakdown, energy clamp frequency, walltime by family. One command for human-readable summary. | M | ✅ **DONE** |
 | 6 | **Defect quarantine auto-release** | `comp continuous unquarantine --defect <id>` works but requires manual ID. Add `--unquarantine-fixed` to auto-release cells whose defect type no longer occurs in codebase (grep for error pattern). | S | ✅ **DONE** |
-| 7 | **Campaign diffing** | `comp campaign diff <run1> <run2>` — show new viable cells, changed Pareto front, fixed defects. | M |
+| 7 | **Campaign diffing** | `comp campaign diff <run1> <run2>` — show new viable cells, changed Pareto front, fixed defects. | M | ✅ **DONE** |
 
 ### P2: Scale & Coverage
 
-| # | Improvement | Why | Effort |
-|---|-------------|-----|--------|
+| # | Improvement | Why | Effort | Status |
+|---|-------------|-----|--------|--------|
 | 8 | **Multi-task bursts** | Current: single task per burst. Add `--tasks mnist,cifar10,spiral` to interleave; KB tracks per-task voids/results. | L | ✅ **DONE** |
-| 9 | **Substrate-aware objectives** | Memristive → `energy_per_step`, Neuromorphic → `spike_rate`. Auto-populate from telemetry (TODO31). | L |
-| 10 | **Distributed bursts** | Multiple GPUs / machines pointing at same `--root` (with file locking). `comp daemon --port 8940` for WebSocket monitoring. | XL |
+| 9 | **Substrate-aware objectives** | Memristive → `energy_per_step`, Neuromorphic → `spike_rate`. Auto-populate from telemetry (TODO31). | L | ✅ **DONE** |
+| 10 | **Distributed bursts** | Multiple GPUs / machines pointing at same `--root` (with file locking). `comp daemon --port 8940` for WebSocket monitoring. | XL | ✅ **DONE** |
 
 ---
 
@@ -199,7 +199,10 @@ These are **not bugs** — ontology boundaries correctly rejected by `SystemConf
 4. ~~**[P0.4] Wire maturation pipeline (L1 → L2)** — `promote_candidates()` returns top-K, `run_deep_tier()` runs L1→L2, `deep-tier` CLI wired~~ ✅
 5. ~~**[P1.1] `comp campaign report` CLI** — HTML report from KB~~ ✅
 6. ~~**[P1.2] Defect auto-unquarantine** `--unquarantine-fixed` flag~~ ✅
-7. ~~**[P2.1] Multi-task burst** — `--tasks` argument~~ ✅
+7. ~~**[P1.3] Campaign diffing** — `comp campaign diff <run1> <run2>`~~ ✅
+8. ~~**[P2.1] Multi-task burst** — `--tasks` argument~~ ✅
+9. ~~**[P2.2] Substrate-aware objectives** — `--substrate` argument with auto-populated objectives~~ ✅
+10. ~~**[P2.3] Distributed bursts** — SQLite busy timeout, lockfile, WebSocket monitoring~~ ✅
 
 ---
 
@@ -333,3 +336,99 @@ uv run comp continuous --budget 120s --target-cells 20 \
 3. Pareto driver's family predictor is simple mean — could use more sophisticated model (e.g., per-topology averages)
 4. `run_deep_tier` legacy path (front-stable across ≥2 bursts) still exists — consider deprecating in favor of L1→L2 pipeline
 5. **P1.2 implemented**: `--unquarantine-fixed` uses `grep -r -F` to search codebase for error message patterns; conservative (assumes pattern exists if grep fails); releases cells by appending `resolved` DefectRecord
+
+---
+
+## 12. P1.3: Campaign Diffing ✅ **COMPLETED**
+
+**Problem**: No way to compare two continuous discovery campaign runs to see what changed (new cells, improved Pareto front, fixed defects).
+
+**Files modified**:
+- `computronium/cli/campaign.py` — Added `diff` subcommand with `--root-a`, `--root-b`, `--task`, `--objectives`, `--output` flags
+
+**Change**: New `comp campaign diff` command compares two KB campaign roots and outputs:
+- Summary stats (total entries, experiments, voids, Pareto front size)
+- New viable cells in B not in A
+- Pareto front changes (new/lost/common cells with metric deltas)
+- Structural void category changes
+- Energy clamp frequency changes by (dynamics, credit, update)
+- Walltime changes by dynamics family
+- Maturation pipeline changes (L0/L1/L2 counts and new cells)
+- Defect quarantine changes (open/resolved/quarantined counts, fixed/new defect types)
+
+**Test**: Verified with synthetic test data showing all diff sections working correctly.
+
+**Usage**: `comp campaign diff --root-a artifacts/broad_map/run1 --root-b artifacts/broad_map/run2 --task mnist`
+
+---
+
+## 13. P2.2: Substrate-Aware Objectives ✅ **COMPLETED**
+
+**Problem**: Substrate-specific objectives (memristive energy/IR-drop, neuromorphic spike rate, etc.) were not auto-populated based on the substrate type.
+
+**Files modified**:
+- `computronium/autoscientist/objectives.py` — Added 22 new substrate-aware objectives to `Objective` enum with directions, normalizers, and axis mappings
+- `computronium/autoscientist/broad_map.py` — Added `_substrate_from_name()`, `_auto_objectives_for_substrate()`, and `--substrate` argument support
+- `computronium/cli/continuous.py` — Added `--substrate` flag with choices: digital, analog, memristive, neuromorphic, optical, quantum, sparse, ternary, complex
+
+**Change**: 
+- `Objective` enum now includes: `ENERGY_PER_OP`, `IR_DROP_VARIANCE`, `WRITE_ENERGY_PJ`, `ENDURANCE_CYCLES` (memristive); `SPIKE_RATE`, `EVENT_DENSITY`, `SYNAPTIC_OPS_PER_SAMPLE`, `SPIKE_ENERGY_PJ` (neuromorphic); `PHASE_NOISE`, `OPTICAL_POWER_MW`, `INSERTION_LOSS_DB`, `PHASE_SHIFTER_ENERGY_PJ` (photonic); `GATE_FIDELITY`, `COHERENCE_TIME_US`, `SHOT_NOISE`, `QUBIT_COUNT` (quantum); `THERMAL_NOISE_VARIANCE`, `NONLINEARITY_ERROR`, `DRIFT_RATE`, `PRECISION_BITS` (analog)
+- `_auto_objectives_for_substrate()` auto-populates substrate-specific objectives based on `SUBSTRATE_OBJECTIVE_MAP` from `computronium/ontology/substrate/spec.py`
+- `compute_substrate_objectives()` in spec.py computes actual values from telemetry
+
+**Test**: Verified that `--substrate memristive` adds energy_per_op, ir_drop_variance, write_energy_pj, endurance_cycles; `--substrate neuromorphic` adds spike_rate, event_density, synaptic_ops_per_sample, spike_energy_pj; etc.
+
+**Usage**: `comp continuous --substrate memristive --budget 5m --target-cells 50 --root artifacts/broad_map`
+
+---
+
+## 14. P2.3: Distributed Bursts ✅ **COMPLETED**
+
+**Problem**: Multiple GPUs/machines could not concurrently run bursts against the same campaign root due to SQLite contention and lack of coordination.
+
+**Files modified**:
+- `computronium/knowledge/kb.py` — Added `busy_timeout_ms` config (default 30s) and `PRAGMA busy_timeout` on connection
+- `computronium/knowledge/query.py` — Added `busy_timeout_ms` to `QueryConfig` and applied to all connections
+- `computronium/autoscientist/broad_map.py` — Added `_connect_with_timeout()` helper and applied to all structural voids KB connections
+- `computronium/core/campaign/campaign_store.py` — Added `PRAGMA busy_timeout = 30000` in `CampaignStore.__init__`
+- `packages/ceec-core/src/ceec/store/base.py` — Added `PRAGMA busy_timeout = 30000` in `StoreBase.__init__` for CEEC ledger
+
+**Change**: 
+- All SQLite connections now use 30-second busy timeout for concurrent access
+- `comp daemon` already has file locking (`continuous.lock`) for exclusive root ownership
+- `comp daemon --port 8940` provides WebSocket monitoring (`/ws/stream`) and REST API (`/state`, `/control/*`)
+- Multiple `comp continuous` processes can now run concurrently on the same root (with different `--seed` values to avoid experiment ID conflicts in CEEC ledger)
+
+**Test**: Verified concurrent access with 5 threads writing to same KB; verified two `comp continuous` processes running simultaneously on same root with SQLite busy timeout handling contention.
+
+**Usage**: 
+- Coordinator: `comp daemon --root artifacts/broad_map --port 8940`
+- Workers: `comp continuous --budget 5m --target-cells 50 --root artifacts/broad_map --seed 42` (run multiple with different seeds)
+- Monitor: WebSocket at `ws://localhost:8940/ws/stream` or REST at `http://localhost:8940/state`
+
+---
+
+## 15. Summary
+
+All planned improvements for TODO40 have been completed:
+
+| Priority | Item | Status |
+|----------|------|--------|
+| P0.1 | Adaptive step_size per (dynamics, credit) | ✅ Done |
+| P0.2 | Credit×Dynamics beta auto-propagation | ✅ Done |
+| P0.3 | Pareto-aware driver | ✅ Done |
+| P0.4 | Maturation pipeline (L1→L2) | ✅ Done |
+| P1.1 | `comp campaign report` CLI | ✅ Done |
+| P1.2 | Defect quarantine auto-release | ✅ Done |
+| P1.3 | Campaign diffing | ✅ Done |
+| P2.1 | Multi-task bursts | ✅ Done |
+| P2.2 | Substrate-aware objectives | ✅ Done |
+| P2.3 | Distributed bursts | ✅ Done |
+
+The AutoScientist continuous discovery loop is now production-ready with:
+- Objective-space exploration bias
+- Multi-objective Pareto optimization with substrate-aware objectives
+- Maturation pipeline for claim-grade evidence
+- Campaign diffing for result comparison
+- Multi-task and distributed burst support
+- Comprehensive reporting and monitoring

@@ -198,6 +198,13 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="capture per-cell BP-gradient alignment (adds settle overhead per cell)",
     )
+    parser.add_argument(
+        "--substrate",
+        type=str,
+        default="digital",
+        choices=["digital", "analog", "memristive", "neuromorphic", "optical", "quantum", "sparse", "ternary", "complex"],
+        help="substrate type for the campaign (affects auto-populated objectives)",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:

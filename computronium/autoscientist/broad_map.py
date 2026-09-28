@@ -29,9 +29,11 @@ import json
 import logging
 import random
 import re
+import sqlite3
 import time
 import traceback
 from dataclasses import dataclass, replace
+from pathlib import Path  # noqa: TID251
 from typing import TYPE_CHECKING, Protocol
 
 from computronium.autoscientist.bridge import ExperimentProposal
@@ -56,10 +58,20 @@ from computronium.autoscientist.proposer import (
 )
 from computronium.utils import seed_everything
 
+BUSY_TIMEOUT_MS = 30000
+
+
+def _connect_with_timeout(db_path: Path) -> sqlite3.Connection:
+    """Create SQLite connection with busy timeout for concurrent access."""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    conn.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS};")
+    return conn
+
+
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable
-    from pathlib import Path
 
     from computronium.knowledge import KnowledgeBase
     from computronium.ontology import GeometryConfig
@@ -122,7 +134,68 @@ class ContinuousBudget:
         return replace(self, done=self.done + n)
 
 
-def enumerate_constraint_voids(kb_path: Path, task: str) -> set[str]:
+def _substrate_from_name(name: str):
+    """Create SubstrateConfig from substrate name."""
+    from computronium.ontology.substrate._substrate import SubstrateConfig
+
+    name_lower = name.lower()
+    factory_map = {
+        "digital": SubstrateConfig.digital,
+        "analog": SubstrateConfig.analog,
+        "memristive": SubstrateConfig.memristive,
+        "neuromorphic": SubstrateConfig.neuromorphic,
+        "optical": SubstrateConfig.optical,
+        "quantum": SubstrateConfig.quantum,
+        "sparse": SubstrateConfig.sparse,
+        "ternary": SubstrateConfig.ternary,
+        "complex": SubstrateConfig.complex,
+    }
+    factory = factory_map.get(name_lower, SubstrateConfig.digital)
+    return factory()
+
+
+def _auto_objectives_for_substrate(
+    substrate_name: str, base_objectives: tuple
+) -> tuple:
+    """Auto-populate substrate-specific objectives based on substrate type."""
+    from computronium.autoscientist.objectives import Objective, make_objective_spec
+    from computronium.ontology.substrate.spec import (
+        DeviceModel,
+        get_substrate_objective_names,
+    )
+
+    # Map substrate name to DeviceModel
+    name_to_device = {
+        "digital": DeviceModel.DIGITAL,
+        "analog": DeviceModel.ANALOG,
+        "memristive": DeviceModel.MEMRISTIVE,
+        "neuromorphic": DeviceModel.NEUROMORPHIC,
+        "optical": DeviceModel.PHOTONIC,
+        "quantum": DeviceModel.QUANTUM,
+        "sparse": DeviceModel.DIGITAL,
+        "ternary": DeviceModel.DIGITAL,
+        "complex": DeviceModel.DIGITAL,
+    }
+    device = name_to_device.get(substrate_name.lower(), DeviceModel.DIGITAL)
+    substrate_obj_names = get_substrate_objective_names(device)
+
+    # Add substrate objectives that aren't already in base objectives
+    base_names = {o.name for o in base_objectives}
+    extra_specs = list(base_objectives)
+    for obj_name in substrate_obj_names:
+        try:
+            obj = Objective(obj_name)
+            if obj not in base_names:
+                extra_specs.append(make_objective_spec(obj))
+        except ValueError:
+            # Objective not in registry, skip
+            pass
+    return tuple(extra_specs)
+
+
+def enumerate_constraint_voids(
+    kb_path: Path, task: str, substrate_name: str = "digital"
+) -> set[str]:
     """Walk the full grid product through ``SystemConfig.validate()``.
 
     Constraint rejections are structural voids (TODO28): enumerate every
@@ -132,11 +205,9 @@ def enumerate_constraint_voids(kb_path: Path, task: str) -> set[str]:
     cells, so governed budget is never spent proposing known-rejected
     coordinates.
     """
-    import sqlite3
 
     from computronium.ontology import (
         CreditAssignmentConfig,
-        DigitalSubstrate,
         ParameterUpdateConfig,
         StateDynamicsConfig,
     )
@@ -144,11 +215,11 @@ def enumerate_constraint_voids(kb_path: Path, task: str) -> set[str]:
 
     kb_path.parent.mkdir(parents=True, exist_ok=True)
 
-    substrate = DigitalSubstrate().config
+    substrate = _substrate_from_name(substrate_name)
     viable: set[str] = set()
 
     # Load known voids from KB
-    conn = sqlite3.connect(kb_path)
+    conn = _connect_with_timeout(kb_path)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS structural_voids (
             dynamics TEXT NOT NULL,
@@ -207,7 +278,7 @@ def enumerate_constraint_voids(kb_path: Path, task: str) -> set[str]:
                         viable.add(cell_key(dynamics, credit, update, topology))
 
     if fresh_rows:
-        conn = sqlite3.connect(kb_path)
+        conn = _connect_with_timeout(kb_path)
         conn.executemany(
             """INSERT OR IGNORE INTO structural_voids
                (dynamics, credit, "update", topology, category, error, task, timestamp)
@@ -683,12 +754,15 @@ def build_sweep(
     void enumeration, stratified driver, defect-wired campaign."""
     from computronium.autoscientist.objectives import parse_objectives
 
+    substrate_name = getattr(args, "substrate", "digital")
     viable = enumerate_constraint_voids(
         args.root / "kb.sqlite",
         task=args.task,
+        substrate_name=substrate_name,
     )
     obj_spec = getattr(args, "objectives", "accuracy,walltime_s")
-    objectives = parse_objectives(obj_spec)
+    base_objectives = parse_objectives(obj_spec)
+    objectives = _auto_objectives_for_substrate(substrate_name, base_objectives)
     driver = StratifiedRandomDriver(
         args.root / "kb.sqlite",
         task=args.task,
@@ -917,9 +991,8 @@ def _count_lines(path: Path) -> int:
 
 
 def _count_voids(kb_path: Path, task: str) -> int:
-    import sqlite3
 
-    conn = sqlite3.connect(kb_path)
+    conn = _connect_with_timeout(kb_path)
     cur = conn.execute(
         "SELECT COUNT(*) FROM structural_voids WHERE task = ?",
         (task,),
@@ -1110,9 +1183,8 @@ def _load_measured_cells_uncached(kb_path: Path, task: str | None) -> list[_Cell
 
 
 def _void_keys(kb_path: Path, task: str) -> frozenset[str]:
-    import sqlite3
 
-    conn = sqlite3.connect(kb_path)
+    conn = _connect_with_timeout(kb_path)
     cur = conn.execute(
         'SELECT dynamics, credit, "update", topology FROM structural_voids WHERE task = ?',
         (task,),

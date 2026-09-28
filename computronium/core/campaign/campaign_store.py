@@ -113,6 +113,8 @@ class CampaignStore(SqliteStore):
 
     def __init__(self, db_path: str | Path, checkpoint_dir: str | Path | None = None):
         super().__init__(db_path)
+        # Set busy timeout for concurrent access (distributed bursts)
+        self.conn.execute("PRAGMA busy_timeout = 30000;")
 
         if checkpoint_dir is None:
             checkpoint_dir = self.db_path.parent / "checkpoints"

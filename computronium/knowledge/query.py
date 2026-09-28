@@ -36,6 +36,7 @@ class QueryConfig:
 
     db_path: str = db_path("computronium_kb.db")
     default_limit: int = 100
+    busy_timeout_ms: int = 30000
 
 
 class QueryEngine:
@@ -87,6 +88,7 @@ class QueryEngine:
 
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            conn.execute(f"PRAGMA busy_timeout = {self.config.busy_timeout_ms};")
             sql = (
                 f"SELECT * FROM knowledge{where_clause} ORDER BY timestamp DESC LIMIT ?"  # ruff: ignore[hardcoded-sql-expression]
             )
@@ -270,6 +272,7 @@ class QueryEngine:
         """Get entry by ID."""
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            conn.execute(f"PRAGMA busy_timeout = {self.config.busy_timeout_ms};")
             cursor = conn.execute("SELECT * FROM knowledge WHERE id = ?", (entry_id,))
             row = cursor.fetchone()
 
@@ -281,6 +284,7 @@ class QueryEngine:
         """Get experiment by ID."""
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            conn.execute(f"PRAGMA busy_timeout = {self.config.busy_timeout_ms};")
             cursor = conn.execute(
                 "SELECT * FROM experiments WHERE id = ?", (experiment_id,)
             )
@@ -311,6 +315,7 @@ class QueryEngine:
 
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
+            conn.execute(f"PRAGMA busy_timeout = {self.config.busy_timeout_ms};")
             sql = (
                 "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"

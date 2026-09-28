@@ -49,6 +49,7 @@ class KnowledgeBaseConfig:
     default_limit: int = 100
     min_experiments: int = 10
     min_records: int = 10
+    busy_timeout_ms: int = 30000  # 30s busy timeout for concurrent access
 
 
 class KnowledgeBase(SqliteStore):  # ruff: ignore[too-many-public-methods] (legacy facade: delegates + async variants)
@@ -175,6 +176,8 @@ class KnowledgeBase(SqliteStore):  # ruff: ignore[too-many-public-methods] (lega
 
         # Initialize SQLite (schema-versioned via the sqlite toolkit)
         super().__init__(self.config.db_path)
+        # Set busy timeout for concurrent access (distributed bursts)
+        self.conn.execute(f"PRAGMA busy_timeout = {self.config.busy_timeout_ms};")
 
         # Load seed data if empty
         self._load_seed_if_empty()
