@@ -82,7 +82,7 @@
 | # | Improvement | Why | Effort | Status |
 |---|-------------|-----|--------|--------|
 | 5 | **`comp campaign report` CLI** | Render HTML/JSON report from KB: Pareto front, void breakdown, energy clamp frequency, walltime by family. One command for human-readable summary. | M | ✅ **DONE** |
-| 6 | **Defect quarantine auto-release** | `comp continuous unquarantine --defect <id>` works but requires manual ID. Add `--unquarantine-fixed` to auto-release cells whose defect type no longer occurs in codebase (grep for error pattern). | S |
+| 6 | **Defect quarantine auto-release** | `comp continuous unquarantine --defect <id>` works but requires manual ID. Add `--unquarantine-fixed` to auto-release cells whose defect type no longer occurs in codebase (grep for error pattern). | S | ✅ **DONE** |
 | 7 | **Campaign diffing** | `comp campaign diff <run1> <run2>` — show new viable cells, changed Pareto front, fixed defects. | M |
 
 ### P2: Scale & Coverage
@@ -198,7 +198,7 @@ These are **not bugs** — ontology boundaries correctly rejected by `SystemConf
 3. ~~**[P0.3] Pareto-aware driver** — Replace stratified random with objective-space coverage~~ ✅
 4. ~~**[P0.4] Wire maturation pipeline (L1 → L2)** — `promote_candidates()` returns top-K, `run_deep_tier()` runs L1→L2, `deep-tier` CLI wired~~ ✅
 5. ~~**[P1.1] `comp campaign report` CLI** — HTML report from KB~~ ✅
-6. **[P1.2] Defect auto-unquarantine** --unquarantine-fixed flag
+6. ~~**[P1.2] Defect auto-unquarantine** `--unquarantine-fixed` flag~~ ✅
 7. **[P2.1] Multi-task burst** — `--tasks` argument
 
 ---
@@ -310,9 +310,10 @@ uv run comp continuous --budget 120s --target-cells 20 \
 - Sections: Summary, Pareto Front, Structural Voids by Category, Energy Clamp Frequency, Walltime by Dynamics Family, Maturation Pipeline, Defect Quarantine
 - Usage: `comp campaign kb-report --root artifacts/broad_map --output-dir report`
 
-**P1.2: Defect quarantine auto-release**
-- Add `--unquarantine-fixed` flag to `comp continuous unquarantine`
+**P1.2: Defect quarantine auto-release** ✅ **COMPLETED**
+- Added `--unquarantine-fixed` flag to `comp continuous unquarantine`
 - Implementation: grep codebase for error pattern; if pattern no longer exists, auto-release affected cells
+- Usage: `comp continuous unquarantine --unquarantine-fixed --root artifacts/broad_map`
 
 **P2.1: Multi-task bursts**
 - Add `--tasks mnist,cifar10,spiral` argument to `comp continuous`
@@ -324,3 +325,4 @@ uv run comp continuous --budget 120s --target-cells 20 \
 2. Energy clamp still occurs for non-overridden combos — expand `_STEP_SIZE_OVERRIDES` map based on campaign data
 3. Pareto driver's family predictor is simple mean — could use more sophisticated model (e.g., per-topology averages)
 4. `run_deep_tier` legacy path (front-stable across ≥2 bursts) still exists — consider deprecating in favor of L1→L2 pipeline
+5. **P1.2 implemented**: `--unquarantine-fixed` uses `grep -r -F` to search codebase for error message patterns; conservative (assumes pattern exists if grep fails); releases cells by appending `resolved` DefectRecord

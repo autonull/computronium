@@ -33,7 +33,12 @@ from computronium.autoscientist.broad_map import (
     run_deep_tier,
     run_l1_maturation,
 )
-from computronium.autoscientist.defects import resolve_defect
+from computronium.autoscientist.defects import (
+    DefectRecord,
+    append_defect,
+    read_defects,
+    resolve_defect,
+)
 from computronium.utils import seed_everything
 
 if TYPE_CHECKING:
@@ -42,6 +47,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger("continuous")
 
 _DEFECTS_NAME = "runtime_defects.jsonl"
+
+
+def _grep_error_pattern(pattern: str, root: Path) -> bool:
+    """Search codebase for error pattern. Returns True if pattern found."""
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] (grep fixed string, no shell)
+
+    try:
+        result = subprocess.run(  # noqa: S603,S607 (fixed command, no shell)
+            ["grep", "-r", "-F", "--include=*.py", pattern, str(root / "computronium")],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        return result.returncode == 0 and result.stdout.strip() != ""
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        # If grep fails or times out, assume pattern might exist (conservative)
+        return True
+
+
+def _unquarantine_fixed(root: Path) -> int:
+    """Auto-release all defects whose error pattern no longer exists in codebase."""
+    import time
+
+    defects_path = root / _DEFECTS_NAME
+    records = read_defects(defects_path)
+
+    # Get all open defects (latest status per defect_id)
+    open_defects: dict[str, DefectRecord] = {}
+    for record in records:
+        if record.status == "open":
+            open_defects[record.defect_id] = record
+        elif record.status == "resolved" and record.defect_id in open_defects:
+            del open_defects[record.defect_id]
+
+    if not open_defects:
+        print("No open defects to check.", flush=True)
+        return 0
+
+    released = 0
+    for defect_id, record in open_defects.items():
+        # Search for the error message in the codebase
+        search_pattern = record.message[:200]  # First 200 chars of error message
+        if not search_pattern.strip():
+            search_pattern = record.error_class
+
+        logger.info("Checking defect %s: %s", defect_id, search_pattern[:80])
+        if not _grep_error_pattern(search_pattern, root):
+            # Pattern not found - defect likely fixed
+            append_defect(
+                defects_path,
+                DefectRecord(
+                    defect_id=defect_id,
+                    timestamp=time.time(),
+                    task=record.task,
+                    cell=record.cell,
+                    error_class=record.error_class,
+                    message=record.message,
+                    traceback_tail="",
+                    status="resolved",
+                ),
+            )
+            logger.info("Defect %s auto-resolved (pattern not found in codebase)", defect_id)
+            released += 1
+        else:
+            logger.info("Defect %s still present in codebase", defect_id)
+
+    if released:
+        print(f"Auto-released {released} defect(s) whose error pattern no longer exists in codebase")
+    else:
+        print("No defects auto-released (all patterns still found in codebase)")
+
+    return released
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
@@ -117,7 +195,12 @@ def _build_parser() -> argparse.ArgumentParser:
     unquarantine = sub.add_parser(
         "unquarantine", help="release cells quarantined by a resolved defect"
     )
-    unquarantine.add_argument("--defect", required=True, help="defect id (sha256[:12])")
+    unquarantine.add_argument("--defect", help="defect id (sha256[:12])")
+    unquarantine.add_argument(
+        "--unquarantine-fixed",
+        action="store_true",
+        help="auto-release all defects whose error pattern no longer exists in codebase",
+    )
     unquarantine.add_argument("--root", type=Path, default=Path("artifacts/broad_map"))
     deep_tier = sub.add_parser(
         "deep-tier",
@@ -170,7 +253,7 @@ def _install_sigterm(handler: Callable[[], object] | None = None) -> None:
     signal.signal(signal.SIGTERM, _terminate)
 
 
-def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: ANN001 (internal, typed by build_sweep)
+def _run_forever(args: argparse.Namespace, campaign, driver) -> int:  # noqa: missing-type-function-argument (internal, typed by build_sweep)
     _install_sigterm()
     try:
         _loop_bursts(args, campaign, driver)
@@ -348,6 +431,13 @@ def _deep_tier(args: argparse.Namespace) -> int:
 
 def _unquarantine(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO)
+    if args.unquarantine_fixed:
+        return _unquarantine_fixed(args.root)
+
+    if not args.defect:
+        print("Error: --defect is required unless --unquarantine-fixed is used", flush=True)
+        return 1
+
     resolved = resolve_defect(args.root / _DEFECTS_NAME, args.defect)
     if resolved == 0:
         print(f"defect {args.defect} not found (or already resolved)", flush=True)
