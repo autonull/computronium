@@ -35,7 +35,7 @@ def _args(root: Path) -> Namespace:
         cells_per_iter=2,
         depth=2,
         hidden_dim=16,
-        param_budget=0,  # skip the rematch rescale: keep the burst tiny
+        param_budget=25000,  # use realistic budget to exercise auto-sizing path
         credit_trace=False,
         maturation=0,
     )

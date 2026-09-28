@@ -204,7 +204,7 @@ def _auto_objectives_for_substrate(
 
 
 def enumerate_constraint_voids(
-    kb_path: Path, task: str, substrate_name: str = "digital"
+    kb_path: Path, task: str, substrate_name: str = "digital", param_budget: int = 25000
 ) -> set[str]:
     """Walk the full grid product through ``SystemConfig.validate()``.
 
@@ -268,7 +268,7 @@ def enumerate_constraint_voids(
                     try:
                         SystemConfig(
                             substrate=substrate,
-                            geometry=_geometry_for(topology),
+                            geometry=_geometry_for(topology, param_budget),
                             dynamics=dcfg,
                             credit=ccfg,
                             update=ucfg,
@@ -308,13 +308,14 @@ def enumerate_constraint_voids(
     return viable
 
 
-def _geometry_for(topology: str) -> GeometryConfig:
+def _geometry_for(topology: str, param_budget: int = 25000) -> GeometryConfig:
     from computronium.autoscientist.compose import build_geometry_config
 
     return build_geometry_config(
-        {"topology_type": topology, "depth": 2, "hidden_dim": 64},
+        {"topology_type": topology},
         input_dim=256,
         output_dim=10,
+        param_budget=param_budget,
     )
 
 
@@ -556,7 +557,7 @@ class StratifiedRandomDriver:
             # where topology_bias penalizes over-sampled topologies for this triple
             topo_balances = self._topology_balance[triple]
             min_topo_count = min(topo_balances.values()) if topo_balances else 0
-            
+
             best_topology = None
             best_score = -1.0
             for topology in viable_topos:
@@ -569,7 +570,9 @@ class StratifiedRandomDriver:
                 topo_count = topo_balances.get(topology, 0)
                 topo_fairness = 1.0 / (1.0 + topo_count - min_topo_count)
                 # Combined score: 70% objective-space, 30% topology fairness
-                combined_score = 0.7 * obj_score + 0.3 * topo_fairness + self.rng.random() * 0.01
+                combined_score = (
+                    0.7 * obj_score + 0.3 * topo_fairness + self.rng.random() * 0.01
+                )
                 if combined_score > best_score:
                     best_score = combined_score
                     best_topology = topology
@@ -587,6 +590,20 @@ class StratifiedRandomDriver:
             maturity_tags = ["maturity:l0"]
             if self.burst_tag is not None:
                 maturity_tags.append(self.burst_tag)
+
+            # Compute auto-sized geometry parameters for dry-run display
+            # Use the same logic as build_geometry_config for consistency
+            from computronium.autoscientist.compose import _auto_size_geometry
+
+            input_dim = (
+                256  # Default for MNIST (784 flattened) - will be adjusted at execution
+            )
+            output_dim = 10  # Default for MNIST
+            hidden_dims, computed_depth = _auto_size_geometry(
+                topology, self.param_budget, input_dim, output_dim, self.depth
+            )
+            computed_hidden = hidden_dims[0] if hidden_dims else 64
+
             proposals.append(
                 ExperimentProposal(
                     hypothesis=(
@@ -597,9 +614,9 @@ class StratifiedRandomDriver:
                     task=self.task,
                     geometry={
                         "topology_type": topology,
-                        "depth": self.depth,
-                        "hidden_dim": self.hidden_dim,
                         "init_scheme": "default",
+                        "depth": computed_depth,
+                        "hidden_dim": computed_hidden,
                     },
                     dynamics=dynamics,
                     credit=credit,
@@ -654,6 +671,21 @@ _VOID_CATEGORIES: tuple[tuple[str, str], ...] = (
     ("must match the size of tensor", "settle_route_shape"),
     ("normalized_shape", "settle_route_shape"),
     ("does not require grad", "autograd_break"),
+    # Credit-geometry mismatches (local contrastive family requires feedforward)
+    ("requires feedforward geometry", "credit_geometry"),
+    # PC-family dynamics require specific credits
+    ("PC-ALM dynamics requires", "dynamics_credit"),
+    ("PCALM dynamics requires", "dynamics_credit"),
+    # Recurrent geometry requires specific dynamics families
+    ("Recurrent geometry", "geometry_constraint"),
+    ("recurrent geometry requires", "geometry_constraint"),
+    # Diffusion dynamics requires recurrent
+    ("Diffusion dynamics requires recurrent", "geometry_constraint"),
+    # Random projections FA contract violation
+    ("layered FA contract would return all-zero", "credit_geometry"),
+    # Attention geometry hidden_dim divisibility (config bug, not void)
+    ("hidden_dim.*must be divisible by num_heads", "geometry_constraint"),
+    ("must be divisible by num_heads", "geometry_constraint"),
 )
 
 
@@ -1048,6 +1080,7 @@ def build_sweep(
         kb_path,
         task=args.task,
         substrate_name=substrate_name,
+        param_budget=args.param_budget,
     )
     # Create shared KB instance once
     shared_kb = KnowledgeBase(kb_path)

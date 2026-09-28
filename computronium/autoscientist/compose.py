@@ -110,6 +110,17 @@ def _as_int_tuple(value: object, default: tuple[int, int, int]) -> tuple[int, in
     return default
 
 
+def _as_int_pair(value: object, default: tuple[int, int]) -> tuple[int, int]:
+    if isinstance(value, list | tuple) and all(
+        isinstance(v, int | float) for v in value
+    ):
+        result = tuple(int(v) for v in value)
+        if len(result) != 2:
+            return default
+        return result  # type: ignore[return-value]
+    return default
+
+
 def _estimate_spatial_lattice_params(
     lattice_dims: tuple[int, int, int],
     hidden_dims: tuple[int, ...],
@@ -195,6 +206,88 @@ def _allowed_keys(topology: str) -> frozenset[str]:
     return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
 
 
+def _auto_size_geometry(
+    topology: str, param_budget: int, input_dim: int, output_dim: int, depth: int
+) -> tuple[tuple[int, ...], int]:
+    """Auto-size hidden_dims and depth from param_budget.
+
+    For a simple MLP: params ≈ input_dim * hidden + (depth-1) * hidden^2 + hidden * output_dim
+    Solve for hidden given budget, with depth as secondary knob.
+    """
+    if param_budget <= 0:
+        # No budget constraint - use defaults
+        return (64,) * max(depth, 1), max(depth, 1)
+
+    # Estimate params for given hidden, depth
+    def estimate_params(h: int, d: int) -> int:
+        if topology in {"feedforward", "recurrent"}:
+            # input * h + (d-1) * h^2 + h * output
+            return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
+        elif topology == "attention":
+            # attention: d_model^2 * n_layers (Q,K,V,O projections) + FFN ~ 4 * d_model^2 * n_layers
+            return 4 * h * h * d
+        elif topology == "ntm":
+            # NTM: controller + memory + heads
+            return h * h + 16 * 8 + h * output_dim
+        elif topology == "causal_transformer":
+            # Similar to attention
+            return 4 * h * h * d
+        elif topology == "tile_mesh":
+            # tile_mesh params ≈ input_dim * npt + (d-1) * npt * tpl * npt + npt * tpl * output_dim
+            # npt = neurons_per_tile, tpl = tiles_per_layer
+            # For auto-sizing, use h as base and derive npt, tpl from it
+            # Simplified: treat as MLP with effective hidden = npt * tpl
+            # We'll estimate using npt ≈ h, tpl ≈ d
+            npt = h
+            tpl = max(d, 1)
+            return (
+                input_dim * npt
+                + max(d - 1, 0) * npt * tpl * npt
+                + npt * tpl * output_dim
+            )
+        elif topology == "spatial_lattice":
+            # spatial_lattice: params ≈ input_dim * prod(lattice_dims) * hidden + hidden * output_dim
+            # lattice_dims also budget-constrained - use small lattice
+            lattice_volume = 4 * 4 * 4  # default 4x4x4
+            return input_dim * lattice_volume * h + h * output_dim
+        elif topology == "nca":
+            # NCA: params ≈ channels^2 * grid_hw (need budget-aware grid sizing)
+            # channels ≈ h, grid_hw ≈ 16*16 = 256
+            grid_area = 16 * 16
+            return h * h * grid_area
+        elif topology == "conv":
+            # Conv: params depend on conv_channels, kernel_size, input_hw
+            # Simplified: treat as MLP with channel expansion
+            # params ≈ in_channels * conv_channels * kernel^2 + conv_channels * output_dim
+            kernel_size = 3
+            in_channels = 3  # typical
+            return in_channels * h * kernel_size * kernel_size + h * output_dim
+        elif topology == "graph":
+            # Graph: params ≈ hidden^2 * num_nodes + edge_params
+            # Simplified: use num_nodes ≈ 32
+            num_nodes = 32
+            return h * h * num_nodes
+        else:
+            # Conservative estimate
+            return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
+
+    # Try depth from 1 to 6, find best hidden
+    best_hidden = 32
+    best_depth = max(depth, 1)
+    for d in range(1, 7):
+        lo, hi = 8, 512
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            if estimate_params(mid, d) <= param_budget:
+                best_hidden = mid
+                best_depth = d
+                lo = mid + 1
+            else:
+                hi = mid - 1
+
+    return (best_hidden,) * best_depth, best_depth
+
+
 def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
     geometry: dict[str, object],
     *,
@@ -226,37 +319,90 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
         )
         raise ProposalComposeError(msg)
 
-    hidden = _as_int(geometry.get("hidden_dim"), 64)
+    # Auto-size from param_budget if not explicitly provided
+    explicit_hidden = "hidden_dim" in geometry
+    explicit_depth = "depth" in geometry
     depth = max(_as_int(geometry.get("depth"), 2), 1)
+    hidden = _as_int(geometry.get("hidden_dim"), 64)
+
+    if not explicit_hidden or not explicit_depth:
+        hidden_dims, depth = _auto_size_geometry(
+            topology, param_budget, input_dim, output_dim, depth
+        )
+        hidden = hidden_dims[0] if hidden_dims else 64
+    else:
+        hidden_dims = (hidden,) * depth
+
     init_scheme = str(geometry.get("init_scheme", "default"))
     if init_scheme not in {"default", "mupc"}:
         msg = f"init_scheme must be 'default' or 'mupc', got {init_scheme!r}"
         raise ProposalComposeError(msg)
     init_scale = _as_float(geometry.get("init_scale"), 0.1)
-    hidden_dims = (hidden,) * depth
 
+    # Auto-size topology-specific parameters from param_budget if not explicitly provided
     # Compute tile_mesh params from param_budget if not explicitly set
-    if topology == "tile_mesh" and param_budget > 0:
-        # tile_mesh params ≈ input_dim * neurons_per_tile + (num_layers-1) * neurons_per_tile * tiles_per_layer * neurons_per_tile + neurons_per_tile * tiles_per_layer * output_dim
-        # Simplified: estimate neurons_per_tile and tiles_per_layer to fit budget
-        npt = _as_int(geometry.get("neurons_per_tile"), 0)
-        tpl = _as_int(geometry.get("tiles_per_layer"), 0)
-        if npt == 0 or tpl == 0:
-            # Estimate: each tile has npt neurons, tpl tiles per layer
-            # Total params ≈ input_dim * npt + depth * npt * tpl * npt + npt * tpl * output_dim
-            # For small budget, use smaller tiles
-            if param_budget < 50000:
-                npt = 16
-                tpl = 2
-            elif param_budget < 100000:
-                npt = 32
-                tpl = 3
-            else:
-                npt = 48
-                tpl = 4
-    else:
+    npt = _as_int(geometry.get("neurons_per_tile"), 0)
+    tpl = _as_int(geometry.get("tiles_per_layer"), 0)
+    if topology == "tile_mesh" and param_budget > 0 and (npt == 0 or tpl == 0):
+        # Use auto-sized hidden as base for npt/tpl estimation
+        # tile_mesh params ≈ input_dim * npt + (depth-1) * npt * tpl * npt + npt * tpl * output_dim
+        # Solve for npt, tpl to fit budget
+        if param_budget < 50000:
+            npt = max(8, hidden // 4)
+            tpl = max(2, depth // 2)
+        elif param_budget < 100000:
+            npt = max(16, hidden // 2)
+            tpl = max(3, depth)
+        else:
+            npt = hidden
+            tpl = depth
+    if npt == 0:
         npt = _as_int(geometry.get("neurons_per_tile"), 48)
+    if tpl == 0:
         tpl = _as_int(geometry.get("tiles_per_layer"), 4)
+
+    # Auto-size NCA grid_hw from param_budget
+    nca_grid_hw = _as_int_pair(geometry.get("grid_hw"), (16, 16))
+    if topology == "nca" and param_budget > 0 and "grid_hw" not in geometry:
+        # NCA params ≈ channels^2 * grid_hw
+        # grid_hw = grid_h * grid_w, channels = hidden
+        # Solve for grid area to fit budget
+        max_grid_area = max(1, param_budget // max(1, hidden * hidden))
+        grid_side = max(4, int(max_grid_area**0.5))
+        nca_grid_hw = (grid_side, grid_side)
+
+    # Auto-size conv parameters from param_budget
+    conv_channels_raw = geometry.get("conv_channels")
+    kernel_size = _as_int(geometry.get("kernel_size"), 3)
+    in_channels = _as_int(geometry.get("in_channels"), 3)
+    input_hw = _as_int_pair(geometry.get("input_hw"), (28, 28))
+    pool_hw = _as_int_pair(geometry.get("pool_hw"), (2, 2))
+    if topology == "conv" and param_budget > 0 and conv_channels_raw is None:
+        # Conv params ≈ in_channels * conv_channels * kernel^2 + conv_channels * output_dim
+        # Solve for conv_channels (per layer), use multiple layers
+        base_channels = max(
+            8,
+            param_budget // (in_channels * kernel_size * kernel_size + output_dim * 2),
+        )
+        num_conv_layers = max(2, min(4, depth))
+        conv_channels: tuple[int, ...] = tuple(
+            max(8, base_channels // (i + 1)) for i in range(num_conv_layers)
+        )
+    elif conv_channels_raw is not None:
+        if isinstance(conv_channels_raw, list):
+            conv_channels = tuple(conv_channels_raw)
+        elif isinstance(conv_channels_raw, tuple):
+            conv_channels = conv_channels_raw
+        else:
+            conv_channels = (int(str(conv_channels_raw)),)
+    else:
+        conv_channels = (8, 16)
+
+    # Auto-size graph hidden_dims from param_budget (edge_index required)
+    if topology == "graph" and param_budget > 0:
+        # Graph params ≈ hidden^2 * num_nodes (approximate)
+        # We already have hidden_dims from _auto_size_geometry
+        pass  # hidden_dims already computed
 
     match topology:
         case "feedforward":
@@ -336,7 +482,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
             return GeometryConfig.nca(
                 channels=hidden,
                 hidden=hidden,
-                grid_hw=_as_int_tuple(geometry.get("grid_hw"), (16, 16)),  # type: ignore[arg-type]
+                grid_hw=nca_grid_hw,  # type: ignore[arg-type]
                 init_scale=init_scale,
             )
         case "ntm":
@@ -351,6 +497,11 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
             return GeometryConfig.conv(
                 input_dim=input_dim,
                 output_dim=output_dim,
+                conv_channels=conv_channels,
+                kernel_size=kernel_size,
+                in_channels=in_channels,
+                input_hw=input_hw,
+                pool_hw=pool_hw,
                 init_scale=init_scale,
             )
         case "graph":
@@ -561,7 +712,7 @@ def _build_substrate_config(substrate_name: str, dynamics: str):
     }
     factory = factory_map.get(name_lower, SubstrateConfig.digital)
 
-    # Diffusion and spike_integration dynamics require substrate noise > 0
-    if dynamics in {"diffusion", "spike_integration"}:
+    # Diffusion, spike_integration, and PC-ALM dynamics require substrate noise > 0
+    if dynamics in {"diffusion", "spike_integration", "pc_alm"}:
         return factory(noise_level=0.05)
     return factory()
