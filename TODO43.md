@@ -1,6 +1,8 @@
 # TODO43 — Unified Search & Evidence Requirements
 
-**Date**: 2026-09-28 · **Rev**: 2 (refined after full-surface audit)
+**Date**: 2026-09-28 · **Rev**: 3 (Rev 2 refined after full-surface audit; Rev 3
+adds §13–§15 + Appendix C — completeness gaps and consolidation candidates,
+pending review)
 **Status**: REQUIREMENTS ONLY. No design, no decomposition, no sequencing.
 Those follow review of this document (§12 "Deferred to Design").
 **Origin**: Campaign Iterations 4–5b (`CAMPAIGN_LOG.md`) for the problem
@@ -12,6 +14,8 @@ every capability that exists today, organized by lifecycle stage — this is the
 union that must not be lost. §5 states requirements, each with a trace to
 problems/capabilities and a behavioral verification. Appendices A–B are the
 preservation artifacts: the flag inventory and the axis enumerations.
+§13–§15 and Appendix C (Rev 3 addendum) are an unreviewed layer — completeness
+gaps and consolidation candidates, not accepted requirements.
 
 ---
 
@@ -1064,5 +1068,171 @@ penn_treebank).
 
 ---
 
-*Ends at requirements. Design, decomposition, and sequencing follow a review of
-this document; nothing in §5–§8 presumes a particular solution shape.*
+## 13. Addendum (Rev 3) — Completeness Audit: Gaps in the Union
+
+**Status**: CANDIDATES, pending review. Produced 2026-09-29 from a code-level
+pass over `hyperopt/search_space.py::RULE_SPACES`, `packages/computronium-lab`,
+`computronium/lightning_/`, `computronium/execution/`, `computronium/analysis/`,
+and the platform packages. Items below would extend §2/§3 and Appendices A–B
+before design; nothing here is accepted until reviewed.
+
+### 13.1 P1 undercounts the implementations (four → six)
+| Implementation | Space it expresses | Policy | Store | Status here |
+|---|---|---|---|---|
+| `packages/computronium-lab` research layer (`synthesis/`, `research/`, `campaign.py`, `sequential.py`, `adaptation.py`) | spec→coordinate synthesis (`Lab.specify/synthesize/explore`), budgeted evolution (`plan_evolution`/`run_evolution`), certified corpus (`MeasurementRunner`, 8 problem classes), continual + substrate-transfer benchmarks | evolution (population/generations), synthesis with constraint screening | own `record_ledger` sqlite + CEEC per generation | absent from P1 and §3 |
+| `computronium/lightning_/` (`nas.py`, `hpo.py`, `experiment.py`, `strategies.py`) | NAS + Lightning HPO loop | trainer-driven search | trainer/Lightning state | §11 audit-pending; zero §3 rows |
+| `computronium/execution/` (`engine.py`, `strategy.py`, `candidate_gen.py`, `synthesizer.py`, `criteria.py`, `task_weights.py`) | candidate generation / strategy progression | strategy progression | execution state | §11 audit-pending; zero §3 rows |
+
+Consequence: the §3 union — and therefore R76's seed registry and R78's
+inventory — is incomplete until these are audited and rowed. Candidate action:
+extend the P1 table, add §3 capability rows, close the §11 gaps.
+
+### 13.2 The continuous-space hyperparameter union is missing from Appendix B
+`hyperopt/search_space.py::RULE_SPACES` holds **10 rules / 70 slots / 37 unique
+parameters** (enumerated in Appendix C). None appear in R1's axis list or
+Appendix B — the same "describable here, inexpressible there" class P1
+condemns. Also missing:
+
+- `SearchSpace.apply_constraints` (`max_hidden`/`max_layers`/`max_steps`) — a
+  fourth constraint mechanism (input to consolidation C, §14).
+- Batch size as a schedule axis; per-update optimizer parameters (adam betas,
+  muon momentum).
+
+Candidate fix: add **B.9** (per-rule continuous union), or declare per-rule
+spaces registry data under R5 with Appendix C as the audit baseline.
+
+### 13.3 Collectable results not inventoried (§3 candidate rows)
+| Collectable | Source | Stage |
+|---|---|---|
+| EMA-harvest metrics (`harvest_mode`; depth-50 0.784→0.917) | `SystemTrainerConfig` | S7 |
+| I(C,U) model outputs; `icu_measurements.csv` rows | `fit_icu_model.py`, `harvest_icu_table.py` | S8/S9 |
+| Recipe-card registry state (credit×update → canonical constructor) | `recipe_cards.py` | S5/S8 |
+| Frozen-θ ψ benchmark results (adaptation/recovery/migration; bitwise θ audits) | TODO16 §5 suite | S6/S10 |
+| Mechanistic-study + stability×memory claim records (factorial 648-cell) | `results/*/claim_record.json` | S8/S10 |
+| ANOVA/Sobol indices; genealogy fingerprints/phylogeny; failure manifestos; energy-landscape/Hessian; interpretability outputs | `analysis/{ablation,genealogy,failure_manifesto,energy_landscape,interpretability}.py` | S9 |
+| Microbench JSONL artifacts (git-SHA-tagged parity/microbench evidence) | `acceleration/microbench` | S8 |
+| Distributed fault records (lost workers, step, partial metrics); distributed topology provenance | `DistributedTrainingError`, `p2p/` | S6/S8 |
+
+Note: R75 scopes the kernel *cache*; the kernel ladder's *evidence trail* is a
+distinct record type this inventory does not yet carry.
+
+### 13.4 Experiment procedures not inventoried (§3 candidate rows)
+- The 5-level joint benchmark suites' *procedures* (phase-A/B task switching,
+  matched-compute comparison, zeroed-weight damage, A₀→A₁ migration, frozen-θ
+  operator battery) — `comp benchmark` is command-level-only in Appendix A.
+- MEP tournament (factorized ablation + ANOVA/Sobol); cross-domain transfer.
+- Evolution campaigns (CEEC pre-registered per generation); corpus
+  certification (`MeasurementRunner`, certified tier); continual and
+  substrate-transfer benchmarks; synthesis pipeline
+  (`specify→synthesize→build→train→explore`).
+- Kernel ladder promotion procedure (reference → torch.compile → Triton, with
+  parity + microbench evidence) — a governed procedure deserving a row.
+- Proposer modes declared in `proposer.py` but never rowed:
+  one-parameter-at-a-time ablation; curriculum progression.
+
+### 13.5 Minor gaps
+- **B.6** omits three domains: graph (`cora`/`citeseer`/`pubmed`), tabular
+  (`breast_cancer`/`iris`/`wine`), time-series/scientific
+  (`synthetic_forecast`, `lorenz`) — README claims ~25 tasks / 7 domains vs
+  B.6's 15+.
+- Package capabilities uncounted: `stability` (the calibrated τ=1.029 guard is
+  C48's implementation), `psi_peft`, `local_feedback` (X-ALI-001/002).
+- Model export (ONNX/TorchScript/INT8/ternary) is a post-promotion artifact
+  path distinct from C86 study export.
+
+---
+
+## 14. Addendum (Rev 3) — Consolidation Candidates
+
+**Status**: PROPOSALS, pending review. Each abstraction below subsumes a
+cluster of §5 requirements without dropping any verification clause. They are
+inputs to the §12 design decisions, not decisions.
+
+| # | Abstraction | Subsumes | Notes |
+|---|---|---|---|
+| A | **One registry pattern** — spec dataclass + integrity locks + doc codegen; instances: axis registry (R5), objective registry (R31), capability registry (R76), flag inventory as a registry *view* (R78), constraint registry, prior store, extension points (R33, R70) | R5, R31, R33, R70, R76–R78, R80 | matches existing doctrine: 64-spec `ImplementationSpec` registry, `test_dynamics_wiring_lock`, registry completeness locks; one conformance harness over all instances |
+| B | **One record schema, four identity sections** — identity = coordinate ∪ schedule(fidelity/seed/epochs/batches) ∪ provenance(env/data/code) ∪ status(governance) | R7, R8, R9, R11, R67, R79; R22/R67 become derived comparison guards | resolves Q1: "same cell" = coordinate key; "same measurement" = full identity |
+| C | **One legality/constraint engine** — predicates over coordinates with recorded reasons; enforced at S4, re-checkable at S6, queryable, globally suppressive | R19, R25, R37, R38, R66; absorbs Q2 and `SearchSpace.apply_constraints` | dry-run (C32) is the preview of the same engine; R42 propagation falls out by construction |
+| D | **Obligations on the pipeline, not the plugins** — policies/stages/evaluators/backends implement small Protocols; the wrapper emits coverage stats, void/defect classification, traceability, stage fragments for *any* plugin | R16–R18, R39–R40, R70–R72 | R17 becomes the shipped-plugin catalog — the preservation proof |
+| E | **Governance as stored predicates** — statuses/causes/verdicts are record fields written by their producing stage; claims, promotion, alerts, reports are pure queries over them | R10, R34–R36, R58–R59, R64, R83 (+K6 unchanged) | settles Q9: ledger status is a record field with provenance link, not a side artifact |
+
+### 14.1 Requirement merges (88 → ~60)
+| Merge | Survives as | Verifications preserved |
+|---|---|---|
+| R7+R8+R9+R11+R67 | identity schema (B) | distinguishability, labeled mixtures, repeats-as-distinct-records, provenance fields, version guards |
+| R26+R27 | replay determinism | replay hash is the assertion mechanism |
+| R21–R24 | budget + cost model | one interface; R23/R24 remain SHOULD clauses on it |
+| R34+R35+R36 | evidence lifecycle (E) | predicate-computable promotion/release/claims |
+| R46–R49 | allocation policy | "measured cost-to-rank beats uniform" kept verbatim |
+| R50+R51+R58+R59 | failure telemetry schema | signal+value+cause+severity as fields; unclassified bucket monitored |
+| R60+R61+R62 | failure learning loop | reproducer → cluster → fix-linkage (SHOULD cluster) |
+| R52+R53+R55+R56 | priors/lessons as records | R54 = the surrogate instantiation of the same mechanism |
+| R31+R33 | objective registry + extension point | out-of-tree objective participates |
+| R1+R5 | registry-driven coordinate schema (A) | Appendix B union discoverable at runtime |
+| R76+R77+R78+R80 | registry + conformance harness (A) | Appendix A becomes a view of the registry |
+| R85+R86 | one report | attribution as a report section; R87/R88 stay SHOULD add-ons |
+| R39+R40 | stage plugin contract (D) | no-op stages emit explicit fragments |
+
+R74/K8 stay separate (concurrency is genuinely distinct).
+
+### 14.2 Pillar restructure of §5 (candidate)
+1. Schema — coordinate, record identity, registries
+2. Execution — stages, policies, budget, determinism
+3. Legality — constraint engine, voids/defects
+4. Evidence — governance predicates, allocation, failure intelligence
+5. Learning — priors, surrogates, lessons, reasoning records
+6. Surface — store, reports, CLI, conformance, operations
+
+Traceability (§7) simplifies to problem → pillar → requirement; acceptance (§8)
+is unchanged in substance; Q1/Q2/Q9 are resolved by the abstractions rather
+than answered separately.
+
+### 14.3 Guard rails (what consolidation must not do)
+- No MUST→SHOULD demotion: every verification clause survives its merge.
+- R17 stays a catalog — the policy union *is* the preservation proof.
+- Global suppression (R38) stays distinct from per-run constraint scoping.
+- K5/K6/K9/K10 are design invariants, not mergeable requirements.
+
+## 15. Addendum (Rev 3) — Recommended Order (candidate)
+1. Fix the union first (§13.1–§13.5): audit lab/lightning/execution, add B.9
+   and the missing domain rows. Consolidating on an incomplete union bakes the
+   gaps into the registry permanently.
+2. Adopt abstractions A–E as §12 design inputs (they answer the "how policy
+   substitutability is expressed", "how governance is represented", and "how
+   the CLIs collapse" rows directly).
+3. Renumber §5 under the pillar structure after review.
+
+## Appendix C — Per-rule continuous hyperparameter union (audit-verified 2026-09-29; B.9 candidate)
+
+Source: `computronium/hyperopt/search_space.py::RULE_SPACES`. 10 rules, 70
+parameter slots, 37 unique parameters. Authoritative ranges/scales live in the
+source table; this appendix proves the union exists and is counted (R1, R5).
+
+| Rule | Parameters |
+|---|---|
+| backprop (4) | learning_rate, weight_decay, hidden_dim, num_layers |
+| eqprop (18) | learning_rate, weight_decay, hidden_dim, num_layers, beta, max_steps, damping, tol, convergence_threshold, convergence_start, sparse_ratio, momentum, update_scale, update_scale_by_depth, w_rec_init, w_rec_gain, feedback_gain, feedback_init_gain |
+| neural_cube (4) | learning_rate, weight_decay, cube_size, max_steps |
+| pepita (3) | learning_rate, hidden_dim, num_layers |
+| forward_forward (6) | learning_rate, hidden_dim, num_layers, threshold, layer_lr, classifier_lr |
+| feedback_alignment (6) | learning_rate, hidden_dim, num_layers, alpha, feedback_mode, use_spectral_norm |
+| target_prop (4) | learning_rate, target_lr, hidden_dim, num_layers |
+| pc_alm (11) | learning_rate, weight_decay, hidden_dim, num_layers, step_size, rho, prospective_leak, max_steps, beta, convergence_threshold, convergence_start |
+| hebbian (4) | learning_rate, hidden_dim, num_layers, use_oja |
+| spiking (10) | learning_rate, hidden_dim, num_layers, num_steps, tau_mem, tau_syn, spike_threshold, refractory_period, dt, spike_grad |
+
+Unique set (37): alpha, beta, classifier_lr, convergence_start,
+convergence_threshold, cube_size, damping, dt, feedback_gain,
+feedback_init_gain, feedback_mode, hidden_dim, layer_lr, learning_rate,
+max_steps, momentum, num_layers, num_steps, prospective_leak,
+refractory_period, rho, sparse_ratio, spike_grad, spike_threshold, step_size,
+target_lr, tau_mem, tau_syn, threshold, tol, update_scale,
+update_scale_by_depth, use_oja, use_spectral_norm, w_rec_gain, w_rec_init,
+weight_decay.
+
+---
+
+*Ends at requirements. §13–§15 and Appendix C are an unreviewed addendum
+(audit + consolidation candidates). Design, decomposition, and sequencing
+follow a review of both layers; nothing in §5–§8 or §13–§15 presumes a
+particular solution shape.*
