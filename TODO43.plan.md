@@ -207,9 +207,10 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
 - `computronium/experiment/schema/registry.py` — Generic Registry[SpecT]
 - `computronium/experiment/schema/axis.py` — AxisSpec, AxisKind, registries
 - `computronium/experiment/schema/coordinate.py` — Coordinate, Schedule, Provenance
-- `computronium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
+- `computtonium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
 - `computronium/experiment/schema/harvest.py` — Tunable harvesting, ConflictingTunableError, HarvestedSchema
 - `computronium/experiment/schema/versioning.py` — Schema versioning, SchemaRegistry, UnknownField
+- `computronium/experiment/schema/registries.py` — OBJECTIVES, CONSTRAINTS, PRIORS, POLICIES, STAGES, CAPABILITIES registries
 - `computronium/experiment/evidence/__init__.py` — Evidence package exports
 - `computronium/experiment/evidence/store.py` — DuckDB RecordStore
 - `computronium/experiment/execution/__init__.py` — Execution package exports (empty, for future)
@@ -225,10 +226,10 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
   `ConflictingTunableError`), `harvest_schema()`.
 - ✅ `schema/versioning.py` — `schema_version`, append-only reader registry, `UnknownField`
   preservation (R79, K4). Version 1 = this schema; no legacy readers needed (Directive 1).
-- Registry instances: `AXES`, `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`,
-  `CAPABILITIES` (abc3 §2.3 seeds, per Gate 1/2 outcomes).
-- Locks (CI property tests): registry uniqueness/totality/no-orphans/lock;
-  `harvest_schema() ⊇ Gate-2 union`; availability-predicate evaluation.
+- ✅ `schema/registries.py` — Registry instances: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`,
+  `POLICIES`, `STAGES`, `CAPABILITIES` (abc3 §2.3 seeds, per Gate 1/2 outcomes).
+- ✅ Locks (CI property tests): `tests/property/test_experiment_registries_wiring_lock.py`
+  — registry uniqueness/totality/no-orphans/lock; export surface wiring.
 - **Lockstep wiring tests** follow the `test_dynamics_wiring_lock.py` pattern: registry ↔
   config classmethods ↔ `__all__` ↔ `TYPE_CHECKING` imports stay in sync per pillar;
   never bypassed.
@@ -378,22 +379,19 @@ strict-clean from WP1 onward.
 
 ## 8. Progress Log
 
-### 2026-09-29 — WP1 Complete
-- Added `duckdb` dependency via `uv add duckdb`
-- Implemented walking skeleton per WP1 specification
-- All new modules pass `ruff format`, `ruff check`, `pyright` (strict), and targeted tests
-- Verified end-to-end: RecordStore creates runs, appends records, handles duplicate measurement_key, retrieves by record_id and measurement_key
-
-### 2026-09-29 — WP2 Partial (harvest.py, versioning.py)
+### 2026-09-29 — WP2 Complete (harvest.py, versioning.py, registries.py)
 - Implemented `schema/harvest.py`: `__tunables__` reflection, name-based dedup, `harvest_schema()`, `ConflictingTunableError`
 - Implemented `schema/versioning.py`: `SchemaRegistry`, `UnknownField` preservation, append-only readers
+- Implemented `schema/registries.py`: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`, `CAPABILITIES` registries with spec classes
+- Added lockstep wiring tests: `tests/property/test_experiment_registries_wiring_lock.py` (12 tests)
 - Updated `schema/__init__.py` to export new modules
 - All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- All 36 experiment-related tests pass (24 original + 12 wiring locks)
 
 ### Improvement Opportunities (for future WPs)
 1. **WP4**: Implement `execution/pipeline.py` and `execution/stage.py` for S1–S11 runner
-2. **WP2**: Registry instances: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`, `CAPABILITIES`
-3. **WP2**: Lockstep wiring tests for new registries (following `test_dynamics_wiring_lock.py` pattern)
+2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
+3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
 4. **WP3**: Implement legality engine (`legality/dsl.py`, `engine.py`, `classify.py`)
 5. **WP5**: Implement full evidence predicates (`status.py`, `claims.py`, `failure.py`, `ceec.py`)
 6. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py`, `icu.py`, `reasoning.py`)
