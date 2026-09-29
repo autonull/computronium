@@ -207,10 +207,14 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
 - `computronium/experiment/schema/registry.py` — Generic Registry[SpecT]
 - `computronium/experiment/schema/axis.py` — AxisSpec, AxisKind, registries
 - `computronium/experiment/schema/coordinate.py` — Coordinate, Schedule, Provenance
-- `computtonium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
+- `computronium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
 - `computronium/experiment/schema/harvest.py` — Tunable harvesting, ConflictingTunableError, HarvestedSchema
 - `computronium/experiment/schema/versioning.py` — Schema versioning, SchemaRegistry, UnknownField
 - `computronium/experiment/schema/registries.py` — OBJECTIVES, CONSTRAINTS, PRIORS, POLICIES, STAGES, CAPABILITIES registries
+- `computronium/experiment/legality/__init__.py` — Legality package exports
+- `computronium/experiment/legality/dsl.py` — Expr AST, evaluator, JSON wire format
+- `computronium/experiment/legality/engine.py` — Constraint model, LegalityEngine, globally-suppressive semantics
+- `computronium/experiment/legality/classify.py` — Defect taxonomy, DefectRegistry, void patterns
 - `computronium/experiment/evidence/__init__.py` — Evidence package exports
 - `computronium/experiment/evidence/store.py` — DuckDB RecordStore
 - `computronium/experiment/execution/__init__.py` — Execution package exports (empty, for future)
@@ -235,11 +239,11 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
   never bypassed.
 
 ### WP3 — Pillar 3: legality engine
-- `legality/dsl.py` — `Expr` AST (frozen dataclasses; `type` alias union per abc3 §4.1) +
+- ✅ `legality/dsl.py` — `Expr` AST (frozen dataclasses; `type` alias union per abc3 §4.1) +
   evaluator dispatched by `match`/`case` + Appendix III JSON wire format (content-hashed).
-- `legality/engine.py` — `Constraint` model (origin/scope/enforced-at), S4/S6 enforcement,
+- ✅ `legality/engine.py` — `Constraint` model (origin/scope/enforced-at), S4/S6 enforcement,
   globally-suppressive semantics (R38); generated compatibility matrix (R63).
-- `legality/classify.py` — void/defect taxonomy as registry data; unclassified bucket counted.
+- ✅ `legality/classify.py` — void/defect taxonomy as registry data; unclassified bucket counted.
 - Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (Q2, R37,
   R66). Migrate-and-delete the original validators (Directive 1).
 
@@ -388,11 +392,18 @@ strict-clean from WP1 onward.
 - All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
 - All 36 experiment-related tests pass (24 original + 12 wiring locks)
 
+### 2026-09-29 — WP3 Complete (legality engine)
+- Implemented `legality/dsl.py`: Expr AST (frozen dataclasses), match/case evaluator, JSON wire format with content hashing
+- Implemented `legality/engine.py`: Constraint model (origin/scope/enforced-at), LegalityEngine, globally-suppressive semantics at S4/S6 (R38)
+- Implemented `legality/classify.py`: Defect taxonomy (Void/Hard/Soft/Unclassified), DefectRegistry with bidirectional void patterns, unclassified bucket counting
+- All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- Integration test verified: constraints evaluate correctly, void patterns detect incompatibilities
+
 ### Improvement Opportunities (for future WPs)
 1. **WP4**: Implement `execution/pipeline.py` and `execution/stage.py` for S1–S11 runner
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
 3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
-4. **WP3**: Implement legality engine (`legality/dsl.py`, `engine.py`, `classify.py`)
+4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
 5. **WP5**: Implement full evidence predicates (`status.py`, `claims.py`, `failure.py`, `ceec.py`)
 6. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py`, `icu.py`, `reasoning.py`)
 7. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
