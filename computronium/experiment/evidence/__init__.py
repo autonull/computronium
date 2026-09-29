@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from computronium.experiment.evidence import store
+from computronium.experiment.evidence import protocol, store
 
-__all__ = ["store"]
+__all__ = ["protocol", "store"]

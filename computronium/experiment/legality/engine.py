@@ -64,9 +64,10 @@ class ConstraintEnforcement(StrEnum):
 
 
 # Stages at which global suppression applies (R38)
-_SUPPRESS_STAGES = frozenset(
-    {ConstraintEnforcement.S4_EXPANSION, ConstraintEnforcement.S6_CLAIM}
-)
+_SUPPRESS_STAGES = frozenset({
+    ConstraintEnforcement.S4_EXPANSION,
+    ConstraintEnforcement.S6_CLAIM,
+})
 
 
 class ConstraintKind(StrEnum):

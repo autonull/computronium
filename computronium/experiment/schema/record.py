@@ -8,7 +8,11 @@ from dataclasses import dataclass, fields
 from enum import StrEnum
 from typing import Any
 
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    Provenance,
+    Schedule,
+)
 
 
 def _canonical_json(obj: Any) -> str:
@@ -55,9 +59,31 @@ class Maturity(StrEnum):
     L2 = "l2"  # Claim-grade
 
 
+class ReproducibilityClass(StrEnum):
+    """Reproducibility classification per WP1.5 scientific validity protocol.
+
+    Three distinct classes:
+    - REPLAYABLE: Same code + seed + schedule → same execution request
+    - COMPUTATIONALLY_REPRODUCIBLE: Same env reproduces numerics within tolerance
+    - SCIENTIFICALLY_REPRODUCIBLE: Independent experiment reproduces reported effect
+    """
+
+    REPLAYABLE = "replayable"
+    COMPUTATIONALLY_REPRODUCIBLE = "computationally_reproducible"
+    SCIENTIFICALLY_REPRODUCIBLE = "scientifically_reproducible"
+
+
 @dataclass(frozen=True, slots=True)
 class Status:
-    """Primary status fields for an experiment record."""
+    """Primary status fields for an experiment record.
+
+    Three-tier status model (per WP5 feedback):
+    - Observations: loss, accuracy, runtime, seed, variance, failure_signal, hardware, dataset
+    - Assessments: gate_verdict, quarantine, maturity, failure_classification (produced by
+      a named, versioned procedure; assessment_procedure_version in status)
+    - Derived Claims: claim_eligible, promoted, beats_baseline, robust, generalizes
+      (pure queries, never stored)
+    """
 
     gate_verdict: GateVerdict
     defect: str
@@ -66,7 +92,8 @@ class Status:
     quarantine: bool
     maturity: Maturity
     uncertainty: dict[str, Any]
-    reproducibility: str
+    reproducibility: ReproducibilityClass
+    assessment_procedure_version: str
     ceec_link: str | None
 
     def __post_init__(self) -> None:
@@ -80,6 +107,10 @@ class Status:
             raise TypeError(f"severity must be Severity, got {type(self.severity)}")
         if not isinstance(self.maturity, Maturity):
             raise TypeError(f"maturity must be Maturity, got {type(self.maturity)}")
+        if not isinstance(self.reproducibility, ReproducibilityClass):
+            raise TypeError(
+                f"reproducibility must be ReproducibilityClass, got {type(self.reproducibility)}"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,7 +222,8 @@ class Record:
                 "quarantine": self.status.quarantine,
                 "maturity": self.status.maturity.value,
                 "uncertainty": self.status.uncertainty,
-                "reproducibility": self.status.reproducibility,
+                "reproducibility": self.status.reproducibility.value,
+                "assessment_procedure_version": self.status.assessment_procedure_version,
                 "ceec_link": self.status.ceec_link,
             },
             "payload": self.payload,
@@ -225,7 +257,10 @@ class Record:
                 quarantine=data["status"]["quarantine"],
                 maturity=Maturity(data["status"]["maturity"]),
                 uncertainty=data["status"]["uncertainty"],
-                reproducibility=data["status"]["reproducibility"],
+                reproducibility=ReproducibilityClass(data["status"]["reproducibility"]),
+                assessment_procedure_version=data["status"][
+                    "assessment_procedure_version"
+                ],
                 ceec_link=data["status"]["ceec_link"],
             ),
             payload=data["payload"],
@@ -238,6 +273,7 @@ __all__ = [
     "GateVerdict",
     "Maturity",
     "Record",
+    "ReproducibilityClass",
     "Severity",
     "Status",
     "_canonical_json",

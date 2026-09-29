@@ -20,6 +20,15 @@ from computronium.experiment.schema.axis import (
     list_axis_specs,
     register_axis_spec,
 )
+from computronium.experiment.schema.record import (
+    FailureCause,
+    GateVerdict,
+    Maturity,
+    Record,
+    ReproducibilityClass,
+    Severity,
+    Status,
+)
 from computronium.experiment.schema.registry import Registry, RegistryDiff
 
 __all__ = [
@@ -33,8 +42,15 @@ __all__ = [
     "AxisKind",
     "AxisPrimitive",
     "AxisSpec",
+    "FailureCause",
+    "GateVerdict",
+    "Maturity",
+    "Record",
     "Registry",
     "RegistryDiff",
+    "ReproducibilityClass",
+    "Severity",
+    "Status",
     "evidence",
     "execution",
     "get_axis_spec",

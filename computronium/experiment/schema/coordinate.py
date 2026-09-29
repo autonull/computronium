@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from typing import Any
 
 
@@ -153,6 +154,23 @@ class Schedule:
         )
 
 
+class DataOrigin(StrEnum):
+    """Origin of the data record for I(C,U) leakage protocol."""
+
+    EXPLORATION = "exploration"  # Policy-independent exploration
+    POLICY_SELECTED = "policy_selected"  # Policy-dependent selection
+    CALIBRATION = "calibration"  # Frozen, never used for policy tuning
+    TEST = "test"  # Held-out tasks, policy-independent
+
+
+class TransferMode(StrEnum):
+    """Transfer learning mode."""
+
+    ZERO_SHOT = "zero_shot"
+    FEW_SHOT = "few_shot"
+    FULL = "full"
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Provenance metadata for an experiment record."""
@@ -163,6 +181,12 @@ class Provenance:
     code_sha: str
     policy: str
     links: dict[str, str]
+    data_origin: DataOrigin = DataOrigin.EXPLORATION
+    training_tasks: tuple[str, ...] = ()
+    transfer_source_ids: tuple[str, ...] = ()
+    transfer_cutoff: str | None = None
+    target_task: str | None = None
+    transfer_mode: TransferMode | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -172,10 +196,18 @@ class Provenance:
             "code_sha": self.code_sha,
             "policy": self.policy,
             "links": self.links,
+            "data_origin": self.data_origin.value,
+            "training_tasks": list(self.training_tasks),
+            "transfer_source_ids": list(self.transfer_source_ids),
+            "transfer_cutoff": self.transfer_cutoff,
+            "target_task": self.target_task,
+            "transfer_mode": self.transfer_mode.value if self.transfer_mode else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Provenance:
+        data_origin = DataOrigin(data.get("data_origin", "exploration"))
+        transfer_mode = data.get("transfer_mode")
         return cls(
             env=data["env"],
             dataset=data["dataset"],
@@ -183,7 +215,20 @@ class Provenance:
             code_sha=data["code_sha"],
             policy=data["policy"],
             links=data.get("links", {}),
+            data_origin=data_origin,
+            training_tasks=tuple(data.get("training_tasks", ())),
+            transfer_source_ids=tuple(data.get("transfer_source_ids", ())),
+            transfer_cutoff=data.get("transfer_cutoff"),
+            target_task=data.get("target_task"),
+            transfer_mode=TransferMode(transfer_mode) if transfer_mode else None,
         )
 
 
-__all__ = ["Coordinate", "Provenance", "Schedule", "_canonical_json"]
+__all__ = [
+    "Coordinate",
+    "DataOrigin",
+    "Provenance",
+    "Schedule",
+    "TransferMode",
+    "_canonical_json",
+]

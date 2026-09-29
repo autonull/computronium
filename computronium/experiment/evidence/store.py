@@ -11,12 +11,16 @@ from typing import TYPE_CHECKING, Any, Self
 
 import duckdb
 
-from computronium.experiment.schema.coordinate import Provenance, Schedule
+from computronium.experiment.schema.coordinate import (
+    Provenance,
+    Schedule,
+)
 from computronium.experiment.schema.record import (
     FailureCause,
     GateVerdict,
     Maturity,
     Record,
+    ReproducibilityClass,
     Severity,
     Status,
 )
@@ -124,7 +128,8 @@ class RecordStore:
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                        quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
-                                       reproducibility TEXT, ceec_link TEXT) NOT NULL,
+                                       reproducibility TEXT, assessment_procedure_version TEXT,
+                                       ceec_link TEXT) NOT NULL,
                 payload         JSON NOT NULL,
                 unknown         JSON
             )
@@ -252,7 +257,8 @@ class RecordStore:
                             "quarantine": record.status.quarantine,
                             "maturity": record.status.maturity.value,
                             "uncertainty": json.dumps(record.status.uncertainty),
-                            "reproducibility": record.status.reproducibility,
+                            "reproducibility": record.status.reproducibility.value,
+                            "assessment_procedure_version": record.status.assessment_procedure_version,
                             "ceec_link": record.status.ceec_link,
                         },
                         json.dumps(record.payload),
@@ -457,7 +463,8 @@ class RecordStore:
             quarantine=status_struct["quarantine"],
             maturity=Maturity(status_struct["maturity"]),
             uncertainty=json.loads(status_struct["uncertainty"]),
-            reproducibility=status_struct["reproducibility"],
+            reproducibility=ReproducibilityClass(status_struct["reproducibility"]),
+            assessment_procedure_version=status_struct["assessment_procedure_version"],
             ceec_link=status_struct["ceec_link"],
         )
 

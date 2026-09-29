@@ -174,6 +174,7 @@ class LocalBackend:
             GateVerdict,
             Maturity,
             Record,
+            ReproducibilityClass,
             Severity,
             Status,
         )
@@ -198,7 +199,8 @@ class LocalBackend:
             quarantine=False,
             maturity=Maturity.L0,
             uncertainty={},
-            reproducibility="pending",
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
             ceec_link=None,
         )
 
@@ -308,6 +310,7 @@ class MultiprocessBackend:
             GateVerdict,
             Maturity,
             Record,
+            ReproducibilityClass,
             Severity,
             Status,
         )
@@ -332,7 +335,8 @@ class MultiprocessBackend:
             quarantine=False,
             maturity=Maturity.L0,
             uncertainty={},
-            reproducibility="pending",
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
             ceec_link=None,
         )
 

@@ -4,7 +4,7 @@
 authoritative spec; abc2 (Rev 1.1) is superseded and consulted only for rationale.
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread
 safety, error/logging conventions, environment rules, testing tiers, commit checklist.
-**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP2 ready to start.
+**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 ready to start.
 
 ---
 
@@ -608,8 +608,18 @@ strict-clean from WP1 onward.
 - Strengthened walking skeleton Gate 3: synthetic known-ground-truth fixture
 - Explicitly distinguished API backwards compatibility (dropped) from historical evidence compatibility (mandatory)
 
+### 2026-09-29 — WP1.5 Complete (Scientific Validity Skeleton)
+- Implemented `evidence/protocol.py`: `CostBudget`, `ComparisonGuard`, effect-size computation (Cohen's d + CI + p-value), Wilcoxon support, `SyntheticGroundTruth` fixture
+- Updated `schema/coordinate.py`: Added `DataOrigin` (exploration/policy_selected/calibration/test) and `TransferMode` (zero_shot/few_shot/full) enums to `Provenance`
+- Updated `schema/record.py`: Added `ReproducibilityClass` (REPLAYABLE/COMPUTATIONALLY_REPRODUCIBLE/SCIENTIFICALLY_REPRODUCIBLE) and `assessment_procedure_version` to `Status`
+- Updated `evidence/store.py`: Schema and parsing for new fields (`reproducibility`, `assessment_procedure_version`, `data_origin`, transfer fields)
+- Updated `execution/backends.py`: Records now use `ReproducibilityClass.REPLAYABLE` and `assessment_procedure_version="1.0"`
+- Created `tests/property/test_scientific_validity_protocol_lock.py` (34 tests): protocol fields, data splits, comparison guards, synthetic fixture recovery
+- All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- All 46 property tests pass (34 new + 12 wiring locks)
+
 ### Improvement Opportunities (for future WPs)
-1. **WP1.5**: Implement scientific validity skeleton (synthetic fixture, data splits, comparison guards, reproducibility classes) **+ atomic append with artifacts kill -9 proof**
+1. **WP1.5**: Atomic append with artifacts kill -9 proof (protocol skeleton complete)
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
 3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
 4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
@@ -626,3 +636,4 @@ strict-clean from WP1 onward.
 - `DuplicateMeasurement` renamed to `DuplicateMeasurementError` to follow naming conventions (N818)
 - `GateVerdict.PASS` renamed to `PASS_` to avoid S105 false positive (hardcoded password detection)
 - **CEEC folded into Kernel**: `packages/ceec-core` → `computronium/experiment/evidence/artifacts.py` (DuckDB `artifacts` table). Single-file atomic transactions. No reconciliation protocol.
+- **WP1.5 complete**: Scientific validity skeleton implemented with protocol module, provenance extensions, reproducibility classes, synthetic fixture, and lockstep tests
