@@ -137,30 +137,17 @@ CREATE TABLE records (
     provenance      JSON NOT NULL,          -- env, dataset+version, code SHA, policy, links
     status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                            quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
-                           reproducibility TEXT, ceec_link TEXT,
-                           assessment_procedure_version TEXT) NOT NULL,  -- §3.1: which procedure produced gate_verdict etc.
+                           reproducibility TEXT, assessment_procedure_version TEXT) NOT NULL,  -- §3.1: which procedure produced gate_verdict etc.
     payload         JSON NOT NULL,          -- objectives, telemetry, probes, artifact refs
     unknown         JSON                    -- R79: preserved, labelled, never defaulted
 );
 
-CREATE TABLE record_artifacts (            -- bytes live in ceec-core (abc3 §6.1.5)
-    record_id TEXT NOT NULL REFERENCES records(record_id),
-    digest    TEXT NOT NULL,
-    role      TEXT NOT NULL,                -- config|figure|reproducer|kernel
-    PRIMARY KEY (record_id, digest, role)
-);
-
--- CEEC/Kernel reconciliation state machine
-CREATE TABLE artifact_reconciliation (
-    record_id     TEXT NOT NULL REFERENCES records(record_id),
-    digest        TEXT NOT NULL,
-    role          TEXT NOT NULL,
-    state         TEXT NOT NULL,            -- PREPARED | CEEC_PUT | DUCKDB_COMMITTED | RECONCILED | ORPHANED
-    ceec_put_at   TIMESTAMP,
-    duckdb_at     TIMESTAMP,
-    reconciled_at TIMESTAMP,
-    error         TEXT,
-    PRIMARY KEY (record_id, digest, role)
+CREATE TABLE artifacts (                   -- unified artifact storage (replaces CEEC delegation)
+    digest        TEXT PRIMARY KEY,        -- content-addressed (SHA256 of bytes)
+    bytes         BLOB NOT NULL,           -- artifact payload
+    role          TEXT NOT NULL,           -- config|figure|reproducer|kernel
+    record_id     TEXT REFERENCES records(record_id),
+    created_at    TIMESTAMP NOT NULL
 );
 
 CREATE TABLE vector_index (
@@ -176,69 +163,50 @@ AND schedule.fidelity = 'L2' AND schedule.n_seeds >= 5`); the authoritative
 CEEC-gated checks are relational, not columnar). Doctrine 5 intact: derived verdicts are
 never stored, never cached.
 
-### 2.1 Cross-Store Atomicity: CEEC/DuckDB Reconciliation Protocol
+### 2.1 Unified Artifacts Table (Single DuckDB, Atomic Append)
 
-**The problem:** Artifact bytes live in CEEC (filesystem + SQLite metadata), relational linkage lives in DuckDB. Two persistence systems → no single ACID transaction.
+**Decision:** CEEC has no external consumers; fold artifact storage into the Kernel's DuckDB.
+Single file, single transaction, no reconciliation needed.
 
-**The contract:** Durable record + content-addressed artifact reference with **eventual reconciliation** (not atomic append).
-
-**State machine (per artifact linkage):**
-
-```
-PREPARED
-    ↓ (RecordStore.append begins)
-CEEC_PUT        ← CEECStore.put(artifact_bytes) → digest
-    ↓ (on success)
-DUCKDB_COMMITTED  ← single DuckDB transaction: INSERT records + INSERT record_artifacts + INSERT artifact_reconciliation(state='DUCKDB_COMMITTED')
-    ↓ (background / on next append / on demand)
-RECONCILED      ← verify CEEC has digest; UPDATE artifact_reconciliation SET state='RECONCILED', reconciled_at=now()
-    ↓ (if CEEC put failed)
-ORPHANED        ← UPDATE artifact_reconciliation SET state='ORPHANED', error=...; record stays, linkage marked broken
+```sql
+-- Artifacts table (replaces CEEC delegation + reconciliation state machine)
+CREATE TABLE artifacts (
+    digest        TEXT PRIMARY KEY,        -- content-addressed (SHA256 of bytes)
+    bytes         BLOB NOT NULL,           -- artifact payload
+    role          TEXT NOT NULL,           -- config|figure|reproducer|kernel
+    record_id     TEXT REFERENCES records(record_id),
+    created_at    TIMESTAMP NOT NULL
+);
 ```
 
-**Recovery query (idempotent, safe to run repeatedly):**
-
+**Atomic append contract:**
 ```python
-# In RecordStore.reconcile_artifacts():
-for ra in self._conn.execute("""
-    SELECT ra.record_id, ra.digest, ra.role
-    FROM record_artifacts ra
-    JOIN artifact_reconciliation ar USING (record_id, digest, role)
-    WHERE ar.state IN ('CEEC_PUT', 'DUCKDB_COMMITTED')
-""").fetchall():
-    # Ask CEEC (separate process/DB) if artifact exists
-    if self._ceec_store.has_artifact(ra.digest):
-        self._conn.execute(
-            """
-            UPDATE artifact_reconciliation
-            SET state='RECONCILED', reconciled_at=now()
-            WHERE record_id=? AND digest=? AND role=?
-        """,
-            (ra.record_id, ra.digest, ra.role),
-        )
-    else:
-        # CEEC doesn't have it → ORPHANED (or retry CEEC_PUT)
-        pass
+def append_with_artifacts(self, record: Record, artifacts: list[tuple[bytes, str]]) -> Record:
+    """Single transaction: record + all artifacts. No partial state possible."""
+    with self._write_lock:
+        self._conn.execute("BEGIN")
+        try:
+            self._conn.execute(INSERT_RECORD, record_params)
+            for art_bytes, role in artifacts:
+                digest = hashlib.sha256(art_bytes).hexdigest()
+                self._conn.execute(
+                    "INSERT INTO artifacts (digest, bytes, role, record_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                    [digest, art_bytes, role, record.record_id, datetime.now()]
+                )
+            self._conn.execute("COMMIT")
+        except Exception:
+            self._conn.execute("ROLLBACK")
+            raise
 ```
 
-**Repair operations:**
-- `RECONCILED`: verify + mark
-- `ORPHANED`: record kept, linkage marked broken; content-addressing makes orphaned CEEC objects harmless garbage (periodic GC)
-- `PREPARED` stale: treat as failed, roll back DuckDB record if needed
+**Benefits:**
+- True ACID: record + artifacts appear together or not at all
+- No reconciliation protocol, no ORPHANED, no background recovery
+- Content-addressing preserved (digest = PK, deduplicated globally)
+- One file to backup/copy/inspect
+- CEEC API becomes internal `ArtifactStore` module (DuckDB-backed)
 
-**Implementation:** `RecordStore.append(record)` executes the state machine; a background `reconcile_artifacts()` method (or CLI command) runs the recovery query. The scientific validity skeleton (WP1.5) proves `kill -9` at any state leaves the system recoverable.
-
-**Store engineering rules (AGENTS.md-binding):**
-
-- Every SQL statement is **parameterized** — never f-string/t-string interpolation into SQL
-  (AGENTS.md Safe Interpolation; also satisfies Ruff `S` bandit rules).
-- `RecordStore` is a context manager (`with` owns connection lifecycle; WAL checkpoint on
-  close); all resource lifecycles via context managers.
-- Value sets are `StrEnum` (`GateVerdict`, `FailureCause`, `Severity`, `Tier`, `AxisKind`,
-  `SpecStatus`, `StageId`, `ConstraintKind`, `ConstraintOrigin`, `ConstraintScope`) — never
-  bare strings; serialized as their values, validated on read.
-- All exceptions raise from abc3 Appendix I's hierarchy with chaining
-  (`raise DuplicateMeasurement(key) from exc`).
+**Store engineering rules** unchanged (parameterized SQL, context managers, StrEnum, exception chaining).
 
 ---
 
@@ -401,9 +369,10 @@ fixture recovers known effects.
   guards (R8/R22/R67).
 - `evidence/failure.py` — `FailureCause` taxonomy, clustering, reproducer emission,
   fix-linkage queries (R58–R62).
-- `evidence/ceec.py` — artifact delegation to `packages/ceec-core::CEECStore`
-  (`CEECStore.put` → digest → `record_artifacts` + `artifact_reconciliation`); ledger linkage
-  via `status.ceec_link` (Q9). Cross-package dependency is the public `ceec` API only.
+- `evidence/artifacts.py` — unified artifact storage in DuckDB `artifacts` table.
+  `ArtifactStore.put(bytes, role) -> digest`, `get(digest) -> bytes`.
+  Single transaction with record append via `RecordStore.append_with_artifacts()`.
+  No CEEC dependency, no reconciliation.
 - Vector retrieval over `vector_index` (brute-force `list_dot` first; HNSW via `vss` or
   external when corpus warrants) — C59, R15, K5.
 - `RunSpec`/record parsing at I/O boundaries (CLI, import, export) validated with
@@ -418,7 +387,7 @@ surrogates that depend on it.
 Deliverables:
 1. **Benchmark class hierarchy (feedback #10):**
    - **E1 — Infrastructure validity:** crash recovery, store overhead, serialization,
-     replay hash, reconciliation correctness. (Pass = machinery works)
+     replay hash, atomic append with artifacts. (Pass = machinery works)
    - **E2 — Algorithmic validity:** policy reaches target quality with fewer evaluations,
      surrogate acquisition efficiency vs random, cost-model estimate-vs-actual. (Pass =
      algorithm improves search efficiency)
@@ -541,10 +510,10 @@ Execution discipline (AGENTS.md Environment/Testing):
 
 | Class | Benchmark | Discharges |
 |---|---|---|
-| **E1 — Infrastructure** | Crash recovery (kill -9 at each reconciliation state) | R12, R26 |
+| **E1 — Infrastructure** | Crash recovery (kill -9 during atomic append) | R12, R26 |
 | | Store overhead harness (mean/p95/fraction < 1% median eval walltime) | K7, K9 |
 | | Serialization round-trip (all sections, schema v1→v2 readers) | R79, K4 |
-| | Reconciliation correctness (CEEC/DuckDB state machine) | R60, K8 |
+| | Atomic append with artifacts (single transaction) | R60, K8 |
 | **E2 — Algorithmic** | Cost-to-rank vs uniform baseline | R46 |
 | | Surrogate vs random on held-out tasks (effect-size protocol) | R54 |
 | | Cost-model estimate-vs-actual error trend | R23, R24 |
@@ -584,8 +553,7 @@ Class P gate enforced in CI.
   data splits enforced, comparison guards work, replay vs reproducibility distinguished.
 - WP5.5 statistical protocol lock passes: benchmark classes disjoint, effect-size protocol
   fields present, I(C,U) data splits enforced, leakage audit runs.
-- CEEC/DuckDB reconciliation: kill -9 at each state → recovery query correct, repair
-  operations idempotent.
+- Atomic append with artifacts: kill -9 during transaction → no partial state, no recovery needed.
 - Legality boundary lock: no heuristic exclusions in DECLARED constraints.
 - Status three-tier model: observations, assessments (with procedure version), derived claims
   (pure queries only).
@@ -627,7 +595,7 @@ strict-clean from WP1 onward.
 
 ### 2026-09-29 — Plan Updated per Review Feedback
 - Added WP1.5 (Scientific Validity Skeleton) and WP5.5 (Statistical Analysis Protocol) to sequence
-- Added CEEC/DuckDB reconciliation protocol with state machine (§2.1) — **implementation pending WP1.5**
+- **CEEC unification**: folded `packages/ceec-core` into Kernel's DuckDB as `artifacts` table. Single-file atomic transactions. Removed reconciliation protocol (§2.1 replaced).
 - Clarified DuckDB single-writer as application constraint; `seq` = persistence order
 - Made VSS an optional capability (experimental)
 - Split status into Observations / Assessments (with procedure version) / Derived Claims
@@ -641,12 +609,12 @@ strict-clean from WP1 onward.
 - Explicitly distinguished API backwards compatibility (dropped) from historical evidence compatibility (mandatory)
 
 ### Improvement Opportunities (for future WPs)
-1. **WP1.5**: Implement scientific validity skeleton (synthetic fixture, data splits, comparison guards, reproducibility classes) **+ CEEC/DuckDB reconciliation protocol implementation + kill -9 proof**
+1. **WP1.5**: Implement scientific validity skeleton (synthetic fixture, data splits, comparison guards, reproducibility classes) **+ atomic append with artifacts kill -9 proof**
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
 3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
 4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
 5. **WP3**: Add legality boundary lock test (`test_legality_boundary_lock.py`)
-6. **WP5**: Implement full evidence predicates (`status.py` with three-tier model, `claims.py`, `failure.py`, `ceec.py` with reconciliation)
+6. **WP5**: Implement full evidence predicates (`status.py` with three-tier model, `claims.py`, `failure.py`, `artifacts.py` unified storage)
 7. **WP5.5**: Implement statistical protocol lock (`test_statistical_protocol_lock.py`)
 8. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
 9. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
@@ -657,3 +625,4 @@ strict-clean from WP1 onward.
 - DuckDB struct field indexes were removed due to syntax limitations; queries filter on struct fields via SQL WHERE clauses instead
 - `DuplicateMeasurement` renamed to `DuplicateMeasurementError` to follow naming conventions (N818)
 - `GateVerdict.PASS` renamed to `PASS_` to avoid S105 false positive (hardcoded password detection)
+- **CEEC folded into Kernel**: `packages/ceec-core` → `computronium/experiment/evidence/artifacts.py` (DuckDB `artifacts` table). Single-file atomic transactions. No reconciliation protocol.
