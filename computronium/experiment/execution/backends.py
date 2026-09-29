@@ -1,0 +1,361 @@
+"""Execution backends for experiment evaluation (WP4)."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import threading
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
+
+if TYPE_CHECKING:
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.schema.record import Record
+
+logger = logging.getLogger(__name__)
+
+
+@runtime_checkable
+class ExecutionBackend(Protocol):
+    """Protocol for execution backends.
+
+    Workers return Records; the pipeline process is the sole writer
+    (single-writer topology per §1.1). In-process concurrency via
+    asyncio.TaskGroup; blocking evaluation bodies stay out of the event loop
+    via asyncio.to_thread.
+    """
+
+    async def submit(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit an evaluation and return completed records.
+
+        Args:
+            coordinate: The 6-axis experiment coordinate
+            schedule: Execution schedule
+            provenance: Provenance metadata
+            params: Experiment parameters
+            store: RecordStore for persistence (pipeline is sole writer)
+
+        Returns:
+            List of completed Records (one per seed).
+        """
+        ...
+
+    async def submit_batch(
+        self,
+        items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit a batch of evaluations.
+
+        Args:
+            items: List of (coordinate, schedule, provenance, params)
+            store: RecordStore for persistence
+
+        Returns:
+            List of completed Records.
+        """
+        ...
+
+    def shutdown(self) -> None:
+        """Shutdown the backend and release resources."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class EvaluationTask:
+    """A single evaluation task."""
+
+    coordinate: Coordinate
+    schedule: Schedule
+    provenance: Provenance
+    params: dict[str, Any]
+
+
+class LocalBackend:
+    """Local in-process execution backend using asyncio.TaskGroup.
+
+    Workers run in the same process; evaluation bodies are offloaded to
+    threads via asyncio.to_thread to avoid blocking the event loop.
+    """
+
+    def __init__(self, *, max_workers: int = 4) -> None:
+        self._max_workers = max_workers
+        self._executor: ThreadPoolExecutor | None = None
+        self._shutdown = False
+
+    async def submit(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit a single evaluation (one schedule, multiple seeds)."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        records = []
+        for seed_offset in range(schedule.n_seeds):
+            seed = schedule.seed + seed_offset
+            task_schedule = Schedule(
+                fidelity=schedule.fidelity,
+                seed=seed,
+                n_seeds=1,
+                epochs=schedule.epochs,
+                batch_limit=schedule.batch_limit,
+                budget_id=schedule.budget_id,
+            )
+            record = await asyncio.to_thread(
+                self._evaluate_single,
+                coordinate,
+                task_schedule,
+                provenance,
+                params,
+            )
+            records.append(record)
+        return records
+
+    async def submit_batch(
+        self,
+        items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit a batch of evaluations concurrently."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        async def submit_one(
+            coord: Coordinate,
+            sched: Schedule,
+            prov: Provenance,
+            params: dict[str, Any],
+        ) -> list[Record]:
+            return await self.submit(coord, sched, prov, params, store)
+
+        async with asyncio.TaskGroup() as tg:
+            tasks = [
+                tg.create_task(submit_one(coord, sched, prov, params))
+                for coord, sched, prov, params in items
+            ]
+
+        results: list[Record] = []
+        for task in tasks:
+            results.extend(task.result())
+        return results
+
+    def _evaluate_single(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+    ) -> Record:
+        """Evaluate a single cell (blocking call, runs in thread pool).
+
+        This is a placeholder - actual evaluation integrates with the
+        ontology/system stack. For now, returns a minimal valid Record.
+        """
+        import time
+
+        from computronium.experiment.schema.record import (
+            FailureCause,
+            GateVerdict,
+            Maturity,
+            Record,
+            Severity,
+            Status,
+        )
+
+        start = time.monotonic()
+
+        # Placeholder: actual evaluation would go here
+        # This integrates with the 6-axis ontology system
+        payload = {
+            "status": "evaluated",
+            "walltime_s": time.monotonic() - start,
+            "seed": schedule.seed,
+            "fidelity": schedule.fidelity,
+            "epochs_completed": schedule.epochs,
+        }
+
+        status = Status(
+            gate_verdict=GateVerdict.PENDING,
+            defect="",
+            cause=FailureCause.UNKNOWN,
+            severity=Severity.LOW,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility="pending",
+            ceec_link=None,
+        )
+
+        return Record.create(
+            run_id=provenance.links.get("run_id", str(uuid.uuid4())),
+            coordinate=coordinate,
+            schedule=schedule,
+            provenance=provenance,
+            status=status,
+            payload=payload,
+        )
+
+    def shutdown(self) -> None:
+        """Shutdown the thread pool."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+        self._shutdown = True
+
+
+class MultiprocessBackend:
+    """Multiprocess execution backend for CPU-intensive evaluations.
+
+    Uses asyncio.to_thread with a process pool for true parallelism.
+    Each worker process evaluates independently; results are serialized
+    and returned to the pipeline process for writing.
+    """
+
+    def __init__(self, *, max_workers: int = 4) -> None:
+        self._max_workers = max_workers
+        self._executor: ThreadPoolExecutor | None = None
+        self._shutdown = False
+
+    async def submit(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit a single evaluation across multiple processes."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        records = []
+        for seed_offset in range(schedule.n_seeds):
+            seed = schedule.seed + seed_offset
+            task_schedule = Schedule(
+                fidelity=schedule.fidelity,
+                seed=seed,
+                n_seeds=1,
+                epochs=schedule.epochs,
+                batch_limit=schedule.batch_limit,
+                budget_id=schedule.budget_id,
+            )
+            record = await asyncio.to_thread(
+                self._evaluate_single_process,
+                coordinate,
+                task_schedule,
+                provenance,
+                params,
+            )
+            records.append(record)
+        return records
+
+    async def submit_batch(
+        self,
+        items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
+        store: RecordStore,
+    ) -> list[Record]:
+        """Submit a batch of evaluations concurrently across processes."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        async def submit_one(
+            coord: Coordinate,
+            sched: Schedule,
+            prov: Provenance,
+            params: dict[str, Any],
+        ) -> list[Record]:
+            return await self.submit(coord, sched, prov, params, store)
+
+        async with asyncio.TaskGroup() as tg:
+            tasks = [
+                tg.create_task(submit_one(coord, sched, prov, params))
+                for coord, sched, prov, params in items
+            ]
+
+        results: list[Record] = []
+        for task in tasks:
+            results.extend(task.result())
+        return results
+
+    def _evaluate_single_process(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+    ) -> Record:
+        """Evaluate a single cell in a worker process (blocking)."""
+        import time
+
+        from computronium.experiment.schema.record import (
+            FailureCause,
+            GateVerdict,
+            Maturity,
+            Record,
+            Severity,
+            Status,
+        )
+
+        start = time.monotonic()
+
+        # Placeholder: actual evaluation would integrate with the ontology stack
+        payload = {
+            "status": "evaluated",
+            "walltime_s": time.monotonic() - start,
+            "seed": schedule.seed,
+            "fidelity": schedule.fidelity,
+            "epochs_completed": schedule.epochs,
+            "worker_pid": threading.get_ident(),
+        }
+
+        status = Status(
+            gate_verdict=GateVerdict.PENDING,
+            defect="",
+            cause=FailureCause.UNKNOWN,
+            severity=Severity.LOW,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility="pending",
+            ceec_link=None,
+        )
+
+        return Record.create(
+            run_id=provenance.links.get("run_id", str(uuid.uuid4())),
+            coordinate=coordinate,
+            schedule=schedule,
+            provenance=provenance,
+            status=status,
+            payload=payload,
+        )
+
+    def shutdown(self) -> None:
+        """Shutdown the thread pool."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+        self._shutdown = True
+
+
+__all__ = [
+    "EvaluationTask",
+    "ExecutionBackend",
+    "LocalBackend",
+    "MultiprocessBackend",
+]
