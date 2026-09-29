@@ -43,6 +43,7 @@ logger = get_logger(__name__)
 # Key: dynamics_type -> step_size value (replaces default)
 _DYNAMICS_STEP_SIZE_OVERRIDES: Final[dict[str, float]] = {
     "diffusion": 0.001,  # Lower step_size for stable Langevin dynamics
+    "predictive_settling": 0.01,  # 0.1 diverges on wide layers (hidden=512 -> loss 1e22)
 }
 
 
@@ -298,9 +299,19 @@ def _auto_size_geometry(
 
 
 def _get_all_valid_geometry_configs(
-    topology: str, param_budget: int, input_dim: int, output_dim: int
+    topology: str,
+    param_budget: int,
+    input_dim: int,
+    output_dim: int,
+    geometry_sampling: str = "full_range",
 ) -> list[tuple[tuple[int, ...], int]]:
-    """Return all valid (hidden_dims, depth) combinations within budget for exploration diversity."""
+    """Return all valid (hidden_dims, depth) combinations within budget for exploration diversity.
+
+    Args:
+        geometry_sampling: "full_range" (default) explores all sizes up to param_budget
+            by sampling multiple hidden sizes per depth. "max_only" returns only
+            the maximum hidden size for each depth (legacy behavior).
+    """
     if param_budget <= 0:
         return [((64,) * d, d) for d in range(1, 7)]
 
@@ -316,7 +327,11 @@ def _get_all_valid_geometry_configs(
         elif topology == "tile_mesh":
             npt = h
             tpl = max(d, 1)
-            return input_dim * npt + max(d - 1, 0) * npt * tpl * npt + npt * tpl * output_dim
+            return (
+                input_dim * npt
+                + max(d - 1, 0) * npt * tpl * npt
+                + npt * tpl * output_dim
+            )
         elif topology == "spatial_lattice":
             lattice_volume = 4 * 4 * 4
             return input_dim * lattice_volume * h + h * output_dim
@@ -345,7 +360,25 @@ def _get_all_valid_geometry_configs(
             else:
                 hi = mid - 1
         if best_h_for_d >= 8:
-            valid_configs.append(((best_h_for_d,) * d, d))
+            if geometry_sampling == "max_only":
+                # Legacy: only the maximum hidden size per depth
+                valid_configs.append(((best_h_for_d,) * d, d))
+            else:
+                # Full range: log-spaced samples from 8 to max
+                num_samples = min(5, best_h_for_d - 7)  # Up to 5 samples per depth
+                if num_samples > 0:
+                    import math
+
+                    log_min = math.log(8)
+                    log_max = math.log(best_h_for_d)
+                    for i in range(num_samples):
+                        log_h = log_min + (log_max - log_min) * i / max(
+                            1, num_samples - 1
+                        )
+                        h = max(8, int(round(math.exp(log_h))))
+                        valid_configs.append(((h,) * d, d))
+                else:
+                    valid_configs.append(((best_h_for_d,) * d, d))
 
     return valid_configs if valid_configs else [((8,) * 1, 1)]
 

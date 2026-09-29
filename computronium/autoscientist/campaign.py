@@ -148,6 +148,12 @@ def probe_spectral_radius(
         torch.random.set_rng_state(cpu_rng_state)
         if cuda_rng_state is not None:
             torch.cuda.set_rng_state(cuda_rng_state)
+        # Reset dynamics internal state (e.g., PC-ALM dual variables) to avoid
+        # cross-contamination between base and perturbed settle calls.
+        if hasattr(system.dynamics, "_dual_vars"):
+            system.dynamics._dual_vars = None
+        if hasattr(system.dynamics, "_free_energy_history"):
+            system.dynamics._free_energy_history = None
         state = CompositeState(activity={"x": x}, plastic={}, substrate={})
         settled = system.dynamics.settle(
             state, system.geometry, system.substrate, target=None

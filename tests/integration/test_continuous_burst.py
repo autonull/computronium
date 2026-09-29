@@ -346,3 +346,98 @@ def test_deep_tier_scan_flags_variance_and_dry_run(tmp_path: Path, capsys) -> No
     assert "energy_minimization|prediction|euclidean|feedforward" in out
     assert "3 CEEC experiments" in out
     assert not (task_root / "maturation.jsonl").exists()  # dry-run writes nothing
+
+
+def test_deep_tier_promotes_an_l1_cell_in_a_single_burst(tmp_path: Path) -> None:
+    """An L1 re-run is a second measurement, so the cell reaches L2.
+
+    Regression test for: the L2 gate counted only *burst* front memberships and
+    an L1 re-run inherits its burst's tag, so no cell could ever reach deep-tier
+    without the driver happening to re-sample the same coordinate.
+    """
+    from computronium.autoscientist.broad_map import _deep_tier_candidates
+    from computronium.knowledge import KnowledgeBase, KnowledgeEntry
+
+    root = tmp_path / "mnist"
+    root.mkdir(parents=True)
+    kb = KnowledgeBase(root / "kb.sqlite")
+    hp = {
+        "geometry": {"topology_type": "feedforward", "depth": 2, "hidden_dim": 64},
+        "dynamics": "lazy",
+        "credit": "gradient",
+        "update": "ortho_adam",
+        "param_budget": 25000,
+    }
+    kb.add_entry(
+        KnowledgeEntry(
+            id="l0_row",
+            topic="experiment:mnist",
+            model_family="eqprop",
+            finding="synthetic measurement",
+            details="",
+            confidence=0.80,
+            tags=[
+                "experiment",
+                "mnist",
+                "broad_map",
+                "maturity:l0",
+                "burst:2026-09-16-1",
+                "lazy|gradient|ortho_adam|feedforward",
+            ],
+            source="experiment",
+            metrics={"final_accuracy": 0.80, "final_loss": 2.3},
+            hyperparameters=hp,
+            extra={},
+        )
+    )
+    kb.add_entry(
+        KnowledgeEntry(
+            id="l1_row",
+            topic="experiment:mnist",
+            model_family="eqprop",
+            finding="synthetic L1 re-run",
+            details="",
+            confidence=0.93,
+            tags=[
+                "experiment",
+                "mnist",
+                "broad_map",
+                "maturity:l1",
+                "burst:2026-09-16-1",
+                "lazy|gradient|ortho_adam|feedforward",
+            ],
+            source="experiment",
+            metrics={"final_accuracy": 0.93, "final_loss": 0.4},
+            hyperparameters=hp,
+            extra={},
+        )
+    )
+
+    candidates = _deep_tier_candidates(root / "kb.sqlite", 5, "mnist")
+    assert [c.key for c in candidates] == ["lazy|gradient|ortho_adam|feedforward"]
+    assert candidates[0].accuracy == pytest.approx(0.93)
+
+
+def test_deep_tier_rejects_a_task_directory_as_root(tmp_path: Path) -> None:
+    """A task directory passed as ``--root`` fails loudly, not as an empty plan.
+
+    Regression test for: ``deep-tier`` resolved ``<root>/<task>/kb.sqlite`` and
+    reported "0 candidate(s)" when the caller passed the task dir itself.
+    """
+    from computronium.cli.continuous import _deep_tier
+
+    task_root = tmp_path / "broad_map" / "mnist"
+    task_root.mkdir(parents=True)
+    (task_root / "kb.sqlite").write_bytes(b"")
+
+    args = Namespace(
+        root=task_root,
+        task="mnist",
+        top=5,
+        epochs=10,
+        seeds=3,
+        seed=_SEED,
+        dry_run=True,
+    )
+    with pytest.raises(FileNotFoundError, match="campaign root"):
+        _deep_tier(args)

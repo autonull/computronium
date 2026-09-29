@@ -38,7 +38,7 @@ from computronium.ontology.dynamics._state import (
 from computronium.ontology.dynamics._state import (
     is_composite_state as _is_composite_state,
 )
-from computronium.ontology.geometry import layer_stack
+from computronium.ontology.geometry import is_tile_block_geometry, layer_stack
 
 GainControlMode = Literal["none", "unit_rms", "spectral"]
 
@@ -828,6 +828,36 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     # Return mean per sample
     batch_size = acts[0].size(0)
     return total_energy / batch_size
+
+
+def _init_settle_acts(
+    geometry: Geometry,
+    x: Tensor,
+    substrate: Substrate,
+    layered: LayeredParams,
+    owner: str,
+) -> list[Tensor]:
+    """Initial activations ``[a_0..a_L]`` for a layered settle, one per transition.
+
+    Block-view geometries (tile mesh) carry their transitions as per-edge block
+    matrices and expose the matching ``[x, z_0..z_{L-1}, output]`` layout
+    through ``settle_blocks``; every other geometry answers with
+    ``forward_with_intermediates``. Both must line up with the extracted
+    transitions or the settle would index mismatched activations.
+    """
+    builder = getattr(geometry, "settle_blocks", None)
+    raw: list[Tensor] | None = (
+        list(cast("list[Tensor]", builder(x, substrate)))
+        if is_tile_block_geometry(geometry) and callable(builder)
+        else geometry.forward_with_intermediates(x, substrate)
+    )
+    if raw is None or len(raw) != len(layered.weights) + 1:
+        raise TypeError(
+            f"{owner} requires feedforward intermediates matching "
+            f"{len(layered.weights) + 1} transitions, got "
+            f"{0 if raw is None else len(raw)}"
+        )
+    return raw
 
 
 def _is_tile_geometry(geometry: Geometry, all_acts: list[Tensor]) -> bool:
@@ -2018,18 +2048,17 @@ class PCALMDynamics(_SettleTelemetry):
 
         op = substrate.get_forward_operator()
 
-        # Initialize layer states from feedforward pass
-        init_acts = geometry.forward_with_intermediates(x, substrate)
-        if init_acts is None or len(init_acts) != len(layered.weights) + 1:
-            raise TypeError("PC-ALM requires valid feedforward intermediates")
-        acts: list[Tensor] = list(init_acts)
+        # Initialize layer states from a feedforward pass
+        acts = _init_settle_acts(geometry, x, substrate, layered, "PC-ALM")
 
         # Initialize dual variables
         num_layers = len(acts) - 1
+        batch_size = acts[0].shape[0]
         if (
             self.config.warm_start_duals
             and self._dual_vars is not None
             and len(self._dual_vars) == num_layers
+            and self._dual_vars[0].shape[0] == batch_size
         ):
             dual_vars = self._dual_vars
         else:

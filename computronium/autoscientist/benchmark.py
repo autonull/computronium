@@ -57,6 +57,7 @@ def benchmark_inference(
         InferenceMetrics with latency and throughput measurements.
     """
     from computronium.autoscientist.compose import compose_proposal_system
+    from computronium.core.system_trainer.train_task import flat_input_dim
     from computronium.core.utils.device import get_device
     from computronium.domains.factory import create_task
 
@@ -69,7 +70,7 @@ def benchmark_inference(
     # Compose the system
     system = compose_proposal_system(  # type: ignore[misc]
         proposal.model,
-        input_dim=task.input_dim,
+        input_dim=flat_input_dim(task.input_dim, task_name),
         output_dim=task.output_dim,
         lr=0.0,  # Not used for inference
         geometry=proposal.geometry or {},

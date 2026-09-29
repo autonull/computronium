@@ -202,6 +202,48 @@ def test_generate_report_assembles_markdown(tmp_path: Path) -> None:
     assert report == root / "campaign_report.md"
 
 
+def test_kb_report_counts_only_the_reported_task(tmp_path: Path) -> None:
+    """The KB report's experiment count follows ``--task``, not the table.
+
+    Regression test for: the headline experiment count came from the unfiltered
+    ``experiments`` table, so a report scoped to one task advertised another
+    task's rows (and a 0-point Pareto front next to a nonzero count).
+    """
+    import sqlite3
+
+    from computronium.core.campaign.kb_report import build_kb_report
+
+    root = tmp_path / "cifar10"
+    root.mkdir()
+    conn = sqlite3.connect(root / "kb.sqlite")
+    conn.execute(
+        "CREATE TABLE knowledge (topic TEXT, source TEXT, model_family TEXT, "
+        "hyperparameters TEXT, metrics TEXT, tags TEXT)"
+    )
+    conn.execute("CREATE TABLE experiments (id INTEGER)")
+    conn.execute(
+        "CREATE TABLE structural_voids (task TEXT, category TEXT, error TEXT, "
+        'dynamics TEXT, credit TEXT, "update" TEXT, topology TEXT)'
+    )
+    for task, n in (("cifar10", 3), ("mnist", 7)):
+        for _ in range(n):
+            conn.execute(
+                "INSERT INTO knowledge VALUES (?, 'experiment', NULL, NULL, NULL, NULL)",
+                (f"experiment:{task}",),
+            )
+        conn.execute("INSERT INTO experiments VALUES (NULL)")
+    conn.execute(
+        "INSERT INTO structural_voids VALUES "
+        "('cifar10', 'geometry_constraint', 'x', 'lazy', 'gradient', 'adam', 'feedforward')"
+    )
+    conn.commit()
+    conn.close()
+
+    report = build_kb_report(root, task="cifar10")
+    assert report.kb_stats["total_experiments"] == 3
+    assert report.kb_stats["total_voids"] == 1
+
+
 def test_daemon_client_unreachable_returns_none() -> None:
     client = DaemonClient("http://127.0.0.1:1", timeout=0.2)
     assert client.get_state() is None

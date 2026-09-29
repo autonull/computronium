@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 import torch
 
@@ -18,6 +20,9 @@ from computronium.ontology import (
     SubstrateConfig,
     SystemState,
 )
+from computronium.ontology.dynamics import dynamics_from_config
+from computronium.ontology.geometry import geometry_from_config
+from computronium.ontology.substrate import substrate_from_config
 
 
 @pytest.fixture
@@ -380,6 +385,139 @@ class TestDeviceConsistency:
         )
 
         assert torch.allclose(logits_cpu, logits_cuda.cpu(), rtol=1e-5, atol=1e-7)
+
+
+class TestPCALMDynamics:
+    """Tests for PCALMDynamics correctness."""
+
+    def test_batch_size_change_warm_start(self, device):
+        """PCALM warm start correctly handles batch size changes.
+
+        Regression test for: dual_vars shape mismatch when batch size changes
+        between settle calls with warm_start_duals=True.
+        """
+        torch.manual_seed(42)
+
+        # Build components
+        substrate_cfg = SubstrateConfig.digital(device=str(device))
+        substrate = substrate_from_config(substrate_cfg)
+
+        geometry_cfg = GeometryConfig.feedforward(
+            input_dim=256,
+            output_dim=10,
+            hidden_dims=(64, 64),
+            init_scale=0.1,
+        )
+        geometry = geometry_from_config(geometry_cfg)
+        geometry.to(device)
+
+        dynamics_cfg = StateDynamicsConfig.pc_alm(
+            max_steps=10,
+            step_size=0.01,
+            warm_start_duals=True,
+        )
+        dynamics = dynamics_from_config(dynamics_cfg)
+
+        # First settle with batch size 2
+        x = torch.randn(2, 256, device=device)
+        y = torch.randint(0, 10, (2,), device=device)
+        state = SystemState(x=x, y=y)
+        state = dynamics.settle(state, geometry, substrate, target=y)
+
+        # Second settle with batch size 8 (different batch size)
+        # This should NOT raise a shape mismatch error
+        x2 = torch.randn(8, 256, device=device)
+        y2 = torch.randint(0, 10, (8,), device=device)
+        state2 = SystemState(x=x2, y=y2)
+        state2 = dynamics.settle(state2, geometry, substrate, target=y2)
+
+        # Verify settle completed successfully
+        assert state2.activations is not None
+
+    def test_batch_size_change_free_then_nudged(self, device):
+        """PCALM free and nudged phases can have different batch sizes.
+
+        Regression test for: dual_vars shape mismatch between free and nudged
+        phases when they use different batch sizes.
+        """
+        torch.manual_seed(42)
+
+        substrate_cfg = SubstrateConfig.digital(device=str(device))
+        substrate = substrate_from_config(substrate_cfg)
+
+        geometry_cfg = GeometryConfig.feedforward(
+            input_dim=256,
+            output_dim=10,
+            hidden_dims=(64, 64),
+            init_scale=0.1,
+        )
+        geometry = geometry_from_config(geometry_cfg)
+        geometry.to(device)
+
+        dynamics_cfg = StateDynamicsConfig.pc_alm(
+            max_steps=5,
+            step_size=0.01,
+            warm_start_duals=True,
+        )
+        dynamics = dynamics_from_config(dynamics_cfg)
+
+        # Free phase with batch size 4
+        x_free = torch.randn(4, 256, device=device)
+        state_free = SystemState(x=x_free)
+        state_free = dynamics.settle(state_free, geometry, substrate, target=None)
+
+        # Nudged phase with batch size 2 (different from free)
+        x_nudged = torch.randn(2, 256, device=device)
+        y_nudged = torch.randint(0, 10, (2,), device=device)
+        state_nudged = SystemState(x=x_nudged, y=y_nudged)
+        state_nudged = dynamics.settle(
+            state_nudged, geometry, substrate, target=y_nudged
+        )
+
+        # Verify both phases completed successfully
+        assert state_free.activations is not None
+        assert state_nudged.activations is not None
+
+    def test_tile_mesh_settles_with_gradients(self, device):
+        """PCALM settles on tile-mesh geometry and reaches every edge weight.
+
+        Regression test for: "PC-ALM requires valid feedforward intermediates"
+        raised on tile_mesh, which reports only [input, output] from
+        ``forward_with_intermediates`` while its transitions are per-edge blocks
+        exposing the ``[x, z_0..z_{L-1}, output]`` layout via ``settle_blocks``.
+        """
+        torch.manual_seed(42)
+
+        substrate = substrate_from_config(SubstrateConfig.digital(device=str(device)))
+        geometry_cfg = GeometryConfig.tile_mesh(
+            input_dim=32,
+            output_dim=10,
+            neurons_per_tile=4,
+            tiles_per_layer=2,
+            num_layers=3,
+        )
+        geometry = geometry_from_config(geometry_cfg)
+        geometry.to(device)
+
+        dynamics = dynamics_from_config(
+            StateDynamicsConfig.pc_alm(max_steps=5, step_size=0.01)
+        )
+
+        x = torch.randn(4, 32, device=device)
+        y = torch.randint(0, 10, (4,), device=device)
+
+        state = dynamics.settle(SystemState(x=x, y=y), geometry, substrate, target=y)
+        assert state.activations is not None
+        acts = state.activations
+        assert isinstance(acts, list)
+
+        energy = dynamics.compute_energy(state, geometry)
+        energy.backward()
+        module = cast("torch.nn.Module", geometry)
+        params = list(module.parameters())
+        assert sum(
+            1 for p in params if p.grad is not None and p.grad.abs().sum() > 0
+        ) == len(params)
 
 
 if __name__ == "__main__":

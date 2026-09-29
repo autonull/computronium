@@ -18,6 +18,10 @@ from collections import Counter
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 @dataclass(frozen=True, slots=True)
@@ -523,16 +527,22 @@ def _extract_walltimes(kb_path: Path, task: str | None) -> list[WalltimeSummary]
     return summaries
 
 
-def _get_kb_stats(kb_path: Path) -> dict:
-    """Get KB statistics."""
+def _get_kb_stats(
+    kb_path: Path,
+    *,
+    experiments: Sequence[sqlite3.Row],
+) -> dict:
+    """Get KB statistics, with the experiment count scoped to the report's task.
+
+    The void count stays a table total: ``structural_voids`` is per-campaign
+    root, one task per root, and the report renders deduplicated summaries.
+    """
     conn = _connect(kb_path)
     stats = {}
     stats["total_entries"] = conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[
         0
     ]
-    stats["total_experiments"] = conn.execute(
-        "SELECT COUNT(*) FROM experiments"
-    ).fetchone()[0]
+    stats["total_experiments"] = len(experiments)
     stats["total_voids"] = conn.execute(
         "SELECT COUNT(*) FROM structural_voids"
     ).fetchone()[0]
@@ -573,7 +583,7 @@ def build_kb_report(
     voids = _extract_voids(kb_path, task)
     clamps = _extract_clamps(kb_path, task)
     walltimes = _extract_walltimes(kb_path, task)
-    kb_stats = _get_kb_stats(kb_path)
+    kb_stats = _get_kb_stats(kb_path, experiments=experiments)
 
     return KBReport(
         campaign_root=str(root),

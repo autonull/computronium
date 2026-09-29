@@ -347,6 +347,7 @@ class StratifiedRandomDriver:
         param_budget: int = 0,
         credit_trace: bool = False,
         limit_batches: int = 0,
+        geometry_sampling: str = "full_range",
         viable: frozenset[str] | None = None,
         defects_path: Path | None = None,
         burst_tag: str | None = None,
@@ -364,6 +365,7 @@ class StratifiedRandomDriver:
         self.param_budget = param_budget
         self.credit_trace = credit_trace
         self.limit_batches = limit_batches
+        self.geometry_sampling = geometry_sampling
         self.viable = viable
         self.defects_path = defects_path
         self.burst_tag = burst_tag
@@ -596,10 +598,16 @@ class StratifiedRandomDriver:
                 maturity_tags.append(self.burst_tag)
 
             # Sample from all valid geometry configs for this topology to explore depth/width diversity
-            from computronium.autoscientist.compose import _get_all_valid_geometry_configs
+            from computronium.autoscientist.compose import (
+                _get_all_valid_geometry_configs,
+            )
 
             valid_configs = _get_all_valid_geometry_configs(
-                topology, self.param_budget, self.input_dim, self.output_dim
+                topology,
+                self.param_budget,
+                self.input_dim,
+                self.output_dim,
+                self.geometry_sampling,
             )
             hidden_dims, computed_depth = self.rng.choice(valid_configs)
             computed_hidden = hidden_dims[0] if hidden_dims else 64
@@ -1102,6 +1110,7 @@ def build_sweep(
         param_budget=args.param_budget,
         credit_trace=args.credit_trace,
         limit_batches=getattr(args, "limit_batches", 0) or 0,
+        geometry_sampling=getattr(args, "geometry_sampling", "full_range"),
         viable=frozenset(viable),
         defects_path=args.root / "runtime_defects.jsonl",
         burst_tag=next_burst_tag(kb_path, shared_kb),
@@ -1397,6 +1406,7 @@ class _Candidate:
     accuracy: float
     bursts_seen: int = 0
     front_bursts: int = 0
+    stability_evidence: int = 0
 
 
 def next_burst_tag(kb_path: Path, kb: KnowledgeBase | None = None) -> str:
@@ -1635,6 +1645,16 @@ def _deep_tier_candidates(
         for key in (str(v) for v in front["key"]):
             front_bursts.setdefault(key, set()).add(burst)
 
+    # A coordinate's stability evidence is the union of its front memberships
+    # and its maturity levels: an L1 re-run is a second, independent
+    # measurement of the same cell, and the driver rarely re-samples a
+    # coordinate across bursts, so counting levels is what makes the
+    # documented L1 -> L2 promotion reachable.
+    evidence = {
+        key: {f"burst:{b}" for b in front_bursts.get(key, ())}
+        | {f"level:{level}" for r in group for level in r.levels}
+        for key, group in by_key.items()
+    }
     candidates = [
         _Candidate(
             key=key,
@@ -1646,10 +1666,11 @@ def _deep_tier_candidates(
             geometry=group[0].geometry,
             param_budget=group[0].param_budget,
             accuracy=max(r.accuracy for r in group),
-            front_bursts=len(front_bursts[key]),
+            front_bursts=len(front_bursts.get(key, ())),
+            stability_evidence=len(evidence[key]),
         )
         for key, group in by_key.items()
-        if len(front_bursts.get(key, ())) >= 2
+        if len(evidence[key]) >= 2
     ]
     # Sort by primary objective
     primary_obj = obj_names[0] if obj_names else "accuracy"

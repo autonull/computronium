@@ -194,6 +194,13 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--depth", type=int, default=2)
     parser.add_argument("--param-budget", type=int, default=25000)
     parser.add_argument(
+        "--geometry-sampling",
+        type=str,
+        default="full_range",
+        choices=["full_range", "max_only"],
+        help="geometry size sampling strategy: full_range explores all sizes up to param_budget (default), max_only uses only max-size configs",
+    )
+    parser.add_argument(
         "--limit-batches",
         type=int,
         default=0,
@@ -412,6 +419,16 @@ def _deep_tier(args: argparse.Namespace) -> int:
 def _deep_tier_single(
     task: str, root: Path, args: argparse.Namespace, objectives
 ) -> int:
+    # ``--root`` is the campaign root and each task subdir hangs off it, so a
+    # task dir passed here resolves to a KB that does not exist. Fail loudly
+    # instead of reporting an empty promotion plan.
+    kb_path = root / "kb.sqlite"
+    if not kb_path.exists():
+        msg = (
+            f"No KB at {kb_path}. Pass the campaign root (the parent of the "
+            f"task directories), not the task directory itself."
+        )
+        raise FileNotFoundError(msg)
     maturation = getattr(args, "maturation", 0)
     if maturation > 0:
         from computronium.autoscientist.broad_map import (
@@ -509,7 +526,8 @@ def _deep_tier_single(
         for candidate in plan:
             print(
                 f"{candidate.key}  acc={candidate.accuracy:.3f}  "
-                f"front_bursts={candidate.front_bursts}  "
+                f"bursts={candidate.front_bursts} "
+                f"evidence={candidate.stability_evidence}  "
                 f"planned: {getattr(args, 'seeds', 3)} seeds × {getattr(args, 'epochs', 10)} epochs"
             )
         print(
