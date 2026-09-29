@@ -260,7 +260,10 @@ class RecordStore:
                     ],
                 )
             except duckdb.ConstraintException as e:
-                if "UNIQUE constraint failed: records.measurement_key" in str(e):
+                if (
+                    "measurement_key" in str(e)
+                    and "unique constraint" in str(e).lower()
+                ):
                     raise DuplicateMeasurementError(record.measurement_key) from e
                 raise StoreError(f"Constraint violation: {e}") from e
 

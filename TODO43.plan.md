@@ -204,10 +204,12 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
 **Files created:**
 - `computronium/experiment/__init__.py` — Public API exports
 - `computronium/experiment/schema/__init__.py` — Schema package exports
-- `computtonium/experiment/schema/registry.py` — Generic Registry[SpecT]
+- `computronium/experiment/schema/registry.py` — Generic Registry[SpecT]
 - `computronium/experiment/schema/axis.py` — AxisSpec, AxisKind, registries
 - `computronium/experiment/schema/coordinate.py` — Coordinate, Schedule, Provenance
 - `computronium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
+- `computronium/experiment/schema/harvest.py` — Tunable harvesting, ConflictingTunableError, HarvestedSchema
+- `computronium/experiment/schema/versioning.py` — Schema versioning, SchemaRegistry, UnknownField
 - `computronium/experiment/evidence/__init__.py` — Evidence package exports
 - `computronium/experiment/evidence/store.py` — DuckDB RecordStore
 - `computronium/experiment/execution/__init__.py` — Execution package exports (empty, for future)
@@ -219,9 +221,9 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
 - `pytest` — all experiment-related tests pass (24 tests)
 
 ### WP2 — Pillar 1 complete: schema & registries
-- `schema/harvest.py` — `__tunables__` reflection, name-based dedup (70→37; conflicts raise
-  `ConflictingTunable`), `harvest_schema()`.
-- `schema/versioning.py` — `schema_version`, append-only reader registry, `UnknownField`
+- ✅ `schema/harvest.py` — `__tunables__` reflection, name-based dedup (70→37; conflicts raise
+  `ConflictingTunableError`), `harvest_schema()`.
+- ✅ `schema/versioning.py` — `schema_version`, append-only reader registry, `UnknownField`
   preservation (R79, K4). Version 1 = this schema; no legacy readers needed (Directive 1).
 - Registry instances: `AXES`, `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`,
   `CAPABILITIES` (abc3 §2.3 seeds, per Gate 1/2 outcomes).
@@ -382,13 +384,20 @@ strict-clean from WP1 onward.
 - All new modules pass `ruff format`, `ruff check`, `pyright` (strict), and targeted tests
 - Verified end-to-end: RecordStore creates runs, appends records, handles duplicate measurement_key, retrieves by record_id and measurement_key
 
+### 2026-09-29 — WP2 Partial (harvest.py, versioning.py)
+- Implemented `schema/harvest.py`: `__tunables__` reflection, name-based dedup, `harvest_schema()`, `ConflictingTunableError`
+- Implemented `schema/versioning.py`: `SchemaRegistry`, `UnknownField` preservation, append-only readers
+- Updated `schema/__init__.py` to export new modules
+- All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+
 ### Improvement Opportunities (for future WPs)
 1. **WP4**: Implement `execution/pipeline.py` and `execution/stage.py` for S1–S11 runner
-2. **WP2**: Implement `schema/harvest.py` for tunable reflection and `schema/versioning.py` for schema evolution
-3. **WP3**: Implement legality engine (`legality/dsl.py`, `engine.py`, `classify.py`)
-4. **WP5**: Implement full evidence predicates (`status.py`, `claims.py`, `failure.py`, `ceec.py`)
-5. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py`, `icu.py`, `reasoning.py`)
-6. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
+2. **WP2**: Registry instances: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`, `CAPABILITIES`
+3. **WP2**: Lockstep wiring tests for new registries (following `test_dynamics_wiring_lock.py` pattern)
+4. **WP3**: Implement legality engine (`legality/dsl.py`, `engine.py`, `classify.py`)
+5. **WP5**: Implement full evidence predicates (`status.py`, `claims.py`, `failure.py`, `ceec.py`)
+6. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py`, `icu.py`, `reasoning.py`)
+7. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
 
 ### Notes for Remaining Work
 - The `execution/` package is scaffolded but empty; WP4 will populate it

@@ -138,6 +138,7 @@ class Record:
         measurement_key = coordinate.measurement_key(schedule)
         record_id = hashlib.sha256(
             _canonical_json({
+                "run_id": run_id,
                 "cell_key": cell_key,
                 "measurement_key": measurement_key,
             }).encode()
