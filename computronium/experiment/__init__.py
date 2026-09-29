@@ -1,35 +1,46 @@
-"""The thin experiment layer (architecture §6).
+"""Computronium Experiment Kernel — unified experiment orchestration."""
 
-A YAML-driven survivor-cascade verdict layer over the existing
-``cli/run.py`` + ``hyperopt`` + ``cli/parity.py`` surface. The only genuinely
-new code in the experiment system lives here.
-"""
+from __future__ import annotations
 
-from computronium.experiment.param_estimator import (
-    InstantiateEstimator,
-    ParamEstimateError,
-    estimate_param_count,
+from computronium.experiment import evidence, execution, schema
+from computronium.experiment.schema.axis import (
+    AXES_REGISTRIES,
+    CREDIT_REGISTRY,
+    DYNAMICS_REGISTRY,
+    GEOMETRY_REGISTRY,
+    PLASTICITY_REGISTRY,
+    SUBSTRATE_REGISTRY,
+    UPDATE_REGISTRY,
+    AxisKind,
+    AxisPrimitive,
+    AxisSpec,
+    get_axis_spec,
+    get_registry,
+    is_available,
+    list_axis_specs,
+    register_axis_spec,
 )
-from computronium.experiment.probe import ProbeDriver, ProbeResult, run_probe
-from computronium.experiment.producer import ConfigProducer, HyperoptGridProducer
-from computronium.experiment.report import Report
-from computronium.experiment.schema import Campaign, Stage, load_campaign
-from computronium.experiment.staircase import Outcome, StaircaseRunner, Verdict
+from computronium.experiment.schema.registry import Registry, RegistryDiff
 
 __all__ = [
-    "Campaign",
-    "ConfigProducer",
-    "HyperoptGridProducer",
-    "InstantiateEstimator",
-    "Outcome",
-    "ParamEstimateError",
-    "ProbeDriver",
-    "ProbeResult",
-    "Report",
-    "Stage",
-    "StaircaseRunner",
-    "Verdict",
-    "estimate_param_count",
-    "load_campaign",
-    "run_probe",
+    "AXES_REGISTRIES",
+    "CREDIT_REGISTRY",
+    "DYNAMICS_REGISTRY",
+    "GEOMETRY_REGISTRY",
+    "PLASTICITY_REGISTRY",
+    "SUBSTRATE_REGISTRY",
+    "UPDATE_REGISTRY",
+    "AxisKind",
+    "AxisPrimitive",
+    "AxisSpec",
+    "Registry",
+    "RegistryDiff",
+    "evidence",
+    "execution",
+    "get_axis_spec",
+    "get_registry",
+    "is_available",
+    "list_axis_specs",
+    "register_axis_spec",
+    "schema",
 ]
