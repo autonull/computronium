@@ -367,24 +367,24 @@ fixture recovers known effects.
 - Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (Q2, R37,
   R66). Migrate-and-delete the original validators (Directive 1).
 
-### WP4 — Pillar 2: execution
+### WP4 — Pillar 2: execution ✅ COMPLETE
 - ✅ `execution/budget.py` — `Budget` + `CostModel` Protocol (R21–R24).
 - ✅ `execution/allocator.py` — `AllocationPolicy` Protocol + evidence-driven successive
   promotion reference implementation (R46–R51, divergence/stagnation telemetry, waste report).
 - ✅ `execution/replay.py` — replay hash, resume on `measurement_key`, checkpoint/restore
   (R26–R30).
-- `execution/backends.py` — local/multiprocess backends; **workers return Records; the
+- ✅ `execution/backends.py` — local/multiprocess backends; **workers return Records; the
   pipeline process is the sole writer** (§1.1). In-process concurrency via
   `asyncio.TaskGroup`; blocking evaluation bodies stay out of the event loop
   (`asyncio.to_thread` where a legacy blocking call must run inside async orchestration);
   concurrent independent failures handled with `except*` (R29 isolation).
-- `execution/policy.py` — `Policy` Protocol + the eight-policy catalog (abc3 §5.3): port
+- ✅ `execution/policy.py` — `Policy` Protocol + the eight-policy catalog (abc3 §5.3): port
   `StratifiedRandom`, `RoundRobinGrid`, `UniformRandom`, `ModelBased` (Optuna behind a
   storage adapter over the unified store — R71), `Evolution`, `Synthesis`,
   `StrategyProgression`, `TrainerDriven` (last four per Gate 1 verdicts). Delete the six
   legacy implementations' search paths as each port lands (Directive 1).
-- `execution/stage.py` — S1–S11 stage definitions with `StageId(StrEnum)` and `StageSpec`.
-- `execution/pipeline.py` — S1–S11 runner with wrapper obligations (coverage, classification,
+- ✅ `execution/stage.py` — S1–S11 stage definitions with `StageId(StrEnum)` and `StageSpec`.
+- ✅ `execution/pipeline.py` — S1–S11 runner with wrapper obligations (coverage, classification,
   traceability, atomic append + reconciliation); `RoundRobinGrid` policy, most stages no-op initially.
 
 ### WP5 — Pillar 4: evidence & governance
@@ -614,12 +614,16 @@ strict-clean from WP1 onward.
 - All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
 - Integration test verified: constraints evaluate correctly, void patterns detect incompatibilities
 
-### 2026-09-29 — WP4 Partial (execution: budget, allocator, replay)
+### 2026-09-29 — WP4 Complete (execution: budget, allocator, replay, backends, policy, stage, pipeline)
 - Implemented `execution/budget.py`: Budget (time/cell/cost limits, from_duration parser), CostModel Protocol, SimpleCostModel
 - Implemented `execution/allocator.py`: AllocationPolicy Protocol, EvidenceDrivenAllocator with successive promotion (R46-R51), divergence/stagnation detection, waste reporting
 - Implemented `execution/replay.py`: compute_replay_hash (R26-R30), Checkpoint serialization, resume_from_store/resume_run via measurement_key dedup, periodic_checkpoint
-- All three modules pass `ruff format`, `ruff check`, `pyright` (strict)
-- Remaining WP4: backends.py, policy.py, stage.py, pipeline.py
+- Implemented `execution/backends.py`: LocalBackend and MultiprocessBackend with asyncio.TaskGroup, single-writer topology, asyncio.to_thread for blocking calls
+- Implemented `execution/policy.py`: Policy Protocol + 8-policy catalog (StratifiedRandom, RoundRobinGrid, UniformRandom, ModelBased/Optuna, Evolution, Synthesis, StrategyProgression, TrainerDriven)
+- Implemented `execution/stage.py`: S1–S11 StageSpec definitions with StageId(StrEnum), StageGate, stage registry and navigation
+- Implemented `execution/pipeline.py`: PipelineRunner with stage progression, budget management, policy-driven candidates, backend execution, checkpointing
+- All 7 modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- Integration test verified: all modules compose correctly, end-to-end execution flow works
 
 ### 2026-09-29 — Plan Updated per Review Feedback
 - Added WP1.5 (Scientific Validity Skeleton) and WP5.5 (Statistical Analysis Protocol) to sequence
@@ -638,18 +642,17 @@ strict-clean from WP1 onward.
 
 ### Improvement Opportunities (for future WPs)
 1. **WP1.5**: Implement scientific validity skeleton (synthetic fixture, data splits, comparison guards, reproducibility classes) **+ CEEC/DuckDB reconciliation protocol implementation + kill -9 proof**
-2. **WP4**: Implement `execution/pipeline.py` and `execution/stage.py` for S1–S11 runner with reconciliation
-3. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
-4. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
-5. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
-6. **WP3**: Add legality boundary lock test (`test_legality_boundary_lock.py`)
-7. **WP5**: Implement full evidence predicates (`status.py` with three-tier model, `claims.py`, `failure.py`, `ceec.py` with reconciliation)
-8. **WP5.5**: Implement statistical protocol lock (`test_statistical_protocol_lock.py`)
-9. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
-10. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
+2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
+3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
+4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
+5. **WP3**: Add legality boundary lock test (`test_legality_boundary_lock.py`)
+6. **WP5**: Implement full evidence predicates (`status.py` with three-tier model, `claims.py`, `failure.py`, `ceec.py` with reconciliation)
+7. **WP5.5**: Implement statistical protocol lock (`test_statistical_protocol_lock.py`)
+8. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
+9. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
 
 ### Notes for Remaining Work
-- The `execution/` package now has budget.py, allocator.py, replay.py; remaining: backends.py, policy.py, stage.py, pipeline.py
+- The `execution/` package is now complete with all 7 modules: budget.py, allocator.py, replay.py, backends.py, policy.py, stage.py, pipeline.py
 - The `evidence/claims.py` is not a separate file; the prefilter lives in `store.py` as `claim_eligible_prefilter()` — this matches the plan's intent
 - DuckDB struct field indexes were removed due to syntax limitations; queries filter on struct fields via SQL WHERE clauses instead
 - `DuplicateMeasurement` renamed to `DuplicateMeasurementError` to follow naming conventions (N818)
