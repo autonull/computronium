@@ -232,9 +232,7 @@ class ReportGenerator:
 
         pareto = []
         for i, p in enumerate(points):
-            dominated = any(
-                _is_dominated(p, q) for j, q in enumerate(points) if i != j
-            )
+            dominated = any(_is_dominated(p, q) for j, q in enumerate(points) if i != j)
             if not dominated:
                 pareto.append(p)
 
@@ -453,7 +451,7 @@ def export_to_parquet(
     return output_path
 
 
-def export_to_json(
+def export_to_json(  # noqa: PLR0914
     store: RecordStore,
     output_path: str | Path,
     run_id: str | None = None,
@@ -464,13 +462,15 @@ def export_to_json(
     if store._conn is None:
         raise RuntimeError("Store not initialized")
 
-    where = "WHERE run_id = ?" if run_id else ""
     params = [run_id] if run_id else []
+    records_query = (
+        "SELECT * FROM records WHERE run_id = ? ORDER BY seq"
+        if run_id
+        else "SELECT * FROM records ORDER BY seq"
+    )
 
     # Records
-    records_rows = store._conn.execute(
-        f"SELECT * FROM records {where} ORDER BY seq", params  # noqa: S608 - parameterized query
-    ).fetchall()
+    records_rows = store._conn.execute(records_query, params).fetchall()
     records = []
     for row in records_rows:
         record = store._row_to_record(row)
@@ -514,14 +514,12 @@ def export_to_json(
         })
 
     # Artifacts
-    artifacts_where = (
-        f"WHERE record_id IN (SELECT record_id FROM records {where})"  # noqa: S608
+    artifacts_query = (
+        "SELECT * FROM artifacts WHERE record_id IN (SELECT record_id FROM records WHERE run_id = ?)"
         if run_id
-        else ""
+        else "SELECT * FROM artifacts"
     )
-    artifacts_rows = store._conn.execute(
-        f"SELECT * FROM artifacts {artifacts_where}", params  # noqa: S608
-    ).fetchall()
+    artifacts_rows = store._conn.execute(artifacts_query, params).fetchall()
     artifacts = [
         {
             "digest": row[0],
@@ -536,9 +534,12 @@ def export_to_json(
     ]
 
     # Runs
-    runs_rows = store._conn.execute(
-        f"SELECT * FROM runs {where} ORDER BY started_at", params  # noqa: S608
-    ).fetchall()
+    runs_query = (
+        "SELECT * FROM runs WHERE run_id = ? ORDER BY started_at"
+        if run_id
+        else "SELECT * FROM runs ORDER BY started_at"
+    )
+    runs_rows = store._conn.execute(runs_query, params).fetchall()
     runs = [
         {
             "run_id": row[0],
@@ -554,14 +555,12 @@ def export_to_json(
     ]
 
     # Vector index
-    vi_where = (
-        f"WHERE record_id IN (SELECT record_id FROM records {where})"  # noqa: S608
+    vi_query = (
+        "SELECT * FROM vector_index WHERE record_id IN (SELECT record_id FROM records WHERE run_id = ?)"
         if run_id
-        else ""
+        else "SELECT * FROM vector_index"
     )
-    vi_rows = store._conn.execute(
-        f"SELECT * FROM vector_index {vi_where}", params  # noqa: S608
-    ).fetchall()
+    vi_rows = store._conn.execute(vi_query, params).fetchall()
     vector_index = [
         {
             "record_id": row[0],

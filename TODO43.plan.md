@@ -772,3 +772,12 @@ strict-clean from WP1 onward.
   - Notes ontology primitive connection pending for full coverage
 - All new code passes `ruff format`, `ruff check`, `pyright` (strict)
 - All 113 experiment property tests pass (109 passed, 4 skipped)
+
+### 2026-09-29 — Registry Completeness Lock Fixed (PEPITA Credit Primitive)
+- Fixed `tests/property/test_registry_completeness_lock.py` to include PEPITA credit primitive mapping:
+  - Added `PepitaCredit` import and `"primitive.credit_assignment.pepita": PepitaCredit` to `ONTOLOGY_MAP`
+  - Added `"primitive.credit_assignment.pepita": "PepitaCredit"` to `ALL_ONTOLOGY_MAPS["credit_assignment"]`
+  - Corrected `_CREDIT_CONFIG_METHODS` mapping: `"pepita"` now maps to `"primitive.credit_assignment.pepita"` (was incorrectly mapped to `pc_alm`)
+- Fixed SQL injection warnings (S608) in `computronium/experiment/surface/report.py` by using conditional query building instead of f-string interpolation
+- All 124 experiment property tests pass (120 passed, 4 skipped in legality boundary lock)
+- All new kernel code passes `ruff format`, `ruff check`, `pyright` (strict)

@@ -442,9 +442,7 @@ class ICUModel:
 
         # Correlation
         corr = (
-            float(np.corrcoef(preds_arr, actuals_arr)[0, 1])
-            if len(preds) > 1
-            else 0.0
+            float(np.corrcoef(preds_arr, actuals_arr)[0, 1]) if len(preds) > 1 else 0.0
         )
 
         # Bounded degradation check (WP5.5 #3)

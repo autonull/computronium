@@ -325,7 +325,7 @@ _CREDIT_CONFIG_METHODS: dict[str, str] = {
     "temporal_trace": "primitive.credit_assignment.temporal_trace",
     "target_inversion": "primitive.credit_assignment.target_inversion",
     "homeostatic": "primitive.credit_assignment.homeostatic",
-    "pepita": "primitive.credit_assignment.pc_alm",  # PEPITA maps to PC-ALM credit primitive
+    "pepita": "primitive.credit_assignment.pepita",
     "gradient": "primitive.credit_assignment.reverse_mode",  # gradient/backprop -> reverse_mode
     "local_contrastive": "primitive.credit_assignment.local_goodness",  # local_contrastive uses local_goodness
     "pc_alm": "primitive.credit_assignment.pc_alm",
@@ -384,6 +384,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
         HomeostaticCredit,
         LocalGoodnessCredit,
         PCALMCredit,
+        PepitaCredit,
         RandomProjectionsCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
@@ -397,6 +398,7 @@ def test_credit_primitives_have_ontology_classes() -> None:
         "primitive.credit_assignment.temporal_trace": TemporalTraceCredit,
         "primitive.credit_assignment.target_inversion": TargetInversionCredit,
         "primitive.credit_assignment.homeostatic": HomeostaticCredit,
+        "primitive.credit_assignment.pepita": PepitaCredit,
         "primitive.credit_assignment.pc_alm": PCALMCredit,
         "primitive.credit_assignment.reverse_mode": BackpropCredit,
     }
@@ -746,6 +748,7 @@ ALL_ONTOLOGY_MAPS: dict[str, dict[str, str]] = {
         "primitive.credit_assignment.temporal_trace": "TemporalTraceCredit",
         "primitive.credit_assignment.target_inversion": "TargetInversionCredit",
         "primitive.credit_assignment.homeostatic": "HomeostaticCredit",
+        "primitive.credit_assignment.pepita": "PepitaCredit",
         "primitive.credit_assignment.pc_alm": "PCALMCredit",
         "primitive.credit_assignment.reverse_mode": "BackpropCredit",
     },

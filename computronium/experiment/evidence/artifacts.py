@@ -96,8 +96,21 @@ class Artifact:
         Database columns: digest, bytes, role, record_id, created_at,
         external_uri, external_size, external_checksum
         """
-        digest, data_bytes, role, record_id, created_at, ext_uri, ext_size, ext_checksum = row
-        storage = ArtifactStorage.INLINE if data_bytes is not None else ArtifactStorage.EXTERNAL
+        (
+            digest,
+            data_bytes,
+            role,
+            record_id,
+            created_at,
+            ext_uri,
+            ext_size,
+            ext_checksum,
+        ) = row
+        storage = (
+            ArtifactStorage.INLINE
+            if data_bytes is not None
+            else ArtifactStorage.EXTERNAL
+        )
         size = len(data_bytes) if data_bytes is not None else (ext_size or 0)
         return cls(
             digest=digest,
@@ -250,7 +263,9 @@ class ArtifactStore:
                 and artifact_input.external_size is not None
                 and artifact_input.external_checksum
             ):
-                raise ValueError("External artifact requires external_uri, external_size, and external_checksum")
+                raise ValueError(
+                    "External artifact requires external_uri, external_size, and external_checksum"
+                )
 
             digest = artifact_input.digest or artifact_input.external_checksum
 

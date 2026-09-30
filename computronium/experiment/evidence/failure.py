@@ -376,12 +376,15 @@ def emit_reproducer(record: Record, error_message: str = "") -> Reproducer:
 
     # Create minimal config (only essential params)
     essential_params = {
-        "lr", "learning_rate", "step_size", "beta",
-        "hidden_dims", "input_dim", "output_dim",
+        "lr",
+        "learning_rate",
+        "step_size",
+        "beta",
+        "hidden_dims",
+        "input_dim",
+        "output_dim",
     }
-    minimal_config = {
-        k: v for k, v in params.items() if k in essential_params
-    }
+    minimal_config = {k: v for k, v in params.items() if k in essential_params}
 
     return Reproducer(
         reproducer_id=reproducer_id,

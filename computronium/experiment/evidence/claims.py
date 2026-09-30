@@ -146,7 +146,9 @@ def generalizes(
     for task in heldout_tasks:
         if task in task_metrics:
             metric = task_metrics[task]
-            if (isinstance(metric, dict) and metric.get("accuracy", 0) > 0.5) or (isinstance(metric, (int, float)) and metric > 0.5):
+            if (isinstance(metric, dict) and metric.get("accuracy", 0) > 0.5) or (
+                isinstance(metric, (int, float)) and metric > 0.5
+            ):
                 passing_tasks += 1
 
     return passing_tasks >= min_tasks

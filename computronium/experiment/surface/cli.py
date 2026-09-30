@@ -478,7 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if handler is None:
             return 2
         return handler(args)
-    except (FileNotFoundError, ValueError, json.JSONDecodeError):
+    except FileNotFoundError, ValueError, json.JSONDecodeError:
         logger.exception("surface CLI error")
         return 1
 
