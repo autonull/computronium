@@ -335,15 +335,6 @@ class LegalityEngine:
         return len(self._constraints)
 
 
-# Global engine instance
-ENGINE = LegalityEngine()
-
-
-def get_engine() -> LegalityEngine:
-    """Get the global legality engine."""
-    return ENGINE
-
-
 def create_constraint(
     expr: Expr,
     origin: ConstraintOrigin,
@@ -352,17 +343,22 @@ def create_constraint(
     kind: ConstraintKind,
     description: str = "",
     tags: frozenset[str] | None = None,
+    engine: LegalityEngine | None = None,
 ) -> Constraint:
-    """Convenience function to create and register a constraint."""
+    """Create a constraint and register it on the given engine.
+
+    The engine is explicit (K10: no module-level shared engine); callers
+    own the `LegalityEngine` instance lifetime.
+    """
     constraint = Constraint.create(
         expr, origin, scope, enforcement, kind, description, tags
     )
-    ENGINE.add_constraint(constraint)
+    if engine is not None:
+        engine.add_constraint(constraint)
     return constraint
 
 
 __all__ = [
-    "ENGINE",
     "Constraint",
     "ConstraintEnforcement",
     "ConstraintKind",
@@ -371,5 +367,4 @@ __all__ = [
     "ConstraintViolation",
     "LegalityEngine",
     "create_constraint",
-    "get_engine",
 ]

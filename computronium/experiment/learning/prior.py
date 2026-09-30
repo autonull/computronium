@@ -15,9 +15,6 @@ for initial registration; consumers reroute behind thin adapters.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from computronium.experiment.schema.registries import (
     PriorSpec,
     prior_value,
@@ -55,23 +52,8 @@ _RULER_LR_DATA: dict[str, float] = {
 
 
 def _load_ruler_table() -> dict[str, float]:
-    """Load ruler table from JSON file if available."""
-    try:
-        path = (
-            Path(__file__).parent.parent.parent / "autoscientist" / "ruler_table.json"
-        )
-        if path.exists():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            result = {}
-            for row in data.get("rows", []):
-                task = row.get("task")
-                lr = row.get("lr")
-                if task and isinstance(lr, int | float):
-                    result[str(task)] = float(lr)
-            return result
-    except OSError, ValueError, KeyError:
-        pass
-    return _RULER_LR_DATA
+    """Frozen ruler-LR table (WP12: legacy JSON read deleted; table ported above)."""
+    return dict(_RULER_LR_DATA)
 
 
 # Step Size Overrides Migration (from computronium.ontology.update)

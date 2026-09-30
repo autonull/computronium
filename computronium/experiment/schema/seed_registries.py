@@ -2177,6 +2177,12 @@ def seed_all_registries() -> None:
     for prior in PRIORS:
         register_prior(prior)
 
+    # Learning priors (L11 single-source: ruler-LR + step-size overrides live
+    # in learning.prior; seed_all must not drop them when it clears PRIORS).
+    from computronium.experiment.learning.prior import register_all_priors
+
+    register_all_priors()
+
     # Policies
     for policy in POLICIES:
         register_policy(policy)

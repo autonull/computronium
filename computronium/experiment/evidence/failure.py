@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -430,56 +431,62 @@ class FixLinkage:
     verification_records: tuple[str, ...] = ()
 
 
-# In-memory fix linkage store (could be persisted to DB)
-_FIX_LINKAGES: dict[str, list[FixLinkage]] = defaultdict(list)
+class FixLinkageStore:
+    """Run-scoped store for failure-pattern fix linkages (K10).
 
+    Replaces the former module-global linkage dict; callers own the
+    instance lifetime and inject it where linkage queries are needed.
+    """
 
-def link_fix_to_pattern(
-    pattern_id: str,
-    fix_commit: str,
-    fix_description: str,
-) -> FixLinkage:
-    """Link a fix (commit/PR) to a failure pattern."""
-    linkage = FixLinkage(
-        pattern_id=pattern_id,
-        fix_commit=fix_commit,
-        fix_description=fix_description,
-        fixed_at=datetime.now().isoformat(),
-    )
-    _FIX_LINKAGES[pattern_id].append(linkage)
-    return linkage
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._linkages: dict[str, list[FixLinkage]] = defaultdict(list)
 
+    def link_fix(
+        self, pattern_id: str, fix_commit: str, fix_description: str
+    ) -> FixLinkage:
+        """Link a fix (commit/PR) to a failure pattern."""
+        linkage = FixLinkage(
+            pattern_id=pattern_id,
+            fix_commit=fix_commit,
+            fix_description=fix_description,
+            fixed_at=datetime.now().isoformat(),
+        )
+        with self._lock:
+            self._linkages[pattern_id].append(linkage)
+        return linkage
 
-def get_fixes_for_pattern(pattern_id: str) -> list[FixLinkage]:
-    """Get all fixes linked to a failure pattern."""
-    return list(_FIX_LINKAGES.get(pattern_id, []))
+    def fixes_for_pattern(self, pattern_id: str) -> list[FixLinkage]:
+        """Get all fixes linked to a failure pattern."""
+        with self._lock:
+            return list(self._linkages.get(pattern_id, []))
 
+    def verify_fix(
+        self, pattern_id: str, fix_commit: str, verification_record_ids: list[str]
+    ) -> bool:
+        """Mark a fix as verified with supporting record IDs."""
+        with self._lock:
+            for linkage in self._linkages.get(pattern_id, []):
+                if linkage.fix_commit != fix_commit:
+                    continue
+                verified = FixLinkage(
+                    pattern_id=linkage.pattern_id,
+                    fix_commit=linkage.fix_commit,
+                    fix_description=linkage.fix_description,
+                    fixed_at=linkage.fixed_at,
+                    verified=True,
+                    verification_records=tuple(verification_record_ids),
+                )
+                idx = self._linkages[pattern_id].index(linkage)
+                self._linkages[pattern_id][idx] = verified
+                return True
+            return False
 
-def verify_fix(
-    pattern_id: str, fix_commit: str, verification_record_ids: list[str]
-) -> bool:
-    """Mark a fix as verified with supporting record IDs."""
-    for linkage in _FIX_LINKAGES.get(pattern_id, []):
-        if linkage.fix_commit == fix_commit:
-            # Create new verified linkage
-            verified = FixLinkage(
-                pattern_id=linkage.pattern_id,
-                fix_commit=linkage.fix_commit,
-                fix_description=linkage.fix_description,
-                fixed_at=linkage.fixed_at,
-                verified=True,
-                verification_records=tuple(verification_record_ids),
-            )
-            # Replace in list
-            idx = _FIX_LINKAGES[pattern_id].index(linkage)
-            _FIX_LINKAGES[pattern_id][idx] = verified
-            return True
-    return False
-
-
-def get_unfixed_patterns(patterns: list[FailurePattern]) -> list[FailurePattern]:
-    """Get patterns that have no linked fixes."""
-    return [p for p in patterns if p.pattern_id not in _FIX_LINKAGES]
+    def unfixed_patterns(self, patterns: list[FailurePattern]) -> list[FailurePattern]:
+        """Get patterns that have no linked fixes."""
+        with self._lock:
+            linked = set(self._linkages)
+        return [p for p in patterns if p.pattern_id not in linked]
 
 
 # =============================================================================
@@ -487,7 +494,9 @@ def get_unfixed_patterns(patterns: list[FailurePattern]) -> list[FailurePattern]
 # =============================================================================
 
 
-def analyze_store_failures(store: RecordStore) -> dict[str, Any]:
+def analyze_store_failures(
+    store: RecordStore, fix_store: FixLinkageStore | None = None
+) -> dict[str, Any]:
     """Run full failure analysis on a store."""
     # Get all failed records
     all_records = store.query_records()
@@ -515,7 +524,9 @@ def analyze_store_failures(store: RecordStore) -> dict[str, Any]:
         "clusters": [c.__dict__ for c in clusters],
         "patterns": [p.__dict__ for p in patterns],
         "reproducers": [r.__dict__ for r in reproducers],
-        "unfixed_patterns": len(get_unfixed_patterns(patterns)),
+        "unfixed_patterns": len(
+            (fix_store or FixLinkageStore()).unfixed_patterns(patterns)
+        ),
     }
 
 
@@ -523,14 +534,11 @@ __all__ = [
     "FailureCluster",
     "FailurePattern",
     "FixLinkage",
+    "FixLinkageStore",
     "Reproducer",
     "analyze_store_failures",
     "cluster_failures",
     "detect_failure_patterns",
     "emit_reproducer",
-    "get_fixes_for_pattern",
-    "get_unfixed_patterns",
-    "link_fix_to_pattern",
     "save_reproducer",
-    "verify_fix",
 ]

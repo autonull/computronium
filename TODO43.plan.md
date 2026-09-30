@@ -1262,15 +1262,68 @@ Definition of Done completes at WP13 close.
 - **Locks**: `tests/property/test_wp11_surface_lock.py` (20 tests) — intent round-trip/dedup/scoping, snapshot serializability, JSON round-trip, handoff content, question-first shape/rejection, codegen determinism + `generate_all` file set, documented-command `--help` conformance (R80), RUN_PROFILES canonical-stage lock, dedup window, Q14 coverage, control-file round-trip.
 - All quality gates pass: `ruff format`, `ruff check` (changed files; `PLR0904` on `RecordStore` relaxed per-line — single-writer API concentration is the §1.1 design), `pyright` strict clean, 174 property tests pass (4 skipped).
 
+### 2026-09-30 — WP12/WP13 Partial: K10 Hygiene, Isolation Locks, Prior Source, E1 Harness (L10, L11, L17, L20)
+- **K10 singletons removed (L10 follow-through)**: `legality/engine.py` — `ENGINE` global
+  + `get_engine()` deleted; `create_constraint(..., engine)` takes an explicit engine
+  (no default). `evidence/failure.py` — `_FIX_LINKAGES` global + 4 module functions
+  replaced by run-scoped `FixLinkageStore` (threading.Lock-guarded, injected;
+  `analyze_store_failures(store, fix_store=None)`). `test_legality_boundary_lock.py`
+  updated to a test-local `_TEST_ENGINE` (test files out of lock scope).
+- **Import-graph lock (WP12 gate)**: `tests/property/test_kernel_isolation_lock.py`
+  (12 tests) — AST scan of the six kernel subpackages forbids legacy pillar imports
+  (autoscientist/hyperopt/lightning_/core.campaign/legacy execution/validation/
+  computronium_lab/ceec) + pre-kernel flat modules + legacy filesystem reach-ins;
+  K10 module-state lock (no global/nonlocal, no module-level state-holder instances
+  or defaultdict/Counter accumulators; registries/catalogs/seed-data/frozen specs
+  exempt by §4 design) + regression pins (ENGINE/get_engine absent, linkage globals
+  absent, FixLinkageStore run-scoped). Found: kernel already import-clean; the only
+  legacy reach-in was `prior.py` reading `autoscientist/ruler_table.json` at import.
+- **L11 tightening**: legacy JSON read deleted from `prior.py` (verified byte-identical
+  to frozen `_RULER_LR_DATA`; behavior-preserving); `seed_all_registries()` now calls
+  `register_all_priors()` after its own PRIORS seed (local import, no layering edge) —
+  previously it cleared PRIORS and dropped all 44 learning priors, leaving two sources
+  of truth. `tests/property/test_wp10_learning_integration_lock.py` (9 tests): L17
+  cross-task identity (task_id spans measurement_key; both tasks persist), L20
+  achieved-seed claims (2/5 seeds ineligible, 5/5 eligible), L11 prior single-source
+  (all ruler tasks + all overrides resolve via `prior_value()`; accessor agrees).
+- **E1 harness (WP13)**: `scripts/probes/store_overhead_bench.py` — 200 timed appends
+  vs 2 s reference eval; measured 2026-09-30: mean=3.03ms p95=4.43ms → 0.15%/0.22%,
+  OVERHEAD_OK (< 1% K7/K9 criterion).
+- Stray `fix_capabilities_v2.py` (WP12 dead-code note): already absent from tree —
+  no action needed.
+- All quality gates pass: `ruff format` + `ruff check` clean on 8 changed files,
+  `pyright` strict clean (engine/failure/prior/seed_registries/new locks),
+  204 property tests pass (4 pre-existing skips), probe OVERHEAD_OK.
+
 ### Improvement Opportunities (remaining WPs)
-1. **WP12**: Legacy port & delete — inventory legacy surfaces, port remaining capabilities as catalog entries, delete legacy modules (Directive 1). Precondition: WP8–WP11 conformance green per capability (R77). Note stray `fix_capabilities_v2.py` at repo root is dead code — delete in WP12 pass.
-2. **WP12**: Prior single-source lock tightening — `prior.py` legacy data tables (`_STEP_SIZE_OVERRIDES_DATA`, `autoscientist/ruler_table.json` import) still seed the registry; delete after consumers reroute.
-3. **WP13**: Class E benchmarks — E1 store-overhead harness `scripts/probes/store_overhead_bench.py` (K7/K9 <1% criterion), E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance; results recorded as store records.
-4. **WP13**: Definition of Done — Gate 1/2 locks non-vacuous, every C1–C88 + gated row has conformance evidence or retirement record, legacy entry points deleted (import-graph lock), run-scoped state lock (no module-level mutable singletons under `experiment/`), store-overhead fraction recorded <1%.
+1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
+   `hyperopt/`, legacy `execution/` engine, `lightning_/`, `packages/computronium-lab`
+   research layer, pre-kernel flat files in `experiment/` (`producer.py`,
+   `staircase.py`, `probe.py`, `param_estimator.py`, `result_sink.py`,
+   `reporting.py`, `report.py`, `schema.py`, `cli.py`; note `schema.py` is shadowed
+   by the `schema/` package — packages win import resolution, so it is dead code).
+   Live importers remain (`validation/backprop_parity.py` → `experiment.probe`,
+   `experiment/cli.py` chain). Precondition unchanged: conformance green per
+   capability (R77); the new import-graph lock now guards the kernel side.
+2. **WP12**: `prior.py` legacy data tables still seed the registry — final deletion
+   step pending full consumer-reroute audit (`ontology/update.py`, `compose.py`,
+   `campaign._ruler_lr` adapters).
+3. **WP13**: E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded
+   reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance;
+   results recorded as store records. Serialization round-trip test (unknown
+   verbatim + fail-closed version) still to add.
+4. **WP13 DoD hardening**: content-hash drift lock for `docs/generated/` (WP11 lock
+   pins file set + determinism only); full C1–C88 conformance-evidence audit.
 
 ### Notes for Remaining Work
-- `RecordStore` is intentionally wide (single-writer topology concentrates the API); `PLR0904` noqa carries the §1.1 rationale. Do not split without a K1 decision.
-- `surface/conformance.py::run_verifying_test` shells to `pytest` via `subprocess` (S404/S603 flags) — sandboxed local CI use only; never pass untrusted node ids.
-- `docs/generated/` is regenerated by `codegen.generate_all()`; the WP11 lock pins the file set and determinism but not content hashes — a content-hash drift lock belongs to the WP13 DoD hardening.
-- `question_first` validates objective ids against OBJECTIVES registry keys (e.g. `validation_accuracy`, not legacy `accuracy`); CLI `--objectives` flags still accept legacy names — reconcile at WP12 port time.
-- Uncommitted pre-existing work in this tree (WP9 `sysctx.py`, WP10 `learning/benchmark.py`, codegen docs, stage-model/conformance tests) lands together with WP11 in the commit below.
+- `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
+- `surface/conformance.py::run_verifying_test` subprocess use remains sandboxed-local only.
+- `question_first` objective-id vs CLI `--objectives` legacy-name reconciliation still
+  open at WP12 port time.
+- `seed_all_registries()` is now the single PRIORS seeding path (seed rows +
+  `register_all_priors()`); calling `register_all_priors()` twice raises on
+  duplicates by `Registry.register` design — seed functions must clear first
+  (as `seed_all_registries` does) and never double-register.
+- Uncommitted pre-existing work in this tree (dirty `algorithms/*/kernel.py`,
+  `execution/strategy.py`, `scripts/campaign_*`, probe scripts) is unrelated to
+  this WP and left untouched; commit below covers kernel-hygiene files only.

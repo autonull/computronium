@@ -35,9 +35,11 @@ from computronium.experiment.legality.engine import (
     ConstraintKind,
     ConstraintOrigin,
     ConstraintScope,
+    LegalityEngine,
     create_constraint,
-    get_engine,
 )
+
+_TEST_ENGINE = LegalityEngine()
 
 
 class ProofKind(StrEnum):
@@ -76,18 +78,19 @@ def register_declared_proof(
     DECLARED_INFEASIBILITY_PROOFS[constraint_id] = proof
 
 
-def _get_declared_constraints() -> list[Constraint]:
+def _get_declared_constraints(
+    engine: LegalityEngine = _TEST_ENGINE,
+) -> list[Constraint]:
     """Get all constraints with DECLARED origin (SYSTEM_CONFIG in current impl)."""
-    engine = get_engine()
     return [
         c
         for c in engine.all_constraints()
         if c.origin
-        in (
+        in {
             ConstraintOrigin.SYSTEM_CONFIG,
             ConstraintOrigin.DYNAMICS_COMPAT,
             ConstraintOrigin.CREDIT_COMPAT,
-        )
+        }
     ]
 
 
@@ -258,7 +261,7 @@ class TestLegalityBoundary:
         """Constraints from SystemConfig.validate() must correspond to void patterns."""
         # This test will be populated when SystemConfig.validate() constraints are migrated
         # For now, it serves as a placeholder for the migration work
-        engine = get_engine()
+        engine = _TEST_ENGINE
         system_config_constraints = [
             c
             for c in engine.all_constraints()
@@ -333,6 +336,7 @@ class TestConstraintProofRegistration:
             enforcement=ConstraintEnforcement.ALWAYS,
             kind=ConstraintKind.HARD,
             description="Test constraint for proof registration",
+            engine=_TEST_ENGINE,
         )
 
         # Register a proof
@@ -352,12 +356,11 @@ class TestConstraintProofRegistration:
 
         # Clean up
         del DECLARED_INFEASIBILITY_PROOFS[constraint.constraint_id]
-        get_engine().remove_constraint(constraint.constraint_id)
+        _TEST_ENGINE.remove_constraint(constraint.constraint_id)
 
     def test_proof_kinds_are_exhaustive(self) -> None:
         """All proof kinds should be used somewhere."""
         # This test ensures we don't have unused proof kinds
-        used_kinds = {p.proof_kind for p in DECLARED_INFEASIBILITY_PROOFS.values()}
         all_kinds = set(ProofKind)
 
         # At minimum, we should have examples of each kind once constraints are seeded
