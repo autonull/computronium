@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import math
 import statistics
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -42,6 +43,14 @@ class BenchmarkPolicy(Protocol):
     def propose(self, n: int, context: dict) -> list[Coordinate]: ...
 
     def get_name(self) -> str: ...
+
+
+type PolicyFactory = Callable[[], BenchmarkPolicy]
+"""Factory producing a fresh policy instance per task/seed.
+
+Surrogate policies must not share training data across independent
+task/seed combinations; this protocol ensures isolation.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,9 +228,9 @@ def _evaluate_policy_on_task(
     return best
 
 
-def run_acquisition_benchmark(
-    treatment_policy: BenchmarkPolicy,
-    control_policy: BenchmarkPolicy,
+def run_acquisition_benchmark(  # noqa: PLR0914
+    treatment_factory: PolicyFactory,
+    control_factory: PolicyFactory,
     tasks: list[BenchmarkTask],
     config: BenchmarkConfig | None = None,
     store: RecordStore | None = None,
@@ -236,8 +245,8 @@ def run_acquisition_benchmark(
     - Reports Cohen's d, 95% CI, p-value (paired t-test or Wilcoxon)
 
     Args:
-        treatment_policy: The policy being evaluated (e.g., surrogate-driven).
-        control_policy: The baseline policy (e.g., uniform random).
+        treatment_factory: Factory producing fresh treatment policy per task/seed.
+        control_factory: Factory producing fresh control policy per task/seed.
         tasks: List of benchmark tasks (must be >= 10).
         config: Benchmark configuration.
         store: Optional record store for persistence.
@@ -275,6 +284,10 @@ def run_acquisition_benchmark(
         task_results[task_id] = {"treatment": [], "control": []}
 
         for seed in range(config.n_seeds):
+            # Fresh policy instances per task/seed (critical for surrogate isolation)
+            treatment_policy = treatment_factory()
+            control_policy = control_factory()
+
             # Evaluate treatment policy
             treatment_score = _evaluate_policy_on_task(
                 treatment_policy,
@@ -297,6 +310,8 @@ def run_acquisition_benchmark(
                 config.primary_metric,
                 store,
             )
+            control_scores[task_id].append(control_score)
+            task_results[task_id]["control"].append(control_score)
             control_scores[task_id].append(control_score)
             task_results[task_id]["control"].append(control_score)
 
@@ -416,8 +431,7 @@ __all__ = [
     "BenchmarkPolicy",
     "BenchmarkResult",
     "BenchmarkTask",
-    "coordinate_to_vector",
+    "PolicyFactory",
     "create_synthetic_benchmark_tasks",
-    "embedding_dims",
     "run_acquisition_benchmark",
 ]

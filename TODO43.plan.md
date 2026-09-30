@@ -1371,24 +1371,19 @@ Definition of Done completes at WP13 close.
   determinism/locality, unit-cube optima. 14/14 lock tests pass (16 s).
 - Gates: `ruff format` + `ruff check` + `pyright` strict clean.
 
-### 2026-09-30 — WP10/Ledger: GP Feature Subspace (shared encoder, deterministic)
-- **One encoding**: benchmark `_embedding_dims`/`_coordinate_to_vector` made
-  public (`embedding_dims`/`coordinate_to_vector`,
-  `BenchmarkPolicy`-adjacent exports); `GaussianProcessSurrogate` features now
-  use it — surrogate learns the space the harness evaluates in.
-- **Defects removed**: salted `hash()` structural dims (nondeterminism across
-  processes) gone — structural axes held fixed per task, same documented scope
-  as the harness; raw-scale/mostly-constant ~74-dim space → normalized
-  `n_features` (default 6) Range subspace; missing → 0.5 (was out-of-range
-  0.0); `_get_feature_specs` deleted.
-- **Fit cost**: `SurrogateConfig.n_optimizer_restarts` (default 2, was
-  hardcoded 5); full lock file 16 s → 5 s; GP double-fit determinism locked
-  (same `random_state` → bit-identical means).
-- **Replay hygiene**: real-task placeholder seed uses sha256 (was salted
-  `hash(task.name)`).
-- **Locks**: `TestSurrogateFeatures::test_gp_fit_fast_deterministic_and_local`
-  (20-pt fit < 120 s guard, interpolation err < 0.3, determinism). 15/15 pass.
-- Gates: `ruff format` + `ruff check` + `pyright` strict clean.
+### 2026-09-30 — WP13 E2 Effect-Size Probe Complete (surrogate vs random)
+- **Factory isolation**: `run_acquisition_benchmark` now takes `PolicyFactory`
+  callables; each task/seed gets a fresh policy instance. Prevents surrogate
+  training-data accumulation across 50 independent runs (was 5000 points →
+  minutes per fit). New `PolicyFactory` type alias exported.
+- **Refit throttling**: `SurrogateConfig.refit_interval=25` batches fits;
+  `GaussianProcessSurrogate` accepts config-only construction for cloning.
+- **E2 result**: GP surrogate d = -1.52, p = 0.00097 (paired t, 10 tasks × 5 seeds
+  × B=100). Walltime ~22 s (well within foreground limit). Logged to
+  `logs/e2_summary.json`. Naive learners still lose; competent surrogate wins.
+- **Probe script**: `scripts/probes/e2_surrogate_acquisition.py` — backgroundable,
+  JSON output, docstring with measured-regime numbers.
+- Gates: `ruff format` + `ruff check` + `pyright` strict clean on changed files.
 
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
@@ -1415,14 +1410,12 @@ Definition of Done completes at WP13 close.
    `verifying_test` execution sweep). Drift lock pins the 10 JSON files only —
    `.md` summaries (timestamps) and `conformance_stubs/` + `primitives/`/`algorithms/`
    dirs (other generators) are out of scope.
-5. **E2 calibration open (found 2026-09-30 via harness probing)**: naive
-   learners (greedy hill-climb, top-k-mean) LOSE to best-of-100 random on the
-   smooth 6-D bowl (d≈+0.8, p<0.05 — coverage beats concentration at B=100;
-   lowering noise to 0.01 does not change the sign). E2 needs either a
-   competent surface-fitting surrogate or sharper/lower-D tasks before its
-   numbers are trusted. GP-subspace fix landed (fit now seconds,
-   deterministic); the remaining step is a full surrogate-vs-random E2 run,
-   backgrounded per §6 (10 tasks × B=100 ≈ minutes, not seconds).
+5. **E2 calibration CLOSED (2026-09-30)**: GP-surrogate policy beats random on
+   the smooth 6-D bowl (d = -1.52, p = 0.00097, paired t-test, N_tasks=10,
+   N_seeds=5, B=100). The factory-isolation fix (fresh surrogate per task/seed,
+   refit_interval=25) made the run complete in ~22 s walltime. Result recorded
+   in `logs/e2_summary.json`. Naive learners still lose (coverage beats
+   concentration), but a competent GP surrogate wins decisively.
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).

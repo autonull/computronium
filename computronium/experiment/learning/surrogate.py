@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 import numpy as np
 
@@ -95,6 +95,7 @@ class SurrogateConfig:
         6  # Embedding dims (registry Range subspace, shared with benchmark)
     )
     n_optimizer_restarts: int = 2  # Kernel optimizer restarts (fit cost control)
+    refit_interval: int = 25  # New observations before a refit (fit cost control)
     # RF/GBT-specific
     n_estimators: int = 100
     max_depth: int | None = None
@@ -211,6 +212,7 @@ class SurrogatePolicy[T]:
         self._training_data: SurrogateTrainingData | None = None
         self._iteration = 0
         self._fitted = False
+        self._pending = 0
 
     @property
     def base_policy(self) -> ProposalPolicy:
@@ -238,12 +240,15 @@ class SurrogatePolicy[T]:
             self._iteration += 1
             return self._base_policy.propose(n, context)
 
-        # Fit surrogate if not yet fitted
-        if not self._fitted and self._training_data:
+        # Fit surrogate when enough new data arrived (fit cost control)
+        if self._training_data:
             training_split = self._training_data.training_data
-            if len(training_split.coordinates) >= 2:
+            if len(training_split.coordinates) >= 2 and (
+                not self._fitted or self._pending >= self._config.refit_interval
+            ):
                 self._surrogate.fit(training_split)
                 self._fitted = True
+                self._pending = 0
 
         # If surrogate not ready, fall back to base policy
         if not self._fitted:
@@ -288,6 +293,7 @@ class SurrogatePolicy[T]:
             objectives=objectives,
             data_origins=origins,
         )
+        self._pending = len(coords)
 
     def _score_candidates(
         self, candidates: list[Coordinate]
@@ -375,8 +381,7 @@ class SurrogatePolicy[T]:
             self._training_data.objectives.append(obj)
             self._training_data.data_origins.append(DataOrigin.POLICY_SELECTED)
 
-        # Re-fit on next propose
-        self._fitted = False
+        self._pending += len(results)
 
     def observe(self, record: Record) -> None:
         """Observe a single record (ProposalPolicy conformance).
@@ -391,7 +396,7 @@ class SurrogatePolicy[T]:
         self._training_data.coordinates.append(coord)
         self._training_data.objectives.append(obj)
         self._training_data.data_origins.append(origin)
-        self._fitted = False
+        self._pending += 1
 
     def observe_score(
         self,
@@ -409,7 +414,7 @@ class SurrogatePolicy[T]:
         self._training_data.coordinates.append(coordinate)
         self._training_data.objectives.append(score)
         self._training_data.data_origins.append(origin)
-        self._fitted = False
+        self._pending += 1
 
     def get_name(self) -> str:
         """Policy name for benchmark metadata."""
@@ -441,16 +446,29 @@ class SurrogatePolicy[T]:
 
         from computronium.experiment.learning.benchmark import (
             BenchmarkConfig,
-            BenchmarkPolicy,
             create_synthetic_benchmark_tasks,
             run_acquisition_benchmark,
         )
 
         tasks = create_synthetic_benchmark_tasks(n_tasks=n_tasks)
         config = BenchmarkConfig(n_tasks=n_tasks, n_seeds=n_seeds, budget=budget)
+
+        def treatment_factory() -> SurrogatePolicy:
+            """Fresh surrogate with same config but empty training data."""
+            surrogate_cls = type(self._surrogate)
+            return SurrogatePolicy(
+                self._base_policy,
+                surrogate_cls(self._config),  # type: ignore[call-arg]
+                self._config,
+                self._store,
+            )
+
+        def baseline_factory() -> ProposalPolicy:
+            return baseline_policy
+
         result = run_acquisition_benchmark(
-            cast("BenchmarkPolicy", self),
-            cast("BenchmarkPolicy", baseline_policy),
+            treatment_factory,
+            baseline_factory,
             tasks,
             config,
             store=self._store,
@@ -533,7 +551,7 @@ class GaussianProcessSurrogate:
             case _:
                 base = Matern(length_scale=1.0, nu=2.5)
 
-        return base + WhiteKernel(noise_level=1e-6, noise_level_bounds=(1e-10, 1e-1))
+        return base + WhiteKernel(noise_level=1e-6, noise_level_bounds=(1e-10, 1e0))
 
     def _coords_to_features(
         self, coords: list[Coordinate], objectives: list[float] | None = None
