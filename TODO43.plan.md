@@ -1267,6 +1267,50 @@ They all consume the **same `SearchSpace`**.
 
 A candidate list should become an optional optimization or seed mechanism, not the fundamental API.
 
+### Concrete type definitions (new module: `experiment/execution/search_space.py`)
+
+```python
+# experiment/execution/search_space.py
+from dataclasses import dataclass
+from typing import Protocol, Iterator
+from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY, OBJECTIVES_REGISTRY
+from computronium.experiment.execution.budget import Budget, CostModel
+from computronium.experiment.evidence.store import RecordStore
+
+@dataclass(frozen=True, slots=True)
+class SearchSpace:
+    """Canonical search space derived from RunSpec."""
+    axes_snapshot: tuple[AxisSpec, ...]  # AXES filtered by availability
+    constraints: tuple[ConstraintSpec, ...]
+    objectives: tuple[ObjectiveSpec, ...]
+    tasks: tuple[str, ...]
+    
+    def active_axes_for(self, coord: Coordinate) -> frozenset[AxisSpec]: ...
+
+@dataclass(frozen=True, slots=True)
+class ProposalContext:
+    """Context passed to every policy's propose()."""
+    search_space: SearchSpace
+    budget: Budget
+    cost_model: CostModel
+    evidence: RecordStore  # read-only view
+    run_id: str
+
+@dataclass(frozen=True, slots=True)
+class Proposal:
+    """Single proposal from a policy."""
+    coordinate: Coordinate
+    schedule: Schedule
+    rationale: str  # policy-specific, for traceability
+    metadata: dict[str, Any]  # e.g., acquisition value, generation method
+
+class Policy(Protocol):
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]: ...
+    def observe(self, record: Record) -> None: ...
+    def get_name(self) -> str: ...
+```
+
 ### Required tests
 
 Add a lock that instantiates every policy with:
@@ -1373,6 +1417,53 @@ or an equivalent typed stage result.
 
 The wrapper should evaluate **stage transition semantics**, not "did this stage produce at least one evaluation record?"
 
+### Concrete Stage types (update `experiment/execution/stage.py`)
+
+```python
+# experiment/execution/stage.py additions
+from enum import StrEnum
+
+class StageTransition(StrEnum):
+    CONTINUE = "continue"
+    COMPLETE = "complete" 
+    PAUSE = "pause"
+    STOP = "stop"
+    QUARANTINE = "quarantine"
+    SKIP = "skip"
+
+@dataclass(frozen=True, slots=True)
+class Fragment:
+    stage_id: StageId
+    records: list[Record] = field(default_factory=list)
+    proposals: list[Proposal] = field(default_factory=list)
+    transition: StageTransition = StageTransition.CONTINUE
+    metadata: dict[str, Any] = field(default_factory=dict)
+    coverage: dict[str, Any] = field(default_factory=dict)
+    classification: dict[str, Any] = field(default_factory=dict)
+
+@runtime_checkable
+class Stage(Protocol):
+    stage_id: ClassVar[StageId]
+    async def run(self, ctx: StageContext) -> Fragment: ...
+
+@dataclass(slots=True)
+class StageContext:
+    run_id: str
+    run_spec: RunSpec  # typed, not dict
+    stage_id: StageId
+    store: RecordStore
+    budget: Budget
+    cost_model: CostModel
+    policy: Policy
+    allocator: AllocationPolicy | None
+    backend: ExecutionBackend
+    search_space: SearchSpace
+    completed_keys: set[str]
+    pending_proposals: list[Proposal]
+    stage_params: dict[str, Any]
+    system_context: SystemContext
+```
+
 ### Put `RunSpec` back at the center
 
 abc3 defines a typed, serializable `RunSpec` as the durable description of a run.
@@ -1466,6 +1557,45 @@ rationale
 budget impact
 ```
 
+### Decision type and round loop termination (new module: `experiment/execution/decision.py`)
+
+```python
+# experiment/execution/decision.py
+from dataclasses import dataclass
+from typing import Literal
+from computronium.experiment.execution.stage import StageTransition
+from computronium.experiment.execution.search_space import Proposal
+from computronium.experiment.execution.allocator import Promotion, Abandonment
+from computronium.experiment.schema.coordinate import Schedule
+
+@dataclass(frozen=True, slots=True)
+class Replication:
+    coordinate: Coordinate
+    base_schedule: Schedule
+    additional_seeds: int
+    rationale: str
+
+@dataclass(frozen=True, slots=True)
+class Decision:
+    transition: StageTransition  # CONTINUE | COMPLETE | PAUSE | STOP
+    new_proposals: list[Proposal] = field(default_factory=list)
+    promotions: list[Promotion] = field(default_factory=list)
+    abandonments: list[Abandonment] = field(default_factory=list)
+    replications: list[Replication] = field(default_factory=list)
+    rationale: str = ""
+    budget_impact: float = 0.0
+```
+
+### Round loop termination conditions
+
+```text
+Round loop terminates when S10 Decide returns:
+  COMPLETE  → budget exhausted OR claim target met OR operator STOP
+  PAUSE     → operator PAUSE OR resource pressure (OOM, thermal) 
+  STOP      → fatal error OR operator KILL
+  CONTINUE  → budget remains AND no stop condition
+```
+
 Then **continuous execution is simply repeated rounds of the kernel**.
 
 That is the point at which "Campaign" stops being a separate architecture.
@@ -1512,6 +1642,42 @@ CATEGORICAL
 ```
 
 Conditional parameters should be activated from the same `availability` expression used by legality/schema—not an Optuna-specific copy.
+
+### OptunaDistributionAdapter (new module: `experiment/execution/optuna_adapter.py`)
+
+```python
+# experiment/execution/optuna_adapter.py
+from optuna.distributions import (
+    FloatDistribution, IntDistribution, CategoricalDistribution, BaseDistribution
+)
+from computronium.experiment.schema.axis import AxisSpec, AxisKind, Scale
+from computronium.experiment.schema.coordinate import Coordinate
+
+class OptunaDistributionAdapter:
+    """Maps AxisSpec → Optuna distribution using availability predicates."""
+    
+    @staticmethod
+    def adapt(spec: AxisSpec, coord: Coordinate) -> BaseDistribution | None:
+        if spec.availability and not spec.availability.evaluate(coord):
+            return None  # unavailable for this coordinate
+            
+        match spec.kind:
+            case AxisKind.CONTINUOUS:
+                return FloatDistribution(
+                    spec.domain.lo, spec.domain.hi,
+                    log=spec.domain.scale == Scale.LOG
+                )
+            case AxisKind.INTEGER:
+                return IntDistribution(
+                    int(spec.domain.lo), int(spec.domain.hi),
+                    log=spec.domain.scale == Scale.LOG
+                )
+            case AxisKind.CATEGORICAL:
+                return CategoricalDistribution(spec.domain.members)
+            case AxisKind.STRUCTURAL:
+                return None  # not sampled, fixed by coordinate
+        return None
+```
 
 ### Resume semantics
 
@@ -1597,6 +1763,39 @@ matched_group
 
 The resulting data can actually support S9 attribution.
 
+### ContrastDesign factor selection (new module: `experiment/execution/contrast_design.py`)
+
+```python
+# experiment/execution/contrast_design.py
+from dataclasses import dataclass
+from typing import Literal
+from computronium.experiment.schema.coordinate import Coordinate
+from computronium.experiment.execution.budget import Budget
+from computronium.experiment.execution.search_space import SearchSpace
+
+@dataclass(frozen=True, slots=True)
+class ContrastDesign:
+    factors: list[str]  # axis parameter names, e.g., ["learning_rate", "batch_size"]
+    design: Literal["OFAT", "fractional_factorial"]
+    baseline: Coordinate
+    contrast_coords: list[Coordinate]
+    contrast_id: str
+
+def construct_contrast_design(
+    search_space: SearchSpace,
+    baseline: Coordinate,
+    budget: Budget,
+    design: Literal["OFAT", "fractional_factorial"] = "OFAT",
+    max_factors: int = 4,
+) -> ContrastDesign:
+    """Select factors with highest prior uncertainty / sensitivity."""
+    # 1. Rank active hyperparameters by prior.uncertainty (PRIORS_REGISTRY)
+    # 2. Select top-k factors
+    # 3. Generate OFAT: baseline + one factor varied across its domain
+    # 4. Or fractional factorial: 2^(k-p) design
+    ...
+```
+
 #### Make `data_origin` first-class
 
 Do not encode:
@@ -1674,22 +1873,48 @@ classify everyone
 raise entire batch
 ```
 
-### Make backend results per-item
+### Make backend results per-item (update `experiment/execution/backends.py`)
 
-```text
-EvaluationResult =
-    Success(record)
-  | Failure(failure_event)
+```python
+# experiment/execution/backends.py additions
+from dataclasses import dataclass
+from typing import Union
+from computronium.experiment.schema.record import Record
+from computronium.experiment.evidence.failure import FailureEvent
+
+@dataclass(frozen=True, slots=True)
+class Success:
+    record: Record
+
+@dataclass(frozen=True, slots=True)
+class Failure:
+    failure_event: FailureEvent
+
+EvaluationResult = Union[Success, Failure]
+
+@runtime_checkable
+class ExecutionBackend(Protocol):
+    async def submit_batch(
+        self,
+        items: list[EvalJob],
+        store: RecordStore,
+    ) -> list[EvaluationResult]:  # per-item, not exception
+        ...
 ```
 
-Then the pipeline can guarantee:
+Then pipeline becomes:
 
-```text
-one cell failing
-    does not destroy its siblings
+```python
+# pipeline.py _execute_batch_with_isolation
+results = await backend.submit_batch(batch, self._store)
+for result in results:
+    match result:
+        case Success(record):
+            self._store.append(record)
+        case Failure(event):
+            self._classify_rejection(...)
+            # siblings continue
 ```
-
-Fatal process/store errors remain exceptional and run-level.
 
 This also aligns much better with the failure taxonomy in abc3.
 
@@ -1819,6 +2044,56 @@ same claim machinery
 
 That is the experiment-kernel equivalent of a real integration test.
 
+### Acceptance Test Harness (new module: `tests/acceptance/unified_kernel.py`)
+
+```python
+# tests/acceptance/unified_kernel.py
+import pytest
+from computronium.experiment.execution.pipeline import PipelineRunner
+from computronium.experiment.execution.policy import create_policy
+from computronium.experiment.schema.coordinate import RunSpec
+from computronium.experiment.evidence.store import RecordStore
+
+class UnifiedKernelHarness:
+    """Runs U1-U5 acceptance tests against a configured kernel."""
+    
+    def __init__(self, run_spec: RunSpec, store: RecordStore):
+        self.run_spec = run_spec
+        self.store = store
+    
+    def run_u1_synthesis(self) -> list[Record]:
+        policy = create_policy("synthesis", objectives=self.run_spec.objectives)
+        runner = PipelineRunner(config=..., policy=policy, store=self.store)
+        return asyncio.run(runner.run())
+    
+    def run_u2_optuna(self) -> list[Record]:
+        policy = create_policy("model_based", sampler="tpe", ...)
+        ...
+    
+    def run_u3_continuous(self, allocator: AllocationPolicy) -> list[Record]:
+        policy = create_policy("stratified_random")
+        runner = PipelineRunner(config=..., policy=policy, allocator=allocator, ...)
+        return asyncio.run(runner.run())
+    
+    def run_u4_policy_interchange(self) -> dict[str, list[Record]]:
+        results = {}
+        for name in ["stratified_random", "model_based", "evolution", "synthesis"]:
+            store = RecordStore(...)  # fresh store per policy
+            policy = create_policy(name, ...)
+            runner = PipelineRunner(config=..., policy=policy, store=store)
+            results[name] = asyncio.run(runner.run())
+        return results
+    
+    def run_u5_cross_policy_reuse(self) -> list[Record]:
+        # Random → TPE → Evolution over same store
+        store = RecordStore(...)
+        for name in ["uniform_random", "model_based", "evolution"]:
+            policy = create_policy(name, ...)
+            runner = PipelineRunner(config=..., policy=policy, store=store)
+            asyncio.run(runner.run())
+        return store.query_records(...)
+```
+
 ---
 
 ### 9.15 WP21 — Legacy Port & Delete (Stricter)
@@ -1907,6 +2182,98 @@ WP22 E3/E4 + full C1–C88 audit
 ```
 
 **The important dependency is that WP20 comes before WP21.** You want proof that the new kernel can really replace the old pillars before deleting them.
+
+---
+
+### 9.17.1 Pipeline Data Flow Diagram
+
+```text
+RUN SPEC INPUT
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ S1 FrameStage                               │
+│   - Resolve objectives → operating points   │
+│   - Synthesis policy produces RunSpec       │
+│   - Emits: proposals, updated RunSpec       │
+└─────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ S2 SpaceStage                               │
+│   - AXES snapshot + legality dry-run        │
+│   - Emits: SearchSpace (active axes)        │
+└─────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ S3 ScheduleStage                            │
+│   - Fidelity/seed/epoch planning            │
+│   - Data-origin allocation (explore/cal/test)│
+│   - ContrastDesign construction             │
+│   - Emits: proposals with schedules         │
+└─────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ S4 GateStage                                │
+│   - LegalityEngine enforcement              │
+│   - Globally-suppressive voids              │
+│   - Emits: filtered proposals               │
+└─────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────────────────────┐
+│ ROUND LOOP (S5–S10 repeat)                  │
+│                                             │
+│ S5 ComposeStage  → compose_joint_system     │
+│ S6 TrainStage    → SystemTrainer.settle     │
+│ S7 MeasureStage  → objectives + probes      │
+│ S8 RecordStage   → atomic append + artifacts│
+│ S9 AttributeStage → counterfactual attr     │
+│ S10 DecideStage  → Decision (CONTINUE...)   │
+│                                             │
+│ Allocator invoked after S7                  │
+│ Promotions/abandonments feed next round     │
+└─────────────────────────────────────────────┘
+     │
+     ▼ (on COMPLETE/PAUSE/STOP)
+┌─────────────────────────────────────────────┐
+│ S11 ReportStage                             │
+│   - surface.report fragments                │
+└─────────────────────────────────────────────┘
+```
+
+---
+
+### 9.17.2 Performance Budgets for New Abstractions
+
+| Operation | Budget | Measurement |
+|-----------|--------|-------------|
+| `SearchSpace` construction | < 5 ms | `AXES` filter + constraint eval |
+| `Policy.propose()` (per proposal) | < 10 ms | Optuna ask, evolution mutate, etc. |
+| `Stage.run()` overhead (wrapper) | < 1 ms | Coverage/classification/provenance |
+| `Fragment` assembly | < 0.5 ms | Dataclass construction |
+| `ContrastDesign` construction | < 50 ms | DOE generation |
+| `EnvironmentSnapshot` capture | < 5 ms | Once per run |
+
+The K7/K9 1% overhead criterion applies.
+
+---
+
+### 9.17.3 Test Migration Checklist
+
+| Existing Test | Tests | Migrates To | Status |
+|---------------|-------|-------------|--------|
+| `test_demo_swap_credit.py` | Credit swap | U1 (Synthesis) | 🔄 |
+| `test_demo_compose_6axis.py` | 6-axis composition | U1 | 🔄 |
+| `test_demo_evolution_search.py` | Evolution | U4 (policy interchange) | 🔄 |
+| `test_pipeline_integration.py` | Pipeline flow | WP15 stage dispatch lock | 🔄 |
+| `test_model_based_policy.py` | Optuna integration | WP17 Optuna-AXES lock | 🔄 |
+| `test_continuous_burst.py` | Continuous loop | U3 (Continuous) | 🔄 |
+| `test_store_overhead_bench.py` | E1 infrastructure | E1 lock (done) | ✅ |
+
+359 tests currently pass (per progress log). Explicit mapping ensures none are lost during WP14–WP22.
 
 ---
 
