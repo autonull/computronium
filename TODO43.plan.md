@@ -4,7 +4,7 @@
 authoritative spec; abc2 (Rev 1.1) is superseded and consulted only for rationale.
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread
 safety, error/logging conventions, environment rules, testing tiers, commit checklist.
-**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 ready to start.
+**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 ready to start.
 
 ---
 
@@ -123,7 +123,8 @@ CREATE TABLE records (
     schema_version  INTEGER NOT NULL,
     -- identity keys
     cell_key        TEXT NOT NULL,          -- sha256(coordinate); repeats group here (R9)
-    measurement_key TEXT NOT NULL UNIQUE,   -- sha256(coordinate ∪ schedule); dedup/resume
+    measurement_key TEXT NOT NULL UNIQUE,   -- sha256(coordinate ∪ schedule ∪ seed); one coordinate × one seed × one schedule
+    replication_key TEXT NOT NULL,          -- sha256(coordinate ∪ schedule_without_seed); groups seeds for a coordinate/schedule
     -- coordinate: structural axes typed; tunables open
     substrate       TEXT NOT NULL,
     geometry        TEXT NOT NULL,
@@ -133,11 +134,12 @@ CREATE TABLE records (
     update_rule     TEXT NOT NULL,
     params          JSON NOT NULL,          -- the 37-tunable union + geometry/substrate params
     schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
-                           epochs INTEGER, batch_limit INTEGER, budget_id TEXT) NOT NULL,
+                           epochs INTEGER, batch_limit INTEGER, budget_id TEXT) NOT NULL,  -- includes seed for measurement_key; replication_key excludes seed
     provenance      JSON NOT NULL,          -- env, dataset+version, code SHA, policy, links
     status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                            quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
-                           reproducibility TEXT, assessment_procedure_version TEXT) NOT NULL,  -- §3.1: which procedure produced gate_verdict etc.
+                           reproducibility TEXT, assessment_procedure_version TEXT,
+                           assessment_procedure_hash TEXT) NOT NULL,  -- §3.1: which procedure produced gate_verdict etc.
     payload         JSON NOT NULL,          -- objectives, telemetry, probes, artifact refs
     unknown         JSON                    -- R79: preserved, labelled, never defaulted
 );
@@ -168,31 +170,58 @@ never stored, never cached.
 **Decision:** CEEC has no external consumers; fold artifact storage into the Kernel's DuckDB.
 Single file, single transaction, no reconciliation needed.
 
+**Artifact size policy:**
+```text
+small artifact (≤ 10 MB default, configurable) → DuckDB BLOB in artifacts.bytes
+large artifact  → external content-addressed store (filesystem/S3/GCS)
+                   + transactional manifest reference in artifacts table
+```
+The default threshold is chosen so that typical experimental artifacts (configs, small figures, kernel dumps, reproducer scripts) stay in-DB, while model checkpoints, videos, and large arrays go external. The threshold is a store configuration parameter; the schema supports both paths.
+
 ```sql
 -- Artifacts table (replaces CEEC delegation + reconciliation state machine)
 CREATE TABLE artifacts (
-    digest        TEXT PRIMARY KEY,        -- content-addressed (SHA256 of bytes)
-    bytes         BLOB NOT NULL,           -- artifact payload
-    role          TEXT NOT NULL,           -- config|figure|reproducer|kernel
-    record_id     TEXT REFERENCES records(record_id),
-    created_at    TIMESTAMP NOT NULL
+    digest            TEXT PRIMARY KEY,        -- content-addressed (SHA256 of bytes)
+    bytes             BLOB,                    -- artifact payload (NULL for external)
+    role              TEXT NOT NULL,           -- config|figure|reproducer|kernel
+    record_id         TEXT REFERENCES records(record_id),
+    created_at        TIMESTAMP NOT NULL,
+    -- external artifact fields
+    external_uri      TEXT,                    -- content-addressed URI (sha256://... or s3://...)
+    external_size     BIGINT,                  -- bytes, for budget accounting
+    external_checksum TEXT                     -- SHA256 of external content
 );
 ```
 
 **Atomic append contract:**
 ```python
-def append_with_artifacts(self, record: Record, artifacts: list[tuple[bytes, str]]) -> Record:
-    """Single transaction: record + all artifacts. No partial state possible."""
+def append_with_artifacts(self, record: Record, artifacts: list[ArtifactInput]) -> Record:
+    """Single transaction: record + all artifacts (internal or external refs).
+    No partial state possible. External artifacts are registered by manifest only."""
     with self._write_lock:
         self._conn.execute("BEGIN")
         try:
             self._conn.execute(INSERT_RECORD, record_params)
-            for art_bytes, role in artifacts:
-                digest = hashlib.sha256(art_bytes).hexdigest()
-                self._conn.execute(
-                    "INSERT INTO artifacts (digest, bytes, role, record_id, created_at) VALUES (?, ?, ?, ?, ?)",
-                    [digest, art_bytes, role, record.record_id, datetime.now()]
-                )
+            for art in artifacts:
+                digest = art.digest or hashlib.sha256(art.bytes).hexdigest()
+                if art.bytes is not None and len(art.bytes) <= self._artifact_inline_threshold:
+                    # Inline small artifact
+                    self._conn.execute(
+                        """INSERT INTO artifacts (digest, bytes, role, record_id, created_at,
+                                                   external_uri, external_size, external_checksum)
+                           VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL)""",
+                        [digest, art.bytes, art.role, record.record_id, datetime.now()]
+                    )
+                else:
+                    # External artifact: bytes is None or too large; external_uri required
+                    assert art.external_uri is not None, "external_uri required for large artifacts"
+                    self._conn.execute(
+                        """INSERT INTO artifacts (digest, bytes, role, record_id, created_at,
+                                                   external_uri, external_size, external_checksum)
+                           VALUES (?, NULL, ?, ?, ?, ?, ?, ?)""",
+                        [digest, art.role, record.record_id, datetime.now(),
+                         art.external_uri, art.external_size, art.external_checksum]
+                    )
             self._conn.execute("COMMIT")
         except Exception:
             self._conn.execute("ROLLBACK")
@@ -200,11 +229,12 @@ def append_with_artifacts(self, record: Record, artifacts: list[tuple[bytes, str
 ```
 
 **Benefits:**
-- True ACID: record + artifacts appear together or not at all
+- True ACID: record + artifacts (inline or manifest) appear together or not at all
 - No reconciliation protocol, no ORPHANED, no background recovery
 - Content-addressing preserved (digest = PK, deduplicated globally)
-- One file to backup/copy/inspect
-- CEEC API becomes internal `ArtifactStore` module (DuckDB-backed)
+- Large artifacts don't bloat the experiment database; external store scales independently
+- One file to backup/copy/inspect for small-artifact workflows; manifest for large
+- CEEC API becomes internal `ArtifactStore` module (DuckDB-backed + external adapter)
 
 **Store engineering rules** unchanged (parameterized SQL, context managers, StrEnum, exception chaining).
 
@@ -282,13 +312,24 @@ Deliverables:
    `PolicySelectedData` (policy-dependent) as distinct record tags; `CalibrationSet`
    (frozen, never used for policy tuning) vs `TestSet` (held-out tasks). Provenance
    fields: `data_origin ∈ {exploration, policy_selected, calibration, test}`.
-3. **Seed/repetition semantics** — `n_seeds` in schedule; `seed` is the base seed;
-   independent repetitions = distinct `measurement_key` (same coordinate, different seed).
-   `Reproducibility` status field records: `computational` (same env, ±tolerance) vs
-   `scientific` (independent env, effect reproduced).
-4. **Matched-cost comparison protocol** — `CostBudget` (FLOPs / walltime / eval-count);
-   comparisons only valid within same budget tier; `ComparisonGuard` refuses or labels
-   unmatched pairs (R8/R22/R67).
+3. **Seed/repetition semantics** — `schedule` struct carries `seed` (base seed for this
+   repetition) and `n_seeds` (planned replication count for the coordinate/schedule pair).
+   Independent repetitions = distinct `measurement_key` (same coordinate, different seed).
+   `replication_key` = `sha256(coordinate ∪ schedule_without_seed)` groups the planned
+   replications for statistical aggregation. `Reproducibility` status field records:
+   `computational` (same env, ±tolerance) vs `scientific` (independent env, effect reproduced).
+4. **Matched-cost comparison protocol** — `CostBudget` with explicit budget tier:
+   ```text
+   CostBudgetTier(StrEnum):
+       EVAL_COUNT   = "eval_count"      -- number of evaluations (always comparable)
+       FLOPS        = "flops"           -- FLOP budget (when FLOPs are meaningful/comparable)
+       WALLTIME     = "walltime"        -- walltime budget (ONLY valid within matched hardware class)
+       ENERGY       = "energy"          -- optional future capability
+   ```
+   Comparisons only valid within same budget tier; `ComparisonGuard` refuses or labels
+   unmatched pairs (R8/R22/R67). For `WALLTIME` tier, `ComparisonGuard` requires matched
+   `hardware_class` (GPU arch, CPU, memory) in provenance; cross-class walltime comparisons
+   are rejected unless explicitly stratified.
 5. **Effect-size + uncertainty representation** — primary endpoint: best validation score
    after B evaluations; secondary: evaluations to reach target τ, area under optimization
    curve, compute-normalized improvement. All with confidence intervals (bootstrap over
@@ -336,7 +377,8 @@ fixture recovers known effects.
   R66). Migrate-and-delete the original validators (Directive 1).
 
 ### WP4 — Pillar 2: execution ✅ COMPLETE
-- ✅ `execution/budget.py` — `Budget` + `CostModel` Protocol (R21–R24).
+- ✅ `execution/budget.py` — `Budget` + `CostModel` Protocol (R21–R24). `CostBudgetTier(StrEnum)`:
+  `EVAL_COUNT`, `FLOPS`, `WALLTIME` (requires `hardware_class` match), `ENERGY` (future).
 - ✅ `execution/allocator.py` — `AllocationPolicy` Protocol + evidence-driven successive
   promotion reference implementation (R46–R51, divergence/stagnation telemetry, waste report).
 - ✅ `execution/replay.py` — replay hash, resume on `measurement_key`, checkpoint/restore
@@ -355,32 +397,40 @@ fixture recovers known effects.
 - ✅ `execution/pipeline.py` — S1–S11 runner with wrapper obligations (coverage, classification,
   traceability, atomic append + reconciliation); `RoundRobinGrid` policy, most stages no-op initially.
 
-### WP5 — Pillar 4: evidence & governance
-- `evidence/status.py` — **Three-tier status model** (feedback #4):
+### WP5 — Pillar 4: evidence & governance ✅ COMPLETE
+- ✅ `evidence/status.py` — **Three-tier status model** (feedback #4):
   - **Observations** — `loss`, `accuracy`, `runtime`, `seed`, `variance`, `failure_signal`,
     `hardware`, `dataset` (primary fields, written by stages)
   - **Assessments** — `gate_verdict`, `quarantine`, `maturity`, `failure_classification`
-    (produced by a *named, versioned procedure*; `assessment_procedure_version` in status)
+    (produced by a *named, versioned, content-addressed procedure*; `assessment_procedure_version`
+    + `assessment_procedure_hash` in status)
   - **Derived Claims** — `claim_eligible`, `promoted`, `beats_baseline`, `robust`,
     `generalizes` (pure queries, never stored)
   This preserves Doctrine 5 while making stored assessments scientifically auditable.
-- `evidence/claims.py` — full predicate suite: claims (R35), promotion (R36), alerts as
+- ✅ `evidence/procedures.py` — **AssessmentProcedure registry** (new): each procedure is a frozen
+  dataclass with `name`, `version`, `code_hash` (SHA256 of the procedure's source/bytecode),
+  `config_schema`, and `frozen_at` timestamp. The registry is append-only; a procedure version
+  is identified by `(name, version, code_hash)`. `assessment_procedure_hash` in status is the
+  content address, making the procedure definition immutable. Version alone is not trusted.
+- ✅ `evidence/claims.py` — full predicate suite: claims (R35), promotion (R36), alerts as
   record-stream predicates (R83/Q14), matched-cost comparison guard (R65), stratification
   guards (R8/R22/R67).
-- `evidence/failure.py` — `FailureCause` taxonomy, clustering, reproducer emission,
+- ✅ `evidence/failure.py` — `FailureCause` taxonomy, clustering, reproducer emission,
   fix-linkage queries (R58–R62).
-- `evidence/artifacts.py` — unified artifact storage in DuckDB `artifacts` table.
+- ✅ `evidence/artifacts.py` — unified artifact storage in DuckDB `artifacts` table.
   `ArtifactStore.put(bytes, role) -> digest`, `get(digest) -> bytes`.
   Single transaction with record append via `RecordStore.append_with_artifacts()`.
   No CEEC dependency, no reconciliation.
-- Vector retrieval over `vector_index` (brute-force `list_dot` first; HNSW via `vss` or
+- ✅ Vector retrieval over `vector_index` (brute-force `list_dot` first; HNSW via `vss` or
   external when corpus warrants) — C59, R15, K5.
-- `RunSpec`/record parsing at I/O boundaries (CLI, import, export) validated with
+- ✅ `RunSpec`/record parsing at I/O boundaries (CLI, import, export) validated with
   **Pydantic v2** models mirroring the internal frozen dataclasses (AGENTS.md data-modeling
   split; matches ceec-core's `_Frozen(BaseModel)` precedent). Internal logic stays on
   frozen dataclasses.
+- ✅ **Locks (CI property tests):** `tests/property/test_statistical_protocol_lock.py`
+  (E1-E4 hierarchy, effect-size protocol, I(C,U) splits, claim predicates, alerts, guards)
 
-### WP5.5 — Statistical Analysis Protocol (NEW — formalizes Class E benchmark hierarchy)
+### WP5.5 — Statistical Analysis Protocol ✅ COMPLETE
 This WP makes the empirical validation protocol explicit and binding before WP6 implements
 surrogates that depend on it.
 
@@ -396,20 +446,36 @@ Deliverables:
      holdouts). (Pass = discovered effect is real)
    - **E4 — Generalization:** cross-task transfer, cross-topology transfer, unseen substrate
      (with explicit transfer provenance from WP1.5 #6). (Pass = knowledge transfers)
-2. **Effect-size protocol (feedback #11):** Replaces "beats random on a held-out task."
+2. **Effect-size protocol (feedback #11):** Replaces "beats random on a held-out task" →
+   "surrogate acquisition vs predeclared baseline on held-out tasks."
    - `N_tasks ≥ 10` independent held-out tasks (predeclared, never used for surrogate training)
-   - `N_seeds ≥ 5` independent repetitions per task
-   - Fixed evaluation budget `B` (compute-normalized: FLOPs or walltime)
+   - `N_seeds ≥ 5` independent repetitions **per task** (within-task repeated measures)
+   - Fixed evaluation budget `B` with explicit `CostBudgetTier`:
+     - `EVAL_COUNT` — evaluation count budget (always comparable)
+     - `FLOPS` — FLOP budget (when FLOPs are meaningful/comparable)
+     - `WALLTIME` — walltime budget (ONLY valid within matched hardware class; requires
+       `hardware_class` provenance match)
    - Predeclared primary metric (e.g., best validation score at budget B)
-   - Paired comparison where possible (same seeds, same tasks)
-   - Report: effect size (Cohen's d), 95% CI, p-value (paired t-test or Wilcoxon)
-   - Secondary: evaluations to reach target τ, area under curve
+   - **Primary inference unit: task.** For each task, aggregate seed-level results to a task-level
+     effect Δ_task = policy_metric(task) - baseline_metric(task). Primary comparison operates
+     over the distribution of Δ_task across tasks (paired where possible: same seeds, same tasks).
+   - Seeds provide within-task uncertainty estimation; report seed-level variance alongside.
+   - Optional: mixed-effects model `metric ~ policy + (1 | task) + (1 | task:seed)` for
+     simultaneous estimation.
+   - Report: effect size (Cohen's d at task level), 95% CI, p-value (paired t-test or
+     Wilcoxon on task-level Δ_task).
+   - Secondary: evaluations to reach target τ, area under curve.
 3. **I(C,U) leakage/selection protocol (feedback #6):**
    - Maintain explicit `data_origin` tag on every record
    - Training data for surrogates = `exploration ∪ policy_selected`
    - Calibration/evaluation data = `calibration ∪ test` (policy-independent)
-   - Periodic audit: surrogate performance on `calibration` vs `policy_selected` must not
-     diverge beyond threshold (detects overfitting to policy-selected regions)
+   - **Calibration semantics (refined from feedback #5):**
+     - `policy-selected` data estimates **in-distribution acquisition performance** (where the policy concentrates)
+     - `calibration` data estimates **generalization error / distributional robustness** (policy-independent distribution)
+     - `test` data remains completely frozen for final scientific evaluation
+     - Report all three: `performance(policy-selected)`, `performance(calibration)`, `performance(test)`
+     - Define acceptable degradation on `calibration`/`test` relative to `policy-selected` (e.g., calibration performance within δ of policy-selected; test within ε of calibration). Thresholds are predeclared.
+     - This replaces "calibration vs policy-selected must not diverge" — distributional divergence is expected when the policy concentrates on interesting regions; the criterion is *bounded degradation*, not non-divergence.
    - Scientific claim: "Learned policy improves acquisition efficiency on *previously unseen
      tasks* under predeclared compute budget" — not "beats random on held-out task."
 
@@ -417,6 +483,8 @@ Deliverables:
 are disjoint, effect-size protocol fields exist, I(C,U) data splits are enforced.
 
 ### WP6 — Pillar 5: learning
+**Hard dependency:** WP1.5 → WP5.5 → WP6 (WP6 must not begin until WP1.5 and WP5.5 acceptance
+criteria pass; WP5.5 protocol lock is a CI gate for WP6).
 - `learning/prior.py` — `PriorSpec` registry; convert the ruler-LR table and step-size
   override tables into prior *data*; delete the source code tables (R52, Q4, Q12).
 - `learning/surrogate.py` — `SurrogatePolicy` wrapper (EI/EHVI) over any `Policy` (R54, Q10).
@@ -515,7 +583,7 @@ Execution discipline (AGENTS.md Environment/Testing):
 | | Serialization round-trip (all sections, schema v1→v2 readers) | R79, K4 |
 | | Atomic append with artifacts (single transaction) | R60, K8 |
 | **E2 — Algorithmic** | Cost-to-rank vs uniform baseline | R46 |
-| | Surrogate vs random on held-out tasks (effect-size protocol) | R54 |
+| | Surrogate acquisition vs predeclared baseline on held-out tasks (effect-size protocol) | R54 |
 | | Cost-model estimate-vs-actual error trend | R23, R24 |
 | | Divergence-bound replay (1357 s run) | R50 |
 | **E3 — Scientific** | Seeded axis-effect reproduction (independent seeds, CI on effect) | R86 |
@@ -527,12 +595,22 @@ Execution discipline (AGENTS.md Environment/Testing):
 
 **Effect-size protocol (replaces "beats random"):**
 - `N_tasks ≥ 10` independent held-out tasks (predeclared, never used for surrogate training)
-- `N_seeds ≥ 5` independent repetitions per task
-- Fixed evaluation budget `B` (compute-normalized: FLOPs or walltime)
+- `N_seeds ≥ 5` independent repetitions **per task** (within-task repeated measures)
+- Fixed evaluation budget `B` with explicit `CostBudgetTier`:
+  - `EVAL_COUNT` — evaluation count budget (always comparable)
+  - `FLOPS` — FLOP budget (when FLOPs are meaningful/comparable)
+  - `WALLTIME` — walltime budget (ONLY valid within matched hardware class; requires
+    `hardware_class` provenance match)
 - Predeclared primary metric (e.g., best validation score at budget B)
-- Paired comparison where possible (same seeds, same tasks)
-- Report: effect size (Cohen's d), 95% CI, p-value (paired t-test or Wilcoxon)
-- Secondary: evaluations to reach target τ, area under curve
+- **Primary inference unit: task.** For each task, aggregate seed-level results to a task-level
+  effect Δ_task = policy_metric(task) - baseline_metric(task). Primary comparison operates
+  over the distribution of Δ_task across tasks (paired where possible: same seeds, same tasks).
+- Seeds provide within-task uncertainty estimation; report seed-level variance alongside.
+- Optional: mixed-effects model `metric ~ policy + (1 | task) + (1 | task:seed)` for
+  simultaneous estimation.
+- Report: effect size (Cohen's d at task level), 95% CI, p-value (paired t-test or
+  Wilcoxon on task-level Δ_task).
+- Secondary: evaluations to reach target τ, area under curve.
 
 Probe/benchmark scripts live in `scripts/probes/` per repo convention: docstring states the
 measured-regime numbers and the demo/decision they informed. Any benchmark exceeding the
@@ -598,15 +676,20 @@ strict-clean from WP1 onward.
 - **CEEC unification**: folded `packages/ceec-core` into Kernel's DuckDB as `artifacts` table. Single-file atomic transactions. Removed reconciliation protocol (§2.1 replaced).
 - Clarified DuckDB single-writer as application constraint; `seq` = persistence order
 - Made VSS an optional capability (experimental)
-- Split status into Observations / Assessments (with procedure version) / Derived Claims
+- Split status into Observations / Assessments (with procedure version + procedure hash) / Derived Claims
 - Defined three reproducibility classes: replayable / computationally_reproducible / scientifically_reproducible
-- Added I(C,U) leakage protocol with explicit data_origin tags
+- Added I(C,U) leakage protocol with explicit data_origin tags; refined calibration semantics (bounded degradation, not non-divergence)
 - Added transfer-learning provenance fields
 - Added six-axis statistical interaction model note
 - Made legality boundary explicit: DECLARED constraints only for logical infeasibility
-- Reorganized Class E benchmarks into E1-E4 hierarchy with effect-size protocol
+- Reorganized Class E benchmarks into E1-E4 hierarchy with effect-size protocol (task-level primary unit, mixed-effects option)
+- **Budget tiers**: `CostBudgetTier` enum (EVAL_COUNT, FLOPS, WALLTIME+hardware_class, ENERGY)
+- **Artifact size policy**: small inline (≤10 MB), large external + manifest
+- **Assessment procedure immutability**: content-addressed by `code_hash`
+- **Seed identity**: `measurement_key` (per seed) vs `replication_key` (groups seeds)
 - Strengthened walking skeleton Gate 3: synthetic known-ground-truth fixture
 - Explicitly distinguished API backwards compatibility (dropped) from historical evidence compatibility (mandatory)
+- **WP dependency chain**: WP1.5 → WP5.5 → WP6 (hard CI gate)
 
 ### 2026-09-29 — WP1.5 Complete (Scientific Validity Skeleton)
 - Implemented `evidence/protocol.py`: `CostBudget`, `ComparisonGuard`, effect-size computation (Cohen's d + CI + p-value), Wilcoxon support, `SyntheticGroundTruth` fixture
@@ -618,16 +701,30 @@ strict-clean from WP1 onward.
 - All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
 - All 46 property tests pass (34 new + 12 wiring locks)
 
+### 2026-09-29 — WP5 Complete (Evidence & Governance)
+- Implemented `evidence/status.py`: Three-tier status model (Observations, Assessments, Derived Claims) with `AssessmentProcedure` content-addressed linkage
+- Implemented `evidence/procedures.py`: `AssessmentProcedure` registry with immutable code_hash; built-in procedures for gate_verdict, maturity, failure_classification, quarantine, reproducibility
+- Implemented `evidence/claims.py`: Full predicate suite — claim_eligible, promoted, beats_baseline, robust, generalizes; alert predicates (divergence, stagnation, resource_exhaustion, constraint_violation); matched-cost comparison guards; stratification guards; I(C,U) data split predicates (training_data_allowed, evaluation_data_allowed, check_leakage)
+- Implemented `evidence/failure.py`: FailureCause taxonomy, clustering (`FailureCluster`, `FailurePattern`), reproducer emission (`Reproducer.to_script()`), fix linkage queries (`FixLinkage`)
+- Implemented `evidence/artifacts.py`: Unified artifact storage in DuckDB `artifacts` table; inline (≤10 MB) vs external (file://) with manifest; `ArtifactStore` with atomic put/get/delete
+- Updated `evidence/store.py`: Atomic `append_with_artifacts()` (single transaction: record + artifacts); vector retrieval (brute-force cosine/dot + optional HNSW via vss); Pydantic v2 models for I/O validation (ScheduleModel, ProvenanceModel, StatusModel, RecordInputModel, RecordOutputModel); unified artifacts table replaces `record_artifacts` + CEEC delegation
+- Updated `evidence/__init__.py`: Exports all new modules
+- Created `tests/property/test_statistical_protocol_lock.py` (33 tests): E1-E4 benchmark hierarchy, effect-size protocol (N_tasks≥10, N_seeds≥5, task-level inference), I(C,U) leakage protocol, claim predicates, alert predicates, comparison guards, store integration
+- All new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- All 79 property tests pass (33 new + 34 scientific validity + 12 wiring locks)
+
+### 2026-09-29 — WP5.5 Complete (Statistical Analysis Protocol)
+- Implemented `tests/property/test_statistical_protocol_lock.py`: Lockstep tests for E1-E4 benchmark class hierarchy, effect-size protocol (Cohen's d + CI + p-value, task-level primary unit), I(C,U) data split enforcement (exploration/policy_selected vs calibration/test), matched-cost comparison guards, stratification guards (hardware_class, data_origin, budget_tier)
+- All tests pass; statistical protocol lock established as CI gate for WP6
+
 ### Improvement Opportunities (for future WPs)
 1. **WP1.5**: Atomic append with artifacts kill -9 proof (protocol skeleton complete)
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
 3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
 4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
 5. **WP3**: Add legality boundary lock test (`test_legality_boundary_lock.py`)
-6. **WP5**: Implement full evidence predicates (`status.py` with three-tier model, `claims.py`, `failure.py`, `artifacts.py` unified storage)
-7. **WP5.5**: Implement statistical protocol lock (`test_statistical_protocol_lock.py`)
-8. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
-9. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
+6. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
+7. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
 
 ### Notes for Remaining Work
 - The `execution/` package is now complete with all 7 modules: budget.py, allocator.py, replay.py, backends.py, policy.py, stage.py, pipeline.py

@@ -1,4 +1,8 @@
-"""DuckDB-backed record store for experiment evidence."""
+"""DuckDB-backed record store for experiment evidence.
+
+Implements WP5: unified artifact storage, vector retrieval, atomic append
+with artifacts, Pydantic v2 models for I/O boundaries.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,13 @@ from typing import TYPE_CHECKING, Any, Self
 
 import duckdb
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+from computronium.experiment.evidence.artifacts import (
+    ArtifactInput,
+    ArtifactStore,
+)
 from computronium.experiment.schema.coordinate import (
     Provenance,
     Schedule,
@@ -26,7 +37,7 @@ from computronium.experiment.schema.record import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from pydantic import BaseModel
 
 
 class DuplicateMeasurementError(Exception):
@@ -47,14 +58,21 @@ class StoreConfig:
 
     path: Path
     read_only: bool = False
+    artifact_inline_threshold_mb: float = 10.0
+    artifact_external_path: Path | None = None
 
 
 class RecordStore:
     """DuckDB-backed record store with single-writer guarantee.
 
-    All writes flow through a single instance guarded by a threading.Lock.
+    All writes flow through a single instance guarded by a threading.RLock.
     DuckDB allows one writer process; this design concentrates writes
     in the orchestrating process.
+
+    Features:
+    - Atomic record + artifact append (single transaction)
+    - Vector retrieval (brute-force + optional HNSW via vss)
+    - Pydantic v2 validation at I/O boundaries
     """
 
     _SCHEMA_VERSION = 1
@@ -62,8 +80,9 @@ class RecordStore:
     def __init__(self, config: StoreConfig) -> None:
         self._config = config
         self._conn: duckdb.DuckDBPyConnection | None = None
-        self._write_lock = threading.Lock()
+        self._write_lock = threading.RLock()
         self._initialized = False
+        self._artifact_store: ArtifactStore | None = None
 
     def __enter__(self) -> Self:
         self._conn = duckdb.connect(
@@ -72,6 +91,13 @@ class RecordStore:
         if not self._initialized and not self._config.read_only:
             self._init_schema()
             self._initialized = True
+        # Initialize artifact store
+        self._artifact_store = ArtifactStore(
+            conn=self._conn,
+            write_lock=self._write_lock,
+            inline_threshold_mb=self._config.artifact_inline_threshold_mb,
+            external_store_path=self._config.artifact_external_path,
+        )
         return self
 
     def __exit__(
@@ -85,11 +111,20 @@ class RecordStore:
                 self._conn.execute("CHECKPOINT")
             self._conn.close()
             self._conn = None
+        self._artifact_store = None
+
+    @property
+    def artifacts(self) -> ArtifactStore:
+        """Access the artifact store."""
+        if self._artifact_store is None:
+            raise StoreError("Artifact store not initialized (enter context first)")
+        return self._artifact_store
 
     def _init_schema(self) -> None:
         """Initialize the database schema."""
         if self._conn is None:
             raise StoreError("Connection not initialized")
+
         # Create sequence for write ordering
         self._conn.execute("CREATE SEQUENCE IF NOT EXISTS record_seq")
 
@@ -135,13 +170,17 @@ class RecordStore:
             )
         """)
 
-        # Record artifacts table (bytes live in ceec-core)
+        # Artifacts table (unified - replaces record_artifacts + CEEC delegation)
         self._conn.execute("""
-            CREATE TABLE IF NOT EXISTS record_artifacts (
-                record_id TEXT NOT NULL REFERENCES records(record_id),
-                digest    TEXT NOT NULL,
-                role      TEXT NOT NULL,
-                PRIMARY KEY (record_id, digest, role)
+            CREATE TABLE IF NOT EXISTS artifacts (
+                digest            TEXT PRIMARY KEY,
+                bytes             BLOB,
+                role              TEXT NOT NULL,
+                record_id         TEXT NOT NULL REFERENCES records(record_id),
+                created_at        TIMESTAMP NOT NULL,
+                external_uri      TEXT,
+                external_size     BIGINT,
+                external_checksum TEXT
             )
         """)
 
@@ -160,6 +199,9 @@ class RecordStore:
         )
         self._conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_records_cell_key ON records(cell_key)"
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_artifacts_record_id ON artifacts(record_id)"
         )
 
     def create_run(
@@ -303,27 +345,124 @@ class RecordStore:
                 unknown=record.unknown,
             )
 
-    def append_artifacts(
-        self, record_id: str, artifacts: list[tuple[str, str]]
-    ) -> None:
-        """Append artifact references for a record.
+    def append_with_artifacts(
+        self, record: Record, artifacts: list[ArtifactInput]
+    ) -> Record:
+        """Atomic append: record + all artifacts in single transaction.
 
         Args:
-            record_id: The record ID
-            artifacts: List of (digest, role) tuples
+            record: The record to append
+            artifacts: List of ArtifactInput objects
+
+        Returns:
+            Record with assigned seq
+
+        Raises:
+            DuplicateMeasurementError: If measurement_key already exists
+            StoreError: On any storage failure (transaction rolled back)
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
+        if self._artifact_store is None:
+            raise StoreError("Artifact store not initialized")
+
         with self._write_lock:
-            for digest, role in artifacts:
+            self._conn.execute("BEGIN")
+            try:
+                # Insert record
                 self._conn.execute(
                     """
-                    INSERT INTO record_artifacts (record_id, digest, role)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT DO NOTHING
+                    INSERT INTO records (
+                        record_id, run_id, schema_version, cell_key, measurement_key,
+                        substrate, geometry, dynamics, plasticity, credit, update,
+                        params, schedule, provenance, status, payload, unknown
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [record_id, digest, role],
+                    [
+                        record.record_id,
+                        record.run_id,
+                        record.schema_version,
+                        record.cell_key,
+                        record.measurement_key,
+                        record.substrate,
+                        record.geometry,
+                        record.dynamics,
+                        record.plasticity,
+                        record.credit,
+                        record.update,
+                        json.dumps(record.params),
+                        {
+                            "fidelity": record.schedule.fidelity,
+                            "seed": record.schedule.seed,
+                            "n_seeds": record.schedule.n_seeds,
+                            "epochs": record.schedule.epochs,
+                            "batch_limit": record.schedule.batch_limit,
+                            "budget_id": record.schedule.budget_id,
+                        },
+                        json.dumps(record.provenance.to_dict()),
+                        {
+                            "gate_verdict": record.status.gate_verdict.value,
+                            "defect": record.status.defect,
+                            "cause": record.status.cause.value,
+                            "severity": record.status.severity.value,
+                            "quarantine": record.status.quarantine,
+                            "maturity": record.status.maturity.value,
+                            "uncertainty": json.dumps(record.status.uncertainty),
+                            "reproducibility": record.status.reproducibility.value,
+                            "assessment_procedure_version": record.status.assessment_procedure_version,
+                            "ceec_link": record.status.ceec_link,
+                        },
+                        json.dumps(record.payload),
+                        json.dumps(record.unknown) if record.unknown else None,
+                    ],
                 )
+
+                # Store artifacts
+                for art_input in artifacts:
+                    self._artifact_store.put(art_input, record.record_id)
+
+                self._conn.execute("COMMIT")
+
+            except duckdb.ConstraintException as e:
+                self._conn.execute("ROLLBACK")
+                if (
+                    "measurement_key" in str(e)
+                    and "unique constraint" in str(e).lower()
+                ):
+                    raise DuplicateMeasurementError(record.measurement_key) from e
+                raise StoreError(f"Constraint violation: {e}") from e
+            except Exception:
+                self._conn.execute("ROLLBACK")
+                raise
+
+        # Fetch the assigned seq and return updated record
+        result = self._conn.execute(
+            "SELECT seq FROM records WHERE record_id = ?", [record.record_id]
+        ).fetchone()
+
+        if result is None:
+            raise StoreError("Failed to retrieve seq after insert")
+
+        return Record(
+            record_id=record.record_id,
+            seq=result[0],
+            run_id=record.run_id,
+            schema_version=record.schema_version,
+            cell_key=record.cell_key,
+            measurement_key=record.measurement_key,
+            substrate=record.substrate,
+            geometry=record.geometry,
+            dynamics=record.dynamics,
+            plasticity=record.plasticity,
+            credit=record.credit,
+            update=record.update,
+            params=record.params,
+            schedule=record.schedule,
+            provenance=record.provenance,
+            status=record.status,
+            payload=record.payload,
+            unknown=record.unknown,
+        )
 
     def get_record(self, record_id: str) -> Record | None:
         """Get a record by record_id."""
@@ -407,6 +546,183 @@ class RecordStore:
             quarantine=False,
         )
 
+    # =========================================================================
+    # Vector Retrieval (brute-force + optional HNSW)
+    # =========================================================================
+
+    def add_embedding(
+        self,
+        record_id: str,
+        embedding: list[float],
+        version: int = 1,
+    ) -> None:
+        """Add or update a vector embedding for a record."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        if len(embedding) != 384:
+            raise ValueError(f"Embedding must be 384-dimensional, got {len(embedding)}")
+
+        with self._write_lock:
+            self._conn.execute(
+                """
+                INSERT INTO vector_index (record_id, embedding, embedding_version)
+                VALUES (?, ?, ?)
+                ON CONFLICT (record_id) DO UPDATE SET
+                    embedding = EXCLUDED.embedding,
+                    embedding_version = EXCLUDED.embedding_version
+                """,
+                [record_id, embedding, version],
+            )
+
+    def get_embedding(self, record_id: str) -> list[float] | None:
+        """Get embedding for a record."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        row = self._conn.execute(
+            "SELECT embedding FROM vector_index WHERE record_id = ?", [record_id]
+        ).fetchone()
+        return list(row[0]) if row else None
+
+    def vector_search_brute_force(
+        self,
+        query_embedding: list[float],
+        k: int = 10,
+        metric: str = "cosine",
+        filter_run_id: str | None = None,
+    ) -> list[tuple[Record, float]]:
+        """Brute-force vector search using DuckDB's array operations.
+
+        Args:
+            query_embedding: Query vector (384-dim)
+            k: Number of results to return
+            metric: "cosine" or "dot"
+            filter_run_id: Optional run_id to restrict search
+
+        Returns:
+            List of (Record, score) tuples, highest score first
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        if len(query_embedding) != 384:
+            raise ValueError(
+                f"Embedding must be 384-dimensional, got {len(query_embedding)}"
+            )
+
+        # Build filter
+        where_clause = ""
+        params: list[Any] = []
+        if filter_run_id:
+            where_clause = "WHERE r.run_id = ?"
+            params.append(filter_run_id)
+
+        if metric == "cosine":
+            # Cosine similarity = dot(a,b) / (|a|*|b|)
+            # DuckDB: list_dot(a,b) / (list_norm(a) * list_norm(b))
+            score_expr = (
+                "list_dot(vi.embedding, ?) / (list_norm(vi.embedding) * list_norm(?))"
+            )
+            params.extend([query_embedding, query_embedding])
+        else:
+            # Dot product
+            score_expr = "list_dot(vi.embedding, ?)"
+            params.append(query_embedding)
+
+        query = f"""
+            SELECT r.*, {score_expr} AS score
+            FROM records r
+            JOIN vector_index vi ON r.record_id = vi.record_id
+            {where_clause}
+            ORDER BY score DESC
+            LIMIT ?
+        """
+        params.append(k)
+
+        rows = self._conn.execute(query, params).fetchall()
+        return [(self._row_to_record(row[:-1]), row[-1]) for row in rows]
+
+    def vector_search_hnsw(
+        self,
+        query_embedding: list[float],
+        k: int = 10,
+        filter_run_id: str | None = None,
+    ) -> list[tuple[Record, float]]:
+        """HNSW vector search via DuckDB vss extension (experimental).
+
+        Falls back to brute-force if vss not available.
+
+        Args:
+            query_embedding: Query vector (384-dim)
+            k: Number of results to return
+            filter_run_id: Optional run_id to restrict search
+
+        Returns:
+            List of (Record, score) tuples, highest score first
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+
+        # Check if vss extension is available
+        try:
+            self._conn.execute("LOAD vss")
+        except duckdb.CatalogException:
+            # Fall back to brute force
+            return self.vector_search_brute_force(
+                query_embedding, k, "cosine", filter_run_id
+            )
+
+        where_clause = ""
+        params = [query_embedding, k]
+        if filter_run_id:
+            where_clause = "AND r.run_id = ?"
+            params.append(filter_run_id)
+
+        query = f"""
+            SELECT r.*, vi.embedding <=> ? AS distance
+            FROM records r
+            JOIN vector_index vi ON r.record_id = vi.record_id
+            WHERE 1=1 {where_clause}
+            ORDER BY distance ASC
+            LIMIT ?
+        """
+
+        try:
+            rows = self._conn.execute(query, params).fetchall()
+            # Convert distance to similarity score (1 - distance for cosine)
+            return [(self._row_to_record(row[:-1]), 1.0 - row[-1]) for row in rows]
+        except Exception:
+            # Fall back on any error
+            return self.vector_search_brute_force(
+                query_embedding, k, "cosine", filter_run_id
+            )
+
+    def vector_search(
+        self,
+        query_embedding: list[float],
+        k: int = 10,
+        metric: str = "cosine",
+        filter_run_id: str | None = None,
+        use_hnsw: bool = False,
+    ) -> list[tuple[Record, float]]:
+        """Unified vector search interface.
+
+        Args:
+            query_embedding: Query vector (384-dim)
+            k: Number of results
+            metric: "cosine" or "dot" (for brute force)
+            filter_run_id: Optional run filter
+            use_hnsw: Try HNSW first (requires vss extension)
+
+        Returns:
+            List of (Record, score) tuples
+        """
+        if use_hnsw:
+            return self.vector_search_hnsw(query_embedding, k, filter_run_id)
+        return self.vector_search_brute_force(query_embedding, k, metric, filter_run_id)
+
+    # =========================================================================
+    # Pydantic Models for I/O Boundaries
+    # =========================================================================
+
     def _row_to_record(self, row: tuple) -> Record:
         """Convert a database row to a Record."""
         return self._build_record_from_row(row)
@@ -481,9 +797,145 @@ class RecordStore:
         return result[0] if result is not None else 0
 
 
+# =========================================================================
+# Pydantic v2 Models for I/O Validation
+# =========================================================================
+
+try:
+    from typing import Annotated
+
+    from pydantic import BaseModel, ConfigDict, Field
+
+    class ScheduleModel(BaseModel):
+        """Pydantic model for Schedule validation at I/O boundaries."""
+
+        model_config = ConfigDict(frozen=True, extra="forbid")
+
+        fidelity: Annotated[str, Field(pattern="^(L0|L1|L2)$")]
+        seed: Annotated[int, Field(ge=0)]
+        n_seeds: Annotated[int, Field(gt=0)]
+        epochs: Annotated[int, Field(gt=0)]
+        batch_limit: Annotated[int, Field(ge=0)]
+        budget_id: str
+
+    class ProvenanceModel(BaseModel):
+        """Pydantic model for Provenance validation at I/O boundaries."""
+
+        model_config = ConfigDict(frozen=True, extra="forbid")
+
+        env: dict[str, str]
+        dataset: str
+        dataset_version: str
+        code_sha: str
+        policy: str
+        links: dict[str, str]
+        data_origin: str = "exploration"
+        training_tasks: list[str] = []
+        transfer_source_ids: list[str] = []
+        transfer_cutoff: str | None = None
+        target_task: str | None = None
+        transfer_mode: str | None = None
+
+    class StatusModel(BaseModel):
+        """Pydantic model for Status validation at I/O boundaries."""
+
+        model_config = ConfigDict(frozen=True, extra="forbid")
+
+        gate_verdict: Annotated[str, Field(pattern="^(PASS|FAIL|QUARANTINE|PENDING)$")]
+        defect: str
+        cause: Annotated[
+            str,
+            Field(
+                pattern="^(unknown|numerical|timeout|oom|invalid_config|runtime_error|constraint_violation|divergence)$"
+            ),
+        ]
+        severity: Annotated[str, Field(pattern="^(low|medium|high|critical)$")]
+        quarantine: bool
+        maturity: Annotated[str, Field(pattern="^(l0|l1|l2)$")]
+        uncertainty: dict[str, Any]
+        reproducibility: Annotated[
+            str,
+            Field(
+                pattern="^(replayable|computationally_reproducible|scientifically_reproducible)$"
+            ),
+        ]
+        assessment_procedure_version: str
+        ceec_link: str | None = None
+
+    class RecordInputModel(BaseModel):
+        """Pydantic model for Record input validation (create/append)."""
+
+        model_config = ConfigDict(frozen=True, extra="forbid")
+
+        run_id: str
+        coordinate: dict[str, Any]
+        schedule: ScheduleModel
+        provenance: ProvenanceModel
+        status: StatusModel
+        payload: dict[str, Any]
+        unknown: dict[str, Any] | None = None
+        schema_version: int = 1
+
+    class RecordOutputModel(BaseModel):
+        """Pydantic model for Record output validation (query results)."""
+
+        model_config = ConfigDict(frozen=True, extra="forbid")
+
+        record_id: str
+        seq: int
+        run_id: str
+        schema_version: int
+        cell_key: str
+        measurement_key: str
+        substrate: str
+        geometry: str
+        dynamics: str
+        plasticity: str
+        credit: str
+        update: str
+        params: dict[str, Any]
+        schedule: ScheduleModel
+        provenance: ProvenanceModel
+        status: StatusModel
+        payload: dict[str, Any]
+        unknown: dict[str, Any] | None = None
+
+    # Validation helpers
+    def validate_record_input(data: dict[str, Any]) -> RecordInputModel:
+        """Validate record input data using Pydantic."""
+        return RecordInputModel.model_validate(data)
+
+    def validate_record_output(data: dict[str, Any]) -> RecordOutputModel:
+        """Validate record output data using Pydantic."""
+        return RecordOutputModel.model_validate(data)
+
+except ImportError:
+    # Pydantic not available - provide no-op validators
+    class _MissingPydantic:
+        def __getattr__(self, name: str) -> Any:
+            raise ImportError(
+                "pydantic v2 required for I/O validation. Install with: uv add pydantic"
+            )
+
+    validate_record_input = _MissingPydantic()  # type: ignore[assignment]
+    validate_record_output = _MissingPydantic()  # type: ignore[assignment]
+    ScheduleModel = _MissingPydantic  # type: ignore[assignment]
+    ProvenanceModel = _MissingPydantic  # type: ignore[assignment]
+    StatusModel = _MissingPydantic  # type: ignore[assignment]
+    RecordInputModel = _MissingPydantic  # type: ignore[assignment]
+    RecordOutputModel = _MissingPydantic  # type: ignore[assignment]
+
+
 __all__ = [
     "DuplicateMeasurementError",
+    "ProvenanceModel",
+    "RecordInputModel",
+    "RecordOutputModel",
     "RecordStore",
+    "ScheduleModel",
+    "StatusModel",
     "StoreConfig",
     "StoreError",
+    "validate_record_input",
+    "validate_record_output",
 ]
