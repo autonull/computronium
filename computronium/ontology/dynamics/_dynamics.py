@@ -552,24 +552,93 @@ class StateDynamicsConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list[object]]:
+    def hyperparameters(
+        cls, primitive_name: str = ""
+    ) -> dict[str, tuple[float, float, str] | list[object] | dict[str, object]]:
         """Hyperparameter ranges owned by the state_dynamics axis.
 
         These are the knobs the dynamics config reads. The sweep unions the
         hyperparameters() of all primitives named by a coordinate.
+
+        Args:
+            primitive_name: The specific primitive name (e.g., "energy_minimization")
+                to provide availability predicates for primitive-specific params.
         """
-        return {
-            "max_steps": (1, 200, "int"),
-            "convergence_threshold": (1e-6, 1e-2, "log"),
-            "convergence_start": (1, 20, "int"),
-            "step_size": (1e-3, 1.0, "log"),
-            "beta": (1e-3, 1.0, "log"),
-            "momentum": (0.0, 0.99, "linear"),
-            "threshold": (0.1, 5.0, "linear"),
-            "rho": (0.1, 10.0, "log"),
-            "prospective_leak": (0.0, 1.0, "linear"),
-            "rho_final": (0.1, 10.0, "log"),
+        from computronium.experiment.legality.dsl import expr_from_string
+
+        # Base hyperparameters available for all dynamics primitives
+        base = {
+            "max_steps": {
+                "domain": (1, 200, "int"),
+                "availability": None,
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "convergence_threshold": {
+                "domain": (1e-6, 1e-2, "log"),
+                "availability": None,
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "convergence_start": {
+                "domain": (1, 20, "int"),
+                "availability": None,
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "step_size": {
+                "domain": (1e-5, 1.0, "log"),
+                "availability": None,
+                "prior": "step_size_energy_minimization_backprop",
+                "override_scope": "coordinate",
+            },
+            "beta": {
+                "domain": (1e-3, 1.0, "log"),
+                "availability": expr_from_string(
+                    'dynamics in ["energy_minimization", "predictive_settling", "error_predictive_coding", "spike_integration", "pc_alm"]'
+                ),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "momentum": {
+                "domain": (0.0, 0.99, "linear"),
+                "availability": expr_from_string('dynamics == "energy_minimization"'),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "threshold": {
+                "domain": (0.1, 5.0, "linear"),
+                "availability": expr_from_string('dynamics == "spike_integration"'),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "rho": {
+                "domain": (0.1, 10.0, "log"),
+                "availability": expr_from_string('dynamics == "pc_alm"'),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "prospective_leak": {
+                "domain": (0.0, 1.0, "linear"),
+                "availability": expr_from_string('dynamics == "pc_alm"'),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
+            "rho_final": {
+                "domain": (0.1, 10.0, "log"),
+                "availability": expr_from_string('dynamics == "pc_alm"'),
+                "prior": None,
+                "override_scope": "coordinate",
+            },
         }
+
+        # Filter based on primitive_name if provided
+        if primitive_name:
+            # For specific primitives, we could filter, but for now return all
+            # The availability predicates will handle conditional availability
+            pass
+
+        return base
 
 
 # ============================================================

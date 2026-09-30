@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import] (used at runtime for isinstance)
+from collections.abc import (
+    Mapping,  # ruff: ignore[typing-only-standard-library-import] (used at runtime for isinstance)
+)
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
@@ -557,23 +559,58 @@ class ParameterUpdateConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list[object]]:
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the parameter_update axis.
 
         These are the knobs the update config reads. The sweep unions the
         hyperparameters() of all primitives named by a coordinate.
+
+        Args:
+            primitive_name: The specific update primitive name for availability predicates.
         """
+        from computronium.experiment.legality.dsl import expr_from_string
+
         return {
-            "step_size": (1e-5, 1.0, "log"),
-            "momentum": (0.0, 0.99, "linear"),
-            "ortho_steps": (0, 10, "int"),
-            "spectral_norm": (0.1, 10.0, "log"),
-            "fisher_damping": (1e-6, 1.0, "log"),
-            "ewc_lambda": (1e-1, 1e4, "log"),
-            "grad_clip": (0.1, 10.0, "log"),
-            "beta2": (0.9, 0.9999, "linear"),
-            "eps": (1e-10, 1e-4, "log"),
-            "ortho_lr": (1e-5, 1.0, "log"),
+            "step_size": {"domain": (1e-5, 1.0, "log")},
+            "momentum": {"domain": (0.0, 0.99, "linear")},
+            "ortho_steps": {
+                "domain": (0, 10, "int"),
+                "availability": expr_from_string(
+                    'update in ["riemannian_orthogonal", "muon", "ortho_adam"]'
+                ),
+            },
+            "spectral_norm": {
+                "domain": (0.1, 10.0, "log"),
+                "availability": expr_from_string('update == "spectral_constrained"'),
+            },
+            "fisher_damping": {
+                "domain": (1e-6, 1.0, "log"),
+                "availability": expr_from_string(
+                    'update in ["natural_gradient", "elastic_consolidation"]'
+                ),
+            },
+            "ewc_lambda": {
+                "domain": (1e-1, 1e4, "log"),
+                "availability": expr_from_string('update == "elastic_consolidation"'),
+            },
+            "grad_clip": {"domain": (0.1, 10.0, "log")},
+            "beta2": {
+                "domain": (0.9, 0.9999, "linear"),
+                "availability": expr_from_string(
+                    'update in ["adam", "local_adam", "ortho_adam", "lion"]'
+                ),
+            },
+            "eps": {
+                "domain": (1e-10, 1e-4, "log"),
+                "availability": expr_from_string(
+                    'update in ["adam", "local_adam", "ortho_adam", "lion"]'
+                ),
+            },
+            "ortho_lr": {
+                "domain": (1e-5, 1.0, "log"),
+                "availability": expr_from_string('update == "ortho_adam"'),
+            },
+            "batch_size": {"domain": [16, 32, 64, 128, 256, 512]},
         }
 
 

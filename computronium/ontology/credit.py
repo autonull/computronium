@@ -482,35 +482,86 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the credit_assignment axis.
 
         These are the knobs the credit config reads. The sweep unions the
         hyperparameters() of all primitives named by a coordinate.
+
+        Args:
+            primitive_name: The specific credit primitive name for availability predicates.
         """
+        from computronium.experiment.legality.dsl import expr_from_string
+
         return {
-            "beta": (1e-3, 1.0, "log"),
-            "feedback_scale": (1e-3, 10.0, "log"),
-            "credit_norm": ["none", "relative", "rms", "beta_adaptive", "spectral"],
-            "local_objective": ["ff", "lemma"],
-            "orthogonal_init": [True, False],
-            "readout_error": [True, False],
-            "learned_feedback": [True, False],
-            "feedback_lr": (1e-3, 0.5, "log"),
-            "feedback_update_every": (1, 10, "int"),
-            "a_plus": (0.1, 5.0, "linear"),
-            "a_minus": (0.1, 5.0, "linear"),
-            "tau_pre": (0.1, 2.0, "linear"),
-            "tau_post": (0.1, 2.0, "linear"),
-            "homeostatic_target": (0.5, 2.0, "linear"),
-            "homeostatic_scaling": [True, False],
-            "ema_beta": (0.9, 0.999, "linear"),
-            "stream_norm": [True, False],
-            "contrast_threshold": (0.5, 10.0, "linear"),
-            "contrast_objective": ["gate", "hinge"],
-            "readout_scale": (0.1, 10.0, "log"),
-            "sequential_lr": (0.0, 1.0, "linear"),
-            "train_biases": [True, False],
+            "beta": {
+                "domain": (1e-3, 1.0, "log"),
+                "availability": expr_from_string(
+                    'credit in ["thermodynamic_contrast", "pc_alm"]'
+                ),
+            },
+            "feedback_scale": {"domain": (1e-3, 10.0, "log")},
+            "credit_norm": {
+                "domain": ["none", "relative", "rms", "beta_adaptive", "spectral"]
+            },
+            "local_objective": {"domain": ["ff", "lemma"]},
+            "orthogonal_init": {"domain": [True, False]},
+            "readout_error": {"domain": [True, False]},
+            "learned_feedback": {"domain": [True, False]},
+            "feedback_lr": {"domain": (1e-3, 0.5, "log")},
+            "feedback_update_every": {"domain": (1, 10, "int")},
+            "a_plus": {
+                "domain": (0.1, 5.0, "linear"),
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "a_minus": {
+                "domain": (0.1, 5.0, "linear"),
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "tau_pre": {
+                "domain": (0.1, 2.0, "linear"),
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "tau_post": {
+                "domain": (0.1, 2.0, "linear"),
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "homeostatic_target": {
+                "domain": (0.5, 2.0, "linear"),
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "homeostatic_scaling": {
+                "domain": [True, False],
+                "availability": expr_from_string('credit == "temporal_trace"'),
+            },
+            "ema_beta": {
+                "domain": (0.9, 0.999, "linear"),
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "stream_norm": {
+                "domain": [True, False],
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "contrast_threshold": {
+                "domain": (0.5, 10.0, "linear"),
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "contrast_objective": {
+                "domain": ["gate", "hinge"],
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "readout_scale": {
+                "domain": (0.1, 10.0, "log"),
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "sequential_lr": {
+                "domain": (0.0, 1.0, "linear"),
+                "availability": expr_from_string('credit == "local_contrastive"'),
+            },
+            "train_biases": {
+                "domain": [True, False],
+                "availability": expr_from_string('credit == "gradient"'),
+            },
         }
 
 

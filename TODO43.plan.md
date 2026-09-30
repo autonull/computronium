@@ -1165,3 +1165,33 @@ Definition of Done completes at WP13 close.
 - WP12 executes Directive 1 port-and-delete over the full legacy inventory,
   including the pre-kernel files currently inside `experiment/`.
 - WP13 defines the E1–E4 harnesses and the extended Definition of Done.
+
+### 2026-09-29 — WP8 Partial: Axis System & Harvest Schema (L1/L2 completed)
+- **Axis unification (L1)**: `AxisKind` (six ontology axes) → `StructuralAxis`;
+  introduced new `AxisKind ∈ {STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL}`;
+  `AxisSpec` extended with `Domain` (lo/hi/scale/members), `availability: Expr | None`,
+  `prior`, `override_scope`, `topology_params`.
+- **Harvest wiring (L2)**: `schema/primitives.py` maps primitive ids → ontology config
+  classes; `harvest_schema()` now calls `hyperparameters()` from each config class and
+  deduplicates across axes.
+- **Rich hyperparameters()**: All six config classes now return extended format with
+  `domain`, `availability` (Expr predicates), `prior`, `override_scope`. Availability
+  predicates encode primitive-conditional parameters (e.g., `ortho_steps` only for
+  `riemannian_orthogonal/muon/ortho_adam`; `a_plus` only for `temporal_trace`).
+- **Structured parameters moved**: `input_dim`, `output_dim` (dataset-determined),
+  `neurons_per_tile`, `tiles_per_layer`, etc. are now marked as structural
+  (`AxisKind.STRUCTURAL`) or topology params, not free hyperparameters.
+- **New tunables discovered**: The harvest now yields 68+ parameters (vs Gate 2's 44),
+  reflecting the richer ontology surface. Legacy names (e.g., `learning_rate`) map to
+  canonical ontology names (e.g., `step_size`); test includes LEGACY_TO_CANONICAL mapping
+  and validates coverage.
+- **Test coverage**: 7 harvest lock tests pass, including Gate 2 union coverage via
+  canonical mapping (30+/44 legacy names covered directly), plus rich ontology expansion
+  (40+ additional params with availability predicates).
+
+### Remaining WP8 Work (not started)
+- CapabilitySpec extension (L3) and seeding C1-C88
+- Constraint seeds with real Expr predicates and proof kinds (L5)
+- ObjectiveSpec extension with weight/normalizer/axis_tag (L16)
+- `docs/design/rev3_gate.md` creation (Gate 1 execution)
+- Registry lockstep tests for AXES + CAPABILITIES totality (C↔R matrix)

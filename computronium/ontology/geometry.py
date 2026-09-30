@@ -509,28 +509,71 @@ class GeometryConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list[object]]:
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the geometry axis.
 
         These are the knobs the geometry config reads. The sweep unions the
         hyperparameters() of all primitives named by a coordinate.
+
+        Args:
+            primitive_name: The specific geometry primitive name for availability predicates.
         """
+        from computronium.experiment.legality.dsl import expr_from_string
+
         return {
-            "input_dim": (1, 8192, "int"),
-            "output_dim": (1, 8192, "int"),
-            "hidden_dim": (8, 4096, "log"),
-            "num_layers": (1, 12, "int"),
-            "init_scale": (1e-3, 10.0, "log"),
-            "neurons_per_tile": (2, 64, "int"),
-            "tiles_per_layer": (1, 8, "int"),
-            "conv_channels": (4, 256, "int"),
-            "kernel_size": (1, 7, "int"),
-            "num_heads": (1, 32, "int"),
-            "seq_len": (16, 4096, "int"),
-            "lattice_dims": (2, 32, "int"),
-            "mem_slots": (4, 128, "int"),
-            "mem_width": (4, 128, "int"),
-            "grid_hw": (4, 64, "int"),
+            "input_dim": {
+                "domain": (1, 8192, "int")
+            },  # Structural - dataset-determined
+            "output_dim": {
+                "domain": (1, 8192, "int")
+            },  # Structural - dataset-determined
+            "hidden_dim": {"domain": (8, 4096, "log")},
+            "num_layers": {"domain": (1, 12, "int")},
+            "init_scale": {"domain": (1e-3, 10.0, "log")},
+            "init_scheme": {"domain": ["default", "mupc", "innocenti"]},
+            "residual": {"domain": [True, False]},
+            "neurons_per_tile": {
+                "domain": (2, 64, "int"),
+                "availability": expr_from_string('geometry in ["tile", "tile_mesh"]'),
+            },
+            "tiles_per_layer": {
+                "domain": (1, 8, "int"),
+                "availability": expr_from_string('geometry in ["tile", "tile_mesh"]'),
+            },
+            "conv_channels": {
+                "domain": (4, 256, "int"),
+                "availability": expr_from_string('geometry == "conv"'),
+            },
+            "kernel_size": {
+                "domain": (1, 7, "int"),
+                "availability": expr_from_string('geometry == "conv"'),
+            },
+            "num_heads": {
+                "domain": (1, 32, "int"),
+                "availability": expr_from_string(
+                    'geometry in ["attention", "causal_transformer"]'
+                ),
+            },
+            "seq_len": {
+                "domain": (16, 4096, "int"),
+                "availability": expr_from_string('geometry == "causal_transformer"'),
+            },
+            "lattice_dims": {
+                "domain": (2, 32, "int"),
+                "availability": expr_from_string('geometry == "spatial_lattice"'),
+            },
+            "mem_slots": {
+                "domain": (4, 128, "int"),
+                "availability": expr_from_string('geometry == "ntm"'),
+            },
+            "mem_width": {
+                "domain": (4, 128, "int"),
+                "availability": expr_from_string('geometry == "ntm"'),
+            },
+            "grid_hw": {
+                "domain": (4, 64, "int"),
+                "availability": expr_from_string('geometry == "nca"'),
+            },
         }
 
 

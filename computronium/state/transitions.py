@@ -117,19 +117,46 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def hyperparameters(cls) -> dict[str, tuple[float, float, str] | list]:
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the plasticity axis.
 
         These are the knobs the plasticity config reads. The sweep unions the
         hyperparameters() of all primitives named by a coordinate.
+
+        Args:
+            primitive_name: The specific plasticity primitive name for availability predicates.
         """
+        from computronium.experiment.legality.dsl import expr_from_string
+
         return {
-            "gate_dim": (8, 512, "int"),
-            "fast_weight_dim": (64, 2048, "int"),
-            "num_operators": (2, 32, "int"),
-            "trace_decay": (0.5, 1.0, "linear"),
-            "conflict_threshold": (0.1, 0.9, "linear"),
-            "replace_readout": [True, False],
+            "gate_dim": {
+                "domain": (8, 512, "int"),
+                "availability": expr_from_string('plasticity == "routing"'),
+            },
+            "fast_weight_dim": {
+                "domain": (64, 2048, "int"),
+                "availability": expr_from_string('plasticity == "fast_weights"'),
+            },
+            "num_operators": {
+                "domain": (2, 32, "int"),
+                "availability": expr_from_string('plasticity == "rule_state"'),
+            },
+            "trace_decay": {
+                "domain": (0.5, 1.0, "linear"),
+                "availability": expr_from_string(
+                    'plasticity in ["temporal_psi", "conflict_adaptive"]'
+                ),
+            },
+            "conflict_threshold": {
+                "domain": (0.1, 0.9, "linear"),
+                "availability": expr_from_string('plasticity == "conflict_adaptive"'),
+            },
+            "replace_readout": {
+                "domain": [True, False],
+                "availability": expr_from_string(
+                    'plasticity in ["temporal_psi", "conflict_adaptive"]'
+                ),
+            },
         }
 
 

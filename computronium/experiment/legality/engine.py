@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.legality.dsl import (
     EvaluationContext,
-    _ExprBase,
-    _ExprProto,
+    Expr,
     evaluate,
     expr_hash,
     expr_to_json,
@@ -94,7 +93,7 @@ class Constraint:
     """
 
     constraint_id: str
-    expr: _ExprProto
+    expr: Expr
     origin: ConstraintOrigin
     scope: ConstraintScope
     enforcement: ConstraintEnforcement
@@ -103,8 +102,10 @@ class Constraint:
     tags: frozenset[str] = field(default_factory=frozenset)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.expr, _ExprBase):
-            raise TypeError(f"expr must be an expression, got {type(self.expr)}")
+        if not hasattr(self.expr, "to_json"):
+            raise TypeError(
+                f"expr must be an expression with to_json method, got {type(self.expr)}"
+            )
         if not isinstance(self.origin, ConstraintOrigin):
             raise TypeError(f"origin must be ConstraintOrigin, got {type(self.origin)}")
         if not isinstance(self.scope, ConstraintScope):
@@ -119,7 +120,7 @@ class Constraint:
     @classmethod
     def create(
         cls,
-        expr: _ExprProto,
+        expr: Expr,
         origin: ConstraintOrigin,
         scope: ConstraintScope,
         enforcement: ConstraintEnforcement,
@@ -344,7 +345,7 @@ def get_engine() -> LegalityEngine:
 
 
 def create_constraint(
-    expr: _ExprProto,
+    expr: Expr,
     origin: ConstraintOrigin,
     scope: ConstraintScope,
     enforcement: ConstraintEnforcement,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from computronium.experiment.schema.coordinate import Coordinate
 
@@ -14,7 +14,10 @@ if TYPE_CHECKING:
 
 
 # Protocol for expression types with to_json method
-class _ExprProto(Protocol):
+@runtime_checkable
+class Expr(Protocol):
+    """Protocol for expression types with to_json method."""
+
     def to_json(self) -> dict[str, Any]: ...
 
 
@@ -24,7 +27,7 @@ class _ExprBase:
 
 
 @dataclass(frozen=True, slots=True)
-class Var(_ExprBase):
+class Var(Expr):
     """Variable reference: axis.param or schedule.field"""
 
     name: str
@@ -34,7 +37,7 @@ class Var(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Const(_ExprBase):
+class Const(Expr):
     """Constant value"""
 
     value: Any
@@ -44,21 +47,21 @@ class Const(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Not(_ExprBase):
+class Not(Expr):
     """Logical negation"""
 
-    expr: _ExprProto
+    expr: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {"type": "Not", "expr": self.expr.to_json()}
 
 
 @dataclass(frozen=True, slots=True)
-class And(_ExprBase):
+class And(Expr):
     """Logical conjunction"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -69,11 +72,11 @@ class And(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Or(_ExprBase):
+class Or(Expr):
     """Logical disjunction"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -84,11 +87,11 @@ class Or(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Eq(_ExprBase):
+class Eq(Expr):
     """Equality comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -99,11 +102,11 @@ class Eq(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Ne(_ExprBase):
+class Ne(Expr):
     """Inequality comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -114,11 +117,11 @@ class Ne(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Lt(_ExprBase):
+class Lt(Expr):
     """Less than comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -129,11 +132,11 @@ class Lt(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Le(_ExprBase):
+class Le(Expr):
     """Less than or equal comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -144,11 +147,11 @@ class Le(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Gt(_ExprBase):
+class Gt(Expr):
     """Greater than comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -159,11 +162,11 @@ class Gt(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class Ge(_ExprBase):
+class Ge(Expr):
     """Greater than or equal comparison"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -174,11 +177,11 @@ class Ge(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class In(_ExprBase):
+class In(Expr):
     """Membership test"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -189,11 +192,11 @@ class In(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class NotIn(_ExprBase):
+class NotIn(Expr):
     """Non-membership test"""
 
-    left: _ExprProto
-    right: _ExprProto
+    left: Expr
+    right: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -204,22 +207,22 @@ class NotIn(_ExprBase):
 
 
 @dataclass(frozen=True, slots=True)
-class HasKey(_ExprBase):
+class HasKey(Expr):
     """Object key existence test"""
 
-    obj: _ExprProto
-    key: _ExprProto
+    obj: Expr
+    key: Expr
 
     def to_json(self) -> dict[str, Any]:
         return {"type": "HasKey", "obj": self.obj.to_json(), "key": self.key.to_json()}
 
 
 @dataclass(frozen=True, slots=True)
-class Call(_ExprBase):
+class Call(Expr):
     """Function call"""
 
     func: str
-    args: tuple[_ExprProto, ...]
+    args: tuple[Expr, ...]
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -237,17 +240,17 @@ def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def expr_hash(expr: _ExprProto) -> str:
+def expr_hash(expr: Expr) -> str:
     """Compute content hash of an expression (Appendix III wire format)."""
     return hashlib.sha256(_canonical_json(expr.to_json()).encode()).hexdigest()
 
 
-def expr_to_json(expr: _ExprProto) -> dict[str, Any]:
+def expr_to_json(expr: Expr) -> dict[str, Any]:
     """Convert expression to JSON wire format."""
     return expr.to_json()
 
 
-def expr_from_json(data: dict[str, Any]) -> _ExprProto:  # noqa: PLR0911 - parser with many cases
+def expr_from_json(data: dict[str, Any]) -> Expr:  # noqa: PLR0911 - parser with many cases
     """Parse expression from JSON wire format."""
     type_map = {
         "Var": Var,
@@ -354,7 +357,7 @@ class EvaluationContext:
 
 
 def _eval_binary(  # noqa: C901,PLR0911 - binary op dispatcher
-    left: _ExprProto, right: _ExprProto, ctx: EvaluationContext, op: str
+    left: Expr, right: Expr, ctx: EvaluationContext, op: str
 ) -> bool:
     """Evaluate binary comparison."""
     left_val = _eval_value(left, ctx)
@@ -384,7 +387,7 @@ def _eval_binary(  # noqa: C901,PLR0911 - binary op dispatcher
             raise ValueError(f"Unknown binary op: {op}")
 
 
-def _eval_value(expr: _ExprProto, ctx: EvaluationContext) -> Any:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
+def _eval_value(expr: Expr, ctx: EvaluationContext) -> Any:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
     """Evaluate an expression to its actual value (not coerced to bool)."""
     match expr:
         case Var(name):
@@ -470,9 +473,47 @@ def _eval_value(expr: _ExprProto, ctx: EvaluationContext) -> Any:  # noqa: C901,
             raise ValueError(f"Unknown expression type: {type(expr)}")
 
 
-def evaluate(expr: _ExprProto, ctx: EvaluationContext) -> bool:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
+def evaluate(expr: Expr, ctx: EvaluationContext) -> bool:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
     """Evaluate an expression as a predicate (coerced to bool)."""
     return bool(_eval_value(expr, ctx))
+
+
+def expr_from_string(s: str) -> Expr:
+    """Parse a simple expression string into an Expr.
+
+    Supports basic forms: "var_name", "var_name == value", "var_name in [a, b, c]",
+    "var_name > value", "var_name < value", etc.
+    """
+    # Simple parser for common cases
+    s = s.strip()
+
+    # Check for binary operators
+    for op_str, op_func in [
+        (" == ", eq),
+        (" != ", ne),
+        (" >= ", ge),
+        (" <= ", le),
+        (" > ", gt),
+        (" < ", lt),
+        (" in ", in_),
+        (" not in ", not_in),
+    ]:
+        if op_str in s:
+            left, right = s.split(op_str, 1)
+            left = left.strip()
+            right = right.strip()
+            # Try to parse right as a value
+            try:
+                # Try to evaluate as Python literal
+                import ast
+
+                right_val = ast.literal_eval(right)
+            except ValueError, SyntaxError:
+                right_val = right
+            return op_func(var(left), const(right_val))
+
+    # Default: just a variable reference
+    return var(s)
 
 
 # Convenience builders
@@ -484,11 +525,11 @@ def const(value: Any) -> Const:
     return Const(value)
 
 
-def not_(expr: _ExprProto) -> Not:
+def not_(expr: Expr) -> Not:
     return Not(expr)
 
 
-def and_(*exprs: _ExprProto) -> _ExprProto:
+def and_(*exprs: Expr) -> Expr:
     if not exprs:
         return const(True)
     result = exprs[0]
@@ -497,7 +538,7 @@ def and_(*exprs: _ExprProto) -> _ExprProto:
     return result
 
 
-def or_(*exprs: _ExprProto) -> _ExprProto:
+def or_(*exprs: Expr) -> Expr:
     if not exprs:
         return const(False)
     result = exprs[0]
@@ -506,43 +547,43 @@ def or_(*exprs: _ExprProto) -> _ExprProto:
     return result
 
 
-def eq(left: _ExprProto, right: _ExprProto) -> Eq:
+def eq(left: Expr, right: Expr) -> Eq:
     return Eq(left, right)
 
 
-def ne(left: _ExprProto, right: _ExprProto) -> Ne:
+def ne(left: Expr, right: Expr) -> Ne:
     return Ne(left, right)
 
 
-def lt(left: _ExprProto, right: _ExprProto) -> Lt:
+def lt(left: Expr, right: Expr) -> Lt:
     return Lt(left, right)
 
 
-def le(left: _ExprProto, right: _ExprProto) -> Le:
+def le(left: Expr, right: Expr) -> Le:
     return Le(left, right)
 
 
-def gt(left: _ExprProto, right: _ExprProto) -> Gt:
+def gt(left: Expr, right: Expr) -> Gt:
     return Gt(left, right)
 
 
-def ge(left: _ExprProto, right: _ExprProto) -> Ge:
+def ge(left: Expr, right: Expr) -> Ge:
     return Ge(left, right)
 
 
-def in_(left: _ExprProto, right: _ExprProto) -> In:
+def in_(left: Expr, right: Expr) -> In:
     return In(left, right)
 
 
-def not_in(left: _ExprProto, right: _ExprProto) -> NotIn:
+def not_in(left: Expr, right: Expr) -> NotIn:
     return NotIn(left, right)
 
 
-def has_key(obj: _ExprProto, key: _ExprProto) -> HasKey:
+def has_key(obj: Expr, key: Expr) -> HasKey:
     return HasKey(obj, key)
 
 
-def call(func: str, *args: _ExprProto) -> Call:
+def call(func: str, *args: Expr) -> Call:
     return Call(func, args)
 
 
@@ -551,6 +592,7 @@ __all__ = [
     "Const",
     "Eq",
     "EvaluationContext",
+    "Expr",
     "Ge",
     "Gt",
     "HasKey",
@@ -568,6 +610,7 @@ __all__ = [
     "eq",
     "evaluate",
     "expr_from_json",
+    "expr_from_string",
     "expr_hash",
     "expr_to_json",
     "ge",

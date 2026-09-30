@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-import dataclasses
-import inspect
 from dataclasses import dataclass
 from typing import Any
 
-from computronium.experiment.schema.axis import AXES_REGISTRIES, AxisKind
+from computronium.experiment.legality.dsl import expr_from_string, or_
+from computronium.experiment.schema.axis import (
+    AxisKind,
+    Domain,
+    HyperparameterSpec,
+    Scale,
+    StructuralAxis,
+)
 
 
 class ConflictingTunableError(ValueError):
@@ -22,24 +27,11 @@ class ConflictingTunableError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class TunableSpec:
-    """Specification for a single tunable parameter."""
-
-    name: str
-    axis_kind: AxisKind
-    axis_name: str
-    type_hint: object
-    default: Any
-    description: str = ""
-    constraints: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class HarvestedSchema:
     """Result of harvesting tunables from all registered axis primitives."""
 
-    tunables: tuple[TunableSpec, ...]
-    axis_kind_order: tuple[AxisKind, ...]
+    tunables: tuple[HyperparameterSpec, ...]
+    axis_kind_order: tuple[StructuralAxis, ...]
     version: int
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,10 +44,15 @@ class HarvestedSchema:
                     "name": t.name,
                     "axis_kind": t.axis_kind.value,
                     "axis_name": t.axis_name,
-                    "type_hint": str(t.type_hint),
-                    "default": t.default,
-                    "description": t.description,
-                    "constraints": list(t.constraints),
+                    "domain": {
+                        "members": t.domain.members,
+                        "lo": t.domain.lo,
+                        "hi": t.domain.hi,
+                        "scale": t.domain.scale.value,
+                    },
+                    "availability": str(t.availability) if t.availability else None,
+                    "prior": t.prior,
+                    "override_scope": t.override_scope,
                 }
                 for t in self.tunables
             ],
@@ -66,205 +63,226 @@ class HarvestedSchema:
         """Create from dictionary."""
         return cls(
             version=data["version"],
-            axis_kind_order=tuple(AxisKind(k) for k in data["axis_kind_order"]),
+            axis_kind_order=tuple(StructuralAxis(k) for k in data["axis_kind_order"]),
             tunables=tuple(
-                TunableSpec(
+                HyperparameterSpec(
                     name=t["name"],
                     axis_kind=AxisKind(t["axis_kind"]),
                     axis_name=t["axis_name"],
-                    type_hint=t["type_hint"],
-                    default=t["default"],
-                    description=t.get("description", ""),
-                    constraints=tuple(t.get("constraints", ())),
+                    domain=Domain(
+                        members=tuple(t["domain"]["members"])
+                        if t["domain"]["members"]
+                        else None,
+                        lo=t["domain"]["lo"],
+                        hi=t["domain"]["hi"],
+                        scale=Scale(t["domain"]["scale"]),
+                    ),
+                    availability=None,  # String representation only for serialization
+                    prior=t.get("prior"),
+                    override_scope=t.get("override_scope", "coordinate"),
                 )
                 for t in data["tunables"]
             ),
         )
 
 
-_RESERVED_FIELDS = frozenset({"name", "axis_kind"})
+def _domain_from_range(lo: float, hi: float, scale: str) -> Domain:
+    """Create a Domain from range parameters."""
+    return Domain(lo=lo, hi=hi, scale=Scale(scale))
 
 
-def _parse_tunables_dict(
-    tunables_attr: dict[str, Any], axis_kind: AxisKind, axis_name: str
-) -> list[TunableSpec]:
-    """Parse tunables from a dict attribute."""
-    tunables = []
-    for name, spec in tunables_attr.items():
-        if isinstance(spec, tuple):
-            type_hint, default = spec[0], spec[1] if len(spec) > 1 else None
-            description = spec[2] if len(spec) > 2 else ""
-            constraints = spec[3] if len(spec) > 3 else ()
-        else:
-            type_hint, default, description, constraints = spec, None, "", ()
-        tunables.append(
-            TunableSpec(
-                name=name,
-                axis_kind=axis_kind,
-                axis_name=axis_name,
-                type_hint=type_hint,
-                default=default,
-                description=description,
-                constraints=tuple(constraints)
-                if isinstance(constraints, (list, tuple))
-                else (),
-            )
-        )
-    return tunables
+def _domain_from_enum(choices: list[str]) -> Domain:
+    """Create a Domain from enumerated choices."""
+    return Domain(members=tuple(choices))
 
 
-def _parse_tunables_sequence(
-    tunables_attr: list | tuple, axis_kind: AxisKind, axis_name: str
-) -> list[TunableSpec]:
-    """Parse tunables from a list/tuple attribute."""
-    tunables = []
-    for item in tunables_attr:
-        if isinstance(item, str):
-            tunables.append(
-                TunableSpec(
-                    name=item,
-                    axis_kind=axis_kind,
-                    axis_name=axis_name,
-                    type_hint=Any,
-                    default=None,
-                    description="",
-                    constraints=(),
+def _parse_hyperparameters(
+    hp_dict: dict[str, Any], axis_name: str
+) -> list[HyperparameterSpec]:
+    """Parse hyperparameters from a config class's hyperparameters() dict.
+
+    Expected format:
+    {
+        "param_name": (lo, hi, scale),  # for continuous/integer
+        "param_name": [choice1, choice2, ...],  # for categorical
+        "param_name": {"domain": (lo, hi, scale), "availability": Expr, "prior": "prior_name", "override_scope": "coordinate"},
+    }
+    """
+    specs = []
+    for name, spec in hp_dict.items():
+        if isinstance(spec, tuple) and len(spec) == 3:
+            # Simple range: (lo, hi, scale)
+            lo, hi, scale = spec
+            if scale == "int":
+                specs.append(
+                    HyperparameterSpec(
+                        name=name,
+                        domain=_domain_from_range(lo, hi, "linear"),
+                        axis_kind=AxisKind.INTEGER,
+                        axis_name=axis_name,
+                    )
                 )
-            )
-        elif isinstance(item, tuple) and len(item) >= 2:
-            name, type_hint = item[0], item[1]
-            default = item[2] if len(item) > 2 else None
-            description = item[3] if len(item) > 3 else ""
-            constraints = item[4] if len(item) > 4 else ()
-            tunables.append(
-                TunableSpec(
+            else:
+                specs.append(
+                    HyperparameterSpec(
+                        name=name,
+                        domain=_domain_from_range(lo, hi, scale),
+                        axis_kind=AxisKind.CONTINUOUS,
+                        axis_name=axis_name,
+                    )
+                )
+        elif isinstance(spec, list):
+            # Categorical
+            specs.append(
+                HyperparameterSpec(
                     name=name,
-                    axis_kind=axis_kind,
+                    domain=_domain_from_enum(spec),
+                    axis_kind=AxisKind.CATEGORICAL,
                     axis_name=axis_name,
-                    type_hint=type_hint,
-                    default=default,
-                    description=description,
-                    constraints=tuple(constraints)
-                    if isinstance(constraints, (list, tuple))
-                    else (),
                 )
             )
-    return tunables
+        elif isinstance(spec, dict):
+            # Full spec with availability, prior, override_scope
+            domain_spec = spec.get("domain")
+            if isinstance(domain_spec, tuple) and len(domain_spec) == 3:
+                lo, hi, scale = domain_spec
+                if scale == "int":
+                    domain = _domain_from_range(lo, hi, "linear")
+                    axis_kind = AxisKind.INTEGER
+                else:
+                    domain = _domain_from_range(lo, hi, scale)
+                    axis_kind = AxisKind.CONTINUOUS
+            elif isinstance(domain_spec, list):
+                domain = _domain_from_enum(domain_spec)
+                axis_kind = AxisKind.CATEGORICAL
+            else:
+                raise ValueError(f"Invalid domain spec for {name}: {domain_spec}")
 
+            availability = spec.get("availability")
+            if isinstance(availability, str):
+                availability = expr_from_string(availability)
 
-def _parse_dataclass_fields(
-    cls: type[Any], axis_kind: AxisKind, axis_name: str
-) -> list[TunableSpec]:
-    """Parse tunables from dataclass fields."""
-    tunables = []
-    for field in dataclasses.fields(cls):
-        if field.name in _RESERVED_FIELDS or field.name.startswith("_"):
-            continue
-        type_hint = field.type if field.type != inspect.Parameter.empty else Any
-        default = field.default if field.default != dataclasses.MISSING else None
-        tunables.append(
-            TunableSpec(
-                name=field.name,
-                axis_kind=axis_kind,
-                axis_name=axis_name,
-                type_hint=type_hint,
-                default=default,
-                description="",
-                constraints=(),
+            specs.append(
+                HyperparameterSpec(
+                    name=name,
+                    domain=domain,
+                    axis_kind=axis_kind,
+                    axis_name=axis_name,
+                    availability=availability,
+                    prior=spec.get("prior"),
+                    override_scope=spec.get("override_scope", "coordinate"),
+                )
             )
-        )
-    return tunables
-
-
-def _extract_tunables_from_class(
-    cls: type[Any], axis_kind: AxisKind, axis_name: str
-) -> list[TunableSpec]:
-    """Extract tunable specifications from a primitive class."""
-    tunables = []
-
-    if hasattr(cls, "__tunables__"):
-        tunables_attr = getattr(cls, "__tunables__")
-        if isinstance(tunables_attr, dict):
-            tunables.extend(_parse_tunables_dict(tunables_attr, axis_kind, axis_name))
-        elif isinstance(tunables_attr, (list, tuple)):
-            tunables.extend(
-                _parse_tunables_sequence(tunables_attr, axis_kind, axis_name)
-            )
-
-    if dataclasses.is_dataclass(cls):
-        tunables.extend(_parse_dataclass_fields(cls, axis_kind, axis_name))
-
-    return tunables
+        else:
+            raise ValueError(f"Unknown hyperparameter spec format for {name}: {spec}")
+    return specs
 
 
 def harvest_schema(version: int = 1) -> HarvestedSchema:
     """Harvest all tunables from registered axis primitives.
 
-    Deduplicates by name; raises ConflictingTunableError if the same name
-    is defined with different semantics across axes.
+    Iterates over all structural axes, calls the config class's
+    hyperparameters() method once per axis (config classes are shared
+    across primitives), and deduplicates across axes.
 
     Args:
         version: Schema version to assign (default 1).
 
     Returns:
-        HarvestedSchema with all tunables, ordered by axis kind.
+        HarvestedSchema with all tunables, ordered by structural axis.
 
     Raises:
         ConflictingTunableError: If a tunable name has conflicting definitions.
     """
     axis_kind_order = (
-        AxisKind.SUBSTRATE,
-        AxisKind.GEOMETRY,
-        AxisKind.DYNAMICS,
-        AxisKind.PLASTICITY,
-        AxisKind.CREDIT,
-        AxisKind.UPDATE,
+        StructuralAxis.SUBSTRATE,
+        StructuralAxis.GEOMETRY,
+        StructuralAxis.DYNAMICS,
+        StructuralAxis.PLASTICITY,
+        StructuralAxis.CREDIT,
+        StructuralAxis.UPDATE,
     )
 
-    all_tunables: dict[str, list[TunableSpec]] = {}
+    all_tunables: dict[str, HyperparameterSpec] = {}
+
+    # Map structural axes to their config classes
+    axis_config_classes = {
+        StructuralAxis.SUBSTRATE: (
+            "computronium.ontology.substrate",
+            "SubstrateConfig",
+        ),
+        StructuralAxis.GEOMETRY: ("computronium.ontology.geometry", "GeometryConfig"),
+        StructuralAxis.DYNAMICS: (
+            "computronium.ontology.dynamics",
+            "StateDynamicsConfig",
+        ),
+        StructuralAxis.PLASTICITY: (
+            "computronium.state.transitions",
+            "PlasticityConfig",
+        ),
+        StructuralAxis.CREDIT: (
+            "computronium.ontology.credit",
+            "CreditAssignmentConfig",
+        ),
+        StructuralAxis.UPDATE: (
+            "computronium.ontology.update",
+            "ParameterUpdateConfig",
+        ),
+    }
 
     for axis_kind in axis_kind_order:
-        registry = AXES_REGISTRIES[axis_kind]
-        for spec in registry.values():
-            primitive_cls = _get_primitive_class(axis_kind, spec.name)
-            if primitive_cls is None:
-                continue
-
-            tunables = _extract_tunables_from_class(primitive_cls, axis_kind, spec.name)
-            for t in tunables:
-                all_tunables.setdefault(t.name, []).append(t)
-
-    final_tunables = []
-    for name, candidates in all_tunables.items():
-        if len(candidates) > 1:
-            first = candidates[0]
-            for other in candidates[1:]:
-                if (
-                    other.type_hint != first.type_hint
-                    or other.default != first.default
-                    or other.constraints != first.constraints
-                ):
-                    raise ConflictingTunableError(
-                        name,
-                        [f"{c.axis_kind.value}.{c.axis_name}" for c in candidates],
-                    )
-            final_tunables.append(first)
-        else:
-            final_tunables.append(candidates[0])
+        module_path, class_name = axis_config_classes[axis_kind]
+        try:
+            module = __import__(module_path, fromlist=[class_name])
+            config_cls = getattr(module, class_name)
+            hp_dict = config_cls.hyperparameters()
+            # Assign to all primitives in this axis
+            axis_name = axis_kind.value
+            specs = _parse_hyperparameters(hp_dict, axis_name)
+            for hp in specs:
+                # Check for conflicts
+                if hp.name in all_tunables:
+                    existing = all_tunables[hp.name]
+                    if (
+                        existing.domain != hp.domain
+                        or existing.axis_kind != hp.axis_kind
+                    ):
+                        raise ConflictingTunableError(
+                            hp.name,
+                            [f"{existing.axis_kind.value}.{existing.axis_name}"],
+                            [f"{hp.axis_kind.value}.{hp.axis_name}"],
+                        )
+                    # Merge availabilities if different
+                    if hp.availability and existing.availability:
+                        hp = HyperparameterSpec(
+                            name=hp.name,
+                            domain=hp.domain,
+                            axis_kind=hp.axis_kind,
+                            axis_name=hp.axis_name,
+                            availability=or_(existing.availability, hp.availability),
+                            prior=hp.prior or existing.prior,
+                            override_scope=hp.override_scope,
+                        )
+                    elif hp.availability and not existing.availability:
+                        hp = HyperparameterSpec(
+                            name=hp.name,
+                            domain=hp.domain,
+                            axis_kind=hp.axis_kind,
+                            axis_name=hp.axis_name,
+                            availability=hp.availability,
+                            prior=hp.prior or existing.prior,
+                            override_scope=hp.override_scope,
+                        )
+                all_tunables[hp.name] = hp
+        except Exception:
+            # If config class doesn't have hyperparameters() or fails, skip
+            pass
 
     return HarvestedSchema(
-        tunables=tuple(final_tunables),
+        tunables=tuple(all_tunables.values()),
         axis_kind_order=axis_kind_order,
         version=version,
     )
-
-
-def _get_primitive_class(axis_kind: AxisKind, name: str) -> type[Any] | None:
-    """Get the primitive class for a registered axis spec."""
-    # This would need access to the actual primitive classes
-    # For now, we return None and rely on AxisSpec metadata
-    # In a full implementation, this would map to the actual classes
-    return None
 
 
 def get_tunable_names() -> frozenset[str]:
@@ -273,7 +291,7 @@ def get_tunable_names() -> frozenset[str]:
     return frozenset(t.name for t in schema.tunables)
 
 
-def get_tunable_spec(name: str) -> TunableSpec | None:
+def get_tunable_spec(name: str) -> HyperparameterSpec | None:
     """Get the specification for a specific tunable."""
     schema = harvest_schema()
     for t in schema.tunables:
@@ -285,7 +303,6 @@ def get_tunable_spec(name: str) -> TunableSpec | None:
 __all__ = [
     "ConflictingTunableError",
     "HarvestedSchema",
-    "TunableSpec",
     "get_tunable_names",
     "get_tunable_spec",
     "harvest_schema",

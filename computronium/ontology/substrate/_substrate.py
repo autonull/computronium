@@ -226,6 +226,36 @@ class SubstrateConfig:
             device=device,
         )
 
+    @classmethod
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+        """Hyperparameter ranges owned by the substrate axis.
+
+        Args:
+            primitive_name: The specific substrate primitive name for availability predicates.
+        """
+        from computronium.experiment.legality.dsl import expr_from_string
+
+        return {
+            "noise_level": {"domain": (0.0, 1.0, "log")},
+            "sparsity": {"domain": (0.0, 0.99, "linear")},
+            "precision": {
+                "domain": ["float32", "float16", "bfloat16", "int8", "int4", "binary"]
+            },
+            "device": {"domain": ["cpu", "cuda", "mps", "fpga"]},
+            "weight_bounds_lo": {
+                "domain": (-10.0, 0.0, "linear"),
+                "availability": expr_from_string(
+                    'substrate in ["analog", "memristive", "quantum"]'
+                ),
+            },
+            "weight_bounds_hi": {
+                "domain": (0.0, 10.0, "linear"),
+                "availability": expr_from_string(
+                    'substrate in ["analog", "memristive", "quantum"]'
+                ),
+            },
+        }
+
 
 # ============================================================
 # Substrate Protocol
