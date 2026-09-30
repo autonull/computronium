@@ -1417,6 +1417,49 @@ Definition of Done completes at WP13 close.
    in `logs/e2_summary.json`. Naive learners still lose (coverage beats
    concentration), but a competent GP surrogate wins decisively.
 
+### 2026-09-30 — WP12 Partial: Pre-kernel flat files deleted (Directive 1)
+- **Deleted 9 pre-kernel experiment files**: `producer.py`, `staircase.py`, `probe.py`,
+  `param_estimator.py`, `result_sink.py`, `reporting.py`, `report.py`, `schema.py`,
+  `cli.py` from `computronium/experiment/` — all were dead code (no kernel imports).
+- **CLI entry point updated**: `computronium/cli/__main__.py` "report" command now
+  routes to `computronium.experiment.surface.cli:main` (new surface dispatcher)
+  instead of the deleted legacy `experiment.cli`.
+- All kernel quality gates pass: `ruff format`, `ruff check`, `pyright` strict clean,
+  27 WP11+isolation tests pass, 27 WP10+serialization+drift tests pass, 31 registry
+  wiring tests pass.
+
+### Improvement Opportunities (remaining WPs)
+1. **WP12 (major)**: Full legacy pillar port & delete still open — `autoscientist/`,
+   `hyperopt/`, legacy `execution/` engine (`engine.py`, `strategy.py`, `synthesizer.py`,
+   `candidate_gen.py`, `_state.py`, `_lifecycle.py`, `lifecycle.py`, `robustness.py`,
+   `monitoring.py`, `interpretability.py`, `dashboard/`), `lightning_/`,
+   `packages/computronium-lab` research layer, `core/campaign/`.
+   Live importers remain (`validation/backprop_parity.py` → `experiment.probe`
+   (now deleted), `experiment/cli.py` chain (now deleted), `param_estimator` used
+   by 8+ legacy modules — all legacy modules, so blocked on their deletion).
+   Precondition unchanged: conformance green per capability (R77); the import-graph
+   lock guards the kernel side. Deletion is blocked on porting, not on kernel work.
+2. **WP12**: `prior.py` legacy data tables still seed the registry — final deletion
+   step pending full consumer-reroute audit (`ontology/update.py`, `compose.py`,
+   `campaign._ruler_lr` adapters). Cleanup: legacy ruler table carries a `"*"`
+   catch-all task surfacing as prior name `ruler_lr_*` — rename to an explicit
+   `ruler_lr_catchall` when the tables are deleted.
+3. **WP13**: E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded
+   reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance;
+   results recorded as store records. (Serialization round-trip + E1 overhead +
+   kill-9 now locked; drift lock done. L9 wiring done — `evaluate_effect_size`
+   now returns real `EffectSizeResult`s.)
+4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
+   `verifying_test` execution sweep). Drift lock pins the 10 JSON files only —
+   `.md` summaries (timestamps) and `conformance_stubs/` + `primitives/`/`algorithms/`
+   dirs (other generators) are out of scope.
+5. **E2 calibration CLOSED (2026-09-30)**: GP-surrogate policy beats random on
+   the smooth 6-D bowl (d = -1.52, p = 0.00097, paired t-test, N_tasks=10,
+   N_seeds=5, B=100). The factory-isolation fix (fresh surrogate per task/seed,
+   refit_interval=25) made the run complete in ~22 s walltime. Result recorded
+   in `logs/e2_summary.json`. Naive learners still lose (coverage beats
+   concentration), but a competent GP surrogate wins decisively.
+
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
 - `surface/conformance.py::run_verifying_test` subprocess use remains sandboxed-local only.

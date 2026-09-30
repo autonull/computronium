@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 # shallow: the dispatcher itself must not drag in the zoo/execution layer.
 _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "run": ("computronium.cli.run", "main"),
-    "report": ("computronium.experiment.cli", "main_report"),
+    "report": ("computronium.experiment.surface.cli", "main"),
     "parity": ("computronium.cli.parity", "main"),
     "repro": ("computronium.cli.repro", "main"),
     "hpo": ("computronium.cli.hpo", "main"),

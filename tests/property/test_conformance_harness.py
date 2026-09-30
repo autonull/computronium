@@ -111,7 +111,9 @@ class TestFlagProjectionLock:
         assert lock.lock_hash
 
         # Check known flags exist
-        assert "core" in lock.flag_to_capabilities or "axis" in lock.flag_to_capabilities
+        assert (
+            "core" in lock.flag_to_capabilities or "axis" in lock.flag_to_capabilities
+        )
 
     def test_save_and_load(self, tmp_path) -> None:
         """Test saving and loading flag projection lock."""
@@ -136,12 +138,16 @@ class TestFlagProjectionLock:
 
         # Every flag in registry should be in projection
         for flag in all_flags:
-            assert flag in lock.flag_to_capabilities, f"Flag {flag} missing from projection"
+            assert flag in lock.flag_to_capabilities, (
+                f"Flag {flag} missing from projection"
+            )
 
         # Every capability in projection should exist in registry
         for flag, caps in lock.flag_to_capabilities.items():
             for cap_id in caps:
-                assert cap_id in CAPABILITIES_REGISTRY, f"Capability {cap_id} in projection but not in registry"
+                assert cap_id in CAPABILITIES_REGISTRY, (
+                    f"Capability {cap_id} in projection but not in registry"
+                )
 
 
 class TestConformanceHarness:
@@ -152,7 +158,9 @@ class TestConformanceHarness:
         # Create a mock store (we can't easily test without a real store)
         # Instead, test the logic directly by checking the registry
         optional_caps = [
-            cap_id for cap_id, spec in CAPABILITIES_REGISTRY.items() if not spec.required
+            cap_id
+            for cap_id, spec in CAPABILITIES_REGISTRY.items()
+            if not spec.required
         ]
         assert len(optional_caps) > 0, "Should have some optional capabilities"
 
@@ -165,21 +173,23 @@ class TestConformanceHarness:
         ]
         for cap_id in retired_caps:
             spec = CAPABILITIES_REGISTRY[cap_id]
-            assert spec.retirement_record is not None, f"Retired capability {cap_id} missing retirement_record"
+            assert spec.retirement_record is not None, (
+                f"Retired capability {cap_id} missing retirement_record"
+            )
 
     def test_required_capabilities_have_verifying_tests(self) -> None:
         """Test that required capabilities have verifying_test node ids."""
         required_caps = [
-            cap_id
-            for cap_id, spec in CAPABILITIES_REGISTRY.items()
-            if spec.required
+            cap_id for cap_id, spec in CAPABILITIES_REGISTRY.items() if spec.required
         ]
         missing_tests = [
             cap_id
             for cap_id in required_caps
             if not CAPABILITIES_REGISTRY[cap_id].verifying_test
         ]
-        assert not missing_tests, f"Required capabilities missing verifying_test: {missing_tests}"
+        assert not missing_tests, (
+            f"Required capabilities missing verifying_test: {missing_tests}"
+        )
 
     def test_verifying_test_format(self) -> None:
         """Test that verifying_test follows pytest node id format."""
@@ -188,9 +198,15 @@ class TestConformanceHarness:
                 # Should be a pytest node id (file::test_name or file::Class::method)
                 # or a test file path (for integration tests that run the whole file)
                 test_path = spec.verifying_test
-                assert test_path.startswith("tests/") or test_path.startswith("packages/"), f"Test path should start with tests/ or packages/ for {cap_id}: {test_path}"
+                assert test_path.startswith("tests/") or test_path.startswith(
+                    "packages/"
+                ), (
+                    f"Test path should start with tests/ or packages/ for {cap_id}: {test_path}"
+                )
                 # Either has :: for specific test, or is a .py file for full file execution
-                assert "::" in test_path or test_path.endswith(".py"), f"Invalid node id format for {cap_id}: {test_path}"
+                assert "::" in test_path or test_path.endswith(".py"), (
+                    f"Invalid node id format for {cap_id}: {test_path}"
+                )
 
 
 class TestConformanceIntegration:
@@ -209,7 +225,13 @@ class TestConformanceIntegration:
             lock_hash="test",
         )
         assert lock.capability_count == 5
-        assert lock.passed_count + lock.failed_count + lock.retired_count + lock.skipped_count == 5
+        assert (
+            lock.passed_count
+            + lock.failed_count
+            + lock.retired_count
+            + lock.skipped_count
+            == 5
+        )
 
 
 if __name__ == "__main__":
