@@ -1,5 +1,4 @@
 {
-  "generated_at": "2026-09-30T13:23:50.127076",
   "void_constraints": [
     {
       "name": "substrate_geometry_compatibility",

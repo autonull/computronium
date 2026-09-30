@@ -201,7 +201,6 @@ def generate_compatibility_matrix() -> dict[str, Any]:
     ]
 
     matrix = {
-        "generated_at": datetime.now().isoformat(),
         "void_constraints": [],
         "axis_pairs": {},
     }
@@ -452,7 +451,7 @@ def _write_capabilities_md(path: Path) -> None:
             f"{cap['owner'] or '-'} | {cap['verifying_test'] or '-'} | "
             f"{flags_str} | {cap['status']} |"
         )
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_objectives_md(path: Path) -> None:
@@ -472,7 +471,7 @@ def _write_objectives_md(path: Path) -> None:
             f"| {obj['name']} | {obj['direction']} | {obj['weight']} | "
             f"{obj['normalizer'] or '-'} | {obj['axis_tag'] or '-'} |"
         )
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_axes_md(path: Path) -> None:
@@ -497,7 +496,7 @@ def _write_axes_md(path: Path) -> None:
             f"{axis.get('axis_kind', '-')} | {avail_str} | {axis.get('prior', '-')} | "
             f"{axis.get('override_scope', '-')} | {topo_params or '-'} |"
         )
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def _write_stages_md(path: Path) -> None:
@@ -517,7 +516,7 @@ def _write_stages_md(path: Path) -> None:
             f"| {stage['stage_id']} | {stage['name']} | {stage['display_name']} | "
             f"{stage['required_fidelity']} | {stage['min_n_seeds']} | {stage['gate']} |"
         )
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def generate_all(output_dir: str | Path = "docs/generated") -> dict[str, Any]:

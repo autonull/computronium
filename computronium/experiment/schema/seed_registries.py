@@ -2179,8 +2179,11 @@ def seed_all_registries() -> None:
 
     # Learning priors (L11 single-source: ruler-LR + step-size overrides live
     # in learning.prior; seed_all must not drop them when it clears PRIORS).
+    # The import itself registers as a side effect when first loaded, so clear
+    # after importing to make seeding independent of import order.
     from computronium.experiment.learning.prior import register_all_priors
 
+    PRIORS_REGISTRY.clear()
     register_all_priors()
 
     # Policies

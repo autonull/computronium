@@ -52,6 +52,10 @@ class StoreError(Exception):
     """Base exception for store errors."""
 
 
+class UnsupportedSchemaVersionError(StoreError):
+    """Raised when a row carries an unknown schema_version (fail-closed, Directive 2)."""
+
+
 type TableName = Literal["records", "artifacts", "runs", "vector_index"]
 
 
@@ -101,6 +105,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
     """
 
     _SCHEMA_VERSION = 1
+    SUPPORTED_SCHEMA_VERSIONS = frozenset({1})
 
     def __init__(self, config: StoreConfig) -> None:
         self._config = config
@@ -184,7 +189,8 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
                 update          TEXT NOT NULL,
                 params          JSON NOT NULL,
                 schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
-                                       epochs INTEGER, batch_limit INTEGER, budget_id TEXT) NOT NULL,
+                                       epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
+                                       task_id TEXT) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                        quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
@@ -314,6 +320,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
                             "epochs": record.schedule.epochs,
                             "batch_limit": record.schedule.batch_limit,
                             "budget_id": record.schedule.budget_id,
+                            "task_id": record.schedule.task_id,
                         },
                         json.dumps(record.provenance.to_dict()),
                         {
@@ -420,6 +427,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
                             "epochs": record.schedule.epochs,
                             "batch_limit": record.schedule.batch_limit,
                             "budget_id": record.schedule.budget_id,
+                            "task_id": record.schedule.task_id,
                         },
                         json.dumps(record.provenance.to_dict()),
                         {
@@ -793,6 +801,11 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
 
     def _build_record_from_row(self, row: tuple) -> Record:
         """Build a Record from a database row tuple."""
+        if row[3] not in self.SUPPORTED_SCHEMA_VERSIONS:
+            raise UnsupportedSchemaVersionError(
+                f"Unsupported schema_version {row[3]} for record {row[0]}; "
+                f"supported: {sorted(self.SUPPORTED_SCHEMA_VERSIONS)}"
+            )
         schedule = self._parse_schedule(row[13])
         provenance = self._parse_provenance(row[14])
         status = self._parse_status(row[15])
@@ -827,6 +840,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
             epochs=schedule_struct["epochs"],
             batch_limit=schedule_struct["batch_limit"],
             budget_id=schedule_struct["budget_id"],
+            task_id=schedule_struct["task_id"],
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:
@@ -1368,6 +1382,7 @@ __all__ = [
     "StoreError",
     "TableName",
     "TableSlice",
+    "UnsupportedSchemaVersionError",
     "validate_record_input",
     "validate_record_output",
 ]

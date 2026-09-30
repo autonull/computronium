@@ -34,11 +34,11 @@ class SchemaVersion:
 
 
 class SchemaRegistry:
-    """Registry of schema readers for forward-compatible reads.
+    """Registry of schema readers keyed by version.
 
     New schema versions are appended; readers for old versions are never
     removed (append-only). Unknown fields are preserved as UnknownField
-    objects for round-trip fidelity (R79).
+    objects for round-trip fidelity (R79). Unknown versions fail closed.
     """
 
     def __init__(self) -> None:
@@ -62,14 +62,19 @@ class SchemaRegistry:
         return max(self._readers.keys()) if self._readers else 1
 
     def read_record(self, data: dict[str, Any]) -> Record:
-        """Read a record using the appropriate versioned reader."""
+        """Read a record using the appropriate versioned reader.
+
+        Fail-closed on unknown versions (Directive 2): no fallback to the
+        latest reader, no old-shape migration. Rebuild the store or
+        register an explicit reader for the new version.
+        """
         version = data.get("schema_version", 1)
         reader = self.get_reader(version)
         if reader is None:
-            # Fall back to latest reader for forward compatibility
-            reader = self.get_reader(self.get_latest_version())
-            if reader is None:
-                raise ValueError(f"No reader available for schema version {version}")
+            raise ValueError(
+                f"No reader registered for schema version {version}; "
+                f"known versions: {sorted(self._readers)}"
+            )
 
         # Preserve unknown fields
         known_fields = set(Record.__dataclass_fields__.keys())

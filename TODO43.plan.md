@@ -1295,6 +1295,36 @@ Definition of Done completes at WP13 close.
   `pyright` strict clean (engine/failure/prior/seed_registries/new locks),
   204 property tests pass (4 pre-existing skips), probe OVERHEAD_OK.
 
+### 2026-09-30 — WP13 Serialization & DoD Hardening: task_id persistence, fail-closed versions, drift lock (L17, §9.7, §9.9)
+- **L17 follow-through — `task_id` persisted**: the WP9 `Schedule.task_id` lived in the
+  dataclass and `measurement_key` but was dropped at the store boundary (DDL STRUCT,
+  both write dicts, `_parse_schedule` all carried 6 fields). Added `task_id TEXT` to
+  the schedule STRUCT, both insert paths, and strict parsing. Per Directive 2
+  (schema changes free before first external use) parsing is strict — pre-existing
+  store files are rebuilt, not migrated.
+- **Fail-closed versions (Directive 2)**: `_build_record_from_row` raises new
+  `UnsupportedSchemaVersionError(StoreError)` on unknown `schema_version`
+  (`SUPPORTED_SCHEMA_VERSIONS = frozenset({1})`); `SchemaRegistry.read_record`
+  raises instead of falling back to the latest reader (had zero callers — safe).
+- **Import-order seeding defect fixed**: `seed_all_registries()` raised
+  `Duplicate registration: ruler_lr_digits` when `learning.prior` was first
+  imported inside the function (import-time side-effect registration + explicit
+  `register_all_priors()`). Clears PRIORS after the local import — seeding is now
+  order-independent and twice-idempotent (verified).
+- **Serialization round-trip lock**: `tests/property/test_serialization_roundtrip_lock.py`
+  (8 tests) — schedule/task_id round-trip, cross-task key distinctness + persistence,
+  `unknown` verbatim (incl. unicode), params/payload/provenance fidelity, store + registry
+  fail-closed on version 999.
+- **Codegen drift lock (WP13 DoD)**: `tests/property/test_codegen_drift_lock.py`
+  (3 tests) — byte-pins all 10 `docs/generated/*.json` against their generators.
+  Found `priors.json` stale (28 rows, pre-WP10 `lr_ruler_*`/`step_size_*` naming vs
+  current 45-row `ruler_lr_*`/`step_size_override_*` registry) — re-pinned.
+  Removed `generated_at` from `generate_compatibility_matrix()` (no consumers;
+  nondeterministic timestamps defeat byte-pinning; `.md` summaries keep theirs).
+  Also fixed 4 pre-existing PLW1514 `encoding=` findings in `codegen.py` md writers.
+- All quality gates pass: `ruff format` + `ruff check` clean on 6 changed files,
+  `pyright` strict clean, 160 property tests pass (149 neighbors + 11 new), 4 pre-existing skips.
+
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
    `hyperopt/`, legacy `execution/` engine, `lightning_/`, `packages/computronium-lab`
@@ -1303,17 +1333,22 @@ Definition of Done completes at WP13 close.
    `reporting.py`, `report.py`, `schema.py`, `cli.py`; note `schema.py` is shadowed
    by the `schema/` package — packages win import resolution, so it is dead code).
    Live importers remain (`validation/backprop_parity.py` → `experiment.probe`,
-   `experiment/cli.py` chain). Precondition unchanged: conformance green per
-   capability (R77); the new import-graph lock now guards the kernel side.
+   `experiment/cli.py` chain, `param_estimator` used by 8+ legacy modules).
+   Precondition unchanged: conformance green per capability (R77); the import-graph
+   lock guards the kernel side. Deletion is blocked on porting, not on kernel work.
 2. **WP12**: `prior.py` legacy data tables still seed the registry — final deletion
    step pending full consumer-reroute audit (`ontology/update.py`, `compose.py`,
-   `campaign._ruler_lr` adapters).
+   `campaign._ruler_lr` adapters). Cleanup: legacy ruler table carries a `"*"`
+   catch-all task surfacing as prior name `ruler_lr_*` — rename to an explicit
+   `ruler_lr_catchall` when the tables are deleted.
 3. **WP13**: E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded
    reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance;
-   results recorded as store records. Serialization round-trip test (unknown
-   verbatim + fail-closed version) still to add.
-4. **WP13 DoD hardening**: content-hash drift lock for `docs/generated/` (WP11 lock
-   pins file set + determinism only); full C1–C88 conformance-evidence audit.
+   results recorded as store records. (Serialization round-trip + E1 overhead +
+   kill-9 now locked; drift lock done.)
+4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
+   `verifying_test` execution sweep). Drift lock pins the 10 JSON files only —
+   `.md` summaries (timestamps) and `conformance_stubs/` + `primitives/`/`algorithms/`
+   dirs (other generators) are out of scope.
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
@@ -1323,7 +1358,7 @@ Definition of Done completes at WP13 close.
 - `seed_all_registries()` is now the single PRIORS seeding path (seed rows +
   `register_all_priors()`); calling `register_all_priors()` twice raises on
   duplicates by `Registry.register` design — seed functions must clear first
-  (as `seed_all_registries` does) and never double-register.
-- Uncommitted pre-existing work in this tree (dirty `algorithms/*/kernel.py`,
-  `execution/strategy.py`, `scripts/campaign_*`, probe scripts) is unrelated to
-  this WP and left untouched; commit below covers kernel-hygiene files only.
+  (as `seed_all_registries` does) and never double-register. Now also robust to
+  `learning.prior` first-import happening inside the seed call.
+- Store files created before the `task_id` STRUCT addition are not readable for
+  old rows (strict parse) — rebuild per Directive 2; no migration machinery.
