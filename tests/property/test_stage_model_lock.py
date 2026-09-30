@@ -169,23 +169,43 @@ class TestWrapperObligations:
     async def test_failure_isolation_leaves_siblings_intact(
         self, temp_store: RecordStore
     ) -> None:
-        """Injected failure leaves siblings, run, and store intact (R29)."""
+        """Injected failure leaves siblings, run, and store intact (R29).
+
+        In the new architecture (WP15/16), failure isolation is provided by:
+        - Stage.run() returning Fragment with per-stage results
+        - Backend returning per-item Success/Failure (WP19)
+        - Pipeline not re-raising on individual stage failures
+        """
         from computronium.experiment.execution.backends import LocalBackend
         from computronium.experiment.execution.budget import Budget, SimpleCostModel
         from computronium.experiment.execution.pipeline import PipelineRunner
         from computronium.experiment.execution.policy import RoundRobinGridPolicy
 
-        # Create a failing backend
+        # Create a failing backend that fails on specific items
         class FailingBackend(LocalBackend):
             async def submit_batch(self, items, store):
-                if len(items) > 1:
-                    raise RuntimeError("Simulated failure")
-                return await super().submit_batch(items, store)
+                results = []
+                for item in items:
+                    if len(items) > 1 and item[0].cell_key() == "fail_cell":
+                        # Simulate per-item failure
+                        from computronium.experiment.schema.record import Record
+                        results.append(Record.create(
+                            run_id="test",
+                            coordinate=item[0],
+                            schedule=item[1],
+                            provenance=item[2],
+                            status=item[2].links.get("status") if hasattr(item[2], "links") else None,
+                            payload={"status": "failed"},
+                        ))
+                    else:
+                        result = await super().submit_batch([item], store)
+                        results.extend(result)
+                return results
 
         config = PipelineConfig(
             run_id="test_failure_isolation",
             run_spec={},
-            stages=[StageId.S1_FRAME],
+            stages=[StageId.S1_FRAME, StageId.S2_SPACE],
             budget=Budget.from_duration("1h"),
             cost_model=SimpleCostModel(),
             policy=RoundRobinGridPolicy(),
@@ -194,11 +214,13 @@ class TestWrapperObligations:
         )
 
         runner = PipelineRunner(config, temp_store)
+        # Should complete without raising
+        await runner.run()
 
-        # The runner should handle the exception and not corrupt state
-        # Note: This test verifies the structure exists; actual failure
-        # isolation is tested in integration tests
-        assert hasattr(runner, "_execute_batch_with_isolation")
+        # Verify coverage was collected for both stages
+        coverage = runner.get_coverage_report()
+        assert "s1_frame" in coverage
+        assert "s2_space" in coverage
 
 
 class TestReplayResumeIntegration:

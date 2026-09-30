@@ -7,10 +7,14 @@ from computronium.experiment.execution import (
     backends,
     budget,
     compose,
+    decision,
+    optuna_adapter,
     pipeline,
     policy,
     replay,
+    search_space,
     stage,
+    stages_impl,
     sysctx,
 )
 
@@ -19,9 +23,13 @@ __all__ = [
     "backends",
     "budget",
     "compose",
+    "decision",
+    "optuna_adapter",
     "pipeline",
     "policy",
     "replay",
+    "search_space",
     "stage",
+    "stages_impl",
     "sysctx",
 ]

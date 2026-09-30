@@ -1,4 +1,4 @@
-"""S1-S11 pipeline runner with wrapper obligations (WP9).
+"""S1-S11 pipeline runner with wrapper obligations (WP9/15/16).
 
 Wrapper obligations (R18/R19/R20/R29/R12):
 - Coverage reporting (R18)
@@ -11,6 +11,11 @@ Wrapper obligations (R18/R19/R20/R29/R12):
 - Replay hash computation and re-check (R26/R27)
 - Resume via measurement_key dedup
 - RegistryCostModel learns estimate-vs-actual (R23/R24)
+
+Architecture:
+- Stage dispatch via Stage.run(ctx) -> Fragment protocol (WP15)
+- Round loop with S3-S10 repeating via Decision (WP16)
+- SearchSpace/ProposalContext/Proposal canonical types (WP14)
 """
 
 from __future__ import annotations
@@ -21,17 +26,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from computronium.experiment.execution.stage import StageId
+from computronium.experiment.execution.decision import Decision, RoundController
+from computronium.experiment.execution.stage import StageId, StageTransition, get_stage_spec
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
     from computronium.experiment.execution.backends import ExecutionBackend
     from computronium.experiment.execution.budget import Budget, CostModel
-    from computronium.experiment.execution.policy import Policy
-    from computronium.experiment.execution.stage import StageSpec
+    from computronium.experiment.execution.search_space import (
+        Fragment,
+        Policy,
+        Proposal,
+        ProposalContext,
+        SearchSpace,
+        StageContext,
+    )
+    from computronium.experiment.execution.stages_impl import get_stage_implementation
     from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
@@ -44,19 +58,20 @@ class PipelineConfig:
     run_id: str
     run_spec: dict[str, Any]
     stages: list[StageId] = field(default_factory=list)
-    budget: Budget | None = None
-    cost_model: CostModel | None = None
-    policy: Policy | None = None
-    backend: ExecutionBackend | None = None
+    budget: "Budget | None" = None
+    cost_model: "CostModel | None" = None
+    policy: "Policy | None" = None
+    allocator: "EvidenceDrivenAllocator | None" = None
+    backend: "ExecutionBackend | None" = None
     checkpoint_dir: Path | None = None
     checkpoint_interval_seconds: float = 60.0
     max_concurrent_evaluations: int = 10
     seed: int | None = None
     # Task IDs for multi-task runs (L17)
     task_ids: list[str] = field(default_factory=list)
-    # Data-origin allocation for S3 (L19)
-    data_origin_allocation: dict[str, float] | None = None
-    contrast_quota: float = 0.1
+    # Round controller config
+    max_rounds: int | None = None
+    min_rounds: int = 1
 
 
 @dataclass(slots=True)
@@ -65,10 +80,11 @@ class PipelineState:
 
     run_id: str
     current_stage_idx: int = 0
+    current_round: int = 0
     completed_measurement_keys: set[str] = field(default_factory=set)
-    pending_candidates: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
+    pending_proposals: list["Proposal"] = field(default_factory=list)
     in_progress: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
-    budget: Budget | None = None
+    budget: "Budget | None" = None
     allocator_state: dict[str, Any] | None = None
     last_checkpoint_time: float = 0.0
     # Coverage tracking (R18)
@@ -79,16 +95,23 @@ class PipelineState:
     proposal_provenance: list[dict[str, Any]] = field(default_factory=list)
     # Replay hash tracking (R26/R27)
     replay_hash: str | None = None
+    # Round controller
+    round_controller: "RoundController | None" = None
+    # Search space
+    search_space: "SearchSpace | None" = None
+    # System context (R75/K10)
+    system_context: Any = None
 
 
 class PipelineRunner:
     """S1-S11 pipeline runner with atomic append + reconciliation + wrapper obligations.
 
     Coordinates the full experiment lifecycle:
-    - Stage progression (S1-S11)
+    - Stage progression (S1-S11) via Stage.run(ctx) -> Fragment dispatch
+    - Round loop (S3-S10 repeat) with Decision-based termination
     - Budget management
-    - Policy-driven candidate selection
-    - Backend execution
+    - Policy-driven candidate selection via SearchSpace
+    - Backend execution with failure isolation
     - Record persistence with reconciliation
     - Checkpointing and resume
     - Wrapper obligations: coverage, classification, traceability, failure isolation
@@ -99,20 +122,27 @@ class PipelineRunner:
     def __init__(
         self,
         config: PipelineConfig,
-        store: RecordStore,
+        store: "RecordStore",
     ) -> None:
         self._config = config
         self._store = store
         self._state = PipelineState(
             run_id=config.run_id,
             budget=config.budget,
+            round_controller=RoundController(
+                max_rounds=config.max_rounds,
+                min_rounds=config.min_rounds,
+            ),
         )
-        self._stages = config.stages or [s.stage_id for s in STAGE_SPECS]
-        self._stage_specs = [get_stage_spec(s) for s in self._stages]
+        self._stages = config.stages or [s.stage_id for s in self._get_all_stage_specs()]
         self._shutdown = False
 
-    async def run(self) -> list[Record]:
-        """Run the full pipeline to completion.
+    def _get_all_stage_specs(self):
+        from computronium.experiment.execution.stage import STAGE_SPECS
+        return STAGE_SPECS
+
+    async def run(self) -> list["Record"]:
+        """Run the full pipeline to completion with round loop.
 
         Returns:
             All records produced during the run.
@@ -123,396 +153,307 @@ class PipelineRunner:
             self._stages,
         )
 
-        all_records: list[Record] = []
+        # Build SearchSpace from RunSpec
+        self._state.search_space = self._build_search_space()
 
-        for stage_idx, stage_spec in enumerate(self._stage_specs):
+        all_records: list["Record"] = []
+
+        # S1-S2: Run once at start
+        for stage_id in [StageId.S1_FRAME, StageId.S2_SPACE]:
             if self._shutdown:
                 break
+            if stage_id not in self._stages:
+                continue
 
-            self._state.current_stage_idx = stage_idx
-            logger.info("Entering stage %s (%s)", stage_spec.stage_id, stage_spec.name)
+            stage_spec = get_stage_spec(stage_id)
+            fragment = await self._dispatch_stage(stage_id, stage_spec)
 
-            stage_records = await self._run_stage(stage_spec)
-            all_records.extend(stage_records)
+            # Collect records and proposals
+            all_records.extend(fragment.records)
+            self._state.pending_proposals.extend(fragment.proposals)
 
-            # Check gate verdict
-            if not self._check_gate(stage_records, stage_spec):
-                logger.warning(
-                    "Gate failed for stage %s, stopping pipeline", stage_spec.stage_id
-                )
+            # Update coverage
+            self._merge_coverage(fragment.coverage)
+
+            # Check gate
+            if not self._check_gate(fragment, stage_spec):
+                logger.warning("Gate failed for stage %s, stopping pipeline", stage_id)
                 break
 
-            # Run allocator between rounds (after S7_MEASURE, before S10_DECIDE)
-            if stage_spec.stage_id == StageId.S7_MEASURE and self._config.budget:
-                await self._run_allocator(stage_records)
+        # S3-S10: Round loop
+        round_controller = self._state.round_controller
+        if round_controller is None:
+            from computronium.experiment.execution.decision import RoundController
+            round_controller = RoundController(
+                max_rounds=self._config.max_rounds,
+                min_rounds=self._config.min_rounds,
+            )
+            self._state.round_controller = round_controller
 
-            # Checkpoint after each stage
+        while round_controller.should_continue(
+            self._get_decision_from_fragments()
+        ):
+            self._state.current_round += 1
+            logger.info("Starting round %d", self._state.current_round)
+
+            # S3 Schedule
+            if StageId.S3_SCHEDULE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S3_SCHEDULE, get_stage_spec(StageId.S3_SCHEDULE))
+                self._state.pending_proposals.extend(fragment.proposals)
+                self._merge_coverage(fragment.coverage)
+
+            # S4 Gate
+            if StageId.S4_GATE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S4_GATE, get_stage_spec(StageId.S4_GATE))
+                self._state.pending_proposals = fragment.proposals  # Filtered
+                self._merge_coverage(fragment.coverage)
+                self._merge_classification(fragment.classification)
+
+            # S5 Compose
+            if StageId.S5_COMPOSE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S5_COMPOSE, get_stage_spec(StageId.S5_COMPOSE))
+                self._state.pending_proposals = fragment.proposals
+                self._merge_coverage(fragment.coverage)
+
+            # S6 Train
+            if StageId.S6_TRAIN in self._stages:
+                fragment = await self._dispatch_stage(StageId.S6_TRAIN, get_stage_spec(StageId.S6_TRAIN))
+                all_records.extend(fragment.records)
+                self._merge_coverage(fragment.coverage)
+
+            # S7 Measure
+            if StageId.S7_MEASURE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S7_MEASURE, get_stage_spec(StageId.S7_MEASURE))
+                all_records.extend(fragment.records)
+                self._merge_coverage(fragment.coverage)
+
+                # Run allocator between rounds (after S7_MEASURE, before S10_DECIDE)
+                if self._config.allocator and self._config.budget:
+                    await self._run_allocator(fragment.records)
+
+            # S8 Record
+            if StageId.S8_RECORD in self._stages:
+                fragment = await self._dispatch_stage(StageId.S8_RECORD, get_stage_spec(StageId.S8_RECORD))
+                all_records.extend(fragment.records)
+                self._merge_coverage(fragment.coverage)
+
+            # S9 Attribute
+            if StageId.S9_ATTRIBUTE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S9_ATTRIBUTE, get_stage_spec(StageId.S9_ATTRIBUTE))
+                self._merge_coverage(fragment.coverage)
+
+            # S10 Decide
+            if StageId.S10_DECIDE in self._stages:
+                fragment = await self._dispatch_stage(StageId.S10_DECIDE, get_stage_spec(StageId.S10_DECIDE))
+                self._state.pending_proposals.extend(fragment.proposals)
+                self._merge_coverage(fragment.coverage)
+                # Decisions will be processed by round controller
+
+            # Checkpoint after each round
             if self._config.checkpoint_dir:
                 await self._create_checkpoint()
 
+        # S11 Report
+        if StageId.S11_REPORT in self._stages:
+            fragment = await self._dispatch_stage(StageId.S11_REPORT, get_stage_spec(StageId.S11_REPORT))
+            self._merge_coverage(fragment.coverage)
+
         logger.info(
-            "Pipeline run %s completed: %d records",
+            "Pipeline run %s completed: %d records, %d rounds",
             self._config.run_id,
             len(all_records),
+            self._state.current_round,
         )
         return all_records
 
-    async def _run_stage(self, stage_spec: StageSpec) -> list[Record]:
-        """Execute a single pipeline stage with wrapper obligations."""
-        # Generate candidates for this stage
-        candidates = await self._generate_candidates(stage_spec)
-
-        if not candidates:
-            logger.info("No candidates for stage %s, skipping", stage_spec.stage_id)
-            return []
-
-        # Filter by budget
-        if self._state.budget and self._state.budget.expired():
-            logger.info("Budget exhausted, stopping stage %s", stage_spec.stage_id)
-            return []
-
-        # Execute candidates with failure isolation (R29)
-        records = await self._execute_candidates_with_isolation(candidates, stage_spec)
-
-        # Update state
-        for record in records:
-            self._state.completed_measurement_keys.add(record.measurement_key)
-
-        # Update coverage (R18)
-        self._update_coverage(stage_spec, records, candidates)
-
-        return records
-
-    async def _generate_candidates(
-        self, stage_spec: StageSpec
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Generate candidate (coordinate, schedule) pairs for a stage."""
-        # If we have pending candidates from previous stage, use those
-        if self._state.pending_candidates:
-            candidates = self._state.pending_candidates
-            self._state.pending_candidates = []
-            return candidates
-
-        # S3_SCHEDULE: Emit data-origin allocation and contrast quota (L19)
-        if stage_spec.stage_id == StageId.S3_SCHEDULE:
-            return await self._generate_s3_schedule_candidates(stage_spec)
-
-        # Otherwise, generate from policy
-        if self._config.policy and self._state.budget and self._config.cost_model:
-            # Get recent records for evidence-driven policies
-            recent_records = self._store.query_records(
-                run_id=self._config.run_id, limit=1000
-            )
-
-            proposals = self._config.policy.propose(
-                candidates=[],  # Will be populated from search space
-                records=recent_records,
-                budget=self._state.budget,
-                cost_model=self._config.cost_model,
-            )
-
-            # Stamp proposal provenance (R20)
-            for coord, sched in proposals:
-                self._state.proposal_provenance.append({
-                    "stage": stage_spec.stage_id.value,
-                    "cell_key": coord.cell_key(),
-                    "fidelity": sched.fidelity,
-                    "seed": sched.seed,
-                    "timestamp": time.time(),
-                })
-
-            return proposals
-
-        # Fallback: generate from search space (placeholder)
-        return []
-
-    async def _generate_s3_schedule_candidates(
-        self, stage_spec: StageSpec
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Generate S3 Schedule candidates with data-origin allocation and contrast quota (L19).
-
-        S3 predeclares a data-origin allocation (exploration/calibration fractions)
-        and a matched-contrast DOE seed (fractional-factorial or OFAT quota within
-        the exploration budget) so effects are identifiable by construction.
-        """
-        params = stage_spec.params
-        allocation = params.get(
-            "data_origin_allocation",
-            {"exploration": 0.5, "calibration": 0.3, "test": 0.2},
+    def _build_search_space(self) -> "SearchSpace":
+        """Build canonical SearchSpace from RunSpec."""
+        from computronium.experiment.execution.search_space import SearchSpace
+        from computronium.experiment.schema.axis import (
+            AXES_REGISTRIES,
+            StructuralAxis,
         )
-        contrast_quota = params.get("contrast_quota", 0.1)
+        from computronium.experiment.schema.registries import (
+            CONSTRAINTS_REGISTRY,
+            OBJECTIVES_REGISTRY,
+        )
 
-        # Get candidates from previous stage or policy
-        if self._config.policy and self._state.budget and self._config.cost_model:
-            recent_records = self._store.query_records(
-                run_id=self._config.run_id, limit=1000
-            )
+        run_spec = self._config.run_spec
 
-            proposals = self._config.policy.propose(
-                candidates=[],
-                records=recent_records,
-                budget=self._state.budget,
-                cost_model=self._config.cost_model,
-            )
+        # Get all axis specs from registries
+        axes_snapshot = []
+        for axis_kind in StructuralAxis:
+            registry = AXES_REGISTRIES[axis_kind]
+            for spec in registry.values():
+                if spec.available:
+                    axes_snapshot.append(spec)
+
+        # Get constraints
+        constraints = list(CONSTRAINTS_REGISTRY.values())
+
+        # Get objectives from run_spec or all
+        objective_names = run_spec.get("objectives", [])
+        if objective_names:
+            objectives = [OBJECTIVES_REGISTRY[name] for name in objective_names if name in OBJECTIVES_REGISTRY]
         else:
-            proposals = []
+            objectives = list(OBJECTIVES_REGISTRY.values())
 
-        if not proposals:
-            return []
+        # Get tasks
+        tasks = tuple(self._config.task_ids) if self._config.task_ids else ("default",)
 
-        # Apply data-origin allocation to schedules
-        total = len(proposals)
-        exploration_count = int(total * allocation.get("exploration", 0.5))
-        calibration_count = int(total * allocation.get("calibration", 0.3))
-        test_count = int(total * allocation.get("test", 0.2))
-
-        # Ensure at least 1 each
-        exploration_count = max(1, exploration_count)
-        calibration_count = max(1, calibration_count)
-        test_count = max(1, test_count)
-
-        # Adjust to match total
-        allocated = exploration_count + calibration_count + test_count
-        if allocated > total:
-            # Scale down proportionally
-            exploration_count = max(1, int(exploration_count * total / allocated))
-            calibration_count = max(1, int(calibration_count * total / allocated))
-            test_count = max(1, total - exploration_count - calibration_count)
-
-        scheduled = []
-        for i, (coord, sched) in enumerate(proposals):
-            if i < exploration_count:
-                data_origin = "exploration"
-            elif i < exploration_count + calibration_count:
-                data_origin = "calibration"
-            elif i < exploration_count + calibration_count + test_count:
-                data_origin = "test"
-            else:
-                # Remaining go to exploration
-                data_origin = "exploration"
-
-            # Create new schedule with data_origin in provenance (will be set later)
-            # For now, we embed it in budget_id as a marker
-            new_sched = Schedule(
-                fidelity=sched.fidelity,
-                seed=sched.seed,
-                n_seeds=sched.n_seeds,
-                epochs=sched.epochs,
-                batch_limit=sched.batch_limit,
-                budget_id=f"{sched.budget_id}:{data_origin}",
-                task_id=sched.task_id,
-            )
-
-            # Contrast quota: reserve some exploration slots for OFAT/fractional-factorial
-            if data_origin == "exploration" and i < int(
-                exploration_count * contrast_quota
-            ):
-                new_sched = Schedule(
-                    fidelity=new_sched.fidelity,
-                    seed=new_sched.seed,
-                    n_seeds=new_sched.n_seeds,
-                    epochs=new_sched.epochs,
-                    batch_limit=new_sched.batch_limit,
-                    budget_id=f"{new_sched.budget_id}:contrast",
-                    task_id=new_sched.task_id,
-                )
-
-            scheduled.append((coord, new_sched))
-
-            # Stamp proposal provenance (R20)
-            self._state.proposal_provenance.append({
-                "stage": stage_spec.stage_id.value,
-                "cell_key": coord.cell_key(),
-                "fidelity": new_sched.fidelity,
-                "seed": new_sched.seed,
-                "data_origin": data_origin,
-                "is_contrast": "contrast" in new_sched.budget_id,
-                "timestamp": time.time(),
-            })
-
-        return scheduled
-
-    async def _execute_candidates_with_isolation(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        stage_spec: StageSpec,
-    ) -> list[Record]:
-        """Execute a batch of candidates with failure isolation (R29)."""
-        if not self._config.backend:
-            logger.warning("No backend configured, skipping execution")
-            return []
-
-        # Prepare provenance
-        provenance = Provenance(
-            env={"python": "3.14", "platform": "linux"},
-            dataset=self._config.run_spec.get("dataset", "unknown"),
-            dataset_version=self._config.run_spec.get("dataset_version", "1.0"),
-            code_sha=self._config.run_spec.get("code_sha", "unknown"),
-            policy=self._config.policy.get_name() if self._config.policy else "unknown",
-            links={"run_id": self._config.run_id},
+        return SearchSpace(
+            axes_snapshot=tuple(axes_snapshot),
+            constraints=tuple(constraints),
+            objectives=tuple(objectives),
+            tasks=tasks,
         )
 
-        # Execute in batches with failure isolation
-        batch_size = self._config.max_concurrent_evaluations
-        all_records = []
+    async def _dispatch_stage(self, stage_id: StageId, stage_spec) -> "Fragment":
+        """Dispatch to the concrete stage implementation."""
+        from computronium.experiment.execution.stages_impl import get_stage_implementation
 
-        for i in range(0, len(candidates), batch_size):
-            batch = candidates[i : i + batch_size]
-            logger.debug(
-                "Executing batch %d/%d (%d candidates)",
-                i // batch_size + 1,
-                (len(candidates) + batch_size - 1) // batch_size,
-                len(batch),
-            )
+        impl_class = get_stage_implementation(stage_id)
+        if impl_class is None:
+            logger.warning("No implementation for stage %s, using no-op", stage_id)
+            from computronium.experiment.execution.search_space import Fragment
+            return Fragment(stage_id=stage_id)
 
-            # Execute batch with isolation
-            batch_records = await self._execute_batch_with_isolation(
-                batch, provenance, stage_spec
-            )
+        # Create stage context
+        ctx = self._create_stage_context(stage_id, stage_spec)
 
-            # Append each record to store (with reconciliation)
-            for record in batch_records:
-                try:
-                    stored_record = self._store.append(record)
-                    all_records.append(stored_record)
-                    logger.debug(
-                        "Stored record %s (seq=%d)",
-                        stored_record.record_id[:16],
-                        stored_record.seq,
-                    )
-                except Exception:
-                    logger.exception("Failed to store record")
-                    # Classification for failed storage (R19)
-                    self._classify_rejection(
-                        "store_failure",
-                        batch[0][0].cell_key() if batch else "unknown",
-                        stage_spec.stage_id.value,
-                    )
-                    raise
-
-            # Update budget (R21)
-            if self._state.budget:
-                for record in batch_records:
-                    cost = (
-                        self._config.cost_model.actual_cost(record)
-                        if self._config.cost_model
-                        else 1.0
-                    )
-                    self._state.budget = self._state.budget.add_cost(cost).advance()
-
-            # Periodic checkpoint
-            if (
-                self._config.checkpoint_dir
-                and time.time() - self._state.last_checkpoint_time
-                > self._config.checkpoint_interval_seconds
-            ):
-                await self._create_checkpoint()
-
-        return all_records
-
-    async def _execute_batch_with_isolation(
-        self,
-        batch: list[tuple[Coordinate, Schedule]],
-        provenance: Provenance,
-        stage_spec: StageSpec,
-    ) -> list[Record]:
-        """Execute a batch with failure isolation (R29).
-
-        Uses except* to handle concurrent independent failures.
-        """
-        backend = self._config.backend
-        if backend is None:
-            logger.warning("No backend configured, skipping execution")
-            return []
-
+        # Run the stage
+        stage_impl = impl_class()
         try:
-            batch_records = await backend.submit_batch(
-                [(coord, sched, provenance, coord.params) for coord, sched in batch],
-                self._store,
+            fragment = await stage_impl.run(ctx)
+            return fragment
+        except Exception as e:
+            logger.exception("Stage %s failed", stage_id)
+            # Return fragment with error info
+            from computronium.experiment.execution.search_space import Fragment
+            return Fragment(
+                stage_id=stage_id,
+                metadata={"error": str(e)},
+                coverage={"stage": stage_id.value, "error": True},
             )
-        except* Exception as eg:
-            # Handle concurrent independent failures (R29)
-            for exc in eg.exceptions:
-                logger.exception("Batch execution failure")
-                # Classify each failure (R19)
-                for coord, sched in batch:
-                    self._classify_rejection(
-                        "execution_failure",
-                        coord.cell_key(),
-                        stage_spec.stage_id.value,
-                        {"error": str(exc)},
-                    )
-            # Re-raise to stop pipeline on execution failure
-            raise
-        else:
-            return batch_records
 
-    def _classify_rejection(
-        self,
-        rejection_type: str,
-        cell_key: str,
-        stage: str,
-        details: dict[str, Any] | None = None,
-    ) -> None:
-        """Classify rejection identically for every policy (R19)."""
-        self._state.rejections.append({
-            "type": rejection_type,
-            "cell_key": cell_key,
-            "stage": stage,
-            "timestamp": time.time(),
-            "details": details or {},
-        })
+    def _create_stage_context(self, stage_id: StageId, stage_spec) -> "StageContext":
+        """Create StageContext for a stage."""
+        from computronium.experiment.execution.search_space import StageContext
 
-    def _update_coverage(
-        self,
-        stage_spec: StageSpec,
-        records: list[Record],
-        candidates: list[tuple[Coordinate, Schedule]],
-    ) -> None:
-        """Update coverage reporting (R18)."""
-        stage_key = stage_spec.stage_id.value
-        self._state.coverage[stage_key] = {
-            "candidates_generated": len(candidates),
-            "records_produced": len(records),
-            "unique_cells": len({r.cell_key for r in records}),
-            "fidelities": list({r.schedule.fidelity for r in records}),
-            "timestamp": time.time(),
-        }
+        # Convert pending proposals to (coord, sched) pairs for backward compatibility
+        pending_candidates = [(p.coordinate, p.schedule) for p in self._state.pending_proposals]
 
-    async def _run_allocator(self, records: list[Record]) -> None:
+        # Ensure required components are available
+        budget = self._state.budget
+        cost_model = self._config.cost_model
+        policy = self._config.policy
+        backend = self._config.backend
+        search_space = self._state.search_space
+
+        if budget is None or cost_model is None or policy is None or backend is None or search_space is None:
+            raise ValueError("Missing required pipeline components for stage context")
+
+        return StageContext(
+            run_id=self._config.run_id,
+            run_spec=self._config.run_spec,
+            stage_id=stage_id,
+            store=self._store,
+            budget=budget,
+            cost_model=cost_model,
+            policy=policy,
+            allocator=self._config.allocator,
+            backend=backend,
+            search_space=search_space,
+            completed_keys=self._state.completed_measurement_keys,
+            pending_proposals=self._state.pending_proposals,
+            pending_candidates=pending_candidates,
+            in_progress=self._state.in_progress,
+            stage_params=stage_spec.params,
+            provenance=Provenance(
+                env={"python": "3.14", "platform": "linux"},
+                dataset=self._config.run_spec.get("dataset", "unknown"),
+                dataset_version=self._config.run_spec.get("dataset_version", "1.0"),
+                code_sha=self._config.run_spec.get("code_sha", "unknown"),
+                policy=self._config.policy.get_name() if self._config.policy else "unknown",
+                links={"run_id": self._config.run_id},
+            ),
+            system_context=self._state.system_context,
+        )
+
+    def _merge_coverage(self, coverage: dict[str, Any]) -> None:
+        """Merge coverage from fragment into state."""
+        # Store per-stage coverage using stage key
+        stage_key = coverage.get("stage", "unknown")
+        self._state.coverage[stage_key] = coverage
+
+    def _merge_classification(self, classification: dict[str, Any]) -> None:
+        """Merge classification from fragment into state."""
+        self._state.rejections.append(classification)
+
+    def _get_decision_from_fragments(self) -> Decision:
+        """Extract Decision from the last S10 fragment."""
+        # For now, create a default continue decision
+        # In practice, this would come from the S10 Decide stage fragment
+        from computronium.experiment.execution.decision import continue_round
+        return continue_round(rationale="Default continue")
+
+    async def _run_allocator(self, records: list["Record"]) -> None:
         """Run EvidenceDrivenAllocator between rounds (R46-R51)."""
-        if not self._config.policy:
+        if not self._config.allocator:
             return
 
-        # The allocator is invoked by the policy's propose method
-        # This is a hook for future allocator integration
-        logger.debug("Allocator hook after S7_MEASURE for run %s", self._config.run_id)
+        logger.debug("Running allocator for run %s", self._config.run_id)
 
-    def _check_gate(self, records: list[Record], stage_spec: StageSpec) -> bool:
+        # Convert pending proposals to candidates
+        candidates = [(p.coordinate, p.schedule) for p in self._state.pending_proposals]
+
+        # Get proposals from allocator
+        budget = self._state.budget
+        cost_model = self._config.cost_model
+        if budget is None or cost_model is None:
+            return
+
+        proposals = self._config.allocator.propose(
+            candidates=candidates,
+            records=records,
+            budget=budget,
+            cost_model=cost_model,
+        )
+
+        # Convert to Proposal objects
+        from computronium.experiment.execution.search_space import Proposal
+        for coord, sched in proposals:
+            self._state.pending_proposals.append(Proposal(
+                coordinate=coord,
+                schedule=sched,
+                rationale="allocator_promotion",
+            ))
+
+    def _check_gate(self, fragment: "Fragment", stage_spec) -> bool:
         """Check if stage gate passes."""
         if stage_spec.gate == "skip":
             return True
 
-        if not records:
+        if not fragment.records and not fragment.proposals:
             return stage_spec.gate != "pass"
 
         # For claim gate, require claim_eligible records
         if stage_spec.gate == "claim":
-            eligible = [r for r in records if self._is_claim_eligible(r)]
+            eligible = [r for r in fragment.records if self._is_claim_eligible(r)]
             return len(eligible) > 0
 
         # For pass gate, require at least one non-quarantine PASS
         if stage_spec.gate == "pass":
             passing = [
                 r
-                for r in records
+                for r in fragment.records
                 if r.status.gate_verdict.value == "PASS" and not r.status.quarantine
             ]
             return len(passing) > 0
 
         return True
 
-    def _is_claim_eligible(self, record: Record) -> bool:
+    def _is_claim_eligible(self, record: "Record") -> bool:
         """Check if record is claim-eligible (pure predicate)."""
         return (
             record.status.gate_verdict.value == "PASS"
@@ -526,9 +467,7 @@ class PipelineRunner:
         if not self._config.checkpoint_dir:
             return
 
-        from computronium.experiment.execution.replay import (
-            create_checkpoint,
-        )
+        from computronium.experiment.execution.replay import create_checkpoint
 
         self._config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         timestamp = int(time.time() * 1000)
@@ -541,7 +480,7 @@ class PipelineRunner:
             run_id=self._config.run_id,
             run_spec=self._config.run_spec,
             completed_keys=frozenset(self._state.completed_measurement_keys),
-            pending=self._state.pending_candidates,
+            pending=[(p.coordinate, p.schedule) for p in self._state.pending_proposals],
             in_progress=self._state.in_progress,
             budget=self._state.budget,
             allocator_state=self._state.allocator_state,
@@ -568,12 +507,6 @@ class PipelineRunner:
         """Get proposal provenance (R20)."""
         return self._state.proposal_provenance
 
-
-# Import STAGE_SPECS and get_stage_spec from stage module
-from computronium.experiment.execution.stage import (  # noqa: E402
-    STAGE_SPECS,
-    get_stage_spec,
-)
 
 __all__ = [
     "PipelineConfig",

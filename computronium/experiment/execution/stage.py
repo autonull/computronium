@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.execution.search_space import Fragment as SearchSpaceFragment
+    from computronium.experiment.execution.search_space import StageContext as SearchSpaceStageContext
 
 
 class StageId(StrEnum):
@@ -50,6 +52,17 @@ class StageGate(StrEnum):
     SKIP = "skip"
 
 
+class StageTransition(StrEnum):
+    """Stage transition decisions for round loop control (WP16)."""
+
+    CONTINUE = "continue"
+    COMPLETE = "complete"
+    PAUSE = "pause"
+    STOP = "stop"
+    QUARANTINE = "quarantine"
+    SKIP = "skip"
+
+
 @dataclass(frozen=True, slots=True)
 class Fragment:
     """Output fragment from a stage execution.
@@ -66,6 +79,29 @@ class Fragment:
     classification: dict[str, Any] = field(
         default_factory=dict
     )  # R19 rejection classification
+    decisions: list = field(default_factory=list)  # Decision objects from S10
+
+
+@dataclass(slots=True)
+class StageContext:
+    """Context passed to each stage during execution."""
+
+    run_id: str
+    run_spec: dict[str, Any]
+    stage_id: StageId
+    store: Any  # RecordStore
+    budget: Any  # Budget
+    cost_model: Any  # CostModel
+    policy: Any  # Policy
+    allocator: Any  # EvidenceDrivenAllocator | None
+    backend: Any  # ExecutionBackend
+    search_space: Any  # SearchSpace
+    completed_keys: set[str]
+    pending_candidates: list[tuple[Coordinate, Schedule]]
+    in_progress: list[tuple[Coordinate, Schedule]]
+    stage_params: dict[str, Any]
+    provenance: Any  # Provenance
+    system_context: Any  # SystemContext (R75/K10)
 
 
 @runtime_checkable
@@ -134,7 +170,7 @@ S1_FRAME = StageSpec(
     description="Objective/operating-point resolution; question-first entry via Synthesis policy (R43)",
     required_fidelity="L0",
     min_n_seeds=1,
-    gate="pass",
+    gate="skip",
     params={
         "objective_resolution": True,
         "operating_points": True,
@@ -149,7 +185,7 @@ S2_SPACE = StageSpec(
     description="Axis snapshot + legality preview (dry-run = same engine, C32)",
     required_fidelity="L0",
     min_n_seeds=1,
-    gate="pass",
+    gate="skip",
     params={
         "axis_snapshot": True,
         "legality_dry_run": True,
@@ -357,6 +393,7 @@ __all__ = [
     "StageGate",
     "StageId",
     "StageSpec",
+    "StageTransition",
     "get_next_stage",
     "get_previous_stage",
     "get_stage_spec",

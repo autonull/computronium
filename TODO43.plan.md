@@ -2867,11 +2867,73 @@ Definition of Done completes at WP13 close.
   ports from legacy and should be refactored or the module deleted when WP12
   removes the last legacy importer.
 
+### 2026-09-30 — WP14/WP15/WP16/WP17 Complete: SearchSpace/Stage Dispatch/Round Loop/Optuna Adapter
+
+- **SearchSpace/ProposalContext/Proposal canonical abstractions (WP14)**: Created `computronium/experiment/execution/search_space.py` with:
+  - `SearchSpace` derived from RunSpec with axes snapshot, constraints, objectives, tasks
+  - `ProposalContext` passed to every policy's `propose()` 
+  - `Proposal` with coordinate, schedule, rationale, metadata
+  - `Policy` protocol with `propose(ctx) -> Iterator[Proposal]`
+  - `Fragment` and `StageContext` for stage dispatch
+  - `Decision` with transition (CONTINUE/COMPLETE/PAUSE/STOP)
+
+- **Stage dispatch runtime (WP15)**: 
+  - Created `computronium/experiment/execution/stages_impl.py` with concrete `Stage.run(ctx) -> Fragment` implementations for all 11 canonical stages (S1_FRAME…S11_REPORT)
+  - Updated `PipelineRunner` to dispatch via `get_stage_implementation(stage_id)` instead of monolithic `_run_stage()`
+  - S1_FRAME and S2_SPACE now run once at start with `gate="skip"`
+  - S3-S10 repeat in round loop with Decision-based termination
+  - Coverage (R18), classification (R19), provenance (R20) collected per-stage
+  - S1 Frame: objective resolution + initial proposals via policy
+  - S2 Space: axis snapshot + legality dry-run
+  - S3 Schedule: fidelity/seed/epoch planning + data-origin allocation + contrast quota
+  - S4 Gate: LegalityEngine enforcement
+  - S5 Compose: compose_joint_system bridge
+  - S6 Train: SystemTrainer settle bridge
+  - S7 Measure: objectives resolved against OBJECTIVES registry
+  - S8 Record: atomic append + artifacts + embedding generation
+  - S9 Attribute: counterfactual axis attribution
+  - S10 Decide: promotion predicates + allocation handoff + Decision
+  - S11 Report: surface.report fragments
+
+- **Round controller with Decision types (WP16)**: Created `computronium/experiment/execution/decision.py` with:
+  - `Decision` dataclass with transition, new_proposals, promotions, abandonments, replications
+  - `RoundController` with should_continue() logic
+  - Convenience factories: `continue_round()`, `complete_run()`, `pause_run()`, `stop_run()`
+  - S3-S10 now repeat in explicit round loop terminated by Decision
+
+- **OptunaDistributionAdapter (WP17)**: Created `computronium/experiment/execution/optuna_adapter.py` with:
+  - Maps `HyperparameterSpec` → Optuna distribution using availability predicates from legality DSL
+  - Handles CONTINUOUS/INTEGER/CATEGORICAL/STRUCTURAL axis kinds
+  - `build_distributions()` constructs all distributions for a SearchSpace at a coordinate
+  - Uses `evaluate()` from legality DSL for availability checks
+
+- **Allocator integration**: EvidenceDrivenAllocator now properly invoked between rounds (after S7, before S10) with proposals converted from allocator output
+
+- **Quality gates pass**: `ruff format`, `ruff check`, `pyright` strict clean
+- **All 359 tests pass** (including stage_model_lock, wp10/11 locks, device hygiene, kernel isolation)
+
+### Improvement Opportunities (remaining WPs)
+1. **WP12 (major)**: Full legacy pillar port & delete still open — `autoscientist/`,
+   `hyperopt/`, legacy `execution/` engine, `lightning_/`, `core/campaign/`,
+   `packages/computronium-lab` research layer. Precondition: conformance green per capability (R77); import-graph lock guards
+   the kernel side.
+2. **WP12**: `prior.py` legacy data tables still seed the registry — final deletion
+   step pending full consumer-reroute audit.
+3. **WP13**: E3 seeded reproduction on `SyntheticGroundTruth`, E4 transfer with
+   explicit provenance; results recorded as store records. (E1 overhead + kill-9 +
+   serialization round-trip + E2 surrogate acquisition now locked/complete.)
+4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
+   `verifying_test` execution sweep).
+5. **WP19**: Failure isolation end-to-end — backend should return per-item Success/Failure instead of raising exceptions per-batch.
+6. **WP19**: Runtime provenance — EnvironmentSnapshot captured once per run, not hardcoded values.
+
 ---
 
-## Integration Reality Correction (2026-09-30)
+## Integration Reality Correction (2026-09-30 — Updated)
 
 **WP8–WP13 established the kernel primitives and most required functionality, but several completion bullets were satisfied structurally rather than end-to-end. These are not architectural reversions. The remaining work closes runtime integration seams and verifies that the individual components actually compose into the unified kernel described by abc3 §5.**
+
+**Progress Update (2026-09-30)**: WP14/WP15/WP16/WP17 have closed the major integration seams:
 
 Explicit reclassification of completion status:
 
@@ -2880,14 +2942,14 @@ Explicit reclassification of completion status:
 | Axis/registry union        | Complete                                                                 |
 | Legality                   | Complete                                                                 |
 | Store/artifacts            | Complete, subject to atomicity clarification                             |
-| Stage definitions          | **Complete definition; runtime dispatch incomplete**                     |
-| Policy catalog             | **Complete catalog; canonical search-space interface incomplete**        |
-| Optuna integration         | **Sampler machinery present; genuine AXES-driven suggestion incomplete** |
-| Allocator                  | **Implementation exists; pipeline integration incomplete**               |
-| Continuous round loop      | **Incomplete**                                                           |
+| Stage definitions          | **Complete** — runtime dispatch via `Stage.run(ctx) -> Fragment`         |
+| Policy catalog             | **Complete** — canonical SearchSpace/ProposalContext/Proposal interface  |
+| Optuna integration         | **Complete** — OptunaDistributionAdapter provides AXES-driven suggestion |
+| Allocator                  | **Complete** — integrated between rounds in round loop                   |
+| Continuous round loop      | **Complete** — S3-S10 repeat with Decision-based termination             |
 | Learning/store integration | Mostly complete                                                          |
 | Claim integrity            | Helper complete; **all callers not yet normalized**                      |
-| Failure isolation          | **Incomplete end-to-end**                                                |
+| Failure isolation          | **Incomplete end-to-end** — backend still raises exceptions per-batch    |
 | E1                         | Complete                                                                 |
 | E2                         | Complete as a mechanism validation                                       |
 | E3/E4                      | Incomplete                                                               |

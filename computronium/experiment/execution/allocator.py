@@ -414,9 +414,34 @@ class EvidenceDrivenAllocator:
         return dist
 
 
+@dataclass(frozen=True, slots=True)
+class Promotion:
+    """A promotion decision for a cell to higher fidelity."""
+
+    cell_key: str
+    coordinate: Coordinate
+    from_fidelity: str
+    to_fidelity: str
+    rationale: str
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
+class Abandonment:
+    """An abandonment decision for a cell."""
+
+    cell_key: str
+    coordinate: Coordinate
+    fidelity: str
+    rationale: str
+    reason: str  # "divergence" | "stagnation" | "budget" | "legality"
+
+
 __all__ = [
     "AllocationPolicy",
     "AllocationState",
     "EvidenceDrivenAllocator",
     "PromotionCandidate",
+    "Promotion",
+    "Abandonment",
 ]
