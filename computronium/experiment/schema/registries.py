@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from computronium.experiment.schema.registry import Registry
+
+if TYPE_CHECKING:
+    from computronium.experiment.legality.dsl import Expr
 
 SpecT = TypeVar("SpecT")
 
@@ -22,6 +25,27 @@ class ObjectiveSpec:
     name: str
     description: str = ""
     direction: str = "minimize"  # "minimize" or "maximize"
+    weight: float = 1.0  # Weight in multi-objective optimization
+    normalizer: str | None = None  # Normalizer function name (e.g., "minmax", "zscore")
+    axis_tag: str | None = None  # Axis this objective primarily relates to
+
+
+class ConstraintKind(StrEnum):
+    """Constraint kinds for enforcement semantics."""
+
+    VOID = "void"  # Logically infeasible — globally suppressive (S4)
+    HARD = "hard"  # Resource/budget limits — enforced at S4/S6
+    SOFT = "soft"  # Preferences — encoded in PRIORS, not enforced
+    FAIRNESS = "fairness"  # Param-budget tolerance (R25)
+    OPERATING_POINT = "operating_point"  # Operating point constraints (R66)
+
+
+class ProofKind(StrEnum):
+    """Machine-checkable proof kinds for DECLARED constraints."""
+
+    TYPE_MISMATCH = "type_mismatch"
+    RESOURCE = "resource"
+    LOGICAL = "logical"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,9 +53,12 @@ class ConstraintSpec:
     """Specification for a constraint."""
 
     name: str
-    kind: str  # "hard", "soft", "budget"
+    kind: ConstraintKind
     description: str = ""
     params: dict | None = None
+    predicate: Expr | None = None  # Expr predicate for machine-checkable evaluation
+    proof_kind: ProofKind | None = None  # Proof kind for DECLARED constraints
+    origin: str = "DECLARED"  # "DECLARED" | "TASK_FENCE" | "APPLY_CONSTRAINTS"
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,16 +133,40 @@ class CapabilityKind(StrEnum):
     LEARNING = "learning"
 
 
+class CapabilityStatus(StrEnum):
+    """Capability status for currency tracking (R78)."""
+
+    ACTIVE = "active"
+    RETIRED = "retired"
+
+
 @dataclass(frozen=True, slots=True)
 class CapabilitySpec:
-    """Specification for a capability (for conformance registry)."""
+    """Specification for a capability (for conformance registry).
+
+    The `name` field is used as the registry key and must equal `capability_id`
+    (e.g., "C1", "C2", ..., "C88") for consistent lookup.
+    """
 
     capability_id: str
+    name: str  # Registry key; must equal capability_id
     kind: CapabilityKind
-    name: str
+    display_name: str  # Human-readable name
     description: str = ""
     required: bool = True
     gated_by: str | None = None  # Gate that enables this capability
+    stage: str | None = None  # Pipeline stage this capability belongs to
+    owner: str | None = None  # Component owner (e.g., "pipeline", "store", "learning")
+    verifying_test: str | None = None  # pytest node id of the verifying test
+    flags: tuple[str, ...] = ()  # Appendix-A flags (e.g., "experimental", "gpu_only")
+    status: CapabilityStatus = CapabilityStatus.ACTIVE
+    retirement_record: str | None = None  # Reference to retirement record if RETIRED
+
+    def __post_init__(self) -> None:
+        if self.name != self.capability_id:
+            raise ValueError(
+                f"CapabilitySpec.name ({self.name}) must equal capability_id ({self.capability_id})"
+            )
 
 
 # Registry instances
@@ -177,11 +228,14 @@ __all__ = [
     "STAGES_REGISTRY",
     "CapabilityKind",
     "CapabilitySpec",
+    "CapabilityStatus",
+    "ConstraintKind",
     "ConstraintSpec",
     "ObjectiveSpec",
     "PolicyKind",
     "PolicySpec",
     "PriorSpec",
+    "ProofKind",
     "StageId",
     "StageSpec",
     "register_capability",

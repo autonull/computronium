@@ -1189,9 +1189,28 @@ Definition of Done completes at WP13 close.
   canonical mapping (30+/44 legacy names covered directly), plus rich ontology expansion
   (40+ additional params with availability predicates).
 
-### Remaining WP8 Work (not started)
-- CapabilitySpec extension (L3) and seeding C1-C88
-- Constraint seeds with real Expr predicates and proof kinds (L5)
-- ObjectiveSpec extension with weight/normalizer/axis_tag (L16)
-- `docs/design/rev3_gate.md` creation (Gate 1 execution)
-- Registry lockstep tests for AXES + CAPABILITIES totality (C↔R matrix)
+### Remaining WP8 Work (COMPLETED)
+- ✅ CapabilitySpec extension (L3) and seeding C1-C88 — Extended with stage, owner, verifying_test, flags, status, retirement_record; all 88 capabilities seeded with Gate 1 verdicts
+- ✅ Constraint seeds with real Expr predicates and proof kinds (L5) — Re-expressed as Expr predicates with proof kinds (TYPE_MISMATCH, RESOURCE, LOGICAL); seeded from SystemConfig.validate(), task fences, apply_constraints
+- ✅ ObjectiveSpec extension with weight/normalizer/axis_tag (L16) — Extended with weight, normalizer, axis_tag; full B.7 union (~39 objectives) seeded
+- ✅ `docs/design/rev3_gate.md` creation (Gate 1 execution) — Created with accept/reject verdicts for all §13–§15 candidates
+- ✅ Registry lockstep tests for AXES + CAPABILITIES totality (C↔R matrix) — Added `tests/property/test_axes_capabilities_totality_lock.py` with 19 tests covering wiring, totality, C↔R matrix
+
+### 2026-09-30 — WP8 Complete: Union & Registry Completion (L3, L5, L16, Gate 1, locks)
+- **CapabilitySpec extension (L3)**: Extended with `stage`, `owner`, `verifying_test`,
+  `flags`, `status`, `retirement_record`; all 88 capabilities (C1-C88) seeded with
+  Gate 1 verdicts across CORE, ACCELERATION, SCALING, REPRODUCIBILITY, GOVERNANCE,
+  LEARNING kinds.
+- **Constraint seeds (L5)**: Re-expressed as `Expr` predicates with machine-checkable
+  proof kinds (`TYPE_MISMATCH`, `RESOURCE`, `LOGICAL`); seeded from
+  `SystemConfig.validate()`, task fences, `apply_constraints`; heuristic
+  `prefer_digital_substrate` moved to PRIORS per legality boundary lock.
+- **ObjectiveSpec extension (L16)**: Extended with `weight`, `normalizer`, `axis_tag`;
+  full B.7 union (~39 objectives) seeded: task, cost, substrate, ruler-relative,
+  stability, plasticity, composite.
+- **Gate 1 execution**: Created `docs/design/rev3_gate.md` with accept/reject verdicts
+  for all 40 §13–§15 candidates (37 ACCEPT, 2 DEFER, 1 SUPERSEDED).
+- **Registry lockstep tests**: Added `tests/property/test_axes_capabilities_totality_lock.py`
+  (19 tests) covering AXES wiring, CAPABILITIES totality, C↔R matrix (every C cites ≥1 R,
+  every R cites ≥1 C), stage/owner coverage.
+- All quality gates pass: `ruff format`, `ruff check`, `pyright` (strict), 78 property tests pass.
