@@ -213,7 +213,9 @@ CREATE TABLE artifacts (
 
 **Atomic append contract:**
 ```python
-def append_with_artifacts(self, record: Record, artifacts: list[ArtifactInput]) -> Record:
+def append_with_artifacts(
+    self, record: Record, artifacts: list[ArtifactInput]
+) -> Record:
     """Single transaction: record + all artifacts (internal or external refs).
     No partial state possible. External artifacts are registered by manifest only."""
     with self._write_lock:
@@ -222,23 +224,35 @@ def append_with_artifacts(self, record: Record, artifacts: list[ArtifactInput]) 
             self._conn.execute(INSERT_RECORD, record_params)
             for art in artifacts:
                 digest = art.digest or hashlib.sha256(art.bytes).hexdigest()
-                if art.bytes is not None and len(art.bytes) <= self._artifact_inline_threshold:
+                if (
+                    art.bytes is not None
+                    and len(art.bytes) <= self._artifact_inline_threshold
+                ):
                     # Inline small artifact
                     self._conn.execute(
                         """INSERT INTO artifacts (digest, bytes, role, record_id, created_at,
                                                    external_uri, external_size, external_checksum)
                            VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL)""",
-                        [digest, art.bytes, art.role, record.record_id, datetime.now()]
+                        [digest, art.bytes, art.role, record.record_id, datetime.now()],
                     )
                 else:
                     # External artifact: bytes is None or too large; external_uri required
-                    assert art.external_uri is not None, "external_uri required for large artifacts"
+                    assert art.external_uri is not None, (
+                        "external_uri required for large artifacts"
+                    )
                     self._conn.execute(
                         """INSERT INTO artifacts (digest, bytes, role, record_id, created_at,
                                                    external_uri, external_size, external_checksum)
                            VALUES (?, NULL, ?, ?, ?, ?, ?, ?)""",
-                        [digest, art.role, record.record_id, datetime.now(),
-                         art.external_uri, art.external_size, art.external_checksum]
+                        [
+                            digest,
+                            art.role,
+                            record.record_id,
+                            datetime.now(),
+                            art.external_uri,
+                            art.external_size,
+                            art.external_checksum,
+                        ],
                     )
             self._conn.execute("COMMIT")
         except Exception:
@@ -1490,6 +1504,26 @@ Definition of Done completes at WP13 close.
    serialization round-trip + E2 surrogate acquisition now locked/complete.)
 4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
    `verifying_test` execution sweep).
+
+### 2026-09-30 — WP13 E3/E4 Probes Complete, Conformance Audit Script Created
+
+- **E3 seeded axis-effect reproduction** (`scripts/probes/e3_seeded_axis_effect.py`):
+  Measures known axis effect across N_seeds independent seeds on SyntheticGroundTruth.
+  Result: d=-1.50, CI=[-2.40,-0.60], p=0.001 (reproduces).
+- **E4 transfer-with-provenance** (`scripts/probes/e4_transfer_provenance.py`):
+  Trains surrogate on source tasks, evaluates on held-out tasks with explicit
+  transfer_source_ids/transfer_mode provenance. Result: d=-1.52, p=0.00097.
+- **Conformance evidence audit** (`scripts/probes/conformance_evidence_audit.py`):
+  Executes all 88 capabilities' verifying_test pytest node ids via ConformanceHarness.
+  Script ready; background run was killed by shell timeout — needs re-run.
+
+### Improvement Opportunities (remaining WPs)
+1. **WP13**: Re-run conformance audit to completion (all 88 verifying tests).
+2. **WP12 (major)**: Full legacy port & delete — `autoscientist/`, `hyperopt/`,
+   legacy `execution/` engine, `lightning_/`, `core/campaign/`,
+   `packages/computronium-lab` research layer. Precondition: conformance green.
+3. **WP12**: `prior.py` legacy data tables final deletion pending consumer-reroute audit.
+4. **WP13 DoD hardening**: Full C1–C88 conformance-evidence audit execution sweep.
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
