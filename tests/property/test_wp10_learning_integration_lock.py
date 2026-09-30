@@ -30,9 +30,9 @@ from computronium.experiment.evidence.claims import claim_eligible_by_achieved_s
 from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.learning.benchmark import (
-    _coordinate_to_vector,
-    _embedding_dims,
+    coordinate_to_vector,
     create_synthetic_benchmark_tasks,
+    embedding_dims,
     run_acquisition_benchmark,
 )
 from computronium.experiment.learning.prior import (
@@ -334,10 +334,10 @@ class TestBenchmarkHarness:
 
     def test_encoder_deterministic_and_local(self) -> None:
         """Encoder is deterministic; a 1%-range nudge moves one dim slightly."""
-        dims = _embedding_dims(6)
+        dims = embedding_dims(6)
         assert dims
-        base = _coordinate_to_vector(_coord(), 6, dims)
-        assert base == _coordinate_to_vector(_coord(), 6, dims)
+        base = coordinate_to_vector(_coord(), 6, dims)
+        assert base == coordinate_to_vector(_coord(), 6, dims)
         spec = dims[0]
         lo = spec.domain.lo or 0.0
         hi = spec.domain.hi or 1.0
@@ -350,7 +350,7 @@ class TestBenchmarkHarness:
             update="Euclidean",
             params={spec.name: (lo + hi) / 2 + 0.01 * (hi - lo)},
         )
-        vec = _coordinate_to_vector(nudged, 6, dims)
+        vec = coordinate_to_vector(nudged, 6, dims)
         dist = float(np.linalg.norm(np.subtract(vec, base)))
         assert 0.0 < dist < 0.05
 
@@ -360,3 +360,50 @@ class TestBenchmarkHarness:
             assert task.synthetic_fixture is not None
             assert len(task.synthetic_fixture.optimum) == 6
             assert all(0.0 <= v < 1.0 for v in task.synthetic_fixture.optimum)
+
+
+class TestSurrogateFeatures:
+    def test_gp_fit_fast_deterministic_and_local(self) -> None:
+        """GP fits the normalized subspace fast, deterministically, usefully."""
+        import time
+
+        from computronium.experiment.learning.surrogate import (
+            GaussianProcessSurrogate,
+            SurrogateConfig,
+            SurrogateTrainingData,
+        )
+
+        dims = embedding_dims(6)
+        rng = np.random.RandomState(7)
+        coords = [
+            Coordinate(
+                substrate="Digital",
+                geometry="Feedforward",
+                dynamics="Instantaneous",
+                plasticity="NullPlasticity",
+                credit="Backprop",
+                update="Euclidean",
+                params={
+                    s.name: float(rng.uniform(s.domain.lo or 0.0, s.domain.hi or 1.0))
+                    for s in dims
+                },
+            )
+            for _ in range(20)
+        ]
+        objs = [float(sum(coordinate_to_vector(c, 6, dims))) for c in coords]
+        data = SurrogateTrainingData(
+            coordinates=coords,
+            objectives=objs,
+            data_origins=[DataOrigin.EXPLORATION] * len(coords),
+        )
+        started = time.monotonic()
+        first = GaussianProcessSurrogate(SurrogateConfig(random_state=0))
+        first.fit(data)
+        mean, _ = first.predict(coords)
+        elapsed = time.monotonic() - started
+        assert elapsed < 120
+        assert float(np.max(np.abs(mean - np.array(objs)))) < 0.3
+        second = GaussianProcessSurrogate(SurrogateConfig(random_state=0))
+        second.fit(data)
+        mean2, _ = second.predict(coords)
+        assert np.array_equal(mean, mean2)

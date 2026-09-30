@@ -18,8 +18,11 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
 
 import numpy as np
 
+from computronium.experiment.learning.benchmark import (
+    coordinate_to_vector,
+    embedding_dims,
+)
 from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
-from computronium.experiment.schema.harvest import HyperparameterSpec, harvest_schema
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
@@ -88,6 +91,10 @@ class SurrogateConfig:
     # GP-specific
     kernel: str = "matern"  # "rbf", "matern", "rational_quadratic"
     nu: float = 2.5  # For matern kernel
+    n_features: int = (
+        6  # Embedding dims (registry Range subspace, shared with benchmark)
+    )
+    n_optimizer_restarts: int = 2  # Kernel optimizer restarts (fit cost control)
     # RF/GBT-specific
     n_estimators: int = 100
     max_depth: int | None = None
@@ -497,7 +504,7 @@ class GaussianProcessSurrogate:
             kernel=kernel,
             alpha=1e-6,
             normalize_y=True,
-            n_restarts_optimizer=5,
+            n_restarts_optimizer=self._config.n_optimizer_restarts,
             random_state=self._config.random_state,
         )
         self._model.fit(X_scaled, y_scaled)
@@ -528,46 +535,21 @@ class GaussianProcessSurrogate:
 
         return base + WhiteKernel(noise_level=1e-6, noise_level_bounds=(1e-10, 1e-1))
 
-    def _get_feature_specs(self) -> list[HyperparameterSpec]:
-        """Get ordered feature specs from harvest_schema for consistent encoding."""
-        schema = harvest_schema()
-        # Sort by axis_kind_order then by name for deterministic ordering
-        axis_order = {axis.value: i for i, axis in enumerate(schema.axis_kind_order)}
-        return sorted(
-            schema.hyperparameters,
-            key=lambda hp: (axis_order.get(hp.axis_name, 999), hp.name),
-        )
-
     def _coords_to_features(
         self, coords: list[Coordinate], objectives: list[float] | None = None
     ) -> tuple[np.ndarray, np.ndarray | None]:
-        """Convert coordinates to feature vectors using harvest_schema for consistent encoding.
+        """Convert coordinates to feature vectors in the shared embedding space.
 
-        R15/R53: Features from the full Coordinate via harvest_schema().
+        R15/R53: features use the same registry-Range embedding as the
+        benchmark harness, so the surrogate learns the space it is evaluated
+        in. Small, normalized, well-conditioned — no salted hashes, no
+        raw-scale or constant columns.
         """
-        feature_specs = self._get_feature_specs()
-        feature_names = [hp.name for hp in feature_specs]
-
-        features = []
-        for coord in coords:
-            feat = []
-            # Structural axes (one-hot or ordinal encoding)
-            feat.append(hash(coord.substrate) % 1000 / 1000.0)
-            feat.append(hash(coord.geometry) % 1000 / 1000.0)
-            feat.append(hash(coord.dynamics) % 1000 / 1000.0)
-            feat.append(hash(coord.plasticity) % 1000 / 1000.0)
-            feat.append(hash(coord.credit) % 1000 / 1000.0)
-            feat.append(hash(coord.update) % 1000 / 1000.0)
-            # Hyperparameter params in harvest_schema order
-            for name in feature_names:
-                v = coord.params.get(name)
-                if isinstance(v, int | float):
-                    feat.append(float(v))
-                else:
-                    feat.append(0.0)  # Default for missing/categorical params
-            features.append(feat)
-
-        X = np.array(features, dtype=float)
+        dims = embedding_dims(self._config.n_features)
+        X = np.array(
+            [coordinate_to_vector(c, self._config.n_features, dims) for c in coords],
+            dtype=float,
+        )
         y = np.array(objectives, dtype=float) if objectives is not None else None
         return X, y
 

@@ -1371,6 +1371,25 @@ Definition of Done completes at WP13 close.
   determinism/locality, unit-cube optima. 14/14 lock tests pass (16 s).
 - Gates: `ruff format` + `ruff check` + `pyright` strict clean.
 
+### 2026-09-30 — WP10/Ledger: GP Feature Subspace (shared encoder, deterministic)
+- **One encoding**: benchmark `_embedding_dims`/`_coordinate_to_vector` made
+  public (`embedding_dims`/`coordinate_to_vector`,
+  `BenchmarkPolicy`-adjacent exports); `GaussianProcessSurrogate` features now
+  use it — surrogate learns the space the harness evaluates in.
+- **Defects removed**: salted `hash()` structural dims (nondeterminism across
+  processes) gone — structural axes held fixed per task, same documented scope
+  as the harness; raw-scale/mostly-constant ~74-dim space → normalized
+  `n_features` (default 6) Range subspace; missing → 0.5 (was out-of-range
+  0.0); `_get_feature_specs` deleted.
+- **Fit cost**: `SurrogateConfig.n_optimizer_restarts` (default 2, was
+  hardcoded 5); full lock file 16 s → 5 s; GP double-fit determinism locked
+  (same `random_state` → bit-identical means).
+- **Replay hygiene**: real-task placeholder seed uses sha256 (was salted
+  `hash(task.name)`).
+- **Locks**: `TestSurrogateFeatures::test_gp_fit_fast_deterministic_and_local`
+  (20-pt fit < 120 s guard, interpolation err < 0.3, determinism). 15/15 pass.
+- Gates: `ruff format` + `ruff check` + `pyright` strict clean.
+
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
    `hyperopt/`, legacy `execution/` engine, `lightning_/`, `packages/computronium-lab`
@@ -1401,10 +1420,9 @@ Definition of Done completes at WP13 close.
    smooth 6-D bowl (d≈+0.8, p<0.05 — coverage beats concentration at B=100;
    lowering noise to 0.01 does not change the sign). E2 needs either a
    competent surface-fitting surrogate or sharper/lower-D tasks before its
-   numbers are trusted. Related defect: `GaussianProcessSurrogate` fits all
-   ~68 harvest dims — 10 tasks × B=100 exceeded a 300 s foreground cell
-   (ConvergenceWarnings, ill-conditioned); needs feature-subspace selection
-   before E2 use. Do NOT background-tune stubs; fix the surrogate dims first.
+   numbers are trusted. GP-subspace fix landed (fit now seconds,
+   deterministic); the remaining step is a full surrogate-vs-random E2 run,
+   backgrounded per §6 (10 tasks × B=100 ≈ minutes, not seconds).
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).

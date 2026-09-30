@@ -102,7 +102,7 @@ def _generate_task_id(task_name: str, seed: int) -> str:
     return hashlib.sha256(f"{task_name}|{seed}".encode()).hexdigest()[:16]
 
 
-def _embedding_dims(dimension: int) -> list[HyperparameterSpec]:
+def embedding_dims(dimension: int) -> list[HyperparameterSpec]:
     """First ``dimension`` Range specs in harvest order (fixed embedding dims)."""
     from computronium.experiment.schema.harvest import harvest_schema
 
@@ -114,7 +114,7 @@ def _embedding_dims(dimension: int) -> list[HyperparameterSpec]:
     return dims
 
 
-def _coordinate_to_vector(
+def coordinate_to_vector(
     coord: Coordinate,
     dimension: int,
     dims: list[HyperparameterSpec] | None = None,
@@ -127,7 +127,7 @@ def _coordinate_to_vector(
     measures continuous-param acquisition, not structural search.
     """
     if dims is None:
-        dims = _embedding_dims(dimension)
+        dims = embedding_dims(dimension)
     vec: list[float] = []
     for i in range(dimension):
         if i < len(dims):
@@ -176,13 +176,16 @@ def _evaluate_policy_on_task(
     """
     del primary_metric, store
     if task.synthetic_fixture is None:
-        rng = np.random.RandomState(seed + hash(task.name) % 1000)
+        task_seed = int.from_bytes(
+            hashlib.sha256(task.name.encode()).digest()[:8], "big"
+        ) % (2**31)
+        rng = np.random.RandomState(seed + task_seed)
         return float(rng.rand())
 
     fixture = task.synthetic_fixture
     total = int(budget.limit) if budget.kind == CostBudgetKind.EVAL_COUNT else 20
     batch = min(5, total)
-    dims = _embedding_dims(fixture.dimension)
+    dims = embedding_dims(fixture.dimension)
     observe = getattr(policy, "observe_score", None)
 
     best = float("inf")
@@ -205,7 +208,7 @@ def _evaluate_policy_on_task(
             )
         for j, coord in enumerate(candidates[:m]):
             score = fixture.evaluate(
-                _coordinate_to_vector(coord, fixture.dimension, dims),
+                coordinate_to_vector(coord, fixture.dimension, dims),
                 seed + round_idx * batch + j,
             )
             best = min(best, score)
@@ -413,6 +416,8 @@ __all__ = [
     "BenchmarkPolicy",
     "BenchmarkResult",
     "BenchmarkTask",
+    "coordinate_to_vector",
     "create_synthetic_benchmark_tasks",
+    "embedding_dims",
     "run_acquisition_benchmark",
 ]
