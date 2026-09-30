@@ -717,14 +717,26 @@ strict-clean from WP1 onward.
 - Implemented `tests/property/test_statistical_protocol_lock.py`: Lockstep tests for E1-E4 benchmark class hierarchy, effect-size protocol (Cohen's d + CI + p-value, task-level primary unit), I(C,U) data split enforcement (exploration/policy_selected vs calibration/test), matched-cost comparison guards, stratification guards (hardware_class, data_origin, budget_tier)
 - All tests pass; statistical protocol lock established as CI gate for WP6
 
+### 2026-09-29 — WP3 Complete (Legality Engine - Boundary Lock)
+- Added `tests/property/test_legality_boundary_lock.py` (10 tests): enforces legality boundary from feedback #9
+- DECLARED constraints must only encode machine-checkable infeasibility proofs (type mismatch, resource violation, logical contradiction)
+- No heuristic exclusions allowed in DECLARED constraints (those belong in PRIORS)
+- Verifies void patterns have proofs, no performance metrics in DECLARED constraints, DECLARED constraints are HARD kind
+
+### 2026-09-29 — WP6 Complete (Pillar 5: Learning Primitives)
+- Implemented `learning/prior.py`: PriorSpec registry with ruler-LR table (11 tasks), step-size overrides (28 dynamics×credit combos), dynamics step-size overrides (2 dynamics); 44 priors registered
+- Implemented `learning/surrogate.py`: SurrogatePolicy wrapper (EI/EHVI/UCB/PI/LOG_EI) over any Policy; GaussianProcessSurrogate with sklearn; E2/E3 protocol compliance (training on exploration ∪ policy_selected, evaluation on calibration ∪ test)
+- Implemented `learning/icu.py`: I(C,U) metamodel with leakage guard; calibration audit per WP5.5 #3; bounded degradation check; leakage detection
+- Implemented `learning/reasoning.py`: Hypothesis/literature records with mandatory provenance linkage (R57, Q15); ProvenanceLink with supporting/contradicting records; ReasoningStore for persistence
+- All 4 modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- All 96 property tests pass (including new legality boundary lock)
+
 ### Improvement Opportunities (for future WPs)
 1. **WP1.5**: Atomic append with artifacts kill -9 proof (protocol skeleton complete)
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
 3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
 4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
-5. **WP3**: Add legality boundary lock test (`test_legality_boundary_lock.py`)
-6. **WP6**: Implement learning primitives (`prior.py`, `surrogate.py` with E2/E3 protocol, `icu.py` with leakage guard, `reasoning.py`)
-7. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
+5. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
 
 ### Notes for Remaining Work
 - The `execution/` package is now complete with all 7 modules: budget.py, allocator.py, replay.py, backends.py, policy.py, stage.py, pipeline.py
