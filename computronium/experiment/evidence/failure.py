@@ -21,6 +21,28 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
+# Failure Event (WP19 - failure isolation)
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class FailureEvent:
+    """An evaluation failure event with full context for isolation and analysis.
+
+    Used by backends to return per-item failures without raising exceptions,
+    enabling successful siblings to continue (WP19 failure isolation).
+    """
+
+    cell_key: str
+    failure_cause: FailureCause
+    error_message: str
+    coordinate: dict[str, Any]
+    schedule: dict[str, Any]
+    provenance: dict[str, Any]
+    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+
+
+# =============================================================================
 # Failure Cluster Analysis
 # =============================================================================
 
@@ -532,6 +554,7 @@ def analyze_store_failures(
 
 __all__ = [
     "FailureCluster",
+    "FailureEvent",
     "FailurePattern",
     "FixLinkage",
     "FixLinkageStore",

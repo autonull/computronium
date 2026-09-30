@@ -1,10 +1,10 @@
-"""S1-S11 pipeline runner with wrapper obligations (WP9/15/16).
+"""S1-S11 pipeline runner with wrapper obligations (WP9/15/16 + WP19).
 
 Wrapper obligations (R18/R19/R20/R29/R12):
 - Coverage reporting (R18)
 - Identical rejection classification for every policy (R19)
 - Proposal provenance stamping (R20)
-- Failure isolation (R29)
+- Failure isolation (R29) - per-item Success/Failure via EvaluationResult
 - Single-writer atomic appends (R12)
 - Budget accounting (R21)
 - EvidenceDrivenAllocator integration between rounds
@@ -16,6 +16,8 @@ Architecture:
 - Stage dispatch via Stage.run(ctx) -> Fragment protocol (WP15)
 - Round loop with S3-S10 repeating via Decision (WP16)
 - SearchSpace/ProposalContext/Proposal canonical types (WP14)
+- EnvironmentSnapshot captured once per run (WP19)
+- SystemContext for run-scoped kernel cache and learning state (R75/K10)
 """
 
 from __future__ import annotations
@@ -27,7 +29,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.execution.decision import Decision, RoundController
-from computronium.experiment.execution.stage import StageId, StageTransition, get_stage_spec
+from computronium.experiment.execution.stage import StageId, get_stage_spec
+from computronium.experiment.execution.sysctx import (
+    SystemContext,
+    capture_environment_snapshot,
+)
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
@@ -41,11 +47,9 @@ if TYPE_CHECKING:
         Fragment,
         Policy,
         Proposal,
-        ProposalContext,
         SearchSpace,
         StageContext,
     )
-    from computronium.experiment.execution.stages_impl import get_stage_implementation
     from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
@@ -58,11 +62,11 @@ class PipelineConfig:
     run_id: str
     run_spec: dict[str, Any]
     stages: list[StageId] = field(default_factory=list)
-    budget: "Budget | None" = None
-    cost_model: "CostModel | None" = None
-    policy: "Policy | None" = None
-    allocator: "EvidenceDrivenAllocator | None" = None
-    backend: "ExecutionBackend | None" = None
+    budget: Budget | None = None
+    cost_model: CostModel | None = None
+    policy: Policy | None = None
+    allocator: EvidenceDrivenAllocator | None = None
+    backend: ExecutionBackend | None = None
     checkpoint_dir: Path | None = None
     checkpoint_interval_seconds: float = 60.0
     max_concurrent_evaluations: int = 10
@@ -72,6 +76,10 @@ class PipelineConfig:
     # Round controller config
     max_rounds: int | None = None
     min_rounds: int = 1
+    # Runtime provenance (WP19)
+    dtype: str = "float32"
+    worker_config: dict[str, Any] = field(default_factory=dict)
+    code_sha: str = "unknown"
 
 
 @dataclass(slots=True)
@@ -82,9 +90,9 @@ class PipelineState:
     current_stage_idx: int = 0
     current_round: int = 0
     completed_measurement_keys: set[str] = field(default_factory=set)
-    pending_proposals: list["Proposal"] = field(default_factory=list)
+    pending_proposals: list[Proposal] = field(default_factory=list)
     in_progress: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
-    budget: "Budget | None" = None
+    budget: Budget | None = None
     allocator_state: dict[str, Any] | None = None
     last_checkpoint_time: float = 0.0
     # Coverage tracking (R18)
@@ -96,11 +104,11 @@ class PipelineState:
     # Replay hash tracking (R26/R27)
     replay_hash: str | None = None
     # Round controller
-    round_controller: "RoundController | None" = None
+    round_controller: RoundController | None = None
     # Search space
-    search_space: "SearchSpace | None" = None
-    # System context (R75/K10)
-    system_context: Any = None
+    search_space: SearchSpace | None = None
+    # System context with environment snapshot (WP19/R75/K10)
+    system_context: SystemContext | None = None
 
 
 class PipelineRunner:
@@ -111,7 +119,7 @@ class PipelineRunner:
     - Round loop (S3-S10 repeat) with Decision-based termination
     - Budget management
     - Policy-driven candidate selection via SearchSpace
-    - Backend execution with failure isolation
+    - Backend execution with failure isolation (WP19)
     - Record persistence with reconciliation
     - Checkpointing and resume
     - Wrapper obligations: coverage, classification, traceability, failure isolation
@@ -122,10 +130,24 @@ class PipelineRunner:
     def __init__(
         self,
         config: PipelineConfig,
-        store: "RecordStore",
+        store: RecordStore,
     ) -> None:
         self._config = config
         self._store = store
+
+        # Capture environment snapshot once per run (WP19)
+        env_snapshot = capture_environment_snapshot(
+            dtype=config.dtype,
+            worker_config=config.worker_config,
+            code_sha=config.code_sha,
+        )
+
+        # Create system context with environment snapshot (R75/K10)
+        system_context = SystemContext(
+            run_id=config.run_id,
+            environment=env_snapshot,
+        )
+
         self._state = PipelineState(
             run_id=config.run_id,
             budget=config.budget,
@@ -133,15 +155,19 @@ class PipelineRunner:
                 max_rounds=config.max_rounds,
                 min_rounds=config.min_rounds,
             ),
+            system_context=system_context,
         )
-        self._stages = config.stages or [s.stage_id for s in self._get_all_stage_specs()]
+        self._stages = config.stages or [
+            s.stage_id for s in self._get_all_stage_specs()
+        ]
         self._shutdown = False
 
     def _get_all_stage_specs(self):
         from computronium.experiment.execution.stage import STAGE_SPECS
+
         return STAGE_SPECS
 
-    async def run(self) -> list["Record"]:
+    async def run(self) -> list[Record]:
         """Run the full pipeline to completion with round loop.
 
         Returns:
@@ -156,9 +182,31 @@ class PipelineRunner:
         # Build SearchSpace from RunSpec
         self._state.search_space = self._build_search_space()
 
-        all_records: list["Record"] = []
+        all_records: list[Record] = []
 
         # S1-S2: Run once at start
+        await self._run_initial_phases(all_records)
+
+        # S3-S10: Round loop
+        await self._run_round_loop(all_records)
+
+        # S11 Report
+        if StageId.S11_REPORT in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S11_REPORT, get_stage_spec(StageId.S11_REPORT)
+            )
+            self._merge_coverage(fragment.coverage)
+
+        logger.info(
+            "Pipeline run %s completed: %d records, %d rounds",
+            self._config.run_id,
+            len(all_records),
+            self._state.current_round,
+        )
+        return all_records
+
+    async def _run_initial_phases(self, all_records: list[Record]) -> None:
+        """Run S1-S2 phases once at start."""
         for stage_id in [StageId.S1_FRAME, StageId.S2_SPACE]:
             if self._shutdown:
                 break
@@ -178,95 +226,112 @@ class PipelineRunner:
             # Check gate
             if not self._check_gate(fragment, stage_spec):
                 logger.warning("Gate failed for stage %s, stopping pipeline", stage_id)
+                self._shutdown = True
                 break
 
-        # S3-S10: Round loop
+    async def _run_round_loop(self, all_records: list[Record]) -> None:
+        """Run S3-S10 round loop with Decision-based termination."""
         round_controller = self._state.round_controller
         if round_controller is None:
             from computronium.experiment.execution.decision import RoundController
+
             round_controller = RoundController(
                 max_rounds=self._config.max_rounds,
                 min_rounds=self._config.min_rounds,
             )
             self._state.round_controller = round_controller
 
-        while round_controller.should_continue(
-            self._get_decision_from_fragments()
-        ):
-            self._state.current_round += 1
-            logger.info("Starting round %d", self._state.current_round)
+        while round_controller.should_continue(self._get_decision_from_fragments()):
+            if self._shutdown:
+                break
+            await self._execute_round(all_records)
 
-            # S3 Schedule
-            if StageId.S3_SCHEDULE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S3_SCHEDULE, get_stage_spec(StageId.S3_SCHEDULE))
-                self._state.pending_proposals.extend(fragment.proposals)
-                self._merge_coverage(fragment.coverage)
+    async def _execute_round(self, all_records: list[Record]) -> None:  # noqa: C901
+        """Execute a single round of S3-S10 stages."""
+        self._state.current_round += 1
+        logger.info("Starting round %d", self._state.current_round)
 
-            # S4 Gate
-            if StageId.S4_GATE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S4_GATE, get_stage_spec(StageId.S4_GATE))
-                self._state.pending_proposals = fragment.proposals  # Filtered
-                self._merge_coverage(fragment.coverage)
-                self._merge_classification(fragment.classification)
-
-            # S5 Compose
-            if StageId.S5_COMPOSE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S5_COMPOSE, get_stage_spec(StageId.S5_COMPOSE))
-                self._state.pending_proposals = fragment.proposals
-                self._merge_coverage(fragment.coverage)
-
-            # S6 Train
-            if StageId.S6_TRAIN in self._stages:
-                fragment = await self._dispatch_stage(StageId.S6_TRAIN, get_stage_spec(StageId.S6_TRAIN))
-                all_records.extend(fragment.records)
-                self._merge_coverage(fragment.coverage)
-
-            # S7 Measure
-            if StageId.S7_MEASURE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S7_MEASURE, get_stage_spec(StageId.S7_MEASURE))
-                all_records.extend(fragment.records)
-                self._merge_coverage(fragment.coverage)
-
-                # Run allocator between rounds (after S7_MEASURE, before S10_DECIDE)
-                if self._config.allocator and self._config.budget:
-                    await self._run_allocator(fragment.records)
-
-            # S8 Record
-            if StageId.S8_RECORD in self._stages:
-                fragment = await self._dispatch_stage(StageId.S8_RECORD, get_stage_spec(StageId.S8_RECORD))
-                all_records.extend(fragment.records)
-                self._merge_coverage(fragment.coverage)
-
-            # S9 Attribute
-            if StageId.S9_ATTRIBUTE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S9_ATTRIBUTE, get_stage_spec(StageId.S9_ATTRIBUTE))
-                self._merge_coverage(fragment.coverage)
-
-            # S10 Decide
-            if StageId.S10_DECIDE in self._stages:
-                fragment = await self._dispatch_stage(StageId.S10_DECIDE, get_stage_spec(StageId.S10_DECIDE))
-                self._state.pending_proposals.extend(fragment.proposals)
-                self._merge_coverage(fragment.coverage)
-                # Decisions will be processed by round controller
-
-            # Checkpoint after each round
-            if self._config.checkpoint_dir:
-                await self._create_checkpoint()
-
-        # S11 Report
-        if StageId.S11_REPORT in self._stages:
-            fragment = await self._dispatch_stage(StageId.S11_REPORT, get_stage_spec(StageId.S11_REPORT))
+        # S3 Schedule
+        if StageId.S3_SCHEDULE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S3_SCHEDULE, get_stage_spec(StageId.S3_SCHEDULE)
+            )
+            self._state.pending_proposals.extend(fragment.proposals)
             self._merge_coverage(fragment.coverage)
 
-        logger.info(
-            "Pipeline run %s completed: %d records, %d rounds",
-            self._config.run_id,
-            len(all_records),
-            self._state.current_round,
-        )
-        return all_records
+        # S4 Gate
+        if StageId.S4_GATE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S4_GATE, get_stage_spec(StageId.S4_GATE)
+            )
+            self._state.pending_proposals = fragment.proposals  # Filtered
+            self._merge_coverage(fragment.coverage)
+            self._merge_classification(fragment.classification)
 
-    def _build_search_space(self) -> "SearchSpace":
+        # S5 Compose
+        if StageId.S5_COMPOSE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S5_COMPOSE, get_stage_spec(StageId.S5_COMPOSE)
+            )
+            self._state.pending_proposals = fragment.proposals
+            self._merge_coverage(fragment.coverage)
+
+        # S6 Train
+        if StageId.S6_TRAIN in self._stages:
+            # First dispatch the stage to get any stage-specific proposals
+            fragment = await self._dispatch_stage(
+                StageId.S6_TRAIN, get_stage_spec(StageId.S6_TRAIN)
+            )
+            self._merge_coverage(fragment.coverage)
+
+            # Execute pending proposals with failure isolation (WP19)
+            if self._state.pending_proposals:
+                successful_records = await self._execute_batch_with_isolation(
+                    self._state.pending_proposals
+                )
+                all_records.extend(successful_records)
+                fragment.records.extend(successful_records)
+
+        # S7 Measure
+        if StageId.S7_MEASURE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S7_MEASURE, get_stage_spec(StageId.S7_MEASURE)
+            )
+            all_records.extend(fragment.records)
+            self._merge_coverage(fragment.coverage)
+
+            # Run allocator between rounds (after S7_MEASURE, before S10_DECIDE)
+            if self._config.allocator and self._config.budget:
+                await self._run_allocator(fragment.records)
+
+        # S8 Record
+        if StageId.S8_RECORD in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S8_RECORD, get_stage_spec(StageId.S8_RECORD)
+            )
+            all_records.extend(fragment.records)
+            self._merge_coverage(fragment.coverage)
+
+        # S9 Attribute
+        if StageId.S9_ATTRIBUTE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S9_ATTRIBUTE, get_stage_spec(StageId.S9_ATTRIBUTE)
+            )
+            self._merge_coverage(fragment.coverage)
+
+        # S10 Decide
+        if StageId.S10_DECIDE in self._stages:
+            fragment = await self._dispatch_stage(
+                StageId.S10_DECIDE, get_stage_spec(StageId.S10_DECIDE)
+            )
+            self._state.pending_proposals.extend(fragment.proposals)
+            self._merge_coverage(fragment.coverage)
+
+        # Checkpoint after each round
+        if self._config.checkpoint_dir:
+            await self._create_checkpoint()
+
+    def _build_search_space(self) -> SearchSpace:
         """Build canonical SearchSpace from RunSpec."""
         from computronium.experiment.execution.search_space import SearchSpace
         from computronium.experiment.schema.axis import (
@@ -294,7 +359,11 @@ class PipelineRunner:
         # Get objectives from run_spec or all
         objective_names = run_spec.get("objectives", [])
         if objective_names:
-            objectives = [OBJECTIVES_REGISTRY[name] for name in objective_names if name in OBJECTIVES_REGISTRY]
+            objectives = [
+                OBJECTIVES_REGISTRY[name]
+                for name in objective_names
+                if name in OBJECTIVES_REGISTRY
+            ]
         else:
             objectives = list(OBJECTIVES_REGISTRY.values())
 
@@ -308,14 +377,17 @@ class PipelineRunner:
             tasks=tasks,
         )
 
-    async def _dispatch_stage(self, stage_id: StageId, stage_spec) -> "Fragment":
+    async def _dispatch_stage(self, stage_id: StageId, stage_spec) -> Fragment:
         """Dispatch to the concrete stage implementation."""
-        from computronium.experiment.execution.stages_impl import get_stage_implementation
+        from computronium.experiment.execution.stages_impl import (
+            get_stage_implementation,
+        )
 
         impl_class = get_stage_implementation(stage_id)
         if impl_class is None:
             logger.warning("No implementation for stage %s, using no-op", stage_id)
             from computronium.experiment.execution.search_space import Fragment
+
             return Fragment(stage_id=stage_id)
 
         # Create stage context
@@ -325,23 +397,26 @@ class PipelineRunner:
         stage_impl = impl_class()
         try:
             fragment = await stage_impl.run(ctx)
-            return fragment
         except Exception as e:
             logger.exception("Stage %s failed", stage_id)
             # Return fragment with error info
             from computronium.experiment.execution.search_space import Fragment
-            return Fragment(
+
+            fragment = Fragment(
                 stage_id=stage_id,
                 metadata={"error": str(e)},
                 coverage={"stage": stage_id.value, "error": True},
             )
+        return fragment
 
-    def _create_stage_context(self, stage_id: StageId, stage_spec) -> "StageContext":
+    def _create_stage_context(self, stage_id: StageId, stage_spec) -> StageContext:
         """Create StageContext for a stage."""
         from computronium.experiment.execution.search_space import StageContext
 
         # Convert pending proposals to (coord, sched) pairs for backward compatibility
-        pending_candidates = [(p.coordinate, p.schedule) for p in self._state.pending_proposals]
+        pending_candidates = [
+            (p.coordinate, p.schedule) for p in self._state.pending_proposals
+        ]
 
         # Ensure required components are available
         budget = self._state.budget
@@ -350,8 +425,20 @@ class PipelineRunner:
         backend = self._config.backend
         search_space = self._state.search_space
 
-        if budget is None or cost_model is None or policy is None or backend is None or search_space is None:
+        if (
+            budget is None
+            or cost_model is None
+            or policy is None
+            or backend is None
+            or search_space is None
+        ):
             raise ValueError("Missing required pipeline components for stage context")
+
+        # Use environment snapshot from system context (WP19)
+        system_context = self._state.system_context
+        if system_context is None:
+            raise ValueError("SystemContext not initialized")
+        env_dict = system_context.environment.to_provenance_dict()
 
         return StageContext(
             run_id=self._config.run_id,
@@ -370,14 +457,16 @@ class PipelineRunner:
             in_progress=self._state.in_progress,
             stage_params=stage_spec.params,
             provenance=Provenance(
-                env={"python": "3.14", "platform": "linux"},
+                env=env_dict,
                 dataset=self._config.run_spec.get("dataset", "unknown"),
                 dataset_version=self._config.run_spec.get("dataset_version", "1.0"),
                 code_sha=self._config.run_spec.get("code_sha", "unknown"),
-                policy=self._config.policy.get_name() if self._config.policy else "unknown",
+                policy=self._config.policy.get_name()
+                if self._config.policy
+                else "unknown",
                 links={"run_id": self._config.run_id},
             ),
-            system_context=self._state.system_context,
+            system_context=system_context,
         )
 
     def _merge_coverage(self, coverage: dict[str, Any]) -> None:
@@ -390,14 +479,41 @@ class PipelineRunner:
         """Merge classification from fragment into state."""
         self._state.rejections.append(classification)
 
+    def _classify_rejection(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        cause: str,
+        message: str,
+    ) -> None:
+        """Classify a rejection identically for every policy (R19).
+
+        Args:
+            coordinate: The experiment coordinate that was rejected
+            schedule: The execution schedule
+            cause: Failure cause classification
+            message: Human-readable error message
+        """
+        classification = {
+            "stage": "train",
+            "cell_key": coordinate.cell_key(),
+            "coordinate": coordinate.to_dict(),
+            "schedule": schedule.to_dict(),
+            "cause": cause,
+            "message": message,
+            "timestamp": __import__("datetime").datetime.now().isoformat(),
+        }
+        self._state.rejections.append(classification)
+
     def _get_decision_from_fragments(self) -> Decision:
         """Extract Decision from the last S10 fragment."""
         # For now, create a default continue decision
         # In practice, this would come from the S10 Decide stage fragment
         from computronium.experiment.execution.decision import continue_round
+
         return continue_round(rationale="Default continue")
 
-    async def _run_allocator(self, records: list["Record"]) -> None:
+    async def _run_allocator(self, records: list[Record]) -> None:
         """Run EvidenceDrivenAllocator between rounds (R46-R51)."""
         if not self._config.allocator:
             return
@@ -422,14 +538,107 @@ class PipelineRunner:
 
         # Convert to Proposal objects
         from computronium.experiment.execution.search_space import Proposal
-        for coord, sched in proposals:
-            self._state.pending_proposals.append(Proposal(
-                coordinate=coord,
-                schedule=sched,
-                rationale="allocator_promotion",
-            ))
 
-    def _check_gate(self, fragment: "Fragment", stage_spec) -> bool:
+        for coord, sched in proposals:
+            self._state.pending_proposals.append(
+                Proposal(
+                    coordinate=coord,
+                    schedule=sched,
+                    rationale="allocator_promotion",
+                )
+            )
+
+    async def _execute_batch_with_isolation(
+        self,
+        proposals: list[Proposal],
+    ) -> list[Record]:
+        """Execute a batch of proposals with failure isolation (WP19).
+
+        Uses backend.submit_batch which returns per-item EvaluationResult
+        (Success or Failure), allowing successful siblings to continue
+        even if some evaluations fail.
+
+        Args:
+            proposals: List of proposals to evaluate
+
+        Returns:
+            List of successfully evaluated Records.
+        """
+        if not self._config.backend:
+            logger.warning("No backend configured, skipping batch execution")
+            return []
+
+        # Build batch items for backend
+        system_context = self._state.system_context
+        if system_context is None:
+            raise ValueError("SystemContext not initialized")
+        env_dict = system_context.environment.to_provenance_dict()
+        provenance = Provenance.from_dict({
+            **env_dict,
+            "dataset": self._config.run_spec.get("dataset", "unknown"),
+            "dataset_version": self._config.run_spec.get("dataset_version", "1.0"),
+            "code_sha": self._config.run_spec.get("code_sha", "unknown"),
+            "policy": self._config.policy.get_name() if self._config.policy else "unknown",
+            "links": {"run_id": self._config.run_id},
+        })
+
+        batch_items = [
+            (p.coordinate, p.schedule, provenance, {})
+            for p in proposals
+        ]
+
+        # Execute with failure isolation
+        from computronium.experiment.execution.backends import (
+            EvaluationResult,
+            Failure,
+            Success,
+        )
+
+        results: list[EvaluationResult] = await self._config.backend.submit_batch(
+            batch_items, self._store
+        )
+
+        # Process results: persist successes, classify failures
+        successful_records: list[Record] = []
+        for i, result in enumerate(results):
+            match result:
+                case Success(record=record):
+                    try:
+                        self._store.append(record)
+                        successful_records.append(record)
+                        self._state.completed_measurement_keys.add(
+                            record.measurement_key
+                        )
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to persist record for %s",
+                            proposals[i].coordinate.cell_key(),
+                        )
+                        self._classify_rejection(
+                            coordinate=proposals[i].coordinate,
+                            schedule=proposals[i].schedule,
+                            cause="PERSISTENCE_ERROR",
+                            message=str(e),
+                        )
+                case Failure(failure_event=event):
+                    logger.warning(
+                        "Evaluation failed for %s: %s",
+                        proposals[i].coordinate.cell_key(),
+                        event.error_message,
+                    )
+                    self._classify_rejection(
+                        coordinate=proposals[i].coordinate,
+                        schedule=proposals[i].schedule,
+                        cause=event.failure_cause.value
+                        if hasattr(event.failure_cause, "value")
+                        else str(event.failure_cause),
+                        message=event.error_message,
+                    )
+                    # Siblings continue - we don't raise the exception
+
+        return successful_records
+
+    def _check_gate(self, fragment: Fragment, stage_spec) -> bool:
         """Check if stage gate passes."""
         if stage_spec.gate == "skip":
             return True
@@ -453,7 +662,7 @@ class PipelineRunner:
 
         return True
 
-    def _is_claim_eligible(self, record: "Record") -> bool:
+    def _is_claim_eligible(self, record: Record) -> bool:
         """Check if record is claim-eligible (pure predicate)."""
         return (
             record.status.gate_verdict.value == "PASS"

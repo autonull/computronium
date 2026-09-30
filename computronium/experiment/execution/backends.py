@@ -1,4 +1,4 @@
-"""Execution backends for experiment evaluation (WP4)."""
+"""Execution backends for experiment evaluation (WP4 + WP19)."""
 
 from __future__ import annotations
 
@@ -13,10 +13,38 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
+    from computronium.experiment.evidence.failure import FailureEvent
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Failure Isolation Types (WP19)
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class Success:
+    """Successful evaluation result."""
+
+    record: Record
+
+
+@dataclass(frozen=True, slots=True)
+class Failure:
+    """Failed evaluation result."""
+
+    failure_event: FailureEvent
+
+
+EvaluationResult = Success | Failure
+
+
+# =============================================================================
+# Backend Protocol
+# =============================================================================
 
 
 @runtime_checkable
@@ -27,6 +55,9 @@ class ExecutionBackend(Protocol):
     (single-writer topology per §1.1). In-process concurrency via
     asyncio.TaskGroup; blocking evaluation bodies stay out of the event loop
     via asyncio.to_thread.
+
+    Failure isolation (WP19): submit_batch returns per-item EvaluationResult
+    instead of raising exceptions, allowing successful siblings to continue.
     """
 
     async def submit(
@@ -55,7 +86,7 @@ class ExecutionBackend(Protocol):
         self,
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
         store: RecordStore,
-    ) -> list[Record]:
+    ) -> list[EvaluationResult]:
         """Submit a batch of evaluations.
 
         Args:
@@ -63,7 +94,8 @@ class ExecutionBackend(Protocol):
             store: RecordStore for persistence
 
         Returns:
-            List of completed Records.
+            List of EvaluationResult (Success or Failure per item).
+            Successful siblings continue even if some items fail.
         """
         ...
 
@@ -131,8 +163,8 @@ class LocalBackend:
         self,
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
         store: RecordStore,
-    ) -> list[Record]:
-        """Submit a batch of evaluations concurrently."""
+    ) -> list[EvaluationResult]:
+        """Submit a batch of evaluations concurrently with failure isolation."""
         if self._executor is None:
             self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
 
@@ -141,8 +173,23 @@ class LocalBackend:
             sched: Schedule,
             prov: Provenance,
             params: dict[str, Any],
-        ) -> list[Record]:
-            return await self.submit(coord, sched, prov, params, store)
+        ) -> EvaluationResult:
+            try:
+                records = await self.submit(coord, sched, prov, params, store)
+                # Return first record as success (submit returns one per seed)
+                return (
+                    Success(record=records[0])
+                    if records
+                    else Failure(
+                        failure_event=self._create_failure_event(
+                            coord, sched, prov, "No records returned"
+                        )
+                    )
+                )
+            except Exception as e:
+                return Failure(
+                    failure_event=self._create_failure_event(coord, sched, prov, str(e))
+                )
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -150,10 +197,27 @@ class LocalBackend:
                 for coord, sched, prov, params in items
             ]
 
-        results: list[Record] = []
-        for task in tasks:
-            results.extend(task.result())
-        return results
+        return [task.result() for task in tasks]
+
+    def _create_failure_event(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        error_message: str,
+    ) -> FailureEvent:
+        """Create a FailureEvent for a failed evaluation."""
+        from computronium.experiment.evidence.failure import FailureEvent
+        from computronium.experiment.schema.record import FailureCause
+
+        return FailureEvent(
+            cell_key=coordinate.cell_key(),
+            failure_cause=FailureCause.RUNTIME_ERROR,
+            error_message=error_message,
+            coordinate=coordinate.to_dict(),
+            schedule=schedule.to_dict(),
+            provenance=provenance.to_dict(),
+        )
 
     def _evaluate_single(
         self,
@@ -271,8 +335,8 @@ class MultiprocessBackend:
         self,
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
         store: RecordStore,
-    ) -> list[Record]:
-        """Submit a batch of evaluations concurrently across processes."""
+    ) -> list[EvaluationResult]:
+        """Submit a batch of evaluations concurrently across processes with failure isolation."""
         if self._executor is None:
             self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
 
@@ -281,8 +345,22 @@ class MultiprocessBackend:
             sched: Schedule,
             prov: Provenance,
             params: dict[str, Any],
-        ) -> list[Record]:
-            return await self.submit(coord, sched, prov, params, store)
+        ) -> EvaluationResult:
+            try:
+                records = await self.submit(coord, sched, prov, params, store)
+                return (
+                    Success(record=records[0])
+                    if records
+                    else Failure(
+                        failure_event=self._create_failure_event(
+                            coord, sched, prov, "No records returned"
+                        )
+                    )
+                )
+            except Exception as e:
+                return Failure(
+                    failure_event=self._create_failure_event(coord, sched, prov, str(e))
+                )
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -290,10 +368,27 @@ class MultiprocessBackend:
                 for coord, sched, prov, params in items
             ]
 
-        results: list[Record] = []
-        for task in tasks:
-            results.extend(task.result())
-        return results
+        return [task.result() for task in tasks]
+
+    def _create_failure_event(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        error_message: str,
+    ) -> FailureEvent:
+        """Create a FailureEvent for a failed evaluation."""
+        from computronium.experiment.evidence.failure import FailureEvent
+        from computronium.experiment.schema.record import FailureCause
+
+        return FailureEvent(
+            cell_key=coordinate.cell_key(),
+            failure_cause=FailureCause.RUNTIME_ERROR,
+            error_message=error_message,
+            coordinate=coordinate.to_dict(),
+            schedule=schedule.to_dict(),
+            provenance=provenance.to_dict(),
+        )
 
     def _evaluate_single_process(
         self,
@@ -358,8 +453,11 @@ class MultiprocessBackend:
 
 
 __all__ = [
+    "EvaluationResult",
     "EvaluationTask",
     "ExecutionBackend",
+    "Failure",
     "LocalBackend",
     "MultiprocessBackend",
+    "Success",
 ]

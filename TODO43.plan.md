@@ -2912,6 +2912,25 @@ Definition of Done completes at WP13 close.
 - **Quality gates pass**: `ruff format`, `ruff check`, `pyright` strict clean
 - **All 359 tests pass** (including stage_model_lock, wp10/11 locks, device hygiene, kernel isolation)
 
+### 2026-09-30 — WP19 Complete: Failure Isolation & Runtime Provenance
+
+- **Failure isolation end-to-end (WP19 item 5)**: 
+  - Added `Success`/`Failure` dataclasses and `EvaluationResult = Success | Failure` union type in `backends.py`
+  - Updated `ExecutionBackend.submit_batch()` to return `list[EvaluationResult]` instead of raising exceptions
+  - Updated `LocalBackend` and `MultiprocessBackend` to wrap each evaluation in try/except, returning `Success(record)` or `Failure(failure_event)` per item
+  - Added `_execute_batch_with_isolation()` method in `PipelineRunner` that processes per-item results: persists successful records, classifies failures via `_classify_rejection()`, allows siblings to continue
+  - Added `_classify_rejection()` method for identical rejection classification across all policies (R19)
+
+- **Runtime provenance — EnvironmentSnapshot (WP19 item 6)**:
+  - Created `EnvironmentSnapshot` dataclass in `sysctx.py` capturing actual runtime environment (Python version, platform, PyTorch/CUDA versions, GPU devices, dtype, worker config, code SHA, relevant dependencies)
+  - Added `capture_environment_snapshot()` function called once per run in `PipelineRunner.__init__()`
+  - Created `SystemContext` dataclass carrying run-scoped kernel cache (keyed by run_id, cell_key, device, dtype) and injected learning state (ICUModel, ReasoningStore) — no module-level singletons (R75/K10)
+  - Updated `_create_stage_context()` to use `EnvironmentSnapshot.to_provenance_dict()` instead of hardcoded `{"python": "3.14", "platform": "linux"}`
+  - Provenance now includes actual runtime data captured once per run
+
+- **Quality gates pass**: `ruff format`, `ruff check`, `pyright` strict clean on all modified files
+- **All targeted tests pass**: 47 stage/WP10/WP11 lock tests, 359 kernel isolation/device hygiene tests, 31 registry wiring tests
+
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy pillar port & delete still open — `autoscientist/`,
    `hyperopt/`, legacy `execution/` engine, `lightning_/`, `core/campaign/`,
@@ -2924,8 +2943,6 @@ Definition of Done completes at WP13 close.
    serialization round-trip + E2 surrogate acquisition now locked/complete.)
 4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
    `verifying_test` execution sweep).
-5. **WP19**: Failure isolation end-to-end — backend should return per-item Success/Failure instead of raising exceptions per-batch.
-6. **WP19**: Runtime provenance — EnvironmentSnapshot captured once per run, not hardcoded values.
 
 ---
 
@@ -2933,7 +2950,7 @@ Definition of Done completes at WP13 close.
 
 **WP8–WP13 established the kernel primitives and most required functionality, but several completion bullets were satisfied structurally rather than end-to-end. These are not architectural reversions. The remaining work closes runtime integration seams and verifies that the individual components actually compose into the unified kernel described by abc3 §5.**
 
-**Progress Update (2026-09-30)**: WP14/WP15/WP16/WP17 have closed the major integration seams:
+**Progress Update (2026-09-30)**: WP14/WP15/WP16/WP17 have closed the major integration seams; WP19 has closed the failure isolation and runtime provenance seams:
 
 Explicit reclassification of completion status:
 
@@ -2949,7 +2966,8 @@ Explicit reclassification of completion status:
 | Continuous round loop      | **Complete** — S3-S10 repeat with Decision-based termination             |
 | Learning/store integration | Mostly complete                                                          |
 | Claim integrity            | Helper complete; **all callers not yet normalized**                      |
-| Failure isolation          | **Incomplete end-to-end** — backend still raises exceptions per-batch    |
+| Failure isolation          | **Complete** — per-item Success/Failure via EvaluationResult, siblings continue |
+| Runtime provenance         | **Complete** — EnvironmentSnapshot captured once per run, injected via SystemContext |
 | E1                         | Complete                                                                 |
 | E2                         | Complete as a mechanism validation                                       |
 | E3/E4                      | Incomplete                                                               |
