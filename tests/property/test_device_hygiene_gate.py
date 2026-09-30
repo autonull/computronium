@@ -20,8 +20,11 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.autoscientist.compose import compose_cell_system
-from computronium.autoscientist.proposer import GRID_CREDITS, GRID_UPDATES
+from computronium.experiment.execution.compose import (
+    GRID_CREDITS,
+    GRID_UPDATES,
+    compose_cell_system,
+)
 from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -50,7 +53,7 @@ _GEOMETRY = {"topology_type": "feedforward", "depth": 2, "hidden_dim": 16}
 def _viable_cells() -> list[tuple[str, str, str]]:
     substrate = DigitalSubstrate().config
     cells: list[tuple[str, str, str]] = []
-    from computronium.autoscientist.compose import build_geometry_config
+    from computronium.experiment.execution.compose import build_geometry_config
 
     geometry = build_geometry_config(_GEOMETRY, input_dim=64, output_dim=10)
     for dynamics in _DYNAMICS:

@@ -1460,6 +1460,37 @@ Definition of Done completes at WP13 close.
    in `logs/e2_summary.json`. Naive learners still lose (coverage beats
    concentration), but a competent GP surrogate wins decisively.
 
+### 2026-09-30 — WP12 Partial: compose_cell_system ported to kernel (param_estimator blocker fixed)
+- **Root cause**: `param_estimator.py` was deleted (pre-kernel flat files, commit b0180f9e)
+  but `autoscientist/compose.py` still imported it at module level →
+  `test_device_hygiene_gate.py` collection error broke the entire property suite.
+- **Fix**: Ported `compose_cell_system`, `build_geometry_config`, and the grid constants
+  (`GRID_DYNAMICS`, `GRID_CREDITS`, `GRID_UPDATES`) from `autoscientist/compose.py` +
+  `autoscientist/proposer.py` into `computronium/experiment/execution/compose.py`
+  (kernel-native, no legacy imports). Updated `test_device_hygiene_gate.py` to import
+  from the kernel. Updated `execution/__init__.py` exports.
+- **Isolation lock**: docstring mentioning legacy path flagged by
+  `test_no_legacy_filesystem_references` — reworded to remove the legacy path reference.
+- **Ruff**: complexity warnings (C901/PLR0911/PLR0912/PLR0914/PLR0915) on the ported
+  functions — added targeted `# noqa` comments (AGENTS.md: relax per-line with reason).
+- All quality gates pass: `ruff format`, `ruff check`, `pyright` strict clean,
+  359 tests pass (352 device hygiene + 7 isolation lock).
+
+### Improvement Opportunities (remaining WPs)
+1. **WP12 (major)**: Full legacy pillar port & delete still open — `autoscientist/`,
+   `hyperopt/`, legacy `execution/` engine, `lightning_/`, `core/campaign/`,
+   `packages/computronium-lab` research layer. Live importers of deleted
+   `param_estimator` remain in legacy modules (all slated for deletion).
+   Precondition: conformance green per capability (R77); import-graph lock guards
+   the kernel side.
+2. **WP12**: `prior.py` legacy data tables still seed the registry — final deletion
+   step pending full consumer-reroute audit.
+3. **WP13**: E3 seeded reproduction on `SyntheticGroundTruth`, E4 transfer with
+   explicit provenance; results recorded as store records. (E1 overhead + kill-9 +
+   serialization round-trip + E2 surrogate acquisition now locked/complete.)
+4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
+   `verifying_test` execution sweep).
+
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
 - `surface/conformance.py::run_verifying_test` subprocess use remains sandboxed-local only.
@@ -1472,3 +1503,6 @@ Definition of Done completes at WP13 close.
   `learning.prior` first-import happening inside the seed call.
 - Store files created before the `task_id` STRUCT addition are not readable for
   old rows (strict parse) — rebuild per Directive 2; no migration machinery.
+- `compose.py` complexity noqa comments are temporary — the functions are direct
+  ports from legacy and should be refactored or the module deleted when WP12
+  removes the last legacy importer.
