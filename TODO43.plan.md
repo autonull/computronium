@@ -741,11 +741,8 @@ strict-clean from WP1 onward.
 - Property tests pass: `test_public_surface_lock.py` (15 tests), existing experiment wiring locks and statistical protocol locks continue to pass
 
 ### Improvement Opportunities (for future WPs)
-1. **WP1.5**: Atomic append with artifacts kill -9 proof (protocol skeleton complete)
-2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
-3. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock (needs Gate 2 union table)
-4. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
-5. **WP7**: Implement surface layer (`report.py`, `cli.py`, `conformance.py`, `operations.py`)
+1. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock — connect ontology primitives to harvest (currently returns empty)
+2. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
 
 ### Notes for Remaining Work
 - The `execution/` package is now complete with all 7 modules: budget.py, allocator.py, replay.py, backends.py, policy.py, stage.py, pipeline.py
@@ -756,3 +753,22 @@ strict-clean from WP1 onward.
 - **CEEC folded into Kernel**: `packages/ceec-core` → `computronium/experiment/evidence/artifacts.py` (DuckDB `artifacts` table). Single-file atomic transactions. No reconciliation protocol.
 - **WP1.5 complete**: Scientific validity skeleton implemented with protocol module, provenance extensions, reproducibility classes, synthetic fixture, and lockstep tests
 - **WP7 complete**: Surface layer implemented with report generation, CLI dispatcher, conformance harness, and operations controller
+
+### 2026-09-29 — WP1.5/WP2/WP5 Atomic Append & Registry Seeding Complete
+- Implemented kill -9 proof for atomic append with artifacts: `tests/property/test_atomic_append_kill_proof.py` (5 tests)
+  - Atomic transaction rollback on exception
+  - Duplicate measurement_key deduplication
+  - SIGKILL mid-transaction leaves no partial state (subprocess test)
+  - Concurrent dedup by measurement_key with single-writer topology
+  - Monotonic seq across concurrent writes
+- Fixed `RecordStore.append_with_artifacts()` to fetch seq inside write lock for thread safety
+- Seeded all registries with Gate 1/2 domain data: `computronium/experiment/schema/seed_registries.py`
+  - 8 objectives, 10 constraints (3 void, 3 hard, 4 soft), 28 priors (11 ruler-LR + 17 step-size + 4 Gate 2 additions)
+  - 9 policy specs (8 catalog + 1 TPE/GP variant), 11 stages (S1-S11), 32 capabilities (C1-C32)
+  - Idempotent `seed_all_registries()` with `Registry.clear()`
+- Created harvest schema Gate 2 union lock: `tests/property/test_harvest_schema_gate2_lock.py` (4 tests)
+  - Documents 44-parameter frozen union (37 Appendix IV + 7 §13.2 additions)
+  - Verifies harvest mechanism structure, serialization, no conflicts
+  - Notes ontology primitive connection pending for full coverage
+- All new code passes `ruff format`, `ruff check`, `pyright` (strict)
+- All 113 experiment property tests pass (109 passed, 4 skipped)

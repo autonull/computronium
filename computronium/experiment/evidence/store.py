@@ -435,34 +435,34 @@ class RecordStore:
                 self._conn.execute("ROLLBACK")
                 raise
 
-        # Fetch the assigned seq and return updated record
-        result = self._conn.execute(
-            "SELECT seq FROM records WHERE record_id = ?", [record.record_id]
-        ).fetchone()
+            # Fetch the assigned seq and return updated record (inside lock for thread safety)
+            result = self._conn.execute(
+                "SELECT seq FROM records WHERE record_id = ?", [record.record_id]
+            ).fetchone()
 
-        if result is None:
-            raise StoreError("Failed to retrieve seq after insert")
+            if result is None:
+                raise StoreError("Failed to retrieve seq after insert")
 
-        return Record(
-            record_id=record.record_id,
-            seq=result[0],
-            run_id=record.run_id,
-            schema_version=record.schema_version,
-            cell_key=record.cell_key,
-            measurement_key=record.measurement_key,
-            substrate=record.substrate,
-            geometry=record.geometry,
-            dynamics=record.dynamics,
-            plasticity=record.plasticity,
-            credit=record.credit,
-            update=record.update,
-            params=record.params,
-            schedule=record.schedule,
-            provenance=record.provenance,
-            status=record.status,
-            payload=record.payload,
-            unknown=record.unknown,
-        )
+            return Record(
+                record_id=record.record_id,
+                seq=result[0],
+                run_id=record.run_id,
+                schema_version=record.schema_version,
+                cell_key=record.cell_key,
+                measurement_key=record.measurement_key,
+                substrate=record.substrate,
+                geometry=record.geometry,
+                dynamics=record.dynamics,
+                plasticity=record.plasticity,
+                credit=record.credit,
+                update=record.update,
+                params=record.params,
+                schedule=record.schedule,
+                provenance=record.provenance,
+                status=record.status,
+                payload=record.payload,
+                unknown=record.unknown,
+            )
 
     def get_record(self, record_id: str) -> Record | None:
         """Get a record by record_id."""

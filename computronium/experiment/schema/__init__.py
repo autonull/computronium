@@ -9,6 +9,7 @@ from computronium.experiment.schema import (
     record,
     registries,
     registry,
+    seed_registries,
     versioning,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "record",
     "registries",
     "registry",
+    "seed_registries",
     "versioning",
 ]
