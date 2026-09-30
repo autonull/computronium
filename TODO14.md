@@ -2398,7 +2398,7 @@ permanently.
   the project-wide "stale statistics corrupt" theme — third independent
   test of the mechanism.
 - **P-D (reach dial)**: retention varies monotonically with injection
-  depth at scale (the dial is real and tunable on real tasks).
+  depth at scale (the dial is real and hyperparameter on real tasks).
 
 ## §24.3 — Queue freeze and stop-loss
 

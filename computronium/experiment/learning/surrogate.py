@@ -485,7 +485,7 @@ class GaussianProcessSurrogate:
     ) -> tuple[np.ndarray, np.ndarray | None]:
         """Convert coordinates to feature vectors."""
         # This is a simplified conversion - in practice would use harvest_schema
-        # to get all tunable dimensions
+        # to get all hyperparameter dimensions
         features = []
         for coord in coords:
             # Flatten coordinate to feature vector
@@ -497,7 +497,7 @@ class GaussianProcessSurrogate:
             feat.append(hash(coord.plasticity) % 1000 / 1000.0)
             feat.append(hash(coord.credit) % 1000 / 1000.0)
             feat.append(hash(coord.update) % 1000 / 1000.0)
-            # Tunable params
+            # Hyperparameter params
             for k in sorted(coord.params.keys()):
                 v = coord.params[k]
                 if isinstance(v, int | float):

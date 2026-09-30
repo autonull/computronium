@@ -1,4 +1,4 @@
-"""Tunable harvesting and schema reflection for experiment configurations."""
+"""Hyperparameter harvesting and schema reflection for experiment configurations."""
 
 from __future__ import annotations
 
@@ -15,22 +15,22 @@ from computronium.experiment.schema.axis import (
 )
 
 
-class ConflictingTunableError(ValueError):
-    """Raised when two axis primitives define the same tunable name with different semantics."""
+class ConflictingHyperparameterError(ValueError):
+    """Raised when two axis primitives define the same hyperparameter name with different semantics."""
 
     def __init__(self, name: str, sources: list[str]) -> None:
         self.name = name
         self.sources = sources
         super().__init__(
-            f"Conflicting tunable '{name}' defined by: {', '.join(sources)}"
+            f"Conflicting hyperparameter '{name}' defined by: {', '.join(sources)}"
         )
 
 
 @dataclass(frozen=True, slots=True)
 class HarvestedSchema:
-    """Result of harvesting tunables from all registered axis primitives."""
+    """Result of harvesting hyperparameters from all registered axis primitives."""
 
-    tunables: tuple[HyperparameterSpec, ...]
+    hyperparameters: tuple[HyperparameterSpec, ...]
     axis_kind_order: tuple[StructuralAxis, ...]
     version: int
 
@@ -39,7 +39,7 @@ class HarvestedSchema:
         return {
             "version": self.version,
             "axis_kind_order": [k.value for k in self.axis_kind_order],
-            "tunables": [
+            "hyperparameters": [
                 {
                     "name": t.name,
                     "axis_kind": t.axis_kind.value,
@@ -54,7 +54,7 @@ class HarvestedSchema:
                     "prior": t.prior,
                     "override_scope": t.override_scope,
                 }
-                for t in self.tunables
+                for t in self.hyperparameters
             ],
         }
 
@@ -64,7 +64,7 @@ class HarvestedSchema:
         return cls(
             version=data["version"],
             axis_kind_order=tuple(StructuralAxis(k) for k in data["axis_kind_order"]),
-            tunables=tuple(
+            hyperparameters=tuple(
                 HyperparameterSpec(
                     name=t["name"],
                     axis_kind=AxisKind(t["axis_kind"]),
@@ -81,7 +81,7 @@ class HarvestedSchema:
                     prior=t.get("prior"),
                     override_scope=t.get("override_scope", "coordinate"),
                 )
-                for t in data["tunables"]
+                for t in data["hyperparameters"]
             ),
         )
 
@@ -179,7 +179,7 @@ def _parse_hyperparameters(
 
 
 def harvest_schema(version: int = 1) -> HarvestedSchema:
-    """Harvest all tunables from registered axis primitives.
+    """Harvest all hyperparameters from registered axis primitives.
 
     Iterates over all structural axes, calls the config class's
     hyperparameters() method once per axis (config classes are shared
@@ -189,10 +189,10 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
         version: Schema version to assign (default 1).
 
     Returns:
-        HarvestedSchema with all tunables, ordered by structural axis.
+        HarvestedSchema with all hyperparameters, ordered by structural axis.
 
     Raises:
-        ConflictingTunableError: If a tunable name has conflicting definitions.
+        ConflictingHyperparameterError: If a hyperparameter name has conflicting definitions.
     """
     axis_kind_order = (
         StructuralAxis.SUBSTRATE,
@@ -203,7 +203,7 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
         StructuralAxis.UPDATE,
     )
 
-    all_tunables: dict[str, HyperparameterSpec] = {}
+    all_hyperparameters: dict[str, HyperparameterSpec] = {}
 
     # Map structural axes to their config classes
     axis_config_classes = {
@@ -241,13 +241,13 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
             specs = _parse_hyperparameters(hp_dict, axis_name)
             for hp in specs:
                 # Check for conflicts
-                if hp.name in all_tunables:
-                    existing = all_tunables[hp.name]
+                if hp.name in all_hyperparameters:
+                    existing = all_hyperparameters[hp.name]
                     if (
                         existing.domain != hp.domain
                         or existing.axis_kind != hp.axis_kind
                     ):
-                        raise ConflictingTunableError(
+                        raise ConflictingHyperparameterError(
                             hp.name,
                             [f"{existing.axis_kind.value}.{existing.axis_name}"],
                             [f"{hp.axis_kind.value}.{hp.axis_name}"],
@@ -273,37 +273,37 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
                             prior=hp.prior or existing.prior,
                             override_scope=hp.override_scope,
                         )
-                all_tunables[hp.name] = hp
+                all_hyperparameters[hp.name] = hp
         except Exception:
             # If config class doesn't have hyperparameters() or fails, skip
             pass
 
     return HarvestedSchema(
-        tunables=tuple(all_tunables.values()),
+        hyperparameters=tuple(all_hyperparameters.values()),
         axis_kind_order=axis_kind_order,
         version=version,
     )
 
 
-def get_tunable_names() -> frozenset[str]:
-    """Get the set of all harvested tunable names."""
+def get_hyperparameter_names() -> frozenset[str]:
+    """Get the set of all harvested hyperparameter names."""
     schema = harvest_schema()
-    return frozenset(t.name for t in schema.tunables)
+    return frozenset(t.name for t in schema.hyperparameters)
 
 
-def get_tunable_spec(name: str) -> HyperparameterSpec | None:
-    """Get the specification for a specific tunable."""
+def get_hyperparameter_spec(name: str) -> HyperparameterSpec | None:
+    """Get the specification for a specific hyperparameter."""
     schema = harvest_schema()
-    for t in schema.tunables:
+    for t in schema.hyperparameters:
         if t.name == name:
             return t
     return None
 
 
 __all__ = [
-    "ConflictingTunableError",
+    "ConflictingHyperparameterError",
     "HarvestedSchema",
-    "get_tunable_names",
-    "get_tunable_spec",
+    "get_hyperparameter_names",
+    "get_hyperparameter_spec",
     "harvest_schema",
 ]

@@ -37,8 +37,8 @@ The Kernel deliberately uses Python 3.14's reflective machinery so that the *com
 | Technique | Mechanism | Deletes boilerplate for | Serves |
 |-----------|-----------|------------------------|--------|
 | **Auto-registration** | `__init_subclass__` + `@register` harvest concrete primitives into registries at import time | Hand-maintained "list of all X" tables | R5, R76, R1 |
-| **Tunable reflection** | Primitives declare `__tunables__`; a harvester reflects them into the coordinate schema | `RULE_SPACES` duplication, `_STEP_SIZE_OVERRIDES`, `_ruler_lr` code tables (P2, P4, Appendix C) | R1, R2, R6, R52 |
-| **Descriptor-driven validation** | `Tunable`/`AxisSpec` descriptors generate validators, defaults, and override plumbing | Per-axis `validate()` boilerplate | R5, R6, R33 |
+| **Hyperparameter reflection** | Primitives declare `__hyperparameters__`; a harvester reflects them into the coordinate schema | `RULE_SPACES` duplication, `_STEP_SIZE_OVERRIDES`, `_ruler_lr` code tables (P2, P4, Appendix C) | R1, R2, R6, R52 |
+| **Descriptor-driven validation** | `Hyperparameter`/`AxisSpec` descriptors generate validators, defaults, and override plumbing | Per-axis `validate()` boilerplate | R5, R6, R33 |
 | **Serializable predicate DSL** | Constraints/claims are AST expressions, not lambdas — persistable, diffable, hashable | Hardcoded fence dicts (C8), unqueryable gates | R37, R38, R41, R66 |
 | **Codegen from registries** | Docs, compatibility matrix, schema validators, and conformance tests are *generated*, then lock-tested against source | Drift between `validate()`, reference docs, and CLI help (P11, P13.3) | R63, R80 |
 | **Versioned reader adapters** | Schema carries an explicit version; per-version readers materialize old shapes, unknown fields labeled | Silent re-defaulting of historical records (P3, P7) | R79, K4 |
@@ -52,7 +52,7 @@ computronium/experiment/
 ├─ registry/          # Abstraction A
 │  ├─ base.py         # Registry[SpecT], @register, IntegrityLock
 │  ├─ axes.py         # AxisRegistry (structural axes, Appendix B)
-│  ├─ tunables.py     # TunableHarvester (Appendix C → B.9)
+│  ├─ hyperparameters.py     # HyperparameterHarvester (Appendix C → B.9)
 │  ├─ objectives.py   # ObjectiveRegistry (B.7, ~39)
 │  ├─ capabilities.py # CapabilityRegistry (C1–C88 + §13 rows)
 │  ├─ constraints.py  # ConstraintRegistry
@@ -127,8 +127,8 @@ def register[SpecT](registry: Registry[SpecT]) -> Callable[[type], type]:
 
 class CreditAssignment(Protocol):
     def __init_subclass__(cls, **kw) -> None:
-        # Auto-harvest cls.__tunables__, cls.__constraints__, cls.__identity_card__
-        # into the axis/tunable/constraint registries at class-creation time.
+        # Auto-harvest cls.__hyperparameters__, cls.__constraints__, cls.__identity_card__
+        # into the axis/hyperparameter/constraint registries at class-creation time.
         ...
 ```
 
@@ -139,7 +139,7 @@ class CreditAssignment(Protocol):
 | Registry | Spec type | Seed content | Requirement |
 |----------|-----------|--------------|-------------|
 | `AxisRegistry` | `AxisSpec` | Appendix B (S,G,D,P,C,U + topology params) | R1, R5 |
-| `TunableRegistry` | `Tunable` | **Reflected** from primitives (Appendix C, 37 params) + lr + step size + batch size + optimizer betas/momentum | R1, R2, R6, R52 |
+| `HyperparameterRegistry` | `Hyperparameter` | **Reflected** from primitives (Appendix C, 37 params) + lr + step size + batch size + optimizer betas/momentum | R1, R2, R6, R52 |
 | `ObjectiveRegistry` | `ObjectiveSpec` | B.7 (~39, with direction/weight/normalizer/axis tag) | R31, R33 |
 | `CapabilityRegistry` | `CapabilitySpec` | C1–C88 + §13.3/§13.4 rows (stage, owner, verifying test) | R76, R77 |
 | `ConstraintRegistry` | `Constraint` | `SystemConfig.validate()` rules + task fences + §13.2 `apply_constraints` | R37, R63, R66 |
@@ -152,7 +152,7 @@ class CreditAssignment(Protocol):
 Generated, then lock-tested against source (so drift fails CI):
 - `docs/generated/` capability & objective listings (R80 "what we can do").
 - The ontology **compatibility matrix** from the ConstraintRegistry (R63) — replacing hand-maintained reference docs.
-- JSON-Schema validators per `AxisSpec`/`Tunable` (R5 runtime discovery).
+- JSON-Schema validators per `AxisSpec`/`Hyperparameter` (R5 runtime discovery).
 - Conformance test stubs per `CapabilitySpec` (R77).
 
 ---
@@ -168,7 +168,7 @@ class IdentitySection(Enum): COORDINATE; SCHEDULE; PROVENANCE; STATUS
 
 @dataclass(frozen=True, slots=True)
 class RecordIdentity:
-    coordinate:   Coordinate        # structural axes + tunables  (§2.2–2.3)
+    coordinate:   Coordinate        # structural axes + hyperparameters  (§2.2–2.3)
     schedule:     Schedule          # fidelity_tier, seed, epochs, batch_limit, budget_id
     provenance:   Provenance        # device, dtype, workers, lib versions, code sha, dataset_id+version
     status:       StatusRef         # governance fields (Abstraction E) — content-addressed
@@ -184,18 +184,18 @@ class AxisSpec[ValueT]:
     meta: SpecMeta
     kind: AxisKind                     # STRUCTURAL_DISCRETE | STRUCTURAL_ENUM
     domain: Domain[ValueT]             # enumerated members (B.1–B.6)
-    topology_params: tuple[Tunable, ...] = ()   # B.2 per-topology keys
+    topology_params: tuple[Hyperparameter, ...] = ()   # B.2 per-topology keys
 ```
 
-**Plasticity is a first-class axis (resolves Q7).** The README's P-axis program (ψ, frozen-θ, NTM/NCA, adaptation/migration) is central; `plasticity` is therefore a structural axis with its own tunables and objectives (`psi_capacity`, `consolidation_cost`, `rewrite_rate`), not a credit/update concern.
+**Plasticity is a first-class axis (resolves Q7).** The README's P-axis program (ψ, frozen-θ, NTM/NCA, adaptation/migration) is central; `plasticity` is therefore a structural axis with its own hyperparameters and objectives (`psi_capacity`, `consolidation_cost`, `rewrite_rate`), not a credit/update concern.
 
-### 2.3 Tunable reflection — the Appendix-C cure (resolves P2/P4)
+### 2.3 Hyperparameter reflection — the Appendix-C cure (resolves P2/P4)
 
 The 37 continuous hyperparameters, learning rate, step size, batch size, and optimizer parameters are **declared on the primitive that owns them** and harvested by reflection. There is no `RULE_SPACES` table to drift from, and no prior table in code.
 
 ```python
 @dataclass(frozen=True, slots=True)
-class Tunable:
+class Hyperparameter:
     meta: SpecMeta
     name: str
     kind: ParamKind                    # CONTINUOUS | DISCRETE | CATEGORICAL
@@ -206,37 +206,37 @@ class Tunable:
 
 # Declared inline on the primitive — the ONLY place this knowledge lives:
 class EqPropCredit:
-    __tunables__ = (
-        Tunable("beta",     CONTINUOUS, Range(0.01, 10.0, LOG), default=0.5),
-        Tunable("max_steps",DISCRETE,   Range(1, 200),          default=20),
-        Tunable("damping",  CONTINUOUS, Range(0.0, 1.0),        default=0.0),
+    __hyperparameters__ = (
+        Hyperparameter("beta",     CONTINUOUS, Range(0.01, 10.0, LOG), default=0.5),
+        Hyperparameter("max_steps",DISCRETE,   Range(1, 200),          default=20),
+        Hyperparameter("damping",  CONTINUOUS, Range(0.0, 1.0),        default=0.0),
         # … all 18 eqprop slots from Appendix C …
     )
 ```
 
 ```python
 def harvest_schema(axes: Registry[AxisSpec], prims: Registry) -> CoordinateSchema:
-    """Reflect structural axes + every primitive's __tunables__ into one schema.
+    """Reflect structural axes + every primitive's __hyperparameters__ into one schema.
     Continuous and discrete share this representation (R4)."""
 ```
 
-**Why this is the fix:** `hyperopt/search_space.py::RULE_SPACES`, `_STEP_SIZE_OVERRIDES`, `_DYNAMICS_STEP_SIZE_OVERRIDES`, and `_ruler_lr` all become *projections* of `TunableRegistry ∪ PriorStore`. A lock asserts `harvest_schema() ⊇ Appendix B ∪ Appendix C` and that every tunable has exactly one owner. Adding a primitive automatically extends the searchable space — "describable here, inexpressible there" (P1) is structurally impossible.
+**Why this is the fix:** `hyperopt/search_space.py::RULE_SPACES`, `_STEP_SIZE_OVERRIDES`, `_DYNAMICS_STEP_SIZE_OVERRIDES`, and `_ruler_lr` all become *projections* of `HyperparameterRegistry ∪ PriorStore`. A lock asserts `harvest_schema() ⊇ Appendix B ∪ Appendix C` and that every hyperparameter has exactly one owner. Adding a primitive automatically extends the searchable space — "describable here, inexpressible there" (P1) is structurally impossible.
 
-- **R2 (lr searchable):** `learning_rate` is a `Tunable(section=COORDINATE)` on every trainable primitive; a run varies it like any axis.
+- **R2 (lr searchable):** `learning_rate` is a `Hyperparameter(section=COORDINATE)` on every trainable primitive; a run varies it like any axis.
 - **R6 (override + record effective value):** overrides flow through the descriptor; the *effective* value is written to the record.
-- **R3 (substrate comparable):** substrate `noise_level`/`precision` are tunables on the substrate axis, so two substrates appear in one comparable set.
+- **R3 (substrate comparable):** substrate `noise_level`/`precision` are hyperparameters on the substrate axis, so two substrates appear in one comparable set.
 
 ### 2.4 Coordinate instances & validation
 
 ```python
 @dataclass(frozen=True, slots=True)
 class Coordinate:
-    values: Mapping[str, Scalar]       # axis/tunable name -> value
+    values: Mapping[str, Scalar]       # axis/hyperparameter name -> value
     def schema(self) -> CoordinateSchema: ...
     def key(self) -> str: ...          # canonical hash of the COORDINATE section only
 ```
 
-`CoordinateSchema.validate(coord)` is generated from the axis/tunable descriptors (single source). Every numeric default is overridable per-run and per-coordinate; the effective value is recorded (R6).
+`CoordinateSchema.validate(coord)` is generated from the axis/hyperparameter descriptors (single source). Every numeric default is overridable per-run and per-coordinate; the effective value is recorded (R6).
 
 ### 2.5 Schema versioning (R79, K4)
 
@@ -431,7 +431,7 @@ Dataset/split identity + version are provenance fields; cross-version comparison
 
 ### 6.1 Priors as data (R52, resolves **Q4/Q12**)
 
-The ruler-LR table and the ~30 step-size overrides are **migrated to `PriorStore` records** (value + uncertainty + provenance + code version), attached to their tunable via `Tunable.prior`. Search *starts from* and can *exceed* them; they are overridable and applied only within stated uncertainty (R55). The code tables are retired (Appendix A records the migration — R78). Q4: the ruler is an **input prior**, not an authoritative default. Q12: convert to priors, retire the code.
+The ruler-LR table and the ~30 step-size overrides are **migrated to `PriorStore` records** (value + uncertainty + provenance + code version), attached to their hyperparameter via `Hyperparameter.prior`. Search *starts from* and can *exceed* them; they are overridable and applied only within stated uncertainty (R55). The code tables are retired (Appendix A records the migration — R78). Q4: the ruler is an **input prior**, not an authoritative default. Q12: convert to priors, retire the code.
 
 ### 6.2 Surrogates in the loop (R54, resolves **Q10**)
 
@@ -523,7 +523,7 @@ A run is pausable/steerable/resumable mid-flight (change budget, add/remove cons
 
 | Pillar | Design component | Requirements covered |
 |--------|------------------|----------------------|
-| **Schema** | Abstraction A + B (registries, tunable reflection, identity) | R1–R9, R11, R31–R33, R67, R79 |
+| **Schema** | Abstraction A + B (registries, hyperparameter reflection, identity) | R1–R9, R11, R31–R33, R67, R79 |
 | **Execution** | Abstraction D (stages, policies, wrapper, budget, allocator, determinism, concurrency, kernels) | R16–R30, R39–R45, R46–R51, R70–R75 |
 | **Legality** | Abstraction C (DSL, engine, classification, suppression) | R19, R25, R37, R38, R42, R66 |
 | **Evidence** | Abstraction E (store, governance predicates, claims, CEEC) | R10, R12–R15, R22, R34–R36, R58–R59, R64, R65, R83 |

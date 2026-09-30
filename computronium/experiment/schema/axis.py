@@ -2,7 +2,7 @@
 
 Axis system (L1 from Remediation Ledger):
 - StructuralAxis: the six ontology axes (Substrate, Geometry, Dynamics, Plasticity, Credit, Update)
-- AxisKind: four-kind type system for tunables (STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL)
+- AxisKind: four-kind type system for hyperparameters (STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL)
 - AxisSpec: unified specification with Domain, availability, prior, override_scope, topology_params
 """
 
@@ -30,7 +30,7 @@ class StructuralAxis(StrEnum):
 
 
 class AxisKind(StrEnum):
-    """Axis kind for tunable parameters (four-kind type system)."""
+    """Axis kind for hyperparameter parameters (four-kind type system)."""
 
     STRUCTURAL = (
         "structural"  # Fixed by primitive choice (e.g., input_dim, neurons_per_tile)
@@ -49,7 +49,7 @@ class Scale(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Domain:
-    """Domain specification for a tunable parameter."""
+    """Domain specification for a hyperparameter parameter."""
 
     members: tuple[str, ...] | None = None  # For Enumerated/CATEGORICAL
     lo: float | None = None  # For Range/CONTINUOUS/INTEGER
@@ -71,7 +71,7 @@ class Domain:
 
 @dataclass(frozen=True, slots=True)
 class HyperparameterSpec:
-    """Specification for a hyperparameter (tunable)."""
+    """Specification for a hyperparameter (hyperparameter)."""
 
     name: str
     domain: Domain

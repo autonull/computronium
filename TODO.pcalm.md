@@ -275,7 +275,7 @@ def settle(self, state, geometry, substrate, target=None):
     ...
 ```
 
-**Adaptive budget** eliminates waste on shallow networks / easy inputs. The `convergence_threshold` becomes a meaningful hyperparameter (tunable via Optuna in `computronium/hyperopt`).
+**Adaptive budget** eliminates waste on shallow networks / easy inputs. The `convergence_threshold` becomes a meaningful hyperparameter (hyperparameter via Optuna in `computronium/hyperopt`).
 
 ---
 

@@ -34,7 +34,7 @@ The acceptance conditions of TODO43 §8 hold, each by the means appropriate to i
 
 | Term | Meaning |
 |---|---|
-| Coordinate | The full set of structural-axis + tunable choices defining *which system* |
+| Coordinate | The full set of structural-axis + hyperparameter choices defining *which system* |
 | Record | One durable, queryable measurement: coordinate ∪ schedule ∪ provenance ∪ status ∪ payload |
 | Policy | How search chooses coordinates, allocates compute, or stops |
 | Stage | A lifecycle phase S1–S11 |
@@ -90,8 +90,8 @@ Eight principles govern every decision below. They are the elegance contract.
 computronium/experiment/                  # "the Kernel"
   ├─ schema/          PILLAR 1 — one axis type, coordinate, record identity, registries
   │   ├─ registry.py       the one Registry (Abstraction A)
-  │   ├─ axis.py           AxisSpec: structural axes AND tunables, one type
-  │   ├─ harvest.py        tunable reflection + schema synthesis (union of Appendix C)
+  │   ├─ axis.py           AxisSpec: structural axes AND hyperparameters, one type
+  │   ├─ harvest.py        hyperparameter reflection + schema synthesis (union of Appendix C)
   │   ├─ coordinate.py     Coordinate + CoordinateSchema
   │   ├─ record.py         Record: four identity sections, three identity keys
   │   └─ versioning.py     schema/spec versions + old-shape readers (R79, K4)
@@ -155,7 +155,7 @@ R43 (question-first entry) is carried by the `Synthesis` policy (§6.3); R73 (ex
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    A. UNIVERSAL REGISTRY SYSTEM                          │
-│  (axes incl. tunables, objectives, capabilities, constraints, priors,  │
+│  (axes incl. hyperparameters, objectives, capabilities, constraints, priors,  │
 │   policies, stages, flags)                                               │
 │  One generic Registry[SpecT] + declarative specs + reflection harvest   │
 └────────────────────────────────┬────────────────────────────────────────┘
@@ -241,7 +241,7 @@ class AxisPrimitive:
             id=f"{axis.value}.{primitive_id}", axis=axis,
             primitive_id=primitive_id, config_schema=cls.config_schema(),
         ))
-        harvest_tunables(cls)      # §3.2 — registers cls.__tunables__ into AXES
+        harvest_hyperparameters(cls)      # §3.2 — registers cls.__hyperparameters__ into AXES
 
 class EnergyMinimization(AxisPrimitive, axis=Axis.DYNAMICS,
                          primitive_id="energy_minimization"): ...
@@ -253,14 +253,14 @@ Enumerating legal values per axis (R5) is `AXES.all()` filtered by axis — disc
 
 | Registry | Spec type | Seed content | Requirement |
 |---|---|---|---|
-| `AXES` | `AxisSpec` | TODO43 App. B structural axes **and** all tunables (App. C's 37, lr, step size, batch size, optimizer params) — one type, one registry | R1, R2, R4–R6 |
+| `AXES` | `AxisSpec` | TODO43 App. B structural axes **and** all hyperparameters (App. C's 37, lr, step size, batch size, optimizer params) — one type, one registry | R1, R2, R4–R6 |
 | `OBJECTIVES` | `ObjectiveSpec` | App. B.7 (~39, direction/weight/normalizer/axis tag) | R31, R33 |
 | `CAPABILITIES` | `CapabilitySpec` | C1–C88 + gated §13.3/§13.4 rows (stage, owner, verifying test) | R76, R77 |
 | `CONSTRAINTS` | `Constraint` | `SystemConfig.validate()` rules + task fences + `apply_constraints` | R37, R63, R66 |
 | `PRIORS` | `PriorSpec` | Ruler-LR table, step-size overrides — as data | R52, R55 |
 | `POLICIES` / `STAGES` | `PolicySpec` / `StageSpec` | R17 policy union; S1–S11 | R17, R39 |
 
-There is no separate `TUNABLES` registry: a tunable is an `AxisSpec` (§3.1). This is what makes R4 ("mixed space, one representation") literally true.
+There is no separate `HYPERPARAMETERS` registry: a hyperparameter is an `AxisSpec` (§3.1). This is what makes R4 ("mixed space, one representation") literally true.
 
 **Flag inventory as a view (R78):** TODO43 Appendix A's flags are a projection of `CAPABILITIES` (`capability → flags → tests`); a lock asserts the projection is current.
 
@@ -283,9 +283,9 @@ Generated, then lock-tested against source (drift fails CI):
 
 ## 3. Abstraction B — Coordinate & Record Identity Schema
 
-### 3.1 One axis type (the tunable/AxisSpec unification)
+### 3.1 One axis type (the hyperparameter/AxisSpec unification)
 
-Structural axes and hyperparameters are one type. A tunable is an `AxisSpec` whose `kind` is continuous/integer/categorical rather than structural:
+Structural axes and hyperparameters are one type. A hyperparameter is an `AxisSpec` whose `kind` is continuous/integer/categorical rather than structural:
 
 ```python
 # experiment/schema/axis.py
@@ -305,31 +305,31 @@ class AxisSpec:
     @classmethod
     def structural(cls, ...) -> "AxisSpec": ...
     @classmethod
-    def tunable(cls, name, kind, domain, *, availability=None, default=None,
+    def hyperparameter(cls, name, kind, domain, *, availability=None, default=None,
                 prior=None) -> "AxisSpec": ...
 ```
 
 **Conditional availability.** `beta` only makes sense when `credit == thermodynamic_contrast`; `tau_mem` only when `dynamics == spike_integration`. Hardcoding this is the P4 trap, so availability is a predicate and the active space is computed, never enumerated:
 
 ```python
-AxisSpec.tunable("beta", CONTINUOUS, Range(1e-3, 1e2, LOG),
+AxisSpec.hyperparameter("beta", CONTINUOUS, Range(1e-3, 1e2, LOG),
                  availability=AxisEquals("credit", "thermodynamic_contrast"))
-AxisSpec.tunable("tau_mem", CONTINUOUS, Range(1e-3, 1.0),
+AxisSpec.hyperparameter("tau_mem", CONTINUOUS, Range(1e-3, 1.0),
                  availability=AxisEquals("dynamics", "spike_integration"))
 ```
 
 Adding a new rule + its hyperparameters = registering N `AxisSpec`s with availability predicates. Zero changes to search, store, schema, or docs. "Describable here, inexpressible there" (P1) is structurally impossible.
 
-### 3.2 Tunable reflection and deduplication — the Appendix-C cure
+### 3.2 Hyperparameter reflection and deduplication — the Appendix-C cure
 
-Primitives declare their tunables inline; the harvester registers them into `AXES`:
+Primitives declare their hyperparameters inline; the harvester registers them into `AXES`:
 
 ```python
 class ThermodynamicContrast(CreditPrimitive, axis=Axis.CREDIT,
                             primitive_id="thermodynamic_contrast"):
-    __tunables__ = (
-        AxisSpec.tunable("beta", CONTINUOUS, Range(1e-3, 1e2, LOG), default=0.5),
-        AxisSpec.tunable("max_steps", INTEGER, Range(1, 200), default=20),
+    __hyperparameters__ = (
+        AxisSpec.hyperparameter("beta", CONTINUOUS, Range(1e-3, 1e2, LOG), default=0.5),
+        AxisSpec.hyperparameter("max_steps", INTEGER, Range(1, 200), default=20),
         # … all eqprop slots from TODO43 Appendix C …
     )
 ```
@@ -339,15 +339,15 @@ class ThermodynamicContrast(CreditPrimitive, axis=Axis.CREDIT,
 - `learning_rate` → one AxisSpec, available wherever any trainable primitive is selected (exactly R2: lr is a searched coordinate, one axis, not ten).
 - `beta` → one AxisSpec, available under `credit ∈ {thermodynamic_contrast, pc_alm}`.
 
-**Conflicting declarations of the same name** (different domain/scale/default) are a conformance-lock failure raising `ConflictingTunable`: ownership is joint, definition is singular. A lock asserts `harvest_schema() ⊇ Appendix B ∪ Appendix C` — the union is counted and locked, exactly as R1/R5 demand.
+**Conflicting declarations of the same name** (different domain/scale/default) are a conformance-lock failure raising `ConflictingHyperparameter`: ownership is joint, definition is singular. A lock asserts `harvest_schema() ⊇ Appendix B ∪ Appendix C` — the union is counted and locked, exactly as R1/R5 demand.
 
-**What this kills.** `RULE_SPACES`, `_STEP_SIZE_OVERRIDES`, `_DYNAMICS_STEP_SIZE_OVERRIDES`, and `_ruler_lr` all become *projections* of `AXES ∪ PRIORS`. R6 (override + record effective value): overrides flow through the descriptor; the effective value is written to the record. R3 (substrate comparable): `noise_level`/`precision` are tunables on the substrate axis, so two substrates appear in one comparable set.
+**What this kills.** `RULE_SPACES`, `_STEP_SIZE_OVERRIDES`, `_DYNAMICS_STEP_SIZE_OVERRIDES`, and `_ruler_lr` all become *projections* of `AXES ∪ PRIORS`. R6 (override + record effective value): overrides flow through the descriptor; the effective value is written to the record. R3 (substrate comparable): `noise_level`/`precision` are hyperparameters on the substrate axis, so two substrates appear in one comparable set.
 
 ### 3.3 Schema synthesis
 
 ```python
 def harvest_schema() -> CoordinateSchema:
-    """Reflect structural axes + all tunables into one schema. Never hand-written.
+    """Reflect structural axes + all hyperparameters into one schema. Never hand-written.
     Continuous and discrete share this representation (R4)."""
     return CoordinateSchema(axes=AXES.all(), schema_version=SCHEMA_VERSION)
 ```
@@ -380,7 +380,7 @@ class Coordinate:
 
 `CoordinateSchema.validate(coord)` is generated from the axis descriptors (single source). Every numeric default is overridable per-run and per-coordinate; the effective value is recorded (R6).
 
-**Plasticity is a first-class axis (Q7).** The README's P-axis program (ψ, frozen-θ, NTM/NCA, adaptation/migration) mandates it; `plasticity` carries its own tunables and objectives (`psi_capacity`, `consolidation_cost`, `rewrite_rate`).
+**Plasticity is a first-class axis (Q7).** The README's P-axis program (ψ, frozen-θ, NTM/NCA, adaptation/migration) mandates it; `plasticity` carries its own hyperparameters and objectives (`psi_capacity`, `consolidation_cost`, `rewrite_rate`).
 
 ### 3.5 Four identity sections, three identity keys
 
@@ -992,7 +992,7 @@ Every technique maps to a concrete requirement and eliminates a specific class o
 | # | Technique | Mechanism | Eliminates / Enables | Serves |
 |---|---|---|---|---|
 | 1 | Auto-registration via `__init_subclass__` | Primitives register at class-definition time | Hand-maintained axis tables (P4) | R5, R1 |
-| 2 | Tunable reflection + dedup | `__tunables__` harvested into `AXES`, deduped by name (70→37) | `RULE_SPACES`, prior code tables (P2, P4, App C) | R1, R2, R4, R6, R52 |
+| 2 | Hyperparameter reflection + dedup | `__hyperparameters__` harvested into `AXES`, deduped by name (70→37) | `RULE_SPACES`, prior code tables (P2, P4, App C) | R1, R2, R4, R6, R52 |
 | 3 | Schema synthesis from registries | `harvest_schema()` walks `AXES` | Hand-written coordinate schemas | R1, R4 |
 | 4 | Serialization/diff from schema | to/from/diff generated from field specs | Boilerplate serializers | R41 |
 | 5 | Serializable predicate DSL | Constraints/claims are AST expressions, not lambdas | Hardcoded fence dicts, unqueryable gates | R37, R38, R41, R66 |
@@ -1006,7 +1006,7 @@ Every technique maps to a concrete requirement and eliminates a specific class o
 | 13 | Content-addressed artifacts via CEEC | Configs, reproducers, kernels stored by hash in CEEC | Dedup, provenance, cache invalidation | R75, K10 |
 | 14 | Versioned reader adapters | Per-version readers materialize old shapes; hashes stable (§3.5) | Destructive migrations | R79, K4 |
 
-**The invariant this buys:** the only hand-written artifacts are definitions (a primitive, a tunable declaration, a constraint, a capability). Everything derived — the union, the schema, the matrix, the docs, the conformance — is regenerated from those definitions. Drift becomes a build failure. This is the structural answer to P4, P11, P14, and R63 simultaneously.
+**The invariant this buys:** the only hand-written artifacts are definitions (a primitive, a hyperparameter declaration, a constraint, a capability). Everything derived — the union, the schema, the matrix, the docs, the conformance — is regenerated from those definitions. Drift becomes a build failure. This is the structural answer to P4, P11, P14, and R63 simultaneously.
 
 **Evolution posture:** new axes/knobs = registration; new policies/stages/objectives = Protocol implementation + optional entry point; schema changes = version bump + reader. Nothing requires editing the core (R70).
 
@@ -1087,7 +1087,7 @@ Each of the six implementations (TODO43 §13.1: `broad_map`, `stack`, `hyperopt`
 
 One minimal vertical slice proving the five abstractions compose:
 
-- A subset of `AXES` (2 structural values per axis + 3 tunables with availability predicates), locked.
+- A subset of `AXES` (2 structural values per axis + 3 hyperparameters with availability predicates), locked.
 - `Coordinate` + `CoordinateSchema.validate` + `harvest_schema()` lock.
 - `Record` with all three keys + schema version 1 reader.
 - `RecordStore` with the full Appendix II DDL, CEEC artifact delegation, WAL, `seq`.
@@ -1196,7 +1196,7 @@ TODO43 §13–§15 are marked "CANDIDATES / PROPOSALS, pending review; nothing h
 | Rev 3 item | How it is absorbed (pending gate) |
 |---|---|
 | §13.1 six implementations | Policy catalog extended (`Evolution`, `Synthesis`, `StrategyProgression`, `TrainerDriven`); capabilities rowed into the registry; P1 table corrected (four → six) |
-| §13.2 continuous union missing | Appendix C → union: tunables as `AxisSpec` registry data; union derived by reflection + conformance-locked; `batch_size`, optimizer betas, and `apply_constraints` added |
+| §13.2 continuous union missing | Appendix C → union: hyperparameters as `AxisSpec` registry data; union derived by reflection + conformance-locked; `batch_size`, optimizer betas, and `apply_constraints` added |
 | §13.3 collectables | EMA-harvest, I(C,U) rows, recipe cards, frozen-θ ψ, claim records, ANOVA/Sobol, genealogy, microbench JSONL, distributed-fault records → registered payload/record types |
 | §13.4 procedures | 5-level benchmark suites, MEP tournament, evolution campaigns, corpus certification, kernel-ladder promotion → capabilities with conformance tests |
 | §13.5 minor gaps | Graph/tabular/time-series domains added; `stability`/`psi_peft`/`local_feedback` capabilities counted; model export as a post-promotion artifact path |
@@ -1229,7 +1229,7 @@ TODO43 §13–§15 are marked "CANDIDATES / PROPOSALS, pending review; nothing h
 | Layer | Mechanism | Catches |
 |---|---|---|
 | Registry integrity locks | CI property tests: uniqueness, totality, no orphans per registry | Silent spec loss (P14) |
-| Schema conformance lock | `harvest_schema() ⊇ Appendix B ∪ Appendix C`; same-name tunables agree | Union drift (P1, §13.2) |
+| Schema conformance lock | `harvest_schema() ⊇ Appendix B ∪ Appendix C`; same-name hyperparameters agree | Union drift (P1, §13.2) |
 | Compatibility matrix lock | Generated matrix ≡ `validate()` behavior | Doc/validator drift (P13) |
 | Capability conformance | Harness walks `CAPABILITIES`, runs each test; CI fails on loss | Capability erosion (P14) |
 | Documented-command conformance | Every documented CLI invocation is a test | CLI drift (P11) |
@@ -1336,7 +1336,7 @@ Retirement is only via an explicit `status: RETIRED` + `migration_note` in the r
 
 The set is satisfied when a system exists in which:
 
-1. One coordinate schema expresses the Appendix-B union (including Appendix C tunables); a single run yields records at more than one lr, substrate, and fidelity (R1–R3, R8). *(S)*
+1. One coordinate schema expresses the Appendix-B union (including Appendix C hyperparameters); a single run yields records at more than one lr, substrate, and fidelity (R1–R3, R8). *(S)*
 2. Records differing only in lr/seed/fidelity are distinguishable, separately queryable, and never averaged unlabeled (R7–R9). *(S)*
 3. A record written by any policy is queryable, reportable, and claim-evaluable by the same code from the same store (R13, R14, R34, R35). *(S)*
 4. Round-robin, stratified, random, and model-based policies traverse the same space, produce comparable records, and report coverage (R16–R18). *(S)*
@@ -1391,7 +1391,7 @@ ExperimentError
  │  ├─ DuplicateSpec(registry, id)
  │  ├─ RegistryLocked(registry)
  │  ├─ UnknownSchemaVersion(version)              # versioned readers (§3.7)
- │  └─ ConflictingTunable(name, declarations)     # §3.2 dedup lock
+ │  └─ ConflictingHyperparameter(name, declarations)     # §3.2 dedup lock
  ├─ LegalityError
  │  ├─ ConstraintViolation(constraint, coordinate, reason)
  │  └─ InvalidCoordinate(schema, violations)
@@ -1510,7 +1510,7 @@ Operator keys: `field`, `lit`, `eq`/`ne`/`lt`/`le`/`gt`/`ge`, `in`, `between`, `
 
 ## Appendix IV — Per-Rule Continuous Hyperparameter Union (audit-verified; registry seed)
 
-Source: `computronium/hyperopt/search_space.py::RULE_SPACES`. 10 rules, 70 parameter slots, 37 unique parameters. Authoritative ranges/scales live in the source table; this appendix proves the union exists and is counted (R1, R5). Upon Gate 2, these become `AxisSpec` tunables in `AXES` with availability predicates (§3.2).
+Source: `computronium/hyperopt/search_space.py::RULE_SPACES`. 10 rules, 70 parameter slots, 37 unique parameters. Authoritative ranges/scales live in the source table; this appendix proves the union exists and is counted (R1, R5). Upon Gate 2, these become `AxisSpec` hyperparameters in `AXES` with availability predicates (§3.2).
 
 | Rule | # | Parameters |
 |---|---|---|
@@ -1556,7 +1556,7 @@ Every material conflict between SPEC-43 Rev 1.1 (macro) and SPEC-43.1 Rev 1.0 (s
 
 ## Appendix VI — Revision Changelog
 
-**SPEC-43 Rev 1.0 → Rev 1.1:** unified tunable representation (tunables are `AxisSpec`s); removed stored `claim_eligible`; unified `params` naming; defined three identity keys with hash-stability; withdrew blanket "by construction" acceptance in favor of S/E/P classification; Rev 3 made an explicit review gate; store DDL + single-writer honesty + monotonic sequence added; exception hierarchy and predicate wire format added.
+**SPEC-43 Rev 1.0 → Rev 1.1:** unified hyperparameter representation (hyperparameters are `AxisSpec`s); removed stored `claim_eligible`; unified `params` naming; defined three identity keys with hash-stability; withdrew blanket "by construction" acceptance in favor of S/E/P classification; Rev 3 made an explicit review gate; store DDL + single-writer honesty + monotonic sequence added; exception hierarchy and predicate wire format added.
 
 **SPEC-43.1 Rev 1.0 (parallel line):** specified the physical store — SQLite WAL + MessagePack, write path and concurrency dedup, four-phase migration with dry-run/rollback, performance budget and harness, merge-acceptance process. Self-corrections appended: reverse package decision, delegate content-addressing to CEEC, treat K7 figures as estimates.
 

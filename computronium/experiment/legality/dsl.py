@@ -329,7 +329,7 @@ class EvaluationContext:
         if name in _COORD_AXES:
             return getattr(self.coordinate, name)
 
-        # Params (tunables)
+        # Params (hyperparameters)
         if name.startswith("params."):
             key = name.split(".", 1)[1]
             return self.coordinate.params.get(key)

@@ -1,6 +1,6 @@
 """Lockstep test: harvest_schema() with Gate-2 union (WP2/WP8).
 
-This test verifies that the harvested tunable schema includes all parameters
+This test verifies that the harvested hyperparameter schema includes all parameters
 from the Gate 2 frozen union table (Appendix IV + §13.2 additions), AND
 includes the richer ontology-specific parameters with availability predicates.
 
@@ -113,9 +113,9 @@ def test_gate_2_union_count() -> None:
 
 
 def test_harvest_schema_has_no_conflicts() -> None:
-    """Verify harvest_schema() produces no ConflictingTunableError."""
+    """Verify harvest_schema() produces no ConflictingHyperparameterError."""
 
-    # This should not raise ConflictingTunableError
+    # This should not raise ConflictingHyperparameterError
     schema = harvest_schema()
     assert schema.version == 1
 
@@ -130,9 +130,9 @@ def test_harvest_schema_structure() -> None:
     assert schema.axis_kind_order[0].value == "substrate"
     assert schema.axis_kind_order[5].value == "update"
 
-    # Should have tunables list
-    assert isinstance(schema.tunables, tuple)
-    assert len(schema.tunables) > 0
+    # Should have hyperparameters list
+    assert isinstance(schema.hyperparameters, tuple)
+    assert len(schema.hyperparameters) > 0
 
 
 def test_harvest_schema_covers_gate_2_legacy_names() -> None:
@@ -143,9 +143,9 @@ def test_harvest_schema_covers_gate_2_legacy_names() -> None:
     """
 
     schema = harvest_schema()
-    harvested_names = {t.name for t in schema.tunables}
+    harvested_names = {t.name for t in schema.hyperparameters}
 
-    # Check that we have canonical names for the key tunables
+    # Check that we have canonical names for the key hyperparameters
     # Core params that must be present (availability predicates don't matter for presence)
     core_params = {
         "step_size",
@@ -186,7 +186,7 @@ def test_harvest_schema_rich_coverage() -> None:
     """Verify harvest_schema() includes rich ontology-specific params."""
 
     schema = harvest_schema()
-    harvested_names = {t.name for t in schema.tunables}
+    harvested_names = {t.name for t in schema.hyperparameters}
 
     # These are the expanded ontology params beyond Gate 2
     ontology_expansions = {
@@ -288,13 +288,13 @@ def test_harvest_schema_availability_predicates() -> None:
         "weight_bounds_hi",  # analog/memristive/quantum
     }
 
-    with_availability = sum(1 for t in schema.tunables if t.availability is not None)
-    print(f"Params with availability: {with_availability}/{len(schema.tunables)}")
+    with_availability = sum(1 for t in schema.hyperparameters if t.availability is not None)
+    print(f"Params with availability: {with_availability}/{len(schema.hyperparameters)}")
 
     # Check that some key conditional params do have availability
     conditional_found = sum(
         1
-        for t in schema.tunables
+        for t in schema.hyperparameters
         if t.name in conditional_params and t.availability is not None
     )
     print(
@@ -313,13 +313,13 @@ def test_harvest_schema_to_dict_roundtrip() -> None:
     data = schema.to_dict()
     assert data["version"] == 1
     assert "axis_kind_order" in data
-    assert "tunables" in data
+    assert "hyperparameters" in data
 
     # Round-trip
     restored = schema.from_dict(data)
     assert restored.version == schema.version
     assert restored.axis_kind_order == schema.axis_kind_order
-    assert len(restored.tunables) == len(schema.tunables)
+    assert len(restored.hyperparameters) == len(schema.hyperparameters)
 
 
 if __name__ == "__main__":

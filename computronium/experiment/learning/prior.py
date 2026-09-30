@@ -23,7 +23,7 @@ from computronium.experiment.schema.registries import (
 
 
 class PriorDomain(StrEnum):
-    """Domain of a prior (which axis/tunable it applies to)."""
+    """Domain of a prior (which axis/hyperparameter it applies to)."""
 
     LEARNING_RATE = "learning_rate"  # Per-task LR (ruler table)
     UPDATE_STEP_SIZE = "update_step_size"  # Per (dynamics, credit) multiplier

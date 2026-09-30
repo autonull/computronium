@@ -75,7 +75,7 @@ zone maps + ART as needed), §6.1.6 (WAL pragmas → DuckDB built-in), Appendix 
   batch appends per evaluation round amortize further.
 - **STRUCT field additions** require `ALTER TABLE … ALTER COLUMN` (a rewrite). Mitigation:
   stable sections are typed STRUCTs; *open* surfaces (`params`, `payload`, `unknown`) are
-  `JSON` — new tunables and telemetry need **zero DDL**. That is the agile-schema
+  `JSON` — new hyperparameters and telemetry need **zero DDL**. That is the agile-schema
   requirement, satisfied.
 - **Cross-process access is exclusive, not concurrent.** DuckDB allows one
   read-write process *or* many read-only processes — never both. While a
@@ -143,14 +143,14 @@ CREATE TABLE records (
     cell_key        TEXT NOT NULL,          -- sha256(coordinate); repeats group here (R9)
     measurement_key TEXT NOT NULL UNIQUE,   -- sha256(coordinate ∪ schedule ∪ seed); one coordinate × one seed × one schedule
     replication_key TEXT NOT NULL,          -- sha256(coordinate ∪ schedule_without_seed); groups seeds for a coordinate/schedule
-    -- coordinate: structural axes typed; tunables open
+    -- coordinate: structural axes typed; hyperparameters open
     substrate       TEXT NOT NULL,
     geometry        TEXT NOT NULL,
     dynamics        TEXT NOT NULL,
     plasticity      TEXT NOT NULL,
     credit          TEXT NOT NULL,
     update_rule     TEXT NOT NULL,
-    params          JSON NOT NULL,          -- the 37-tunable union + geometry/substrate params
+    params          JSON NOT NULL,          -- the 37-hyperparameter union + geometry/substrate params
     schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                            epochs INTEGER, batch_limit INTEGER, budget_id TEXT) NOT NULL,  -- includes seed for measurement_key; replication_key excludes seed
     provenance      JSON NOT NULL,          -- env, dataset+version, code SHA, policy, links
@@ -297,7 +297,7 @@ abc3 §12.4. Package `computronium/experiment/` per abc3 §1.1.
 - `computronium/experiment/schema/axis.py` — AxisSpec, AxisKind, registries
 - `computronium/experiment/schema/coordinate.py` — Coordinate, Schedule, Provenance
 - `computronium/experiment/schema/record.py` — Record, Status, GateVerdict, FailureCause, Severity, Maturity
-- `computronium/experiment/schema/harvest.py` — Tunable harvesting, ConflictingTunableError, HarvestedSchema
+- `computronium/experiment/schema/harvest.py` — Hyperparameter harvesting, ConflictingHyperparameterError, HarvestedSchema
 - `computronium/experiment/schema/versioning.py` — Schema versioning, SchemaRegistry, UnknownField
 - `computronium/experiment/schema/registries.py` — OBJECTIVES, CONSTRAINTS, PRIORS, POLICIES, STAGES, CAPABILITIES registries
 - `computronium/experiment/legality/__init__.py` — Legality package exports
@@ -368,7 +368,7 @@ fixture recovers known effects.
 
 ### WP2 — Pillar 1 complete: schema & registries
 - ✅ `schema/harvest.py` — `hyperparameters()`-based reflection, name-based dedup (70→44; conflicts raise
-  `ConflictingTunableError`), `harvest_schema()`.
+  `ConflictingHyperparameterError`), `harvest_schema()`.
 - ✅ `schema/versioning.py` — `schema_version` fail-closed on unknown versions;
   `UnknownField` preservation as forward tolerance (Directive 2). No old-shape
   readers, no reader registry.
@@ -664,7 +664,7 @@ strict-clean from WP1 onward.
 ## 8. Progress Log
 
 ### 2026-09-29 — WP2 Complete (harvest.py, versioning.py, registries.py)
-- Implemented `schema/harvest.py`: `hyperparameters()`-based reflection, name-based dedup, `harvest_schema()`, `ConflictingTunableError`
+- Implemented `schema/harvest.py`: `hyperparameters()`-based reflection, name-based dedup, `harvest_schema()`, `ConflictingHyperparameterError`
 - Implemented `schema/versioning.py`: `SchemaRegistry`, `UnknownField` preservation, append-only readers
 - Implemented `schema/registries.py`: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`, `POLICIES`, `STAGES`, `CAPABILITIES` registries with spec classes
 - Added lockstep wiring tests: `tests/property/test_experiment_registries_wiring_lock.py` (12 tests)
@@ -831,7 +831,7 @@ of the interaction-surrogate mechanism, not its scope.
 
 | # | Completed artifact | Defect | Correction | WP |
 |---|---|---|---|---|
-| L1 | `schema/axis.py::AxisKind` | The six-axis enum doubles as the axis-type system; tunables are a separate `TunableSpec` (violates abc3 §3.1 "one axis type", R4) | Rename the six-axis enum → `StructuralAxis`; introduce `AxisKind ∈ {STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL}`; one `AXES: Registry[AxisSpec]` with `Domain`, `availability: Expr \| None`, `prior`, `override_scope`, `topology_params`; the six structural axes register as `AxisSpec.kind=STRUCTURAL` with their `topology_params`; tunables register as `CONTINUOUS/INTEGER/CATEGORICAL`; `schema/harvest.py::TunableSpec` removed — harvest returns `AxisSpec` directly | WP8 |
+| L1 | `schema/axis.py::AxisKind` | The six-axis enum doubles as the axis-type system; hyperparameters are a separate `HyperparameterSpec` (violates abc3 §3.1 "one axis type", R4) | Rename the six-axis enum → `StructuralAxis`; introduce `AxisKind ∈ {STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL}`; one `AXES: Registry[AxisSpec]` with `Domain`, `availability: Expr \| None`, `prior`, `override_scope`, `topology_params`; the six structural axes register as `AxisSpec.kind=STRUCTURAL` with their `topology_params`; hyperparameters register as `CONTINUOUS/INTEGER/CATEGORICAL`; `schema/harvest.py::HyperparameterSpec` removed — harvest returns `AxisSpec` directly | WP8 |
 | L2 | `schema/harvest.py::_get_primitive_class` | Returns `None` — `harvest_schema()` is always empty; the Gate-2 union lock passes vacuously | Extend `hyperparameters()` on each primitive's config class to return `dict[str, HyperparameterSpec]` with `domain`, `availability`, `kind`, `prior`, `override_scope`; harvest iterates ontology registries (`DYNAMICS_REGISTRY`, …), calls `config_class.hyperparameters()` on each, deduplicates by name with `Or(availability)`; add `hyperparameters()` to Substrate and Plasticity config classes; structural params (`input_dim`, `hidden_dim`, …) move to `AxisSpec.structural().topology_params`; lock asserts `harvest_schema() ⊇ 44-name frozen union` non-vacuously | WP8 |
 | L3 | `schema/seed_registries.py::CAPABILITIES` | 32 rows; TODO43 requires C1–C88 + gated §13.3/§13.4 rows; `CapabilitySpec` lacks `status`/`verifying_test`/`flags` | Extend `CapabilitySpec` with `stage`, `owner`, `verifying_test`, `flags`, `status ∈ {ACTIVE, RETIRED}` + `retirement_record`; seed the full inventory per the Gate 1 verdict table | WP8 |
 | L4 | `schema/registries.py::StageId` + `seed_registries.STAGES` | Invented lifecycle (`S1_DISCOVERY…S11_RETIREMENT`); TODO43 §3.0 / abc3 §5.1 define S1 Frame…S11 Report | Replace with the canonical `StageId` (S1_FRAME…S11_REPORT); maturation semantics map onto S10 Decide / S3 Schedule; update `STAGE_SPECS`, `RUN_PROFILES`, and the stage lock together | WP9 |
@@ -868,7 +868,7 @@ Deliverables:
    implemented design); §15 order → SUPERSEDED by this plan.
 2. **Axis unification (L1)** — `AxisKind` four-kind + `StructuralAxis` rename;
     `Domain` (`Enumerated` members | `Range(lo, hi, scale)`, scale ∈ {LINEAR, LOG});
-    `AxisSpec.tunable(...)` classmethod; `HyperparameterSpec` dataclass
+    `AxisSpec.hyperparameter(...)` classmethod; `HyperparameterSpec` dataclass
     (`domain`, `availability`, `kind`, `prior`, `override_scope`);
     `hyperparameters()` on each config class returns `dict[str, HyperparameterSpec]`;
     availability predicates are `legality.dsl.Expr`; one `AXES` registry;
@@ -882,7 +882,7 @@ Deliverables:
     `INTEGER`|`CATEGORICAL`), `prior` (`PriorSpec` id), `override_scope`;
     harvest iterates registries, calls `hyperparameters()`, deduplicates by
     name with `Or(availability)`; conflicting `domain`/`kind` raises
-    `ConflictingTunableError`; add `hyperparameters()` to Substrate and
+    `ConflictingHyperparameterError`; add `hyperparameters()` to Substrate and
     Plasticity config classes; structural params (`input_dim`, `hidden_dim`,
     `num_layers`, …) removed from `hyperparameters()` — they belong in
     `AxisSpec.structural().topology_params` seeded in the registry.
@@ -936,7 +936,7 @@ Deliverables:
    `ruler_energy_ratio`, stability, plasticity) per Gate 1; multi-objective
    studies resolve directions from the registry (feeds NSGA-II, Pareto, alerts).
 7. **Locks** — strengthen `test_harvest_schema_gate2_lock.py` (non-vacuous union;
-    every harvested tunable has `Domain` + `availability` + `kind`; no defaults in
+    every harvested hyperparameter has `Domain` + `availability` + `kind`; no defaults in
     harvest output); extend registry lockstep to `AXES` + `CAPABILITIES` totality
     (the §7.2 C↔R matrix as data: every C cited by ≥1 R, every R cites ≥1 C);
     constraints-with-proof lock (extends the legality boundary lock).
@@ -1181,7 +1181,7 @@ Definition of Done completes at WP13 close.
 - **Structured parameters moved**: `input_dim`, `output_dim` (dataset-determined),
   `neurons_per_tile`, `tiles_per_layer`, etc. are now marked as structural
   (`AxisKind.STRUCTURAL`) or topology params, not free hyperparameters.
-- **New tunables discovered**: The harvest now yields 68+ parameters (vs Gate 2's 44),
+- **New hyperparameters discovered**: The harvest now yields 68+ parameters (vs Gate 2's 44),
   reflecting the richer ontology surface. Legacy names (e.g., `learning_rate`) map to
   canonical ontology names (e.g., `step_size`); test includes LEGACY_TO_CANONICAL mapping
   and validates coverage.
