@@ -1325,6 +1325,30 @@ Definition of Done completes at WP13 close.
 - All quality gates pass: `ruff format` + `ruff check` clean on 6 changed files,
   `pyright` strict clean, 160 property tests pass (149 neighbors + 11 new), 4 pre-existing skips.
 
+### 2026-09-30 — WP10 Ledger Closure: L7 Training Load + L9 Effect-Size Runner (surrogate.py)
+- **L7 follow-through — `_load_training_data` wired**: `SurrogatePolicy` now pulls
+  `exploration ∪ policy_selected` through the public `RecordStore.query_records(
+  data_origin=...)` API (no stub, no private reach-ins); calibration/test records
+  are excluded by construction and remain the WP5.5 audit's domain.
+- **L9 closed — `evaluate_effect_size` implemented**: guards (`n_tasks≥10`,
+  `n_seeds≥5`) then delegates to `learning/benchmark.py::run_acquisition_benchmark`
+  over `create_synthetic_benchmark_tasks(n_tasks)` and returns
+  `result.effect_size` (`EffectSizeResult`: task-level Cohen's d + CI + p-value).
+  `NotImplementedError` removed.
+- **Protocol conformance**: added `SurrogatePolicy.observe()` (forwards to base +
+  appends datum with its own origin tag, refits next propose) and `get_name()`
+  (`surrogate(<acq>) over <base>`) — the class now satisfies its own
+  `ProposalPolicy` protocol; benchmark `Policy` interop via `cast` (runtime
+  duck-typed; `_evaluate_policy_on_task` only needs `get_name`).
+- **DRY**: extracted `_record_to_datum()` shared by `_load_training_data`,
+  `observe()`, and `update()` (update keeps its documented POLICY_SELECTED
+  stamping).
+- **Locks**: `test_wp10_learning_integration_lock.py` 8 → 11 tests
+  (`TestSurrogateStoreWiring`: training-split exclusion, guard enforcement,
+  runner result shape); `_prov`/`_record` helpers gained an `origin` param.
+- All quality gates pass: `ruff format` + `ruff check` + `pyright` strict clean
+  on both changed files; 11/11 lock tests pass.
+
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
    `hyperopt/`, legacy `execution/` engine, `lightning_/`, `packages/computronium-lab`
@@ -1344,11 +1368,19 @@ Definition of Done completes at WP13 close.
 3. **WP13**: E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded
    reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance;
    results recorded as store records. (Serialization round-trip + E1 overhead +
-   kill-9 now locked; drift lock done.)
+   kill-9 now locked; drift lock done. L9 wiring done — `evaluate_effect_size`
+   now returns real `EffectSizeResult`s.)
 4. **WP13 DoD hardening**: full C1–C88 conformance-evidence audit (per-capability
    `verifying_test` execution sweep). Drift lock pins the 10 JSON files only —
    `.md` summaries (timestamps) and `conformance_stubs/` + `primitives/`/`algorithms/`
    dirs (other generators) are out of scope.
+5. **Benchmark harness fidelity (found 2026-09-30 via L9 wiring)**:
+   `benchmark.py::_evaluate_policy_on_task` ignores the policy for synthetic
+   tasks (fixture evaluated on random coords; treatment≡control distribution →
+   d≈0) and returns an unseeded `rng.rand()` placeholder for real tasks.
+   Before E2/E3 numbers are trusted, it must drive `policy.propose()` per
+   task/seed (paired draws) so the treatment/control contrast is real; until
+   then `evaluate_effect_size` proves the protocol path, not a policy effect.
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).

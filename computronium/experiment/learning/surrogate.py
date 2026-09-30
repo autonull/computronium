@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
 
 import numpy as np
 
@@ -24,10 +24,29 @@ from computronium.experiment.schema.harvest import HyperparameterSpec, harvest_s
 if TYPE_CHECKING:
     from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
     from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.execution.policy import Policy
     from computronium.experiment.schema.record import Record
 
 
 T = TypeVar("T", bound=Coordinate)
+
+
+def _record_to_datum(record: Record) -> tuple[Coordinate, float, DataOrigin]:
+    """Extract (coordinate, objective, origin) from a record."""
+    coord = Coordinate(
+        substrate=record.substrate,
+        geometry=record.geometry,
+        dynamics=record.dynamics,
+        plasticity=record.plasticity,
+        credit=record.credit,
+        update=record.update,
+        params=record.params,
+    )
+    obj = record.payload.get("val_loss", float("inf"))
+    origin = record.provenance.data_origin
+    if not isinstance(origin, DataOrigin):
+        origin = DataOrigin(origin)
+    return coord, obj, origin
 
 
 @runtime_checkable
@@ -235,43 +254,28 @@ class SurrogatePolicy[T]:
         return [c for c, _ in scored[:n]]
 
     def _load_training_data(self) -> None:
-        """Load training data from store, tagged with data origins."""
+        """Load training data from store, tagged with data origins.
+
+        Pulls exploration ∪ policy_selected through the public query API (L7);
+        calibration/test records are excluded here and consumed only by the
+        WP5.5 calibration audit.
+        """
         if not self._store:
             return
 
-        # Query all records for this run/campaign
-        # Note: query_all() would need to be implemented on RecordStore
-        # For now, this is a placeholder
-        records: list[Record] = []
+        records: list[Record] = [
+            *self._store.query_records(data_origin=DataOrigin.EXPLORATION.value),
+            *self._store.query_records(data_origin=DataOrigin.POLICY_SELECTED.value),
+        ]
 
-        coords = []
-        objectives = []
-        origins = []
-
+        coords: list[Coordinate] = []
+        objectives: list[float] = []
+        origins: list[DataOrigin] = []
         for record in records:
-            # Extract coordinate
-            coord = Coordinate(
-                substrate=record.substrate,
-                geometry=record.geometry,
-                dynamics=record.dynamics,
-                plasticity=record.plasticity,
-                credit=record.credit,
-                update=record.update,
-                params=record.params,
-            )
+            coord, obj, origin = _record_to_datum(record)
             coords.append(coord)
-
-            # Extract primary objective (e.g., validation loss)
-            obj = record.payload.get("val_loss", float("inf"))
             objectives.append(obj)
-
-            # Get data origin from provenance
-            origin_str = (
-                record.provenance.data_origin
-                if hasattr(record.provenance, "data_origin")
-                else "exploration"
-            )
-            origins.append(DataOrigin(origin_str))
+            origins.append(origin)
 
         self._training_data = SurrogateTrainingData(
             coordinates=coords,
@@ -360,22 +364,33 @@ class SurrogatePolicy[T]:
             self._training_data = SurrogateTrainingData([], [], [])
 
         for record in results:
-            coord = Coordinate(
-                substrate=record.substrate,
-                geometry=record.geometry,
-                dynamics=record.dynamics,
-                plasticity=record.plasticity,
-                credit=record.credit,
-                update=record.update,
-                params=record.params,
-            )
-            obj = record.payload.get("val_loss", float("inf"))
+            coord, obj, _ = _record_to_datum(record)
             self._training_data.coordinates.append(coord)
             self._training_data.objectives.append(obj)
             self._training_data.data_origins.append(DataOrigin.POLICY_SELECTED)
 
         # Re-fit on next propose
         self._fitted = False
+
+    def observe(self, record: Record) -> None:
+        """Observe a single record (ProposalPolicy conformance).
+
+        Forwards to the base policy and appends to training data with the
+        record's own data-origin tag.
+        """
+        self._base_policy.observe(record)
+        if self._training_data is None:
+            self._training_data = SurrogateTrainingData([], [], [])
+        coord, obj, origin = _record_to_datum(record)
+        self._training_data.coordinates.append(coord)
+        self._training_data.objectives.append(obj)
+        self._training_data.data_origins.append(origin)
+        self._fitted = False
+
+    def get_name(self) -> str:
+        """Policy name for benchmark metadata."""
+        base = self._base_policy.get_name()
+        return f"surrogate({self._config.acquisition.value}) over {base}"
 
     def evaluate_effect_size(
         self,
@@ -400,12 +415,22 @@ class SurrogatePolicy[T]:
         if n_seeds < 5:
             raise ValueError(f"Protocol requires N_seeds >= 5, got {n_seeds}")
 
-        # This would run both policies on held-out tasks and compute effect size
-        # For now, return a placeholder - actual implementation needs benchmark runner
-        raise NotImplementedError(
-            "Effect size evaluation requires benchmark runner integration. "
-            "See computronium.experiment.evidence.protocol.compute_effect_size"
+        from computronium.experiment.learning.benchmark import (
+            BenchmarkConfig,
+            create_synthetic_benchmark_tasks,
+            run_acquisition_benchmark,
         )
+
+        tasks = create_synthetic_benchmark_tasks(n_tasks=n_tasks)
+        config = BenchmarkConfig(n_tasks=n_tasks, n_seeds=n_seeds, budget=budget)
+        result = run_acquisition_benchmark(
+            cast("Policy", self),
+            cast("Policy", baseline_policy),
+            tasks,
+            config,
+            store=self._store,
+        )
+        return result.effect_size
 
 
 # =============================================================================

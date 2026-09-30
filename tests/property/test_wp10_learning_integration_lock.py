@@ -13,13 +13,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+import numpy.typing as npt
 import pytest
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from computronium.experiment.learning.surrogate import SurrogateTrainingData
+
 from computronium.experiment.evidence.claims import claim_eligible_by_achieved_seeds
+from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.learning.prior import (
     _DYNAMICS_STEP_SIZE_OVERRIDES_DATA,
@@ -100,7 +105,7 @@ def _status() -> Status:
     )
 
 
-def _prov() -> Provenance:
+def _prov(origin: DataOrigin = DataOrigin.EXPLORATION) -> Provenance:
     return Provenance(
         env={},
         dataset="test",
@@ -108,16 +113,22 @@ def _prov() -> Provenance:
         code_sha="sha",
         policy="policy",
         links={},
-        data_origin=DataOrigin.EXPLORATION,
+        data_origin=origin,
     )
 
 
-def _record(run_id: str, seed: int, task_id: str = "", record_idx: int = 0) -> Record:
+def _record(
+    run_id: str,
+    seed: int,
+    task_id: str = "",
+    record_idx: int = 0,
+    origin: DataOrigin = DataOrigin.EXPLORATION,
+) -> Record:
     return Record.create(
         run_id=run_id,
         coordinate=_coord(),
         schedule=_sched(seed, task_id),
-        provenance=_prov(),
+        provenance=_prov(origin),
         status=_status(),
         payload={"accuracy": 0.9, "lock_idx": record_idx},
     )
@@ -191,3 +202,81 @@ class TestPriorSingleSource:
             if prior_value(f"dynamics_step_size_{dynamics}") is None:
                 missing.append(dynamics)
         assert not missing, f"overrides missing from PRIORS: {missing}"
+
+
+class _StubModel:
+    def fit(self, data: SurrogateTrainingData) -> None:
+        pass
+
+    def predict(
+        self, coords: list[Coordinate]
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        n = len(coords)
+        return np.zeros(n), np.ones(n)
+
+    def predict_with_grad(
+        self, coords: list[Coordinate]
+    ) -> tuple[
+        npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]
+    ]:
+        n = len(coords)
+        return np.zeros(n), np.ones(n), np.zeros(n)
+
+
+class _StubPolicy:
+    def propose(self, n: int, context: dict) -> list[Coordinate]:
+        return [_coord() for _ in range(n)]
+
+    def observe(self, record: Record) -> None:
+        pass
+
+    def get_name(self) -> str:
+        return "stub"
+
+
+def _surrogate(store: RecordStore | None = None):  # type: ignore[no-untyped-def]
+    from computronium.experiment.learning.surrogate import (
+        SurrogateConfig,
+        SurrogatePolicy,
+    )
+
+    return SurrogatePolicy(_StubPolicy(), _StubModel(), SurrogateConfig(), store)
+
+
+class TestSurrogateStoreWiring:
+    def test_training_split_excludes_calibration_test(
+        self, _store: RecordStore
+    ) -> None:
+        """L7: surrogate trains on exploration ∪ policy_selected only."""
+        run_id = _store.create_run(spec={"kind": "lock"})
+        _store.append(_record(run_id, 1, origin=DataOrigin.EXPLORATION))
+        _store.append(_record(run_id, 2, origin=DataOrigin.POLICY_SELECTED))
+        _store.append(_record(run_id, 3, origin=DataOrigin.CALIBRATION))
+        _store.append(_record(run_id, 4, origin=DataOrigin.TEST))
+        pol = _surrogate(_store)
+        pol._load_training_data()
+        assert pol._training_data is not None
+        assert sorted(o.value for o in pol._training_data.data_origins) == [
+            "exploration",
+            "policy_selected",
+        ]
+
+    def test_effect_size_guards(self) -> None:
+        """L9: protocol minimums enforced before any benchmark runs."""
+        pol = _surrogate()
+        with pytest.raises(ValueError, match="N_tasks >= 10"):
+            pol.evaluate_effect_size(
+                _StubPolicy(), CostBudget.eval_count(10), n_tasks=4
+            )
+        with pytest.raises(ValueError, match="N_seeds >= 5"):
+            pol.evaluate_effect_size(
+                _StubPolicy(), CostBudget.eval_count(10), n_seeds=2
+            )
+
+    def test_effect_size_returns_protocol_result(self) -> None:
+        """L9: effect size runs on the synthetic task batch via the runner."""
+        pol = _surrogate()
+        result = pol.evaluate_effect_size(_StubPolicy(), CostBudget.eval_count(10))
+        assert isinstance(result, EffectSizeResult)
+        assert result.n_tasks >= 10
+        assert result.n_seeds >= 5
