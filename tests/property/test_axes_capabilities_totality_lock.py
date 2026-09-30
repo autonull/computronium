@@ -9,7 +9,6 @@ This test ensures:
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
 
 import pytest
 
@@ -17,7 +16,6 @@ from computronium.experiment.schema.axis import (
     AXES_REGISTRIES,
     StructuralAxis,
     get_registry,
-    list_axis_specs,
 )
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
@@ -25,7 +23,6 @@ from computronium.experiment.schema.registries import (
     CapabilitySpec,
     CapabilityStatus,
 )
-from computronium.experiment.schema.seed_registries import CAPABILITIES
 
 
 class TestAxesRegistryWiring:
@@ -79,7 +76,10 @@ class TestAxesRegistryWiring:
                 "computronium.ontology.substrate",
                 "SubstrateConfig",
             ),
-            StructuralAxis.GEOMETRY: ("computronium.ontology.geometry", "GeometryConfig"),
+            StructuralAxis.GEOMETRY: (
+                "computronium.ontology.geometry",
+                "GeometryConfig",
+            ),
             StructuralAxis.DYNAMICS: (
                 "computronium.ontology.dynamics",
                 "StateDynamicsConfig",
@@ -106,9 +106,9 @@ class TestAxesRegistryWiring:
             )
             # Verify it's a classmethod
             hp_method = getattr(config_cls, "hyperparameters")
-            assert isinstance(inspect.getattr_static(config_cls, "hyperparameters"), classmethod), (
-                f"{class_name}.hyperparameters is not a classmethod"
-            )
+            assert isinstance(
+                inspect.getattr_static(config_cls, "hyperparameters"), classmethod
+            ), f"{class_name}.hyperparameters is not a classmethod"
 
     def test_harvest_schema_integrity(self) -> None:
         """harvest_schema() runs without ConflictingHyperparameterError."""
@@ -199,7 +199,7 @@ class TestCapabilitiesRegistryTotality:
                 )
 
     def test_stage_coverage(self) -> None:
-        """Capabilities cover all pipeline stages S1-S11."""
+        """Capabilities cover all pipeline stages S1-S11 (canonical names)."""
         from computronium.experiment.schema.seed_registries import seed_all_registries
 
         seed_all_registries()
@@ -209,8 +209,20 @@ class TestCapabilitiesRegistryTotality:
             if cap.stage:
                 stages_covered.add(cap.stage)
 
-        # Should cover S1 through S11
-        expected_stages = {f"S{i}" for i in range(1, 12)}
+        # Should cover S1_FRAME through S11_REPORT (canonical stage IDs)
+        expected_stages = {
+            "S1_FRAME",
+            "S2_SPACE",
+            "S3_SCHEDULE",
+            "S4_GATE",
+            "S5_COMPOSE",
+            "S6_TRAIN",
+            "S7_MEASURE",
+            "S8_RECORD",
+            "S9_ATTRIBUTE",
+            "S10_DECIDE",
+            "S11_REPORT",
+        }
         for stage in expected_stages:
             assert stage in stages_covered, f"No capabilities for stage {stage}"
 
@@ -400,7 +412,9 @@ class TestCRequirementsMatrix:
         seed_all_registries()
 
         for cap_id in [f"C{i}" for i in range(1, 89)]:
-            assert cap_id in self.C_R_MATRIX, f"Capability {cap_id} missing from C↔R matrix"
+            assert cap_id in self.C_R_MATRIX, (
+                f"Capability {cap_id} missing from C↔R matrix"
+            )
             requirements = self.C_R_MATRIX[cap_id]
             assert len(requirements) >= 1, f"Capability {cap_id} cites no requirements"
 
@@ -414,9 +428,7 @@ class TestCRequirementsMatrix:
         # Each requirement should be cited by at least one capability
         for req in all_requirements:
             citing_caps = [
-                cap_id
-                for cap_id, reqs in self.C_R_MATRIX.items()
-                if req in reqs
+                cap_id for cap_id, reqs in self.C_R_MATRIX.items() if req in reqs
             ]
             assert len(citing_caps) >= 1, (
                 f"Requirement {req} not cited by any capability"

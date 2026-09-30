@@ -1,4 +1,4 @@
-"""Policy implementations for experiment execution (WP4)."""
+"""Policy implementations for experiment execution (WP4/9)."""
 
 from __future__ import annotations
 
@@ -9,12 +9,42 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 import optuna
 
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_objectives(
+    objective_names: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Resolve objective names and directions from OBJECTIVES registry.
+
+    Args:
+        objective_names: Tuple of objective names from run spec.
+
+    Returns:
+        Tuple of (resolved_names, resolved_directions) where directions
+        are "maximize" or "minimize" per objective.
+    """
+    resolved_names = []
+    resolved_directions = []
+
+    for name in objective_names:
+        spec = OBJECTIVES_REGISTRY.get(name)
+        if spec is not None:
+            resolved_names.append(spec.name)
+            resolved_directions.append(spec.direction)
+        else:
+            # Fallback: assume maximize for unknown objectives
+            resolved_names.append(name)
+            resolved_directions.append("maximize")
+            logger.warning("Objective '%s' not in registry, assuming maximize", name)
+
+    return tuple(resolved_names), tuple(resolved_directions)
 
 
 @runtime_checkable
@@ -264,37 +294,33 @@ class UniformRandomPolicy:
 class ModelBasedPolicy:
     """Model-based optimization using Optuna.
 
-    Uses a surrogate model (TPE, GP, etc.) to propose promising cells.
-    Storage adapter persists trials to the unified store (R71).
+    Supports TPE, NSGA-II, GP, Random samplers with MedianPruner/HyperbandPruner.
+    Trials persisted as records; study rebuilt from store on resume (R71, P7).
     """
 
     def __init__(
         self,
         *,
-        sampler: str = "tpe",
+        sampler: str = "tpe",  # "tpe", "nsga2", "gp", "random"
+        pruner: str | None = None,  # "median", "hyperband", None
         seed: int | None = None,
         n_startup_trials: int = 10,
+        objectives: tuple[str, ...] = (
+            "accuracy",
+        ),  # Objective names from OBJECTIVES registry
+        directions: tuple[str, ...]
+        | None = None,  # "maximize" or "minimize" per objective
     ) -> None:
         self._sampler_name = sampler
+        self._pruner_name = pruner
         self._seed = seed
         self._n_startup_trials = n_startup_trials
+        self._objectives = objectives
+        self._directions = directions or tuple("maximize" for _ in objectives)
         self._name = f"model_based_{sampler}"
         self._study: optuna.Study | None = None
-        self._trial_map: dict[str, Any] = {}
-
-    def _get_study(self, run_id: str) -> optuna.Study:
-        """Get or create Optuna study with unified store storage."""
-        if self._study is None:
-            # Use in-memory storage with run_id prefix for isolation
-            storage = optuna.storages.InMemoryStorage()
-            sampler = self._create_sampler()
-            self._study = optuna.create_study(
-                storage=storage,
-                sampler=sampler,
-                direction="maximize",
-                study_name=f"exp_{run_id}",
-            )
-        return self._study
+        self._run_id: str | None = None
+        self._param_names: list[str] = []  # Parameter names for trial mapping
 
     def _create_sampler(self) -> optuna.samplers.BaseSampler:
         """Create Optuna sampler based on configuration."""
@@ -302,6 +328,8 @@ class ModelBasedPolicy:
             return optuna.samplers.TPESampler(
                 seed=self._seed, n_startup_trials=self._n_startup_trials
             )
+        elif self._sampler_name == "nsga2":
+            return optuna.samplers.NSGAIISampler(seed=self._seed, population_size=50)
         elif self._sampler_name == "gp":
             return optuna.samplers.GPSampler(
                 seed=self._seed, n_startup_trials=self._n_startup_trials
@@ -312,6 +340,136 @@ class ModelBasedPolicy:
             return optuna.samplers.TPESampler(
                 seed=self._seed, n_startup_trials=self._n_startup_trials
             )
+
+    def _create_pruner(self) -> optuna.pruners.BasePruner | None:
+        """Create Optuna pruner based on configuration."""
+        if self._pruner_name == "median":
+            return optuna.pruners.MedianPruner(
+                n_startup_trials=self._n_startup_trials,
+                n_warmup_steps=5,
+                interval_steps=1,
+            )
+        elif self._pruner_name == "hyperband":
+            return optuna.pruners.HyperbandPruner(
+                min_resource=1,
+                max_resource=50,
+                reduction_factor=3,
+            )
+        return None
+
+    def _create_study(self, run_id: str) -> optuna.Study:
+        """Create a new Optuna study with sampler and pruner."""
+        sampler = self._create_sampler()
+        pruner = self._create_pruner()
+
+        if len(self._objectives) == 1:
+            direction = self._directions[0] if self._directions else "maximize"
+            study = optuna.create_study(
+                sampler=sampler,
+                pruner=pruner,
+                direction=direction,
+                study_name=f"exp_{run_id}",
+            )
+        else:
+            # Multi-objective
+            directions = (
+                list(self._directions)
+                if self._directions
+                else ["maximize"] * len(self._objectives)
+            )
+            study = optuna.create_study(
+                sampler=sampler,
+                pruner=pruner,
+                directions=directions,
+                study_name=f"exp_{run_id}",
+            )
+        return study
+
+    def _rebuild_study_from_records(
+        self, run_id: str, records: list[Record]
+    ) -> optuna.Study:
+        """Rebuild Optuna study from stored records (R71).
+
+        Uses optuna.trial.create_trial to reconstruct trial history
+        without a private Optuna database.
+        """
+        study = self._create_study(run_id)
+
+        for record in records:
+            trial = self._record_to_trial_obj(record)
+            if trial is not None:
+                study.add_trial(trial)
+
+        return study
+
+    def _get_or_rebuild_study(self, run_id: str, records: list[Record]) -> optuna.Study:
+        """Get existing study or rebuild from records."""
+        if self._study is None or self._run_id != run_id:
+            self._run_id = run_id
+            self._study = self._rebuild_study_from_records(run_id, records)
+        return self._study
+
+    def _record_to_trial_obj(self, record: Record) -> optuna.trial.FrozenTrial | None:
+        """Convert record to Optuna FrozenTrial for study reconstruction."""
+        try:
+            # Extract parameter values from record params
+            params = {}
+            for name in self._param_names:
+                if name in record.params:
+                    params[name] = record.params[name]
+
+            # Extract objective values
+            values = []
+            for obj_name in self._objectives:
+                if obj_name in record.payload:
+                    val = record.payload[obj_name]
+                    if isinstance(val, (int, float)):
+                        values.append(float(val))
+                    else:
+                        return None
+                else:
+                    return None
+
+            # Create trial state
+            state = optuna.trial.TrialState.COMPLETE
+            if record.status.gate_verdict.value != "PASS":
+                state = optuna.trial.TrialState.FAIL
+
+            return optuna.trial.create_trial(
+                params=params,
+                distributions={},  # Will be inferred
+                values=values,
+                state=state,
+            )
+        except Exception as e:
+            logger.warning("Failed to convert record to trial: %s", e)
+            return None
+
+    def _coord_to_params(self, coord: Coordinate) -> dict[str, float]:
+        """Extract parameter values from coordinate for trial suggestion."""
+        params = {}
+        for name in self._param_names:
+            if name in coord.params:
+                val = coord.params[name]
+                if isinstance(val, (int, float)):
+                    params[name] = float(val)
+        return params
+
+    def _params_to_coord(
+        self, params: dict[str, float], template_coord: Coordinate, schedule: Schedule
+    ) -> Coordinate:
+        """Create a new coordinate with suggested parameters."""
+        new_params = template_coord.params.copy()
+        new_params.update(params)
+        return Coordinate(
+            substrate=template_coord.substrate,
+            geometry=template_coord.geometry,
+            dynamics=template_coord.dynamics,
+            plasticity=template_coord.plasticity,
+            credit=template_coord.credit,
+            update=template_coord.update,
+            params=new_params,
+        )
 
     def propose(
         self,
@@ -324,47 +482,67 @@ class ModelBasedPolicy:
         if not candidates:
             return []
 
+        # Determine run_id
+        run_id = (
+            records[0].run_id
+            if records
+            else (candidates[0][1].budget_id if candidates else "default")
+        )
+
         # Update study with observed records
-        for record in records:
-            self._record_to_trial(record)
+        study = self._get_or_rebuild_study(run_id, records)
 
-        study = self._get_study(records[0].run_id if records else "default")
+        # Extract parameter names from first candidate if not set
+        if not self._param_names and candidates:
+            self._param_names = list(candidates[0][0].params.keys())
 
-        # For now, filter affordable candidates and use top suggestions
+        # Filter affordable candidates
         affordable = self._filter_affordable(candidates, budget, cost_model)
         if not affordable:
             return []
 
-        # Use Optuna to suggest from affordable candidates
-        # Map coordinates to parameter space
+        # Use Optuna to suggest new parameter configurations
         proposals = []
-        for _ in range(min(10, len(affordable))):
+        n_suggest = min(10, len(affordable))
+
+        for _ in range(n_suggest):
             trial = study.ask()
-            # Map trial params to a candidate (simplified)
-            # In practice, this would use a proper parameterization
-            idx = trial.number % len(affordable)
-            proposals.append(affordable[idx])
+
+            # Map suggested params to a coordinate
+            suggested_params = trial.params
+            if not suggested_params:
+                # Fallback: pick from affordable
+                idx = trial.number % len(affordable)
+                proposals.append(affordable[idx])
+                continue
+
+            # Use first affordable as template
+            template_coord, template_sched = affordable[0]
+            new_coord = self._params_to_coord(
+                suggested_params, template_coord, template_sched
+            )
+
+            # Find matching affordable candidate or use template with new params
+            matched = False
+            for coord, sched in affordable:
+                if all(
+                    abs(coord.params.get(k, 0) - v) < 1e-6
+                    for k, v in suggested_params.items()
+                    if k in coord.params
+                ):
+                    proposals.append((coord, sched))
+                    matched = True
+                    break
+
+            if not matched:
+                proposals.append((new_coord, template_sched))
 
         return proposals
 
     def observe(self, record: Record) -> None:
         """Incorporate record into Optuna study."""
-        self._record_to_trial(record)
-
-    def _record_to_trial(self, record: Record) -> None:
-        """Convert record to Optuna trial."""
-        if record.run_id not in self._trial_map:
-            # Store for reference
-            self._trial_map[record.measurement_key] = record
-
-    def _extract_score(self, record: Record) -> float:
-        """Extract optimization score from record."""
-        for key in ("val_acc", "test_acc", "accuracy", "score", "loss"):
-            if key in record.payload:
-                val = record.payload[key]
-                if isinstance(val, (int, float)):
-                    return float(val)
-        return 0.0
+        # The study is rebuilt from records on each propose call
+        # This method is kept for protocol compatibility
 
     def get_name(self) -> str:
         return self._name

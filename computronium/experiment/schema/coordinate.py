@@ -71,6 +71,7 @@ class Coordinate:
                 "epochs": schedule.epochs,
                 "batch_limit": schedule.batch_limit,
                 "budget_id": schedule.budget_id,
+                "task_id": schedule.task_id,
             },
         }
         return hashlib.sha256(_canonical_json(combined).encode()).hexdigest()
@@ -119,6 +120,7 @@ class Schedule:
     epochs: int
     batch_limit: int
     budget_id: str
+    task_id: str = ""  # L17: Task identity for cross-task uniqueness
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -140,6 +142,7 @@ class Schedule:
             "epochs": self.epochs,
             "batch_limit": self.batch_limit,
             "budget_id": self.budget_id,
+            "task_id": self.task_id,
         }
 
     @classmethod
@@ -151,6 +154,7 @@ class Schedule:
             epochs=data["epochs"],
             batch_limit=data["batch_limit"],
             budget_id=data["budget_id"],
+            task_id=data.get("task_id", ""),
         )
 
 

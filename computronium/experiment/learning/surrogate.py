@@ -3,6 +3,10 @@
 Implements WP6 deliverable: SurrogatePolicy wrapper (EI/EHVI) over any Policy (R54, Q10).
 Must respect E2/E3 protocol: surrogate trained on exploration ∪ policy_selected,
 evaluated on calibration ∪ test with effect-size reporting.
+
+R15/R53: Surrogate layer is coordinate-wide — features from the full Coordinate
+via harvest_schema(); I(C,U) is one registered interaction-surrogate instance
+over the credit×update pair, extensible to any axis pair by registering a feature encoder.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 import numpy as np
 
 from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
+from computronium.experiment.schema.harvest import HyperparameterSpec, harvest_schema
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
@@ -480,28 +485,43 @@ class GaussianProcessSurrogate:
 
         return base + WhiteKernel(noise_level=1e-6, noise_level_bounds=(1e-10, 1e-1))
 
+    def _get_feature_specs(self) -> list[HyperparameterSpec]:
+        """Get ordered feature specs from harvest_schema for consistent encoding."""
+        schema = harvest_schema()
+        # Sort by axis_kind_order then by name for deterministic ordering
+        axis_order = {axis.value: i for i, axis in enumerate(schema.axis_kind_order)}
+        return sorted(
+            schema.hyperparameters,
+            key=lambda hp: (axis_order.get(hp.axis_name, 999), hp.name),
+        )
+
     def _coords_to_features(
         self, coords: list[Coordinate], objectives: list[float] | None = None
     ) -> tuple[np.ndarray, np.ndarray | None]:
-        """Convert coordinates to feature vectors."""
-        # This is a simplified conversion - in practice would use harvest_schema
-        # to get all hyperparameter dimensions
+        """Convert coordinates to feature vectors using harvest_schema for consistent encoding.
+
+        R15/R53: Features from the full Coordinate via harvest_schema().
+        """
+        feature_specs = self._get_feature_specs()
+        feature_names = [hp.name for hp in feature_specs]
+
         features = []
         for coord in coords:
-            # Flatten coordinate to feature vector
             feat = []
-            # Structural axes (categorical -> one-hot or ordinal)
+            # Structural axes (one-hot or ordinal encoding)
             feat.append(hash(coord.substrate) % 1000 / 1000.0)
             feat.append(hash(coord.geometry) % 1000 / 1000.0)
             feat.append(hash(coord.dynamics) % 1000 / 1000.0)
             feat.append(hash(coord.plasticity) % 1000 / 1000.0)
             feat.append(hash(coord.credit) % 1000 / 1000.0)
             feat.append(hash(coord.update) % 1000 / 1000.0)
-            # Hyperparameter params
-            for k in sorted(coord.params.keys()):
-                v = coord.params[k]
+            # Hyperparameter params in harvest_schema order
+            for name in feature_names:
+                v = coord.params.get(name)
                 if isinstance(v, int | float):
                     feat.append(float(v))
+                else:
+                    feat.append(0.0)  # Default for missing/categorical params
             features.append(feat)
 
         X = np.array(features, dtype=float)

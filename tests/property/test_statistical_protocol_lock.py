@@ -12,26 +12,14 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.evidence.claims import (
-    Alert,
     alert_on_divergence,
     alert_on_resource_exhaustion,
-    alert_on_stagnation,
     beats_baseline,
-    check_all_alerts,
     check_leakage,
     claim_eligible,
     evaluation_data_allowed,
-    filter_claim_eligible,
-    filter_promoted,
-    generalizes,
-    is_calibration_data,
-    is_exploration_data,
-    is_policy_selected_data,
-    is_test_data,
     promoted,
     robust,
-    same_budget_tier,
-    same_data_origin,
     same_hardware_class,
     training_data_allowed,
     valid_comparison,
@@ -151,7 +139,9 @@ class TestEffectSizeProtocol:
     def test_budget_tier_matching_required(self) -> None:
         """Comparisons only valid within same budget tier."""
         guard = ComparisonGuard(CostBudget.eval_count(100))
-        matches, label = guard.check_or_label(CostBudget.walltime(60.0), label_unmatched=True)
+        matches, label = guard.check_or_label(
+            CostBudget.walltime(60.0), label_unmatched=True
+        )
         assert matches is False
         assert label is not None
         assert "BUDGET_MISMATCH" in label
@@ -161,7 +151,9 @@ class TestEffectSizeProtocol:
         # This is enforced at the comparison level, not budget level
         # The guard doesn't know about hardware - that's checked separately
         guard = ComparisonGuard(CostBudget.walltime(60.0))
-        matches, _ = guard.check_or_label(CostBudget.walltime(60.0), label_unmatched=True)
+        matches, _ = guard.check_or_label(
+            CostBudget.walltime(60.0), label_unmatched=True
+        )
         assert matches is True
 
 
@@ -185,7 +177,14 @@ class TestDataSplitProtocol:
                 update="Euclidean",
                 params={},
             )
-        sched = Schedule(fidelity="L2", seed=42, n_seeds=5, epochs=10, batch_limit=100, budget_id="test")
+        sched = Schedule(
+            fidelity="L2",
+            seed=42,
+            n_seeds=5,
+            epochs=10,
+            batch_limit=100,
+            budget_id="test",
+        )
         prov = Provenance(
             env={},
             dataset="test",
@@ -255,11 +254,17 @@ class TestDataSplitProtocol:
     def test_leakage_detection_test_in_training(self) -> None:
         """Leakage detected when test data in training set."""
         train_records = [
-            self._make_record(DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")),
-            self._make_record(DataOrigin.TEST, "rec2", self._make_coord("train2")),  # LEAK!
+            self._make_record(
+                DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")
+            ),
+            self._make_record(
+                DataOrigin.TEST, "rec2", self._make_coord("train2")
+            ),  # LEAK!
         ]
         eval_records = [
-            self._make_record(DataOrigin.CALIBRATION, "rec3", self._make_coord("eval1")),
+            self._make_record(
+                DataOrigin.CALIBRATION, "rec3", self._make_coord("eval1")
+            ),
         ]
         ok, violations = check_leakage(train_records, eval_records)
         assert not ok
@@ -268,8 +273,12 @@ class TestDataSplitProtocol:
     def test_leakage_detection_calibration_in_training(self) -> None:
         """Leakage detected when calibration data in training set."""
         train_records = [
-            self._make_record(DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")),
-            self._make_record(DataOrigin.CALIBRATION, "rec2", self._make_coord("train2")),  # LEAK!
+            self._make_record(
+                DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")
+            ),
+            self._make_record(
+                DataOrigin.CALIBRATION, "rec2", self._make_coord("train2")
+            ),  # LEAK!
         ]
         eval_records = [
             self._make_record(DataOrigin.TEST, "rec3", self._make_coord("eval1")),
@@ -286,7 +295,9 @@ class TestDataSplitProtocol:
             self._make_record(DataOrigin.EXPLORATION, "rec1", shared_coord),
         ]
         eval_records = [
-            self._make_record(DataOrigin.CALIBRATION, "rec2", shared_coord),  # Same cell!
+            self._make_record(
+                DataOrigin.CALIBRATION, "rec2", shared_coord
+            ),  # Same cell!
         ]
         ok, violations = check_leakage(train_records, eval_records)
         assert not ok
@@ -296,11 +307,17 @@ class TestDataSplitProtocol:
         """Clean split passes leakage check."""
         # Use different coordinates to get different cell_keys
         train_records = [
-            self._make_record(DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")),
-            self._make_record(DataOrigin.POLICY_SELECTED, "rec2", self._make_coord("train2")),
+            self._make_record(
+                DataOrigin.EXPLORATION, "rec1", self._make_coord("train1")
+            ),
+            self._make_record(
+                DataOrigin.POLICY_SELECTED, "rec2", self._make_coord("train2")
+            ),
         ]
         eval_records = [
-            self._make_record(DataOrigin.CALIBRATION, "rec3", self._make_coord("eval1")),
+            self._make_record(
+                DataOrigin.CALIBRATION, "rec3", self._make_coord("eval1")
+            ),
             self._make_record(DataOrigin.TEST, "rec4", self._make_coord("eval2")),
         ]
         ok, violations = check_leakage(train_records, eval_records)
@@ -330,8 +347,13 @@ class TestClaimPredicates:
             budget_id=overrides.get("budget_id", "test"),
         )
         prov = Provenance(
-            env={}, dataset="test", dataset_version="1.0", code_sha="sha",
-            policy="policy", links={}, data_origin=DataOrigin.EXPLORATION
+            env={},
+            dataset="test",
+            dataset_version="1.0",
+            code_sha="sha",
+            policy="policy",
+            links={},
+            data_origin=DataOrigin.EXPLORATION,
         )
         status = Status(
             gate_verdict=overrides.get("gate_verdict", GateVerdict.PASS_),
@@ -400,23 +422,33 @@ class TestClaimPredicates:
     def test_robust_checks_seed_variance(self) -> None:
         """Robust checks coefficient of variation across seeds."""
         # Add seed metrics with low variance
-        record = self._make_claim_eligible_record(payload={
-            "accuracy": 0.95,
-            "seed_metrics": [
-                {"accuracy": 0.95}, {"accuracy": 0.96}, {"accuracy": 0.94},
-                {"accuracy": 0.95}, {"accuracy": 0.95}
-            ]
-        })
+        record = self._make_claim_eligible_record(
+            payload={
+                "accuracy": 0.95,
+                "seed_metrics": [
+                    {"accuracy": 0.95},
+                    {"accuracy": 0.96},
+                    {"accuracy": 0.94},
+                    {"accuracy": 0.95},
+                    {"accuracy": 0.95},
+                ],
+            }
+        )
         assert robust(record, cv_threshold=0.1)
 
         # High variance should fail
-        record_high_var = self._make_claim_eligible_record(payload={
-            "accuracy": 0.95,
-            "seed_metrics": [
-                {"accuracy": 0.95}, {"accuracy": 0.70}, {"accuracy": 0.90},
-                {"accuracy": 0.80}, {"accuracy": 0.85}
-            ]
-        })
+        record_high_var = self._make_claim_eligible_record(
+            payload={
+                "accuracy": 0.95,
+                "seed_metrics": [
+                    {"accuracy": 0.95},
+                    {"accuracy": 0.70},
+                    {"accuracy": 0.90},
+                    {"accuracy": 0.80},
+                    {"accuracy": 0.85},
+                ],
+            }
+        )
         assert not robust(record_high_var, cv_threshold=0.1)
 
 
@@ -426,50 +458,128 @@ class TestAlertPredicates:
     def test_alert_on_divergence(self) -> None:
         """Alert triggers on NaN/inf loss."""
         coord = Coordinate(
-            substrate="Digital", geometry="Feedforward", dynamics="Instantaneous",
-            plasticity="NullPlasticity", credit="Backprop", update="Euclidean", params={}
+            substrate="Digital",
+            geometry="Feedforward",
+            dynamics="Instantaneous",
+            plasticity="NullPlasticity",
+            credit="Backprop",
+            update="Euclidean",
+            params={},
         )
-        sched = Schedule(fidelity="L2", seed=42, n_seeds=5, epochs=10, batch_limit=100, budget_id="test")
-        prov = Provenance(env={}, dataset="test", dataset_version="1.0", code_sha="sha", policy="policy", links={})
+        sched = Schedule(
+            fidelity="L2",
+            seed=42,
+            n_seeds=5,
+            epochs=10,
+            batch_limit=100,
+            budget_id="test",
+        )
+        prov = Provenance(
+            env={},
+            dataset="test",
+            dataset_version="1.0",
+            code_sha="sha",
+            policy="policy",
+            links={},
+        )
         status = Status(
-            gate_verdict=GateVerdict.FAIL, defect="", cause=FailureCause.NUMERICAL,
-            severity=Severity.CRITICAL, quarantine=False, maturity=Maturity.L0,
-            uncertainty={}, reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0", ceec_link=None
+            gate_verdict=GateVerdict.FAIL,
+            defect="",
+            cause=FailureCause.NUMERICAL,
+            severity=Severity.CRITICAL,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
+            ceec_link=None,
         )
 
         # NaN loss
-        record_nan = Record.create(run_id="run1", coordinate=coord, schedule=sched, provenance=prov, status=status, payload={"loss": float("nan")})
+        record_nan = Record.create(
+            run_id="run1",
+            coordinate=coord,
+            schedule=sched,
+            provenance=prov,
+            status=status,
+            payload={"loss": float("nan")},
+        )
         alert = alert_on_divergence(record_nan)
         assert alert is not None
         assert alert.alert_type == "divergence"
         assert alert.severity == "critical"
 
         # Inf loss
-        record_inf = Record.create(run_id="run1", coordinate=coord, schedule=sched, provenance=prov, status=status, payload={"loss": float("inf")})
+        record_inf = Record.create(
+            run_id="run1",
+            coordinate=coord,
+            schedule=sched,
+            provenance=prov,
+            status=status,
+            payload={"loss": float("inf")},
+        )
         alert = alert_on_divergence(record_inf)
         assert alert is not None
 
         # Normal loss - no alert
-        record_normal = Record.create(run_id="run1", coordinate=coord, schedule=sched, provenance=prov, status=status, payload={"loss": 0.5})
+        record_normal = Record.create(
+            run_id="run1",
+            coordinate=coord,
+            schedule=sched,
+            provenance=prov,
+            status=status,
+            payload={"loss": 0.5},
+        )
         assert alert_on_divergence(record_normal) is None
 
     def test_alert_on_resource_exhaustion(self) -> None:
         """Alert triggers on OOM/timeout."""
         coord = Coordinate(
-            substrate="Digital", geometry="Feedforward", dynamics="Instantaneous",
-            plasticity="NullPlasticity", credit="Backprop", update="Euclidean", params={}
+            substrate="Digital",
+            geometry="Feedforward",
+            dynamics="Instantaneous",
+            plasticity="NullPlasticity",
+            credit="Backprop",
+            update="Euclidean",
+            params={},
         )
-        sched = Schedule(fidelity="L2", seed=42, n_seeds=5, epochs=10, batch_limit=100, budget_id="test")
-        prov = Provenance(env={}, dataset="test", dataset_version="1.0", code_sha="sha", policy="policy", links={})
+        sched = Schedule(
+            fidelity="L2",
+            seed=42,
+            n_seeds=5,
+            epochs=10,
+            batch_limit=100,
+            budget_id="test",
+        )
+        prov = Provenance(
+            env={},
+            dataset="test",
+            dataset_version="1.0",
+            code_sha="sha",
+            policy="policy",
+            links={},
+        )
         status = Status(
-            gate_verdict=GateVerdict.FAIL, defect="", cause=FailureCause.OOM,
-            severity=Severity.CRITICAL, quarantine=False, maturity=Maturity.L0,
-            uncertainty={}, reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0", ceec_link=None
+            gate_verdict=GateVerdict.FAIL,
+            defect="",
+            cause=FailureCause.OOM,
+            severity=Severity.CRITICAL,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
+            ceec_link=None,
         )
 
-        record = Record.create(run_id="run1", coordinate=coord, schedule=sched, provenance=prov, status=status, payload={"failure_signal": "oom"})
+        record = Record.create(
+            run_id="run1",
+            coordinate=coord,
+            schedule=sched,
+            provenance=prov,
+            status=status,
+            payload={"failure_signal": "oom"},
+        )
         alert = alert_on_resource_exhaustion(record)
         assert alert is not None
         assert alert.alert_type == "resource_exhaustion"
@@ -486,51 +596,97 @@ class TestComparisonGuards:
         data_origin: DataOrigin = DataOrigin.EXPLORATION,
     ) -> Record:
         coord = Coordinate(
-            substrate="Digital", geometry="Feedforward", dynamics="Instantaneous",
-            plasticity="NullPlasticity", credit="Backprop", update="Euclidean", params={}
+            substrate="Digital",
+            geometry="Feedforward",
+            dynamics="Instantaneous",
+            plasticity="NullPlasticity",
+            credit="Backprop",
+            update="Euclidean",
+            params={},
         )
-        sched = Schedule(fidelity="L2", seed=42, n_seeds=5, epochs=10, batch_limit=100, budget_id="test")
+        sched = Schedule(
+            fidelity="L2",
+            seed=42,
+            n_seeds=5,
+            epochs=10,
+            batch_limit=100,
+            budget_id="test",
+        )
         prov = Provenance(
             env={"hardware_class": hardware_class},
-            dataset="test", dataset_version="1.0", code_sha="sha",
-            policy="policy", links={"cost_budget": f'{{"kind": "{budget_kind.value}", "limit": {budget_limit}}}'},
-            data_origin=data_origin
+            dataset="test",
+            dataset_version="1.0",
+            code_sha="sha",
+            policy="policy",
+            links={
+                "cost_budget": f'{{"kind": "{budget_kind.value}", "limit": {budget_limit}}}'
+            },
+            data_origin=data_origin,
         )
         status = Status(
-            gate_verdict=GateVerdict.PASS_, defect="", cause=FailureCause.UNKNOWN,
-            severity=Severity.LOW, quarantine=False, maturity=Maturity.L2,
-            uncertainty={}, reproducibility=ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE,
-            assessment_procedure_version="1.0", ceec_link=None
+            gate_verdict=GateVerdict.PASS_,
+            defect="",
+            cause=FailureCause.UNKNOWN,
+            severity=Severity.LOW,
+            quarantine=False,
+            maturity=Maturity.L2,
+            uncertainty={},
+            reproducibility=ReproducibilityClass.COMPUTATIONALLY_REPRODUCIBLE,
+            assessment_procedure_version="1.0",
+            ceec_link=None,
         )
-        return Record.create(run_id="run1", coordinate=coord, schedule=sched, provenance=prov, status=status, payload={"accuracy": 0.9})
+        return Record.create(
+            run_id="run1",
+            coordinate=coord,
+            schedule=sched,
+            provenance=prov,
+            status=status,
+            payload={"accuracy": 0.9},
+        )
 
     def test_same_hardware_class_for_walltime(self) -> None:
         """Same hardware class required for walltime comparisons."""
-        rec_a = self._make_record_with_budget(CostBudgetKind.WALLTIME_S, 60.0, "gpu_a100")
-        rec_b = self._make_record_with_budget(CostBudgetKind.WALLTIME_S, 60.0, "gpu_a100")
-        rec_c = self._make_record_with_budget(CostBudgetKind.WALLTIME_S, 60.0, "gpu_h100")
+        rec_a = self._make_record_with_budget(
+            CostBudgetKind.WALLTIME_S, 60.0, "gpu_a100"
+        )
+        rec_b = self._make_record_with_budget(
+            CostBudgetKind.WALLTIME_S, 60.0, "gpu_a100"
+        )
+        rec_c = self._make_record_with_budget(
+            CostBudgetKind.WALLTIME_S, 60.0, "gpu_h100"
+        )
 
         assert same_hardware_class(rec_a, rec_b)
         assert not same_hardware_class(rec_a, rec_c)
 
     def test_valid_comparison_checks_all_guards(self) -> None:
         """Valid comparison checks hardware, data origin, budget tier, claim eligibility."""
-        rec_a = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100, "gpu_a100")
-        rec_b = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100, "gpu_a100")
+        rec_a = self._make_record_with_budget(
+            CostBudgetKind.EVAL_COUNT, 100, "gpu_a100"
+        )
+        rec_b = self._make_record_with_budget(
+            CostBudgetKind.EVAL_COUNT, 100, "gpu_a100"
+        )
 
         valid, violations = valid_comparison(rec_a, rec_b)
         assert valid
         assert len(violations) == 0
 
         # Different hardware
-        rec_c = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100, "gpu_h100")
+        rec_c = self._make_record_with_budget(
+            CostBudgetKind.EVAL_COUNT, 100, "gpu_h100"
+        )
         valid, violations = valid_comparison(rec_a, rec_c, require_same_hardware=True)
         assert not valid
         assert "HARDWARE_CLASS_MISMATCH" in violations
 
         # Different data origin
-        rec_d = self._make_record_with_budget(CostBudgetKind.EVAL_COUNT, 100, "gpu_a100", DataOrigin.POLICY_SELECTED)
-        valid, violations = valid_comparison(rec_a, rec_d, require_same_data_origin=True)
+        rec_d = self._make_record_with_budget(
+            CostBudgetKind.EVAL_COUNT, 100, "gpu_a100", DataOrigin.POLICY_SELECTED
+        )
+        valid, violations = valid_comparison(
+            rec_a, rec_d, require_same_data_origin=True
+        )
         assert not valid
         assert "DATA_ORIGIN_MISMATCH" in violations
 
@@ -569,9 +725,7 @@ class TestStoreIntegration:
                 # Check artifacts table exists
                 conn = store._conn
                 assert conn is not None
-                result = conn.execute(
-                    "SELECT COUNT(*) FROM artifacts"
-                ).fetchone()
+                result = conn.execute("SELECT COUNT(*) FROM artifacts").fetchone()
                 assert result is not None
 
     def test_store_supports_vector_index(self) -> None:
@@ -583,14 +737,15 @@ class TestStoreIntegration:
             with RecordStore(config) as store:
                 conn = store._conn
                 assert conn is not None
-                result = conn.execute(
-                    "SELECT COUNT(*) FROM vector_index"
-                ).fetchone()
+                result = conn.execute("SELECT COUNT(*) FROM vector_index").fetchone()
                 assert result is not None
 
     def test_append_with_artifacts_atomic(self) -> None:
         """append_with_artifacts is atomic (record + artifacts)."""
-        from computronium.experiment.evidence.artifacts import ArtifactInput, ArtifactRole
+        from computronium.experiment.evidence.artifacts import (
+            ArtifactInput,
+            ArtifactRole,
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "test.duckdb"
@@ -600,20 +755,49 @@ class TestStoreIntegration:
                 run_id = store.create_run()
 
                 coord = Coordinate(
-                    substrate="Digital", geometry="Feedforward", dynamics="Instantaneous",
-                    plasticity="NullPlasticity", credit="Backprop", update="Euclidean", params={}
+                    substrate="Digital",
+                    geometry="Feedforward",
+                    dynamics="Instantaneous",
+                    plasticity="NullPlasticity",
+                    credit="Backprop",
+                    update="Euclidean",
+                    params={},
                 )
-                sched = Schedule(fidelity="L1", seed=42, n_seeds=1, epochs=1, batch_limit=10, budget_id="test")
-                prov = Provenance(env={}, dataset="test", dataset_version="1.0", code_sha="sha", policy="policy", links={})
+                sched = Schedule(
+                    fidelity="L1",
+                    seed=42,
+                    n_seeds=1,
+                    epochs=1,
+                    batch_limit=10,
+                    budget_id="test",
+                )
+                prov = Provenance(
+                    env={},
+                    dataset="test",
+                    dataset_version="1.0",
+                    code_sha="sha",
+                    policy="policy",
+                    links={},
+                )
                 status = Status(
-                    gate_verdict=GateVerdict.PASS_, defect="", cause=FailureCause.UNKNOWN,
-                    severity=Severity.LOW, quarantine=False, maturity=Maturity.L1,
-                    uncertainty={}, reproducibility=ReproducibilityClass.REPLAYABLE,
-                    assessment_procedure_version="1.0", ceec_link=None
+                    gate_verdict=GateVerdict.PASS_,
+                    defect="",
+                    cause=FailureCause.UNKNOWN,
+                    severity=Severity.LOW,
+                    quarantine=False,
+                    maturity=Maturity.L1,
+                    uncertainty={},
+                    reproducibility=ReproducibilityClass.REPLAYABLE,
+                    assessment_procedure_version="1.0",
+                    ceec_link=None,
                 )
                 record = Record.create(
-                    run_id=run_id, coordinate=coord, schedule=sched, provenance=prov,
-                    status=status, payload={"accuracy": 0.9}
+                    run_id=run_id,
+                    coordinate=coord,
+                    schedule=sched,
+                    provenance=prov,
+                    status=status,
+                    payload={"accuracy": 0.9},
                 )
 
                 artifacts = [

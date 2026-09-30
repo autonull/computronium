@@ -1,0 +1,75 @@
+[
+  {
+    "name": "evolution",
+    "kind": "evolution",
+    "description": "Evolutionary search with mutation and crossover",
+    "params": {
+      "population_size": 20,
+      "mutation_rate": 0.1,
+      "crossover_rate": 0.5
+    }
+  },
+  {
+    "name": "model_based_gp",
+    "kind": "model_based",
+    "description": "Model-based optimization using Optuna GP sampler",
+    "params": {
+      "sampler": "gp",
+      "n_startup_trials": 10
+    }
+  },
+  {
+    "name": "model_based_tpe",
+    "kind": "model_based",
+    "description": "Model-based optimization using Optuna TPE sampler",
+    "params": {
+      "sampler": "tpe",
+      "n_startup_trials": 10
+    }
+  },
+  {
+    "name": "round_robin_grid",
+    "kind": "round_robin_grid",
+    "description": "Round-robin grid traversal for systematic enumeration",
+    "params": {}
+  },
+  {
+    "name": "strategy_progression",
+    "kind": "strategy_progression",
+    "description": "Progressive strategy: exploration \u2192 exploitation \u2192 refinement",
+    "params": {}
+  },
+  {
+    "name": "stratified_random",
+    "kind": "stratified_random",
+    "description": "Stratified random sampling across 6 axes for coverage",
+    "params": {
+      "per_stratum": 50
+    }
+  },
+  {
+    "name": "synthesis",
+    "kind": "synthesis",
+    "description": "Synthesis of multiple policies with weighted combination",
+    "params": {
+      "weights": [
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  {
+    "name": "trainer_driven",
+    "kind": "trainer_driven",
+    "description": "Trainer-driven proposals from external learned policy",
+    "params": {}
+  },
+  {
+    "name": "uniform_random",
+    "kind": "uniform_random",
+    "description": "Uniform random sampling over all candidates",
+    "params": {}
+  }
+]

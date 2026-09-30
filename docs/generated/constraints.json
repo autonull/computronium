@@ -1,0 +1,165 @@
+[
+  {
+    "name": "apply_constraints_max_hidden",
+    "kind": "hard",
+    "description": "Max hidden dim from apply_constraints",
+    "params": null,
+    "predicate": "Le(left=Var(name='hidden_dim'), right=Const(value=4096))",
+    "proof_kind": "resource",
+    "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "apply_constraints_max_layers",
+    "kind": "hard",
+    "description": "Max layers from apply_constraints",
+    "params": null,
+    "predicate": "Le(left=Var(name='num_layers'), right=Const(value=32))",
+    "proof_kind": "resource",
+    "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "apply_constraints_max_steps",
+    "kind": "hard",
+    "description": "Max settling steps from apply_constraints",
+    "params": null,
+    "predicate": "Le(left=Var(name='max_steps'), right=Const(value=500))",
+    "proof_kind": "resource",
+    "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "classification_requires_classifier_head",
+    "kind": "void",
+    "description": "Classification tasks require output_dim matching num_classes",
+    "params": null,
+    "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"classification\" implies output_dim > 1'))",
+    "proof_kind": "type_mismatch",
+    "origin": "TASK_FENCE"
+  },
+  {
+    "name": "credit_update_compatibility",
+    "kind": "void",
+    "description": "Backprop credit requires Euclidean or compatible update rule",
+    "params": null,
+    "predicate": "Eq(left=Var(name='not (credit'), right=Const(value='\"backprop\" and update not in [\"euclidean\", \"muon\", \"natural_gradient\", \"riemannian_orthogonal\"])'))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "dynamics_plasticity_compatibility",
+    "kind": "void",
+    "description": "Instantaneous dynamics cannot use fast-weight plasticity",
+    "params": null,
+    "predicate": "Eq(left=Var(name='not (dynamics'), right=Const(value='\"instantaneous\" and plasticity == \"fast_weight\")'))",
+    "proof_kind": "type_mismatch",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "fidelity_schedule_consistency",
+    "kind": "hard",
+    "description": "L2 fidelity requires n_seeds >= 5",
+    "params": null,
+    "predicate": "Eq(left=Var(name='fidelity'), right=Const(value='\"L2\" implies n_seeds >= 5'))",
+    "proof_kind": "logical",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "gpu_memory_budget",
+    "kind": "hard",
+    "description": "Model must fit in GPU memory",
+    "params": {
+      "max_gpu_memory_gb": 80
+    },
+    "predicate": "Le(left=Var(name='estimated_gpu_memory_gb'), right=Const(value='max_gpu_memory_gb'))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "language_modeling_requires_causal",
+    "kind": "void",
+    "description": "Language modeling requires causal attention or recurrent geometry",
+    "params": null,
+    "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"language_modeling\" implies geometry in [\"causal_transformer\", \"recurrent\"]'))",
+    "proof_kind": "type_mismatch",
+    "origin": "TASK_FENCE"
+  },
+  {
+    "name": "max_hidden_dim",
+    "kind": "void",
+    "description": "Hidden dimension exceeds hardware limits",
+    "params": null,
+    "predicate": "Le(left=Var(name='hidden_dim'), right=Const(value=8192))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "max_layers",
+    "kind": "void",
+    "description": "Layer count exceeds hardware limits",
+    "params": null,
+    "predicate": "Le(left=Var(name='num_layers'), right=Const(value=64))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "max_steps",
+    "kind": "void",
+    "description": "Settling steps exceed budget",
+    "params": null,
+    "predicate": "Le(left=Var(name='max_steps'), right=Const(value=1000))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "operating_point_max_epochs",
+    "kind": "operating_point",
+    "description": "Maximum epochs per operating point to prevent overfitting",
+    "params": {
+      "max_epochs": 100
+    },
+    "predicate": "Le(left=Var(name='epochs'), right=Const(value=100))",
+    "proof_kind": "resource",
+    "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "operating_point_min_seeds",
+    "kind": "operating_point",
+    "description": "Minimum seeds per operating point for statistical validity",
+    "params": {
+      "min_seeds": 3
+    },
+    "predicate": "Ge(left=Var(name='n_seeds'), right=Const(value=3))",
+    "proof_kind": "resource",
+    "origin": "APPLY_CONSTRAINTS"
+  },
+  {
+    "name": "param_budget_fairness",
+    "kind": "fairness",
+    "description": "Param budget tolerance 25% for fair comparison across axes",
+    "params": {
+      "tolerance": 0.25
+    },
+    "predicate": "Le(left=Var(name='param_count'), right=Const(value='param_budget * 1.25'))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "substrate_geometry_compatibility",
+    "kind": "void",
+    "description": "Digital substrate incompatible with analog-only geometries",
+    "params": null,
+    "predicate": "Eq(left=Var(name='not (substrate'), right=Const(value='\"digital\" and geometry in [\"analog\", \"photonic\", \"quantum\"])'))",
+    "proof_kind": "logical",
+    "origin": "DECLARED"
+  },
+  {
+    "name": "training_time_budget",
+    "kind": "hard",
+    "description": "Training must complete within time budget",
+    "params": {
+      "max_hours": 24
+    },
+    "predicate": "Le(left=Var(name='estimated_hours'), right=Const(value='max_hours'))",
+    "proof_kind": "resource",
+    "origin": "DECLARED"
+  }
+]

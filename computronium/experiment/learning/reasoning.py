@@ -1,6 +1,8 @@
 """Reasoning and literature records for the learning system.
 
 Implements WP6 deliverable: hypothesis/literature records with mandatory provenance linkage (R57, Q15).
+R57 Remediation: hypotheses/literature persisted as records (payload kinds "hypothesis"/"literature")
+with ProvenanceLink ↔ record-id cross-links; S1 Frame links motivating hypothesis/literature into run provenance.
 """
 
 from __future__ import annotations
@@ -10,9 +12,26 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from computronium.experiment.schema.coordinate import Coordinate
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    DataOrigin,
+    Provenance,
+    Schedule,
+)
+from computronium.experiment.schema.record import (
+    FailureCause,
+    GateVerdict,
+    Maturity,
+    Record,
+    ReproducibilityClass,
+    Severity,
+    Status,
+)
+
+if TYPE_CHECKING:
+    from computronium.experiment.evidence.store import RecordStore
 
 
 class HypothesisStatus(StrEnum):
@@ -396,7 +415,12 @@ class LiteratureRecord:
 
 
 class ReasoningStore:
-    """Store for hypotheses and literature records with provenance."""
+    """Store for hypotheses and literature records with provenance.
+
+    L10/K10: No module-level singleton. Instances are created per-run and
+    injected via SystemContext. Persistence to RecordStore uses payload kinds
+    "hypothesis" and "literature" with ProvenanceLink cross-links.
+    """
 
     def __init__(self) -> None:
         self._hypotheses: dict[str, Hypothesis] = {}
@@ -504,23 +528,241 @@ class ReasoningStore:
             for k, v in data.get("literature", {}).items()
         }
 
+    # =========================================================================
+    # Persistence to RecordStore (R57)
+    # =========================================================================
 
-# Global reasoning store
-_REASONING_STORE: ReasoningStore | None = None
+    def persist_hypothesis(
+        self,
+        store: RecordStore,
+        hypothesis: Hypothesis,
+        run_id: str,
+    ) -> Record:
+        """Persist a hypothesis as a record with payload.kind = "hypothesis".
 
+        Creates a record linking the hypothesis to supporting/contradicting records
+        via ProvenanceLink. The hypothesis_id becomes the record_id for traceability.
+        """
+        # Build payload with hypothesis data
+        payload = {
+            "kind": "hypothesis",
+            "hypothesis": hypothesis.to_dict(),
+        }
 
-def get_reasoning_store() -> ReasoningStore:
-    """Get or create the global reasoning store."""
-    global _REASONING_STORE  # noqa: PLW0603 - singleton pattern
-    if _REASONING_STORE is None:
-        _REASONING_STORE = ReasoningStore()
-    return _REASONING_STORE
+        # Create minimal coordinate for the hypothesis record
+        coord = Coordinate(
+            substrate="digital",
+            geometry="feedforward",
+            dynamics="instantaneous",
+            plasticity="null",
+            credit="gradient",
+            update="euclidean",
+            params={},
+        )
 
+        # Create provenance with run_id and code_hash from hypothesis
+        provenance = Provenance(
+            env={},
+            dataset="",
+            dataset_version="",
+            code_sha=hypothesis.provenance.code_hash,
+            policy="reasoning",
+            links={
+                "hypothesis_id": hypothesis.hypothesis_id,
+                "supporting_records": ",".join(
+                    hypothesis.provenance.supporting_records
+                ),
+                "contradicting_records": ",".join(
+                    hypothesis.provenance.contradicting_records
+                ),
+            },
+            data_origin=DataOrigin.EXPLORATION,
+            training_tasks=(),
+            transfer_source_ids=(),
+            transfer_cutoff=None,
+            target_task="",
+            transfer_mode=None,
+        )
 
-def reset_reasoning_store() -> None:
-    """Reset the global reasoning store (for testing)."""
-    global _REASONING_STORE  # noqa: PLW0603 - singleton pattern
-    _REASONING_STORE = None
+        # Create status
+        status = Status(
+            gate_verdict=GateVerdict.PASS_,
+            defect="",
+            cause=FailureCause.UNKNOWN,
+            severity=Severity.LOW,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
+            ceec_link=None,
+        )
+
+        # Create schedule
+        schedule = Schedule(
+            fidelity="L0",
+            seed=0,
+            n_seeds=1,
+            epochs=0,
+            batch_limit=0,
+            budget_id="",
+        )
+
+        record = Record(
+            record_id=f"hyp_{hypothesis.hypothesis_id}",
+            seq=0,
+            run_id=run_id,
+            schema_version=1,
+            cell_key=hashlib.sha256(hypothesis.statement.encode()).hexdigest()[:16],
+            measurement_key=hashlib.sha256(
+                f"{hypothesis.hypothesis_id}|{run_id}".encode()
+            ).hexdigest()[:16],
+            substrate=coord.substrate,
+            geometry=coord.geometry,
+            dynamics=coord.dynamics,
+            plasticity=coord.plasticity,
+            credit=coord.credit,
+            update=coord.update,
+            params=coord.params,
+            schedule=schedule,
+            provenance=provenance,
+            status=status,
+            payload=payload,
+            unknown=None,
+        )
+
+        return store.append(record)
+
+    def persist_literature(
+        self,
+        store: RecordStore,
+        literature: LiteratureRecord,
+        run_id: str,
+    ) -> Record:
+        """Persist a literature record as a record with payload.kind = "literature"."""
+        # Build payload with literature data
+        payload = {
+            "kind": "literature",
+            "literature": literature.to_dict(),
+        }
+
+        # Create minimal coordinate
+        coord = Coordinate(
+            substrate="digital",
+            geometry="feedforward",
+            dynamics="instantaneous",
+            plasticity="null",
+            credit="gradient",
+            update="euclidean",
+            params={},
+        )
+
+        # Create provenance
+        provenance = Provenance(
+            env={},
+            dataset="",
+            dataset_version="",
+            code_sha=literature.provenance.code_hash,
+            policy="reasoning",
+            links={
+                "literature_id": literature.literature_id,
+                "related_hypotheses": ",".join(literature.related_hypotheses),
+            },
+            data_origin=DataOrigin.EXPLORATION,
+            training_tasks=(),
+            transfer_source_ids=(),
+            transfer_cutoff=None,
+            target_task="",
+            transfer_mode=None,
+        )
+
+        # Create status
+        status = Status(
+            gate_verdict=GateVerdict.PASS_,
+            defect="",
+            cause=FailureCause.UNKNOWN,
+            severity=Severity.LOW,
+            quarantine=False,
+            maturity=Maturity.L0,
+            uncertainty={},
+            reproducibility=ReproducibilityClass.REPLAYABLE,
+            assessment_procedure_version="1.0",
+            ceec_link=None,
+        )
+
+        # Create schedule
+        schedule = Schedule(
+            fidelity="L0",
+            seed=0,
+            n_seeds=1,
+            epochs=0,
+            batch_limit=0,
+            budget_id="",
+        )
+
+        record = Record(
+            record_id=f"lit_{literature.literature_id}",
+            seq=0,
+            run_id=run_id,
+            schema_version=1,
+            cell_key=hashlib.sha256(literature.title.encode()).hexdigest()[:16],
+            measurement_key=hashlib.sha256(
+                f"{literature.literature_id}|{run_id}".encode()
+            ).hexdigest()[:16],
+            substrate=coord.substrate,
+            geometry=coord.geometry,
+            dynamics=coord.dynamics,
+            plasticity=coord.plasticity,
+            credit=coord.credit,
+            update=coord.update,
+            params=coord.params,
+            schedule=schedule,
+            provenance=provenance,
+            status=status,
+            payload=payload,
+            unknown=None,
+        )
+
+        return store.append(record)
+
+    def load_from_store(
+        self,
+        store: RecordStore,
+        run_id: str | None = None,
+    ) -> tuple[int, int]:
+        """Load hypotheses and literature from the record store.
+
+        Queries records with payload.kind in {"hypothesis", "literature"}.
+
+        Returns:
+            Tuple of (hypotheses_loaded, literature_loaded).
+        """
+        hyp_loaded = 0
+        lit_loaded = 0
+
+        # Load hypotheses
+        hyp_records = store.query_records_by_payload_kind(
+            payload_kind="hypothesis", run_id=run_id
+        )
+        for record in hyp_records:
+            hyp_data = record.payload.get("hypothesis")
+            if hyp_data:
+                hypothesis = Hypothesis.from_dict(hyp_data)
+                self.add_hypothesis(hypothesis)
+                hyp_loaded += 1
+
+        # Load literature
+        lit_records = store.query_records_by_payload_kind(
+            payload_kind="literature", run_id=run_id
+        )
+        for record in lit_records:
+            lit_data = record.payload.get("literature")
+            if lit_data:
+                literature = LiteratureRecord.from_dict(lit_data)
+                self.add_literature(literature)
+                lit_loaded += 1
+
+        return hyp_loaded, lit_loaded
 
 
 @dataclass(frozen=True, slots=True)
@@ -611,6 +853,4 @@ __all__ = [
     "ReasoningStore",
     "create_hypothesis",
     "create_literature_record",
-    "get_reasoning_store",
-    "reset_reasoning_store",
 ]

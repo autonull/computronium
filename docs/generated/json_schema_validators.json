@@ -1,0 +1,1096 @@
+{
+  "substrate.analog": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: analog",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.complex": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: complex",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.digital": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: digital",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.memristive": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: memristive",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.neuromorphic": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: neuromorphic",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.optical": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: optical",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.quantum": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: quantum",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.sparse": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: sparse",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "substrate.ternary": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: ternary",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "geometry.attention": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: attention",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "num_heads": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 32,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "num_heads"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.causal_transformer": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: causal_transformer",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "hidden_dim": {
+        "type": "number",
+        "minimum": 8,
+        "maximum": 4096,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "num_heads": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 32,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "seq_len": {
+        "type": "number",
+        "minimum": 16,
+        "maximum": 4096,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "hidden_dim",
+      "num_heads",
+      "seq_len"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.conv": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: conv",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "conv_channels": {
+        "type": "number",
+        "minimum": 4,
+        "maximum": 256,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "kernel_size": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 7,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "conv_channels",
+      "kernel_size"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.feedforward": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: feedforward",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "hidden_dim": {
+        "type": "number",
+        "minimum": 8,
+        "maximum": 4096,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "num_layers": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 12,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "hidden_dim",
+      "num_layers"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.graph": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: graph",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "hidden_dim": {
+        "type": "number",
+        "minimum": 8,
+        "maximum": 4096,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "hidden_dim"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.nca": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: nca",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "grid_hw": {
+        "type": "number",
+        "minimum": 4,
+        "maximum": 64,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "grid_hw"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.ntm": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: ntm",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "mem_slots": {
+        "type": "number",
+        "minimum": 4,
+        "maximum": 128,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "mem_width": {
+        "type": "number",
+        "minimum": 4,
+        "maximum": 128,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "mem_slots",
+      "mem_width"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.recurrent": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: recurrent",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "hidden_dim": {
+        "type": "number",
+        "minimum": 8,
+        "maximum": 4096,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "num_layers": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 12,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "hidden_dim",
+      "num_layers"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.spatial_lattice": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: spatial_lattice",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "lattice_dims": {
+        "type": "number",
+        "minimum": 2,
+        "maximum": 32,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "lattice_dims"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.tile": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: tile",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "neurons_per_tile": {
+        "type": "number",
+        "minimum": 2,
+        "maximum": 64,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "tiles_per_layer": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "neurons_per_tile",
+      "tiles_per_layer"
+    ],
+    "additionalProperties": false
+  },
+  "geometry.tile_mesh": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: tile_mesh",
+    "type": "object",
+    "properties": {
+      "input_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "output_dim": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8192,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "neurons_per_tile": {
+        "type": "number",
+        "minimum": 2,
+        "maximum": 64,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "tiles_per_layer": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 8,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "input_dim",
+      "output_dim",
+      "neurons_per_tile",
+      "tiles_per_layer"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.diffusion": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: diffusion",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.energy_minimization": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: energy_minimization",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "convergence_threshold": {
+        "type": "number",
+        "minimum": 1e-06,
+        "maximum": 0.01,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps",
+      "convergence_threshold"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.error_predictive_coding": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: error_predictive_coding",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "convergence_threshold": {
+        "type": "number",
+        "minimum": 1e-06,
+        "maximum": 0.01,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps",
+      "convergence_threshold"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.instantaneous": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: instantaneous",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "dynamics.lazy": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: lazy",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "dynamics.pc_alm": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: pc_alm",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.predictive_settling": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: predictive_settling",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "convergence_threshold": {
+        "type": "number",
+        "minimum": 1e-06,
+        "maximum": 0.01,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps",
+      "convergence_threshold"
+    ],
+    "additionalProperties": false
+  },
+  "dynamics.spike_integration": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: spike_integration",
+    "type": "object",
+    "properties": {
+      "max_steps": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 200,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "max_steps"
+    ],
+    "additionalProperties": false
+  },
+  "plasticity.conflict_adaptive": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: conflict_adaptive",
+    "type": "object",
+    "properties": {
+      "trace_decay": {
+        "type": "number",
+        "minimum": 0.5,
+        "maximum": 1.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "conflict_threshold": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 0.9,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "trace_decay",
+      "conflict_threshold"
+    ],
+    "additionalProperties": false
+  },
+  "plasticity.fast_weights": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: fast_weights",
+    "type": "object",
+    "properties": {
+      "fast_weight_dim": {
+        "type": "number",
+        "minimum": 64,
+        "maximum": 2048,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "fast_weight_dim"
+    ],
+    "additionalProperties": false
+  },
+  "plasticity.null": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: null",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "plasticity.routing": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: routing",
+    "type": "object",
+    "properties": {
+      "gate_dim": {
+        "type": "number",
+        "minimum": 8,
+        "maximum": 512,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "gate_dim"
+    ],
+    "additionalProperties": false
+  },
+  "plasticity.rule_state": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: rule_state",
+    "type": "object",
+    "properties": {
+      "num_operators": {
+        "type": "number",
+        "minimum": 2,
+        "maximum": 32,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "num_operators"
+    ],
+    "additionalProperties": false
+  },
+  "plasticity.substrate_coupled": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: substrate_coupled",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "plasticity.temporal_psi": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: temporal_psi",
+    "type": "object",
+    "properties": {
+      "trace_decay": {
+        "type": "number",
+        "minimum": 0.5,
+        "maximum": 1.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "trace_decay"
+    ],
+    "additionalProperties": false
+  },
+  "credit.gradient": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: gradient",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "credit.homeostatic": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: homeostatic",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "credit.local_contrastive": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: local_contrastive",
+    "type": "object",
+    "properties": {
+      "ema_beta": {
+        "type": "number",
+        "minimum": 0.9,
+        "maximum": 0.999,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "contrast_threshold": {
+        "type": "number",
+        "minimum": 0.5,
+        "maximum": 10.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "contrast_objective": {
+        "type": "string",
+        "enum": [
+          "unknown"
+        ],
+        "description": "Axis kind: categorical, Availability: None"
+      }
+    },
+    "required": [
+      "ema_beta",
+      "contrast_threshold",
+      "contrast_objective"
+    ],
+    "additionalProperties": false
+  },
+  "credit.local_goodness": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: local_goodness",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "credit.pc_alm": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: pc_alm",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "credit.pepita": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: pepita",
+    "type": "object",
+    "properties": {
+      "feedback_scale": {
+        "type": "number",
+        "minimum": 0.001,
+        "maximum": 10.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "feedback_scale"
+    ],
+    "additionalProperties": false
+  },
+  "credit.random_projections": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: random_projections",
+    "type": "object",
+    "properties": {
+      "feedback_scale": {
+        "type": "number",
+        "minimum": 0.001,
+        "maximum": 10.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "feedback_scale"
+    ],
+    "additionalProperties": false
+  },
+  "credit.target_inversion": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: target_inversion",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "credit.temporal_trace": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: temporal_trace",
+    "type": "object",
+    "properties": {
+      "a_plus": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 5.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "a_minus": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 5.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "tau_pre": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 2.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "tau_post": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 2.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "a_plus",
+      "a_minus",
+      "tau_pre",
+      "tau_post"
+    ],
+    "additionalProperties": false
+  },
+  "credit.thermodynamic_contrast": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: thermodynamic_contrast",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "update.adam": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: adam",
+    "type": "object",
+    "properties": {
+      "beta2": {
+        "type": "number",
+        "minimum": 0.9,
+        "maximum": 0.9999,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "eps": {
+        "type": "number",
+        "minimum": 1e-10,
+        "maximum": 0.0001,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "beta2",
+      "eps"
+    ],
+    "additionalProperties": false
+  },
+  "update.elastic_consolidation": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: elastic_consolidation",
+    "type": "object",
+    "properties": {
+      "ewc_lambda": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 10000.0,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "fisher_damping": {
+        "type": "number",
+        "minimum": 1e-06,
+        "maximum": 1.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "ewc_lambda",
+      "fisher_damping"
+    ],
+    "additionalProperties": false
+  },
+  "update.euclidean": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: euclidean",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "update.lion": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: lion",
+    "type": "object",
+    "properties": {
+      "beta2": {
+        "type": "number",
+        "minimum": 0.9,
+        "maximum": 0.9999,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "eps": {
+        "type": "number",
+        "minimum": 1e-10,
+        "maximum": 0.0001,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "beta2",
+      "eps"
+    ],
+    "additionalProperties": false
+  },
+  "update.local_adam": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: local_adam",
+    "type": "object",
+    "properties": {
+      "beta2": {
+        "type": "number",
+        "minimum": 0.9,
+        "maximum": 0.9999,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "eps": {
+        "type": "number",
+        "minimum": 1e-10,
+        "maximum": 0.0001,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "beta2",
+      "eps"
+    ],
+    "additionalProperties": false
+  },
+  "update.mean_norm": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: mean_norm",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "update.muon": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: muon",
+    "type": "object",
+    "properties": {
+      "ortho_steps": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "momentum": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 0.99,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "ortho_steps",
+      "momentum"
+    ],
+    "additionalProperties": false
+  },
+  "update.natural_gradient": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: natural_gradient",
+    "type": "object",
+    "properties": {
+      "fisher_damping": {
+        "type": "number",
+        "minimum": 1e-06,
+        "maximum": 1.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "fisher_damping"
+    ],
+    "additionalProperties": false
+  },
+  "update.ortho_adam": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: ortho_adam",
+    "type": "object",
+    "properties": {
+      "beta2": {
+        "type": "number",
+        "minimum": 0.9,
+        "maximum": 0.9999,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "eps": {
+        "type": "number",
+        "minimum": 1e-10,
+        "maximum": 0.0001,
+        "description": "Axis kind: structural, Availability: None"
+      },
+      "ortho_lr": {
+        "type": "number",
+        "minimum": 1e-05,
+        "maximum": 1.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "beta2",
+      "eps",
+      "ortho_lr"
+    ],
+    "additionalProperties": false
+  },
+  "update.riemannian_orthogonal": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: riemannian_orthogonal",
+    "type": "object",
+    "properties": {
+      "ortho_steps": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 10,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "ortho_steps"
+    ],
+    "additionalProperties": false
+  },
+  "update.role_split": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: role_split",
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "additionalProperties": false
+  },
+  "update.spectral_constrained": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AxisSpec: spectral_constrained",
+    "type": "object",
+    "properties": {
+      "spectral_norm": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 10.0,
+        "description": "Axis kind: structural, Availability: None"
+      }
+    },
+    "required": [
+      "spectral_norm"
+    ],
+    "additionalProperties": false
+  }
+}

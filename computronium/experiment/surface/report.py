@@ -7,7 +7,7 @@ for R73 round-trip.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -21,6 +21,7 @@ from computronium.experiment.evidence.claims import (
     check_all_alerts,
     filter_promoted,
 )
+from computronium.experiment.schema.record import GateVerdict
 
 __all__ = [
     "ExportBundle",
@@ -30,6 +31,7 @@ __all__ = [
     "export_to_parquet",
     "generate_run_report",
     "load_export_bundle",
+    "narrative_handoff_summary",
 ]
 
 
@@ -72,13 +74,8 @@ class ReportGenerator:
 
     def run_summary(self, run_id: str) -> RunSummary | None:
         """Get summary for a single run."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
-        row = self._store._conn.execute(
-            "SELECT * FROM runs WHERE run_id = ?", [run_id]
-        ).fetchone()
-        if row is None:
+        info = self._store.query_run(run_id)
+        if info is None:
             return None
 
         record_count = self._store.count_records(run_id)
@@ -90,14 +87,14 @@ class ReportGenerator:
         promoted_count = sum(1 for r in promoted_records if r.run_id == run_id)
 
         return RunSummary(
-            run_id=row[0],
-            spec=json.loads(row[1]) if row[1] else None,
-            spec_version=row[2],
-            status=row[3],
-            budget_consumed_s=row[4],
-            replay_hash=row[5],
-            started_at=row[6],
-            finished_at=row[7],
+            run_id=info.run_id,
+            spec=info.spec,
+            spec_version=info.spec_version,
+            status=info.status,
+            budget_consumed_s=info.budget_consumed_s,
+            replay_hash=info.replay_hash,
+            started_at=info.started_at,
+            finished_at=info.finished_at,
             record_count=record_count,
             claim_eligible_count=claim_eligible_count,
             promoted_count=promoted_count,
@@ -105,15 +102,9 @@ class ReportGenerator:
 
     def list_runs(self) -> list[RunSummary]:
         """List all runs with summaries."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
-        rows = self._store._conn.execute(
-            "SELECT run_id FROM runs ORDER BY started_at DESC"
-        ).fetchall()
         results: list[RunSummary] = []
-        for row in rows:
-            summary = self.run_summary(row[0])
+        for info in self._store.query_runs():
+            summary = self.run_summary(info.run_id)
             if summary is not None:
                 results.append(summary)
         return results
@@ -134,22 +125,8 @@ class ReportGenerator:
         self, run_id: str | None = None
     ) -> list[tuple[Record, list[Alert]]]:
         """Get records with their alert status."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
-        conditions = []
-        params = []
-        if run_id:
-            conditions.append("run_id = ?")
-            params.append(run_id)
-
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query = f"SELECT * FROM records{where_clause} ORDER BY seq"  # noqa: S608 - parameterized query
-        rows = self._store._conn.execute(query, params).fetchall()
-
         results = []
-        for row in rows:
-            record = self._store._row_to_record(row)
+        for record in self._store.query_records(run_id=run_id):
             alerts = check_all_alerts(record)
             if alerts:
                 results.append((record, alerts))
@@ -171,9 +148,6 @@ class ReportGenerator:
         Returns:
             List of dicts with record_id, coordinate, and objective values
         """
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
         eligible = self.claim_eligible_records(run_id)
         if not eligible:
             return []
@@ -240,61 +214,180 @@ class ReportGenerator:
 
     def maturity_distribution(self, run_id: str | None = None) -> dict[str, int]:
         """Count records by maturity level."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
-        conditions = []
-        params = []
-        if run_id:
-            conditions.append("run_id = ?")
-            params.append(run_id)
-
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query = (
-            f"SELECT status.maturity, COUNT(*) FROM records{where_clause} "  # noqa: S608
-            "GROUP BY status.maturity"
-        )
-        rows = self._store._conn.execute(query, params).fetchall()
-        return {row[0]: row[1] for row in rows}
+        return self._store.count_by_status_field("maturity", run_id)
 
     def gate_verdict_distribution(self, run_id: str | None = None) -> dict[str, int]:
         """Count records by gate verdict."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
-
-        conditions = []
-        params = []
-        if run_id:
-            conditions.append("run_id = ?")
-            params.append(run_id)
-
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query = (
-            f"SELECT status.gate_verdict, COUNT(*) FROM records{where_clause} "  # noqa: S608
-            "GROUP BY status.gate_verdict"
-        )
-        rows = self._store._conn.execute(query, params).fetchall()
-        return {row[0]: row[1] for row in rows}
+        return self._store.count_by_status_field("gate_verdict", run_id)
 
     def coordinate_coverage(self, run_id: str | None = None) -> dict[str, int]:
         """Count unique coordinates (cell_keys) and their seed replication."""
-        if self._store._conn is None:
-            raise RuntimeError("Store not initialized")
+        return self._store.cell_seed_counts(run_id)
 
-        conditions = []
-        params = []
-        if run_id:
-            conditions.append("run_id = ?")
-            params.append(run_id)
+    def axis_coverage(self, run_id: str | None = None) -> dict[str, dict[str, int]]:
+        """Per-axis stratification of records (R18 axis-coverage section)."""
+        return {
+            axis: self._store.count_by_axis(axis, run_id)  # type: ignore[arg-type]
+            for axis in (
+                "substrate",
+                "geometry",
+                "dynamics",
+                "plasticity",
+                "credit",
+                "update",
+            )
+        }
 
-        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
-        query = f"""
-            SELECT cell_key, COUNT(*) as n_seeds
-            FROM records{where_clause}
-            GROUP BY cell_key
-        """  # noqa: S608 - parameterized query
-        rows = self._store._conn.execute(query, params).fetchall()
-        return {row[0]: row[1] for row in rows}
+    def failures_by_cause(self, run_id: str | None = None) -> dict[str, int]:
+        """Count failed records grouped by recorded failure cause."""
+        return self._store.count_by_failure_cause(run_id)
+
+    def budget_consumption(self, run_id: str | None = None) -> list[dict[str, Any]]:
+        """Budget consumed per run (declared vs consumed when available)."""
+        results = []
+        for info in self._store.query_runs(run_id=run_id):
+            declared = (info.spec or {}).get("budget_seconds")
+            results.append({
+                "run_id": info.run_id,
+                "status": info.status,
+                "declared_budget_s": declared,
+                "consumed_s": info.budget_consumed_s,
+            })
+        return results
+
+    def fronts_by_fidelity(
+        self,
+        run_id: str | None = None,
+        objectives: tuple[str, str] = ("accuracy", "param_count"),
+        maximize: tuple[bool, bool] = (True, False),
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Pareto frontier per fidelity level (R86 fronts-by-fidelity)."""
+        records = self._store.query_records(run_id=run_id)
+        by_fidelity: dict[str, list[Any]] = {}
+        for record in records:
+            by_fidelity.setdefault(record.schedule.fidelity, []).append(record)
+
+        fronts: dict[str, list[dict[str, Any]]] = {}
+        for fidelity, fidelity_records in sorted(by_fidelity.items()):
+            # Reuse the Pareto filter by feeding claim-shaped subsets.
+            eligible = [
+                r
+                for r in fidelity_records
+                if r.status.gate_verdict == GateVerdict.PASS_
+                and not r.status.quarantine
+            ]
+            fronts[fidelity] = self._pareto_subset(eligible, objectives, maximize)
+        return fronts
+
+    def promotion_history(self, run_id: str | None = None) -> list[dict[str, Any]]:
+        """Promoted records in persistence (seq) order — promotion history."""
+        promoted = filter_promoted(self.claim_eligible_records(run_id))
+        promoted.sort(key=lambda r: r.seq)
+        return [
+            {
+                "seq": r.seq,
+                "record_id": r.record_id,
+                "cell_key": r.cell_key,
+                "fidelity": r.schedule.fidelity,
+                "seed": r.schedule.seed,
+                "maturity": r.status.maturity.value,
+            }
+            for r in promoted
+        ]
+
+    def claim_eligible_table(self, run_id: str | None = None) -> list[dict[str, Any]]:
+        """Flat claim-eligible table rows for reporting (R85)."""
+        rows = []
+        for r in self.claim_eligible_records(run_id):
+            replication_key = (
+                f"{r.cell_key}|{r.schedule.fidelity}|{r.schedule.n_seeds}|"
+                f"{r.schedule.epochs}|{r.schedule.batch_limit}|{r.schedule.budget_id}"
+            )
+            rows.append({
+                "record_id": r.record_id,
+                "cell_key": r.cell_key,
+                "replication_key": replication_key,
+                "coordinate": f"{r.substrate}/{r.geometry}/{r.dynamics}/"
+                f"{r.plasticity}/{r.credit}/{r.update}",
+                "fidelity": r.schedule.fidelity,
+                "seed": r.schedule.seed,
+                "n_seeds": r.schedule.n_seeds,
+                "maturity": r.status.maturity.value,
+            })
+        return rows
+
+    def campaign_diff(self, run_a: str, run_b: str) -> dict[str, Any]:
+        """Cross-run campaign diff (C78): coverage and outcome deltas."""
+        diff: dict[str, Any] = {"run_a": run_a, "run_b": run_b}
+        for label, run in (("a", run_a), ("b", run_b)):
+            diff[f"summary_{label}"] = self.run_summary(run)
+            diff[f"coverage_{label}"] = self.coordinate_coverage(run)
+            diff[f"maturity_{label}"] = self.maturity_distribution(run)
+        cov_a = diff["coverage_a"]
+        cov_b = diff["coverage_b"]
+        diff["cells_only_in_a"] = sorted(set(cov_a) - set(cov_b))
+        diff["cells_only_in_b"] = sorted(set(cov_b) - set(cov_a))
+        diff["shared_cells"] = len(set(cov_a) & set(cov_b))
+        return diff
+
+    def _pareto_subset(
+        self,
+        records: list[Record],
+        objectives: tuple[str, str],
+        maximize: tuple[bool, bool],
+    ) -> list[dict[str, Any]]:
+        """Pareto filter over a record subset (shared by frontier methods)."""
+        points: list[dict[str, Any]] = []
+        for record in records:
+            try:
+                primary_val = record.payload.get(objectives[0])
+                secondary_val = record.payload.get(objectives[1])
+                if primary_val is None or secondary_val is None:
+                    continue
+                points.append({
+                    "record_id": record.record_id,
+                    "cell_key": record.cell_key,
+                    "primary": float(primary_val),
+                    "secondary": float(secondary_val),
+                    "coordinate": {
+                        "substrate": record.substrate,
+                        "geometry": record.geometry,
+                        "dynamics": record.dynamics,
+                        "plasticity": record.plasticity,
+                        "credit": record.credit,
+                        "update": record.update,
+                    },
+                })
+            except ValueError, TypeError:
+                continue
+
+        if not points:
+            return []
+
+        def _is_dominated(p: dict[str, Any], q: dict[str, Any]) -> bool:
+            primary_better = (
+                q["primary"] > p["primary"]
+                if maximize[0]
+                else q["primary"] < p["primary"]
+            )
+            secondary_better = (
+                q["secondary"] > p["secondary"]
+                if maximize[1]
+                else q["secondary"] < p["secondary"]
+            )
+            primary_equal = q["primary"] == p["primary"]
+            secondary_equal = q["secondary"] == p["secondary"]
+            return (
+                (primary_better or primary_equal)
+                and (secondary_better or secondary_equal)
+                and (primary_better or secondary_better)
+            )
+
+        return [
+            p
+            for i, p in enumerate(points)
+            if not any(_is_dominated(p, q) for j, q in enumerate(points) if i != j)
+        ]
 
 
 def generate_run_report(store: RecordStore, run_id: str) -> str:
@@ -387,52 +480,26 @@ def export_to_parquet(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    if store._conn is None:
-        raise RuntimeError("Store not initialized")
+    snapshot = store.export_snapshot(run_id)
 
-    # Export records
-    where = "WHERE run_id = ?" if run_id else ""
-    params = [run_id] if run_id else []
+    def _flatten(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        flat: list[dict[str, Any]] = []
+        for row in rows:
+            flat.append({
+                key: json.dumps(value, default=str)
+                if isinstance(value, dict | list)
+                else value
+                for key, value in row.items()
+            })
+        return flat
 
-    records_df = pd.read_sql_query(
-        f"SELECT * FROM records {where} ORDER BY seq",  # noqa: S608
-        store._conn,
-        params=params,
-    )
+    records_df = pd.DataFrame(_flatten(snapshot["records"]))
+    artifacts_df = pd.DataFrame(snapshot["artifacts"])
+    runs_df = pd.DataFrame(_flatten(snapshot["runs"]))
+    vi_df = pd.DataFrame(_flatten(snapshot["vector_index"]))
     records_df.to_parquet(output_path / "records.parquet", index=False)
-
-    # Export artifacts
-    artifacts_where = (
-        f"WHERE record_id IN (SELECT record_id FROM records {where})"  # noqa: S608
-        if run_id
-        else ""
-    )
-    artifacts_df = pd.read_sql_query(
-        f"SELECT * FROM artifacts {artifacts_where} ORDER BY created_at",  # noqa: S608
-        store._conn,
-        params=params,
-    )
     artifacts_df.to_parquet(output_path / "artifacts.parquet", index=False)
-
-    # Export runs
-    runs_df = pd.read_sql_query(
-        f"SELECT * FROM runs {where} ORDER BY started_at",  # noqa: S608
-        store._conn,
-        params=params,
-    )
     runs_df.to_parquet(output_path / "runs.parquet", index=False)
-
-    # Export vector index
-    vi_where = (
-        f"WHERE record_id IN (SELECT record_id FROM records {where})"  # noqa: S608
-        if run_id
-        else ""
-    )
-    vi_df = pd.read_sql_query(
-        f"SELECT * FROM vector_index {vi_where}",  # noqa: S608
-        store._conn,
-        params=params,
-    )
     vi_df.to_parquet(output_path / "vector_index.parquet", index=False)
 
     # Export metadata
@@ -459,116 +526,11 @@ def export_to_json(  # noqa: PLR0914
     """Export store data to a single JSON file for round-trip."""
     output_file = Path(output_path)
 
-    if store._conn is None:
-        raise RuntimeError("Store not initialized")
-
-    params = [run_id] if run_id else []
-    records_query = (
-        "SELECT * FROM records WHERE run_id = ? ORDER BY seq"
-        if run_id
-        else "SELECT * FROM records ORDER BY seq"
-    )
-
-    # Records
-    records_rows = store._conn.execute(records_query, params).fetchall()
-    records = []
-    for row in records_rows:
-        record = store._row_to_record(row)
-        records.append({
-            "record_id": record.record_id,
-            "seq": record.seq,
-            "run_id": record.run_id,
-            "schema_version": record.schema_version,
-            "cell_key": record.cell_key,
-            "measurement_key": record.measurement_key,
-            "substrate": record.substrate,
-            "geometry": record.geometry,
-            "dynamics": record.dynamics,
-            "plasticity": record.plasticity,
-            "credit": record.credit,
-            "update": record.update,
-            "params": record.params,
-            "schedule": {
-                "fidelity": record.schedule.fidelity,
-                "seed": record.schedule.seed,
-                "n_seeds": record.schedule.n_seeds,
-                "epochs": record.schedule.epochs,
-                "batch_limit": record.schedule.batch_limit,
-                "budget_id": record.schedule.budget_id,
-            },
-            "provenance": record.provenance.to_dict(),
-            "status": {
-                "gate_verdict": record.status.gate_verdict.value,
-                "defect": record.status.defect,
-                "cause": record.status.cause.value,
-                "severity": record.status.severity.value,
-                "quarantine": record.status.quarantine,
-                "maturity": record.status.maturity.value,
-                "uncertainty": record.status.uncertainty,
-                "reproducibility": record.status.reproducibility.value,
-                "assessment_procedure_version": record.status.assessment_procedure_version,
-                "ceec_link": record.status.ceec_link,
-            },
-            "payload": record.payload,
-            "unknown": record.unknown,
-        })
-
-    # Artifacts
-    artifacts_query = (
-        "SELECT * FROM artifacts WHERE record_id IN (SELECT record_id FROM records WHERE run_id = ?)"
-        if run_id
-        else "SELECT * FROM artifacts"
-    )
-    artifacts_rows = store._conn.execute(artifacts_query, params).fetchall()
-    artifacts = [
-        {
-            "digest": row[0],
-            "role": row[2],
-            "record_id": row[3],
-            "created_at": row[4].isoformat() if row[4] else None,
-            "external_uri": row[5],
-            "external_size": row[6],
-            "external_checksum": row[7],
-        }
-        for row in artifacts_rows
-    ]
-
-    # Runs
-    runs_query = (
-        "SELECT * FROM runs WHERE run_id = ? ORDER BY started_at"
-        if run_id
-        else "SELECT * FROM runs ORDER BY started_at"
-    )
-    runs_rows = store._conn.execute(runs_query, params).fetchall()
-    runs = [
-        {
-            "run_id": row[0],
-            "spec": json.loads(row[1]) if row[1] else None,
-            "spec_version": row[2],
-            "status": row[3],
-            "budget_consumed_s": row[4],
-            "replay_hash": row[5],
-            "started_at": row[6].isoformat() if row[6] else None,
-            "finished_at": row[7].isoformat() if row[7] else None,
-        }
-        for row in runs_rows
-    ]
-
-    # Vector index
-    vi_query = (
-        "SELECT * FROM vector_index WHERE record_id IN (SELECT record_id FROM records WHERE run_id = ?)"
-        if run_id
-        else "SELECT * FROM vector_index"
-    )
-    vi_rows = store._conn.execute(vi_query, params).fetchall()
-    vector_index = [
-        {
-            "record_id": row[0],
-            "embedding": list(row[1]),
-            "embedding_version": row[2],
-        }
-        for row in vi_rows
-    ]
+    snapshot = store.export_snapshot(run_id)
+    records = snapshot["records"]
+    artifacts = snapshot["artifacts"]
+    runs = snapshot["runs"]
+    vector_index = snapshot["vector_index"]
 
     bundle = ExportBundle(
         records=records,
@@ -594,9 +556,65 @@ def export_to_json(  # noqa: PLR0914
             return super().default(obj)
 
     with Path(output_file).open("w", encoding="utf-8") as f:
-        json.dump(bundle.__dict__, f, cls=DateTimeEncoder, indent=2)
+        json.dump(asdict(bundle), f, cls=DateTimeEncoder, indent=2)
 
     return output_file
+
+
+def narrative_handoff_summary(store: RecordStore, run_id: str) -> str:
+    """Narrative handoff summary for operator review (R88).
+
+    One screen: run state, evidence counts, claim-eligible cells, open
+    alerts, promotion history tail, budget, and operator intents.
+    """
+    generator = ReportGenerator(store)
+    summary = generator.run_summary(run_id)
+    if summary is None:
+        return f"Run {run_id} not found"
+    eligible = generator.claim_eligible_table(run_id)
+    alerted = generator.records_with_alerts(run_id)
+    history = generator.promotion_history(run_id)
+    budgets = generator.budget_consumption(run_id)
+    intents = store.query_intent_records(run_id)
+    lines = [
+        f"Handoff: run {run_id} [{summary.status}]",
+        f"Records: {summary.record_count} total, "
+        f"{summary.claim_eligible_count} claim-eligible, "
+        f"{summary.promoted_count} promoted.",
+    ]
+    if eligible:
+        lines.append("Claim-eligible cells (first 5):")
+        for row in eligible[:5]:
+            lines.append(
+                f"  {row['coordinate']} fidelity={row['fidelity']} "
+                f"seeds={row['seed']}/{row['n_seeds']} maturity={row['maturity']}"
+            )
+    else:
+        lines.append("No claim-eligible cells yet.")
+    if alerted:
+        lines.append(f"Open alerts: {len(alerted)} record(s) flagged:")
+        for record, alerts in alerted[:5]:
+            kinds = ", ".join(a.alert_type for a in alerts)
+            lines.append(f"  {record.record_id[:12]} [{kinds}]")
+    else:
+        lines.append("Open alerts: none.")
+    if history:
+        lines.append(
+            f"Latest promotion: seq={history[-1]['seq']} "
+            f"cell={history[-1]['cell_key'][:12]}"
+        )
+    if budgets:
+        consumed = budgets[0].get("consumed_s")
+        declared = budgets[0].get("declared_budget_s")
+        lines.append(f"Budget: consumed={consumed}s declared={declared}s")
+    lines.append(f"Operator intents on record: {len(intents)}")
+    for intent_record in intents[-3:]:
+        payload = intent_record.payload
+        lines.append(
+            f"  {payload.get('intent_kind')} by {payload.get('operator')} "
+            f"at {payload.get('timestamp')}"
+        )
+    return "\n".join(lines)
 
 
 def load_export_bundle(path: str | Path) -> ExportBundle:

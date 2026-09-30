@@ -249,8 +249,10 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
                     ):
                         raise ConflictingHyperparameterError(
                             hp.name,
-                            [f"{existing.axis_kind.value}.{existing.axis_name}"],
-                            [f"{hp.axis_kind.value}.{hp.axis_name}"],
+                            [
+                                f"{existing.axis_kind.value}.{existing.axis_name}",
+                                f"{hp.axis_kind.value}.{hp.axis_name}",
+                            ],
                         )
                     # Merge availabilities if different
                     if hp.availability and existing.availability:

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from computronium.experiment.learning import icu, prior, reasoning, surrogate
+from computronium.experiment.learning import benchmark, icu, prior, reasoning, surrogate
 
 __all__ = [
+    "benchmark",
     "icu",
     "prior",
     "reasoning",

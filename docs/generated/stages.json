@@ -1,0 +1,164 @@
+[
+  {
+    "stage_id": "s10_decide",
+    "name": "s10_decide",
+    "display_name": "Decide",
+    "description": "Promotion predicates + allocation handoff (R36, R46-R51)",
+    "required_fidelity": "L2",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "promotion_predicates": true,
+      "allocation_handoff": true,
+      "evidence_driven_allocation": true
+    }
+  },
+  {
+    "stage_id": "s11_report",
+    "name": "s11_report",
+    "display_name": "Report",
+    "description": "Delegates to surface.report fragments (R85-R88)",
+    "required_fidelity": "L2",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "report_generation": true,
+      "pareto_frontiers": true,
+      "cross_run_campaign_diff": true
+    }
+  },
+  {
+    "stage_id": "s1_frame",
+    "name": "s1_frame",
+    "display_name": "Frame",
+    "description": "Objective/operating-point resolution; question-first entry via Synthesis policy (R43)",
+    "required_fidelity": "L0",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "objective_resolution": true,
+      "operating_points": true,
+      "synthesis_policy": true
+    }
+  },
+  {
+    "stage_id": "s2_space",
+    "name": "s2_space",
+    "display_name": "Space",
+    "description": "Axis snapshot + legality preview (dry-run = same engine, C32)",
+    "required_fidelity": "L0",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "axis_snapshot": true,
+      "legality_dry_run": true,
+      "max_cells": 1000,
+      "coverage_target": 0.8
+    }
+  },
+  {
+    "stage_id": "s3_schedule",
+    "name": "s3_schedule",
+    "display_name": "Schedule",
+    "description": "Fidelity/seed/epoch planning; per-task adaptation (R44); data-origin allocation + contrast quota (L19)",
+    "required_fidelity": "L1",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "fidelity_planning": true,
+      "seed_planning": true,
+      "per_task_adaptation": true,
+      "data_origin_allocation": {
+        "exploration": 0.5,
+        "calibration": 0.3,
+        "test": 0.2
+      },
+      "contrast_quota": 0.1
+    }
+  },
+  {
+    "stage_id": "s4_gate",
+    "name": "s4_gate",
+    "display_name": "Gate",
+    "description": "LegalityEngine enforcement; globally-suppressive voids (R38)",
+    "required_fidelity": "L1",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "legality_enforcement": true,
+      "void_suppression": true,
+      "apply_constraints": true
+    }
+  },
+  {
+    "stage_id": "s5_compose",
+    "name": "s5_compose",
+    "display_name": "Compose",
+    "description": "compose_joint_system bridge; effective-value recording (R6)",
+    "required_fidelity": "L1",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "compose_joint_system": true,
+      "effective_value_recording": true
+    }
+  },
+  {
+    "stage_id": "s6_train",
+    "name": "s6_train",
+    "display_name": "Train",
+    "description": "SystemTrainer settle bridge; guard/divergence telemetry (R50/R51); per-epoch intermediate values feed pruners",
+    "required_fidelity": "L1",
+    "min_n_seeds": 3,
+    "gate": "pass",
+    "params": {
+      "system_trainer": true,
+      "settle_bridge": true,
+      "divergence_telemetry": true,
+      "guard_telemetry": true,
+      "pruner_intermediate_values": true
+    }
+  },
+  {
+    "stage_id": "s7_measure",
+    "name": "s7_measure",
+    "display_name": "Measure",
+    "description": "Objectives resolved against OBJECTIVES; probes; robustness dimension (R69) computed when profile requests it",
+    "required_fidelity": "L2",
+    "min_n_seeds": 5,
+    "gate": "pass",
+    "params": {
+      "objective_resolution": true,
+      "probes": true,
+      "robustness_dimension": true
+    }
+  },
+  {
+    "stage_id": "s8_record",
+    "name": "s8_record",
+    "display_name": "Record",
+    "description": "Atomic append + artifacts + embedding generation (vector_index write with embedding_version; brute-force retrieval)",
+    "required_fidelity": "L2",
+    "min_n_seeds": 5,
+    "gate": "pass",
+    "params": {
+      "atomic_append": true,
+      "artifacts": true,
+      "embedding_generation": true,
+      "vector_index_write": true
+    }
+  },
+  {
+    "stage_id": "s9_attribute",
+    "name": "s9_attribute",
+    "display_name": "Attribute",
+    "description": "Counterfactual axis attribution from records (R86)",
+    "required_fidelity": "L2",
+    "min_n_seeds": 1,
+    "gate": "pass",
+    "params": {
+      "counterfactual_attribution": true,
+      "axis_attribution": true
+    }
+  }
+]

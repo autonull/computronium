@@ -15,14 +15,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import pytest
 
 from computronium.experiment.legality.classify import (
     DEFECT_REGISTRY,
-    DefectClass,
-    VoidReason,
+)
+from computronium.experiment.legality.dsl import (
+    Const,
+    Eq,
+    Var,
+    const,
+    eq,
+    var,
 )
 from computronium.experiment.legality.engine import (
     Constraint,
@@ -30,36 +35,17 @@ from computronium.experiment.legality.engine import (
     ConstraintKind,
     ConstraintOrigin,
     ConstraintScope,
-    ENGINE,
     create_constraint,
     get_engine,
 )
-from computronium.experiment.legality.dsl import (
-    Eq,
-    Var,
-    Const,
-    and_,
-    or_,
-    not_,
-    gt,
-    lt,
-    in_,
-    evaluate,
-    EvaluationContext,
-    var,
-    const,
-    eq,
-)
-
-
-if TYPE_CHECKING:
-    from computronium.experiment.schema.record import Record
 
 
 class ProofKind(StrEnum):
     """Kinds of machine-checkable infeasibility proofs."""
 
-    TYPE_MISMATCH = "type_mismatch"  # e.g., substrate requires digital, geometry requires analog
+    TYPE_MISMATCH = (
+        "type_mismatch"  # e.g., substrate requires digital, geometry requires analog
+    )
     RESOURCE_VIOLATION = "resource_violation"  # e.g., memory > budget, compute > limit
     LOGICAL_CONTRADICTION = "logical_contradiction"  # e.g., A and not A
 
@@ -96,7 +82,12 @@ def _get_declared_constraints() -> list[Constraint]:
     return [
         c
         for c in engine.all_constraints()
-        if c.origin in (ConstraintOrigin.SYSTEM_CONFIG, ConstraintOrigin.DYNAMICS_COMPAT, ConstraintOrigin.CREDIT_COMPAT)
+        if c.origin
+        in (
+            ConstraintOrigin.SYSTEM_CONFIG,
+            ConstraintOrigin.DYNAMICS_COMPAT,
+            ConstraintOrigin.CREDIT_COMPAT,
+        )
     ]
 
 
@@ -104,7 +95,10 @@ def _has_machine_checkable_proof(constraint: Constraint) -> tuple[bool, str | No
     """Check if a constraint has a registered machine-checkable proof."""
     if constraint.constraint_id in DECLARED_INFEASIBILITY_PROOFS:
         return True, None
-    return False, f"No infeasibility proof registered for constraint {constraint.constraint_id} ({constraint.description})"
+    return (
+        False,
+        f"No infeasibility proof registered for constraint {constraint.constraint_id} ({constraint.description})",
+    )
 
 
 def _is_heuristic_exclusion(constraint: Constraint) -> tuple[bool, str | None]:
@@ -138,7 +132,10 @@ def _is_heuristic_exclusion(constraint: Constraint) -> tuple[bool, str | None]:
 
     for kw in heuristic_keywords:
         if kw in desc or kw in expr_str:
-            return True, f"Heuristic language detected: '{kw}' in constraint {constraint.constraint_id}"
+            return (
+                True,
+                f"Heuristic language detected: '{kw}' in constraint {constraint.constraint_id}",
+            )
 
     return False, None
 
@@ -196,8 +193,7 @@ class TestLegalityBoundary:
         for key1 in void_patterns:
             key2 = (key1[1], key1[0])
             assert key2 in DEFECT_REGISTRY._void_patterns, (
-                f"Void pattern {key1} not registered bidirectionally; "
-                f"missing {key2}"
+                f"Void pattern {key1} not registered bidirectionally; missing {key2}"
             )
 
     def test_no_declared_constraint_on_performance(self) -> None:
@@ -234,8 +230,7 @@ class TestLegalityBoundary:
         if violations:
             pytest.fail(
                 "DECLARED constraints reference performance metrics "
-                "(should be in PRIORS or soft constraints):\n"
-                + "\n".join(violations)
+                "(should be in PRIORS or soft constraints):\n" + "\n".join(violations)
             )
 
     def test_declared_constraints_are_hard_or_void(self) -> None:
@@ -265,7 +260,8 @@ class TestLegalityBoundary:
         # For now, it serves as a placeholder for the migration work
         engine = get_engine()
         system_config_constraints = [
-            c for c in engine.all_constraints()
+            c
+            for c in engine.all_constraints()
             if c.origin == ConstraintOrigin.SYSTEM_CONFIG
         ]
 
@@ -291,8 +287,8 @@ class TestLegalityBoundary:
         # CONSTRAINTS registry. The test verifies separation of concerns.
 
         from computronium.experiment.schema.registries import (
-            PRIORS_REGISTRY,
             CONSTRAINTS_REGISTRY,
+            PRIORS_REGISTRY,
         )
 
         # PRIORS and CONSTRAINTS should be separate registries

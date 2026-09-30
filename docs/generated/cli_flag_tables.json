@@ -1,0 +1,1472 @@
+{
+  "capability_flags": [
+    {
+      "flag": "axis",
+      "capability_id": "C1",
+      "display_name": "Six-axis coordinate space",
+      "kind": "core"
+    },
+    {
+      "flag": "coordinate",
+      "capability_id": "C1",
+      "display_name": "Six-axis coordinate space",
+      "kind": "core"
+    },
+    {
+      "flag": "allocation",
+      "capability_id": "C10",
+      "display_name": "Evidence-driven allocation",
+      "kind": "core"
+    },
+    {
+      "flag": "evidence_driven",
+      "capability_id": "C10",
+      "display_name": "Evidence-driven allocation",
+      "kind": "core"
+    },
+    {
+      "flag": "replay",
+      "capability_id": "C11",
+      "display_name": "Replay and resume",
+      "kind": "core"
+    },
+    {
+      "flag": "resume",
+      "capability_id": "C11",
+      "display_name": "Replay and resume",
+      "kind": "core"
+    },
+    {
+      "flag": "status",
+      "capability_id": "C12",
+      "display_name": "Three-tier status model",
+      "kind": "core"
+    },
+    {
+      "flag": "three_tier",
+      "capability_id": "C12",
+      "display_name": "Three-tier status model",
+      "kind": "core"
+    },
+    {
+      "flag": "claims",
+      "capability_id": "C13",
+      "display_name": "Claim eligibility predicates",
+      "kind": "core"
+    },
+    {
+      "flag": "predicates",
+      "capability_id": "C13",
+      "display_name": "Claim eligibility predicates",
+      "kind": "core"
+    },
+    {
+      "flag": "failure",
+      "capability_id": "C14",
+      "display_name": "Failure intelligence",
+      "kind": "core"
+    },
+    {
+      "flag": "clustering",
+      "capability_id": "C14",
+      "display_name": "Failure intelligence",
+      "kind": "core"
+    },
+    {
+      "flag": "artifacts",
+      "capability_id": "C15",
+      "display_name": "Unified artifact storage",
+      "kind": "core"
+    },
+    {
+      "flag": "atomic",
+      "capability_id": "C15",
+      "display_name": "Unified artifact storage",
+      "kind": "core"
+    },
+    {
+      "flag": "vector",
+      "capability_id": "C16",
+      "display_name": "Vector retrieval",
+      "kind": "core"
+    },
+    {
+      "flag": "vss_optional",
+      "capability_id": "C16",
+      "display_name": "Vector retrieval",
+      "kind": "core"
+    },
+    {
+      "flag": "priors",
+      "capability_id": "C17",
+      "display_name": "Prior registry",
+      "kind": "core"
+    },
+    {
+      "flag": "ruler_lr",
+      "capability_id": "C17",
+      "display_name": "Prior registry",
+      "kind": "core"
+    },
+    {
+      "flag": "surrogate",
+      "capability_id": "C18",
+      "display_name": "Surrogate policy wrapper",
+      "kind": "core"
+    },
+    {
+      "flag": "acquisition",
+      "capability_id": "C18",
+      "display_name": "Surrogate policy wrapper",
+      "kind": "core"
+    },
+    {
+      "flag": "icu",
+      "capability_id": "C19",
+      "display_name": "I(C,U) metamodel",
+      "kind": "core"
+    },
+    {
+      "flag": "leakage_guard",
+      "capability_id": "C19",
+      "display_name": "I(C,U) metamodel",
+      "kind": "core"
+    },
+    {
+      "flag": "schema",
+      "capability_id": "C2",
+      "display_name": "Unified record schema",
+      "kind": "core"
+    },
+    {
+      "flag": "record",
+      "capability_id": "C2",
+      "display_name": "Unified record schema",
+      "kind": "core"
+    },
+    {
+      "flag": "reasoning",
+      "capability_id": "C20",
+      "display_name": "Reasoning records",
+      "kind": "core"
+    },
+    {
+      "flag": "provenance",
+      "capability_id": "C20",
+      "display_name": "Reasoning records",
+      "kind": "core"
+    },
+    {
+      "flag": "compilation",
+      "capability_id": "C21",
+      "display_name": "torch.compile settle loop",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "experimental",
+      "capability_id": "C21",
+      "display_name": "torch.compile settle loop",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "checkpointing",
+      "capability_id": "C22",
+      "display_name": "Gradient checkpointing",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "memory",
+      "capability_id": "C22",
+      "display_name": "Gradient checkpointing",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "gain_control",
+      "capability_id": "C23",
+      "display_name": "Gain control homeostasis",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "homeostasis",
+      "capability_id": "C23",
+      "display_name": "Gain control homeostasis",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "kv_cache",
+      "capability_id": "C24",
+      "display_name": "KV cache for transformer",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "transformer",
+      "capability_id": "C24",
+      "display_name": "KV cache for transformer",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "async",
+      "capability_id": "C25",
+      "display_name": "Async orchestration",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "taskgroup",
+      "capability_id": "C25",
+      "display_name": "Async orchestration",
+      "kind": "acceleration"
+    },
+    {
+      "flag": "multiprocess",
+      "capability_id": "C26",
+      "display_name": "Multiprocess backend",
+      "kind": "scaling"
+    },
+    {
+      "flag": "parallel",
+      "capability_id": "C26",
+      "display_name": "Multiprocess backend",
+      "kind": "scaling"
+    },
+    {
+      "flag": "ddp",
+      "capability_id": "C27",
+      "display_name": "Multi-GPU DDP/FSDP",
+      "kind": "scaling"
+    },
+    {
+      "flag": "fsdp",
+      "capability_id": "C27",
+      "display_name": "Multi-GPU DDP/FSDP",
+      "kind": "scaling"
+    },
+    {
+      "flag": "gpu_only",
+      "capability_id": "C27",
+      "display_name": "Multi-GPU DDP/FSDP",
+      "kind": "scaling"
+    },
+    {
+      "flag": "p2p",
+      "capability_id": "C28",
+      "display_name": "P2P gossip cluster",
+      "kind": "scaling"
+    },
+    {
+      "flag": "kademlia",
+      "capability_id": "C28",
+      "display_name": "P2P gossip cluster",
+      "kind": "scaling"
+    },
+    {
+      "flag": "vectorization",
+      "capability_id": "C29",
+      "display_name": "Batch vectorization",
+      "kind": "scaling"
+    },
+    {
+      "flag": "batch",
+      "capability_id": "C29",
+      "display_name": "Batch vectorization",
+      "kind": "scaling"
+    },
+    {
+      "flag": "content_addressed",
+      "capability_id": "C3",
+      "display_name": "Content-addressed records",
+      "kind": "core"
+    },
+    {
+      "flag": "dedup",
+      "capability_id": "C3",
+      "display_name": "Content-addressed records",
+      "kind": "core"
+    },
+    {
+      "flag": "pipeline_parallel",
+      "capability_id": "C30",
+      "display_name": "Pipeline parallelism",
+      "kind": "scaling"
+    },
+    {
+      "flag": "experimental",
+      "capability_id": "C30",
+      "display_name": "Pipeline parallelism",
+      "kind": "scaling"
+    },
+    {
+      "flag": "replayable",
+      "capability_id": "C31",
+      "display_name": "Computational reproducibility",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "computational",
+      "capability_id": "C31",
+      "display_name": "Computational reproducibility",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "scientific",
+      "capability_id": "C32",
+      "display_name": "Scientific reproducibility",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "independent_env",
+      "capability_id": "C32",
+      "display_name": "Scientific reproducibility",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "reproducibility_class",
+      "capability_id": "C33",
+      "display_name": "Reproducibility class tracking",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "tracking",
+      "capability_id": "C33",
+      "display_name": "Reproducibility class tracking",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "assessment",
+      "capability_id": "C34",
+      "display_name": "Assessment procedure versioning",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "procedure",
+      "capability_id": "C34",
+      "display_name": "Assessment procedure versioning",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "data_origin",
+      "capability_id": "C35",
+      "display_name": "Data origin tagging",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "split",
+      "capability_id": "C35",
+      "display_name": "Data origin tagging",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "transfer",
+      "capability_id": "C36",
+      "display_name": "Transfer provenance tracking",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "provenance",
+      "capability_id": "C36",
+      "display_name": "Transfer provenance tracking",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "comparison",
+      "capability_id": "C37",
+      "display_name": "Matched-cost comparison guard",
+      "kind": "governance"
+    },
+    {
+      "flag": "guard",
+      "capability_id": "C37",
+      "display_name": "Matched-cost comparison guard",
+      "kind": "governance"
+    },
+    {
+      "flag": "stratification",
+      "capability_id": "C38",
+      "display_name": "Stratification guard",
+      "kind": "governance"
+    },
+    {
+      "flag": "hardware_class",
+      "capability_id": "C38",
+      "display_name": "Stratification guard",
+      "kind": "governance"
+    },
+    {
+      "flag": "icu",
+      "capability_id": "C39",
+      "display_name": "I(C,U) leakage audit",
+      "kind": "governance"
+    },
+    {
+      "flag": "leakage",
+      "capability_id": "C39",
+      "display_name": "I(C,U) leakage audit",
+      "kind": "governance"
+    },
+    {
+      "flag": "audit",
+      "capability_id": "C39",
+      "display_name": "I(C,U) leakage audit",
+      "kind": "governance"
+    },
+    {
+      "flag": "dedup",
+      "capability_id": "C4",
+      "display_name": "Measurement key deduplication",
+      "kind": "core"
+    },
+    {
+      "flag": "measurement_key",
+      "capability_id": "C4",
+      "display_name": "Measurement key deduplication",
+      "kind": "core"
+    },
+    {
+      "flag": "alerts",
+      "capability_id": "C40",
+      "display_name": "Alert predicates",
+      "kind": "governance"
+    },
+    {
+      "flag": "predicates",
+      "capability_id": "C40",
+      "display_name": "Alert predicates",
+      "kind": "governance"
+    },
+    {
+      "flag": "promotion",
+      "capability_id": "C41",
+      "display_name": "Promotion predicates",
+      "kind": "governance"
+    },
+    {
+      "flag": "claims",
+      "capability_id": "C41",
+      "display_name": "Promotion predicates",
+      "kind": "governance"
+    },
+    {
+      "flag": "effect_size",
+      "capability_id": "C42",
+      "display_name": "Effect-size protocol",
+      "kind": "governance"
+    },
+    {
+      "flag": "cohens_d",
+      "capability_id": "C42",
+      "display_name": "Effect-size protocol",
+      "kind": "governance"
+    },
+    {
+      "flag": "budget",
+      "capability_id": "C43",
+      "display_name": "Budget tier system",
+      "kind": "governance"
+    },
+    {
+      "flag": "tier",
+      "capability_id": "C43",
+      "display_name": "Budget tier system",
+      "kind": "governance"
+    },
+    {
+      "flag": "operations",
+      "capability_id": "C44",
+      "display_name": "Run controller",
+      "kind": "governance"
+    },
+    {
+      "flag": "control",
+      "capability_id": "C44",
+      "display_name": "Run controller",
+      "kind": "governance"
+    },
+    {
+      "flag": "service",
+      "capability_id": "C45",
+      "display_name": "Service manager",
+      "kind": "governance"
+    },
+    {
+      "flag": "webhooks",
+      "capability_id": "C45",
+      "display_name": "Service manager",
+      "kind": "governance"
+    },
+    {
+      "flag": "conformance",
+      "capability_id": "C46",
+      "display_name": "Conformance harness",
+      "kind": "governance"
+    },
+    {
+      "flag": "ci",
+      "capability_id": "C46",
+      "display_name": "Conformance harness",
+      "kind": "governance"
+    },
+    {
+      "flag": "currency",
+      "capability_id": "C47",
+      "display_name": "Currency lock",
+      "kind": "governance"
+    },
+    {
+      "flag": "flags",
+      "capability_id": "C47",
+      "display_name": "Currency lock",
+      "kind": "governance"
+    },
+    {
+      "flag": "synthesis",
+      "capability_id": "C48",
+      "display_name": "Question-first entry",
+      "kind": "governance"
+    },
+    {
+      "flag": "question_first",
+      "capability_id": "C48",
+      "display_name": "Question-first entry",
+      "kind": "governance"
+    },
+    {
+      "flag": "surrogate",
+      "capability_id": "C49",
+      "display_name": "Surrogate-driven acquisition",
+      "kind": "learning"
+    },
+    {
+      "flag": "ei",
+      "capability_id": "C49",
+      "display_name": "Surrogate-driven acquisition",
+      "kind": "learning"
+    },
+    {
+      "flag": "cell_key",
+      "capability_id": "C5",
+      "display_name": "Cell key grouping",
+      "kind": "core"
+    },
+    {
+      "flag": "replication",
+      "capability_id": "C5",
+      "display_name": "Cell key grouping",
+      "kind": "core"
+    },
+    {
+      "flag": "transfer",
+      "capability_id": "C50",
+      "display_name": "Cross-task transfer",
+      "kind": "learning"
+    },
+    {
+      "flag": "cross_task",
+      "capability_id": "C50",
+      "display_name": "Cross-task transfer",
+      "kind": "learning"
+    },
+    {
+      "flag": "priors",
+      "capability_id": "C51",
+      "display_name": "Prior single-source accessor",
+      "kind": "learning"
+    },
+    {
+      "flag": "single_source",
+      "capability_id": "C51",
+      "display_name": "Prior single-source accessor",
+      "kind": "learning"
+    },
+    {
+      "flag": "icu",
+      "capability_id": "C52",
+      "display_name": "Run-scoped ICU/Reasoning",
+      "kind": "learning"
+    },
+    {
+      "flag": "reasoning",
+      "capability_id": "C52",
+      "display_name": "Run-scoped ICU/Reasoning",
+      "kind": "learning"
+    },
+    {
+      "flag": "k10",
+      "capability_id": "C52",
+      "display_name": "Run-scoped ICU/Reasoning",
+      "kind": "learning"
+    },
+    {
+      "flag": "reasoning",
+      "capability_id": "C53",
+      "display_name": "Reasoning persistence",
+      "kind": "learning"
+    },
+    {
+      "flag": "persistence",
+      "capability_id": "C53",
+      "display_name": "Reasoning persistence",
+      "kind": "learning"
+    },
+    {
+      "flag": "warm_start",
+      "capability_id": "C54",
+      "display_name": "Warm-start from prior runs",
+      "kind": "learning"
+    },
+    {
+      "flag": "transfer",
+      "capability_id": "C54",
+      "display_name": "Warm-start from prior runs",
+      "kind": "learning"
+    },
+    {
+      "flag": "surrogate",
+      "capability_id": "C55",
+      "display_name": "Coordinate-wide surrogate",
+      "kind": "learning"
+    },
+    {
+      "flag": "coordinate_wide",
+      "capability_id": "C55",
+      "display_name": "Coordinate-wide surrogate",
+      "kind": "learning"
+    },
+    {
+      "flag": "icu",
+      "capability_id": "C56",
+      "display_name": "I(C,U) feature encoder",
+      "kind": "learning"
+    },
+    {
+      "flag": "feature_encoder",
+      "capability_id": "C56",
+      "display_name": "I(C,U) feature encoder",
+      "kind": "learning"
+    },
+    {
+      "flag": "claims",
+      "capability_id": "C57",
+      "display_name": "Achieved-seed claim eligibility",
+      "kind": "learning"
+    },
+    {
+      "flag": "achieved_seeds",
+      "capability_id": "C57",
+      "display_name": "Achieved-seed claim eligibility",
+      "kind": "learning"
+    },
+    {
+      "flag": "pareto",
+      "capability_id": "C58",
+      "display_name": "Multi-objective Pareto",
+      "kind": "learning"
+    },
+    {
+      "flag": "multi_objective",
+      "capability_id": "C58",
+      "display_name": "Multi-objective Pareto",
+      "kind": "learning"
+    },
+    {
+      "flag": "substrate",
+      "capability_id": "C59",
+      "display_name": "Substrate-aware objectives",
+      "kind": "learning"
+    },
+    {
+      "flag": "objectives",
+      "capability_id": "C59",
+      "display_name": "Substrate-aware objectives",
+      "kind": "learning"
+    },
+    {
+      "flag": "versioning",
+      "capability_id": "C6",
+      "display_name": "Schema versioning",
+      "kind": "core"
+    },
+    {
+      "flag": "unknown_field",
+      "capability_id": "C6",
+      "display_name": "Schema versioning",
+      "kind": "core"
+    },
+    {
+      "flag": "frozen_theta",
+      "capability_id": "C60",
+      "display_name": "Frozen-\u03b8 \u03c8 adaptation",
+      "kind": "learning"
+    },
+    {
+      "flag": "psi",
+      "capability_id": "C60",
+      "display_name": "Frozen-\u03b8 \u03c8 adaptation",
+      "kind": "learning"
+    },
+    {
+      "flag": "ntm",
+      "capability_id": "C61",
+      "display_name": "NTM geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C61",
+      "display_name": "NTM geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "experimental",
+      "capability_id": "C61",
+      "display_name": "NTM geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "nca",
+      "capability_id": "C62",
+      "display_name": "NCA geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C62",
+      "display_name": "NCA geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "experimental",
+      "capability_id": "C62",
+      "display_name": "NCA geometry",
+      "kind": "core"
+    },
+    {
+      "flag": "pepita",
+      "capability_id": "C63",
+      "display_name": "PEPITA/LEMMA credit",
+      "kind": "core"
+    },
+    {
+      "flag": "lemma",
+      "capability_id": "C63",
+      "display_name": "PEPITA/LEMMA credit",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C63",
+      "display_name": "PEPITA/LEMMA credit",
+      "kind": "core"
+    },
+    {
+      "flag": "holomorphic",
+      "capability_id": "C64",
+      "display_name": "Holomorphic EP",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C64",
+      "display_name": "Holomorphic EP",
+      "kind": "core"
+    },
+    {
+      "flag": "directed_ep",
+      "capability_id": "C65",
+      "display_name": "Directed EP",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C65",
+      "display_name": "Directed EP",
+      "kind": "core"
+    },
+    {
+      "flag": "finite_nudge",
+      "capability_id": "C66",
+      "display_name": "Finite-nudge EP",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C66",
+      "display_name": "Finite-nudge EP",
+      "kind": "core"
+    },
+    {
+      "flag": "ternary",
+      "capability_id": "C67",
+      "display_name": "Ternary EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "eqprop",
+      "capability_id": "C67",
+      "display_name": "Ternary EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C67",
+      "display_name": "Ternary EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "momentum",
+      "capability_id": "C68",
+      "display_name": "Momentum EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "eqprop",
+      "capability_id": "C68",
+      "display_name": "Momentum EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C68",
+      "display_name": "Momentum EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "sparse",
+      "capability_id": "C69",
+      "display_name": "Sparse EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "eqprop",
+      "capability_id": "C69",
+      "display_name": "Sparse EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C69",
+      "display_name": "Sparse EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "legality",
+      "capability_id": "C7",
+      "display_name": "Legality engine",
+      "kind": "core"
+    },
+    {
+      "flag": "void",
+      "capability_id": "C7",
+      "display_name": "Legality engine",
+      "kind": "core"
+    },
+    {
+      "flag": "defect",
+      "capability_id": "C7",
+      "display_name": "Legality engine",
+      "kind": "core"
+    },
+    {
+      "flag": "diffusion",
+      "capability_id": "C70",
+      "display_name": "Diffusion EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "eqprop",
+      "capability_id": "C70",
+      "display_name": "Diffusion EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C70",
+      "display_name": "Diffusion EqProp",
+      "kind": "core"
+    },
+    {
+      "flag": "routing",
+      "capability_id": "C71",
+      "display_name": "Routing plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "plasticity",
+      "capability_id": "C71",
+      "display_name": "Routing plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C71",
+      "display_name": "Routing plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "fast_weight",
+      "capability_id": "C72",
+      "display_name": "Fast-weight plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "plasticity",
+      "capability_id": "C72",
+      "display_name": "Fast-weight plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C72",
+      "display_name": "Fast-weight plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "substrate_coupled",
+      "capability_id": "C73",
+      "display_name": "Substrate-coupled plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "plasticity",
+      "capability_id": "C73",
+      "display_name": "Substrate-coupled plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C73",
+      "display_name": "Substrate-coupled plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "z3",
+      "capability_id": "C74",
+      "display_name": "Rule-state plasticity (Z3)",
+      "kind": "core"
+    },
+    {
+      "flag": "rule_state",
+      "capability_id": "C74",
+      "display_name": "Rule-state plasticity (Z3)",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C74",
+      "display_name": "Rule-state plasticity (Z3)",
+      "kind": "core"
+    },
+    {
+      "flag": "closed_form",
+      "capability_id": "C75",
+      "display_name": "Closed-form ridge plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "ridge",
+      "capability_id": "C75",
+      "display_name": "Closed-form ridge plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C75",
+      "display_name": "Closed-form ridge plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "temporal_psi",
+      "capability_id": "C76",
+      "display_name": "Temporal \u03c8 plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "plasticity",
+      "capability_id": "C76",
+      "display_name": "Temporal \u03c8 plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "gate1_accepted",
+      "capability_id": "C76",
+      "display_name": "Temporal \u03c8 plasticity",
+      "kind": "core"
+    },
+    {
+      "flag": "ceec",
+      "capability_id": "C77",
+      "display_name": "CEEC core ledger",
+      "kind": "core"
+    },
+    {
+      "flag": "ledger",
+      "capability_id": "C77",
+      "display_name": "CEEC core ledger",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C77",
+      "display_name": "CEEC core ledger",
+      "kind": "core"
+    },
+    {
+      "flag": "psi_peft",
+      "capability_id": "C78",
+      "display_name": "Psi-PEFT",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C78",
+      "display_name": "Psi-PEFT",
+      "kind": "core"
+    },
+    {
+      "flag": "local_feedback",
+      "capability_id": "C79",
+      "display_name": "Local feedback projections",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C79",
+      "display_name": "Local feedback projections",
+      "kind": "core"
+    },
+    {
+      "flag": "pipeline",
+      "capability_id": "C8",
+      "display_name": "S1-S11 pipeline",
+      "kind": "core"
+    },
+    {
+      "flag": "stages",
+      "capability_id": "C8",
+      "display_name": "S1-S11 pipeline",
+      "kind": "core"
+    },
+    {
+      "flag": "stability",
+      "capability_id": "C80",
+      "display_name": "Stability guard",
+      "kind": "core"
+    },
+    {
+      "flag": "guard",
+      "capability_id": "C80",
+      "display_name": "Stability guard",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C80",
+      "display_name": "Stability guard",
+      "kind": "core"
+    },
+    {
+      "flag": "lab",
+      "capability_id": "C81",
+      "display_name": "Computronium Lab synthesis",
+      "kind": "core"
+    },
+    {
+      "flag": "synthesis",
+      "capability_id": "C81",
+      "display_name": "Computronium Lab synthesis",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C81",
+      "display_name": "Computronium Lab synthesis",
+      "kind": "core"
+    },
+    {
+      "flag": "lab",
+      "capability_id": "C82",
+      "display_name": "Computronium Lab evolution",
+      "kind": "core"
+    },
+    {
+      "flag": "evolution",
+      "capability_id": "C82",
+      "display_name": "Computronium Lab evolution",
+      "kind": "core"
+    },
+    {
+      "flag": "platform",
+      "capability_id": "C82",
+      "display_name": "Computronium Lab evolution",
+      "kind": "core"
+    },
+    {
+      "flag": "cli",
+      "capability_id": "C83",
+      "display_name": "Surface CLI dispatcher",
+      "kind": "core"
+    },
+    {
+      "flag": "surface",
+      "capability_id": "C83",
+      "display_name": "Surface CLI dispatcher",
+      "kind": "core"
+    },
+    {
+      "flag": "report",
+      "capability_id": "C84",
+      "display_name": "Report generator",
+      "kind": "core"
+    },
+    {
+      "flag": "export",
+      "capability_id": "C84",
+      "display_name": "Report generator",
+      "kind": "core"
+    },
+    {
+      "flag": "codegen",
+      "capability_id": "C85",
+      "display_name": "Codegen from registries",
+      "kind": "core"
+    },
+    {
+      "flag": "drift_lock",
+      "capability_id": "C85",
+      "display_name": "Codegen from registries",
+      "kind": "core"
+    },
+    {
+      "flag": "conformance",
+      "capability_id": "C86",
+      "display_name": "Documented-command conformance",
+      "kind": "core"
+    },
+    {
+      "flag": "cli",
+      "capability_id": "C86",
+      "display_name": "Documented-command conformance",
+      "kind": "core"
+    },
+    {
+      "flag": "gallery",
+      "capability_id": "C87",
+      "display_name": "Gallery lock",
+      "kind": "core"
+    },
+    {
+      "flag": "manifest",
+      "capability_id": "C87",
+      "display_name": "Gallery lock",
+      "kind": "core"
+    },
+    {
+      "flag": "probes",
+      "capability_id": "C88",
+      "display_name": "Probe conventions",
+      "kind": "core"
+    },
+    {
+      "flag": "conventions",
+      "capability_id": "C88",
+      "display_name": "Probe conventions",
+      "kind": "core"
+    },
+    {
+      "flag": "policy",
+      "capability_id": "C9",
+      "display_name": "Eight-policy catalog",
+      "kind": "core"
+    },
+    {
+      "flag": "catalog",
+      "capability_id": "C9",
+      "display_name": "Eight-policy catalog",
+      "kind": "core"
+    }
+  ],
+  "objective_axis_tags": [
+    {
+      "axis_tag": "task",
+      "objective_name": "bleu_score",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "ruler",
+      "objective_name": "bp_deficit",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "substrate",
+      "objective_name": "coherence_time",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "plasticity",
+      "objective_name": "consolidation_cost",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "convergence_steps",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "composite",
+      "objective_name": "credit_efficiency",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "energy_efficiency",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "energy_per_step",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "f1_score",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "flops",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "free_energy",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "substrate",
+      "objective_name": "gate_fidelity",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "generalization_gap",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "substrate",
+      "objective_name": "ir_drop_variance",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "latency_ms",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "lyapunov_exponent",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "max_singular_value",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "memory_usage",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "param_count",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "perplexity",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "substrate",
+      "objective_name": "phase_noise",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "plasticity",
+      "objective_name": "psi_capacity",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "plasticity",
+      "objective_name": "rewrite_rate",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "ruler",
+      "objective_name": "ruler_energy_ratio",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "ruler",
+      "objective_name": "ruler_param_ratio",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "ruler",
+      "objective_name": "ruler_walltime_ratio",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "settle_steps",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "stability",
+      "objective_name": "spectral_radius",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "substrate",
+      "objective_name": "spike_rate",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "composite",
+      "objective_name": "stability_plasticity_ratio",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "test_accuracy",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "test_loss",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "training_time",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "validation_accuracy",
+      "direction": "maximize"
+    },
+    {
+      "axis_tag": "task",
+      "objective_name": "validation_loss",
+      "direction": "minimize"
+    },
+    {
+      "axis_tag": "cost",
+      "objective_name": "walltime_total",
+      "direction": "minimize"
+    }
+  ],
+  "constraint_kinds": [
+    {
+      "kind": "hard",
+      "constraint_name": "apply_constraints_max_hidden",
+      "origin": "APPLY_CONSTRAINTS",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "hard",
+      "constraint_name": "apply_constraints_max_layers",
+      "origin": "APPLY_CONSTRAINTS",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "hard",
+      "constraint_name": "apply_constraints_max_steps",
+      "origin": "APPLY_CONSTRAINTS",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "classification_requires_classifier_head",
+      "origin": "TASK_FENCE",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "credit_update_compatibility",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "dynamics_plasticity_compatibility",
+      "origin": "DECLARED",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "hard",
+      "constraint_name": "fidelity_schedule_consistency",
+      "origin": "DECLARED",
+      "proof_kind": "logical"
+    },
+    {
+      "kind": "hard",
+      "constraint_name": "gpu_memory_budget",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "language_modeling_requires_causal",
+      "origin": "TASK_FENCE",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "max_hidden_dim",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "max_layers",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "max_steps",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "operating_point",
+      "constraint_name": "operating_point_max_epochs",
+      "origin": "APPLY_CONSTRAINTS",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "operating_point",
+      "constraint_name": "operating_point_min_seeds",
+      "origin": "APPLY_CONSTRAINTS",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "fairness",
+      "constraint_name": "param_budget_fairness",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    },
+    {
+      "kind": "void",
+      "constraint_name": "substrate_geometry_compatibility",
+      "origin": "DECLARED",
+      "proof_kind": "logical"
+    },
+    {
+      "kind": "hard",
+      "constraint_name": "training_time_budget",
+      "origin": "DECLARED",
+      "proof_kind": "resource"
+    }
+  ]
+}

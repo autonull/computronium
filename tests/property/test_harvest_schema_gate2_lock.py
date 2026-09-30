@@ -288,8 +288,12 @@ def test_harvest_schema_availability_predicates() -> None:
         "weight_bounds_hi",  # analog/memristive/quantum
     }
 
-    with_availability = sum(1 for t in schema.hyperparameters if t.availability is not None)
-    print(f"Params with availability: {with_availability}/{len(schema.hyperparameters)}")
+    with_availability = sum(
+        1 for t in schema.hyperparameters if t.availability is not None
+    )
+    print(
+        f"Params with availability: {with_availability}/{len(schema.hyperparameters)}"
+    )
 
     # Check that some key conditional params do have availability
     conditional_found = sum(

@@ -11,6 +11,16 @@ from typing import Any
 
 from computronium.experiment.execution.stage import STAGE_SPECS as EXEC_STAGE_SPECS
 from computronium.experiment.legality.dsl import expr_from_string
+from computronium.experiment.schema.axis import (
+    AXES_REGISTRIES,
+    AxisKind,
+    AxisSpec,
+    Domain,
+    HyperparameterSpec,
+    Scale,
+    StructuralAxis,
+    register_axis_spec,
+)
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CONSTRAINTS_REGISTRY,
@@ -35,6 +45,304 @@ from computronium.experiment.schema.registries import (
     register_prior,
     register_stage,
 )
+
+# =============================================================================
+# AXIS PRIMITIVES — Seed AXES_REGISTRIES with AxisSpec for each primitive
+# Required for codegen (WP11.2) - listings, validators, stubs, flag tables
+# Sources: primitives.ALL_PRIMITIVES (primitive ids per axis) +
+# config-class hyperparameters() for availability/topology params.
+# =============================================================================
+
+# Substrate primitives: no primitive-specific topology; all share the
+# SubstrateConfig surface. device/precision are structural (dataset/runtime
+# determined), searchable substrate params carry availability predicates.
+_SUBSTRATE_PRIMS: list[tuple[str, str]] = [
+    ("digital", "Digital substrate: exact arithmetic, full precision"),
+    ("analog", "Analog substrate: continuous-valued physical state"),
+    ("memristive", "Memristive substrate: conductance, IR-drop, noise"),
+    ("neuromorphic", "Neuromorphic substrate: asynchronous spike events"),
+    ("optical", "Photonic substrate: phase/amplitude modulation"),
+    ("quantum", "Quantum substrate: unitary gate simulation"),
+    ("complex", "Complex-valued substrate"),
+    ("sparse", "Sparse substrate: sparsity-masked state"),
+    ("ternary", "Ternary substrate: weights in {-alpha, 0, +alpha}"),
+]
+
+# Geometry primitives: topology params are fixed by the primitive choice
+# (Appendix C: only hidden_dim/num_layers/cube_size/init_scale are searched).
+_GEOMETRY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
+    (
+        "feedforward",
+        "Feedforward DAG (MLP/CNN)",
+        ("input_dim", "output_dim", "hidden_dim", "num_layers"),
+    ),
+    (
+        "recurrent",
+        "Recurrent attractor (Hopfield/EqProp)",
+        ("input_dim", "output_dim", "hidden_dim", "num_layers"),
+    ),
+    (
+        "causal_transformer",
+        "Causal transformer with KV cache",
+        ("input_dim", "output_dim", "hidden_dim", "num_heads", "seq_len"),
+    ),
+    (
+        "tile",
+        "TileNet modular tile mesh",
+        ("input_dim", "output_dim", "neurons_per_tile", "tiles_per_layer"),
+    ),
+    (
+        "tile_mesh",
+        "TileNet mesh topology",
+        ("input_dim", "output_dim", "neurons_per_tile", "tiles_per_layer"),
+    ),
+    (
+        "conv",
+        "Convolutional geometry",
+        ("input_dim", "output_dim", "conv_channels", "kernel_size"),
+    ),
+    (
+        "graph",
+        "Arbitrary node-edge fabric (FabricPC)",
+        ("input_dim", "output_dim", "hidden_dim"),
+    ),
+    ("attention", "Attention geometry", ("input_dim", "output_dim", "num_heads")),
+    (
+        "spatial_lattice",
+        "3-D spatial lattice (neural_cube)",
+        ("input_dim", "output_dim", "lattice_dims"),
+    ),
+    ("nca", "Neural cellular automaton fabric", ("input_dim", "output_dim", "grid_hw")),
+    (
+        "ntm",
+        "Neural Turing Machine tape",
+        ("input_dim", "output_dim", "mem_slots", "mem_width"),
+    ),
+]
+
+# Dynamics primitives: settling-specific params become topology of the primitive
+_DYNAMICS_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
+    (
+        "energy_minimization",
+        "Equilibrium propagation energy minimization",
+        ("max_steps", "convergence_threshold"),
+    ),
+    (
+        "predictive_settling",
+        "Predictive coding settling",
+        ("max_steps", "convergence_threshold"),
+    ),
+    (
+        "error_predictive_coding",
+        "Error predictive coding",
+        ("max_steps", "convergence_threshold"),
+    ),
+    ("spike_integration", "LIF/Izhikevich spike integration", ("max_steps",)),
+    ("instantaneous", "Instantaneous pass (FF/Backprop)", ()),
+    ("diffusion", "Continuous-time diffusion settling", ("max_steps",)),
+    ("lazy", "Lazy/on-demand state dynamics", ()),
+    ("pc_alm", "Augmented Lagrangian predictive coding", ("max_steps",)),
+]
+
+# Credit primitives: STDP/contrastive/feedback-specific params are structural
+_CREDIT_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("thermodynamic_contrast", "EqProp free/nudged contrast (Scellier-Bengio)", ()),
+    ("random_projections", "Fixed random feedback (FA/DFA)", ("feedback_scale",)),
+    ("local_goodness", "Forward-Forward / PEPITA goodness", ()),
+    (
+        "local_contrastive",
+        "Local contrastive credit",
+        ("ema_beta", "contrast_threshold", "contrast_objective"),
+    ),
+    (
+        "temporal_trace",
+        "Hebbian/STDP temporal trace",
+        ("a_plus", "a_minus", "tau_pre", "tau_post"),
+    ),
+    ("target_inversion", "Target propagation inversion", ()),
+    ("homeostatic", "Autonomous Lipschitz scaling", ()),
+    ("pepita", "PEPITA input-modulation credit", ("feedback_scale",)),
+    ("gradient", "Backprop gradient credit (ruler reference)", ()),
+    ("pc_alm", "PC-ALM primal-dual credit", ()),
+]
+
+# Update primitives: rule-specific optimizer params are structural
+_UPDATE_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("euclidean", "SGD/Adam Euclidean update", ()),
+    ("adam", "Adam adaptive moment", ("beta2", "eps")),
+    ("local_adam", "Local Adam", ("beta2", "eps")),
+    ("ortho_adam", "Orthogonal Adam", ("beta2", "eps", "ortho_lr")),
+    (
+        "riemannian_orthogonal",
+        "Riemannian orthogonal update (Muon-family)",
+        ("ortho_steps",),
+    ),
+    ("muon", "Muon update", ("ortho_steps", "momentum")),
+    ("lion", "Lion optimizer", ("beta2", "eps")),
+    ("spectral_constrained", "Spectral-norm constrained update", ("spectral_norm",)),
+    ("mean_norm", "Mean-norm update", ()),
+    (
+        "elastic_consolidation",
+        "EWC elastic consolidation",
+        ("ewc_lambda", "fisher_damping"),
+    ),
+    ("natural_gradient", "Natural gradient (Fisher)", ("fisher_damping",)),
+    ("role_split", "Role-split update", ()),
+]
+
+# Plasticity primitives: psi-specific dims are structural to the primitive
+_PLASTICITY_PRIMS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("null", "Null plasticity (5-D slice)", ()),
+    ("routing", "Routing plasticity: state-dependent gating", ("gate_dim",)),
+    ("fast_weights", "Fast-weight episode-local memory", ("fast_weight_dim",)),
+    ("substrate_coupled", "Physical substrate-coupled plasticity", ()),
+    ("rule_state", "Rule-state plasticity (Z3)", ("num_operators",)),
+    ("temporal_psi", "Trace-decayed supervised psi", ("trace_decay",)),
+    (
+        "conflict_adaptive",
+        "Conflict-adaptive psi",
+        ("trace_decay", "conflict_threshold"),
+    ),
+]
+
+
+def _hyperparameter_spec(
+    name: str, axis_name: str, kind: AxisKind
+) -> HyperparameterSpec:
+    """Build a HyperparameterSpec for a topology (structural) param.
+
+    Topology params are fixed by the primitive choice; they carry a permissive
+    domain because they are not searched — only recorded in AxisSpec.
+    """
+    defaults: dict[str, tuple[float, float, Scale]] = {
+        "input_dim": (1, 8192, Scale.LINEAR),
+        "output_dim": (1, 8192, Scale.LINEAR),
+        "hidden_dim": (8, 4096, Scale.LOG),
+        "num_layers": (1, 12, Scale.LINEAR),
+        "num_heads": (1, 32, Scale.LINEAR),
+        "seq_len": (16, 4096, Scale.LOG),
+        "neurons_per_tile": (2, 64, Scale.LINEAR),
+        "tiles_per_layer": (1, 8, Scale.LINEAR),
+        "conv_channels": (4, 256, Scale.LINEAR),
+        "kernel_size": (1, 7, Scale.LINEAR),
+        "lattice_dims": (2, 32, Scale.LINEAR),
+        "grid_hw": (4, 64, Scale.LINEAR),
+        "mem_slots": (4, 128, Scale.LOG),
+        "mem_width": (4, 128, Scale.LOG),
+        "max_steps": (1, 200, Scale.LINEAR),
+        "convergence_threshold": (1e-6, 0.01, Scale.LOG),
+        "feedback_scale": (0.001, 10.0, Scale.LOG),
+        "ema_beta": (0.9, 0.999, Scale.LINEAR),
+        "contrast_threshold": (0.5, 10.0, Scale.LINEAR),
+        "a_plus": (0.1, 5.0, Scale.LINEAR),
+        "a_minus": (0.1, 5.0, Scale.LINEAR),
+        "tau_pre": (0.1, 2.0, Scale.LINEAR),
+        "tau_post": (0.1, 2.0, Scale.LINEAR),
+        "beta2": (0.9, 0.9999, Scale.LINEAR),
+        "eps": (1e-10, 1e-4, Scale.LOG),
+        "ortho_lr": (1e-5, 1.0, Scale.LOG),
+        "ortho_steps": (0, 10, Scale.LINEAR),
+        "spectral_norm": (0.1, 10.0, Scale.LOG),
+        "ewc_lambda": (0.1, 1e4, Scale.LOG),
+        "fisher_damping": (1e-6, 1.0, Scale.LOG),
+        "momentum": (0.0, 0.99, Scale.LINEAR),
+        "gate_dim": (8, 512, Scale.LINEAR),
+        "fast_weight_dim": (64, 2048, Scale.LOG),
+        "num_operators": (2, 32, Scale.LINEAR),
+        "trace_decay": (0.5, 1.0, Scale.LINEAR),
+        "conflict_threshold": (0.1, 0.9, Scale.LINEAR),
+    }
+    if name in defaults:
+        lo, hi, scale = defaults[name]
+        return HyperparameterSpec(
+            name=name,
+            domain=Domain(lo=lo, hi=hi, scale=scale),
+            axis_kind=kind,
+            axis_name=axis_name,
+        )
+    return HyperparameterSpec(
+        name=name,
+        domain=Domain(members=("unknown",)),
+        axis_kind=AxisKind.CATEGORICAL,
+        axis_name=axis_name,
+    )
+
+
+def _seed_axis_primitives() -> None:
+    """Register one AxisSpec per primitive in AXES_REGISTRIES.
+
+    Structural topology params are attached per primitive; searchable
+    hyperparameters remain the harvest layer's concern (L2).
+    """
+    for name, description in _SUBSTRATE_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.SUBSTRATE,
+                description=description,
+            )
+        )
+    for name, description, topology in _GEOMETRY_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.GEOMETRY,
+                description=description,
+                topology_params=tuple(
+                    _hyperparameter_spec(p, "geometry", AxisKind.STRUCTURAL)
+                    for p in topology
+                ),
+            )
+        )
+    for name, description, topology in _DYNAMICS_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.DYNAMICS,
+                description=description,
+                topology_params=tuple(
+                    _hyperparameter_spec(p, "dynamics", AxisKind.STRUCTURAL)
+                    for p in topology
+                ),
+            )
+        )
+    for name, description, topology in _CREDIT_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.CREDIT,
+                description=description,
+                topology_params=tuple(
+                    _hyperparameter_spec(p, "credit", AxisKind.STRUCTURAL)
+                    for p in topology
+                ),
+            )
+        )
+    for name, description, topology in _UPDATE_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.UPDATE,
+                description=description,
+                topology_params=tuple(
+                    _hyperparameter_spec(p, "update", AxisKind.STRUCTURAL)
+                    for p in topology
+                ),
+            )
+        )
+    for name, description, topology in _PLASTICITY_PRIMS:
+        register_axis_spec(
+            AxisSpec(
+                name=name,
+                axis_kind=StructuralAxis.PLASTICITY,
+                description=description,
+                topology_params=tuple(
+                    _hyperparameter_spec(p, "plasticity", AxisKind.STRUCTURAL)
+                    for p in topology
+                ),
+            )
+        )
+
 
 # =============================================================================
 # OBJECTIVES — Gate 1/2: full Appendix B.7 union (~39 objectives)
@@ -750,7 +1058,7 @@ POLICIES = [
 
 
 # =============================================================================
-# STAGES — S1-S11 pipeline stages (abc3 §5.2)
+# STAGES — S1-S11 canonical pipeline stages (TODO43 §3.0 / abc3 §5.1)
 # =============================================================================
 
 
@@ -759,11 +1067,13 @@ def _convert_stage_spec(exec_stage: Any) -> StageSpec:
     """Convert execution.stage.StageSpec to schema.registries.StageSpec."""
     return StageSpec(
         stage_id=exec_stage.stage_id,
-        name=exec_stage.name,
+        name=exec_stage.name,  # Canonical ID
+        display_name=exec_stage.display_name,
         description=exec_stage.description,
         required_fidelity=exec_stage.required_fidelity,
         min_n_seeds=exec_stage.min_n_seeds,
         gate=exec_stage.gate,
+        params=exec_stage.params,
     )
 
 
@@ -780,7 +1090,7 @@ CAPABILITIES = [
         display_name="Six-axis coordinate space",
         description="Full Substrate×Geometry×Dynamics×Plasticity×Credit×Update coordinate space",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="schema",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_all_registries_dict_completeness",
         flags=("axis", "coordinate"),
@@ -792,7 +1102,7 @@ CAPABILITIES = [
         display_name="Unified record schema",
         description="Single record schema with four identity sections and three identity keys",
         required=True,
-        stage="S2",
+        stage="S2_SPACE",
         owner="schema",
         verifying_test="tests/property/test_dynamics_wiring_lock.py::test_record_schema_valid",
         flags=("schema", "record"),
@@ -804,7 +1114,7 @@ CAPABILITIES = [
         display_name="Content-addressed records",
         description="Records identified by content hash (record_id)",
         required=True,
-        stage="S8",
+        stage="S8_RECORD",
         owner="store",
         verifying_test="tests/property/test_atomic_append_kill_proof.py::test_atomic_transaction_rollback",
         flags=("content_addressed", "dedup"),
@@ -816,7 +1126,7 @@ CAPABILITIES = [
         display_name="Measurement key deduplication",
         description="Unique measurement_key prevents duplicate evaluations",
         required=True,
-        stage="S8",
+        stage="S8_RECORD",
         owner="store",
         verifying_test="tests/property/test_atomic_append_kill_proof.py::test_duplicate_measurement_key_dedup",
         flags=("dedup", "measurement_key"),
@@ -828,7 +1138,7 @@ CAPABILITIES = [
         display_name="Cell key grouping",
         description="cell_key groups repeated evaluations of same coordinate",
         required=True,
-        stage="S2",
+        stage="S2_SPACE",
         owner="schema",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_replication_key_groups_seeds",
         flags=("cell_key", "replication"),
@@ -840,7 +1150,7 @@ CAPABILITIES = [
         display_name="Schema versioning",
         description="Append-only schema evolution with UnknownField preservation",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="schema",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_schema_versioning_fail_closed",
         flags=("versioning", "unknown_field"),
@@ -852,7 +1162,7 @@ CAPABILITIES = [
         display_name="Legality engine",
         description="Predicate-based constraint engine with void/defect classification",
         required=True,
-        stage="S4",
+        stage="S4_GATE",
         owner="legality",
         verifying_test="tests/property/test_legality_boundary_lock.py::test_declared_constraints_have_proof",
         flags=("legality", "void", "defect"),
@@ -864,7 +1174,7 @@ CAPABILITIES = [
         display_name="S1-S11 pipeline",
         description="Eleven-stage pipeline with wrapper obligations",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="pipeline",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_stage_registry_completeness",
         flags=("pipeline", "stages"),
@@ -876,7 +1186,7 @@ CAPABILITIES = [
         display_name="Eight-policy catalog",
         description="StratifiedRandom, RoundRobinGrid, UniformRandom, ModelBased, Evolution, Synthesis, StrategyProgression, TrainerDriven",
         required=True,
-        stage="S3",
+        stage="S3_SCHEDULE",
         owner="policy",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_policy_registry_has_eight",
         flags=("policy", "catalog"),
@@ -888,7 +1198,7 @@ CAPABILITIES = [
         display_name="Evidence-driven allocation",
         description="Non-uniform compute allocation with divergence/stagnation detection",
         required=True,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="allocator",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_allocation_promotion",
         flags=("allocation", "evidence_driven"),
@@ -900,7 +1210,7 @@ CAPABILITIES = [
         display_name="Replay and resume",
         description="Deterministic replay via replay_hash; resume via measurement_key",
         required=True,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="replay",
         verifying_test="tests/property/test_atomic_append_kill_proof.py::test_monotonic_seq_across_concurrent",
         flags=("replay", "resume"),
@@ -912,7 +1222,7 @@ CAPABILITIES = [
         display_name="Three-tier status model",
         description="Observations, Assessments (procedure-versioned), Derived Claims",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_three_tier_status_model",
         flags=("status", "three_tier"),
@@ -924,7 +1234,7 @@ CAPABILITIES = [
         display_name="Claim eligibility predicates",
         description="Pure query predicates for claim_eligible, promoted, beats_baseline",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_claim_eligible_predicate",
         flags=("claims", "predicates"),
@@ -936,7 +1246,7 @@ CAPABILITIES = [
         display_name="Failure intelligence",
         description="FailureCause taxonomy, clustering, reproducer emission",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_failure_clustering",
         flags=("failure", "clustering"),
@@ -948,7 +1258,7 @@ CAPABILITIES = [
         display_name="Unified artifact storage",
         description="Atomic record+artifact transactions in DuckDB",
         required=True,
-        stage="S8",
+        stage="S8_RECORD",
         owner="artifacts",
         verifying_test="tests/property/test_atomic_append_kill_proof.py::test_atomic_append_with_artifacts",
         flags=("artifacts", "atomic"),
@@ -960,7 +1270,7 @@ CAPABILITIES = [
         display_name="Vector retrieval",
         description="Brute-force cosine/dot + optional HNSW via vss",
         required=True,
-        stage="S8",
+        stage="S8_RECORD",
         owner="store",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_vector_retrieval_bruteforce",
         flags=("vector", "vss_optional"),
@@ -972,7 +1282,7 @@ CAPABILITIES = [
         display_name="Prior registry",
         description="Ruler LR + step-size overrides as PriorSpec data",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="priors",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_priors_registry_seeded",
         flags=("priors", "ruler_lr"),
@@ -984,7 +1294,7 @@ CAPABILITIES = [
         display_name="Surrogate policy wrapper",
         description="EI/EHVI/UCB/PI/LOG_EI over any base Policy",
         required=True,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_surrogate_policy_wrapper",
         flags=("surrogate", "acquisition"),
@@ -996,7 +1306,7 @@ CAPABILITIES = [
         display_name="I(C,U) metamodel",
         description="Input-conditional uncertainty metamodel with leakage guard",
         required=True,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_icu_leakage_guard",
         flags=("icu", "leakage_guard"),
@@ -1008,7 +1318,7 @@ CAPABILITIES = [
         display_name="Reasoning records",
         description="Hypothesis/literature records with provenance linkage",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_reasoning_provenance_linkage",
         flags=("reasoning", "provenance"),
@@ -1020,7 +1330,7 @@ CAPABILITIES = [
         display_name="torch.compile settle loop",
         description="Compiled settle loop for digital substrate (2x speedup)",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="dynamics",
         verifying_test="tests/property/test_settle_driver_lock.py::test_compiled_settle_bitwise_equal",
         flags=("compilation", "experimental"),
@@ -1032,7 +1342,7 @@ CAPABILITIES = [
         display_name="Gradient checkpointing",
         description="Memory-compute tradeoff for deep settling",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="dynamics",
         verifying_test="tests/property/test_settle_driver_lock.py::test_gradient_checkpointing_memory",
         flags=("checkpointing", "memory"),
@@ -1044,7 +1354,7 @@ CAPABILITIES = [
         display_name="Gain control homeostasis",
         description="μPC-style unit RMS and spectral renormalization",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="dynamics",
         verifying_test="tests/property/test_settle_driver_lock.py::test_gain_control_unit_rms",
         flags=("gain_control", "homeostasis"),
@@ -1056,7 +1366,7 @@ CAPABILITIES = [
         display_name="KV cache for transformer",
         description="Key-value cache for autoregressive generation",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="geometry",
         verifying_test="tests/property/test_geometry_wiring_lock.py::test_transformer_kv_cache",
         flags=("kv_cache", "transformer"),
@@ -1068,7 +1378,7 @@ CAPABILITIES = [
         display_name="Async orchestration",
         description="asyncio.TaskGroup for concurrent evaluation",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_async_backend_works",
         flags=("async", "taskgroup"),
@@ -1080,7 +1390,7 @@ CAPABILITIES = [
         display_name="Multiprocess backend",
         description="Parallel evaluation via multiprocessing",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_multiprocess_backend",
         flags=("multiprocess", "parallel"),
@@ -1092,7 +1402,7 @@ CAPABILITIES = [
         display_name="Multi-GPU DDP/FSDP",
         description="Distributed data parallel and fully sharded data parallel",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_ddp_fsdp_works",
         flags=("ddp", "fsdp", "gpu_only"),
@@ -1104,7 +1414,7 @@ CAPABILITIES = [
         display_name="P2P gossip cluster",
         description="Kademlia-based peer-to-peer worker coordination",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_p2p_cluster_works",
         flags=("p2p", "kademlia"),
@@ -1116,7 +1426,7 @@ CAPABILITIES = [
         display_name="Batch vectorization",
         description="Vectorized evaluation across batch dimension",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_batch_vectorization",
         flags=("vectorization", "batch"),
@@ -1128,7 +1438,7 @@ CAPABILITIES = [
         display_name="Pipeline parallelism",
         description="Stage-wise pipeline parallelism for deep networks",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_pipeline_parallelism",
         flags=("pipeline_parallel", "experimental"),
@@ -1140,7 +1450,7 @@ CAPABILITIES = [
         display_name="Computational reproducibility",
         description="Same env reproduces numerics within tolerance",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="replay",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_replayable_reproducibility",
         flags=("replayable", "computational"),
@@ -1152,7 +1462,7 @@ CAPABILITIES = [
         display_name="Scientific reproducibility",
         description="Independent env reproduces reported effect",
         required=False,
-        stage="S11",
+        stage="S11_REPORT",
         owner="benchmarks",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_scientific_reproducibility",
         flags=("scientific", "independent_env"),
@@ -1164,7 +1474,7 @@ CAPABILITIES = [
         display_name="Reproducibility class tracking",
         description="REPLAYABLE / COMPUTATIONALLY_REPRODUCIBLE / SCIENTIFICALLY_REPRODUCIBLE",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_reproducibility_classes",
         flags=("reproducibility_class", "tracking"),
@@ -1176,7 +1486,7 @@ CAPABILITIES = [
         display_name="Assessment procedure versioning",
         description="Content-addressed immutable assessment procedures",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_assessment_procedure_versioning",
         flags=("assessment", "procedure"),
@@ -1188,7 +1498,7 @@ CAPABILITIES = [
         display_name="Data origin tagging",
         description="exploration / policy_selected / calibration / test tags on every record",
         required=True,
-        stage="S3",
+        stage="S3_SCHEDULE",
         owner="schema",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_data_origin_tags",
         flags=("data_origin", "split"),
@@ -1200,7 +1510,7 @@ CAPABILITIES = [
         display_name="Transfer provenance tracking",
         description="training_tasks, transfer_source_ids, transfer_mode on records",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_transfer_provenance",
         flags=("transfer", "provenance"),
@@ -1212,7 +1522,7 @@ CAPABILITIES = [
         display_name="Matched-cost comparison guard",
         description="Refuses unmatched budget tier/hardware class comparisons",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_comparison_guard_rejects_mismatched",
         flags=("comparison", "guard"),
@@ -1224,7 +1534,7 @@ CAPABILITIES = [
         display_name="Stratification guard",
         description="Requires hardware_class match for WALLTIME budget tier",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_stratification_guard_hardware_class",
         flags=("stratification", "hardware_class"),
@@ -1236,7 +1546,7 @@ CAPABILITIES = [
         display_name="I(C,U) leakage audit",
         description="Periodic calibration audit for bounded degradation",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_icu_calibration_audit",
         flags=("icu", "leakage", "audit"),
@@ -1248,7 +1558,7 @@ CAPABILITIES = [
         display_name="Alert predicates",
         description="Divergence, stagnation, resource_exhaustion, constraint_violation alerts",
         required=True,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_alert_predicates",
         flags=("alerts", "predicates"),
@@ -1260,7 +1570,7 @@ CAPABILITIES = [
         display_name="Promotion predicates",
         description="promoted, beats_baseline, robust, generalizes claim predicates",
         required=True,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_promotion_predicates",
         flags=("promotion", "claims"),
@@ -1272,7 +1582,7 @@ CAPABILITIES = [
         display_name="Effect-size protocol",
         description="Cohen's d + CI + p-value at task level (N_tasks≥10, N_seeds≥5)",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_effect_size_protocol",
         flags=("effect_size", "cohens_d"),
@@ -1284,7 +1594,7 @@ CAPABILITIES = [
         display_name="Budget tier system",
         description="EVAL_COUNT, FLOPS, WALLTIME (hardware_class), ENERGY tiers",
         required=True,
-        stage="S3",
+        stage="S3_SCHEDULE",
         owner="budget",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_budget_tier_system",
         flags=("budget", "tier"),
@@ -1296,7 +1606,7 @@ CAPABILITIES = [
         display_name="Run controller",
         description="Pausable/steerable runs with operator intent audit trail",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="operations",
         verifying_test="tests/property/test_public_surface_lock.py::test_run_controller_pause_resume",
         flags=("operations", "control"),
@@ -1308,7 +1618,7 @@ CAPABILITIES = [
         display_name="Service manager",
         description="Long-running services with auto-restart and webhook alerts",
         required=False,
-        stage="S9",
+        stage="S9_ATTRIBUTE",
         owner="operations",
         verifying_test="tests/property/test_public_surface_lock.py::test_service_manager_webhooks",
         flags=("service", "webhooks"),
@@ -1320,7 +1630,7 @@ CAPABILITIES = [
         display_name="Conformance harness",
         description="CI gate enforcement with capability currency lock",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_conformance_harness_gate",
         flags=("conformance", "ci"),
@@ -1332,7 +1642,7 @@ CAPABILITIES = [
         display_name="Currency lock",
         description="Appendix-A flag projection view with currency tracking (R78)",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_currency_lock_flags",
         flags=("currency", "flags"),
@@ -1344,7 +1654,7 @@ CAPABILITIES = [
         display_name="Question-first entry",
         description="Synthesis policy: ProblemSpec → I(C,U,P)-predicted coordinate",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="policy",
         verifying_test="tests/property/test_public_surface_lock.py::test_synthesis_policy_question_first",
         flags=("synthesis", "question_first"),
@@ -1356,7 +1666,7 @@ CAPABILITIES = [
         display_name="Surrogate-driven acquisition",
         description="EI/EHVI acquisition functions for efficient search",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_surrogate_acquisition_ei",
         flags=("surrogate", "ei"),
@@ -1368,7 +1678,7 @@ CAPABILITIES = [
         display_name="Cross-task transfer",
         description="Transfer learning with explicit provenance",
         required=False,
-        stage="S1",
+        stage="S1_FRAME",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_cross_task_transfer",
         flags=("transfer", "cross_task"),
@@ -1380,7 +1690,7 @@ CAPABILITIES = [
         display_name="Prior single-source accessor",
         description="prior_value(name, context) with confidence/uncertainty/override",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="priors",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_prior_single_source",
         flags=("priors", "single_source"),
@@ -1392,7 +1702,7 @@ CAPABILITIES = [
         display_name="Run-scoped ICU/Reasoning",
         description="Context-injected ICU/Reasoning; no module-level singletons (K10)",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="learning",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_no_global_singletons",
         flags=("icu", "reasoning", "k10"),
@@ -1404,7 +1714,7 @@ CAPABILITIES = [
         display_name="Reasoning persistence",
         description="Hypotheses/literature as records with ProvenanceLink cross-links",
         required=True,
-        stage="S1",
+        stage="S1_FRAME",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_reasoning_persistence",
         flags=("reasoning", "persistence"),
@@ -1416,7 +1726,7 @@ CAPABILITIES = [
         display_name="Warm-start from prior runs",
         description="Registered prior/surrogate sources for transfer",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_warm_start_prior_runs",
         flags=("warm_start", "transfer"),
@@ -1428,7 +1738,7 @@ CAPABILITIES = [
         display_name="Coordinate-wide surrogate",
         description="SurrogatePolicy over any Policy, features from full Coordinate",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_coordinate_wide_surrogate",
         flags=("surrogate", "coordinate_wide"),
@@ -1440,7 +1750,7 @@ CAPABILITIES = [
         display_name="I(C,U) feature encoder",
         description="Credit×Update interaction surrogate with feature encoder",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_icu_feature_encoder",
         flags=("icu", "feature_encoder"),
@@ -1452,7 +1762,7 @@ CAPABILITIES = [
         display_name="Achieved-seed claim eligibility",
         description="claim_eligible counts achieved seeds per replication_key (L20)",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="evidence",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_achieved_seed_claim",
         flags=("claims", "achieved_seeds"),
@@ -1464,7 +1774,7 @@ CAPABILITIES = [
         display_name="Multi-objective Pareto",
         description="Configurable Pareto fronts across 20+ objectives per axis",
         required=True,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="objectives",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_multi_objective_pareto",
         flags=("pareto", "multi_objective"),
@@ -1476,7 +1786,7 @@ CAPABILITIES = [
         display_name="Substrate-aware objectives",
         description="Memristive→energy, Neuromorphic→spike_rate, etc.",
         required=False,
-        stage="S7",
+        stage="S7_MEASURE",
         owner="substrate",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_substrate_aware_objectives",
         flags=("substrate", "objectives"),
@@ -1488,7 +1798,7 @@ CAPABILITIES = [
         display_name="Frozen-θ ψ adaptation",
         description="Lab.adapt Pareto over (accuracy, stability, cost) with θ bitwise invariant",
         required=False,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="update",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_frozen_theta_psi_adapt",
         flags=("frozen_theta", "psi"),
@@ -1500,7 +1810,7 @@ CAPABILITIES = [
         display_name="NTM geometry",
         description="External-memory tape: LSTM controller + content-addressed heads",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="geometry",
         verifying_test="tests/integration/test_demo_ntm.py",
         flags=("ntm", "gate1_accepted", "experimental"),
@@ -1512,7 +1822,7 @@ CAPABILITIES = [
         display_name="NCA geometry",
         description="Neural cellular automaton fabric; local credit solves growing NCA",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="geometry",
         verifying_test="tests/integration/test_demo_nca.py",
         flags=("nca", "gate1_accepted", "experimental"),
@@ -1524,7 +1834,7 @@ CAPABILITIES = [
         display_name="PEPITA/LEMMA credit",
         description="Published PEPITA input-modulation credit; LEMMA closed-form per-layer",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="credit",
         verifying_test="tests/integration/test_demo_swap_credit.py",
         flags=("pepita", "lemma", "gate1_accepted"),
@@ -1536,7 +1846,7 @@ CAPABILITIES = [
         display_name="Holomorphic EP",
         description="Complex-valued EP with holomorphic activations and conjugate feedback",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_holomorphic_ep.py",
         flags=("holomorphic", "gate1_accepted"),
@@ -1548,7 +1858,7 @@ CAPABILITIES = [
         display_name="Directed EP",
         description="Asymmetric EP implementing Feedback Alignment within energy framework",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_directed_ep.py",
         flags=("directed_ep", "gate1_accepted"),
@@ -1560,7 +1870,7 @@ CAPABILITIES = [
         display_name="Finite-nudge EP",
         description="Large β finite nudge instead of infinitesimal limit",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_finite_nudge_ep.py",
         flags=("finite_nudge", "gate1_accepted"),
@@ -1572,7 +1882,7 @@ CAPABILITIES = [
         display_name="Ternary EqProp",
         description="Ternary-weight EP with STE-based quantization",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_ternary_eqprop.py",
         flags=("ternary", "eqprop", "gate1_accepted"),
@@ -1584,7 +1894,7 @@ CAPABILITIES = [
         display_name="Momentum EqProp",
         description="Heavy-ball settling dynamics for faster equilibrium convergence",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_momentum_eqprop.py",
         flags=("momentum", "eqprop", "gate1_accepted"),
@@ -1596,7 +1906,7 @@ CAPABILITIES = [
         display_name="Sparse EqProp",
         description="Dynamic sparsity masks with efficient sparse matmul",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_sparse_eqprop.py",
         flags=("sparse", "eqprop", "gate1_accepted"),
@@ -1608,7 +1918,7 @@ CAPABILITIES = [
         display_name="Diffusion EqProp",
         description="Continuous-time diffusion settling dynamics",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="models_native",
         verifying_test="tests/integration/test_demo_diffusion_eqprop.py",
         flags=("diffusion", "eqprop", "gate1_accepted"),
@@ -1620,7 +1930,7 @@ CAPABILITIES = [
         display_name="Routing plasticity",
         description="State-dependent gating, sparse pathway routing",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_swap_plasticity.py",
         flags=("routing", "plasticity", "gate1_accepted"),
@@ -1632,7 +1942,7 @@ CAPABILITIES = [
         display_name="Fast-weight plasticity",
         description="Episode-local associative memory via fast-weight matrices",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_swap_plasticity.py",
         flags=("fast_weight", "plasticity", "gate1_accepted"),
@@ -1644,7 +1954,7 @@ CAPABILITIES = [
         display_name="Substrate-coupled plasticity",
         description="Physical plasticity (memristive conductance dynamics)",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_memristive.py",
         flags=("substrate_coupled", "plasticity", "gate1_accepted"),
@@ -1656,7 +1966,7 @@ CAPABILITIES = [
         display_name="Rule-state plasticity (Z3)",
         description="Rule selection as dynamical variable; frozen-θ ψ benchmarks",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_z3_frozen_theta.py",
         flags=("z3", "rule_state", "gate1_accepted"),
@@ -1668,7 +1978,7 @@ CAPABILITIES = [
         display_name="Closed-form ridge plasticity",
         description="Supervised ψ computed, not trained (LEMMA-style)",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_closed_form_ridge.py",
         flags=("closed_form", "ridge", "gate1_accepted"),
@@ -1680,7 +1990,7 @@ CAPABILITIES = [
         display_name="Temporal ψ plasticity",
         description="Trace-decayed supervised ψ — forgetting enables task migration",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="plasticity",
         verifying_test="tests/integration/test_demo_temporal_psi.py",
         flags=("temporal_psi", "plasticity", "gate1_accepted"),
@@ -1692,7 +2002,7 @@ CAPABILITIES = [
         display_name="CEEC core ledger",
         description="Standalone epistemic governance ledger (evidence/beliefs/gates/audit)",
         required=False,
-        stage="S8",
+        stage="S8_RECORD",
         owner="ceec_core",
         verifying_test="packages/ceec-core/tests/test_ceec_ledger.py",
         flags=("ceec", "ledger", "platform"),
@@ -1704,7 +2014,7 @@ CAPABILITIES = [
         display_name="Psi-PEFT",
         description="Frozen-backbone task switching via temporal-ψ ridge readouts",
         required=False,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="psi_peft",
         verifying_test="packages/psi-peft/tests/test_psi_peft.py",
         flags=("psi_peft", "platform"),
@@ -1716,7 +2026,7 @@ CAPABILITIES = [
         display_name="Local feedback projections",
         description="Adaptive local feedback for local credit (X-ALI validated)",
         required=False,
-        stage="S5",
+        stage="S5_COMPOSE",
         owner="local_feedback",
         verifying_test="packages/local-feedback/tests/test_local_feedback.py",
         flags=("local_feedback", "platform"),
@@ -1728,7 +2038,7 @@ CAPABILITIES = [
         display_name="Stability guard",
         description="Calibrated stability guard (attach, ROC-calibrated τ=1.029)",
         required=False,
-        stage="S6",
+        stage="S6_TRAIN",
         owner="stability",
         verifying_test="packages/stability/tests/test_stability_guard.py",
         flags=("stability", "guard", "platform"),
@@ -1740,7 +2050,7 @@ CAPABILITIES = [
         display_name="Computronium Lab synthesis",
         description="ProblemSpec → coordinate + provenance + predicted viability",
         required=False,
-        stage="S1",
+        stage="S1_FRAME",
         owner="lab",
         verifying_test="packages/computronium-lab/tests/test_lab_synthesize.py",
         flags=("lab", "synthesis", "platform"),
@@ -1752,7 +2062,7 @@ CAPABILITIES = [
         display_name="Computronium Lab evolution",
         description="Budgeted evolution with campaign-backed fitness and audited ledger",
         required=False,
-        stage="S10",
+        stage="S10_DECIDE",
         owner="lab",
         verifying_test="packages/computronium-lab/tests/test_lab_evolution.py",
         flags=("lab", "evolution", "platform"),
@@ -1764,7 +2074,7 @@ CAPABILITIES = [
         display_name="Surface CLI dispatcher",
         description="Single comp-surface dispatcher with run profiles as data",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_surface_cli_profiles",
         flags=("cli", "surface"),
@@ -1776,7 +2086,7 @@ CAPABILITIES = [
         display_name="Report generator",
         description="Run summaries, claim queries, Pareto frontiers, Parquet/JSON export",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_report_generator",
         flags=("report", "export"),
@@ -1788,7 +2098,7 @@ CAPABILITIES = [
         display_name="Codegen from registries",
         description="docs/generated listings, compatibility matrix, JSON-Schema validators",
         required=False,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_codegen_drift_lock",
         flags=("codegen", "drift_lock"),
@@ -1800,7 +2110,7 @@ CAPABILITIES = [
         display_name="Documented-command conformance",
         description="R80: every CLI command has conformance test",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="surface",
         verifying_test="tests/property/test_public_surface_lock.py::test_documented_command_conformance",
         flags=("conformance", "cli"),
@@ -1812,7 +2122,7 @@ CAPABILITIES = [
         display_name="Gallery lock",
         description="DEMOS registry + docs/figures/manifest.json pinning (R87)",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="visualization",
         verifying_test="tests/integration/test_gallery_lock.py",
         flags=("gallery", "manifest"),
@@ -1824,7 +2134,7 @@ CAPABILITIES = [
         display_name="Probe conventions",
         description="scripts/probes/ throwaway scripts with measured-regime docstrings",
         required=True,
-        stage="S11",
+        stage="S11_REPORT",
         owner="probes",
         verifying_test="tests/property/test_public_surface_lock.py::test_probe_conventions",
         flags=("probes", "conventions"),
@@ -1849,6 +2159,11 @@ def seed_all_registries() -> None:
     POLICIES_REGISTRY.clear()
     STAGES_REGISTRY.clear()
     CAPABILITIES_REGISTRY.clear()
+    for axis_registry in AXES_REGISTRIES.values():
+        axis_registry.clear()
+
+    # Axis primitives (codegen listings + validators)
+    _seed_axis_primitives()
 
     # Objectives
     for obj in OBJECTIVES:

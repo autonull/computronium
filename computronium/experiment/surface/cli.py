@@ -63,7 +63,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
     "quick-verify": RunProfile(
         name="quick-verify",
         description="Fast sanity check: L0 smoke + L1 evidence on few seeds",
-        stages=["S1_DISCOVERY", "S2_VALIDATION", "S3_CALIBRATION"],
+        stages=["s1_frame", "s2_space", "s3_schedule", "s4_gate", "s5_compose"],
         fidelity="L1",
         seeds=1,
         epochs=3,
@@ -77,17 +77,17 @@ RUN_PROFILES: dict[str, RunProfile] = {
         name="production-map",
         description="Full broad mapping: L0→L1→L2 maturation with multi-objective Pareto",
         stages=[
-            "S1_DISCOVERY",
-            "S2_VALIDATION",
-            "S3_CALIBRATION",
-            "S4_EXPANSION",
-            "S5_MATURATION",
-            "S6_CLAIM",
-            "S7_REPRODUCTION",
-            "S8_DISTILLATION",
-            "S9_DEPLOYMENT",
-            "S10_MONITORING",
-            "S11_RETIREMENT",
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
         ],
         fidelity="L0",
         seeds=1,
@@ -101,7 +101,15 @@ RUN_PROFILES: dict[str, RunProfile] = {
     "maturation": RunProfile(
         name="maturation",
         description="Re-run front cells at higher fidelity (L1→L2)",
-        stages=["S4_EXPANSION", "S5_MATURATION", "S6_CLAIM", "S7_REPRODUCTION"],
+        stages=[
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+        ],
         fidelity="L2",
         seeds=5,
         epochs=10,
@@ -114,7 +122,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
     "claim": RunProfile(
         name="claim",
         description="Claim-grade L2 re-runs with CEEC governance (N≥10 seeds)",
-        stages=["S8_DISTILLATION", "S9_DEPLOYMENT", "S10_MONITORING", "S11_RETIREMENT"],
+        stages=["s8_record", "s9_attribute", "s10_decide", "s11_report"],
         fidelity="L2",
         seeds=10,
         epochs=20,
@@ -332,15 +340,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
         # Determine run_id
         run_id = args.run_id
         if run_id is None:
-            if store._conn is None:
-                raise RuntimeError("Store connection not initialized")
-            runs = store._conn.execute(
-                "SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1"
-            ).fetchone()
-            if runs is None:
+            run_id = store.latest_run_id()
+            if run_id is None:
                 logger.error("No runs found in store")
                 return 1
-            run_id = runs[0]
 
         logger.info(f"Generating report for run: {run_id}")
 
@@ -422,21 +425,8 @@ def _check_capability(
     store: RecordStore, run_id: str | None, spec: CapabilitySpec
 ) -> bool:
     """Check if a capability has passing evidence in the store."""
-    if store._conn is None:
-        raise RuntimeError("Store connection not initialized")
-
-    # Build query based on capability kind
-    conditions = ["status.gate_verdict = 'PASS'", "status.quarantine = 0"]
-    params = []
-
-    if run_id:
-        conditions.append("run_id = ?")
-        params.append(run_id)
-
-    where_clause = " WHERE " + " AND ".join(conditions)
-    query = f"SELECT COUNT(*) FROM records{where_clause}"  # noqa: S608 - parameterized query
-    result = store._conn.execute(query, params).fetchone()
-    return result is not None and result[0] > 0
+    _ = spec  # evidence is currently run-scoped, not capability-scoped
+    return store.count_passing_records(run_id) > 0
 
 
 def _cmd_status(args: argparse.Namespace) -> int:

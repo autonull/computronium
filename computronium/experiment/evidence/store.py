@@ -11,7 +11,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import duckdb
 
@@ -52,6 +52,31 @@ class StoreError(Exception):
     """Base exception for store errors."""
 
 
+type TableName = Literal["records", "artifacts", "runs", "vector_index"]
+
+
+@dataclass(frozen=True, slots=True)
+class RunInfo:
+    """Public read-model row for the runs table."""
+
+    run_id: str
+    spec: dict[str, Any] | None
+    spec_version: int
+    status: str
+    budget_consumed_s: float | None
+    replay_hash: str | None
+    started_at: datetime
+    finished_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class TableSlice:
+    """Column-typed result of a public table read."""
+
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Any, ...], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class StoreConfig:
     """Configuration for RecordStore."""
@@ -62,7 +87,7 @@ class StoreConfig:
     artifact_external_path: Path | None = None
 
 
-class RecordStore:
+class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the read/write API here by design (§1.1)
     """DuckDB-backed record store with single-writer guarantee.
 
     All writes flow through a single instance guarded by a threading.RLock.
@@ -308,10 +333,7 @@ class RecordStore:
                     ],
                 )
             except duckdb.ConstraintException as e:
-                if (
-                    "measurement_key" in str(e)
-                    and "unique constraint" in str(e).lower()
-                ):
+                if "measurement_key" in str(e) or "record_id" in str(e):
                     raise DuplicateMeasurementError(record.measurement_key) from e
                 raise StoreError(f"Constraint violation: {e}") from e
 
@@ -425,10 +447,7 @@ class RecordStore:
 
             except duckdb.ConstraintException as e:
                 self._conn.execute("ROLLBACK")
-                if (
-                    "measurement_key" in str(e)
-                    and "unique constraint" in str(e).lower()
-                ):
+                if "measurement_key" in str(e) or "record_id" in str(e):
                     raise DuplicateMeasurementError(record.measurement_key) from e
                 raise StoreError(f"Constraint violation: {e}") from e
             except Exception:
@@ -493,10 +512,24 @@ class RecordStore:
         gate_verdict: GateVerdict | None = None,
         fidelity: str | None = None,
         quarantine: bool | None = None,
+        data_origin: str | None = None,
+        payload_kind: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> list[Record]:
-        """Query records with filters."""
+        """Query records with filters.
+
+        Args:
+            run_id: Filter by run ID.
+            cell_key: Filter by cell key (groups repeated evaluations).
+            gate_verdict: Filter by gate verdict.
+            fidelity: Filter by schedule fidelity (L0/L1/L2).
+            quarantine: Filter by quarantine status.
+            data_origin: Filter by provenance.data_origin (exploration/policy_selected/calibration/test).
+            payload_kind: Filter by payload.kind (e.g., "icu", "hypothesis", "literature").
+            limit: Maximum number of records to return.
+            offset: Number of records to skip.
+        """
         if self._conn is None:
             raise StoreError("Connection not initialized")
 
@@ -518,6 +551,12 @@ class RecordStore:
         if quarantine is not None:
             conditions.append("status.quarantine = ?")
             params.append(quarantine)
+        if data_origin is not None:
+            conditions.append("json_extract_string(provenance, '$.data_origin') = ?")
+            params.append(data_origin)
+        if payload_kind is not None:
+            conditions.append("json_extract_string(payload, '$.kind') = ?")
+            params.append(payload_kind)
 
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         limit_clause = f" LIMIT {limit}" if limit else ""
@@ -527,6 +566,31 @@ class RecordStore:
         query = f"SELECT * FROM records{where_clause} ORDER BY seq{limit_clause}{offset_clause}"
         rows = self._conn.execute(query, params).fetchall()
         return [self._row_to_record(row) for row in rows]
+
+    def query_records_by_payload_kind(
+        self,
+        payload_kind: str,
+        run_id: str | None = None,
+        data_origin: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[Record]:
+        """Query records by payload kind with optional filters.
+
+        Args:
+            payload_kind: The payload kind to filter by (e.g., "icu", "hypothesis", "literature").
+            run_id: Optional run ID filter.
+            data_origin: Optional data origin filter.
+            limit: Maximum number of records.
+            offset: Number of records to skip.
+        """
+        return self.query_records(
+            run_id=run_id,
+            data_origin=data_origin,
+            payload_kind=payload_kind,
+            limit=limit,
+            offset=offset,
+        )
 
     def claim_eligible_prefilter(
         self,
@@ -784,6 +848,73 @@ class RecordStore:
             ceec_link=status_struct["ceec_link"],
         )
 
+    def count_achieved_seeds(
+        self,
+        replication_key: str,
+        run_id: str | None = None,
+        gate_verdict: GateVerdict | None = GateVerdict.PASS_,
+    ) -> int:
+        """Count achieved seeds for a replication key.
+
+        Groups records by replication_key components (coordinate + schedule without seed)
+        and counts distinct seeds that have PASS gate verdict.
+
+        Args:
+            replication_key: The replication key (computed from coordinate + schedule_without_seed).
+            run_id: Optional run ID filter.
+            gate_verdict: Filter by gate verdict (default PASS).
+
+        Returns:
+            Number of distinct seeds achieved for this replication key.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+
+        # Build replication key components from the provided replication_key
+        # The replication_key format is: cell_key|fidelity|n_seeds|epochs|batch_limit|budget_id
+        parts = replication_key.split("|")
+        if len(parts) != 6:
+            # Fallback: try to compute from cell_key and schedule components
+            pass
+
+        cell_key = parts[0]
+        fidelity = parts[1]
+        n_seeds = int(parts[2])
+        epochs = int(parts[3])
+        batch_limit = int(parts[4])
+        budget_id = parts[5]
+
+        conditions = [
+            "cell_key = ?",
+            "schedule.fidelity = ?",
+            "schedule.n_seeds = ?",
+            "schedule.epochs = ?",
+            "schedule.batch_limit = ?",
+            "schedule.budget_id = ?",
+        ]
+        params: list[Any] = [
+            cell_key,
+            fidelity,
+            n_seeds,
+            epochs,
+            batch_limit,
+            budget_id,
+        ]
+        if gate_verdict is not None:
+            conditions.append("status.gate_verdict = ?")
+            params.append(gate_verdict.value)
+
+        if run_id is not None:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+
+        where_clause = " WHERE " + " AND ".join(conditions)
+
+        # Count distinct seeds
+        query = f"SELECT COUNT(DISTINCT schedule.seed) FROM records{where_clause}"
+        result = self._conn.execute(query, params).fetchone()
+        return result[0] if result is not None else 0
+
     def count_records(self, run_id: str | None = None) -> int:
         """Count records, optionally filtered by run_id."""
         if self._conn is None:
@@ -795,6 +926,304 @@ class RecordStore:
         else:
             result = self._conn.execute("SELECT COUNT(*) FROM records").fetchone()
         return result[0] if result is not None else 0
+
+    # =========================================================================
+    # Public read API (L14: surface consumes these; no _conn reach-ins)
+    # =========================================================================
+
+    def query_run(self, run_id: str) -> RunInfo | None:
+        """Get a single run's info, or None if absent."""
+        rows = self.query_runs(run_id)
+        return rows[0] if rows else None
+
+    def query_runs(
+        self, run_id: str | None = None, limit: int | None = None
+    ) -> list[RunInfo]:
+        """Query runs (latest first when run_id is omitted)."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions: list[str] = []
+        params: list[Any] = []
+        if run_id is not None:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""  # noqa: S608 - static fragment, parameterized values
+        limit_clause = f" LIMIT {int(limit)}" if limit else ""  # noqa: S608 - int-coerced
+        rows = self._conn.execute(
+            f"SELECT run_id, spec, spec_version, status, budget_consumed_s, "  # noqa: S608 - static column list
+            f"replay_hash, started_at, finished_at FROM runs{where_clause} "
+            f"ORDER BY started_at DESC{limit_clause}",
+            params,
+        ).fetchall()
+        return [
+            RunInfo(
+                run_id=row[0],
+                spec=json.loads(row[1]) if row[1] else None,
+                spec_version=row[2],
+                status=row[3],
+                budget_consumed_s=row[4],
+                replay_hash=row[5],
+                started_at=row[6],
+                finished_at=row[7],
+            )
+            for row in rows
+        ]
+
+    def latest_run_id(self) -> str | None:
+        """Return the most recently started run_id, or None."""
+        runs = self.query_runs(limit=1)
+        return runs[0].run_id if runs else None
+
+    def count_passing_records(self, run_id: str | None = None) -> int:
+        """Count records with PASS gate verdict and no quarantine."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions = ["status.gate_verdict = 'PASS'", "status.quarantine = 0"]
+        params: list[Any] = []
+        if run_id:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = " WHERE " + " AND ".join(conditions)
+        result = self._conn.execute(
+            f"SELECT COUNT(*) FROM records{where_clause}",
+            params,  # noqa: S608 - parameterized, static conditions
+        ).fetchone()
+        return result[0] if result is not None else 0
+
+    def count_by_status_field(
+        self, field: Literal["maturity", "gate_verdict"], run_id: str | None = None
+    ) -> dict[str, int]:
+        """Count records grouped by a status struct field."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        column = "status.maturity" if field == "maturity" else "status.gate_verdict"
+        conditions = []
+        params: list[Any] = []
+        if run_id:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = self._conn.execute(
+            f"SELECT {column}, COUNT(*) FROM records{where_clause} "  # noqa: S608 - column from Literal whitelist
+            f"GROUP BY {column}",
+            params,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def cell_seed_counts(self, run_id: str | None = None) -> dict[str, int]:
+        """Count records per cell_key (seed replication counts)."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions = []
+        params: list[Any] = []
+        if run_id:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = self._conn.execute(
+            f"SELECT cell_key, COUNT(*) FROM records{where_clause} "  # noqa: S608 - parameterized
+            "GROUP BY cell_key",
+            params,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def count_by_failure_cause(self, run_id: str | None = None) -> dict[str, int]:
+        """Count records grouped by failure cause (non-unknown causes only)."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions = ["status.cause != 'unknown'"]
+        params: list[Any] = []
+        if run_id:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = " WHERE " + " AND ".join(conditions)
+        rows = self._conn.execute(
+            f"SELECT status.cause, COUNT(*) FROM records{where_clause} "  # noqa: S608 - parameterized
+            "GROUP BY status.cause",
+            params,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def count_by_axis(
+        self,
+        axis: Literal[
+            "substrate", "geometry", "dynamics", "plasticity", "credit", "update"
+        ],
+        run_id: str | None = None,
+    ) -> dict[str, int]:
+        """Count records grouped by a structural axis value (axis coverage, R18)."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions = []
+        params: list[Any] = []
+        if run_id:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = self._conn.execute(
+            f"SELECT {axis}, COUNT(*) FROM records{where_clause} "  # noqa: S608 - axis from Literal whitelist
+            f"GROUP BY {axis}",
+            params,
+        ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
+    def read_table(self, table: TableName, run_id: str | None = None) -> TableSlice:
+        """Read a full table (optionally scoped to a run) with columns.
+
+        Public bulk-read for exporters; table name is a Literal whitelist and
+        values are parameterized.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        match table:
+            case "records":
+                query = (
+                    "SELECT * FROM records WHERE run_id = ? ORDER BY seq"
+                    if run_id
+                    else "SELECT * FROM records ORDER BY seq"
+                )
+            case "artifacts":
+                query = (
+                    "SELECT * FROM artifacts WHERE record_id IN "
+                    "(SELECT record_id FROM records WHERE run_id = ?) ORDER BY created_at"
+                    if run_id
+                    else "SELECT * FROM artifacts ORDER BY created_at"
+                )
+            case "runs":
+                query = (
+                    "SELECT * FROM runs WHERE run_id = ? ORDER BY started_at"
+                    if run_id
+                    else "SELECT * FROM runs ORDER BY started_at"
+                )
+            case "vector_index":
+                query = (
+                    "SELECT * FROM vector_index WHERE record_id IN "
+                    "(SELECT record_id FROM records WHERE run_id = ?)"
+                    if run_id
+                    else "SELECT * FROM vector_index"
+                )
+        params = [run_id] if run_id else []
+        cursor = self._conn.execute(query, params)
+        columns = tuple(d[0] for d in cursor.description)
+        rows = tuple(cursor.fetchall())
+        return TableSlice(columns=columns, rows=rows)
+
+    def record_intent(self, run_id: str, intent: dict[str, Any]) -> Record:
+        """Persist an operator intent as a run-linked record (R84, L13).
+
+        Payload kind is ``operator_intent``; uniqueness derives from
+        ``intent_id`` via ``schedule.task_id``, so redelivery dedups through
+        the single writer like any other measurement.
+        """
+        from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
+
+        intent_id = str(intent.get("intent_id", uuid.uuid4()))
+        record = Record.create(
+            run_id=run_id,
+            coordinate=Coordinate(
+                substrate="operator",
+                geometry="control",
+                dynamics="none",
+                plasticity="none",
+                credit="none",
+                update="none",
+                params={"intent_id": intent_id},
+            ),
+            schedule=Schedule(
+                fidelity="L0",
+                seed=0,
+                n_seeds=1,
+                epochs=1,
+                batch_limit=0,
+                budget_id="operator",
+                task_id=intent_id,
+            ),
+            provenance=Provenance(
+                env={},
+                dataset="operator",
+                dataset_version="v1",
+                code_sha="kernel",
+                policy="operator",
+                links={"run_id": run_id},
+                data_origin=DataOrigin.EXPLORATION,
+            ),
+            status=Status(
+                gate_verdict=GateVerdict.PENDING,
+                defect="",
+                cause=FailureCause.UNKNOWN,
+                severity=Severity.LOW,
+                quarantine=False,
+                maturity=Maturity.L0,
+                uncertainty={},
+                reproducibility=ReproducibilityClass.REPLAYABLE,
+                assessment_procedure_version="1.0",
+                ceec_link=None,
+            ),
+            payload={
+                "kind": "operator_intent",
+                "intent_kind": intent.get("kind"),
+                **{k: v for k, v in intent.items() if k != "kind"},
+            },
+        )
+        return self.append(record)
+
+    def query_intent_records(self, run_id: str | None = None) -> list[Record]:
+        """Operator-intent records, optionally scoped to a run (R84)."""
+        return self.query_records_by_payload_kind("operator_intent", run_id=run_id)
+
+    def export_snapshot(self, run_id: str | None = None) -> dict[str, Any]:
+        """Public bulk-export read model (R73, L14).
+
+        Returns JSON-serializable ``records``/``runs``/``artifacts``/
+        ``vector_index`` collections without exposing the connection.
+        Artifact bytes stay out; manifests carry digest, role, and
+        external references.
+        """
+        records = [r.to_dict() for r in self.query_records(run_id=run_id)]
+        runs = [
+            {
+                "run_id": info.run_id,
+                "spec": info.spec,
+                "spec_version": info.spec_version,
+                "status": info.status,
+                "budget_consumed_s": info.budget_consumed_s,
+                "replay_hash": info.replay_hash,
+                "started_at": info.started_at.isoformat() if info.started_at else None,
+                "finished_at": info.finished_at.isoformat()
+                if info.finished_at
+                else None,
+            }
+            for info in self.query_runs(run_id=run_id)
+        ]
+        artifacts: list[dict[str, Any]] = []
+        table = self.read_table("artifacts", run_id)
+        for row in table.rows:
+            entry = dict(zip(table.columns, row, strict=True))
+            created = entry.get("created_at")
+            artifacts.append({
+                "digest": entry.get("digest"),
+                "role": entry.get("role"),
+                "record_id": entry.get("record_id"),
+                "created_at": created.isoformat() if created is not None else None,
+                "external_uri": entry.get("external_uri"),
+                "external_size": entry.get("external_size"),
+                "external_checksum": entry.get("external_checksum"),
+            })
+        vectors: list[dict[str, Any]] = []
+        vi = self.read_table("vector_index", run_id)
+        for row in vi.rows:
+            entry = dict(zip(vi.columns, row, strict=True))
+            vectors.append({
+                "record_id": entry.get("record_id"),
+                "embedding": list(entry.get("embedding") or []),
+                "embedding_version": entry.get("embedding_version"),
+            })
+        return {
+            "records": records,
+            "runs": runs,
+            "artifacts": artifacts,
+            "vector_index": vectors,
+        }
 
 
 # =========================================================================
@@ -932,10 +1361,13 @@ __all__ = [
     "RecordInputModel",
     "RecordOutputModel",
     "RecordStore",
+    "RunInfo",
     "ScheduleModel",
     "StatusModel",
     "StoreConfig",
     "StoreError",
+    "TableName",
+    "TableSlice",
     "validate_record_input",
     "validate_record_output",
 ]

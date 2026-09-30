@@ -6,6 +6,7 @@ Leakage guard: I(C,U) training data tagged with data_origin; periodic calibratio
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from computronium.experiment.evidence.store import DuplicateMeasurementError
 from computronium.experiment.learning.surrogate import (
     AcquisitionFunction,
     GaussianProcessSurrogate,
@@ -23,7 +25,21 @@ from computronium.experiment.learning.surrogate import (
     SurrogateModel,
     SurrogateTrainingData,
 )
-from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    DataOrigin,
+    Provenance,
+    Schedule,
+)
+from computronium.experiment.schema.record import (
+    FailureCause,
+    GateVerdict,
+    Maturity,
+    Record,
+    ReproducibilityClass,
+    Severity,
+    Status,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -288,14 +304,143 @@ class ICUModel:
         for r in records:
             self.add_record(r)
 
-    def load_from_store(self, store: RecordStore) -> int:
+    def load_from_store(
+        self,
+        store: RecordStore,
+        run_id: str | None = None,
+        data_origin: str | None = None,
+    ) -> int:
         """Load I(C,U) records from the experiment store.
 
-        Queries records with I(C,U) provenance and reconstructs ICURecords.
+        Queries records with payload kind "icu" and reconstructs ICURecords.
+
+        Args:
+            store: The RecordStore to query.
+            run_id: Optional run ID to filter by.
+            data_origin: Optional data origin filter (exploration/policy_selected/calibration/test).
+
+        Returns:
+            Number of records loaded.
         """
-        # This would query the store for records with I(C,U) provenance
-        # For now, return 0 - actual implementation needs store integration
-        return 0
+        records = store.query_records_by_payload_kind(
+            payload_kind="icu", run_id=run_id, data_origin=data_origin
+        )
+
+        loaded = 0
+        for record in records:
+            icu_data = record.payload.get("icu")
+            if icu_data:
+                icu_record = ICURecord.from_dict(icu_data)
+                self.add_record(icu_record)
+                loaded += 1
+
+        return loaded
+
+    def persist_to_store(
+        self,
+        store: RecordStore,
+        run_id: str,
+        record_id: str,
+        data_origin: DataOrigin,
+    ) -> None:
+        """Persist this I(C,U) model's records to the store.
+
+        Creates a new record with payload.kind = "icu" containing the ICURecord data.
+
+        Args:
+            store: The RecordStore to write to.
+            run_id: The run ID for the new record.
+            record_id: The record ID for the new record.
+            data_origin: The data origin tag for the record.
+        """
+        # For each ICURecord, create a store record with the ICU data in payload
+        for icu_record in self._records:
+            # Create a minimal coordinate for the ICU record
+            coord = Coordinate(
+                substrate=icu_record.feature_vector.substrate_type or "digital",
+                geometry=icu_record.feature_vector.geometry_type or "feedforward",
+                dynamics=icu_record.feature_vector.dynamics_type or "instantaneous",
+                plasticity=icu_record.feature_vector.plasticity_type or "null",
+                credit=icu_record.feature_vector.credit_type,
+                update=icu_record.feature_vector.update_type,
+                params={},
+            )
+
+            # Build payload with ICU data
+            payload = {
+                "kind": "icu",
+                "icu": icu_record.to_dict(),
+                "model_version": self._model_version,
+                "code_hash": self._code_hash,
+            }
+
+            # Create provenance with data_origin
+            provenance = Provenance(
+                env={},
+                dataset="",
+                dataset_version="",
+                code_sha="",
+                policy="icu_model",
+                links={},
+                data_origin=data_origin,
+                training_tasks=(),
+                transfer_source_ids=(),
+                transfer_cutoff=None,
+                target_task=icu_record.task,
+                transfer_mode=None,
+            )
+
+            # Create status
+            status = Status(
+                gate_verdict=GateVerdict.PASS_,
+                defect="",
+                cause=FailureCause.UNKNOWN,
+                severity=Severity.LOW,
+                quarantine=False,
+                maturity=Maturity.L0,
+                uncertainty={},
+                reproducibility=ReproducibilityClass.REPLAYABLE,
+                assessment_procedure_version="1.0",
+                ceec_link=None,
+            )
+
+            # Create schedule
+            schedule = Schedule(
+                fidelity="L0",
+                seed=icu_record.seed,
+                n_seeds=1,
+                epochs=0,
+                batch_limit=0,
+                budget_id="",
+            )
+
+            record = Record(
+                record_id=f"{record_id}_{icu_record.feature_vector.interaction_key}",
+                seq=0,  # Will be assigned by store
+                run_id=run_id,
+                schema_version=1,
+                cell_key=hashlib.sha256(
+                    f"{coord.substrate}|{coord.geometry}|{coord.dynamics}|{coord.plasticity}|{coord.credit}|{coord.update}".encode()
+                ).hexdigest()[:16],
+                measurement_key=hashlib.sha256(
+                    f"{coord.substrate}|{coord.geometry}|{coord.dynamics}|{coord.plasticity}|{coord.credit}|{coord.update}|{icu_record.seed}".encode()
+                ).hexdigest()[:16],
+                substrate=coord.substrate,
+                geometry=coord.geometry,
+                dynamics=coord.dynamics,
+                plasticity=coord.plasticity,
+                credit=coord.credit,
+                update=coord.update,
+                params=coord.params,
+                schedule=schedule,
+                provenance=provenance,
+                status=status,
+                payload=payload,
+                unknown=None,
+            )
+
+            with contextlib.suppress(DuplicateMeasurementError):
+                store.append(record)
 
     def fit(self) -> None:
         """Fit the I(C,U) surrogate on training data only.
@@ -531,28 +676,6 @@ class ICUModel:
         return model
 
 
-# =============================================================================
-# Registry Integration
-# =============================================================================
-
-# Global I(C,U) model instance
-_ICU_MODEL: ICUModel | None = None
-
-
-def get_icu_model() -> ICUModel:
-    """Get or create the global I(C,U) model."""
-    global _ICU_MODEL  # noqa: PLW0603 - singleton pattern
-    if _ICU_MODEL is None:
-        _ICU_MODEL = ICUModel()
-    return _ICU_MODEL
-
-
-def reset_icu_model() -> None:
-    """Reset the global I(C,U) model (for testing)."""
-    global _ICU_MODEL  # noqa: PLW0603 - singleton pattern
-    _ICU_MODEL = None
-
-
 def create_icu_prior_surrogate() -> SurrogateModel:
     """Create an I(C,U) surrogate for use as a prior source in SurrogatePolicy."""
     config = SurrogateConfig(
@@ -569,6 +692,4 @@ __all__ = [
     "ICUModel",
     "ICURecord",
     "create_icu_prior_surrogate",
-    "get_icu_model",
-    "reset_icu_model",
 ]

@@ -1,0 +1,115 @@
+{
+  "generated_at": "2026-09-30T13:23:50.127076",
+  "void_constraints": [
+    {
+      "name": "substrate_geometry_compatibility",
+      "description": "Digital substrate incompatible with analog-only geometries",
+      "predicate": "Eq(left=Var(name='not (substrate'), right=Const(value='\"digital\" and geometry in [\"analog\", \"photonic\", \"quantum\"])'))",
+      "proof_kind": "logical"
+    },
+    {
+      "name": "dynamics_plasticity_compatibility",
+      "description": "Instantaneous dynamics cannot use fast-weight plasticity",
+      "predicate": "Eq(left=Var(name='not (dynamics'), right=Const(value='\"instantaneous\" and plasticity == \"fast_weight\")'))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "credit_update_compatibility",
+      "description": "Backprop credit requires Euclidean or compatible update rule",
+      "predicate": "Eq(left=Var(name='not (credit'), right=Const(value='\"backprop\" and update not in [\"euclidean\", \"muon\", \"natural_gradient\", \"riemannian_orthogonal\"])'))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "max_hidden_dim",
+      "description": "Hidden dimension exceeds hardware limits",
+      "predicate": "Le(left=Var(name='hidden_dim'), right=Const(value=8192))",
+      "proof_kind": "resource"
+    },
+    {
+      "name": "max_layers",
+      "description": "Layer count exceeds hardware limits",
+      "predicate": "Le(left=Var(name='num_layers'), right=Const(value=64))",
+      "proof_kind": "resource"
+    },
+    {
+      "name": "max_steps",
+      "description": "Settling steps exceed budget",
+      "predicate": "Le(left=Var(name='max_steps'), right=Const(value=1000))",
+      "proof_kind": "resource"
+    },
+    {
+      "name": "classification_requires_classifier_head",
+      "description": "Classification tasks require output_dim matching num_classes",
+      "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"classification\" implies output_dim > 1'))",
+      "proof_kind": "type_mismatch"
+    },
+    {
+      "name": "language_modeling_requires_causal",
+      "description": "Language modeling requires causal attention or recurrent geometry",
+      "predicate": "Eq(left=Var(name='task_type'), right=Const(value='\"language_modeling\" implies geometry in [\"causal_transformer\", \"recurrent\"]'))",
+      "proof_kind": "type_mismatch"
+    }
+  ],
+  "axis_pairs": {
+    "substrate\u00d7geometry": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "substrate\u00d7dynamics": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "substrate\u00d7plasticity": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "substrate\u00d7credit": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "substrate\u00d7update": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "geometry\u00d7dynamics": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "geometry\u00d7plasticity": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "geometry\u00d7credit": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "geometry\u00d7update": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "dynamics\u00d7plasticity": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "dynamics\u00d7credit": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "dynamics\u00d7update": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "plasticity\u00d7credit": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "plasticity\u00d7update": {
+      "compatible": true,
+      "void_reasons": []
+    },
+    "credit\u00d7update": {
+      "compatible": true,
+      "void_reasons": []
+    }
+  }
+}

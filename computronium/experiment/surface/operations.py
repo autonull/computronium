@@ -145,28 +145,22 @@ class RunController:
         self._persist_intent(intent)
 
     def _persist_intent(self, intent: OperatorIntent) -> None:
-        """Persist intent to store."""
-        # Store as artifact with special role
-        from computronium.experiment.evidence.artifacts import (
-            ArtifactInput,
-            ArtifactRole,
-        )
-
-        artifact = ArtifactInput(
-            bytes=json.dumps({
-                "intent_id": intent.intent_id,
-                "run_id": intent.run_id,
-                "kind": intent.kind.value,
-                "payload": intent.payload,
-                "timestamp": intent.timestamp.isoformat(),
-                "operator": intent.operator,
-                "reason": intent.reason,
-            }).encode(),
-            role=ArtifactRole.KERNEL,  # Using kernel role for operator intents
-        )
-        # Note: Would need a dummy record_id or a special handling for intents
-        # For now, just log it
-        logger.debug(f"Intent artifact: {artifact}")
+        """Persist intent as a run-linked record through the single writer."""
+        try:
+            record = self._store.record_intent(
+                intent.run_id,
+                {
+                    "intent_id": intent.intent_id,
+                    "kind": intent.kind.value,
+                    "payload": intent.payload,
+                    "timestamp": intent.timestamp.isoformat(),
+                    "operator": intent.operator,
+                    "reason": intent.reason,
+                },
+            )
+            logger.debug(f"Intent persisted as record {record.record_id}")
+        except Exception:
+            logger.exception("Intent persistence failed")
 
     async def _emit_alert(self, event: str, data: dict[str, Any]) -> None:
         """Emit alert to all registered webhooks."""
@@ -445,6 +439,56 @@ def create_operator_intent(
     )
 
 
+class AlertDedup:
+    """Notify-only alert dedup keyed (predicate, run, window) (R83).
+
+    Thread-safe; the window is wall-clock seconds per predicate+run key.
+    """
+
+    def __init__(self, window_seconds: float = 3600.0) -> None:
+        self._window = window_seconds
+        self._last_fired: dict[tuple[str, str], datetime] = {}
+        self._lock = threading.Lock()
+
+    def should_fire(self, predicate: str, run_id: str) -> bool:
+        """Return True once per window for a (predicate, run) pair."""
+        from datetime import timedelta
+
+        now = datetime.now()
+        key = (predicate, run_id)
+        with self._lock:
+            last = self._last_fired.get(key)
+            if last is not None and now - last < timedelta(seconds=self._window):
+                return False
+            self._last_fired[key] = now
+            return True
+
+
+DEFAULT_Q14_ROUTES: dict[str, list[str]] = {
+    "run_completed": ["operator", "ledger"],
+    "run_failed": ["operator", "pager"],
+    "run_cancelled": ["operator"],
+    "run_paused": ["operator"],
+    "run_resumed": ["operator"],
+    "divergence": ["operator", "ledger"],
+    "stagnation": ["ledger"],
+    "resource_exhaustion": ["operator", "pager"],
+    "constraint_violation": ["ledger"],
+}
+"""Q14 default webhook routing: event -> subscriber groups.
+
+Recorded as ``WebhookConfig.events`` defaults; a webhook subscribes by
+listing the events it wants, defaulting to its group's routes.
+"""
+
+
+def default_events_for(group: str = "operator") -> list[str]:
+    """Events routed to a subscriber group per the Q14 routing model."""
+    return sorted(
+        event for event, groups in DEFAULT_Q14_ROUTES.items() if group in groups
+    )
+
+
 def submit_intent_to_run(
     run_id: str,
     store_path: Path,
@@ -455,37 +499,30 @@ def submit_intent_to_run(
 ) -> None:
     """Submit an intent to a running service (for external CLI use).
 
-    This would typically connect to a running service via IPC or a control file.
-    For now, records the intent to the store for later reconciliation.
+    Persists the intent as a run-linked record through the single writer;
+    the service's control-file watcher picks it up on its next poll.
     """
     intent = create_operator_intent(run_id, kind, payload, operator, reason)
 
     store_config = StoreConfig(path=store_path)
-    with RecordStore(store_config):
-        # Record intent as artifact (metadata only, no record to attach to)
-        from computronium.experiment.evidence.artifacts import (
-            ArtifactInput,
-            ArtifactRole,
-        )
-
-        _ = ArtifactInput(
-            bytes=json.dumps({
+    with RecordStore(store_config) as store:
+        store.record_intent(
+            run_id,
+            {
                 "intent_id": intent.intent_id,
-                "run_id": intent.run_id,
                 "kind": intent.kind.value,
                 "payload": intent.payload,
                 "timestamp": intent.timestamp.isoformat(),
                 "operator": intent.operator,
                 "reason": intent.reason,
-            }).encode(),
-            role=ArtifactRole.KERNEL,
+            },
         )
-        # Note: We can't easily append without a record, so store metadata in a control table
-        # or just log for now
         logger.info(f"Intent submitted for run {run_id}: {kind.value}")
 
 
 __all__ = [
+    "DEFAULT_Q14_ROUTES",
+    "AlertDedup",
     "OperatorIntent",
     "OperatorIntentKind",
     "RunController",
@@ -494,5 +531,6 @@ __all__ = [
     "ServiceManager",
     "WebhookConfig",
     "create_operator_intent",
+    "default_events_for",
     "submit_intent_to_run",
 ]

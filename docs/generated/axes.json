@@ -1,0 +1,1798 @@
+[
+  {
+    "name": "analog",
+    "structural_axis": "substrate",
+    "description": "Analog substrate: continuous-valued physical state",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "complex",
+    "structural_axis": "substrate",
+    "description": "Complex-valued substrate",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "digital",
+    "structural_axis": "substrate",
+    "description": "Digital substrate: exact arithmetic, full precision",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "memristive",
+    "structural_axis": "substrate",
+    "description": "Memristive substrate: conductance, IR-drop, noise",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "neuromorphic",
+    "structural_axis": "substrate",
+    "description": "Neuromorphic substrate: asynchronous spike events",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "optical",
+    "structural_axis": "substrate",
+    "description": "Photonic substrate: phase/amplitude modulation",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "quantum",
+    "structural_axis": "substrate",
+    "description": "Quantum substrate: unitary gate simulation",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "sparse",
+    "structural_axis": "substrate",
+    "description": "Sparse substrate: sparsity-masked state",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "ternary",
+    "structural_axis": "substrate",
+    "description": "Ternary substrate: weights in {-alpha, 0, +alpha}",
+    "available": true,
+    "axis_kind": "substrate",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "attention",
+    "structural_axis": "geometry",
+    "description": "Attention geometry",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "num_heads",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 32,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "causal_transformer",
+    "structural_axis": "geometry",
+    "description": "Causal transformer with KV cache",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "hidden_dim",
+        "domain": {
+          "type": "range",
+          "lo": 8,
+          "hi": 4096,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "num_heads",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 32,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "seq_len",
+        "domain": {
+          "type": "range",
+          "lo": 16,
+          "hi": 4096,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "conv",
+    "structural_axis": "geometry",
+    "description": "Convolutional geometry",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "conv_channels",
+        "domain": {
+          "type": "range",
+          "lo": 4,
+          "hi": 256,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "kernel_size",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 7,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "feedforward",
+    "structural_axis": "geometry",
+    "description": "Feedforward DAG (MLP/CNN)",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "hidden_dim",
+        "domain": {
+          "type": "range",
+          "lo": 8,
+          "hi": 4096,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "num_layers",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 12,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "graph",
+    "structural_axis": "geometry",
+    "description": "Arbitrary node-edge fabric (FabricPC)",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "hidden_dim",
+        "domain": {
+          "type": "range",
+          "lo": 8,
+          "hi": 4096,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "nca",
+    "structural_axis": "geometry",
+    "description": "Neural cellular automaton fabric",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "grid_hw",
+        "domain": {
+          "type": "range",
+          "lo": 4,
+          "hi": 64,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "ntm",
+    "structural_axis": "geometry",
+    "description": "Neural Turing Machine tape",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "mem_slots",
+        "domain": {
+          "type": "range",
+          "lo": 4,
+          "hi": 128,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "mem_width",
+        "domain": {
+          "type": "range",
+          "lo": 4,
+          "hi": 128,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "recurrent",
+    "structural_axis": "geometry",
+    "description": "Recurrent attractor (Hopfield/EqProp)",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "hidden_dim",
+        "domain": {
+          "type": "range",
+          "lo": 8,
+          "hi": 4096,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "num_layers",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 12,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "spatial_lattice",
+    "structural_axis": "geometry",
+    "description": "3-D spatial lattice (neural_cube)",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "lattice_dims",
+        "domain": {
+          "type": "range",
+          "lo": 2,
+          "hi": 32,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "tile",
+    "structural_axis": "geometry",
+    "description": "TileNet modular tile mesh",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "neurons_per_tile",
+        "domain": {
+          "type": "range",
+          "lo": 2,
+          "hi": 64,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "tiles_per_layer",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "tile_mesh",
+    "structural_axis": "geometry",
+    "description": "TileNet mesh topology",
+    "available": true,
+    "axis_kind": "geometry",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "input_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "output_dim",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8192,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "neurons_per_tile",
+        "domain": {
+          "type": "range",
+          "lo": 2,
+          "hi": 64,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "tiles_per_layer",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 8,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "geometry",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "diffusion",
+    "structural_axis": "dynamics",
+    "description": "Continuous-time diffusion settling",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "energy_minimization",
+    "structural_axis": "dynamics",
+    "description": "Equilibrium propagation energy minimization",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "convergence_threshold",
+        "domain": {
+          "type": "range",
+          "lo": 1e-06,
+          "hi": 0.01,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "error_predictive_coding",
+    "structural_axis": "dynamics",
+    "description": "Error predictive coding",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "convergence_threshold",
+        "domain": {
+          "type": "range",
+          "lo": 1e-06,
+          "hi": 0.01,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "instantaneous",
+    "structural_axis": "dynamics",
+    "description": "Instantaneous pass (FF/Backprop)",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "lazy",
+    "structural_axis": "dynamics",
+    "description": "Lazy/on-demand state dynamics",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "pc_alm",
+    "structural_axis": "dynamics",
+    "description": "Augmented Lagrangian predictive coding",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "predictive_settling",
+    "structural_axis": "dynamics",
+    "description": "Predictive coding settling",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "convergence_threshold",
+        "domain": {
+          "type": "range",
+          "lo": 1e-06,
+          "hi": 0.01,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "spike_integration",
+    "structural_axis": "dynamics",
+    "description": "LIF/Izhikevich spike integration",
+    "available": true,
+    "axis_kind": "dynamics",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "max_steps",
+        "domain": {
+          "type": "range",
+          "lo": 1,
+          "hi": 200,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "dynamics",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "conflict_adaptive",
+    "structural_axis": "plasticity",
+    "description": "Conflict-adaptive psi",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "trace_decay",
+        "domain": {
+          "type": "range",
+          "lo": 0.5,
+          "hi": 1.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "conflict_threshold",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 0.9,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "fast_weights",
+    "structural_axis": "plasticity",
+    "description": "Fast-weight episode-local memory",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "fast_weight_dim",
+        "domain": {
+          "type": "range",
+          "lo": 64,
+          "hi": 2048,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "null",
+    "structural_axis": "plasticity",
+    "description": "Null plasticity (5-D slice)",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "routing",
+    "structural_axis": "plasticity",
+    "description": "Routing plasticity: state-dependent gating",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "gate_dim",
+        "domain": {
+          "type": "range",
+          "lo": 8,
+          "hi": 512,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "rule_state",
+    "structural_axis": "plasticity",
+    "description": "Rule-state plasticity (Z3)",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "num_operators",
+        "domain": {
+          "type": "range",
+          "lo": 2,
+          "hi": 32,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "substrate_coupled",
+    "structural_axis": "plasticity",
+    "description": "Physical substrate-coupled plasticity",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "temporal_psi",
+    "structural_axis": "plasticity",
+    "description": "Trace-decayed supervised psi",
+    "available": true,
+    "axis_kind": "plasticity",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "trace_decay",
+        "domain": {
+          "type": "range",
+          "lo": 0.5,
+          "hi": 1.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "plasticity",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "gradient",
+    "structural_axis": "credit",
+    "description": "Backprop gradient credit (ruler reference)",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "homeostatic",
+    "structural_axis": "credit",
+    "description": "Autonomous Lipschitz scaling",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "local_contrastive",
+    "structural_axis": "credit",
+    "description": "Local contrastive credit",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "ema_beta",
+        "domain": {
+          "type": "range",
+          "lo": 0.9,
+          "hi": 0.999,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "contrast_threshold",
+        "domain": {
+          "type": "range",
+          "lo": 0.5,
+          "hi": 10.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "contrast_objective",
+        "domain": {
+          "type": "enumerated",
+          "members": [
+            "unknown"
+          ]
+        },
+        "axis_kind": "categorical",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "local_goodness",
+    "structural_axis": "credit",
+    "description": "Forward-Forward / PEPITA goodness",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "pc_alm",
+    "structural_axis": "credit",
+    "description": "PC-ALM primal-dual credit",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "pepita",
+    "structural_axis": "credit",
+    "description": "PEPITA input-modulation credit",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "feedback_scale",
+        "domain": {
+          "type": "range",
+          "lo": 0.001,
+          "hi": 10.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "random_projections",
+    "structural_axis": "credit",
+    "description": "Fixed random feedback (FA/DFA)",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "feedback_scale",
+        "domain": {
+          "type": "range",
+          "lo": 0.001,
+          "hi": 10.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "target_inversion",
+    "structural_axis": "credit",
+    "description": "Target propagation inversion",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "temporal_trace",
+    "structural_axis": "credit",
+    "description": "Hebbian/STDP temporal trace",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "a_plus",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 5.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "a_minus",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 5.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "tau_pre",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 2.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "tau_post",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 2.0,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "credit",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "thermodynamic_contrast",
+    "structural_axis": "credit",
+    "description": "EqProp free/nudged contrast (Scellier-Bengio)",
+    "available": true,
+    "axis_kind": "credit",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "adam",
+    "structural_axis": "update",
+    "description": "Adam adaptive moment",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "beta2",
+        "domain": {
+          "type": "range",
+          "lo": 0.9,
+          "hi": 0.9999,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "eps",
+        "domain": {
+          "type": "range",
+          "lo": 1e-10,
+          "hi": 0.0001,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "elastic_consolidation",
+    "structural_axis": "update",
+    "description": "EWC elastic consolidation",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "ewc_lambda",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 10000.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "fisher_damping",
+        "domain": {
+          "type": "range",
+          "lo": 1e-06,
+          "hi": 1.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "euclidean",
+    "structural_axis": "update",
+    "description": "SGD/Adam Euclidean update",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "lion",
+    "structural_axis": "update",
+    "description": "Lion optimizer",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "beta2",
+        "domain": {
+          "type": "range",
+          "lo": 0.9,
+          "hi": 0.9999,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "eps",
+        "domain": {
+          "type": "range",
+          "lo": 1e-10,
+          "hi": 0.0001,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "local_adam",
+    "structural_axis": "update",
+    "description": "Local Adam",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "beta2",
+        "domain": {
+          "type": "range",
+          "lo": 0.9,
+          "hi": 0.9999,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "eps",
+        "domain": {
+          "type": "range",
+          "lo": 1e-10,
+          "hi": 0.0001,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "mean_norm",
+    "structural_axis": "update",
+    "description": "Mean-norm update",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "muon",
+    "structural_axis": "update",
+    "description": "Muon update",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "ortho_steps",
+        "domain": {
+          "type": "range",
+          "lo": 0,
+          "hi": 10,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "momentum",
+        "domain": {
+          "type": "range",
+          "lo": 0.0,
+          "hi": 0.99,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "natural_gradient",
+    "structural_axis": "update",
+    "description": "Natural gradient (Fisher)",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "fisher_damping",
+        "domain": {
+          "type": "range",
+          "lo": 1e-06,
+          "hi": 1.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "ortho_adam",
+    "structural_axis": "update",
+    "description": "Orthogonal Adam",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "beta2",
+        "domain": {
+          "type": "range",
+          "lo": 0.9,
+          "hi": 0.9999,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "eps",
+        "domain": {
+          "type": "range",
+          "lo": 1e-10,
+          "hi": 0.0001,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      },
+      {
+        "name": "ortho_lr",
+        "domain": {
+          "type": "range",
+          "lo": 1e-05,
+          "hi": 1.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "riemannian_orthogonal",
+    "structural_axis": "update",
+    "description": "Riemannian orthogonal update (Muon-family)",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "ortho_steps",
+        "domain": {
+          "type": "range",
+          "lo": 0,
+          "hi": 10,
+          "scale": "linear"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  },
+  {
+    "name": "role_split",
+    "structural_axis": "update",
+    "description": "Role-split update",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": []
+  },
+  {
+    "name": "spectral_constrained",
+    "structural_axis": "update",
+    "description": "Spectral-norm constrained update",
+    "available": true,
+    "axis_kind": "update",
+    "availability_predicate": null,
+    "prior": null,
+    "override_scope": "coordinate",
+    "topology_params": [
+      {
+        "name": "spectral_norm",
+        "domain": {
+          "type": "range",
+          "lo": 0.1,
+          "hi": 10.0,
+          "scale": "log"
+        },
+        "axis_kind": "structural",
+        "axis_name": "update",
+        "availability": null,
+        "prior": null,
+        "override_scope": "coordinate"
+      }
+    ]
+  }
+]

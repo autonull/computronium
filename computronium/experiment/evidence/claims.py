@@ -14,10 +14,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.schema.coordinate import DataOrigin
+from computronium.experiment.schema.record import GateVerdict, Record
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.protocol import ComparisonGuard, CostBudget
-    from computronium.experiment.schema.record import Record
+    from computronium.experiment.evidence.store import RecordStore
 
 
 # =============================================================================
@@ -42,6 +43,81 @@ def claim_eligible(record: Record) -> bool:
         and not record.status.quarantine
         and record.schedule.fidelity == "L2"
         and record.schedule.n_seeds >= 5
+    )
+
+
+def claim_eligible_by_achieved_seeds(
+    record: Record,
+    store: "RecordStore",  # noqa: UP037 - forward reference for type-checking import
+    min_seeds: int = 5,
+    run_id: str | None = None,
+) -> bool:
+    """Check if a record is eligible for claim based on *achieved* seeds.
+
+    Unlike claim_eligible() which uses the planned schedule.n_seeds,
+    this function queries the store to count how many seeds actually
+    completed with PASS gate verdict for this replication key.
+
+    This prevents runs that died mid-replication from being considered
+    claim-eligible (L20 remediation).
+
+    Args:
+        record: The record to check.
+        store: The RecordStore to query for achieved seeds.
+        min_seeds: Minimum required achieved seeds (default 5 per protocol).
+        run_id: Optional run ID to scope the query.
+
+    Returns:
+        True if achieved seeds >= min_seeds and other criteria met.
+    """
+    """Check if a record is eligible for claim based on *achieved* seeds.
+
+    Unlike claim_eligible() which uses the planned schedule.n_seeds,
+    this function queries the store to count how many seeds actually
+    completed with PASS gate verdict for this replication key.
+
+    This prevents runs that died mid-replication from being considered
+    claim-eligible (L20 remediation).
+
+    Args:
+        record: The record to check.
+        store: The RecordStore to query for achieved seeds.
+        min_seeds: Minimum required achieved seeds (default 5 per protocol).
+        run_id: Optional run ID to scope the query.
+
+    Returns:
+        True if achieved seeds >= min_seeds and other criteria met.
+    """
+    # Basic eligibility checks (same as claim_eligible)
+    if not (
+        record.status.gate_verdict.value == "PASS"
+        and not record.status.quarantine
+        and record.schedule.fidelity == "L2"
+    ):
+        return False
+
+    # Compute replication key from record
+    rep_key = _compute_replication_key(record)
+
+    # Count achieved seeds
+    achieved = store.count_achieved_seeds(
+        replication_key=rep_key,
+        run_id=run_id or record.run_id,
+        gate_verdict=GateVerdict.PASS_,
+    )
+
+    return achieved >= min_seeds
+
+
+def _compute_replication_key(record: Record) -> str:
+    """Compute replication key from record (coordinate + schedule without seed)."""
+    return (
+        f"{record.cell_key}|"
+        f"{record.schedule.fidelity}|"
+        f"{record.schedule.n_seeds}|"
+        f"{record.schedule.epochs}|"
+        f"{record.schedule.batch_limit}|"
+        f"{record.schedule.budget_id}"
     )
 
 
@@ -511,6 +587,7 @@ __all__ = [
     "check_all_alerts",
     "check_leakage",
     "claim_eligible",
+    "claim_eligible_by_achieved_seeds",
     "claim_eligible_strict",
     "compare_matched_cost",
     "evaluation_data_allowed",

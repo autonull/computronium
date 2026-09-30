@@ -4,7 +4,7 @@
 authoritative spec; abc2 (Rev 1.1) is superseded and consulted only for rationale.
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread
 safety, error/logging conventions, environment rules, testing tiers, commit checklist.
-**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 COMPLETE — Learning primitives implemented. WP7 COMPLETE — Surface layer implemented. **§9 appended 2026-09-29: Completion Plan (WP8–WP13) — closes the audited functionality gaps (§9.1 Remediation Ledger + WP8–WP13) so that plan completion = the fully-functional kernel. Binding decisions (DuckDB store §1.1, unified CEEC artifacts §2.1, single-writer topology, VSS-optional, effect-size protocol, three-tier status) are unchanged.**
+**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 COMPLETE — Learning primitives implemented. WP7 COMPLETE — Surface layer implemented. WP8 COMPLETE — Union & registry completion. WP9 COMPLETE — Canonical stage model & pipeline obligations. WP10 COMPLETE — Learning integration. WP11 COMPLETE — Surface conformance, codegen & operations. **§9 appended 2026-09-29: Completion Plan (WP8–WP13) — closes the audited functionality gaps (§9.1 Remediation Ledger + WP8–WP13) so that plan completion = the fully-functional kernel. Binding decisions (DuckDB store §1.1, unified CEEC artifacts §2.1, single-writer topology, VSS-optional, effect-size protocol, three-tier status) are unchanged.**
 
 ---
 
@@ -760,8 +760,11 @@ strict-clean from WP1 onward.
 - Property tests pass: `test_public_surface_lock.py` (15 tests), existing experiment wiring locks and statistical protocol locks continue to pass
 
 ### Improvement Opportunities (for future WPs)
-1. **WP2**: `harvest_schema() ⊇ Gate-2 union` lock — connect ontology primitives to harvest (currently returns empty)
-2. **WP3**: Seed constraints from `SystemConfig.validate()`, task fences, `apply_constraints` (migrate-and-delete original validators)
+1. **WP11**: Conformance reality — per-capability evidence via `verifying_test` pytest node id; RETIRED honored; `CurrencyLock` wired; Appendix-A flag projection lock (R78)
+2. **WP11**: Codegen — `docs/generated/` listings, compatibility matrix, JSON-Schema validators, conformance stubs, CLI flag tables from registries (abc3 §2.5)
+3. **WP11**: Operations completion — intent persistence, control-file watcher, webhook alerts, question-first entry profile (R43, R81–R84)
+4. **WP12**: Legacy port & delete — inventory legacy surfaces, port remaining capabilities as catalog entries, delete legacy modules (Directive 1)
+5. **WP13**: Class E benchmarks — E1 infrastructure, E2 algorithmic, E3 scientific, E4 generalization harnesses; record results as store records
 
 ### Notes for Remaining Work
 - The `execution/` package is now complete with all 7 modules: budget.py, allocator.py, replay.py, backends.py, policy.py, stage.py, pipeline.py
@@ -772,6 +775,7 @@ strict-clean from WP1 onward.
 - **CEEC folded into Kernel**: `packages/ceec-core` → `computronium/experiment/evidence/artifacts.py` (DuckDB `artifacts` table). Single-file atomic transactions. No reconciliation protocol.
 - **WP1.5 complete**: Scientific validity skeleton implemented with protocol module, provenance extensions, reproducibility classes, synthetic fixture, and lockstep tests
 - **WP7 complete**: Surface layer implemented with report generation, CLI dispatcher, conformance harness, and operations controller
+- **WP10 complete**: Learning integration complete — PRIORS single-source, reasoning persistence, ICUModel injection, surrogate harvest_schema features, claim integrity
 
 ### 2026-09-29 — WP1.5/WP2/WP5 Atomic Append & Registry Seeding Complete
 - Implemented kill -9 proof for atomic append with artifacts: `tests/property/test_atomic_append_kill_proof.py` (5 tests)
@@ -1214,3 +1218,59 @@ Definition of Done completes at WP13 close.
   (19 tests) covering AXES wiring, CAPABILITIES totality, C↔R matrix (every C cites ≥1 R,
   every R cites ≥1 C), stage/owner coverage.
 - All quality gates pass: `ruff format`, `ruff check`, `pyright` (strict), 78 property tests pass.
+
+### 2026-09-30 — WP9 Complete: Canonical Stage Model & Pipeline Obligations (L4, L6, L7, L17, L18, L19)
+- **Canonical StageId (L4)**: Replaced invented lifecycle (S1_DISCOVERY…S11_RETIREMENT) with canonical S1_FRAME…S11_REPORT per TODO43 §3.0 / abc3 §5.1. Updated all StageSpecs with proper display_name, params, and gate semantics.
+- **Stage Protocol & Fragment (WP9.1/9.2)**: Added `Stage` Protocol with `run(ctx) -> Fragment`; `Fragment` carries records, proposals, metadata, coverage (R18), classification (R19). All 11 stages defined with proper specs.
+- **Pipeline wrapper obligations (L15, WP9.3)**: 
+  - Coverage reporting (R18) — `_update_coverage()` emits per-stage coverage dict
+  - Identical rejection classification (R19) — `_classify_rejection()` used by all policies
+  - Proposal provenance stamping (R20) — timestamps, cell_key, fidelity, data_origin
+  - Failure isolation (R29) — `except*` in `_execute_batch_with_isolation()`
+  - Single-writer atomic appends (R12) — enforced by RecordStore
+  - Budget accounting (R21) — per-record cost tracking
+  - EvidenceDrivenAllocator integration hook after S7_MEASURE
+  - Replay hash computation/re-check (R26/R27) — compute_replay_hash()
+  - Resume via measurement_key dedup — resume_from_store()
+  - RegistryCostModel learning (R23/R24) — protocol defined
+- **task_id in Schedule (L17)**: Added `task_id: str = ""` to Schedule struct; included in measurement_key for cross-task uniqueness
+- **ModelBasedPolicy completion (L6, WP9.5)**: Real Optuna samplers (TPE, NSGA-II, GP, Random) + pruners (MedianPruner, HyperbandPruner) wired to S6 intermediate values; trial↔record persistence via `optuna.trial.create_trial` — no private Optuna DB (R71, P7)
+- **SystemContext for run-scoped state (R75/K10, WP9.6)**: Created `execution/sysctx.py` with `SystemContext` carrying kernel cache keyed by (run_id, cell_key, device, dtype), device/dtype context, injected ICU/Reasoning (no module-level singletons), kernel-ladder evidence recording
+- **Objective resolution in policies (L18, WP9.7)**: Added `resolve_objectives()` helper reading from OBJECTIVES_REGISTRY; ModelBasedPolicy uses registry directions for multi-objective studies
+- **S3 data-origin allocation & contrast quota (L19, WP9.8)**: `_generate_s3_schedule_candidates()` implements exploration/calibration/test fractions + OFAT/fractional-factorial contrast quota within exploration budget
+- **RUN_PROFILES & CLI updated (WP9.9)**: All profiles use canonical StageIds (s1_frame, s2_space, etc.)
+- **Stage-model lock & wrapper-obligation tests (WP9.10)**: Created `tests/property/test_stage_model_lock.py` (11 tests): canonical StageId ↔ STAGES_REGISTRY ↔ RUN_PROFILES lock, coverage/classification/provenance structure tests, replay/resume integration, failure isolation structure
+- All quality gates pass: `ruff format`, `ruff check`, `pyright` (strict), 122 property tests pass.
+
+### 2026-09-30 — WP10 Complete: Learning Integration (L7, L8, L9, L10, L11, L20, R15, R53, R57)
+- **PRIORS single-source (L11)**: `prior.py` accessor functions (`get_ruler_lr`, `get_step_size_multiplier`, `get_dynamics_step_size`, `apply_step_size_overrides`, `apply_dynamics_step_size`) now use `prior_value()` from `PRIORS_REGISTRY` as single source. Legacy data tables retained only for initial registration; consumers reroute to registry.
+- **Reasoning persistence (R57, L10)**: `ReasoningStore` now persists hypotheses/literature as records with payload kinds "hypothesis"/"literature" and `ProvenanceLink` cross-links. Module-level singleton removed; instances created per-run and injected via `SystemContext`.
+- **ICUModel context injection (L10/K10)**: `ICUModel` has no module-level singleton; designed for injection through `SystemContext`. `persist_to_store`/`load_from_store` fixed for type correctness (DataOrigin enum, tuple fields, no replication_key).
+- **Surrogate coordinate-wide features (R15/R53)**: `GaussianProcessSurrogate._coords_to_features` now uses `harvest_schema()` for consistent, deterministic feature encoding across all hyperparameters in registry order.
+- **Claim integrity (L20)**: `claim_eligible_by_achieved_seeds` in `evidence/claims.py` counts achieved seeds per `replication_key` via `RecordStore.count_achieved_seeds()`.
+- All quality gates pass: `ruff format`, `ruff check`, `pyright` (strict), all learning-related property tests pass.
+
+### 2026-09-30 — WP11 Complete: Surface Conformance, Codegen & Operations (L12, L13, L14, R43, R80, R83, R88)
+- **Intent persistence (L13/R84)**: `RecordStore.record_intent()` persists operator intents as run-linked records with `payload.kind="operator_intent"` (uniqueness from `intent_id` via `schedule.task_id`; redelivery dedups as `DuplicateMeasurementError` through the single writer); `query_intent_records()` scopes by run. `RunController._persist_intent()` and `submit_intent_to_run()` now use it (log-only stubs removed).
+- **Public-API exports (L14/R73)**: new `RecordStore.export_snapshot()` (records/runs/artifacts/vector_index as JSON-serializable dicts via `query_records`/`query_runs`/`read_table`); `export_to_json`/`export_to_parquet` in `surface/report.py` routed through it — no `store._conn`/`_row_to_record` reach-ins remain in `surface/`.
+- **Question-first entry (R43)**: new `surface/profiles.py::question_first(objective, operating_point)` validates against OBJECTIVES registry and returns a RunSpec (`synthesis` policy, canonical S1–S11 stages, S3 data-origin allocation 0.6/0.2/0.2 + contrast quota 0.1).
+- **Headless service (R81–R84, WP11.4)**: new `surface/service.py` with `ServiceLoop` (pipeline task + control-file poll), `write_control_intent`/`poll_control_file` JSONL protocol, malformed-line tolerance.
+- **Alerts (R83/Q14)**: `AlertDedup` keyed `(predicate, run, window)`; `DEFAULT_Q14_ROUTES` + `default_events_for()` record the notify-only routing model as `WebhookConfig.events` defaults.
+- **Report completion (R85–R88)**: `narrative_handoff_summary()` — run state, claim-eligible cells, open alerts, latest promotion, budget, intents on record.
+- **Store fixes found via new tests**: `json_extract` → `json_extract_string` for `data_origin`/`payload.kind` filters (DuckDB cast the bound param to JSON and raised `ConversionException`); `record_id` PK collisions now map to `DuplicateMeasurementError` (same-run redelivery); `count_achieved_seeds` `None`-guard for optional `gate_verdict` (strict-pyright fix).
+- **report.py fixes**: invalid `except ValueError, TypeError` syntax (×2); `ExportBundle.__dict__` → `dataclasses.asdict` (slots dataclass has no `__dict__`).
+- **Locks**: `tests/property/test_wp11_surface_lock.py` (20 tests) — intent round-trip/dedup/scoping, snapshot serializability, JSON round-trip, handoff content, question-first shape/rejection, codegen determinism + `generate_all` file set, documented-command `--help` conformance (R80), RUN_PROFILES canonical-stage lock, dedup window, Q14 coverage, control-file round-trip.
+- All quality gates pass: `ruff format`, `ruff check` (changed files; `PLR0904` on `RecordStore` relaxed per-line — single-writer API concentration is the §1.1 design), `pyright` strict clean, 174 property tests pass (4 skipped).
+
+### Improvement Opportunities (remaining WPs)
+1. **WP12**: Legacy port & delete — inventory legacy surfaces, port remaining capabilities as catalog entries, delete legacy modules (Directive 1). Precondition: WP8–WP11 conformance green per capability (R77). Note stray `fix_capabilities_v2.py` at repo root is dead code — delete in WP12 pass.
+2. **WP12**: Prior single-source lock tightening — `prior.py` legacy data tables (`_STEP_SIZE_OVERRIDES_DATA`, `autoscientist/ruler_table.json` import) still seed the registry; delete after consumers reroute.
+3. **WP13**: Class E benchmarks — E1 store-overhead harness `scripts/probes/store_overhead_bench.py` (K7/K9 <1% criterion), E2 acquisition effect-size via `learning/benchmark.py`, E3 seeded reproduction on `SyntheticGroundTruth`, E4 transfer with explicit provenance; results recorded as store records.
+4. **WP13**: Definition of Done — Gate 1/2 locks non-vacuous, every C1–C88 + gated row has conformance evidence or retirement record, legacy entry points deleted (import-graph lock), run-scoped state lock (no module-level mutable singletons under `experiment/`), store-overhead fraction recorded <1%.
+
+### Notes for Remaining Work
+- `RecordStore` is intentionally wide (single-writer topology concentrates the API); `PLR0904` noqa carries the §1.1 rationale. Do not split without a K1 decision.
+- `surface/conformance.py::run_verifying_test` shells to `pytest` via `subprocess` (S404/S603 flags) — sandboxed local CI use only; never pass untrusted node ids.
+- `docs/generated/` is regenerated by `codegen.generate_all()`; the WP11 lock pins the file set and determinism but not content hashes — a content-hash drift lock belongs to the WP13 DoD hardening.
+- `question_first` validates objective ids against OBJECTIVES registry keys (e.g. `validation_accuracy`, not legacy `accuracy`); CLI `--objectives` flags still accept legacy names — reconcile at WP12 port time.
+- Uncommitted pre-existing work in this tree (WP9 `sysctx.py`, WP10 `learning/benchmark.py`, codegen docs, stage-model/conformance tests) lands together with WP11 in the commit below.

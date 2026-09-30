@@ -1,0 +1,1607 @@
+[
+  {
+    "capability_id": "C1",
+    "name": "C1",
+    "kind": "core",
+    "display_name": "Six-axis coordinate space",
+    "description": "Full Substrate\u00d7Geometry\u00d7Dynamics\u00d7Plasticity\u00d7Credit\u00d7Update coordinate space",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "schema",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_all_registries_dict_completeness",
+    "flags": [
+      "axis",
+      "coordinate"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C10",
+    "name": "C10",
+    "kind": "core",
+    "display_name": "Evidence-driven allocation",
+    "description": "Non-uniform compute allocation with divergence/stagnation detection",
+    "required": true,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "allocator",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_allocation_promotion",
+    "flags": [
+      "allocation",
+      "evidence_driven"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C11",
+    "name": "C11",
+    "kind": "core",
+    "display_name": "Replay and resume",
+    "description": "Deterministic replay via replay_hash; resume via measurement_key",
+    "required": true,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "replay",
+    "verifying_test": "tests/property/test_atomic_append_kill_proof.py::test_monotonic_seq_across_concurrent",
+    "flags": [
+      "replay",
+      "resume"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C12",
+    "name": "C12",
+    "kind": "core",
+    "display_name": "Three-tier status model",
+    "description": "Observations, Assessments (procedure-versioned), Derived Claims",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_three_tier_status_model",
+    "flags": [
+      "status",
+      "three_tier"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C13",
+    "name": "C13",
+    "kind": "core",
+    "display_name": "Claim eligibility predicates",
+    "description": "Pure query predicates for claim_eligible, promoted, beats_baseline",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_claim_eligible_predicate",
+    "flags": [
+      "claims",
+      "predicates"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C14",
+    "name": "C14",
+    "kind": "core",
+    "display_name": "Failure intelligence",
+    "description": "FailureCause taxonomy, clustering, reproducer emission",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_failure_clustering",
+    "flags": [
+      "failure",
+      "clustering"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C15",
+    "name": "C15",
+    "kind": "core",
+    "display_name": "Unified artifact storage",
+    "description": "Atomic record+artifact transactions in DuckDB",
+    "required": true,
+    "gated_by": null,
+    "stage": "S8_RECORD",
+    "owner": "artifacts",
+    "verifying_test": "tests/property/test_atomic_append_kill_proof.py::test_atomic_append_with_artifacts",
+    "flags": [
+      "artifacts",
+      "atomic"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C16",
+    "name": "C16",
+    "kind": "core",
+    "display_name": "Vector retrieval",
+    "description": "Brute-force cosine/dot + optional HNSW via vss",
+    "required": true,
+    "gated_by": null,
+    "stage": "S8_RECORD",
+    "owner": "store",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_vector_retrieval_bruteforce",
+    "flags": [
+      "vector",
+      "vss_optional"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C17",
+    "name": "C17",
+    "kind": "core",
+    "display_name": "Prior registry",
+    "description": "Ruler LR + step-size overrides as PriorSpec data",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "priors",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_priors_registry_seeded",
+    "flags": [
+      "priors",
+      "ruler_lr"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C18",
+    "name": "C18",
+    "kind": "core",
+    "display_name": "Surrogate policy wrapper",
+    "description": "EI/EHVI/UCB/PI/LOG_EI over any base Policy",
+    "required": true,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_surrogate_policy_wrapper",
+    "flags": [
+      "surrogate",
+      "acquisition"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C19",
+    "name": "C19",
+    "kind": "core",
+    "display_name": "I(C,U) metamodel",
+    "description": "Input-conditional uncertainty metamodel with leakage guard",
+    "required": true,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_icu_leakage_guard",
+    "flags": [
+      "icu",
+      "leakage_guard"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C2",
+    "name": "C2",
+    "kind": "core",
+    "display_name": "Unified record schema",
+    "description": "Single record schema with four identity sections and three identity keys",
+    "required": true,
+    "gated_by": null,
+    "stage": "S2_SPACE",
+    "owner": "schema",
+    "verifying_test": "tests/property/test_dynamics_wiring_lock.py::test_record_schema_valid",
+    "flags": [
+      "schema",
+      "record"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C20",
+    "name": "C20",
+    "kind": "core",
+    "display_name": "Reasoning records",
+    "description": "Hypothesis/literature records with provenance linkage",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_reasoning_provenance_linkage",
+    "flags": [
+      "reasoning",
+      "provenance"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C21",
+    "name": "C21",
+    "kind": "acceleration",
+    "display_name": "torch.compile settle loop",
+    "description": "Compiled settle loop for digital substrate (2x speedup)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "dynamics",
+    "verifying_test": "tests/property/test_settle_driver_lock.py::test_compiled_settle_bitwise_equal",
+    "flags": [
+      "compilation",
+      "experimental"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C22",
+    "name": "C22",
+    "kind": "acceleration",
+    "display_name": "Gradient checkpointing",
+    "description": "Memory-compute tradeoff for deep settling",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "dynamics",
+    "verifying_test": "tests/property/test_settle_driver_lock.py::test_gradient_checkpointing_memory",
+    "flags": [
+      "checkpointing",
+      "memory"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C23",
+    "name": "C23",
+    "kind": "acceleration",
+    "display_name": "Gain control homeostasis",
+    "description": "\u03bcPC-style unit RMS and spectral renormalization",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "dynamics",
+    "verifying_test": "tests/property/test_settle_driver_lock.py::test_gain_control_unit_rms",
+    "flags": [
+      "gain_control",
+      "homeostasis"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C24",
+    "name": "C24",
+    "kind": "acceleration",
+    "display_name": "KV cache for transformer",
+    "description": "Key-value cache for autoregressive generation",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "geometry",
+    "verifying_test": "tests/property/test_geometry_wiring_lock.py::test_transformer_kv_cache",
+    "flags": [
+      "kv_cache",
+      "transformer"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C25",
+    "name": "C25",
+    "kind": "acceleration",
+    "display_name": "Async orchestration",
+    "description": "asyncio.TaskGroup for concurrent evaluation",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_async_backend_works",
+    "flags": [
+      "async",
+      "taskgroup"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C26",
+    "name": "C26",
+    "kind": "scaling",
+    "display_name": "Multiprocess backend",
+    "description": "Parallel evaluation via multiprocessing",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_multiprocess_backend",
+    "flags": [
+      "multiprocess",
+      "parallel"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C27",
+    "name": "C27",
+    "kind": "scaling",
+    "display_name": "Multi-GPU DDP/FSDP",
+    "description": "Distributed data parallel and fully sharded data parallel",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_ddp_fsdp_works",
+    "flags": [
+      "ddp",
+      "fsdp",
+      "gpu_only"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C28",
+    "name": "C28",
+    "kind": "scaling",
+    "display_name": "P2P gossip cluster",
+    "description": "Kademlia-based peer-to-peer worker coordination",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_p2p_cluster_works",
+    "flags": [
+      "p2p",
+      "kademlia"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C29",
+    "name": "C29",
+    "kind": "scaling",
+    "display_name": "Batch vectorization",
+    "description": "Vectorized evaluation across batch dimension",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_batch_vectorization",
+    "flags": [
+      "vectorization",
+      "batch"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C3",
+    "name": "C3",
+    "kind": "core",
+    "display_name": "Content-addressed records",
+    "description": "Records identified by content hash (record_id)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S8_RECORD",
+    "owner": "store",
+    "verifying_test": "tests/property/test_atomic_append_kill_proof.py::test_atomic_transaction_rollback",
+    "flags": [
+      "content_addressed",
+      "dedup"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C30",
+    "name": "C30",
+    "kind": "scaling",
+    "display_name": "Pipeline parallelism",
+    "description": "Stage-wise pipeline parallelism for deep networks",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "backends",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_pipeline_parallelism",
+    "flags": [
+      "pipeline_parallel",
+      "experimental"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C31",
+    "name": "C31",
+    "kind": "reproducibility",
+    "display_name": "Computational reproducibility",
+    "description": "Same env reproduces numerics within tolerance",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "replay",
+    "verifying_test": "tests/property/test_scientific_validity_protocol_lock.py::test_replayable_reproducibility",
+    "flags": [
+      "replayable",
+      "computational"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C32",
+    "name": "C32",
+    "kind": "reproducibility",
+    "display_name": "Scientific reproducibility",
+    "description": "Independent env reproduces reported effect",
+    "required": false,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "benchmarks",
+    "verifying_test": "tests/property/test_scientific_validity_protocol_lock.py::test_scientific_reproducibility",
+    "flags": [
+      "scientific",
+      "independent_env"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C33",
+    "name": "C33",
+    "kind": "reproducibility",
+    "display_name": "Reproducibility class tracking",
+    "description": "REPLAYABLE / COMPUTATIONALLY_REPRODUCIBLE / SCIENTIFICALLY_REPRODUCIBLE",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_scientific_validity_protocol_lock.py::test_reproducibility_classes",
+    "flags": [
+      "reproducibility_class",
+      "tracking"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C34",
+    "name": "C34",
+    "kind": "reproducibility",
+    "display_name": "Assessment procedure versioning",
+    "description": "Content-addressed immutable assessment procedures",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_assessment_procedure_versioning",
+    "flags": [
+      "assessment",
+      "procedure"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C35",
+    "name": "C35",
+    "kind": "reproducibility",
+    "display_name": "Data origin tagging",
+    "description": "exploration / policy_selected / calibration / test tags on every record",
+    "required": true,
+    "gated_by": null,
+    "stage": "S3_SCHEDULE",
+    "owner": "schema",
+    "verifying_test": "tests/property/test_scientific_validity_protocol_lock.py::test_data_origin_tags",
+    "flags": [
+      "data_origin",
+      "split"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C36",
+    "name": "C36",
+    "kind": "reproducibility",
+    "display_name": "Transfer provenance tracking",
+    "description": "training_tasks, transfer_source_ids, transfer_mode on records",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_transfer_provenance",
+    "flags": [
+      "transfer",
+      "provenance"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C37",
+    "name": "C37",
+    "kind": "governance",
+    "display_name": "Matched-cost comparison guard",
+    "description": "Refuses unmatched budget tier/hardware class comparisons",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_comparison_guard_rejects_mismatched",
+    "flags": [
+      "comparison",
+      "guard"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C38",
+    "name": "C38",
+    "kind": "governance",
+    "display_name": "Stratification guard",
+    "description": "Requires hardware_class match for WALLTIME budget tier",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_stratification_guard_hardware_class",
+    "flags": [
+      "stratification",
+      "hardware_class"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C39",
+    "name": "C39",
+    "kind": "governance",
+    "display_name": "I(C,U) leakage audit",
+    "description": "Periodic calibration audit for bounded degradation",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_icu_calibration_audit",
+    "flags": [
+      "icu",
+      "leakage",
+      "audit"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C4",
+    "name": "C4",
+    "kind": "core",
+    "display_name": "Measurement key deduplication",
+    "description": "Unique measurement_key prevents duplicate evaluations",
+    "required": true,
+    "gated_by": null,
+    "stage": "S8_RECORD",
+    "owner": "store",
+    "verifying_test": "tests/property/test_atomic_append_kill_proof.py::test_duplicate_measurement_key_dedup",
+    "flags": [
+      "dedup",
+      "measurement_key"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C40",
+    "name": "C40",
+    "kind": "governance",
+    "display_name": "Alert predicates",
+    "description": "Divergence, stagnation, resource_exhaustion, constraint_violation alerts",
+    "required": true,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_alert_predicates",
+    "flags": [
+      "alerts",
+      "predicates"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C41",
+    "name": "C41",
+    "kind": "governance",
+    "display_name": "Promotion predicates",
+    "description": "promoted, beats_baseline, robust, generalizes claim predicates",
+    "required": true,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_promotion_predicates",
+    "flags": [
+      "promotion",
+      "claims"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C42",
+    "name": "C42",
+    "kind": "governance",
+    "display_name": "Effect-size protocol",
+    "description": "Cohen's d + CI + p-value at task level (N_tasks\u226510, N_seeds\u22655)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_effect_size_protocol",
+    "flags": [
+      "effect_size",
+      "cohens_d"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C43",
+    "name": "C43",
+    "kind": "governance",
+    "display_name": "Budget tier system",
+    "description": "EVAL_COUNT, FLOPS, WALLTIME (hardware_class), ENERGY tiers",
+    "required": true,
+    "gated_by": null,
+    "stage": "S3_SCHEDULE",
+    "owner": "budget",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_budget_tier_system",
+    "flags": [
+      "budget",
+      "tier"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C44",
+    "name": "C44",
+    "kind": "governance",
+    "display_name": "Run controller",
+    "description": "Pausable/steerable runs with operator intent audit trail",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "operations",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_run_controller_pause_resume",
+    "flags": [
+      "operations",
+      "control"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C45",
+    "name": "C45",
+    "kind": "governance",
+    "display_name": "Service manager",
+    "description": "Long-running services with auto-restart and webhook alerts",
+    "required": false,
+    "gated_by": null,
+    "stage": "S9_ATTRIBUTE",
+    "owner": "operations",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_service_manager_webhooks",
+    "flags": [
+      "service",
+      "webhooks"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C46",
+    "name": "C46",
+    "kind": "governance",
+    "display_name": "Conformance harness",
+    "description": "CI gate enforcement with capability currency lock",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_conformance_harness_gate",
+    "flags": [
+      "conformance",
+      "ci"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C47",
+    "name": "C47",
+    "kind": "governance",
+    "display_name": "Currency lock",
+    "description": "Appendix-A flag projection view with currency tracking (R78)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_currency_lock_flags",
+    "flags": [
+      "currency",
+      "flags"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C48",
+    "name": "C48",
+    "kind": "governance",
+    "display_name": "Question-first entry",
+    "description": "Synthesis policy: ProblemSpec \u2192 I(C,U,P)-predicted coordinate",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "policy",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_synthesis_policy_question_first",
+    "flags": [
+      "synthesis",
+      "question_first"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C49",
+    "name": "C49",
+    "kind": "learning",
+    "display_name": "Surrogate-driven acquisition",
+    "description": "EI/EHVI acquisition functions for efficient search",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_surrogate_acquisition_ei",
+    "flags": [
+      "surrogate",
+      "ei"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C5",
+    "name": "C5",
+    "kind": "core",
+    "display_name": "Cell key grouping",
+    "description": "cell_key groups repeated evaluations of same coordinate",
+    "required": true,
+    "gated_by": null,
+    "stage": "S2_SPACE",
+    "owner": "schema",
+    "verifying_test": "tests/property/test_scientific_validity_protocol_lock.py::test_replication_key_groups_seeds",
+    "flags": [
+      "cell_key",
+      "replication"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C50",
+    "name": "C50",
+    "kind": "learning",
+    "display_name": "Cross-task transfer",
+    "description": "Transfer learning with explicit provenance",
+    "required": false,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_cross_task_transfer",
+    "flags": [
+      "transfer",
+      "cross_task"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C51",
+    "name": "C51",
+    "kind": "learning",
+    "display_name": "Prior single-source accessor",
+    "description": "prior_value(name, context) with confidence/uncertainty/override",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "priors",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_prior_single_source",
+    "flags": [
+      "priors",
+      "single_source"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C52",
+    "name": "C52",
+    "kind": "learning",
+    "display_name": "Run-scoped ICU/Reasoning",
+    "description": "Context-injected ICU/Reasoning; no module-level singletons (K10)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_no_global_singletons",
+    "flags": [
+      "icu",
+      "reasoning",
+      "k10"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C53",
+    "name": "C53",
+    "kind": "learning",
+    "display_name": "Reasoning persistence",
+    "description": "Hypotheses/literature as records with ProvenanceLink cross-links",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_reasoning_persistence",
+    "flags": [
+      "reasoning",
+      "persistence"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C54",
+    "name": "C54",
+    "kind": "learning",
+    "display_name": "Warm-start from prior runs",
+    "description": "Registered prior/surrogate sources for transfer",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_warm_start_prior_runs",
+    "flags": [
+      "warm_start",
+      "transfer"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C55",
+    "name": "C55",
+    "kind": "learning",
+    "display_name": "Coordinate-wide surrogate",
+    "description": "SurrogatePolicy over any Policy, features from full Coordinate",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_coordinate_wide_surrogate",
+    "flags": [
+      "surrogate",
+      "coordinate_wide"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C56",
+    "name": "C56",
+    "kind": "learning",
+    "display_name": "I(C,U) feature encoder",
+    "description": "Credit\u00d7Update interaction surrogate with feature encoder",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "learning",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_icu_feature_encoder",
+    "flags": [
+      "icu",
+      "feature_encoder"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C57",
+    "name": "C57",
+    "kind": "learning",
+    "display_name": "Achieved-seed claim eligibility",
+    "description": "claim_eligible counts achieved seeds per replication_key (L20)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "evidence",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_achieved_seed_claim",
+    "flags": [
+      "claims",
+      "achieved_seeds"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C58",
+    "name": "C58",
+    "kind": "learning",
+    "display_name": "Multi-objective Pareto",
+    "description": "Configurable Pareto fronts across 20+ objectives per axis",
+    "required": true,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "objectives",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_multi_objective_pareto",
+    "flags": [
+      "pareto",
+      "multi_objective"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C59",
+    "name": "C59",
+    "kind": "learning",
+    "display_name": "Substrate-aware objectives",
+    "description": "Memristive\u2192energy, Neuromorphic\u2192spike_rate, etc.",
+    "required": false,
+    "gated_by": null,
+    "stage": "S7_MEASURE",
+    "owner": "substrate",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_substrate_aware_objectives",
+    "flags": [
+      "substrate",
+      "objectives"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C6",
+    "name": "C6",
+    "kind": "core",
+    "display_name": "Schema versioning",
+    "description": "Append-only schema evolution with UnknownField preservation",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "schema",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_schema_versioning_fail_closed",
+    "flags": [
+      "versioning",
+      "unknown_field"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C60",
+    "name": "C60",
+    "kind": "learning",
+    "display_name": "Frozen-\u03b8 \u03c8 adaptation",
+    "description": "Lab.adapt Pareto over (accuracy, stability, cost) with \u03b8 bitwise invariant",
+    "required": false,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "update",
+    "verifying_test": "tests/property/test_statistical_protocol_lock.py::test_frozen_theta_psi_adapt",
+    "flags": [
+      "frozen_theta",
+      "psi"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C61",
+    "name": "C61",
+    "kind": "core",
+    "display_name": "NTM geometry",
+    "description": "External-memory tape: LSTM controller + content-addressed heads",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "geometry",
+    "verifying_test": "tests/integration/test_demo_ntm.py",
+    "flags": [
+      "ntm",
+      "gate1_accepted",
+      "experimental"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C62",
+    "name": "C62",
+    "kind": "core",
+    "display_name": "NCA geometry",
+    "description": "Neural cellular automaton fabric; local credit solves growing NCA",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "geometry",
+    "verifying_test": "tests/integration/test_demo_nca.py",
+    "flags": [
+      "nca",
+      "gate1_accepted",
+      "experimental"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C63",
+    "name": "C63",
+    "kind": "core",
+    "display_name": "PEPITA/LEMMA credit",
+    "description": "Published PEPITA input-modulation credit; LEMMA closed-form per-layer",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "credit",
+    "verifying_test": "tests/integration/test_demo_swap_credit.py",
+    "flags": [
+      "pepita",
+      "lemma",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C64",
+    "name": "C64",
+    "kind": "core",
+    "display_name": "Holomorphic EP",
+    "description": "Complex-valued EP with holomorphic activations and conjugate feedback",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_holomorphic_ep.py",
+    "flags": [
+      "holomorphic",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C65",
+    "name": "C65",
+    "kind": "core",
+    "display_name": "Directed EP",
+    "description": "Asymmetric EP implementing Feedback Alignment within energy framework",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_directed_ep.py",
+    "flags": [
+      "directed_ep",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C66",
+    "name": "C66",
+    "kind": "core",
+    "display_name": "Finite-nudge EP",
+    "description": "Large \u03b2 finite nudge instead of infinitesimal limit",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_finite_nudge_ep.py",
+    "flags": [
+      "finite_nudge",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C67",
+    "name": "C67",
+    "kind": "core",
+    "display_name": "Ternary EqProp",
+    "description": "Ternary-weight EP with STE-based quantization",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_ternary_eqprop.py",
+    "flags": [
+      "ternary",
+      "eqprop",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C68",
+    "name": "C68",
+    "kind": "core",
+    "display_name": "Momentum EqProp",
+    "description": "Heavy-ball settling dynamics for faster equilibrium convergence",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_momentum_eqprop.py",
+    "flags": [
+      "momentum",
+      "eqprop",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C69",
+    "name": "C69",
+    "kind": "core",
+    "display_name": "Sparse EqProp",
+    "description": "Dynamic sparsity masks with efficient sparse matmul",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_sparse_eqprop.py",
+    "flags": [
+      "sparse",
+      "eqprop",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C7",
+    "name": "C7",
+    "kind": "core",
+    "display_name": "Legality engine",
+    "description": "Predicate-based constraint engine with void/defect classification",
+    "required": true,
+    "gated_by": null,
+    "stage": "S4_GATE",
+    "owner": "legality",
+    "verifying_test": "tests/property/test_legality_boundary_lock.py::test_declared_constraints_have_proof",
+    "flags": [
+      "legality",
+      "void",
+      "defect"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C70",
+    "name": "C70",
+    "kind": "core",
+    "display_name": "Diffusion EqProp",
+    "description": "Continuous-time diffusion settling dynamics",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "models_native",
+    "verifying_test": "tests/integration/test_demo_diffusion_eqprop.py",
+    "flags": [
+      "diffusion",
+      "eqprop",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C71",
+    "name": "C71",
+    "kind": "core",
+    "display_name": "Routing plasticity",
+    "description": "State-dependent gating, sparse pathway routing",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_swap_plasticity.py",
+    "flags": [
+      "routing",
+      "plasticity",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C72",
+    "name": "C72",
+    "kind": "core",
+    "display_name": "Fast-weight plasticity",
+    "description": "Episode-local associative memory via fast-weight matrices",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_swap_plasticity.py",
+    "flags": [
+      "fast_weight",
+      "plasticity",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C73",
+    "name": "C73",
+    "kind": "core",
+    "display_name": "Substrate-coupled plasticity",
+    "description": "Physical plasticity (memristive conductance dynamics)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_memristive.py",
+    "flags": [
+      "substrate_coupled",
+      "plasticity",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C74",
+    "name": "C74",
+    "kind": "core",
+    "display_name": "Rule-state plasticity (Z3)",
+    "description": "Rule selection as dynamical variable; frozen-\u03b8 \u03c8 benchmarks",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_z3_frozen_theta.py",
+    "flags": [
+      "z3",
+      "rule_state",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C75",
+    "name": "C75",
+    "kind": "core",
+    "display_name": "Closed-form ridge plasticity",
+    "description": "Supervised \u03c8 computed, not trained (LEMMA-style)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_closed_form_ridge.py",
+    "flags": [
+      "closed_form",
+      "ridge",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C76",
+    "name": "C76",
+    "kind": "core",
+    "display_name": "Temporal \u03c8 plasticity",
+    "description": "Trace-decayed supervised \u03c8 \u2014 forgetting enables task migration",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "plasticity",
+    "verifying_test": "tests/integration/test_demo_temporal_psi.py",
+    "flags": [
+      "temporal_psi",
+      "plasticity",
+      "gate1_accepted"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C77",
+    "name": "C77",
+    "kind": "core",
+    "display_name": "CEEC core ledger",
+    "description": "Standalone epistemic governance ledger (evidence/beliefs/gates/audit)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S8_RECORD",
+    "owner": "ceec_core",
+    "verifying_test": "packages/ceec-core/tests/test_ceec_ledger.py",
+    "flags": [
+      "ceec",
+      "ledger",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C78",
+    "name": "C78",
+    "kind": "core",
+    "display_name": "Psi-PEFT",
+    "description": "Frozen-backbone task switching via temporal-\u03c8 ridge readouts",
+    "required": false,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "psi_peft",
+    "verifying_test": "packages/psi-peft/tests/test_psi_peft.py",
+    "flags": [
+      "psi_peft",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C79",
+    "name": "C79",
+    "kind": "core",
+    "display_name": "Local feedback projections",
+    "description": "Adaptive local feedback for local credit (X-ALI validated)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S5_COMPOSE",
+    "owner": "local_feedback",
+    "verifying_test": "packages/local-feedback/tests/test_local_feedback.py",
+    "flags": [
+      "local_feedback",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C8",
+    "name": "C8",
+    "kind": "core",
+    "display_name": "S1-S11 pipeline",
+    "description": "Eleven-stage pipeline with wrapper obligations",
+    "required": true,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "pipeline",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_stage_registry_completeness",
+    "flags": [
+      "pipeline",
+      "stages"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C80",
+    "name": "C80",
+    "kind": "core",
+    "display_name": "Stability guard",
+    "description": "Calibrated stability guard (attach, ROC-calibrated \u03c4=1.029)",
+    "required": false,
+    "gated_by": null,
+    "stage": "S6_TRAIN",
+    "owner": "stability",
+    "verifying_test": "packages/stability/tests/test_stability_guard.py",
+    "flags": [
+      "stability",
+      "guard",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C81",
+    "name": "C81",
+    "kind": "core",
+    "display_name": "Computronium Lab synthesis",
+    "description": "ProblemSpec \u2192 coordinate + provenance + predicted viability",
+    "required": false,
+    "gated_by": null,
+    "stage": "S1_FRAME",
+    "owner": "lab",
+    "verifying_test": "packages/computronium-lab/tests/test_lab_synthesize.py",
+    "flags": [
+      "lab",
+      "synthesis",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C82",
+    "name": "C82",
+    "kind": "core",
+    "display_name": "Computronium Lab evolution",
+    "description": "Budgeted evolution with campaign-backed fitness and audited ledger",
+    "required": false,
+    "gated_by": null,
+    "stage": "S10_DECIDE",
+    "owner": "lab",
+    "verifying_test": "packages/computronium-lab/tests/test_lab_evolution.py",
+    "flags": [
+      "lab",
+      "evolution",
+      "platform"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C83",
+    "name": "C83",
+    "kind": "core",
+    "display_name": "Surface CLI dispatcher",
+    "description": "Single comp-surface dispatcher with run profiles as data",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_surface_cli_profiles",
+    "flags": [
+      "cli",
+      "surface"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C84",
+    "name": "C84",
+    "kind": "core",
+    "display_name": "Report generator",
+    "description": "Run summaries, claim queries, Pareto frontiers, Parquet/JSON export",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_report_generator",
+    "flags": [
+      "report",
+      "export"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C85",
+    "name": "C85",
+    "kind": "core",
+    "display_name": "Codegen from registries",
+    "description": "docs/generated listings, compatibility matrix, JSON-Schema validators",
+    "required": false,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_codegen_drift_lock",
+    "flags": [
+      "codegen",
+      "drift_lock"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C86",
+    "name": "C86",
+    "kind": "core",
+    "display_name": "Documented-command conformance",
+    "description": "R80: every CLI command has conformance test",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "surface",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_documented_command_conformance",
+    "flags": [
+      "conformance",
+      "cli"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C87",
+    "name": "C87",
+    "kind": "core",
+    "display_name": "Gallery lock",
+    "description": "DEMOS registry + docs/figures/manifest.json pinning (R87)",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "visualization",
+    "verifying_test": "tests/integration/test_gallery_lock.py",
+    "flags": [
+      "gallery",
+      "manifest"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C88",
+    "name": "C88",
+    "kind": "core",
+    "display_name": "Probe conventions",
+    "description": "scripts/probes/ throwaway scripts with measured-regime docstrings",
+    "required": true,
+    "gated_by": null,
+    "stage": "S11_REPORT",
+    "owner": "probes",
+    "verifying_test": "tests/property/test_public_surface_lock.py::test_probe_conventions",
+    "flags": [
+      "probes",
+      "conventions"
+    ],
+    "status": "active",
+    "retirement_record": null
+  },
+  {
+    "capability_id": "C9",
+    "name": "C9",
+    "kind": "core",
+    "display_name": "Eight-policy catalog",
+    "description": "StratifiedRandom, RoundRobinGrid, UniformRandom, ModelBased, Evolution, Synthesis, StrategyProgression, TrainerDriven",
+    "required": true,
+    "gated_by": null,
+    "stage": "S3_SCHEDULE",
+    "owner": "policy",
+    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_policy_registry_has_eight",
+    "flags": [
+      "policy",
+      "catalog"
+    ],
+    "status": "active",
+    "retirement_record": null
+  }
+]

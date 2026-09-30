@@ -1,0 +1,290 @@
+[
+  {
+    "name": "bleu_score",
+    "description": "BLEU score for translation/generation tasks",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "bp_deficit",
+    "description": "Backprop ruler accuracy - measured accuracy (lower = closer to ruler)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "ruler"
+  },
+  {
+    "name": "coherence_time",
+    "description": "Coherence time (quantum substrate)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "substrate"
+  },
+  {
+    "name": "consolidation_cost",
+    "description": "Compute cost of \u03c8\u2192\u03b8 consolidation",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "plasticity"
+  },
+  {
+    "name": "convergence_steps",
+    "description": "Number of steps to reach convergence threshold",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "credit_efficiency",
+    "description": "Credit alignment / FLOPs (credit efficiency)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "composite"
+  },
+  {
+    "name": "energy_efficiency",
+    "description": "Performance per joule (accuracy / energy)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "energy_per_step",
+    "description": "Energy consumption per training step (joules)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "f1_score",
+    "description": "F1 score for classification tasks",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "flops",
+    "description": "Floating-point operations per training step",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "free_energy",
+    "description": "Free energy at convergence (energy-based dynamics)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability"
+  },
+  {
+    "name": "gate_fidelity",
+    "description": "Gate fidelity (quantum substrate)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "substrate"
+  },
+  {
+    "name": "generalization_gap",
+    "description": "Train-validation gap (smaller is better)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "ir_drop_variance",
+    "description": "IR drop variance (memristive substrate)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "substrate"
+  },
+  {
+    "name": "latency_ms",
+    "description": "Inference latency in milliseconds",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "lyapunov_exponent",
+    "description": "Largest Lyapunov exponent (chaos indicator)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability"
+  },
+  {
+    "name": "max_singular_value",
+    "description": "Maximum singular value \u03c3_max(J_F) (transient amplification bound)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability"
+  },
+  {
+    "name": "memory_usage",
+    "description": "Peak GPU memory usage",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "param_count",
+    "description": "Total parameter count",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "perplexity",
+    "description": "Perplexity for language modeling tasks",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "task"
+  },
+  {
+    "name": "phase_noise",
+    "description": "Phase noise (photonic substrate)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "substrate"
+  },
+  {
+    "name": "psi_capacity",
+    "description": "Plastic state capacity (\u03c8 dimensionality)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "plasticity"
+  },
+  {
+    "name": "rewrite_rate",
+    "description": "Rate of \u03c8 rewriting (adaptation speed)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "plasticity"
+  },
+  {
+    "name": "ruler_energy_ratio",
+    "description": "Cell energy / ruler energy (lower = more efficient than ruler)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "ruler"
+  },
+  {
+    "name": "ruler_param_ratio",
+    "description": "Cell param_count / ruler param_count",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "ruler"
+  },
+  {
+    "name": "ruler_walltime_ratio",
+    "description": "Cell walltime / ruler walltime (lower = faster than ruler)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "ruler"
+  },
+  {
+    "name": "settle_steps",
+    "description": "Number of settle steps to convergence",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability"
+  },
+  {
+    "name": "spectral_radius",
+    "description": "Spectral radius \u03c1(J_F) of Jacobian (asymptotic stability margin)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "stability"
+  },
+  {
+    "name": "spike_rate",
+    "description": "Average spike rate (neuromorphic substrate)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "substrate"
+  },
+  {
+    "name": "stability_plasticity_ratio",
+    "description": "\u03c1(J_F) / \u03c8_capacity (stability-plasticity trade-off)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "log",
+    "axis_tag": "composite"
+  },
+  {
+    "name": "test_accuracy",
+    "description": "Test accuracy (held-out evaluation)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "test_loss",
+    "description": "Test loss (held-out evaluation)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "training_time",
+    "description": "Wall-clock training time per epoch",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "cost"
+  },
+  {
+    "name": "validation_accuracy",
+    "description": "Validation accuracy (primary metric for classification tasks)",
+    "direction": "maximize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "validation_loss",
+    "description": "Validation loss (primary metric for regression/language tasks)",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "task"
+  },
+  {
+    "name": "walltime_total",
+    "description": "Total wall-clock time for full training run",
+    "direction": "minimize",
+    "weight": 1.0,
+    "normalizer": "minmax",
+    "axis_tag": "cost"
+  }
+]

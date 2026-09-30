@@ -6,9 +6,9 @@ STAGES, and CAPABILITIES following the same pattern as AXES_REGISTRIES.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from computronium.experiment.schema.registry import Registry
 
@@ -69,6 +69,10 @@ class PriorSpec:
     distribution: str  # "normal", "log_uniform", "categorical", etc.
     params: dict
     description: str = ""
+    # Metadata for single-source accessor (L11)
+    confidence: float = 1.0  # 0-1, confidence in this prior
+    uncertainty: float = 0.0  # Uncertainty in the prior parameters
+    override_scope: str = ""  # "run", "coordinate", "global" - scope for overrides
 
 
 class PolicyKind(StrEnum):
@@ -95,19 +99,19 @@ class PolicySpec:
 
 
 class StageId(StrEnum):
-    """Stage identifiers for the S1-S11 pipeline."""
+    """Stage identifiers for the S1-S11 pipeline per TODO43 §3.0 / abc3 §5.1."""
 
-    S1_DISCOVERY = "s1_discovery"
-    S2_VALIDATION = "s2_validation"
-    S3_CALIBRATION = "s3_calibration"
-    S4_EXPANSION = "s4_expansion"
-    S5_MATURATION = "s5_maturation"
-    S6_CLAIM = "s6_claim"
-    S7_REPRODUCTION = "s7_reproduction"
-    S8_DISTILLATION = "s8_distillation"
-    S9_DEPLOYMENT = "s9_deployment"
-    S10_MONITORING = "s10_monitoring"
-    S11_RETIREMENT = "s11_retirement"
+    S1_FRAME = "s1_frame"
+    S2_SPACE = "s2_space"
+    S3_SCHEDULE = "s3_schedule"
+    S4_GATE = "s4_gate"
+    S5_COMPOSE = "s5_compose"
+    S6_TRAIN = "s6_train"
+    S7_MEASURE = "s7_measure"
+    S8_RECORD = "s8_record"
+    S9_ATTRIBUTE = "s9_attribute"
+    S10_DECIDE = "s10_decide"
+    S11_REPORT = "s11_report"
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,11 +119,13 @@ class StageSpec:
     """Specification for a pipeline stage."""
 
     stage_id: StageId
-    name: str
+    name: str  # Canonical stage ID (e.g., "s1_frame") - used as registry key
+    display_name: str  # Human-readable name (e.g., "Frame")
     description: str = ""
     required_fidelity: str = "L1"
     min_n_seeds: int = 1
     gate: str = "pass"
+    params: dict[str, Any] = field(default_factory=dict)
 
 
 class CapabilityKind(StrEnum):
@@ -203,6 +209,65 @@ def register_prior(spec: PriorSpec) -> None:
     PRIORS_REGISTRY.register(spec)
 
 
+def prior_value(
+    name: str,
+    context: dict[str, Any] | None = None,
+) -> tuple[float, float, float] | None:
+    """Get a prior value with confidence and uncertainty (single-source accessor, L11).
+
+    Args:
+        name: The prior name (e.g., "lr_ruler_mnist", "step_size_energy_minimization_backprop").
+        context: Optional context for per-run/per-coordinate overrides.
+            Keys: "run_id", "coordinate", "override" (dict of param overrides).
+
+    Returns:
+        Tuple of (center_value, confidence, uncertainty) or None if not found.
+        For log_uniform distributions, center is the geometric mean.
+        For normal distributions, center is the mean.
+        For categorical, center is the first choice.
+    """
+    prior = PRIORS_REGISTRY.get(name)
+    if prior is None:
+        return None
+
+    # Extract center value from distribution params
+    center = _extract_prior_center(prior.distribution, prior.params)
+
+    # Apply context overrides if provided
+    if context and context.get("override"):
+        override_params = context["override"]
+        if name in override_params:
+            override = override_params[name]
+            if isinstance(override, int | float):
+                center = float(override)
+            elif isinstance(override, dict) and "center" in override:
+                center = float(override["center"])
+
+    return (center, prior.confidence, prior.uncertainty)
+
+
+def _extract_prior_center(distribution: str, params: dict) -> float:
+    """Extract the center/mean value from distribution parameters."""
+    match distribution:
+        case "log_uniform":
+            # Geometric mean of low and high
+            low = params.get("low", 1e-3)
+            high = params.get("high", 1.0)
+            center = params.get("center", (low * high) ** 0.5)
+            return float(center)
+        case "normal" | "log_normal":
+            return float(params.get("mean", params.get("center", 0.0)))
+        case "uniform":
+            low = params.get("low", 0.0)
+            high = params.get("high", 1.0)
+            return float(params.get("center", (low + high) / 2))
+        case "categorical":
+            choices = params.get("choices", [])
+            return float(choices[0]) if choices else 0.0
+        case _:
+            return float(params.get("center", params.get("mean", 0.0)))
+
+
 def register_policy(spec: PolicySpec) -> None:
     """Register a policy specification."""
     POLICIES_REGISTRY.register(spec)
@@ -238,6 +303,7 @@ __all__ = [
     "ProofKind",
     "StageId",
     "StageSpec",
+    "prior_value",
     "register_capability",
     "register_constraint",
     "register_objective",

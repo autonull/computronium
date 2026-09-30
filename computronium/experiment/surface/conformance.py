@@ -1,4 +1,4 @@
-"""Capability conformance harness (WP7).
+"""Capability conformance harness (WP7 + WP11).
 
 Ensures every C1-C88 + gated row has a passing test or explicit retirement record.
 CI gate for capability conformance. Appendix A flags become a projection view
@@ -7,6 +7,10 @@ of CAPABILITIES with a currency lock.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -20,6 +24,7 @@ from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilityKind,
     CapabilitySpec,
+    CapabilityStatus,
 )
 
 __all__ = [
@@ -27,10 +32,15 @@ __all__ = [
     "ConformanceResult",
     "ConformanceStatus",
     "CurrencyLock",
+    "FlagProjectionLock",
     "check_conformance",
     "generate_conformance_report",
+    "generate_flag_projection_lock",
     "load_currency_lock",
+    "load_flag_projection_lock",
+    "run_verifying_test",
     "save_currency_lock",
+    "save_flag_projection_lock",
 ]
 
 
@@ -55,6 +65,8 @@ class ConformanceResult:
     evidence_count: int
     message: str
     checked_at: datetime
+    verifying_test_result: str | None = None  # pytest node id + result
+    test_duration_seconds: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,11 +90,67 @@ class CurrencyLock:
         return age_hours <= max_age_hours
 
 
+@dataclass(frozen=True, slots=True)
+class FlagProjectionLock:
+    """Appendix-A flag projection lock (R78).
+
+    Maps flags -> capability IDs, ensuring the projection view is current.
+    """
+
+    generated_at: datetime
+    flag_to_capabilities: dict[str, list[str]]  # flag -> list of capability_ids
+    capability_count: int
+    lock_hash: str
+
+    def is_current(self, max_age_hours: int = 24) -> bool:
+        """Check if lock is current (not stale)."""
+        age_hours = (datetime.now() - self.generated_at).total_seconds() / 3600
+        return age_hours <= max_age_hours
+
+
+def run_verifying_test(
+    node_id: str, timeout_seconds: int = 60
+) -> tuple[bool, str, float]:
+    """Run a single pytest verifying test and return (passed, output, duration).
+
+    Uses targeted selection (-k) to run only the specified test node.
+    """
+    import time
+
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                node_id,
+                "-v",
+                "--tb=short",
+                "-x",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            cwd=Path.cwd(),
+        )
+        duration = time.monotonic() - start
+        passed = result.returncode == 0
+        output = result.stdout + result.stderr
+        return passed, output, duration
+    except subprocess.TimeoutExpired:
+        duration = time.monotonic() - start
+        return False, f"Test timed out after {timeout_seconds}s", duration
+    except Exception as e:
+        duration = time.monotonic() - start
+        return False, f"Test execution error: {e}", duration
+
+
 class ConformanceHarness:
     """Capability conformance harness for CI gate enforcement.
 
     Every registered capability must have:
-    - Passing evidence in the store (PASS)
+    - Passing verifying_test (pytest node id executed via targeted selection) (PASS)
     - OR be marked optional (SKIPPED)
     - OR have an explicit retirement record (RETIRED)
     """
@@ -94,19 +162,21 @@ class ConformanceHarness:
         self,
         run_id: str | None = None,
         require_all: bool = True,
+        execute_verifying_tests: bool = True,
     ) -> list[ConformanceResult]:
         """Check all registered capabilities.
 
         Args:
             run_id: Optional run ID to filter evidence
             require_all: If True, fail on any required capability without evidence
+            execute_verifying_tests: If True, run pytest verifying tests
 
         Returns:
             List of conformance results for all capabilities
         """
         results = []
         for capability_id, spec in CAPABILITIES_REGISTRY.items():
-            result = self._check_capability(spec, run_id)
+            result = self._check_capability(spec, run_id, execute_verifying_tests)
             results.append(result)
 
         if require_all:
@@ -119,7 +189,10 @@ class ConformanceHarness:
         return results
 
     def _check_capability(
-        self, spec: CapabilitySpec, run_id: str | None
+        self,
+        spec: CapabilitySpec,
+        run_id: str | None,
+        execute_verifying_tests: bool,
     ) -> ConformanceResult:
         """Check a single capability."""
         if not spec.required:
@@ -133,7 +206,47 @@ class ConformanceHarness:
                 checked_at=datetime.now(),
             )
 
-        # Query for evidence
+        # Check for retirement record
+        if spec.status == CapabilityStatus.RETIRED:
+            return ConformanceResult(
+                capability_id=spec.capability_id,
+                capability_name=spec.name,
+                kind=spec.kind,
+                status=ConformanceStatus.RETIRED,
+                evidence_count=0,
+                message=f"Retired: {spec.retirement_record or 'no record'}",
+                checked_at=datetime.now(),
+            )
+
+        # Run verifying test if available
+        if execute_verifying_tests and spec.verifying_test:
+            passed, output, duration = run_verifying_test(spec.verifying_test)
+            if passed:
+                return ConformanceResult(
+                    capability_id=spec.capability_id,
+                    capability_name=spec.name,
+                    kind=spec.kind,
+                    status=ConformanceStatus.PASS_,
+                    evidence_count=1,
+                    message=f"Verifying test passed: {spec.verifying_test}",
+                    checked_at=datetime.now(),
+                    verifying_test_result=spec.verifying_test,
+                    test_duration_seconds=duration,
+                )
+            else:
+                return ConformanceResult(
+                    capability_id=spec.capability_id,
+                    capability_name=spec.name,
+                    kind=spec.kind,
+                    status=ConformanceStatus.FAIL,
+                    evidence_count=0,
+                    message=f"Verifying test failed: {spec.verifying_test}",
+                    checked_at=datetime.now(),
+                    verifying_test_result=f"FAILED: {spec.verifying_test}",
+                    test_duration_seconds=duration,
+                )
+
+        # Fallback to store evidence query
         evidence_count = self._count_evidence(spec, run_id)
 
         if evidence_count > 0:
@@ -151,30 +264,16 @@ class ConformanceHarness:
             capability_id=spec.capability_id,
             capability_name=spec.name,
             kind=spec.kind,
-            status=ConformanceStatus.FAIL,
+            status=ConformanceStatus.NO_EVIDENCE,
             evidence_count=0,
-            message="Required capability has no passing evidence",
+            message="Required capability has no verifying test or passing evidence",
             checked_at=datetime.now(),
         )
 
     def _count_evidence(self, spec: CapabilitySpec, run_id: str | None) -> int:
-        """Count passing records for a capability."""
-        if self._store._conn is None:
-            raise RuntimeError("Store connection not initialized")
-
-        conditions = ["status.gate_verdict = 'PASS'", "status.quarantine = 0"]
-        params = []
-
-        if run_id:
-            conditions.append("run_id = ?")
-            params.append(run_id)
-
-        # Capability-specific evidence queries could go here
-        # For now, general PASS count
-        where_clause = " WHERE " + " AND ".join(conditions)
-        query = f"SELECT COUNT(*) FROM records{where_clause}"  # noqa: S608 - parameterized query
-        result = self._store._conn.execute(query, params).fetchone()
-        return result[0] if result else 0
+        """Count passing records as fallback evidence for a capability."""
+        _ = spec  # evidence is currently run-scoped, not capability-scoped
+        return self._store.count_passing_records(run_id)
 
     def generate_lock(self, run_id: str | None = None) -> CurrencyLock:
         """Generate a currency lock for the current conformance state."""
@@ -183,10 +282,9 @@ class ConformanceHarness:
         passed = sum(1 for r in results if r.status == ConformanceStatus.PASS_)
         failed = sum(1 for r in results if r.status == ConformanceStatus.FAIL)
         skipped = sum(1 for r in results if r.status == ConformanceStatus.SKIPPED)
+        retired = sum(1 for r in results if r.status == ConformanceStatus.RETIRED)
 
         # Generate lock hash from results
-        import hashlib
-
         lock_data = "|".join(
             f"{r.capability_id}:{r.status.value}:{r.evidence_count}"
             for r in sorted(results, key=lambda x: x.capability_id)
@@ -198,7 +296,7 @@ class ConformanceHarness:
             capability_count=len(results),
             passed_count=passed,
             failed_count=failed,
-            retired_count=0,  # No retired concept in current CapabilitySpec
+            retired_count=retired,
             skipped_count=skipped,
             lock_hash=lock_hash,
         )
@@ -216,20 +314,30 @@ def check_conformance(
     store: RecordStore,
     run_id: str | None = None,
     require_all: bool = True,
+    execute_verifying_tests: bool = True,
 ) -> list[ConformanceResult]:
     """Convenience function to run conformance check."""
     harness = ConformanceHarness(store)
-    return harness.check_all(run_id=run_id, require_all=require_all)
+    return harness.check_all(
+        run_id=run_id,
+        require_all=require_all,
+        execute_verifying_tests=execute_verifying_tests,
+    )
 
 
 def generate_conformance_report(
     store: RecordStore,
     run_id: str | None = None,
     output_path: str | Path | None = None,
+    execute_verifying_tests: bool = True,
 ) -> str:
     """Generate a human-readable conformance report."""
     harness = ConformanceHarness(store)
-    results = harness.check_all(run_id=run_id, require_all=False)
+    results = harness.check_all(
+        run_id=run_id,
+        require_all=False,
+        execute_verifying_tests=execute_verifying_tests,
+    )
     lock = harness.generate_lock(run_id=run_id)
 
     lines = [
@@ -240,6 +348,7 @@ def generate_conformance_report(
         f"Total Capabilities: {lock.capability_count}",
         f"  Passed: {lock.passed_count}",
         f"  Failed: {lock.failed_count}",
+        f"  Retired: {lock.retired_count}",
         f"  Skipped (optional): {lock.skipped_count}",
         "",
         "Details:",
@@ -254,9 +363,13 @@ def generate_conformance_report(
             ConformanceStatus.NO_EVIDENCE: "?",
         }.get(result.status, "?")
 
+        test_info = ""
+        if result.verifying_test_result:
+            test_info = f" [test: {result.verifying_test_result} ({result.test_duration_seconds:.2f}s)]"
+
         lines.append(
             f"  {status_icon} {result.capability_id:<32} [{result.kind.value:16}] "
-            f"{result.status.value:12} evidence={result.evidence_count} - {result.message}"
+            f"{result.status.value:12} evidence={result.evidence_count} - {result.message}{test_info}"
         )
 
     report_text = "\n".join(lines)
@@ -267,10 +380,35 @@ def generate_conformance_report(
     return report_text
 
 
+def generate_flag_projection_lock() -> FlagProjectionLock:
+    """Generate Appendix-A flag projection lock (R78).
+
+    Maps each flag to the capabilities that carry it.
+    """
+    flag_map: dict[str, list[str]] = {}
+    for cap_id, spec in CAPABILITIES_REGISTRY.items():
+        for flag in spec.flags:
+            flag_map.setdefault(flag, []).append(cap_id)
+
+    # Sort for deterministic output
+    for flag in flag_map:
+        flag_map[flag].sort()
+
+    lock_data = "|".join(
+        f"{flag}:{','.join(caps)}" for flag, caps in sorted(flag_map.items())
+    )
+    lock_hash = hashlib.sha256(lock_data.encode()).hexdigest()[:16]
+
+    return FlagProjectionLock(
+        generated_at=datetime.now(),
+        flag_to_capabilities=flag_map,
+        capability_count=len(CAPABILITIES_REGISTRY),
+        lock_hash=lock_hash,
+    )
+
+
 def save_currency_lock(lock: CurrencyLock, path: str | Path) -> None:
     """Save currency lock to JSON file."""
-    import json
-
     data = {
         "generated_at": lock.generated_at.isoformat(),
         "capability_count": lock.capability_count,
@@ -285,8 +423,6 @@ def save_currency_lock(lock: CurrencyLock, path: str | Path) -> None:
 
 def load_currency_lock(path: str | Path) -> CurrencyLock:
     """Load currency lock from JSON file."""
-    import json
-
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     return CurrencyLock(
         generated_at=datetime.fromisoformat(data["generated_at"]),
@@ -295,5 +431,27 @@ def load_currency_lock(path: str | Path) -> CurrencyLock:
         failed_count=data["failed_count"],
         retired_count=data["retired_count"],
         skipped_count=data["skipped_count"],
+        lock_hash=data["lock_hash"],
+    )
+
+
+def save_flag_projection_lock(lock: FlagProjectionLock, path: str | Path) -> None:
+    """Save flag projection lock to JSON file."""
+    data = {
+        "generated_at": lock.generated_at.isoformat(),
+        "flag_to_capabilities": lock.flag_to_capabilities,
+        "capability_count": lock.capability_count,
+        "lock_hash": lock.lock_hash,
+    }
+    Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def load_flag_projection_lock(path: str | Path) -> FlagProjectionLock:
+    """Load flag projection lock from JSON file."""
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return FlagProjectionLock(
+        generated_at=datetime.fromisoformat(data["generated_at"]),
+        flag_to_capabilities=data["flag_to_capabilities"],
+        capability_count=data["capability_count"],
         lock_hash=data["lock_hash"],
     )
