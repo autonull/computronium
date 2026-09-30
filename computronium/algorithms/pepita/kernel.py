@@ -8,7 +8,6 @@ until a fused PEPITA algorithm kernel is written.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.ff_kernels import HAS_TRITON_FF  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 

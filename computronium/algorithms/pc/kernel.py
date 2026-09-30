@@ -8,7 +8,6 @@ until a fused PC algorithm kernel is written.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.pc_kernels import HAS_TRITON_PC  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 

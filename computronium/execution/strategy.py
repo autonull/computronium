@@ -1,5 +1,7 @@
 import random
-from collections.abc import Callable  # ruff: ignore[typing-only-standard-library-import] — ClassVar annotations are evaluated at runtime
+from collections.abc import (
+    Callable,  # ruff: ignore[typing-only-standard-library-import] — ClassVar annotations are evaluated at runtime
+)
 from typing import TYPE_CHECKING, ClassVar
 
 from computronium.core.logging import get_logger

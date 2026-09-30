@@ -11,10 +11,9 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
-from collections import Counter, defaultdict
-from dataclasses import dataclass, asdict
+from collections import defaultdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 
 @dataclass
@@ -231,58 +230,80 @@ def analyze_pareto(exps: list[dict]) -> ParetoStats:
 def analyze_numerical_defects(exps: list[dict]) -> list[DefectStats]:
     """Detect numerical defects: NaN loss, exploding loss, very low accuracy."""
     groups: dict[tuple[str, str, str, str], list[dict]] = defaultdict(list)
-    
+
     for exp in exps:
         key = (exp["dynamics"], exp["credit"], exp["update"], exp["topology"])
         groups[key].append(exp)
-    
+
     defects = []
     for (dyn, cred, upd, topo), exps_list in groups.items():
         if len(exps_list) < 1:
             continue
-        
+
         nan_count = 0
         exploding_count = 0
         very_low_acc_count = 0
-        
+
         for exp in exps_list:
             metrics = exp["metrics"]
             loss = metrics.get("final_loss", 0)
             acc = metrics.get("final_accuracy", 0)
-            
+
             if isinstance(loss, float) and loss != loss:  # NaN
                 nan_count += 1
             elif isinstance(loss, float) and loss > 100:
                 exploding_count += 1
             elif acc < 0.05:
                 very_low_acc_count += 1
-        
+
         if nan_count > 0:
-            defects.append(DefectStats(
-                combo=f"{dyn}|{cred}|{upd}|{topo}",
-                dynamics=dyn, credit=cred, update=upd, topology=topo,
-                defect_type="nan_loss", value=float(nan_count), count=nan_count
-            ))
+            defects.append(
+                DefectStats(
+                    combo=f"{dyn}|{cred}|{upd}|{topo}",
+                    dynamics=dyn,
+                    credit=cred,
+                    update=upd,
+                    topology=topo,
+                    defect_type="nan_loss",
+                    value=float(nan_count),
+                    count=nan_count,
+                )
+            )
         if exploding_count > 0:
             # Get max exploding loss for this combo
             max_loss = max(
-                exp["metrics"].get("final_loss", 0) 
-                for exp in exps_list 
-                if isinstance(exp["metrics"].get("final_loss", 0), float) and exp["metrics"].get("final_loss", 0) > 100
+                exp["metrics"].get("final_loss", 0)
+                for exp in exps_list
+                if isinstance(exp["metrics"].get("final_loss", 0), float)
+                and exp["metrics"].get("final_loss", 0) > 100
             )
-            defects.append(DefectStats(
-                combo=f"{dyn}|{cred}|{upd}|{topo}",
-                dynamics=dyn, credit=cred, update=upd, topology=topo,
-                defect_type="exploding_loss", value=max_loss, count=exploding_count
-            ))
+            defects.append(
+                DefectStats(
+                    combo=f"{dyn}|{cred}|{upd}|{topo}",
+                    dynamics=dyn,
+                    credit=cred,
+                    update=upd,
+                    topology=topo,
+                    defect_type="exploding_loss",
+                    value=max_loss,
+                    count=exploding_count,
+                )
+            )
         if very_low_acc_count > 0 and len(exps_list) == very_low_acc_count:
             # All runs for this combo have very low accuracy
-            defects.append(DefectStats(
-                combo=f"{dyn}|{cred}|{upd}|{topo}",
-                dynamics=dyn, credit=cred, update=upd, topology=topo,
-                defect_type="very_low_acc", value=0.0, count=very_low_acc_count
-            ))
-    
+            defects.append(
+                DefectStats(
+                    combo=f"{dyn}|{cred}|{upd}|{topo}",
+                    dynamics=dyn,
+                    credit=cred,
+                    update=upd,
+                    topology=topo,
+                    defect_type="very_low_acc",
+                    value=0.0,
+                    count=very_low_acc_count,
+                )
+            )
+
     return defects
 
 
@@ -309,7 +330,7 @@ def find_worst_combos(exps: list[dict], top_n: int = 3) -> list[dict]:
     for exp in exps:
         acc = exp["metrics"].get("final_accuracy", 0)
         if acc > 0:
-            groups[(exp["dynamics"], exp["credit"], exp["update"])].append(acc)
+            groups[exp["dynamics"], exp["credit"], exp["update"]].append(acc)
 
     results = []
     for combo, accs in groups.items():
@@ -389,7 +410,7 @@ def main():
     print(f"Parameter budget: {args.budget}")
 
     # Clamps
-    print(f"\n--- ENERGY CLAMPS ---")
+    print("\n--- ENERGY CLAMPS ---")
     clamp_warnings = [s for s in clamp_stats if s.clamp_rate > 0.2]
     if clamp_warnings:
         print(f"⚠️  {len(clamp_warnings)} combos exceed 20% clamp rate:")
@@ -401,7 +422,7 @@ def main():
         print("✅ All clamp rates < 20%")
 
     # Spectral
-    print(f"\n--- SPECTRAL RADIUS ---")
+    print("\n--- SPECTRAL RADIUS ---")
     spectral_warnings = [s for s in spectral_stats if s.over_1 > 0]
     if spectral_warnings:
         print(f"⚠️  {len(spectral_warnings)} dynamics have spectral_radius > 1.0:")
@@ -413,7 +434,7 @@ def main():
         print("✅ All spectral radii < 1.0")
 
     # Params
-    print(f"\n--- PARAM COUNT ---")
+    print("\n--- PARAM COUNT ---")
     param_warnings = [s for s in param_stats if s.over_budget > 0]
     if param_warnings:
         print(f"⚠️  {len(param_warnings)} topologies exceed 1.5x budget:")
@@ -425,7 +446,7 @@ def main():
         print("✅ All param counts within 1.5x budget")
 
     # Pareto
-    print(f"\n--- PARETO FRONT ---")
+    print("\n--- PARETO FRONT ---")
     print(f"   Front size: {pareto_stats.front_size}")
     print(
         f"   Accuracy range: {pareto_stats.accuracy_range[0]:.4f} – {pareto_stats.accuracy_range[1]:.4f}"
@@ -452,7 +473,7 @@ def main():
         )
 
     # Numerical defects
-    print(f"\n--- NUMERICAL DEFECTS ---")
+    print("\n--- NUMERICAL DEFECTS ---")
     if defect_stats:
         print(f"⚠️  {len(defect_stats)} combos have numerical defects:")
         for s in defect_stats:

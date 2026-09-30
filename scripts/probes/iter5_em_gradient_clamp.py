@@ -9,10 +9,14 @@ from computronium.domains.factory import create_task
 from computronium.utils import seed_everything
 
 BATCHES = int(sys.argv[1]) if len(sys.argv) > 1 else 200
-MULTIPLIERS = [float(m) for m in sys.argv[2].split(",")] if len(sys.argv) > 2 else [
-    0.5,
-    0.05,
-]
+MULTIPLIERS = (
+    [float(m) for m in sys.argv[2].split(",")]
+    if len(sys.argv) > 2
+    else [
+        0.5,
+        0.05,
+    ]
+)
 
 t = create_task("mnist", device="cpu", batch_size=64, quick_mode=True)
 t.setup()
@@ -20,12 +24,15 @@ IN = flat_input_dim(t.input_dim, "mnist")
 base = dict(U._STEP_SIZE_OVERRIDES)
 
 for mult in MULTIPLIERS:
-    U._STEP_SIZE_OVERRIDES[("energy_minimization", "gradient")] = mult
+    U._STEP_SIZE_OVERRIDES["energy_minimization", "gradient"] = mult
     seed_everything(42)
     s = compose_cell_system(
-        dynamics="energy_minimization", credit="gradient", update="riemannian_orthogonal",
+        dynamics="energy_minimization",
+        credit="gradient",
+        update="riemannian_orthogonal",
         geometry={"topology_type": "feedforward", "depth": 4, "hidden_dim": 20},
-        input_dim=IN, output_dim=t.output_dim,
+        input_dim=IN,
+        output_dim=t.output_dim,
     )
     losses, accs, energies = [], [], []
     for i, (x, y) in enumerate(t.train_dataloader):

@@ -50,7 +50,6 @@ def _layer_b_backends() -> tuple[int, int, list[str], bool]:
             and node.name.endswith("KernelBackend")
             and not _is_protocol(node)
         )
-    import computronium.acceleration  # ruff: ignore[unused-import]  (populates the registry)
     from computronium.acceleration.kernel_backend import KernelRegistry
 
     walked = "computronium.acceleration.registry" in sys.modules and any(
@@ -74,7 +73,6 @@ def _is_protocol(node: ast.ClassDef) -> bool:
 
 def _layer_a() -> tuple[int, int, int, list[str]]:
     """``(specs, kernel_verified, declaring triton, modules reaching triton)``."""
-    import computronium.acceleration  # ruff: ignore[unused-import]
     from computronium.acceleration.registry import all_specs
 
     specs = all_specs()

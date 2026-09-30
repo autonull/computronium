@@ -8,7 +8,6 @@ until a fused SNN algorithm kernel is written.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.snn_kernels import HAS_TRITON_SNN  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 

@@ -8,7 +8,6 @@ until a fused Tile algorithm kernel is written.
 from typing import Any
 
 from computronium.acceleration.availability import triton_rung_available
-from computronium.acceleration.tile_kernels import TRITON_IMPORTED_TILE  # ruff: ignore[unused-import] (used by family_of derivation)
 
 KERNEL_TECHNOLOGY = "triton"
 

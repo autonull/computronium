@@ -18,12 +18,16 @@ LR = float(sys.argv[6]) if len(sys.argv) > 6 else 1e-3
 t = create_task("mnist", device="cpu", batch_size=64, quick_mode=True)
 t.setup()
 IN = flat_input_dim(t.input_dim, "mnist")
-U._STEP_SIZE_OVERRIDES[(DYN, CRED)] = MULT
+U._STEP_SIZE_OVERRIDES[DYN, CRED] = MULT
 seed_everything(42)
 s = compose_cell_system(
-    dynamics=DYN, credit=CRED, update=UPD, lr=LR,
+    dynamics=DYN,
+    credit=CRED,
+    update=UPD,
+    lr=LR,
     geometry={"topology_type": "feedforward", "depth": 4, "hidden_dim": 20},
-    input_dim=IN, output_dim=t.output_dim,
+    input_dim=IN,
+    output_dim=t.output_dim,
 )
 loader = t.train_dataloader
 for epoch in range(EPOCHS):

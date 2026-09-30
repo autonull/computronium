@@ -63,10 +63,10 @@ def format_entry(analysis: dict, command: str, fixes: str, investigated: str) ->
     lines = [
         f"## {today} — Iteration (auto)",
         "",
-        f"**Command**:",
-        f"```bash",
+        "**Command**:",
+        "```bash",
         f"{command}",
-        f"```",
+        "```",
         "",
         f"**Results**: {n_exps} completed, 0 failed, {n_voids} structural voids, 0 defects",
     ]
@@ -74,19 +74,19 @@ def format_entry(analysis: dict, command: str, fixes: str, investigated: str) ->
     if clamp_warnings:
         lines.append(f"- ⚠️ {len(clamp_warnings)} combos exceed 20% clamp rate")
     else:
-        lines.append(f"- No energy clamp warnings")
+        lines.append("- No energy clamp warnings")
 
     if spectral_warnings:
         lines.append(
             f"- ⚠️ {len(spectral_warnings)} dynamics have spectral_radius > 1.0"
         )
     else:
-        lines.append(f"- No spectral radius explosions")
+        lines.append("- No spectral radius explosions")
 
     if param_warnings:
         lines.append(f"- ⚠️ {len(param_warnings)} topologies exceed 1.5x budget")
     else:
-        lines.append(f"- No param blowups")
+        lines.append("- No param blowups")
 
     lines.append(
         f"- Pareto spread: {analysis.get('pareto', {}).get('spread_pct', 0):.1f} pp"
@@ -139,7 +139,7 @@ def main():
         return 1
 
     # Append to log
-    with open(log_path, "a") as f:
+    with Path(log_path).open("a") as f:
         f.write("\n" + entry + "\n")
 
     print(f"Appended to {log_path}")
