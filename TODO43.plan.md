@@ -4,7 +4,7 @@
 authoritative spec; abc2 (Rev 1.1) is superseded and consulted only for rationale.
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread
 safety, error/logging conventions, environment rules, testing tiers, commit checklist.
-**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 COMPLETE — Learning primitives implemented. WP7 COMPLETE — Surface layer implemented.
+**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 COMPLETE — Learning primitives implemented. WP7 COMPLETE — Surface layer implemented. **§9 appended 2026-09-29: Completion Plan (WP8–WP13) — closes the audited functionality gaps (§9.1 Remediation Ledger + WP8–WP13) so that plan completion = the fully-functional kernel. Binding decisions (DuckDB store §1.1, unified CEEC artifacts §2.1, single-writer topology, VSS-optional, effect-size protocol, three-tier status) are unchanged.**
 
 ---
 
@@ -781,3 +781,325 @@ strict-clean from WP1 onward.
 - Fixed SQL injection warnings (S608) in `computronium/experiment/surface/report.py` by using conditional query building instead of f-string interpolation
 - All 124 experiment property tests pass (120 passed, 4 skipped in legality boundary lock)
 - All new kernel code passes `ruff format`, `ruff check`, `pyright` (strict)
+
+---
+
+## 9. Completion Plan — WP8–WP13 (architecture completion)
+
+**Added:** 2026-09-29. Purpose: close every functionality gap between the implemented
+kernel and TODO43 R1–R88 + the abc3 §0.6 gates, **without overriding any binding
+decision** (DuckDB §1.1, unified CEEC artifacts §2.1, single-writer topology,
+VSS-optional, effect-size protocol, three-tier status model). A code-level audit of
+the completed WPs found them structurally present but functionally incomplete at the
+integration seams, plus seed/spec defects. §9.1 records every correction to
+already-completed work (each preserves its tests and extends locks — nothing is
+undone for its own sake); §9.2–§9.7 define the WPs that fill the gaps. WP8–WP13 are
+binding work packages in the same sense as WP1–WP7 and land through the Agent
+Commit Checklist (§3 preamble) under the engineering standards of §4.
+
+**Axis symmetry (binding design invariant).** The six-axis ontology
+(`Substrate × Geometry × Dynamics × Plasticity × Credit × Update`) is the search
+space in full; no axis, and no learning algorithm, is architecturally privileged.
+Backprop appears only as (a) the conventional *ruler-relative* objective family
+(`bp_deficit`, `ruler_walltime_ratio`, `ruler_energy_ratio` — three of the ~39
+B.7 objectives, preserved per C1/R31) and (b) an optional predeclared reference
+control under R65 ("e.g. backprop"). Objectives, priors, surrogates, allocation,
+legality, and attribution all operate over the whole coordinate; any axis pair —
+or the full coordinate — may be metamodelled. I(C,U) is one registered instance
+of the interaction-surrogate mechanism, not its scope.
+
+### 9.1 Remediation Ledger (completed work that must change)
+
+| # | Completed artifact | Defect | Correction | WP |
+|---|---|---|---|---|
+| L1 | `schema/axis.py::AxisKind` | The six-axis enum doubles as the axis-type system; tunables are a separate `TunableSpec` (violates abc3 §3.1 "one axis type", R4) | Rename the six-axis enum → `StructuralAxis`; introduce `AxisKind ∈ {STRUCTURAL, CONTINUOUS, INTEGER, CATEGORICAL}`; one `AXES: Registry[AxisSpec]` with `Domain`, `availability: Expr \| None`, `default`, `prior`; the per-structural-axis registries become filtered projections of `AXES` | WP8 |
+| L2 | `schema/harvest.py::_get_primitive_class` | Returns `None` — `harvest_schema()` is always empty; the Gate-2 union lock passes vacuously | Wire harvest to the ontology single-source registries (`DYNAMICS_REGISTRY`, …); primitives declare `__tunables__` (with `Domain` ranges/scales) with config-dataclass reflection as fallback; lock asserts `harvest_schema() ⊇ 44-name frozen union` non-vacuously | WP8 |
+| L3 | `schema/seed_registries.py::CAPABILITIES` | 32 rows; TODO43 requires C1–C88 + gated §13.3/§13.4 rows; `CapabilitySpec` lacks `status`/`verifying_test`/`flags` | Extend `CapabilitySpec` with `stage`, `owner`, `verifying_test`, `flags`, `status ∈ {ACTIVE, RETIRED}` + `retirement_record`; seed the full inventory per the Gate 1 verdict table | WP8 |
+| L4 | `schema/registries.py::StageId` + `seed_registries.STAGES` | Invented lifecycle (`S1_DISCOVERY…S11_RETIREMENT`); TODO43 §3.0 / abc3 §5.1 define S1 Frame…S11 Report | Replace with the canonical `StageId` (S1_FRAME…S11_REPORT); maturation semantics map onto S10 Decide / S3 Schedule; update `STAGE_SPECS`, `RUN_PROFILES`, and the stage lock together | WP9 |
+| L5 | `seed_registries.py::CONSTRAINTS` | Placeholder specs (params dicts, no Expr); `prefer_digital_substrate` is a heuristic preference — violates the legality boundary (DECLARED = infeasibility only) | Re-express as `legality.dsl.Expr` predicates with machine-checkable proof kinds; `prefer_digital_substrate` moves to PRIORS; seeds sourced from `SystemConfig.validate()` rules, `TASK_COMPAT` fences, `apply_constraints` (R37/R63/R66) | WP8 |
+| L6 | `execution/policy.py::ModelBasedPolicy` | `InMemoryStorage` + `trial.number % len(affordable)` selection — not model-based; no pruner; no persistence (P7 risk) | Real TPE/NSGA-II/GP/Random samplers incl. `NSGAIISampler` (C20); pruner support (`MedianPruner`/`HyperbandPruner`) wired to allocation early-termination (R46); trials persisted as records; on resume the study is rebuilt from store records via `optuna.trial.create_trial` — no private Optuna DB (R71) | WP9 |
+| L7 | `learning/surrogate.py::_load_training_data` | `records: list[Record] = []` stub — the surrogate never sees data | Implement `RecordStore.query_records(run_id, data_origin=…)` public API; SurrogatePolicy pulls `exploration ∪ policy_selected` through it | WP10 |
+| L8 | `learning/icu.py::load_from_store` | Returns 0 — no persistence path | Persist I(C,U) rows as record payload entries (`payload.icu`) with `data_origin`; implement the loader keyed on provenance tags | WP10 |
+| L9 | `learning/surrogate.py::evaluate_effect_size` | `NotImplementedError` — the E2 protocol is undischargeable | Implement via `evidence.protocol.compute_effect_size` + the synthetic ground-truth task batch (WP13 harness); n_tasks≥10, n_seeds≥5 enforced | WP10 |
+| L10 | `learning/icu.py` / `learning/reasoning.py` module globals | `_ICU_MODEL`, `_REASONING_STORE` singletons violate K10 (run-scoped state, never global) | Inject `ICUModel`/`ReasoningStore` through `SystemContext`; delete the global accessors | WP10 |
+| L11 | `learning/prior.py` | Re-declares the legacy tables (`_STEP_SIZE_OVERRIDES_DATA`, …) and reads `autoscientist/ruler_table.json` at import — P4 duplication survives | The PRIORS registry becomes the single source (`prior_value(name, context)` accessor with confidence/uncertainty and per-run/per-coordinate override scope, R6/R52/R55); legacy tables deleted at WP12 after consumers reroute | WP10 |
+| L12 | `surface/conformance.py::_count_evidence` | Generic PASS-count for every capability — conformance is vacuous | Capability-specific evidence: `verifying_test` pytest node id run via targeted selection; RETIRED honored; `CurrencyLock.retired_count` wired | WP11 |
+| L13 | `surface/operations.py::_persist_intent` | Logs only — R84 operator intent is not first-class data | Persist intents as `run_id`-linked records (payload kind `operator_intent`) through the single writer | WP11 |
+| L14 | `surface/cli.py`, `surface/report.py` | `store._conn` private reach-ins; profile stage names tie to L4 | Public read API (`query_runs`, `query_records`; `count_records` exists); profiles retargeted to canonical StageIds | WP9/WP11 |
+| L15 | `execution/pipeline.py` | Wrapper obligations (R18/R19/R20/R29/R12), allocator, replay-hash, learned cost model not wired | The wrapper emits coverage/classification/traceability fragments; invokes `EvidenceDrivenAllocator` between rounds; computes and re-checks `replay_hash`; `RegistryCostModel` learns from per-stage walltimes (R23/R24) | WP9 |
+| L16 | `schema/registries.py::ObjectiveSpec` + `seed_registries.OBJECTIVES` | 8 generic ML rows; TODO43 B.7 defines the ~39-objective union (task/cost/substrate/ruler/stability/plasticity) and C1/R31 require per-objective direction + weight + normalizer + axis tag | Extend `ObjectiveSpec` with `weight`, `normalizer`, `axis_tag`; seed the full B.7 union per Gate 1; S7 resolves every stored metric against `OBJECTIVES` with an unresolved-metric bucket | WP8 |
+| L17 | `schema/coordinate.py::Schedule` + identity keys (§2) | Task/dataset identity is provenance-only — not part of `schedule` ⇒ `measurement_key` collides across tasks (same coordinate+seed on two tasks is rejected as duplicate) and tasks are not proposal-addressable (R44, C7, C30) | Add `task_id` to the schedule struct (schema v2 append-only reader); proposals carry task; `measurement_key` = sha256(coordinate ∪ schedule ∪ seed) then spans tasks; `replication_key` groups seeds within task | WP9 |
+| L18 | `execution/policy.py` (`direction="maximize"`, `_extract_score` key lists), `learning/surrogate.py` (`val_loss` default, EHVI fall-through) | Objective name/direction hardcoded in policies — violates R31 registry resolution and silently biases toward accuracy-style maximization | Policies resolve objective id/direction from the run spec's declared objectives (OBJECTIVES registry); EHVI implemented or multi-objective delegated to the NSGA-II path — never a silent zero score | WP9 |
+| L19 | Missing: S3 Schedule data-origin design | Exploration/calibration quotas unspecified ⇒ the I(C,U) audit and R86 attribution can be vacuous (no policy-independent data, no matched contrasts to attribute) | S3 predeclares a data-origin allocation (exploration/calibration fractions) and a matched-contrast DOE seed (fractional-factorial or OFAT quota within the exploration budget) so effects are identifiable by construction; policies may exceed, never undercut, the quota | WP9 |
+| L20 | `evidence/claims.py::claim_eligible` (planned `n_seeds`) | Claim eligibility keyed on *planned* `schedule.n_seeds` — a run dying mid-replication would satisfy R64 without the seeds | Count *achieved* seeds (records grouped by `replication_key`); `schedule.n_seeds` remains the SQL prefilter hint only | WP10 |
+
+### 9.2 WP8 — Union & registry completion (Gate 1 / Gate 2 closure)
+
+Deliverables:
+1. **Gate 1 executed** — `docs/design/rev3_gate.md`: accept/reject verdict per
+   TODO43 §13–§15 candidate with a one-line rationale. Pre-registered defaults,
+   consistent with the adopted implementations: §13.1 six-implementation P1 →
+   ACCEPT (the eight-policy catalog already carries it); §13.2 continuous union +
+   `apply_constraints` → ACCEPT (B.9 constraints + PRIORS additions); §13.3
+   collectables → row-by-row (kernel-relevant rows ACCEPT as payload/record types;
+   platform-only rows DEFER with a retirement record); §13.4 procedures → ACCEPT
+   as capability rows; §13.5 domains/packages → ACCEPT rows (graph/tabular/
+   time-series tasks; `stability`, `psi_peft`, `local_feedback`; model-export as a
+   post-promotion artifact path). §14 abstractions A–E → ADOPTED (they are the
+   implemented design); §15 order → SUPERSEDED by this plan.
+2. **Axis unification (L1)** — `AxisKind` four-kind + `StructuralAxis` rename;
+   `Domain` (`Enumerated` members | `Range(lo, hi, scale)`, scale ∈ {LINEAR, LOG});
+   `AxisSpec.tunable(...)` classmethod; availability predicates are
+   `legality.dsl.Expr`; one `AXES` registry; structural projections keep existing
+   kernel call sites working (Directive 1: no external API compat needed).
+3. **Harvest wiring (L2)** — `schema/primitives.py` maps primitive ids → ontology
+   classes *from the ontology registries themselves* (no hand-maintained list);
+   `__tunables__` declarations added to primitives owning the 44-union parameters
+   with authoritative Domains (Appendix C ranges); config-dataclass reflection
+   supplies names/defaults/availability for everything else; conflicting
+   redeclaration raises `ConflictingTunableError`; same-name multi-primitive
+   declarations collapse into one AxisSpec whose availability is the `Or(...)` of
+   the declarers' selection predicates.
+4. **Capability inventory (L3)** — `CapabilitySpec` extended; C1–C88 seeded from
+   TODO43 §3 with stage/owner/verifying_test; gated §13 rows per Gate 1 verdicts;
+   Appendix-A flags carried as `flags` tuples → the projection view + currency
+   lock (R78).
+5. **Constraint seeds (L5)** — real `Expr` predicates with proof kinds
+   (`TYPE_MISMATCH`, `RESOURCE`, `LOGICAL`); task fences with recorded, queryable
+   reasons (R37); `max_hidden`/`max_layers`/`max_steps` from `apply_constraints`;
+   fairness (param-budget 25 % tolerance) as a FAIRNESS constraint (R25);
+   operating points as constraints (R66).
+6. **Objectives union (L16)** — `ObjectiveSpec` gains `weight`/`normalizer`/
+   `axis_tag`; `OBJECTIVES` seeded with the full Appendix B.7 union (~39:
+   task, cost, substrate, ruler-relative `bp_deficit`/`ruler_walltime_ratio`/
+   `ruler_energy_ratio`, stability, plasticity) per Gate 1; multi-objective
+   studies resolve directions from the registry (feeds NSGA-II, Pareto, alerts).
+7. **Locks** — strengthen `test_harvest_schema_gate2_lock.py` (non-vacuous union;
+   Domain presence for the 44 frozen names); extend the registry lockstep to `AXES`
+   + `CAPABILITIES` totality (the §7.2 C↔R matrix as data: every C cited by ≥1 R,
+   every R cites ≥1 C); constraints-with-proof lock (extends the legality
+   boundary lock).
+
+### 9.3 WP9 — Canonical stage model & pipeline obligations
+
+Deliverables:
+1. **Stage model (L4)** — `StageId` S1_FRAME…S11_REPORT per TODO43 §3.0; the
+   `Stage` Protocol (`run(ctx) -> Fragment`); implementations:
+   - S1 Frame — objective/operating-point resolution (R43 entry, with `Synthesis`).
+   - S2 Space — axis snapshot + legality preview (dry-run = the same engine, C32).
+   - S3 Schedule — fidelity/seed/epoch planning; per-task adaptation (R44).
+   - S4 Gate — `LegalityEngine` enforcement; globally-suppressive voids (R38).
+   - S5 Compose — `compose_joint_system` bridge; effective-value recording (R6).
+   - S6 Train — `SystemTrainer` settle bridge; guard/divergence telemetry
+     (R50/R51); per-epoch intermediate values feed pruners.
+   - S7 Measure — objectives resolved against `OBJECTIVES`; probes; robustness
+     dimension (R69) computed when the profile requests it.
+   - S8 Record — atomic append + artifacts + embedding generation (`vector_index`
+     write with `embedding_version`; brute-force retrieval already present).
+   - S9 Attribute — counterfactual axis attribution from records (R86).
+   - S10 Decide — promotion predicates + allocation handoff (R36, R46–R51).
+   - S11 Report — delegates to `surface.report` fragments.
+   No-op stages emit explicit empty fragments (R39); all are swappable Protocols
+   that never change the record schema (R40).
+2. **Pipeline obligations (L15)** — the wrapper emits coverage (R18), classifies
+   every rejection identically for every policy (R19), stamps proposal provenance
+   (R20), isolates failures (R29), single-writer atomic appends (R12), budget
+   accounting (R21); integrates `EvidenceDrivenAllocator` between rounds; computes
+   and re-checks `replay_hash` (R26/R27); resumes via `measurement_key` dedup;
+   `RegistryCostModel` learns estimate-vs-actual (R23/R24).
+3. **ModelBased policy completion (L6)** — samplers TPE (multivariate default)/
+   NSGA-II/GP/Random; pruners Median/Hyperband wired to S6 intermediate values and
+   allocator early-termination; trial↔record persistence + resume rebuild;
+   `PolicySpec.params` gains `pruner`.
+4. **Run-scoped acceleration (R75/K10)** — `execution/sysctx.py::SystemContext`
+   carrying the run-scoped kernel cache keyed `(run_id, cell_key, device, dtype)`,
+   device/dtype context, and injected learning state; kernel-ladder evidence
+   (parity/microbench, git-SHA tagged) recorded as records; the legacy global
+   kernel cache never enters the kernel.
+5. **Identity & objective corrections (L17/L18)** — `task_id` joins the schedule
+   struct (v2 reader; proposals address task; measurement/replication keys span
+   tasks — cross-task uniqueness lock); policies resolve objective id/direction
+   from the run spec via `OBJECTIVES`; EHVI completed or multi-objective routed
+   to NSGA-II.
+6. **Experimental-design seeding (L19)** — S3 emits the data-origin allocation
+   and contrast quota as part of the schedule fragment; coverage reporting (R18)
+   shows quota satisfaction per run; the WP5.5 audit consumes policy-independent
+   data by construction rather than by luck.
+7. **Locks** — stage-model lock (canonical StageId ↔ STAGES registry ↔
+   RUN_PROFILES ↔ stage classes); wrapper-obligation property tests (coverage
+   emitted even for a proposal-swallowing policy; classification identical across
+   policies; injected failure leaves siblings, run, and store intact); replay/
+   resume integration test.
+
+### 9.4 WP10 — Learning integration
+
+Deliverables:
+1. **Store wiring (L7/L8)** — `RecordStore.query_records(...)` public API with
+   `data_origin`/`run_id`/payload-kind filters; `SurrogatePolicy` and `ICUModel`
+   consume it; I(C,U) rows persisted in `payload.icu` with `data_origin` tags; the
+   calibration audit reads them back.
+2. **Effect-size runner (L9)** — `learning/benchmark.py`:
+   `run_acquisition_benchmark(policy, baseline, tasks, seeds, budget) ->
+   EffectSizeResult` over the synthetic ground-truth task batch; used by E2/E3
+   (WP13).
+3. **Priors single-source (L11)** — `PRIORS` accessor
+   `prior_value(name, context)` with `confidence`, uncertainty, and
+   per-run/per-coordinate override scope (R6/R52/R55); `prior.py` reads only the
+   registry; `ontology/update.py`, `compose.py`, and `campaign._ruler_lr`
+   consumers reroute behind thin adapters marked for deletion.
+4. **K10 hygiene (L10)** — context-injected ICU/Reasoning; singleton accessors
+   deleted.
+5. **Reasoning persistence (R57)** — hypotheses/literature persisted as records
+   (payload kinds `hypothesis`/`literature`) with `ProvenanceLink` ↔ record-id
+   cross-links; S1 Frame links the motivating hypothesis/literature into run
+   provenance; literature retrieval stays out-of-loop by default (Q15:
+   provenance linkage first; active generation is opt-in).
+6. **Transfer & analytic reachability (R15/R53)** — warm-start from prior runs
+   wired as registered prior/surrogate sources; the surrogate layer is
+   coordinate-wide (`SurrogatePolicy` over any `Policy`, features from the full
+   `Coordinate` via `harvest_schema()`), and I(C,U) is one registered
+   interaction-surrogate instance over the credit×update pair — extensible to
+   any axis pair by registering a feature encoder; C59–C63 reachable from search
+   (the surrogate training-data loader) and from reports (WP11).
+7. **Claim integrity (L20)** — `claim_eligible` counts achieved seeds per
+   `replication_key` (planned `n_seeds` stays a prefilter hint); the R64
+   uncertainty statement derives from achieved replication counts.
+
+### 9.5 WP11 — Surface conformance, codegen & operations
+
+Deliverables:
+1. **Conformance reality (L12)** — per-capability evidence: `verifying_test`
+   pytest node id executed via targeted selection (fast tier) or consulted from
+   the latest CI result records; RETIRED honored with a retirement record;
+   `CurrencyLock` counts all states; Appendix-A flag projection lock (R78).
+2. **Codegen (abc3 §2.5)** — `docs/generated/` listings (capabilities, objectives,
+   axes), the compatibility matrix from CONSTRAINTS (R63), JSON-Schema validators
+   per AxisSpec (R5 runtime discovery), conformance stubs per CapabilitySpec, CLI
+   flag tables — all lock-tested against source; figures/manifest pinning reuses
+   the gallery-lock pattern (R87).
+3. **Report completion (R85–R88)** — axis-coverage section (per-axis
+   stratification, R18), fronts by fidelity, budget consumption, failures by
+   cause, promotion history, claim-eligible table, narrative handoff summary
+   (R88); the public store read API replaces `store._conn` reach-ins (L14).
+4. **Operations completion (R81–R84)** — intent persistence (L13); a control-file
+   watcher so an external CLI can pause/steer/resume a running service
+   (`surface/service.py` headless loop: RunController + control file + webhooks);
+   notify-only alerts per R83 with dedup keyed `(predicate, run, window)`; Q14
+   routing model recorded as `WebhookConfig.events` defaults.
+5. **Question-first entry (R43)** — `surface.profiles.question_first(objective,
+   operating_point) -> RunSpec` (the `Synthesis` policy), profile-registered and
+   conformance-tested.
+6. **Locks** — the conformance CI gate (fails if a required capability lacks its
+   verifying test), codegen drift locks, documented-command conformance for the
+   surface CLI (R80).
+
+### 9.6 WP12 — Legacy port & delete (Directive 1)
+
+Precondition: WP8–WP11 conformance green for every capability whose replacement
+ships in this WP (R77: no silent loss).
+
+1. **Inventory** — legacy surfaces: `autoscientist/` (broad_map, campaign, daemon,
+   reasoner, local_llm, literature, objectives, proposer, counterfactual, alerts,
+   compose, defects, report), `core/campaign/` (stack, campaign_store, kb_report,
+   report, pareto, replication, kernel_cache, checkpoint, discovery, evaluation,
+   fidelity, frontier_record), `hyperopt/` (all), the legacy `execution/` engine/
+   strategy/synthesizer/candidate_gen/_state/…, `lightning_/`,
+   `packages/computronium-lab/` research layer, and the pre-kernel files inside
+   `computronium/experiment/` (`producer.py`, `staircase.py`, `probe.py`,
+   `param_estimator.py`, `result_sink.py`, `reporting.py`, `report.py`,
+   `schema.py`, `cli.py`).
+2. **Port remaining capabilities as catalog entries** — producer grid/TPE modes →
+   policies (delivered via the WP9 ModelBased/Grid policies); reasoner templates →
+   hypothesis factories feeding `learning.reasoning` (C3); local_llm → optional
+   hypothesis source (C4, opt-in per Q15); literature retrieval →
+   `learning.reasoning` ingestion (C5); counterfactual attribution → the S9 stage
+   body (C68); alerts → record predicates + webhook surface (C85, delivered in
+   WP11; legacy deleted here); daemon control surface → `surface/service.py`
+   (C87); robustness harness → S7 Measure (R69); scaling-law fitting → an analysis
+   module over records (C67); NAS/Lightning HPO → `TrainerDriven` adapters
+   (§13.1); lab synthesis/evolution → the `Synthesis`/`Evolution` policies
+   (already catalogued); lab corpus certification → capability row + probe
+   script; MEP/frozen-θ/benchmark suites → Class E additions (WP13) or retirement
+   records per Gate 1.
+3. **Delete** — after each port's conformance test passes: remove the module, its
+   CLI verbs from `cli/__main__.py`, its flags (Appendix-A rows retire), and the
+   `kb.sqlite`/`campaign.db`/`ledger.sqlite` readers (Directive 2: the files are
+   abandoned untouched). Pre-kernel `experiment/` files relocate to
+   `scripts/probes/` (probe), merge into profiles (staircase), or delete.
+4. **Locks** — a final import-graph lock (`computronium.experiment` imports no
+   legacy pillar module); `cli/__main__.py` exposes only kernel surface commands;
+   the Appendix-A audit lock (every retired flag maps to a capability or a
+   retirement record).
+
+### 9.7 WP13 — Class E benchmarks & Definition of Done
+
+1. **E1** — kill -9 (exists); store-overhead harness
+   `scripts/probes/store_overhead_bench.py` (mean/p95/fraction < 1 % of median
+   evaluation walltime; K7/K9); serialization round-trip incl. `unknown` verbatim
+   + the v1→v2 reader path; atomic append with artifacts (exists).
+2. **E2** — cost-to-rank vs the uniform baseline; surrogate acquisition vs the
+   predeclared baseline on held-out synthetic tasks via the WP10 effect-size
+   runner; cost-model estimate-vs-actual trend; divergence-bound replay on a
+   seeded clamping run; reference controls are predeclared per study (R65) —
+   e.g. the backprop ruler at matched cost, or any baseline registered in
+   `POLICIES`/`OBJECTIVES`; no control is architecturally privileged.
+3. **E3** — seeded axis-effect reproduction on `SyntheticGroundTruth`
+   (independent seeds, CI); environment-variation repetition (GPU arch/CUDA/
+   PyTorch versions as provenance-stratified re-runs); predeclared held-out task
+   transfer (N≥10, paired, effect size).
+4. **E4** — cross-task / cross-topology / unseen-substrate transfer with explicit
+   `transfer_source_ids`/`transfer_mode` provenance.
+5. All benchmark scripts live in `scripts/probes/` with measured-regime
+   docstrings; runs > 5 min go background per §6; results are recorded as store
+   records (E-class rows in `CAPABILITIES` evidence).
+6. **Definition of Done (extends §7)** — Gate 1/2 documents exist and their locks
+   pass non-vacuously; every C1–C88 + gated row has conformance evidence or a
+   retirement record; Class E benchmarks recorded; legacy entry points deleted
+   (import-graph lock); run-scoped state lock (no module-level mutable singletons
+   under `experiment/`); the store-overhead fraction recorded < 1 %.
+
+### 9.8 Sequencing & dependencies
+
+```
+WP8 (union/registries; executes Gate 1 + Gate 2 for real)
+  └─ WP9 (canonical stages + pipeline obligations; depends on AXES/CONSTRAINTS/CAPABILITIES seeds)
+       ├─ WP10 (learning integration; needs the store query API + pipeline rounds)
+       ├─ WP11 (conformance/codegen/operations; needs stages + capabilities)
+       │    └─ WP12 (legacy port-and-delete; strictly gated on conformance green)
+       └─ WP13 (Class E harnesses; E1 after WP9; E2/E3/E4 after WP10)
+```
+WP10 ∥ WP11 after WP9; WP12 strictly after WP11; WP13 tracks the WPs it exercises.
+Definition of Done completes at WP13 close.
+
+### 9.9 Test-matrix additions (extends §5)
+
+- Stage-model lock; wrapper-obligation property tests; replay/resume integration test.
+- Non-vacuous Gate-2 union lock; registry totality matrix (C↔R) lock.
+- Capability-conformance CI gate; codegen drift locks; Appendix-A projection lock.
+- Singletons-absence lock for `experiment/` (K10).
+- Prior single-source lock (PRIORS ⊇ the legacy-table union) — tightens to
+  deletion at WP12.
+- Cross-task identity lock (two tasks, same coordinate+seed ⇒ distinct
+  `measurement_key`s); achieved-seed claim test; contrast-identifiability test
+  (attribution recovers a known effect on a DOE-seeded run, R86/E3).
+
+### 2026-09-29 — Plan Revised: Completion Plan (§9, WP8–WP13) appended
+- Full-surface code audit produced the §9.1 Remediation Ledger (15 items) across the
+  completed WP2/WP4/WP6/WP7 artifacts; every correction preserves the binding
+  decisions (DuckDB, unified CEEC artifacts, single-writer topology, effect
+  protocol) and its existing tests.
+- Gate 1/2 are discharged for real in WP8 (`docs/design/rev3_gate.md` +
+  non-vacuous union lock) — they were previously skipped while their outputs were
+  assumed.
+- Canonical stage model (S1 Frame…S11 Report) replaces the invented lifecycle;
+  `RUN_PROFILES` remap onto it.
+- ModelBased policy completed: real TPE/NSGA-II/GP/Random samplers + Median/
+  Hyperband pruners wired to allocation early-termination; trials persisted as
+  records — no private Optuna DB (R71, P7).
+- Learning seams wired: store query API, I(C,U) persistence, effect-size runner,
+  priors single-source, K10 context injection (singletons removed).
+- Conformance made non-vacuous (`verifying_test` per capability, retirement
+  records, wired `CurrencyLock`); codegen + Appendix-A flags projection added.
+- WP12 executes Directive 1 port-and-delete over the full legacy inventory,
+  including the pre-kernel files currently inside `experiment/`.
+- WP13 defines the E1–E4 harnesses and the extended Definition of Done.
