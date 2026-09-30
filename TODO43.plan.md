@@ -15,10 +15,13 @@ safety, error/logging conventions, environment rules, testing tiers, commit chec
    are **dropped**. Legacy entry points (`broad_map`, `stack`, `hyperopt`, `execution`,
    `lightning_`, computronium-lab research layer) are ported *into* the Kernel as catalog
    entries, then deleted outright.
-2. **Historical evidence compatibility is mandatory.** While API backwards compatibility is
-   explicitly dropped, the ability to read and interpret v1 records must be preserved forever.
-   Schema evolution is append-only: new versions add readers, never remove old ones. Unknown
-   fields are preserved as `UnknownField` (§3.7, R79, K4).
+2. **No backwards compatibility of any kind (supersedes TODO43 R79/K4 reader mandates).**
+   There are no users and no historical artifacts to preserve: legacy stores are abandoned
+   untouched (Directive 3) and no old-shape readers, migrations, or strangler phases exist.
+   The kernel schema carries a version integer and fails closed on unknown versions; the
+   `unknown` column preserves unrecognized fields verbatim as cheap forward tolerance for
+   in-flight data — not a compatibility contract. Schema changes before first external use
+   are free: rebuild the store or bump-and-fail-closed.
 3. **No data preservation.** `kb.sqlite`, `campaign.db`, `ledger.sqlite`, and Optuna `*.db`
    are abandoned in place, untouched and read-only by neglect (never opened again). Only
    `packages/ceec-core`'s content-addressed store is linked forward (it is an active
@@ -53,21 +56,18 @@ agility inside a SQL engine with real constraints.
 
 | Option | Verdict | Why |
 |---|---|---|
-| SQLite + MessagePack BLOBs + projected columns (abc3 §6.1) | **Superseded** | The projection machinery (dual-write + CI lock) and MessagePack opaqueness exist only to work around SQLite's inability to query inside BLOBs. |
-| SQLite + JSON1 + expression indexes | Fallback | Kills MessagePack, but JSON is parsed per query; analytics (fronts, attribution, clustering — the actual product) fight the row-store. |
 | **DuckDB** | **Selected** | Native `STRUCT`/`JSON`/`MAP`/array columns — sections are typed, queryable, indexable by zone maps; no projections. Columnar analytics for claims/fronts/attribution. `vss` extension for the vector index **(experimental; optional capability — see §1.1.1)**. Parquet-native export/import (R73 nearly free). WAL + crash-safe. In-process, zero-config. |
-| libSQL/Turso | Rejected | SQLite fork; brings nothing DuckDB doesn't, adds a fork dependency. |
 | PostgreSQL | Rejected | Server process violates the embedded/zero-config posture. |
 | MongoDB | Rejected | Server, no UNIQUE-constraint discipline for dedup keys without ceremony, weak relational integrity for `record_artifacts`, new operational surface, and gains nothing over DuckDB JSON columns. |
 
 **Supersessions to abc3:** §6.1.1 (MessagePack → native typed columns), §6.1.3 (projected
-columns → deleted; the columns *are* the source), §6.1.4 (SQLite indexes → zone maps + ART
-as needed), §6.1.6 (WAL pragmas → DuckDB built-in), Appendix II DDL (→ §2 of this plan),
-§6.1.5 (artifact delegation targets `packages/ceec-core::CEECStore`).
+columns → deleted; the columns *are* the source), §6.1.4 (hand-tuned index strategy →
+zone maps + ART as needed), §6.1.6 (WAL pragmas → DuckDB built-in), Appendix II DDL
+(→ §2 of this plan), §6.1.5 (artifact delegation targets `packages/ceec-core::CEECStore`).
 
 **Honest tradeoffs:**
 
-- **Single-writer-per-process is an application-level determinism/governance decision, not a DuckDB limitation.** DuckDB supports multiple writer threads within one process using MVCC/optimistic concurrency (DuckDB concurrency docs). The design concentrates writes: `ExecutionBackend.submit() -> list[Record]` returns records to the pipeline, and only the pipeline writes. **Binding rule:** all store writes flow through the orchestrating process's single `RecordStore` instance, guarded by a `threading.Lock` (PEP 703 — in-process parallel evaluation via `asyncio.TaskGroup` shares that instance; the GIL is not trusted). K8 dedup becomes in-process; `measurement_key` UNIQUE remains the enforcement. If a true multi-writer requirement ever emerges, the `Store` Protocol swaps back to SQLite WAL.
+- **Single-writer-per-process is an application-level determinism/governance decision, not a DuckDB limitation.** DuckDB supports multiple writer threads within one process using MVCC/optimistic concurrency (DuckDB concurrency docs). The design concentrates writes: `ExecutionBackend.submit() -> list[Record]` returns records to the pipeline, and only the pipeline writes. **Binding rule:** all store writes flow through the orchestrating process's single `RecordStore` instance, guarded by a `threading.Lock` (PEP 703 — in-process parallel evaluation via `asyncio.TaskGroup` shares that instance; the GIL is not trusted). K8 dedup becomes in-process; `measurement_key` UNIQUE remains the enforcement. If a genuine multi-*process* writer requirement ever emerges, it is a new explicit K1 decision taken behind the `Store` Protocol seam — no legacy engine is pre-committed as the fallback.
 - **`seq` = authoritative persistence order, not deterministic experiment order.** The `threading.Lock` serializes access but does not guarantee concurrent workers acquire it in reproducible order. `seq` is the write-order authority (K8); the replay order comes from the recorded proposal/evaluation schedule (R26–R27).
 - **Tiny-commit latency.** DuckDB commits cost ~1–3 ms vs SQLite's ~0.5 ms. The binding
   K7/K9 criterion is **overhead < 1% of median evaluation walltime** (evaluations run 1–10 s),
@@ -77,6 +77,15 @@ as needed), §6.1.6 (WAL pragmas → DuckDB built-in), Appendix II DDL (→ §2 
   stable sections are typed STRUCTs; *open* surfaces (`params`, `payload`, `unknown`) are
   `JSON` — new tunables and telemetry need **zero DDL**. That is the agile-schema
   requirement, satisfied.
+- **Cross-process access is exclusive, not concurrent.** DuckDB allows one
+  read-write process *or* many read-only processes — never both. While a
+  service-mode run holds the store, `comp-surface report/export` from another
+  process cannot open it. Mitigation: live reporting/steering route through the
+  service's control surface (WP11.4); standalone report/export run when idle, or
+  against an export bundle (R73) — both discharge the need without a store swap.
+  Should any future requirement ever justify a different store engine, that is a
+  new explicit K1 decision behind the `Store` Protocol seam; nothing is
+  pre-committed.
 
 #### 1.1.1 Vector Search: Optional Capability
 
@@ -89,6 +98,15 @@ VectorStore capability
 ```
 
 The plan's existing fallback (small corpus → brute force, large corpus → HNSW) becomes the explicit contract. The `vector_index` table in §2 remains; the index *population strategy* is pluggable. This keeps the scientific kernel independent of a still-evolving optimization feature.
+
+**Embedding producer (open decision, K1-owned).** The `FLOAT[384]` column needs
+a source: (a) a deterministic hashing/feature-hashed embedder — no new
+dependency, semantics limited to lexical/structural similarity — or (b) a small
+local transformer model — semantic retrieval, but a new mandatory dependency
+requiring an explicit K1 decision, vendored/offline-installable (extension and
+model downloads must not require network at run time). S8 writes embeddings
+tagged with `embedding_version`, so the choice is revisable per version without
+schema change; brute-force retrieval semantics do not depend on the choice.
 
 ### 1.2 Dependency decision (K1 discharge)
 
@@ -351,8 +369,9 @@ fixture recovers known effects.
 ### WP2 — Pillar 1 complete: schema & registries
 - ✅ `schema/harvest.py` — `__tunables__` reflection, name-based dedup (70→37; conflicts raise
   `ConflictingTunableError`), `harvest_schema()`.
-- ✅ `schema/versioning.py` — `schema_version`, append-only reader registry, `UnknownField`
-  preservation (R79, K4). Version 1 = this schema; no legacy readers needed (Directive 1).
+- ✅ `schema/versioning.py` — `schema_version` fail-closed on unknown versions;
+  `UnknownField` preservation as forward tolerance (Directive 2). No old-shape
+  readers, no reader registry.
 - ✅ `schema/registries.py` — Registry instances: `OBJECTIVES`, `CONSTRAINTS`, `PRIORS`,
   `POLICIES`, `STAGES`, `CAPABILITIES` (abc3 §2.3 seeds, per Gate 1/2 outcomes).
 - ✅ Locks (CI property tests): `tests/property/test_experiment_registries_wiring_lock.py`
@@ -622,9 +641,9 @@ defects first (AGENTS.md), not accepted verdicts, until the harness itself is ve
 ## 7. Definition of Done
 
 abc3 §21.1 items 1–12 (all) and §21.2 adjusted: ~~migration complete~~ → legacy stores
-abandoned untouched (Directive 2); schema evolution proven from v1 forward, not from legacy
-records. Every Class S lock green, every Class E benchmark recorded as a store record, every
-Class P gate enforced in CI.
+abandoned untouched (Directive 3); schema versioning is fail-closed — no legacy readers,
+no migration machinery (Directive 2). Every Class S lock green, every Class E benchmark
+recorded as a store record, every Class P gate enforced in CI.
 
 **New acceptance criteria from feedback:**
 - WP1.5 scientific validity skeleton passes: synthetic fixture recovers known effect,
@@ -828,7 +847,7 @@ of the interaction-surrogate mechanism, not its scope.
 | L14 | `surface/cli.py`, `surface/report.py` | `store._conn` private reach-ins; profile stage names tie to L4 | Public read API (`query_runs`, `query_records`; `count_records` exists); profiles retargeted to canonical StageIds | WP9/WP11 |
 | L15 | `execution/pipeline.py` | Wrapper obligations (R18/R19/R20/R29/R12), allocator, replay-hash, learned cost model not wired | The wrapper emits coverage/classification/traceability fragments; invokes `EvidenceDrivenAllocator` between rounds; computes and re-checks `replay_hash`; `RegistryCostModel` learns from per-stage walltimes (R23/R24) | WP9 |
 | L16 | `schema/registries.py::ObjectiveSpec` + `seed_registries.OBJECTIVES` | 8 generic ML rows; TODO43 B.7 defines the ~39-objective union (task/cost/substrate/ruler/stability/plasticity) and C1/R31 require per-objective direction + weight + normalizer + axis tag | Extend `ObjectiveSpec` with `weight`, `normalizer`, `axis_tag`; seed the full B.7 union per Gate 1; S7 resolves every stored metric against `OBJECTIVES` with an unresolved-metric bucket | WP8 |
-| L17 | `schema/coordinate.py::Schedule` + identity keys (§2) | Task/dataset identity is provenance-only — not part of `schedule` ⇒ `measurement_key` collides across tasks (same coordinate+seed on two tasks is rejected as duplicate) and tasks are not proposal-addressable (R44, C7, C30) | Add `task_id` to the schedule struct (schema v2 append-only reader); proposals carry task; `measurement_key` = sha256(coordinate ∪ schedule ∪ seed) then spans tasks; `replication_key` groups seeds within task | WP9 |
+| L17 | `schema/coordinate.py::Schedule` + identity keys (§2) | Task/dataset identity is provenance-only — not part of `schedule` ⇒ `measurement_key` collides across tasks (same coordinate+seed on two tasks is rejected as duplicate) and tasks are not proposal-addressable (R44, C7, C30) | Add `task_id` to the schedule struct (schema version bump, fail-closed — no reader machinery per Directive 2); proposals carry task; `measurement_key` = sha256(coordinate ∪ schedule ∪ seed) then spans tasks; `replication_key` groups seeds within task | WP9 |
 | L18 | `execution/policy.py` (`direction="maximize"`, `_extract_score` key lists), `learning/surrogate.py` (`val_loss` default, EHVI fall-through) | Objective name/direction hardcoded in policies — violates R31 registry resolution and silently biases toward accuracy-style maximization | Policies resolve objective id/direction from the run spec's declared objectives (OBJECTIVES registry); EHVI implemented or multi-objective delegated to the NSGA-II path — never a silent zero score | WP9 |
 | L19 | Missing: S3 Schedule data-origin design | Exploration/calibration quotas unspecified ⇒ the I(C,U) audit and R86 attribution can be vacuous (no policy-independent data, no matched contrasts to attribute) | S3 predeclares a data-origin allocation (exploration/calibration fractions) and a matched-contrast DOE seed (fractional-factorial or OFAT quota within the exploration budget) so effects are identifiable by construction; policies may exceed, never undercut, the quota | WP9 |
 | L20 | `evidence/claims.py::claim_eligible` (planned `n_seeds`) | Claim eligibility keyed on *planned* `schedule.n_seeds` — a run dying mid-replication would satisfy R64 without the seeds | Count *achieved* seeds (records grouped by `replication_key`); `schedule.n_seeds` remains the SQL prefilter hint only | WP10 |
@@ -979,8 +998,9 @@ Deliverables:
    the gallery-lock pattern (R87).
 3. **Report completion (R85–R88)** — axis-coverage section (per-axis
    stratification, R18), fronts by fidelity, budget consumption, failures by
-   cause, promotion history, claim-eligible table, narrative handoff summary
-   (R88); the public store read API replaces `store._conn` reach-ins (L14).
+   cause, promotion history, cross-run campaign diff (C78), claim-eligible
+   table, narrative handoff summary (R88); the public store read API replaces
+   `store._conn` reach-ins (L14).
 4. **Operations completion (R81–R84)** — intent persistence (L13); a control-file
    watcher so an external CLI can pause/steer/resume a running service
    (`surface/service.py` headless loop: RunController + control file + webhooks);
@@ -1022,10 +1042,10 @@ ships in this WP (R77: no silent loss).
    script; MEP/frozen-θ/benchmark suites → Class E additions (WP13) or retirement
    records per Gate 1.
 3. **Delete** — after each port's conformance test passes: remove the module, its
-   CLI verbs from `cli/__main__.py`, its flags (Appendix-A rows retire), and the
-   `kb.sqlite`/`campaign.db`/`ledger.sqlite` readers (Directive 2: the files are
-   abandoned untouched). Pre-kernel `experiment/` files relocate to
-   `scripts/probes/` (probe), merge into profiles (staircase), or delete.
+   CLI verbs from `cli/__main__.py`, its flags (Appendix-A rows retire), and every
+   legacy store reader (Directive 3: the files are abandoned untouched). Pre-kernel
+   `experiment/` files relocate to `scripts/probes/` (probe), merge into profiles
+   (staircase), or delete.
 4. **Locks** — a final import-graph lock (`computronium.experiment` imports no
    legacy pillar module); `cli/__main__.py` exposes only kernel surface commands;
    the Appendix-A audit lock (every retired flag maps to a capability or a
@@ -1036,7 +1056,7 @@ ships in this WP (R77: no silent loss).
 1. **E1** — kill -9 (exists); store-overhead harness
    `scripts/probes/store_overhead_bench.py` (mean/p95/fraction < 1 % of median
    evaluation walltime; K7/K9); serialization round-trip incl. `unknown` verbatim
-   + the v1→v2 reader path; atomic append with artifacts (exists).
+   and fail-closed version checks; atomic append with artifacts (exists).
 2. **E2** — cost-to-rank vs the uniform baseline; surrogate acquisition vs the
    predeclared baseline on held-out synthetic tasks via the WP10 effect-size
    runner; cost-model estimate-vs-actual trend; divergence-bound replay on a
