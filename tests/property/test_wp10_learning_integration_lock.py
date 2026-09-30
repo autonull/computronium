@@ -7,6 +7,9 @@ L20 (claim integrity): claim_eligible_by_achieved_seeds counts achieved
 seeds per replication key; a run dying mid-replication is not eligible.
 L11 (priors single-source): every ruler-LR task and every override in the
 legacy tables resolves through the PRIORS registry via prior_value().
+L7/L9 (surrogate wiring): training split excludes calibration/test; effect
+size runs the closed-loop benchmark and returns a protocol result.
+Harness: closed-loop mechanics, encoder locality, unit-cube task optima.
 """
 
 from __future__ import annotations
@@ -26,6 +29,12 @@ if TYPE_CHECKING:
 from computronium.experiment.evidence.claims import claim_eligible_by_achieved_seeds
 from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
+from computronium.experiment.learning.benchmark import (
+    _coordinate_to_vector,
+    _embedding_dims,
+    create_synthetic_benchmark_tasks,
+    run_acquisition_benchmark,
+)
 from computronium.experiment.learning.prior import (
     _DYNAMICS_STEP_SIZE_OVERRIDES_DATA,
     _RULER_LR_DATA,
@@ -280,3 +289,74 @@ class TestSurrogateStoreWiring:
         assert isinstance(result, EffectSizeResult)
         assert result.n_tasks >= 10
         assert result.n_seeds >= 5
+
+
+class _RecordingPolicy:
+    def __init__(self) -> None:
+        self.batch_sizes: list[int] = []
+        self.rounds: list[int] = []
+        self.best_at_round_start: list[float] = []
+        self.n_observed = 0
+
+    def propose(self, n: int, context: dict) -> list[Coordinate]:
+        self.batch_sizes.append(n)
+        self.rounds.append(int(context["round"]))
+        self.best_at_round_start.append(float(context["history_best"]))
+        return [_coord() for _ in range(n)]
+
+    def observe_score(self, coordinate: Coordinate, score: float) -> None:
+        self.n_observed += 1
+
+    def get_name(self) -> str:
+        return "recording"
+
+
+class TestBenchmarkHarness:
+    def test_closed_loop_mechanics(self) -> None:
+        """Harness drives propose→score→observe_score in budget-sized rounds."""
+        treatment, control = _RecordingPolicy(), _RecordingPolicy()
+        tasks = create_synthetic_benchmark_tasks(n_tasks=10)
+        run_acquisition_benchmark(
+            treatment,
+            control,
+            tasks,
+            None,
+        )
+        for pol in (treatment, control):
+            assert pol.n_observed == 10 * 5 * 100
+            assert set(pol.rounds) == set(range(20))
+            assert all(n == 5 for n in pol.batch_sizes)
+            assert all(
+                b == float("inf")
+                for r, b in zip(pol.rounds, pol.best_at_round_start, strict=True)
+                if r == 0
+            )
+
+    def test_encoder_deterministic_and_local(self) -> None:
+        """Encoder is deterministic; a 1%-range nudge moves one dim slightly."""
+        dims = _embedding_dims(6)
+        assert dims
+        base = _coordinate_to_vector(_coord(), 6, dims)
+        assert base == _coordinate_to_vector(_coord(), 6, dims)
+        spec = dims[0]
+        lo = spec.domain.lo or 0.0
+        hi = spec.domain.hi or 1.0
+        nudged = Coordinate(
+            substrate="Digital",
+            geometry="Feedforward",
+            dynamics="Instantaneous",
+            plasticity="NullPlasticity",
+            credit="Backprop",
+            update="Euclidean",
+            params={spec.name: (lo + hi) / 2 + 0.01 * (hi - lo)},
+        )
+        vec = _coordinate_to_vector(nudged, 6, dims)
+        dist = float(np.linalg.norm(np.subtract(vec, base)))
+        assert 0.0 < dist < 0.05
+
+    def test_task_optima_in_unit_cube(self) -> None:
+        """Benchmark optima match the encoder output range [0,1)^6."""
+        for task in create_synthetic_benchmark_tasks(n_tasks=10):
+            assert task.synthetic_fixture is not None
+            assert len(task.synthetic_fixture.optimum) == 6
+            assert all(0.0 <= v < 1.0 for v in task.synthetic_fixture.optimum)

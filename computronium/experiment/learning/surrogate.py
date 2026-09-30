@@ -24,7 +24,6 @@ from computronium.experiment.schema.harvest import HyperparameterSpec, harvest_s
 if TYPE_CHECKING:
     from computronium.experiment.evidence.protocol import CostBudget, EffectSizeResult
     from computronium.experiment.evidence.store import RecordStore
-    from computronium.experiment.execution.policy import Policy
     from computronium.experiment.schema.record import Record
 
 
@@ -387,6 +386,24 @@ class SurrogatePolicy[T]:
         self._training_data.data_origins.append(origin)
         self._fitted = False
 
+    def observe_score(
+        self,
+        coordinate: Coordinate,
+        score: float,
+        origin: DataOrigin = DataOrigin.POLICY_SELECTED,
+    ) -> None:
+        """Observe a lightweight (coordinate, score) datum (benchmark path).
+
+        Same effect as :meth:`observe` without building a Record; used by the
+        closed-loop benchmark harness for inter-batch learning.
+        """
+        if self._training_data is None:
+            self._training_data = SurrogateTrainingData([], [], [])
+        self._training_data.coordinates.append(coordinate)
+        self._training_data.objectives.append(score)
+        self._training_data.data_origins.append(origin)
+        self._fitted = False
+
     def get_name(self) -> str:
         """Policy name for benchmark metadata."""
         base = self._base_policy.get_name()
@@ -417,6 +434,7 @@ class SurrogatePolicy[T]:
 
         from computronium.experiment.learning.benchmark import (
             BenchmarkConfig,
+            BenchmarkPolicy,
             create_synthetic_benchmark_tasks,
             run_acquisition_benchmark,
         )
@@ -424,8 +442,8 @@ class SurrogatePolicy[T]:
         tasks = create_synthetic_benchmark_tasks(n_tasks=n_tasks)
         config = BenchmarkConfig(n_tasks=n_tasks, n_seeds=n_seeds, budget=budget)
         result = run_acquisition_benchmark(
-            cast("Policy", self),
-            cast("Policy", baseline_policy),
+            cast("BenchmarkPolicy", self),
+            cast("BenchmarkPolicy", baseline_policy),
             tasks,
             config,
             store=self._store,

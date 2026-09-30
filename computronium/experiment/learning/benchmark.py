@@ -1,26 +1,47 @@
 """Effect-size benchmark runner for learning policies.
 
 Implements WP10 deliverable: run_acquisition_benchmark() for E2/E3 protocol.
+
+Synthetic evaluation is a closed loop: each policy proposes coordinates in
+small batches, the fixture scores them, and policies supporting
+``observe_score`` learn between batches. The treatment/control contrast is
+therefore a real policy effect, not a fixed draw.
 """
 
 from __future__ import annotations
 
 import hashlib
+import math
 import statistics
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import numpy as np
 
 from computronium.experiment.evidence.protocol import (
     CostBudget,
+    CostBudgetKind,
     EffectSizeResult,
     compute_effect_size,
 )
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
-    from computronium.experiment.execution.policy import Policy
+    from computronium.experiment.schema.axis import HyperparameterSpec
+    from computronium.experiment.schema.coordinate import Coordinate
+
+
+@runtime_checkable
+class BenchmarkPolicy(Protocol):
+    """Minimal policy surface the benchmark harness drives.
+
+    Matches ``ProposalPolicy`` (surrogate.py); execution ``Policy`` objects
+    need an adapter (their ``propose`` takes candidates/records/budget).
+    """
+
+    def propose(self, n: int, context: dict) -> list[Coordinate]: ...
+
+    def get_name(self) -> str: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +102,65 @@ def _generate_task_id(task_name: str, seed: int) -> str:
     return hashlib.sha256(f"{task_name}|{seed}".encode()).hexdigest()[:16]
 
 
+def _embedding_dims(dimension: int) -> list[HyperparameterSpec]:
+    """First ``dimension`` Range specs in harvest order (fixed embedding dims)."""
+    from computronium.experiment.schema.harvest import harvest_schema
+
+    dims = [
+        s
+        for s in harvest_schema().hyperparameters
+        if s.domain.lo is not None and s.domain.hi is not None
+    ][:dimension]
+    return dims
+
+
+def _coordinate_to_vector(
+    coord: Coordinate,
+    dimension: int,
+    dims: list[HyperparameterSpec] | None = None,
+) -> tuple[float, ...]:
+    """Encode a coordinate as a locality-preserving [0,1)^dimension vector.
+
+    Numeric params are min-max normalized against their registry Range
+    (LOG scale in log space); missing/non-numeric entries map to 0.5.
+    Structural axes are held fixed by the task — the synthetic benchmark
+    measures continuous-param acquisition, not structural search.
+    """
+    if dims is None:
+        dims = _embedding_dims(dimension)
+    vec: list[float] = []
+    for i in range(dimension):
+        if i < len(dims):
+            spec = dims[i]
+            lo = spec.domain.lo or 0.0
+            hi = spec.domain.hi or 1.0
+            raw = coord.params.get(spec.name, (lo + hi) / 2)
+            try:
+                v = float(raw)  # type: ignore[arg-type]
+            except TypeError, ValueError:
+                v = (lo + hi) / 2
+            if hi <= lo:
+                vec.append(0.5)
+            elif spec.domain.scale.name == "LOG" and lo > 0 and v > 0:
+                vec.append(
+                    min(
+                        1.0,
+                        max(
+                            0.0,
+                            (math.log(v) - math.log(lo))
+                            / (math.log(hi) - math.log(lo)),
+                        ),
+                    )
+                )
+            else:
+                vec.append(min(1.0, max(0.0, (v - lo) / (hi - lo))))
+        else:
+            vec.append(0.5)
+    return tuple(vec)
+
+
 def _evaluate_policy_on_task(
-    policy: Policy,
+    policy: BenchmarkPolicy,
     task: BenchmarkTask,
     seed: int,
     budget: CostBudget,
@@ -91,27 +169,56 @@ def _evaluate_policy_on_task(
 ) -> float:
     """Evaluate a policy on a single task with a single seed.
 
-    This is a placeholder - actual implementation would run the policy
-    on the task and return the primary metric value.
+    Closed loop: propose a batch, score it on the fixture, feed scores back
+    via ``observe_score`` when supported, repeat until the budget is spent.
+    Returns the best score seen (lower is better). Noise indices are
+    eval-order based, so paired policies share the noise sequence prefix.
     """
-    # For synthetic tasks, evaluate using the synthetic fixture
-    if task.synthetic_fixture is not None:
-        # Generate a coordinate from the policy
-        # This is a simplified version - real implementation would
-        # use the policy's propose method
-        return task.synthetic_fixture.evaluate(
-            tuple(np.random.RandomState(seed).rand(6)), seed
-        )
+    del primary_metric, store
+    if task.synthetic_fixture is None:
+        rng = np.random.RandomState(seed + hash(task.name) % 1000)
+        return float(rng.rand())
 
-    # For real tasks, this would run actual training
-    # Placeholder: return a random score for now
-    rng = np.random.RandomState(seed + hash(task.name) % 1000)
-    return float(rng.rand())
+    fixture = task.synthetic_fixture
+    total = int(budget.limit) if budget.kind == CostBudgetKind.EVAL_COUNT else 20
+    batch = min(5, total)
+    dims = _embedding_dims(fixture.dimension)
+    observe = getattr(policy, "observe_score", None)
+
+    best = float("inf")
+    done = 0
+    round_idx = 0
+    while done < total:
+        m = min(batch, total - done)
+        context = {
+            "task_id": task.task_id,
+            "seed": seed,
+            "budget_limit": total,
+            "round": round_idx,
+            "history_best": best,
+        }
+        candidates = policy.propose(m, context)
+        if not candidates:
+            raise TypeError(
+                f"Policy {policy.get_name()!r} returned no candidates; "
+                "benchmark policies must implement propose(n, context)."
+            )
+        for j, coord in enumerate(candidates[:m]):
+            score = fixture.evaluate(
+                _coordinate_to_vector(coord, fixture.dimension, dims),
+                seed + round_idx * batch + j,
+            )
+            best = min(best, score)
+            if observe is not None:
+                observe(coord, score)
+        done += m
+        round_idx += 1
+    return best
 
 
 def run_acquisition_benchmark(
-    treatment_policy: Policy,
-    control_policy: Policy,
+    treatment_policy: BenchmarkPolicy,
+    control_policy: BenchmarkPolicy,
     tasks: list[BenchmarkTask],
     config: BenchmarkConfig | None = None,
     store: RecordStore | None = None,
@@ -268,9 +375,10 @@ def create_synthetic_benchmark_tasks(
 
     tasks = []
     for i in range(n_tasks):
-        # Create a synthetic fixture with different optimum for each task
-        offset = i * 0.5
-        optimum = tuple(float(j + 1 + offset) for j in range(dimension))
+        # Optimum uniform in [0,1)^dimension: matches the encoder output range
+        # so every task is solvable by acquisition (seeded per task index).
+        task_rng = np.random.RandomState(0xBEAC0000 + i)
+        optimum = tuple(float(v) for v in task_rng.rand(dimension))
 
         interaction_matrix = []
         for j in range(dimension):
@@ -302,6 +410,7 @@ def create_synthetic_benchmark_tasks(
 
 __all__ = [
     "BenchmarkConfig",
+    "BenchmarkPolicy",
     "BenchmarkResult",
     "BenchmarkTask",
     "create_synthetic_benchmark_tasks",

@@ -1349,6 +1349,28 @@ Definition of Done completes at WP13 close.
 - All quality gates pass: `ruff format` + `ruff check` + `pyright` strict clean
   on both changed files; 11/11 lock tests pass.
 
+### 2026-09-30 — WP13 Harness Fidelity: Closed-Loop Benchmark Runner (benchmark.py)
+- **Closed loop (was item 5 below)**: `_evaluate_policy_on_task` now runs
+  propose→score→`observe_score` batches (batch 5, rounds = ceil(B/5)) until the
+  `CostBudget` is spent; returns best-seen score. Noise indices are eval-order
+  based so paired policies share the noise prefix. New `BenchmarkPolicy`
+  protocol (`propose(n, context)`/`get_name`, `observe_score` optional and
+  duck-typed); `run_acquisition_benchmark` retyped from execution `Policy`.
+- **Locality-preserving encoder**: `_coordinate_to_vector` normalizes numeric
+  params against registry Ranges (LOG in log space, missing → 0.5) over the
+  first `dimension` Range specs in harvest order; structural axes held fixed
+  by task (documented scope: continuous-param acquisition).
+- **Task optima**: `create_synthetic_benchmark_tasks` optima now uniform
+  [0,1)^dimension seeded per task (were [1..6]+offset, outside encoder range).
+  Shared `evidence.protocol.create_synthetic_fixture` untouched (lock-pinned).
+- **`SurrogatePolicy.observe_score`**: lightweight benchmark observation path
+  (no Record construction); `evaluate_effect_size` casts updated to
+  `BenchmarkPolicy`.
+- **Locks**: `TestBenchmarkHarness` (3 tests) — round/budget mechanics
+  (5000 obs/policy, 20 rounds × 5, round-0 best=inf), encoder
+  determinism/locality, unit-cube optima. 14/14 lock tests pass (16 s).
+- Gates: `ruff format` + `ruff check` + `pyright` strict clean.
+
 ### Improvement Opportunities (remaining WPs)
 1. **WP12 (major)**: Full legacy port & delete still open — `autoscientist/`,
    `hyperopt/`, legacy `execution/` engine, `lightning_/`, `packages/computronium-lab`
@@ -1374,13 +1396,15 @@ Definition of Done completes at WP13 close.
    `verifying_test` execution sweep). Drift lock pins the 10 JSON files only —
    `.md` summaries (timestamps) and `conformance_stubs/` + `primitives/`/`algorithms/`
    dirs (other generators) are out of scope.
-5. **Benchmark harness fidelity (found 2026-09-30 via L9 wiring)**:
-   `benchmark.py::_evaluate_policy_on_task` ignores the policy for synthetic
-   tasks (fixture evaluated on random coords; treatment≡control distribution →
-   d≈0) and returns an unseeded `rng.rand()` placeholder for real tasks.
-   Before E2/E3 numbers are trusted, it must drive `policy.propose()` per
-   task/seed (paired draws) so the treatment/control contrast is real; until
-   then `evaluate_effect_size` proves the protocol path, not a policy effect.
+5. **E2 calibration open (found 2026-09-30 via harness probing)**: naive
+   learners (greedy hill-climb, top-k-mean) LOSE to best-of-100 random on the
+   smooth 6-D bowl (d≈+0.8, p<0.05 — coverage beats concentration at B=100;
+   lowering noise to 0.01 does not change the sign). E2 needs either a
+   competent surface-fitting surrogate or sharper/lower-D tasks before its
+   numbers are trusted. Related defect: `GaussianProcessSurrogate` fits all
+   ~68 harvest dims — 10 tasks × B=100 exceeded a 300 s foreground cell
+   (ConvergenceWarnings, ill-conditioned); needs feature-subspace selection
+   before E2 use. Do NOT background-tune stubs; fix the surrogate dims first.
 
 ### Notes for Remaining Work
 - `RecordStore` `PLR0904` noqa stands (§1.1 single-writer concentration).
