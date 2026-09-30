@@ -4,7 +4,7 @@
 authoritative spec; abc2 (Rev 1.1) is superseded and consulted only for rationale.
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread
 safety, error/logging conventions, environment rules, testing tiers, commit checklist.
-**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 ready to start.
+**Status:** WP1 COMPLETE — Walking skeleton implemented and tested. WP1.5 COMPLETE — Scientific validity skeleton implemented. WP2 COMPLETE — Schema & registries implemented. WP3 COMPLETE — Legality engine implemented. WP4 COMPLETE — Execution implemented. WP5 COMPLETE — Evidence & governance implemented. WP5.5 COMPLETE — Statistical analysis protocol implemented. WP6 COMPLETE — Learning primitives implemented. WP7 COMPLETE — Surface layer implemented.
 
 ---
 
@@ -731,6 +731,15 @@ strict-clean from WP1 onward.
 - All 4 modules pass `ruff format`, `ruff check`, `pyright` (strict)
 - All 96 property tests pass (including new legality boundary lock)
 
+### 2026-09-29 — WP7 Complete (Pillar 6: Surface Layer)
+- Implemented `surface/report.py`: ReportGenerator with run summaries, claim-eligible queries, promoted records, Pareto frontier, maturity/gate verdict distributions, coordinate coverage; export_to_json and export_to_parquet for R73 round-trip
+- Implemented `surface/cli.py`: Single dispatcher (`comp-surface`) with 4 run profiles as data (quick-verify, production-map, maturation, claim); commands for run, report, export, conformance, status; integrated with PipelineRunner
+- Implemented `surface/conformance.py`: ConformanceHarness for CI gate enforcement; CurrencyLock for capability currency tracking (R78); ConformanceStatus enum (PASS_, FAIL, SKIPPED, RETIRED, NO_EVIDENCE); generate_conformance_report, save/load_currency_lock
+- Implemented `surface/operations.py`: RunController for pausable/steerable runs with OperatorIntent audit trail; ServiceManager for long-running services with auto-restart; WebhookConfig for alert notifications; OperatorIntentKind enum (PAUSE, RESUME, STOP, MODIFY_BUDGET, MODIFY_STAGES, MODIFY_OBJECTIVES, UNQUARANTINE, PRIORITIZE_CELL, INJECT_CANDIDATE, SNAPSHOT)
+- Updated `experiment/__init__.py` and `surface/__init__.py` to export surface package
+- All 4 new modules pass `ruff format`, `ruff check`, `pyright` (strict)
+- Property tests pass: `test_public_surface_lock.py` (15 tests), existing experiment wiring locks and statistical protocol locks continue to pass
+
 ### Improvement Opportunities (for future WPs)
 1. **WP1.5**: Atomic append with artifacts kill -9 proof (protocol skeleton complete)
 2. **WP2**: Seed registries with domain data per Gate 1/2 outcomes
@@ -746,3 +755,4 @@ strict-clean from WP1 onward.
 - `GateVerdict.PASS` renamed to `PASS_` to avoid S105 false positive (hardcoded password detection)
 - **CEEC folded into Kernel**: `packages/ceec-core` → `computronium/experiment/evidence/artifacts.py` (DuckDB `artifacts` table). Single-file atomic transactions. No reconciliation protocol.
 - **WP1.5 complete**: Scientific validity skeleton implemented with protocol module, provenance extensions, reproducibility classes, synthetic fixture, and lockstep tests
+- **WP7 complete**: Surface layer implemented with report generation, CLI dispatcher, conformance harness, and operations controller

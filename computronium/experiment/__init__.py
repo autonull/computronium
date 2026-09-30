@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from computronium.experiment import evidence, execution, schema
+from computronium.experiment import evidence, execution, schema, surface
 from computronium.experiment.schema.axis import (
     AXES_REGISTRIES,
     CREDIT_REGISTRY,
@@ -59,4 +59,5 @@ __all__ = [
     "list_axis_specs",
     "register_axis_spec",
     "schema",
+    "surface",
 ]
