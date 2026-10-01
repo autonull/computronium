@@ -606,3 +606,75 @@ Two consequences worth carrying:
 Do **not** re-attempt `pytest tests/`. In order: decide the `testpaths` hole
 (§12.3), run `tests/acceptance/` once to close U1–U5, then Phase 2
 (`comp run --spec-file`).
+
+---
+
+## 14. The end-to-end target, stated so it can be checked
+
+**Objective: loosely satisfy TODO43's MUSTs through one runnable example.**
+Not all 88 requirements — a *named subset*, demonstrably exercised, so that
+"does it work?" has a falsifiable answer. TODO43 remains the requirements
+source; this section only picks the slice that an end-to-end demo can prove.
+
+| TODO43 | Requirement | What the example must show |
+|---|---|---|
+| **R7** | record identifies the exact config | two records differing only in `credit` are distinguishable and separately queryable |
+| **R8** | fidelity is first-class | the report stratifies by L0/L1/L2, never averages across tiers |
+| **R9** | repeats are distinct records | 5 seeds of one coordinate = 5 records sharing `cell_key` |
+| **R10** | no result carries an open defect | a gate-failed cell is absent from the claim set, computable from the record alone |
+| **R12/R26/R74** | crash-safe, replayable, no duplicate/reordered records under concurrency | kill mid-run, resume by `run_id`, coverage continues without a gap or a repeat |
+| **R22** | comparisons only between comparable fidelity/budget | an unmatched pair is refused, not silently averaged |
+| **R35/R64** | claim is a record predicate carrying n and variance | the claim line prints `n=5, mean ± half-range`; it is a filter, not a run's self-assessment |
+| **R41** | versioned, diffable, portable spec | two specs `diff` cleanly; the run is reproducible from the spec alone |
+| **R85** | one report from the store alone | objectives + fronts, axis coverage, budget consumed, failures by cause, promotion history, claim-eligible — one command |
+| **R76/R77** | capability registry + conformance | `comp report conformance` covers the capabilities the run touched |
+
+Everything else in TODO43 stays deferred and is *not* claimed by the example.
+
+### 14.1 The bridge already exists — in two places
+
+The missing evaluation path is not missing; it is **duplicated outside the
+kernel**:
+
+1. **`packages/computronium-lab/…/lab.py:311` `Lab.train`** → `train_with_certificates(system, loader, …)` — real training, seeded, with a CEEC ledger. Real.
+2. **Every `tests/integration/test_demo_*.py`** — `compose_system(...)` → `SystemTrainer(...).fit()[-1]["train_acc"]`. Real, and already asserted.
+
+So `LocalBackend._evaluate_single` must **delegate** to one of these, not
+reimplement. The single-coordinate → config-class resolution (the part that does
+not exist yet) is mechanical, and the axis registries are already populated.
+
+*Caution, and it is TODO43's own P4:* `Lab.explore` returns a frontier of
+**predicted** metrics from a static `CATALOG` (`cand.pareto`), and
+`synthesize` scores candidates with a viability model. Those are priors, not
+measurements. The example must use `train`, never `explore`, or it will report
+catalog numbers as results.
+
+### 14.2 What "runnable" means here
+
+A clean checkout, CPU only, no network, and:
+
+1. `comp run --spec-file examples/<name>.yaml` — completes, writes records.
+2. Records contain a **real** `train_acc`, and it **moves when the axis moves**.
+   This is the one assertion that distinguishes evidence from a well-typed
+   `walltime_s`.
+3. `comp report --run-id <id>` — claim (with n and variance), evidence,
+   limitation, all from the store alone (R85, R14).
+4. `comp report status` — the run is listed and resumable.
+5. Interrupt, then resume by `run_id` — no duplicate, no gap.
+6. Re-run the same spec — same `replay_hash` (R27).
+7. `--policy stratified_random` then `--policy model_based` — same store, same
+   schema, comparable records (R16, R17).
+
+Every one of those seven is a test. The example is the fixture, not a
+narrative.
+
+### 14.3 README drift found while cross-checking
+
+`README.md:288` documents `comp report run --profile default`, but no `default`
+profile exists — the four are `quick-verify`, `production-map`, `maturation`,
+`claim`. The invocation **errors**. This is TODO43 P11 recurring verbatim, and
+`test_cli_readme_lock` did not catch it because it locks the command *table*,
+not the code blocks. The invocation is now corrected to
+`comp report run quick-verify --store …` and the lock still passes (3 passed).
+**Not yet done:** extending that lock to fenced bash blocks is H3.4's job and is
+still open — until then, documented invocations are verified only by hand.

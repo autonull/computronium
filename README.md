@@ -285,7 +285,7 @@ Kernel operations via `comp report`:
 
 ```bash
 uv run comp report --help            # report/export/conformance/status subcommands
-uv run comp report run --profile default --store experiment.duckdb
+uv run comp report run quick-verify --store experiment.duckdb
 uv run comp report status --store experiment.duckdb
 ```
 
