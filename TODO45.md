@@ -85,10 +85,14 @@ docs/         curated reference + generated (manifest locked)   # no archive/
       **873/3699** — `tests/integration/test_demo_uaxis_muon_swap.py`. Not a
       failure list; a *cost* problem. The default gate (`uv run python -m pytest`,
       3241 tests) is a different and much cheaper thing.
-- [ ] **G0.2** Per-test walltime for the 20 slowest. `tests/conftest.py` already
-      censuses every test over 5 s at end of run and `addopts` carries
-      `--durations=25`; both now print on the *default gate*, which is minutes not
-      hours. Collect from that run; do not launch a separate one.
+- [ ] **G0.2** Per-test walltime for the 20 slowest. **Mostly settled, and the answer
+      is the finding:** `tests/unit/`, `tests/primitives/`, `tests/algorithms/` +
+      `tests/acceleration/` have a *maximum* single-test call time of ~1.5 s — not
+      one test in those 1,568 needs a budget marker. The entire walltime problem
+      was the demos, which were not in any exclusion. `tests/property/` is the one
+      shard whose top-25 floor is still 2.2 s (hypothesis suites); its actual
+      maximum is the only number still missing, and it comes free from the next
+      run. Do not launch a run to get it.
 - [x] **G0.3** **Decided: real argparse help tree.** `computronium/cli/__main__.py`
       now builds one; `comp --help` prints a command table with per-command
       summaries (exit 0), bare `comp` prints help to stderr (exit 1), unknown
@@ -96,22 +100,28 @@ docs/         curated reference + generated (manifest locked)   # no archive/
       command's own parser. The `_USAGE` literal is gone.
 - [x] **G0.4** Confirmed: 21 `DEMOS`, 21 `docs/figures/manifest.json` figures.
 
-**Gate:** a committed snapshot table of real numbers, replacing §11. — *partially
-met; §12 carries what was measured instead.*
+**Gate:** *met* — §12.5 is the committed snapshot of real numbers; G0.2 has one
+number outstanding and it is free.
 
 ---
 
-## Phase 1 — Removals (before any feature work)
+## Phase 1 — Removals
 
-Deletion first: it cannot regress the critical path once references are checked, and it
-reduces the surface every later phase touches.
+Removal first, because it shrinks the surface every later phase touches. But
+**removal is two different acts with two different authorities** (§11.3):
+*exclusion / marking / deferral* is cheap, reversible, and unattended; *deletion*
+is never unattended. Phase 1 is now almost entirely the first kind — R1.4 done,
+R1.3 withdrawn, R1.5 void.
 
-- [ ] **R1.1** `tests/slow/` — superseded by kernel demos/benchmarks. **Already deleted**
-      in the working tree; `tests/test_timeout_marker_policy.py` `KNOWN_LONG` updated
-      to match. Needs a default-gate run to confirm the timeout-marker lock passes.
-- [ ] **R1.2** `tests/graph/` — deleted in the working tree. Confirm no suite depends on
-      the graph geometry it covered; if one does, that is a real coverage gap to record,
-      not a reason to restore the directory.
+- [x] **R1.1** `tests/slow/` — deleted in an earlier session; `KNOWN_LONG` updated to
+      match. **Confirmed:** `test_timeout_marker_policy` passes (part of the 60
+      structural locks, §12.5).
+- [x] **R1.2** `tests/graph/` — deleted in an earlier session. **Confirmed:** grep
+      finds no reference to `tests/graph` or `tests/slow` anywhere in code, CI,
+      scripts, or tests. The covered behaviour is now documented in
+      `docs/archive/20260722/FABRICPC.plan.md` (topology/inference/training cases),
+      which is why R1.3's withdrawal mattered. Accepted as a coverage gap: the
+      graph-geometry assertions are no longer executed anywhere.
 - [ ] **R1.3** ~~Delete `docs/archive/`~~ **WITHDRAWN. Do not execute.**
       I deleted it; the operator overruled and it is restored (467 files, 8.7 MB).
       The plan's justification — "git history is the archive" — is an argument,
@@ -131,35 +141,67 @@ reduces the surface every later phase touches.
       to do.
 - [ ] **R1.6** Delete any subsystem that G0 shows is untested *and* unreferenced.
 
-**Gate:** tree is smaller, `ruff`/`pyright`/`pytest` all still resolve, no dangling refs.
+**Gate:** *met* — `ruff` 433 findings vs 440 baseline (ratchet passes), no dangling
+refs, all four `testpaths` shards green (§12.5). Remaining: R1.6, which needs the
+acceptance suite run to know what is genuinely unreferenced.
 
 ---
 
 ## Phase 2 — Critical Path: `comp run` end-to-end
 
-One capability, done properly, beats twelve half-wired ones. Scope deliberately narrow:
-**`--spec-file` only.** Natural-language composition is a later, optional extra.
+> **Re-scoped by inspection, 2026-10-01.** The original C1.1–C1.5 assumed a
+> typed `RunSpec`, a `SearchSpace` builder, and a set of policies that the CLI
+> had yet to expose. Reading the code shows all three assumptions are wrong in
+> *both* directions: the policies and search space exist but live **only inside
+> the acceptance test**, while `RunSpec` does not exist at all. The real work is
+> smaller than the phase claimed and differently shaped.
 
-- [ ] **C1.1** `comp run --spec-file spec.yaml` — RunSpec → `SearchSpace` →
-      `ProposalPolicy` → `PipelineRunner` (S1–S11) → `RecordStore` → Claims. Reuse the
-      existing kernel surface; this is a thin adapter, not new machinery.
-- [ ] **C1.2** `--policy synthesis|stratified_random|uniform_random|round_robin_grid` —
-      the four that need no surrogate. `model_based` (TPE/NSGA-II) and `evolution` are
-      deferred until the path is proven.
-- [ ] **C1.3** `--rounds N` with `--run-id` pause/resume, single-writer `RecordStore`
-      append, atomic writes. (U3 is already locked in
-      `tests/acceptance/test_unified_kernel.py`; this exposes it, not reimplements it.)
-- [ ] **C1.4** `comp report --run-id <id>` renders Claim/Evidence/Limitation for any run.
-- [ ] **C1.5** Ship one worked example (`examples/eqprop-vs-backprop-mnist.yaml`) whose
-      output is asserted by a test, so the README can point at a runnable artifact.
+- [ ] **C2.0** **Lift two definitions out of the test and into the library.**
+      This is the highest value-per-line item in the whole plan and it is a
+      prerequisite, not a chore:
+      - `tests/acceptance/test_unified_kernel.py:86-99` holds a 6-entry
+        `policy_map` — the single place `synthesis | stratified_random |
+        uniform_random | round_robin_grid | model_based_tpe | evolution` are
+        named. All six classes exist in
+        `computronium/experiment/execution/policy.py`; none are re-exported from
+        `execution/__init__.py`.
+      - `_build_search_space()` (`:121-145`) is the only `SearchSpace`
+        construction in the repo, and it is in a test.
 
-**Deliberately deferred from the old Phase C:** `comp search` (C2), `comp export` (C4),
-`comp status` (C5), `comp migrate` (C6), and the 12-command gate. These are conveniences
-over a store that must first exist and be correct. `comp report` already exposes
-run/report/export/conformance/status as subcommands — check whether C4/C5 are *already
-satisfied* through it before writing new adapters.
+      Move both to the library as the single source; have the acceptance test and
+      the CLI both import them. Every subsequent item gets cheaper, and the
+      acceptance test stops being the de facto public API.
+- [ ] **C2.1** **Typed `RunSpec`.** There is no `RunSpec` class — the "spec" is
+      `dict[str, object]` built inline in the test (`:52-75`) and `json.load`ed
+      without a single validation in `surface/cli.py:261-263`. Per AGENTS.md this
+      is a Pydantic v2 boundary: `RunSpec`, `TaskName`, fidelity/seeds/epochs,
+      `budget_seconds`, stage list, objectives. Load from **YAML** (`--spec-file`),
+      validate, and fail with the offending field named. This is C1.1's real
+      content; the rest of C1.1 was already there.
+- [ ] **C2.2** `comp run --spec-file spec.yaml --policy <name> --rounds N
+      --run-id <id>`. Given C2.0 this is thin: wire the library policy map
+      through `_cmd_run`, which currently hardcodes `RoundRobinGridPolicy` at
+      `surface/cli.py:313`. Pause/resume already works via `--run-id`; C1.3
+      exposes it rather than reimplements it.
+- [ ] **C2.3** **One worked example, asserted** (`examples/eqprop-vs-backprop-mnist.yaml`)
+      with a test that asserts the numbers it prints. This was C1.5, the *last*
+      item; it is now **third**, because it is the artifact that answers "does
+      this thing actually work?" and nothing else in the plan does.
+- [ ] **C2.4** `comp report --run-id <id>` — **NOT already satisfied, contrary to
+      the draft's guess.** `generate_run_report` (`surface/report.py:393`) renders
+      counts, maturity and gate-verdict distributions, coordinate coverage, and a
+      Pareto frontier. It renders no claims. `evidence/claims.py` has eligibility
+      *predicates* (`claim_eligible`, `promoted`, `robust`, `generalizes`) and no
+      rendering, and **`limitation` does not appear anywhere in
+      `computronium/experiment/`** — zero grep hits. So the Claim/Evidence/
+      Limitation triple needs (a) a claim renderer over existing predicates and
+      (b) a Limitation data model that does not exist yet. Sequence C2.4 *after*
+      C2.3, and treat the Limitation model as the risky half — if it will not fit
+      honestly, ship Claim/Evidence and say so in the report rather than
+      fabricating a limitations section.
 
-**Gate:** a new user runs the example and gets a record + claim. Nothing else matters yet.
+**Gate:** a new user clones, runs the example, and gets a record, a claim, and a
+report. Nothing else matters yet.
 
 ---
 
@@ -196,7 +238,9 @@ Scope this phase by G0.2, not by assumption.
       math or justify a tightened `atol` in the test docstring.
 - [ ] **F4.4** Every `xfail` carries `# issue: <url>`. No silent skips.
 
-**Gate:** `uv run python -m pytest tests/ -q` → 0 failures, 0 errors, 0 unexpected xpasses.
+**Gate:** the ladder in §11.2 tiers 3–4 → 0 failures, 0 errors, 0 unexpected xpasses.
+**Never `pytest tests/`** — that command bypasses `testpaths` and is what died at
+test 873 (§12.1).
 
 ---
 
@@ -268,7 +312,83 @@ Do **not** work file-by-file. Work the table below in ratio order. Each row is a
 
 ---
 
-## 11. Session Log
+## 11. What session 2 taught the plan
+
+### 11.1 The plan's Phase 0 was itself the defect
+
+G0.1 said "run the full suite first, get real numbers." Doing so is what
+exposed that "the full suite" was never a well-defined object: `testpaths`
+excludes four directories, `addopts` excludes three markers, and the 21 demos
+were in neither exclusion. **Ground truth must be cheap by construction, or
+getting it costs more than the work it informs.** Ground truth is now: sharded
+runs (§12.5), collected in minutes, repeatable by anyone.
+
+### 11.2 Verification is a ladder, not a switch
+
+The instinct was "full suite or nothing". Both are wrong. The working unit is a
+*shard*, priced:
+
+| Tier | Scope | Cost | Use |
+|---|---|---|---|
+| 0 | import + `comp` exit codes | ~35 s | every commit |
+| 1 | the shard you touched | ~2 min | every commit |
+| 2 | gallery figure lock | 7 s | demo-adjacent changes |
+| 3 | one `testpaths` directory | 15 s – 2 min | round close |
+| 4 | all four + `tests/acceptance/` | ~10 min | release candidate |
+| — | `pytest -m demo` | ~1 h | re-pinning the gallery only |
+
+Never "the full suite". Never `pytest tests/`.
+
+### 11.3 Deletion is not removal
+
+Phase 1 assumed removal was free because "deletion cannot regress the critical
+path once references are checked". Wrong, and the error was mine: grep answers
+*will this break something*, never *should this exist*. The restored archive is
+the only remaining record of the `tests/graph/` suite that R1.2 asks about —
+deleting it destroyed the evidence for another open item, which no reference
+check would ever have caught.
+
+**Split the vocabulary, and split the authority:**
+
+- *Exclusion, marking, deferral* — cheap, reversible, unattended. The `demo`
+  marker removed 2.75 h from the gate and was the right move; so is R1.4.
+- *Destruction* — never unattended. Requires a named sign-off per instance.
+
+### 11.4 Config files must never be wholesale-reverted
+
+`git checkout <ref> -- pyproject.toml` to undo one edit silently dropped an
+unrelated one (`docs/archive` in the ruff `exclude`), which broke
+`test_lint_count_ratchet` at 2136 > 440. Revert by **reverting the hunk**, not
+the file. This is now a standing rule, not a lesson to re-learn.
+
+### 11.5 Cheap instrumentation beat expensive investigation
+
+The ratchet and the `--durations` census both already existed. The walltime
+problem was not undetected — it was *unowned by any gate*. Prefer adding a
+measurement to a gate over running an investigation to produce a number.
+
+### 11.6 What is still unknown, stated as unknowns
+
+- Whether the kernel runs end-to-end **has never been executed here.** U1–U5
+  are the proof and they are unrun.
+- The hard kill at test 873 is undiagnosed. It is now out of the way, not
+  understood.
+- A demo is "just a test" today, which is why it was run as one. A demo is an
+  artifact producer; that is the whole insight, and it took two dead suites to
+  see it.
+
+### 11.7 Revised spine
+
+Phase 0 is measured. Phase 1 is reduced to R1.4 (done), R1.6 (pending G0), and
+one decision (§12.3, `testpaths`). Phase 2 is re-scoped above. The spine is now
+short enough to hold in one head:
+
+1. **Prove the kernel runs** — run U1–U5. Verification *and* feasibility for
+   Phase 2 in one act. Nothing else in the plan matters until this is known.
+2. **Make it demonstrable** — C2.0 → C2.1 → C2.2 → C2.3, ending in a runnable
+   example with asserted numbers.
+3. **Make it honest** — Phase 3, now that there is output to be honest about.
+4. **Everything else** — flakes, type hygiene, release.
 
 ### Session 1 — A1 attempted, reverted, plan re-sequenced
 
@@ -301,7 +421,7 @@ that will fight the manifest drift lock → R1.5.
 
 ---
 
-### Measured snapshot (2026-10-01, verified this session)
+### 12.0 Session 1 — measured snapshot (superseded by §12.5 where they conflict)
 
 | Metric | Value | Note |
 |--------|-------|------|
@@ -314,7 +434,7 @@ that will fight the manifest drift lock → R1.5.
 | Demos / manifest figures | 21 / 21 | F2 currently satisfied |
 | `docs/archive/` | 467 files, 8.7 MB | → R1.3 |
 | Test files by dir | primitives 145, property 133, algorithms 84, integration 56, unit 51, acceleration 15, ceec 14, platform 6, acceptance 1 | |
-| pytest totals | *unverified* | appendix figure is stale → G0.1 |
+| pytest totals | *unverified* | stale; real per-shard numbers now in §12.5 |
 
 ---
 
@@ -363,6 +483,10 @@ gallery_lock"`, which the new `-m` in `addopts` would have silently emptied).
    CI only reaches it because CI names directories explicitly.
    → **Decision needed:** either add `acceptance` to `testpaths`, or state
    plainly that CI is the gate and `pytest` is a fast lane.
+   **Recommendation: add `tests/acceptance`** — one directory, 8 tests, and it
+   is the only file that proves the kernel works end to end. A fast lane that
+   silently omits the project's central claim is not a fast lane, it is a
+   false-negative generator.
 2. **CI runs everything serially** in seven explicit shards. xdist is available
    and unused. Low priority: CI walltime is not the bottleneck this plan is
    about.

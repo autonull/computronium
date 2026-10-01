@@ -80,7 +80,15 @@
 *   **Test execution tiers** — run the cheapest tier that can catch your change; always show output + walltime (never truncate failures):
     1. **Targeted** (default): only tests touching changed modules (`uv run python -m pytest tests/<path> -k <signature> -q`).
     2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -m demo -q`) + drift locks + property suite.
-    3. **Full suite**: round close or explicit request — never a per-commit habit.
+    3. **Directory shards**: one `testpaths` directory (`primitives` 14 s, `algorithms`+`acceleration` 88 s, `unit` 117 s, `property` 166 s under `-n 4`) — round close.
+    4. **All shards + `tests/acceptance/`**: ~10 min — release candidate.
+*   **Never `pytest tests/`.** It bypasses `testpaths` and pulls in every demo;
+  two attempts hard-killed at test 873/3699 with no traceback (TODO45 §12.1).
+*   **`-n 4` is already in `addopts`**; do not add `-n` by hand, and do not
+  override it downward for small selections without reason (worker startup costs
+  ~10 s, which exceeds some shards' entire runtime).
+*   **Demos are artifact producers, not checks.** The `demo` marker is stamped in
+  `tests/conftest.py` by filename; `pytest -m demo` is the only way to run them.
 *   **hypothesis**: Use for property-based tests on pure logic.
 *   **Mocking**: Prefer Dependency Injection over `unittest.mock`. Use `pytest-mock` when strictly required.
 *   **Fixtures**: Use fixtures over setup/teardown; `@pytest.mark.parametrize` over duplicated tests.
