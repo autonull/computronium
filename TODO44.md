@@ -467,11 +467,14 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
   - [x] Benchmark modules moved from `experiments/joint/` to `benchmarks/joint/`
   - [x] CLI benchmark rewired to `benchmarks.joint` modules
   - [x] Validation verifier rewritten (KB recording removed)
-  - [x] P2P module cleaned (evolution removed)
+  - [x] P2P module cleaned (evolution removed, p2p_worker removed)
   - [x] Stability module cleaned (calibration removed)
   - [x] Docstring legacy mentions purged (B7)
   - [x] All 6 CLI subcommands working: report, parity, repro, validate, joint-validate, benchmark
-- [ ] Phase D full-tree lock + CLI↔README lock + schema forward-tolerance + single-writer enforcement green
+- [x] Phase D full-tree import isolation lock created and passing (computronium/ clean; computronium-lab exempted per A7 for Phase D rework)
+  - [ ] CLI↔README lock
+  - [ ] Schema forward-tolerance test
+  - [ ] Single-writer enforcement test
 - [ ] Phase E README rewritten and locked
 - [ ] Phase F demos + probes + gallery + ML benchmark suite green
 - [ ] Phase G gates pass, version bumped, release notes, committed
