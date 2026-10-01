@@ -39,18 +39,14 @@ TESTS = pathlib.Path("tests")
 #: mechanism that found them; the rest were already declared and simply never
 #: recorded here.
 KNOWN_LONG: tuple[tuple[str, int], ...] = (
-    (
-        "tests/integration/test_continuous_burst.py::test_burst_measures_cells_and_writes_artifacts",
-        300,
-    ),
-    (
-        "tests/integration/test_continuous_burst.py::test_l1_maturation_promotes_front_cells_once",
-        300,
-    ),
-    (
-        "tests/integration/test_continuous_burst.py::test_second_burst_never_remeasures_cells",
-        300,
-    ),
+    ("tests/acceptance/test_unified_kernel.py::test_legality_same_for_all_policies", 120),
+    ("tests/acceptance/test_unified_kernel.py::test_u1_synthesis_policy_end_to_end", 120),
+    ("tests/acceptance/test_unified_kernel.py::test_u2_model_based_policy_end_to_end", 120),
+    ("tests/acceptance/test_unified_kernel.py::test_u3_multi_round_with_allocator", 180),
+    ("tests/acceptance/test_unified_kernel.py::test_u3_pause_resume_via_run_id", 180),
+    ("tests/acceptance/test_unified_kernel.py::test_u4_policy_interchangeability", 300),
+    ("tests/acceptance/test_unified_kernel.py::test_u5_cross_policy_evidence_reuse", 300),
+    ("tests/acceptance/test_unified_kernel.py::test_u5_same_measurement_identity", 120),
     ("tests/integration/test_demo_compose_6axis.py::test_demo_compose_6axis", 300),
     (
         "tests/integration/test_demo_credit_channel_map.py::test_demo_credit_channel_map",
@@ -68,7 +64,6 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         600,
     ),
     ("tests/integration/test_demo_ntm_local.py::test_demo_ntm_local", 900),
-    ("tests/integration/test_demo_paxis_pareto.py::test_demo_paxis_pareto", 300),
     ("tests/integration/test_demo_pc_alm.py::test_demo_pc_alm", 600),
     (
         "tests/integration/test_demo_spatial_lattice_geometry_swap.py::test_demo_spatial_lattice_geometry_swap",
@@ -77,10 +72,6 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/integration/test_demo_spike_settle.py::test_demo_spike_settle", 300),
     ("tests/integration/test_demo_substrate_swap.py::test_demo_substrate_swap", 300),
     ("tests/integration/test_demo_swap_credit.py::test_demo_swap_credit", 300),
-    (
-        "tests/integration/test_demo_temporal_psi_migration.py::test_demo_temporal_psi_migration",
-        300,
-    ),
     ("tests/integration/test_demo_uaxis_coverage.py::test_demo_uaxis_coverage", 600),
     (
         "tests/integration/test_demo_uaxis_depth_frontier.py::test_demo_uaxis_depth_frontier",
@@ -99,12 +90,6 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
     ("tests/integration/test_wheel_acceptance.py::test_wheel_installs_and_runs", 300),
     ("tests/property/test_axis_certifications.py::TestCAxisLocalGoodnessCredit", 600),
     ("tests/property/test_axis_certifications.py::TestCAxisTargetInversionCredit", 600),
-    ("tests/property/test_deep_credit_trial.py::test_contrasts_cover_deep_tier", 600),
-    ("tests/property/test_mechanistic_study.py::test_determinism", 600),
-    (
-        "tests/property/test_memory_budget_trial.py::test_never_commissionable_names_only_the_fully_walled_cells",
-        300,
-    ),
     ("tests/property/test_ontology_parity.py", 300),
     (
         "tests/property/test_state_algebra_lock.py::test_type_checking_imports_are_not_called_at_runtime",
@@ -114,23 +99,11 @@ KNOWN_LONG: tuple[tuple[str, int], ...] = (
         "tests/property/test_undefined_name_lock.py::test_every_cross_module_import_names_a_defined_symbol",
         300,
     ),
-    ("tests/slow/test_continual_learning.py::test_ewc_single_task_learning", 600),
-    (
-        "tests/slow/test_continual_learning.py::test_fast_weights_single_task_learning",
-        600,
-    ),
-    ("tests/slow/test_continual_learning.py::test_suite_runner_smoke", 600),
-    ("tests/slow/test_quickstart_smoke.py::test_quickstart_end_to_end", 600),
-    ("tests/unit/core/test_campaign_stack.py::test_campaign_run_end_to_end", 300),
     ("tests/unit/core/test_credit.py::test_cosine_similarity_reasonable", 600),
     ("tests/unit/core/test_nca_geometry.py::test_distill_then_grow", 300),
     ("tests/unit/core/test_ntm_geometry.py::test_bptt_learns_copy_mechanics", 900),
     (
         "tests/unit/core/test_transformer_geometry.py::test_bp_learns_structured_tokens",
-        300,
-    ),
-    (
-        "tests/unit/test_campaign_reproducibility.py::test_geometry_execution_is_bit_for_bit_reproducible",
         300,
     ),
 )
