@@ -8,7 +8,6 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 
 from computronium.core.logging import get_logger
 from computronium.core.pipeline import apply_autograd_update
-from computronium.core.utils.device import get_device
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
 
@@ -239,7 +238,7 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:  # ruff: ignore[too-man
 
         # Standard forward pass with thermal noise injected into hidden state
         out = model(X)
-        
+
         # Add thermal noise to the output logits (simplified)
         noise = torch.randn_like(out) * T * 0.05
         out = out + noise

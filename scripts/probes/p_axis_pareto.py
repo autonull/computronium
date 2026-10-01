@@ -30,7 +30,6 @@ from statistics import mean, stdev
 
 import numpy as np
 import torch
-
 from computronium.core.campaign.evaluation import episode_batch, resolve_device
 from computronium.experiments.joint.forgetting_trial import (
     PROBE_EPISODE_BASE,

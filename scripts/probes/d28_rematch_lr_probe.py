@@ -35,6 +35,7 @@ FAMILIES = ("energy_minimization", "instantaneous")
 def viable_cells(topology: str = "feedforward") -> list[tuple[str, str, str]]:
     """Viable (dynamics, credit, update) triples at the given topology."""
     from computronium.autoscientist.compose import build_geometry_config
+
     from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,

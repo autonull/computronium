@@ -10,9 +10,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import torch
-from torch import nn
-
 from stability.resources import ResourceUsage
+from torch import nn
 
 if TYPE_CHECKING:
     from collections.abc import Callable

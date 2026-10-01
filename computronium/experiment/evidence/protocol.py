@@ -309,7 +309,7 @@ class SyntheticGroundTruth:
         if len(params) != self.dimension:
             raise ValueError(f"Expected {self.dimension} params, got {len(params)}")
 
-        rng = random.Random(seed)  # noqa: S311 - synthetic fixture, not cryptographic
+        rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - synthetic fixture, not cryptographic
 
         # Quadratic form: (x - opt)^T A (x - opt)
         diff = [p - o for p, o in zip(params, self.optimum, strict=True)]

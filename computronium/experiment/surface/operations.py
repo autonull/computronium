@@ -181,7 +181,7 @@ class RunController:
 
         for attempt in range(webhook.retry_count):
             try:
-                req = request.Request(  # noqa: S310 - webhook URL is user-configured
+                req = request.Request(  # ruff: ignore[suspicious-url-open-usage] - webhook URL is user-configured
                     webhook.url,
                     data=payload,
                     headers={
@@ -189,7 +189,7 @@ class RunController:
                         **webhook.headers,
                     },
                 )
-                with request.urlopen(req, timeout=webhook.timeout_seconds) as resp:  # noqa: S310
+                with request.urlopen(req, timeout=webhook.timeout_seconds) as resp:  # ruff: ignore[suspicious-url-open-usage]
                     if 200 <= resp.status < 300:
                         return
                     logger.warning(

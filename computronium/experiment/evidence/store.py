@@ -91,7 +91,7 @@ class StoreConfig:
     artifact_external_path: Path | None = None
 
 
-class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the read/write API here by design (§1.1)
+class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topology concentrates the read/write API here by design (§1.1)
     """DuckDB-backed record store with single-writer guarantee.
 
     All writes flow through a single instance guarded by a threading.RLock.
@@ -571,7 +571,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
         limit_clause = f" LIMIT {limit}" if limit else ""
         offset_clause = f" OFFSET {offset}" if offset else ""
 
-        # ruff: noqa: S608 - query is parameterized, not interpolated
+        # ruff: file-ignore[S608] - query is parameterized, not interpolated
         query = f"SELECT * FROM records{where_clause} ORDER BY seq{limit_clause}{offset_clause}"
         rows = self._conn.execute(query, params).fetchall()
         return [self._row_to_record(row) for row in rows]
@@ -965,7 +965,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
         where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""  # noqa: S608 - static fragment, parameterized values
         limit_clause = f" LIMIT {int(limit)}" if limit else ""  # noqa: S608 - int-coerced
         rows = self._conn.execute(
-            f"SELECT run_id, spec, spec_version, status, budget_consumed_s, "  # noqa: S608 - static column list
+            f"SELECT run_id, spec, spec_version, status, budget_consumed_s, "  # ruff: ignore[hardcoded-sql-expression] - static column list
             f"replay_hash, started_at, finished_at FROM runs{where_clause} "
             f"ORDER BY started_at DESC{limit_clause}",
             params,
@@ -1019,7 +1019,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
             params.append(run_id)
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         rows = self._conn.execute(
-            f"SELECT {column}, COUNT(*) FROM records{where_clause} "  # noqa: S608 - column from Literal whitelist
+            f"SELECT {column}, COUNT(*) FROM records{where_clause} "  # ruff: ignore[hardcoded-sql-expression] - column from Literal whitelist
             f"GROUP BY {column}",
             params,
         ).fetchall()
@@ -1036,7 +1036,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
             params.append(run_id)
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         rows = self._conn.execute(
-            f"SELECT cell_key, COUNT(*) FROM records{where_clause} "  # noqa: S608 - parameterized
+            f"SELECT cell_key, COUNT(*) FROM records{where_clause} "  # ruff: ignore[hardcoded-sql-expression] - parameterized
             "GROUP BY cell_key",
             params,
         ).fetchall()
@@ -1053,7 +1053,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
             params.append(run_id)
         where_clause = " WHERE " + " AND ".join(conditions)
         rows = self._conn.execute(
-            f"SELECT status.cause, COUNT(*) FROM records{where_clause} "  # noqa: S608 - parameterized
+            f"SELECT status.cause, COUNT(*) FROM records{where_clause} "  # ruff: ignore[hardcoded-sql-expression] - parameterized
             "GROUP BY status.cause",
             params,
         ).fetchall()
@@ -1076,7 +1076,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
             params.append(run_id)
         where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
         rows = self._conn.execute(
-            f"SELECT {axis}, COUNT(*) FROM records{where_clause} "  # noqa: S608 - axis from Literal whitelist
+            f"SELECT {axis}, COUNT(*) FROM records{where_clause} "  # ruff: ignore[hardcoded-sql-expression] - axis from Literal whitelist
             f"GROUP BY {axis}",
             params,
         ).fetchall()

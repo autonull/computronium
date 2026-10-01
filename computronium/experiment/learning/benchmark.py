@@ -228,7 +228,7 @@ def _evaluate_policy_on_task(
     return best
 
 
-def run_acquisition_benchmark(  # noqa: PLR0914
+def run_acquisition_benchmark(  # ruff: ignore[too-many-locals]
     treatment_factory: PolicyFactory,
     control_factory: PolicyFactory,
     tasks: list[BenchmarkTask],

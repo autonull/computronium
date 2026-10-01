@@ -77,6 +77,9 @@ import hashlib
 import time
 
 import torch
+from computronium.experiments.joint.tasks import (
+    create_switching_task,
+)
 from torch import Tensor
 
 from computronium import (
@@ -92,9 +95,6 @@ from computronium import (
     compose_system_from_configs,
 )
 from computronium.core.pipeline import forward_pass, run_train_step
-from computronium.experiments.joint.tasks import (
-    create_switching_task,
-)
 
 SEED = 0
 STAGE_A_EPISODES = 300

@@ -470,7 +470,7 @@ class PEPITAKernelBackend:
 
         return weight_deltas
 
-    def kernel_train_step(  # noqa: PLR0914
+    def kernel_train_step(  # ruff: ignore[too-many-locals]
         self,
         model: torch.nn.Module,
         config: KernelConfig | None,
@@ -637,7 +637,7 @@ try:  # noqa: PLR0915
         tl.store(goodness_ptr + offs_b, goodness, mask=mask_b)
 
     @triton.jit
-    def _ff_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
+    def _ff_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_pos_ptr,
         post_pos_ptr,
         pre_neg_ptr,
@@ -743,7 +743,7 @@ try:  # noqa: PLR0915
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _pepita_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
+    def _pepita_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_std_ptr,
         post_std_ptr,
         pre_err_ptr,

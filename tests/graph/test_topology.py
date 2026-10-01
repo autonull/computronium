@@ -1,7 +1,6 @@
 """Tests for graph topology — edges, GraphStructure, validation."""
 
 import pytest
-
 from computronium.graph.nodes import Linear, ReLU
 from computronium.graph.topology import Edge, GraphStructure, TaskMap, graph
 

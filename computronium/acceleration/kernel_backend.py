@@ -319,7 +319,7 @@ class KernelRegistry:
 
                 if time_ms > 0 and not np.isinf(time_ms):
                     results.append((hw, time_ms))
-            except Exception:  # noqa: S112 - try next backend
+            except Exception:  # ruff: ignore[try-except-continue] - try next backend
                 # Backend failed, skip
                 continue
 
@@ -363,7 +363,7 @@ class KernelRegistry:
                     extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
                 backend.initialize(config)
-            except Exception:  # noqa: S110 - fallback to default backend
+            except Exception:  # ruff: ignore[try-except-pass] - fallback to default backend
                 pass
 
         # Get the operation method

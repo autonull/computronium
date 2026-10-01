@@ -15,10 +15,6 @@ import sys
 from typing import Any
 
 import torch
-from torch import nn
-
-from computronium.core.continual.arms import create_fast_weight_arm
-from computronium.core.continual.buffers import ReplayBuffer
 from computronium.experiments.joint.memory_wall import (
     ENVELOPES,
     ArmConfig,
@@ -26,6 +22,10 @@ from computronium.experiments.joint.memory_wall import (
     MemoryAccountedModel,
 )
 from computronium.resources import ResourceUsage
+from torch import nn
+
+from computronium.core.continual.arms import create_fast_weight_arm
+from computronium.core.continual.buffers import ReplayBuffer
 
 
 def test_resourceusage_peak_activation_bytes() -> dict[str, Any]:

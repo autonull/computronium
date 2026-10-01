@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-
 from computronium.graph.nodes import Linear, ReLU, Slot, Tanh
 
 

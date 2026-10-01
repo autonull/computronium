@@ -182,7 +182,7 @@ def _auto_size_geometry(  # noqa: C901, PLR0911
     if param_budget <= 0:
         return (64,) * max(depth, 1), max(depth, 1)
 
-    def estimate_params(h: int, d: int) -> int:  # noqa: PLR0911
+    def estimate_params(h: int, d: int) -> int:  # ruff: ignore[too-many-return-statements]
         if topology in {"feedforward", "recurrent"}:
             return input_dim * h + max(d - 1, 0) * h * h + h * output_dim
         if topology in {"attention", "causal_transformer"}:
@@ -233,7 +233,7 @@ def _auto_size_geometry(  # noqa: C901, PLR0911
     return (best_h,) * best_d, best_d
 
 
-def build_geometry_config(  # noqa: C901, PLR0911, PLR0912, PLR0914, PLR0915
+def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals, too-many-statements]
     geometry: dict[str, object],
     *,
     input_dim: int,

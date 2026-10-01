@@ -59,7 +59,7 @@ def _discover_package(package_name: str) -> None:
 
 def _discover() -> None:
     """Discover and register implementations from primitives/ and algorithms/ packages."""
-    global _DISCOVERED  # noqa: PLW0603 - required for module-level cache
+    global _DISCOVERED  # ruff: ignore[global-statement] - required for module-level cache
     if _DISCOVERED:
         return
 

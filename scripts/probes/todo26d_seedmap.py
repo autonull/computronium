@@ -27,6 +27,7 @@ import time
 from itertools import islice
 
 import torch
+from computronium.experiments.joint.tasks import create_switching_task
 from torch import Tensor
 
 from computronium import (
@@ -51,7 +52,6 @@ from computronium import (
     create_task,
 )
 from computronium.core.pipeline import forward_pass, run_train_step
-from computronium.experiments.joint.tasks import create_switching_task
 
 INPUT_DIM = 16
 WIDTH = 32

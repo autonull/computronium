@@ -21,7 +21,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import torch
-
 from computronium.experiments.joint.z3_fixed_weights import (
     MetaRecipe,
     evaluate_z3,

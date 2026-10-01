@@ -48,7 +48,7 @@ def claim_eligible(record: Record) -> bool:
 
 def claim_eligible_by_achieved_seeds(
     record: Record,
-    store: "RecordStore",  # noqa: UP037 - forward reference for type-checking import
+    store: "RecordStore",  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
     min_seeds: int = 5,
     run_id: str | None = None,
 ) -> bool:

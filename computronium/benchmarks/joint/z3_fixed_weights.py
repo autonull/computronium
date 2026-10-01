@@ -90,11 +90,11 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.core.utils.device import get_device
 from computronium.benchmarks.joint._claims import (
     CLAIMS_SCOPE_PLUMBING_ONLY,
     CLAIMS_SCOPE_PSI_ENGAGED,
 )
+from computronium.core.utils.device import get_device
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

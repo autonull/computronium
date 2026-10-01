@@ -62,6 +62,7 @@ import hashlib
 import time
 
 import torch
+from computronium.experiments.joint.tasks import create_switching_task
 from torch import Tensor
 
 from computronium import (
@@ -86,7 +87,6 @@ from computronium import (
 )
 from computronium.core.pipeline import forward_pass, run_train_step
 from computronium.core.plasticity.routing import RoutingPlasticity
-from computronium.experiments.joint.tasks import create_switching_task
 from computronium.ontology.credit import Phase
 from computronium.state import CompositeState
 

@@ -350,7 +350,7 @@ try:  # noqa: PLR0915
     from computronium.acceleration import grid
 
     @triton.jit
-    def _hebbian_update_kernel(  # noqa: PLR0913,PLR0917
+    def _hebbian_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_ptr,
         post_ptr,
         weight_ptr,
@@ -405,7 +405,7 @@ try:  # noqa: PLR0915
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _three_factor_hebbian_kernel(  # noqa: PLR0913,PLR0917
+    def _three_factor_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_ptr,
         post_ptr,
         modulator_ptr,
@@ -447,7 +447,7 @@ try:  # noqa: PLR0915
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _contrastive_hebbian_kernel(  # noqa: PLR0913,PLR0917
+    def _contrastive_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,

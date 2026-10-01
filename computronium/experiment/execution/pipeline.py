@@ -37,7 +37,6 @@ from computronium.experiment.execution.sysctx import (
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
-    from pathlib import Path
 
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
@@ -246,7 +245,7 @@ class PipelineRunner:
                 break
             await self._execute_round(all_records)
 
-    async def _execute_round(self, all_records: list[Record]) -> None:  # noqa: C901
+    async def _execute_round(self, all_records: list[Record]) -> None:  # ruff: ignore[complex-structure]
         """Execute a single round of S3-S10 stages."""
         self._state.current_round += 1
         logger.info("Starting round %d", self._state.current_round)

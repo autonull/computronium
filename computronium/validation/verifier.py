@@ -167,7 +167,7 @@ class Verifier:
 
     def run_tracks(
         self, track_ids: list[int] | None = None, parallel: bool = False
-    ) -> dict[int, "TrackResult"]:
+    ) -> dict[int, TrackResult]:
         """Run specified tracks (or all if None)."""
         self.print_header()
         self.notebook.add_header(self.seed)

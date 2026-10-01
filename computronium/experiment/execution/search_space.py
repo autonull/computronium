@@ -574,9 +574,9 @@ class Fragment:
 from computronium.experiment.execution.allocator import (
     EvidenceDrivenAllocator,  # noqa: E402
 )
-from computronium.experiment.execution.backends import ExecutionBackend  # noqa: E402
-from computronium.experiment.execution.stage import StageId  # noqa: E402
-from computronium.experiment.execution.sysctx import SystemContext  # noqa: E402
+from computronium.experiment.execution.backends import ExecutionBackend  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.experiment.execution.stage import StageId  # ruff: ignore[module-import-not-at-top-of-file]
+from computronium.experiment.execution.sysctx import SystemContext  # ruff: ignore[module-import-not-at-top-of-file]
 
 __all__ = [
     "Decision",

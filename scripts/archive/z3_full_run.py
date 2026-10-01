@@ -24,11 +24,11 @@ import time
 from pathlib import Path
 
 import torch
-
 from computronium.experiments.joint.z3_fixed_weights import (
     MetaRecipe,
     evaluate_z3,
 )
+
 from computronium.validation.preregistration import (
     ThresholdRegistration,
     paired_comparison,

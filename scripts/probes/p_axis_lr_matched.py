@@ -22,7 +22,6 @@ import itertools
 
 import numpy as np
 import torch
-
 from computronium.core.campaign.evaluation import (
     episode_batch,
     evaluate_episode,

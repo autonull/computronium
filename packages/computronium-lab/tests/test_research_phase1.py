@@ -5,6 +5,14 @@ from __future__ import annotations
 import random
 
 import pytest
+from computronium.autopoiesis.protocols import (
+    Constitution,
+    FitnessMetric,
+    MutationOperator,
+    OperatorGenome,
+    SelectionPolicy,
+    StagnationDetector,
+)
 from computronium_lab import Constraints, Lab
 from computronium_lab.research import (
     BUDGET_CAPS,
@@ -19,15 +27,6 @@ from computronium_lab.research import (
     crowding_distance,
     hypervolume,
     nondominated_sort,
-)
-
-from computronium.autopoiesis.protocols import (
-    Constitution,
-    FitnessMetric,
-    MutationOperator,
-    OperatorGenome,
-    SelectionPolicy,
-    StagnationDetector,
 )
 
 

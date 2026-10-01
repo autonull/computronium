@@ -273,7 +273,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except Exception:  # noqa: S112 - try next backend
+                    except Exception:  # ruff: ignore[try-except-continue] - try next backend
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 

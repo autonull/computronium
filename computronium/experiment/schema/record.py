@@ -23,7 +23,7 @@ def _canonical_json(obj: Any) -> str:
 class GateVerdict(StrEnum):
     """Gate verdict for experiment status."""
 
-    PASS_ = "PASS"  # noqa: S105
+    PASS_ = "PASS"  # ruff: ignore[hardcoded-password-string]
     FAIL = "FAIL"
     QUARANTINE = "QUARANTINE"
     PENDING = "PENDING"

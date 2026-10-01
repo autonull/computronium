@@ -17,12 +17,12 @@ import json
 import math
 
 import torch
-
 from computronium.analysis.instruments import (
     BP_COSINE_GATE,
     credit_trace,
     settle_horizon,
 )
+
 from computronium.models.native import (
     create_native_backprop_mlp,
     create_native_eqprop_mlp,

@@ -57,6 +57,7 @@ from __future__ import annotations
 import time
 
 import torch
+from computronium.experiments.joint.tasks import create_switching_task
 
 from computronium import (
     BackpropCredit,
@@ -79,7 +80,6 @@ from computronium import (
     ThermodynamicContrast,
     compose_system,
 )
-from computronium.experiments.joint.tasks import create_switching_task
 from computronium.ontology.geometry import (
     InitScheme,  # ruff: ignore[typing-only-first-party-import]
 )

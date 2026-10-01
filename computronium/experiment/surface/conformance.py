@@ -46,7 +46,7 @@ __all__ = [
 class ConformanceStatus(StrEnum):
     """Conformance check result status."""
 
-    PASS_ = "pass"  # noqa: S105 - not a password, status value
+    PASS_ = "pass"  # ruff: ignore[hardcoded-password-string] - not a password, status value
     FAIL = "fail"
     SKIPPED = "skipped"  # Optional capability
     RETIRED = "retired"  # Explicitly retired with record

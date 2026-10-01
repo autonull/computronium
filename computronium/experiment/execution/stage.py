@@ -44,7 +44,7 @@ class StageId(StrEnum):
 class StageGate(StrEnum):
     """Gate verdicts for stage transitions."""
 
-    PASS_ = "pass"  # noqa: S105 - not a password
+    PASS_ = "pass"  # ruff: ignore[hardcoded-password-string] - not a password
     FAIL = "fail"
     QUARANTINE = "quarantine"
     SKIP = "skip"

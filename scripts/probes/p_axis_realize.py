@@ -20,7 +20,6 @@ import time
 
 import numpy as np
 import torch
-
 from computronium.core.campaign.evaluation import (
     episode_batch,
     evaluate_episode,
@@ -33,6 +32,7 @@ from computronium.experiments.joint.forgetting_trial import (
     TrialConfig,
     _compose,
 )
+
 from computronium.state import CompositeState
 
 ARMS = ("null", "fast_weights", "routing")

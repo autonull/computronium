@@ -293,7 +293,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
-    def __init__(  # noqa: PLR0913,PLR0917
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         input_dim: int,
         hidden_dim: int,
@@ -412,7 +412,7 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(  # noqa: PLR0911
+    def forward_step(  # ruff: ignore[too-many-return-statements]
         self,
         h: np.ndarray,
         x_emb: np.ndarray,

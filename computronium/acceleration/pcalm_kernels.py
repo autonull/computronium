@@ -44,7 +44,7 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
     return target
 
 
-def pcalm_settle_loop(  # noqa: PLR0913,PLR0917
+def pcalm_settle_loop(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     acts: list[Tensor],
     dual_vars: list[Tensor],
     weights: Sequence[Tensor],
@@ -155,7 +155,7 @@ def _build_fused_kernel() -> _TritonKernel | None:
     import triton.language as tl
 
     @triton.jit
-    def _fused_update_kernel(  # noqa: PLR0913,PLR0917
+    def _fused_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         h_ptr,
         c_ptr,
         lam_ptr,

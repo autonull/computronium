@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-
 from computronium.graph import (
     Edge,
     InferenceSGD,

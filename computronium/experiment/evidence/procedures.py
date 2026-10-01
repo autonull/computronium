@@ -59,7 +59,7 @@ def get_assessment_procedure(
         return None
     # Find any procedure matching name and version
     prefix = f"{name}@{version}#"
-    for key in ASSESSMENT_PROCEDURES.keys():  # noqa: SIM118 - need keys, not values
+    for key in ASSESSMENT_PROCEDURES.keys():  # ruff: ignore[in-dict-keys] - need keys, not values
         if key.startswith(prefix):
             proc = ASSESSMENT_PROCEDURES[key]
             return replace(proc, name=name)
@@ -71,7 +71,7 @@ def list_assessment_procedures(
 ) -> list[AssessmentProcedure]:
     """List all registered assessment procedures, optionally filtered by kind."""
     procedures = []
-    for key in ASSESSMENT_PROCEDURES.keys():  # noqa: SIM118 - need keys, not values
+    for key in ASSESSMENT_PROCEDURES.keys():  # ruff: ignore[in-dict-keys] - need keys, not values
         proc = ASSESSMENT_PROCEDURES[key]
         # Extract original name from key
         original_name = key.split("@")[0]

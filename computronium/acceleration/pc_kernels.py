@@ -305,7 +305,7 @@ try:  # noqa: PLR0915
     from computronium.acceleration import grid
 
     @triton.jit
-    def _pc_prediction_kernel(  # noqa: PLR0913,PLR0917
+    def _pc_prediction_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         mu_ptr,
         W_ptr,
         b_ptr,
@@ -435,7 +435,7 @@ try:  # noqa: PLR0915
         )
 
     @triton.jit
-    def _pc_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
+    def _pc_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,

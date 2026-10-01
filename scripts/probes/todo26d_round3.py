@@ -64,6 +64,7 @@ import time
 from itertools import islice
 
 import torch
+from computronium.experiments.joint.tasks import create_switching_task
 from torch import Tensor
 
 from computronium import (
@@ -92,7 +93,6 @@ from computronium.core.plasticity.temporal_psi import (
     TemporalPsiConfig,
     TemporalPsiPlasticity,
 )
-from computronium.experiments.joint.tasks import create_switching_task
 from computronium.ontology.geometry import (
     InitScheme,  # ruff: ignore[typing-only-first-party-import]
 )

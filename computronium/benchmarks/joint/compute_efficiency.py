@@ -21,13 +21,13 @@ import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
-from computronium.core.profiling import measure_suite_resources
-from computronium.core.utils.device import get_device
 from computronium.benchmarks.joint import (
     CLAIMS_SCOPE_PSI_ENGAGED,
     CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
 )
 from computronium.benchmarks.joint.tasks import gaussian_blobs
+from computronium.core.profiling import measure_suite_resources
+from computronium.core.utils.device import get_device
 from computronium.state import CompositeState
 
 

@@ -2,9 +2,6 @@
 
 import pytest
 import torch
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
-
 from computronium.graph import (
     Edge,
     InferenceSGD,
@@ -16,6 +13,8 @@ from computronium.graph import (
     train_backprop,
     train_pcn,
 )
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
 
 
 @pytest.mark.slow

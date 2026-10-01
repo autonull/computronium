@@ -25,7 +25,6 @@ import json
 import pathlib
 
 import torch
-
 from computronium.analysis.instruments import credit_trace
 from computronium.autoscientist.compose import compose_cell_system
 

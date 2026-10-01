@@ -13,7 +13,10 @@ _version_not_supported = False
 
 try:
     from grpc._utilities import first_version_is_lower
-    _version_not_supported = first_version_is_lower(GRPC_VERSION, GRPC_GENERATED_VERSION)
+
+    _version_not_supported = first_version_is_lower(
+        GRPC_VERSION, GRPC_GENERATED_VERSION
+    )
 except ImportError:
     _version_not_supported = True
 
@@ -28,8 +31,7 @@ if _version_not_supported:
 
 
 class TileMeshServiceStub:
-    """RPC Service for Tile Mesh Communication
-    """
+    """RPC Service for Tile Mesh Communication"""
 
     def __init__(self, channel):
         """Constructor.
@@ -38,67 +40,66 @@ class TileMeshServiceStub:
             channel: A grpc.Channel.
         """
         self.FetchTileActivation = channel.unary_unary(
-                "/bioplausible.p2p.TileMeshService/FetchTileActivation",
-                request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationRequest.SerializeToString,
-                response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationResponse.FromString,
-                _registered_method=True)
+            "/bioplausible.p2p.TileMeshService/FetchTileActivation",
+            request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationRequest.SerializeToString,
+            response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationResponse.FromString,
+            _registered_method=True,
+        )
         self.SyncBoundaryTiles = channel.unary_unary(
-                "/bioplausible.p2p.TileMeshService/SyncBoundaryTiles",
-                request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncRequest.SerializeToString,
-                response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncResponse.FromString,
-                _registered_method=True)
+            "/bioplausible.p2p.TileMeshService/SyncBoundaryTiles",
+            request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncRequest.SerializeToString,
+            response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncResponse.FromString,
+            _registered_method=True,
+        )
         self.Heartbeat = channel.unary_unary(
-                "/bioplausible.p2p.TileMeshService/Heartbeat",
-                request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatRequest.SerializeToString,
-                response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatResponse.FromString,
-                _registered_method=True)
+            "/bioplausible.p2p.TileMeshService/Heartbeat",
+            request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatRequest.SerializeToString,
+            response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatResponse.FromString,
+            _registered_method=True,
+        )
         self.PushParameterUpdate = channel.unary_unary(
-                "/bioplausible.p2p.TileMeshService/PushParameterUpdate",
-                request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateRequest.SerializeToString,
-                response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateResponse.FromString,
-                _registered_method=True)
+            "/bioplausible.p2p.TileMeshService/PushParameterUpdate",
+            request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateRequest.SerializeToString,
+            response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateResponse.FromString,
+            _registered_method=True,
+        )
         self.ExecuteStep = channel.unary_unary(
-                "/bioplausible.p2p.TileMeshService/ExecuteStep",
-                request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepRequest.SerializeToString,
-                response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepResponse.FromString,
-                _registered_method=True)
+            "/bioplausible.p2p.TileMeshService/ExecuteStep",
+            request_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepRequest.SerializeToString,
+            response_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepResponse.FromString,
+            _registered_method=True,
+        )
 
 
 class TileMeshServiceServicer:
-    """RPC Service for Tile Mesh Communication
-    """
+    """RPC Service for Tile Mesh Communication"""
 
     def FetchTileActivation(self, request, context):
-        """Fetch activation for a remote tile
-        """
+        """Fetch activation for a remote tile"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def SyncBoundaryTiles(self, request, context):
-        """Synchronize boundary tile activations with neighbor
-        """
+        """Synchronize boundary tile activations with neighbor"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def Heartbeat(self, request, context):
-        """Send heartbeat to maintain P2P membership
-        """
+        """Send heartbeat to maintain P2P membership"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def PushParameterUpdate(self, request, context):
-        """Federated parameter update aggregation
-        """
+        """Federated parameter update aggregation"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
     def ExecuteStep(self, request, context):
-        """Execute a single distributed training step
-        """
+        """Execute a single distributed training step"""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
@@ -106,55 +107,60 @@ class TileMeshServiceServicer:
 
 def add_TileMeshServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            "FetchTileActivation": grpc.unary_unary_rpc_method_handler(
-                    servicer.FetchTileActivation,
-                    request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationRequest.FromString,
-                    response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationResponse.SerializeToString,
-            ),
-            "SyncBoundaryTiles": grpc.unary_unary_rpc_method_handler(
-                    servicer.SyncBoundaryTiles,
-                    request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncRequest.FromString,
-                    response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncResponse.SerializeToString,
-            ),
-            "Heartbeat": grpc.unary_unary_rpc_method_handler(
-                    servicer.Heartbeat,
-                    request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatRequest.FromString,
-                    response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatResponse.SerializeToString,
-            ),
-            "PushParameterUpdate": grpc.unary_unary_rpc_method_handler(
-                    servicer.PushParameterUpdate,
-                    request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateRequest.FromString,
-                    response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateResponse.SerializeToString,
-            ),
-            "ExecuteStep": grpc.unary_unary_rpc_method_handler(
-                    servicer.ExecuteStep,
-                    request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepRequest.FromString,
-                    response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepResponse.SerializeToString,
-            ),
+        "FetchTileActivation": grpc.unary_unary_rpc_method_handler(
+            servicer.FetchTileActivation,
+            request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationRequest.FromString,
+            response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.TileActivationResponse.SerializeToString,
+        ),
+        "SyncBoundaryTiles": grpc.unary_unary_rpc_method_handler(
+            servicer.SyncBoundaryTiles,
+            request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncRequest.FromString,
+            response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.BoundarySyncResponse.SerializeToString,
+        ),
+        "Heartbeat": grpc.unary_unary_rpc_method_handler(
+            servicer.Heartbeat,
+            request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatRequest.FromString,
+            response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.HeartbeatResponse.SerializeToString,
+        ),
+        "PushParameterUpdate": grpc.unary_unary_rpc_method_handler(
+            servicer.PushParameterUpdate,
+            request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateRequest.FromString,
+            response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ParameterUpdateResponse.SerializeToString,
+        ),
+        "ExecuteStep": grpc.unary_unary_rpc_method_handler(
+            servicer.ExecuteStep,
+            request_deserializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepRequest.FromString,
+            response_serializer=computronium_dot_p2p_dot_proto_dot_tile__mesh__pb2.ExecuteStepResponse.SerializeToString,
+        ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            "bioplausible.p2p.TileMeshService", rpc_method_handlers)
+        "bioplausible.p2p.TileMeshService", rpc_method_handlers
+    )
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers("bioplausible.p2p.TileMeshService", rpc_method_handlers)
+    server.add_registered_method_handlers(
+        "bioplausible.p2p.TileMeshService", rpc_method_handlers
+    )
 
- # This class is part of an EXPERIMENTAL API.
+
+# This class is part of an EXPERIMENTAL API.
 
 
 class TileMeshService:
-    """RPC Service for Tile Mesh Communication
-    """
+    """RPC Service for Tile Mesh Communication"""
 
     @staticmethod
-    def FetchTileActivation(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def FetchTileActivation(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -169,19 +175,22 @@ class TileMeshService:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def SyncBoundaryTiles(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def SyncBoundaryTiles(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -196,19 +205,22 @@ class TileMeshService:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def Heartbeat(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def Heartbeat(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -223,19 +235,22 @@ class TileMeshService:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def PushParameterUpdate(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def PushParameterUpdate(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -250,19 +265,22 @@ class TileMeshService:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )
 
     @staticmethod
-    def ExecuteStep(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
+    def ExecuteStep(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
         return grpc.experimental.unary_unary(
             request,
             target,
@@ -277,4 +295,5 @@ class TileMeshService:
             wait_for_ready,
             timeout,
             metadata,
-            _registered_method=True)
+            _registered_method=True,
+        )

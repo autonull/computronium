@@ -2,8 +2,6 @@
 
 import pytest
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
 from computronium.graph import (
     Edge,
     InferenceSGD,
@@ -15,6 +13,7 @@ from computronium.graph import (
     train_backprop,
     train_pcn,
 )
+from torch.utils.data import DataLoader, TensorDataset
 
 
 @pytest.fixture

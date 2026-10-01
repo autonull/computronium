@@ -44,6 +44,7 @@ def first_viable_cell(
     executor — exactly what the campaign's dry-run gate exists to catch.
     """
     from computronium.autoscientist.compose import build_geometry_config
+
     from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,

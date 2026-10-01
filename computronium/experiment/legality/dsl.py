@@ -250,7 +250,7 @@ def expr_to_json(expr: Expr) -> dict[str, Any]:
     return expr.to_json()
 
 
-def expr_from_json(data: dict[str, Any]) -> Expr:  # noqa: PLR0911 - parser with many cases
+def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-return-statements] - parser with many cases
     """Parse expression from JSON wire format."""
     type_map = {
         "Var": Var,
@@ -318,7 +318,7 @@ class EvaluationContext:
             params=record.params,
         )
 
-    def resolve_var(self, name: str) -> Any:  # noqa: PLR0911 - expected for resolver
+    def resolve_var(self, name: str) -> Any:  # ruff: ignore[too-many-return-statements] - expected for resolver
         """Resolve a variable name to a value."""
         # Schedule fields
         if name.startswith("schedule."):
@@ -356,7 +356,7 @@ class EvaluationContext:
         return None
 
 
-def _eval_binary(  # noqa: C901,PLR0911 - binary op dispatcher
+def _eval_binary(  # ruff: ignore[complex-structure, too-many-return-statements] - binary op dispatcher
     left: Expr, right: Expr, ctx: EvaluationContext, op: str
 ) -> bool:
     """Evaluate binary comparison."""
@@ -387,7 +387,7 @@ def _eval_binary(  # noqa: C901,PLR0911 - binary op dispatcher
             raise ValueError(f"Unknown binary op: {op}")
 
 
-def _eval_value(expr: Expr, ctx: EvaluationContext) -> Any:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
+def _eval_value(expr: Expr, ctx: EvaluationContext) -> Any:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches] - match/case evaluator
     """Evaluate an expression to its actual value (not coerced to bool)."""
     match expr:
         case Var(name):

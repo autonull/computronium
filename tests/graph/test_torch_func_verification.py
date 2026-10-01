@@ -5,7 +5,6 @@ on our node forward functions, the entire PC training approach fails.
 """
 
 import torch
-
 from computronium.graph.nodes import Linear
 
 

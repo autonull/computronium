@@ -17,8 +17,6 @@ import time
 from pathlib import Path
 
 import torch
-
-from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.experiments.joint.z3_fixed_weights import (
     MetaRecipe,
     TaskShape,
@@ -32,6 +30,8 @@ from computronium.experiments.joint.z3_fixed_weights import (
     create_parity_task,
     create_threshold_task,
 )
+
+from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 
 TASKS = [
     ("parity", create_parity_task),

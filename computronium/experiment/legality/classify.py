@@ -379,7 +379,7 @@ def classify_record(
     )
 
 
-def _map_violation_to_defect_class(  # noqa: C901,PLR0911 - classifier with many patterns
+def _map_violation_to_defect_class(  # ruff: ignore[complex-structure, too-many-return-statements] - classifier with many patterns
     violation: ConstraintViolation,
 ) -> DefectClass | None:
     """Map a constraint violation to a defect class."""

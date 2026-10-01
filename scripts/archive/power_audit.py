@@ -27,6 +27,7 @@ from computronium.validation.power_preregistration import (
     DEFAULT_TARGET_POWER as TARGET_POWER,
 )
 from computronium.validation.power_preregistration import min_detectable_effect
+
 from computronium.validation.statistics import cohens_d, power_for_two_sample
 
 

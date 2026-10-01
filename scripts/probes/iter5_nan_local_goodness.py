@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 
 from computronium.autoscientist.compose import compose_cell_system
+
 from computronium.core.system_trainer.train_task import train_task
 from computronium.utils import seed_everything
 

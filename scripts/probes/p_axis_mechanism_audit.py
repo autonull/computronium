@@ -26,7 +26,6 @@ from statistics import mean
 
 import numpy as np
 import torch
-
 from computronium.core.campaign.evaluation import evaluate_episode, probe_episode
 from computronium.experiments.joint.forgetting_trial import (
     PROBE_EPISODE_BASE,

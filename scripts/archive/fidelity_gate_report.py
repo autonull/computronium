@@ -48,6 +48,7 @@ def _leakage_probe(coordinate: str) -> dict[str, float] | None:
         build_coordinate_system,
         episode_batch,
     )
+
     from computronium.core.pipeline import forward_pass
     from computronium.ontology import SystemState
 

@@ -21,8 +21,9 @@ from computronium.autoscientist.broad_map import (
     run_l1_maturation,
 )
 from computronium.knowledge import KnowledgeBase
-from computronium.utils import seed_everything
 from tests.integration.test_continuous_burst import _SEED, _args, build_sweep
+
+from computronium.utils import seed_everything
 
 
 def main() -> None:

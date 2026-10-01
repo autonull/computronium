@@ -1,9 +1,9 @@
 import sys
 
 import torch
+from computronium.autoscientist.compose import compose_cell_system
 
 import computronium.ontology.update as U
-from computronium.autoscientist.compose import compose_cell_system
 from computronium.core.system_trainer.train_task import flat_input_dim
 from computronium.domains.factory import create_task
 from computronium.utils import seed_everything

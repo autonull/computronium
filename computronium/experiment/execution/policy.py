@@ -78,7 +78,7 @@ class StratifiedRandomPolicy:
     """
 
     def __init__(self, *, seed: int | None = None) -> None:
-        self._rng = random.Random(seed)  # noqa: S311 - not cryptographic
+        self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "stratified_random"
 
     def propose(
@@ -149,7 +149,7 @@ class RoundRobinGridPolicy:
     """
 
     def __init__(self, *, seed: int | None = None) -> None:
-        self._rng = random.Random(seed)  # noqa: S311 - not cryptographic
+        self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "round_robin_grid"
         self._indices: dict[str, int] = {}
 
@@ -238,7 +238,7 @@ class UniformRandomPolicy:
     """Uniform random sampling over all candidates."""
 
     def __init__(self, *, seed: int | None = None) -> None:
-        self._rng = random.Random(seed)  # noqa: S311 - not cryptographic
+        self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "uniform_random"
 
     def propose(
@@ -603,7 +603,7 @@ class EvolutionPolicy:
         self._population_size = population_size
         self._mutation_rate = mutation_rate
         self._crossover_rate = crossover_rate
-        self._rng = random.Random(seed)  # noqa: S311 - not cryptographic
+        self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "evolution"
         self._population: list[
             tuple[Coordinate, Schedule, float]

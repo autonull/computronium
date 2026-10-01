@@ -2,15 +2,12 @@
 Training utilities for the TaskProtocol interface.
 """
 
-import contextlib
-import time
 from typing import Protocol, cast, runtime_checkable
 
 import torch
 from torch import nn
 
 from computronium.core.logging import get_logger
-from computronium.core.losses import compute_loss
 from computronium.domains.base import DomainType
 
 __all__ = [
@@ -221,7 +218,9 @@ class _TaskTrainer:
                 loss = self._loss(logits, y)
                 loss = self.safety_wrapper.check_loss(loss)
                 loss.backward()
-                self.safety_wrapper.clip_grad_norm(self.model.parameters(), self.grad_clip)
+                self.safety_wrapper.clip_grad_norm(
+                    self.model.parameters(), self.grad_clip
+                )
                 self.optimizer.step()
 
                 # Accumulate metrics
