@@ -7,6 +7,7 @@ import random
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import optuna
+from optuna.study import StudyDirection
 
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
@@ -362,8 +363,17 @@ class ModelBasedPolicy:
         sampler = self._create_sampler()
         pruner = self._create_pruner()
 
+        def _to_study_direction(d: str) -> StudyDirection:
+            return (
+                StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
+            )
+
         if len(self._objectives) == 1:
-            direction = self._directions[0] if self._directions else "maximize"
+            direction = (
+                _to_study_direction(self._directions[0])
+                if self._directions
+                else StudyDirection.MAXIMIZE
+            )
             study = optuna.create_study(
                 sampler=sampler,
                 pruner=pruner,
@@ -373,9 +383,9 @@ class ModelBasedPolicy:
         else:
             # Multi-objective
             directions = (
-                list(self._directions)
+                [_to_study_direction(d) for d in self._directions]
                 if self._directions
-                else ["maximize"] * len(self._objectives)
+                else [StudyDirection.MAXIMIZE] * len(self._objectives)
             )
             study = optuna.create_study(
                 sampler=sampler,
