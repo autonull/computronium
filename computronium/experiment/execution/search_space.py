@@ -13,13 +13,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from computronium.experiment.legality.dsl import evaluate
+from computronium.experiment.legality.dsl import Expr, evaluate
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.policy import Policy
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
@@ -493,7 +494,7 @@ class Proposal:
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
-class Policy(Protocol):
+class ProposalPolicy(Protocol):
     """Protocol for proposal policies."""
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
@@ -581,9 +582,9 @@ __all__ = [
     "Decision",
     "Domain",
     "Fragment",
-    "Policy",
     "Proposal",
     "ProposalContext",
+    "ProposalPolicy",
     "SearchSpace",
     "Stage",
     "StageContext",

@@ -498,3 +498,30 @@ Explicit reclassification of completion status:
 | Full C1–C88 proof | Incomplete |
 
 **Why this matters:** The current plan says "ModelBased policy completed" and "EvidenceDrivenAllocator integration hook" even though the corresponding runtime paths still contain stubs. The Stage Protocol is defined but `PipelineRunner` does not actually dispatch to `Stage.run()`, the policy interface still receives an empty candidate list, and the allocator hook is a no-op. These seams must close before the kernel is genuinely unified.
+
+---
+
+## 2026-10-01 Session: Type Safety & Lint Fixes (Post-WP22)
+
+All work packages complete per plan. This session addressed remaining pyright type errors and ruff import sorting in the `experiment/` kernel modules:
+
+**Fixed pyright errors (7 total):**
+1. `computronium/experiment/execution/compose.py:501` — Replaced deleted `_DYNAMICS_STEP_SIZE_OVERRIDES` with `get_dynamics_step_size()` from PRIORS registry (WP12.1 cleanup)
+2. `computronium/experiment/execution/optuna_adapter.py:40` — Fixed `Expr.evaluate()` call; now uses standalone `evaluate()` from legality DSL with proper `EvaluationContext`
+3. `computronium/experiment/execution/search_space.py:60` — Added missing `Expr` import from legality DSL
+4. `computronium/experiment/execution/stage.py:84,128` — Removed duplicate `StageContext` class declaration
+5. `computronium/experiment/execution/pipeline.py:450` — Changed `Policy` import from `search_space.py` (proposal policy protocol) to `policy.py` (allocation policy protocol) to match actual runtime usage in stages
+6. `computronium/experiment/execution/search_space.py:497` — Renamed proposal `Policy` protocol to `ProposalPolicy` to avoid shadowing allocation `Policy`
+7. `computronium/experiment/execution/stages_impl.py:71,179` — Fixed `ctx.policy.propose()` calls; now correctly typed with allocation policy protocol
+
+**Fixed ruff import sorting:**
+- `computronium/experiment/execution/compose.py` — Reordered imports per isort conventions
+
+**Verification:**
+- All 8 U1–U5 acceptance tests pass
+- All 37 property lock tests pass (WP10, ContrastDesign, KernelIsolation)
+- All 7 atomic append + demo tests pass
+- `pyright computronium/experiment/` — 0 errors
+- `ruff format` — no changes needed
+
+No functional changes; purely type safety and lint hygiene.

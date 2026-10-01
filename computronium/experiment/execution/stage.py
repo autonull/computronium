@@ -124,27 +124,6 @@ class Stage(Protocol):
         ...
 
 
-@dataclass(slots=True)
-class StageContext:
-    """Context passed to each stage during execution."""
-
-    run_id: str
-    run_spec: dict[str, Any]
-    stage_id: StageId
-    store: Any  # RecordStore
-    budget: Any  # Budget
-    cost_model: Any  # CostModel
-    policy: Any  # Policy
-    allocator: Any  # EvidenceDrivenAllocator | None
-    backend: Any  # ExecutionBackend
-    completed_keys: set[str]
-    pending_candidates: list[tuple[Coordinate, Schedule]]
-    in_progress: list[tuple[Coordinate, Schedule]]
-    stage_params: dict[str, Any]
-    provenance: Any  # Provenance
-    system_context: Any  # SystemContext (R75/K10)
-
-
 @dataclass(frozen=True, slots=True)
 class StageSpec:
     """Specification for a pipeline stage."""

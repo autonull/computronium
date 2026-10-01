@@ -14,9 +14,10 @@ from optuna.distributions import (
     IntDistribution,
 )
 
+from computronium.experiment.legality.dsl import EvaluationContext
+
 if TYPE_CHECKING:
     from computronium.experiment.execution.search_space import SearchSpace
-    from computronium.experiment.legality.dsl import EvaluationContext
     from computronium.experiment.schema.axis import AxisSpec, HyperparameterSpec
     from computronium.experiment.schema.coordinate import Coordinate
 
@@ -37,10 +38,58 @@ class OptunaDistributionAdapter:
         """
 
         # Check availability
-        if spec.availability_predicate and not spec.availability_predicate.evaluate(
-            coord
-        ):
-            return None
+        if spec.availability_predicate:
+            from computronium.experiment.legality.dsl import evaluate
+            from computronium.experiment.schema.coordinate import Provenance, Schedule
+            from computronium.experiment.schema.record import (
+                FailureCause,
+                GateVerdict,
+                Maturity,
+                Record,
+                ReproducibilityClass,
+                Severity,
+                Status,
+            )
+
+            # Create a minimal record for evaluation context
+            schedule = Schedule(
+                fidelity="L0",
+                seed=42,
+                n_seeds=1,
+                epochs=1,
+                batch_limit=0,
+                budget_id="eval",
+                task_id="default",
+            )
+            record = Record.create(
+                run_id="eval",
+                coordinate=coord,
+                schedule=schedule,
+                provenance=Provenance(
+                    env={},
+                    dataset="test",
+                    dataset_version="1.0",
+                    code_sha="test",
+                    policy="test",
+                    links={},
+                ),
+                status=Status(
+                    gate_verdict=GateVerdict.PENDING,
+                    defect="",
+                    cause=FailureCause.UNKNOWN,
+                    severity=Severity.LOW,
+                    quarantine=False,
+                    maturity=Maturity.L0,
+                    uncertainty={},
+                    reproducibility=ReproducibilityClass.REPLAYABLE,
+                    assessment_procedure_version="1.0",
+                    ceec_link=None,
+                ),
+                payload={},
+            )
+            ctx = EvaluationContext(record)
+            if not evaluate(spec.availability_predicate, ctx):
+                return None
 
         # Structural axes are not sampled
         if spec.axis_kind.value == "structural":

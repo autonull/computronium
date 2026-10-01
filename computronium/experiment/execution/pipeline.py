@@ -43,9 +43,9 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
     from computronium.experiment.execution.backends import ExecutionBackend
     from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.search_space import (
         Fragment,
-        Policy,
         Proposal,
         SearchSpace,
         StageContext,
