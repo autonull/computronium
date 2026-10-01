@@ -140,8 +140,31 @@ and its `__all__` entry**. The axis-name → config-class resolution the whole
 critical path needs **is already written, unwired, and takes `lr` as a
 parameter.** This is why D1 is smaller than it looks.
 
-Gaps in it: it covers five axes, not six — **no `plasticity`**, though
-abc3 §3.4 makes plasticity first-class (Q7) and it is half the research program.
+Gaps in it, all of which land in §3.0.1:
+
+- It covers five axes, not six — **no `plasticity`**, though abc3 §3.4 makes
+  plasticity first-class (Q7) and it is half the research program.
+- **Three different mechanisms decide "what does this configuration need", and
+  they disagree** (`:502`, `:508`, `:516-529`):
+  1. `inspect.signature(update_factory).parameters` gates a `step_size` kwarg —
+     reflection on the *config factory* rather than on the primitive, and
+     covering exactly one hyperparameter.
+  2. `get_dynamics_step_size(dynamics) or 0.1` — a prior with a bare `0.1`
+     fallback, i.e. a magic number in a fallback path.
+  3. `if dcfg.dynamics_type == "energy_minimization" and ccfg.credit_type ==
+     "thermodynamic_contrast": ccfg = …(beta=dcfg.beta)` — **per-combination
+     coupling hardcoded in string-matching branches.** That is TODO43 P4 again,
+     and abc3 §3.2 says it must be an availability predicate in the spec. A
+     third pairing that needs the same relationship is a new branch, not a
+     derivation.
+- **`lr` is a parameter the caller should not have to supply, and it is a
+  misnomer.** In this ontology there is no learning rate reaching the update —
+  the demos use `ParameterUpdateConfig.euclidean(step_size=…)` and the historical
+  ruler-lr table was rerouted into `PRIORS` — so this is a step size named `lr`.
+  Worse, the failure is silent: if the selected update ignores `step_size`, the
+  supplied value is discarded with no signal, and the effective value is not
+  recorded (R6). Availability is a property of the selected primitives, so it
+  must be derived from the coordinate, never asserted by the caller.
 
 ### D6 — Several stages are coverage shells
 
@@ -287,10 +310,39 @@ Concretely, in `computronium/experiment/`:
 - **Availability is a predicate, never a branch** (abc3 §3.1): `beta` is active
   when `credit == thermodynamic_contrast` because the spec says so, not because
   code checks.
-- Enforce it, do not trust it: a property test asserts that no numeric literal
-  equal to a known task shape appears in `experiment/execution/`, and that every
-  default reaching a `Coordinate` is traceable to `AXES`. This is the same
-  trick as `test_lint_count_ratchet` — which earned its keep by catching a
+#### 3.0.1 `compose_cell_system` decides hyperparameter availability three ways; make it one
+
+This is the D5 defect named as its own item because it is the mechanism by which
+every other hardcoding would return. `compose_cell_system` currently takes
+`lr: float = 1e-3` as a parameter and asks each piece separately what it needs.
+Replace all three mechanisms with **one** call:
+
+```text
+coord    = Coordinate(credit=…, update=…, params={…})
+active   = harvest_schema().active_axes(coord)   # availability predicates decide
+config   = compose from exactly the active AxisSpecs,
+           resolved from coord.params, prior as fallback
+record   = the effective value, recorded (R6)
+```
+
+Acceptance:
+
+- **No `lr` parameter.** A coordinate whose primitives need no learning rate
+  receives none, and is legal without one.
+- `inspect.signature` on a config factory is **gone** from composition.
+- **No branch compares two axis names to decide a hyperparameter's value.** The
+  `energy_minimization × thermodynamic_contrast → beta` coupling becomes
+  availability, so a third pairing needs a spec row, not code.
+- A coordinate carrying a param that is **inactive** for its selection is
+  rejected (or reported) — dead config is a defect, the same smell the D13
+  demo already chases with its dead-`local_objective` ratchet.
+- Two primitives declaring one name with different domains raises
+  `ConflictingHyperparameter`, a registry failure, not a silent branch.
+
+- Enforce the rest, do not trust it: a property test asserts that no numeric
+  literal equal to a known task shape appears in `experiment/execution/`, and
+  that every default reaching a `Coordinate` is traceable to `AXES`. This is the
+  same trick as `test_lint_count_ratchet` — which earned its keep by catching a
   config error nobody noticed.
 
 ### 3.1 One cell, end to end, for real
