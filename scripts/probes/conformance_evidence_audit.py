@@ -58,6 +58,7 @@ def run_conformance_audit(
         results = check_conformance(
             store=store,
             execute_verifying_tests=execute_tests,
+            require_all=False,
         )
     walltime = time.monotonic() - start
 

@@ -162,7 +162,7 @@ class Record:
         status: Status,
         payload: dict[str, Any],
         unknown: dict[str, Any] | None = None,
-        schema_version: int = 1,
+        schema_version: int = 3,
     ) -> Record:
         """Create a new record with computed identity keys."""
         cell_key = coordinate.cell_key()

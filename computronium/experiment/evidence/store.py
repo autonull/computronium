@@ -104,8 +104,8 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
     - Pydantic v2 validation at I/O boundaries
     """
 
-    _SCHEMA_VERSION = 1
-    SUPPORTED_SCHEMA_VERSIONS = frozenset({1})
+    _SCHEMA_VERSION = 3
+    SUPPORTED_SCHEMA_VERSIONS = frozenset({3})
 
     def __init__(self, config: StoreConfig) -> None:
         self._config = config
@@ -180,7 +180,7 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
                 run_id          TEXT NOT NULL REFERENCES runs(run_id),
                 schema_version  INTEGER NOT NULL,
                 cell_key        TEXT NOT NULL,
-                measurement_key TEXT NOT NULL UNIQUE,
+                measurement_key TEXT NOT NULL,
                 substrate       TEXT NOT NULL,
                 geometry        TEXT NOT NULL,
                 dynamics        TEXT NOT NULL,
@@ -197,7 +197,8 @@ class RecordStore:  # noqa: PLR0904 - single-writer topology concentrates the re
                                        reproducibility TEXT, assessment_procedure_version TEXT,
                                        ceec_link TEXT) NOT NULL,
                 payload         JSON NOT NULL,
-                unknown         JSON
+                unknown         JSON,
+                UNIQUE(run_id, measurement_key)
             )
         """)
 
@@ -1317,7 +1318,7 @@ try:
         status: StatusModel
         payload: dict[str, Any]
         unknown: dict[str, Any] | None = None
-        schema_version: int = 1
+        schema_version: int = 2
 
     class RecordOutputModel(BaseModel):
         """Pydantic model for Record output validation (query results)."""

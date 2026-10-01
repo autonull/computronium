@@ -159,12 +159,14 @@ class Schedule:
 
 
 class DataOrigin(StrEnum):
-    """Origin of the data record for I(C,U) leakage protocol."""
+    """Origin of the data record for I(C,U) leakage protocol and contrast design."""
 
     EXPLORATION = "exploration"  # Policy-independent exploration
-    POLICY_SELECTED = "policy_selected"  # Policy-dependent selection
+    POLICY_SELECTED = "policy_selected"  # Policy-dependent selection (I(C,U) split)
     CALIBRATION = "calibration"  # Frozen, never used for policy tuning
     TEST = "test"  # Held-out tasks, policy-independent
+    CONTROL = "control"  # Control group for contrast design
+    CONTRAST = "contrast"  # Contrast group for DOE (OFAT/fractional-factorial)
 
 
 class TransferMode(StrEnum):

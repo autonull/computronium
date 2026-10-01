@@ -111,25 +111,24 @@ class TestAtomicAppendKillProof:
                 assert ArtifactRole.FIGURE in roles
 
     def test_append_with_artifacts_atomic_on_duplicate_measurement(self) -> None:
-        """If duplicate measurement_key, entire transaction rolls back."""
+        """If duplicate measurement_key within same run, entire transaction rolls back."""
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "test.duckdb"
             config = StoreConfig(path=store_path)
 
             with RecordStore(config) as store:
-                run_id1 = store.create_run()
-                run_id2 = store.create_run()
+                run_id = store.create_run()
                 # First record
-                record1 = _make_test_record(run_id1, seed=42)
+                record1 = _make_test_record(run_id, seed=42)
                 artifacts = _make_artifacts()
 
                 # First append succeeds
                 appended1 = store.append_with_artifacts(record1, artifacts)
 
                 # Second record with SAME measurement_key (same coordinate + schedule + seed)
-                # but different run_id so record_id is different
+                # and SAME run_id so measurement_key is duplicate within the run
                 record2 = _make_test_record(
-                    run_id2, seed=42
+                    run_id, seed=42
                 )  # Same seed = same measurement_key
 
                 from computronium.experiment.evidence.store import (
@@ -242,11 +241,10 @@ with RecordStore(config) as store:
                     assert count == 0
 
     def test_concurrent_append_dedup_by_measurement_key(self) -> None:
-        """Concurrent appends with same measurement_key: only one succeeds (dedup).
+        """Concurrent appends with same measurement_key within same run: only one succeeds (dedup).
 
         Uses a SINGLE RecordStore instance shared across threads (single-writer topology).
-        Each thread creates its own run_id so record_ids differ, but same coordinate+schedule
-        gives same measurement_key.
+        All threads use the same run_id so measurement_key conflicts are detected.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "test.duckdb"
@@ -256,10 +254,10 @@ with RecordStore(config) as store:
             errors = []
 
             with RecordStore(config) as store:
+                run_id = store.create_run()
 
                 def append_record() -> None:
                     try:
-                        run_id = store.create_run()
                         coord = Coordinate(
                             substrate="Digital",
                             geometry="Feedforward",
@@ -315,14 +313,14 @@ with RecordStore(config) as store:
                     except Exception as e:
                         errors.append(e)
 
-                # Run multiple threads with SAME seed (same measurement_key)
+                # Run multiple threads with SAME seed (same measurement_key) and SAME run_id
                 threads = [threading.Thread(target=append_record) for _ in range(5)]
                 for t in threads:
                     t.start()
                 for t in threads:
                     t.join()
 
-            # Only one should succeed (dedup by measurement_key)
+            # Only one should succeed (dedup by measurement_key within run)
             assert len(results) == 1
             # Others should get DuplicateMeasurementError
             assert len(errors) == 4
