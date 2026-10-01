@@ -57,7 +57,7 @@ class MEPKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
             else "cpu"
         )
         self._dtype = config.dtype
@@ -106,9 +106,7 @@ class MEPKernelBackend:
             )
         else:
             target_vec = y.to(device=self._device, dtype=self._dtype)
-        nudged_states[-1] = nudged_states[-1] + self._beta * (
-            target_vec - nudged_states[-1]
-        )
+        nudged_states[-1] += self._beta * (target_vec - nudged_states[-1])
         # Contrastive update
         gradients = self.contrastive_update(free_states, nudged_states)
         self.update_weights(gradients, 1.0)
@@ -240,7 +238,7 @@ class MEPKernelBackend:
 
             # Apply activation derivative if needed
             if hasattr(module, "activation"):
-                grad_state = grad_state * _activation_deriv(state, module.activation)  # ruff: ignore[non-augmented-assignment]
+                grad_state *= _activation_deriv(state, module.activation)
 
             grads.append(grad_state)
 
@@ -346,7 +344,7 @@ class O1MemoryEPv2KernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
             else "cpu"
         )
         self._dtype = config.dtype
@@ -385,9 +383,7 @@ class O1MemoryEPv2KernelBackend:
             )
         else:
             target_vec = y.to(device=self._device, dtype=self._dtype)
-        nudged_states[-1] = nudged_states[-1] + self._beta * (
-            target_vec - nudged_states[-1]
-        )
+        nudged_states[-1] += self._beta * (target_vec - nudged_states[-1])
         # Contrastive update
         gradients = self.compute_update(free_states, nudged_states)
         self.update_weights(gradients, 1.0)
@@ -471,7 +467,7 @@ class O1MemoryEPv2KernelBackend:
 
             # Activation derivative
             if hasattr(module, "activation"):
-                grad = grad * _activation_deriv(state, module.activation)  # ruff: ignore[non-augmented-assignment]
+                grad *= _activation_deriv(state, module.activation)
 
             grads.append(grad)
 

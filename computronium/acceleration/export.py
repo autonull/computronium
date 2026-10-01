@@ -124,10 +124,10 @@ def _build_export_module(
 ) -> nn.Sequential:
     """Wrap the Linear stack with inter-layer activations for ONNX export."""
     layers: list[nn.Module] = []
-    for i, layer in enumerate(stack):
+    for i, layer_module in enumerate(stack):
         # Strip spectral norm for ONNX export compatibility
-        layer = _strip_spectral_norm(layer)  # ruff: ignore[redefined-loop-name]
-        layers.append(layer)
+        stripped = _strip_spectral_norm(layer_module)
+        layers.append(stripped)
         if i < len(stack) - 1 and not isinstance(activation, nn.Identity):
             layers.append(activation)
     return nn.Sequential(*layers)

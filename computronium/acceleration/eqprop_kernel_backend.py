@@ -53,7 +53,7 @@ class EqPropKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+        is_cuda = config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 

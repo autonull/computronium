@@ -293,7 +293,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(  # noqa: PLR0913,PLR0917
         self,
         input_dim: int,
         hidden_dim: int,
@@ -412,7 +412,7 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(  # ruff: ignore[too-many-return-statements]
+    def forward_step(  # noqa: PLR0911
         self,
         h: np.ndarray,
         x_emb: np.ndarray,
@@ -920,10 +920,7 @@ class EqPropKernelBPTT:
             dtanh = dh * tanh_deriv(pre_act, xp)  # [batch, hidden]
 
             # Accumulate gradients
-            if t > 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
-                h_prev = trajectory[t - 1][1]
-            else:
-                h_prev = xp.zeros_like(h)
+            h_prev = trajectory[t - 1][1] if t > 0 else xp.zeros_like(h)
 
             dW_rec += dtanh.T @ h_prev / batch_size
             dW_in += dtanh.T @ x / batch_size

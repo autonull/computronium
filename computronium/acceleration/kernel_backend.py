@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 import torch
@@ -122,7 +122,7 @@ class KernelConfig:
         if self.algorithm == AlgorithmFamily.EQPROP and self.settle_steps == 0:
             object.__setattr__(self, "settle_steps", 30)
         if (
-            self.algorithm in (AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY)  # ruff: ignore[literal-membership]
+            self.algorithm in {AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY}
             and self.settle_steps == 0
         ):
             object.__setattr__(self, "settle_steps", 30)
@@ -157,17 +157,21 @@ class KernelBackend(Protocol):
 class KernelRegistry:
     """Global registry for kernel backends with auto-selection and auto-tuning logic."""
 
-    _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}  # ruff: ignore[mutable-class-default]
-    _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}  # ruff: ignore[mutable-class-default]
+    _backends: ClassVar[dict[AlgorithmFamily, dict[HardwareTarget, type]]] = {}
+    _instances: ClassVar[dict[tuple[AlgorithmFamily, HardwareTarget], object]] = {}
     # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
-    _autotune_cache: dict[
-        tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
-    ] = {}  # ruff: ignore[mutable-class-default]
+    _autotune_cache: ClassVar[
+        dict[
+            tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
+        ]
+    ] = {}
     # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
-    _benchmark_cache: dict[
-        tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
-        list[tuple[HardwareTarget, float]],
-    ] = {}  # ruff: ignore[mutable-class-default]
+    _benchmark_cache: ClassVar[
+        dict[
+            tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
+            list[tuple[HardwareTarget, float]],
+        ]
+    ] = {}
 
     @classmethod
     def register(
@@ -315,7 +319,7 @@ class KernelRegistry:
 
                 if time_ms > 0 and not np.isinf(time_ms):
                     results.append((hw, time_ms))
-            except Exception:  # ruff: ignore[try-except-continue]
+            except Exception:  # noqa: S112 - try next backend
                 # Backend failed, skip
                 continue
 
@@ -359,7 +363,7 @@ class KernelRegistry:
                     extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
                 backend.initialize(config)
-            except Exception:  # ruff: ignore[try-except-pass]
+            except Exception:  # noqa: S110 - fallback to default backend
                 pass
 
         # Get the operation method

@@ -15,17 +15,17 @@ from optuna.distributions import (
 )
 
 if TYPE_CHECKING:
-    from computronium.experiment.schema.axis import AxisSpec, HyperparameterSpec, Scale
-    from computronium.experiment.schema.coordinate import Coordinate
     from computronium.experiment.execution.search_space import SearchSpace
-    from computronium.experiment.legality.dsl import evaluate, EvaluationContext
+    from computronium.experiment.legality.dsl import EvaluationContext
+    from computronium.experiment.schema.axis import AxisSpec, HyperparameterSpec
+    from computronium.experiment.schema.coordinate import Coordinate
 
 
 class OptunaDistributionAdapter:
     """Maps AxisSpec → Optuna distribution using availability predicates."""
 
     @staticmethod
-    def adapt(spec: "AxisSpec", coord: "Coordinate") -> BaseDistribution | None:
+    def adapt(spec: AxisSpec, coord: Coordinate) -> BaseDistribution | None:
         """Convert an AxisSpec to an Optuna distribution.
 
         Args:
@@ -35,10 +35,11 @@ class OptunaDistributionAdapter:
         Returns:
             Optuna distribution or None if unavailable/structural.
         """
-        from computronium.experiment.schema.axis import AxisKind, Scale
 
         # Check availability
-        if spec.availability_predicate and not spec.availability_predicate.evaluate(coord):
+        if spec.availability_predicate and not spec.availability_predicate.evaluate(
+            coord
+        ):
             return None
 
         # Structural axes are not sampled
@@ -52,7 +53,7 @@ class OptunaDistributionAdapter:
 
     @staticmethod
     def adapt_hyperparameter(
-        hp_spec: "HyperparameterSpec", coord: "Coordinate"
+        hp_spec: HyperparameterSpec, coord: Coordinate
     ) -> BaseDistribution | None:
         """Convert a HyperparameterSpec to an Optuna distribution.
 
@@ -63,21 +64,23 @@ class OptunaDistributionAdapter:
         Returns:
             Optuna distribution or None if unavailable.
         """
-        from computronium.experiment.schema.axis import AxisKind, Scale
         from computronium.experiment.legality.dsl import evaluate
+        from computronium.experiment.schema.axis import AxisKind, Scale
         from computronium.experiment.schema.record import Record
 
         # Check availability using the legality DSL evaluate function
         if hp_spec.availability:
             # Create a minimal record for evaluation context
-            ctx = EvaluationContext(Record.create(
-                run_id="",
-                coordinate=coord,
-                schedule=None,  # type: ignore
-                provenance=None,  # type: ignore
-                status=None,  # type: ignore
-                payload={},
-            ))
+            ctx = EvaluationContext(
+                Record.create(
+                    run_id="",
+                    coordinate=coord,
+                    schedule=None,  # type: ignore
+                    provenance=None,  # type: ignore
+                    status=None,  # type: ignore
+                    payload={},
+                )
+            )
             if not evaluate(hp_spec.availability, ctx):
                 return None
 
@@ -111,7 +114,7 @@ class OptunaDistributionAdapter:
 
     @staticmethod
     def build_distributions(
-        search_space: "SearchSpace", coord: "Coordinate"
+        search_space: SearchSpace, coord: Coordinate
     ) -> dict[str, BaseDistribution]:
         """Build all distributions for a search space at a given coordinate.
 
@@ -134,14 +137,16 @@ class OptunaDistributionAdapter:
 
             # Check primitive availability
             if axis.availability_predicate:
-                ctx = EvaluationContext(Record.create(
-                    run_id="",
-                    coordinate=coord,
-                    schedule=None,  # type: ignore
-                    provenance=None,  # type: ignore
-                    status=None,  # type: ignore
-                    payload={},
-                ))
+                ctx = EvaluationContext(
+                    Record.create(
+                        run_id="",
+                        coordinate=coord,
+                        schedule=None,  # type: ignore
+                        provenance=None,  # type: ignore
+                        status=None,  # type: ignore
+                        payload={},
+                    )
+                )
                 if not evaluate(axis.availability_predicate, ctx):
                     continue
 

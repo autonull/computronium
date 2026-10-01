@@ -34,7 +34,7 @@
     "description": "Objective/operating-point resolution; question-first entry via Synthesis policy (R43)",
     "required_fidelity": "L0",
     "min_n_seeds": 1,
-    "gate": "pass",
+    "gate": "skip",
     "params": {
       "objective_resolution": true,
       "operating_points": true,
@@ -48,7 +48,7 @@
     "description": "Axis snapshot + legality preview (dry-run = same engine, C32)",
     "required_fidelity": "L0",
     "min_n_seeds": 1,
-    "gate": "pass",
+    "gate": "skip",
     "params": {
       "axis_snapshot": true,
       "legality_dry_run": true,

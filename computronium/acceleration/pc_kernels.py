@@ -61,7 +61,7 @@ class PCKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
             else "cpu"
         )
         self._dtype = config.dtype
@@ -198,7 +198,7 @@ class PCKernelBackend:
         for i in range(1, len(self._mu)):
             pred = _apply_activation(self._mu[i - 1] @ W[i - 1].T, self._activation)
             if self._layers[i - 1].bias is not None:
-                pred = pred + self._layers[i - 1].bias.data  # ruff: ignore[non-augmented-assignment]
+                pred += self._layers[i - 1].bias.data
             energy += 0.5 * (self._mu[i] - pred).pow(2).sum().item()
 
         return energy
@@ -222,23 +222,23 @@ class PCKernelBackend:
         weight_deltas: dict[str, Tensor] = {}
         L = len(self._layers)
 
-        for l in range(1, L + 1):  # ruff: ignore[ambiguous-variable-name]
+        for layer_idx in range(1, L + 1):
             # Error at layer l predicts mu_l from mu_{l-1} via W[l-1].
-            free_pre = free_mu[l - 1]
+            free_pre = free_mu[layer_idx - 1]
             free_pred = _apply_activation(
-                free_pre @ self._layers[l - 1].weight.data.T, self._activation
+                free_pre @ self._layers[layer_idx - 1].weight.data.T, self._activation
             )
-            if self._layers[l - 1].bias is not None:
-                free_pred = free_pred + self._layers[l - 1].bias.data  # ruff: ignore[non-augmented-assignment]
-            free_error = free_mu[l] - free_pred
+            if self._layers[layer_idx - 1].bias is not None:
+                free_pred += self._layers[layer_idx - 1].bias.data
+            free_error = free_mu[layer_idx] - free_pred
 
-            nudged_pre = nudged_mu[l - 1]
+            nudged_pre = nudged_mu[layer_idx - 1]
             nudged_pred = _apply_activation(
-                nudged_pre @ self._layers[l - 1].weight.data.T, self._activation
+                nudged_pre @ self._layers[layer_idx - 1].weight.data.T, self._activation
             )
-            if self._layers[l - 1].bias is not None:
-                nudged_pred = nudged_pred + self._layers[l - 1].bias.data  # ruff: ignore[non-augmented-assignment]
-            nudged_error = nudged_mu[l] - nudged_pred
+            if self._layers[layer_idx - 1].bias is not None:
+                nudged_pred += self._layers[layer_idx - 1].bias.data
+            nudged_error = nudged_mu[layer_idx] - nudged_pred
 
             # Weight delta for W[l-1] [D_l, D_{l-1}]
             free_grad = batched_outer_product(free_pre, free_error)
@@ -246,10 +246,10 @@ class PCKernelBackend:
             delta = self._eta_weight * contrastive_delta(
                 free_grad, nudged_grad, beta=1.0
             )
-            weight_deltas[f"layers.{l - 1}.weight"] = delta
+            weight_deltas[f"layers.{layer_idx - 1}.weight"] = delta
 
-            if self._layers[l - 1].bias is not None:
-                weight_deltas[f"layers.{l - 1}.bias"] = self._eta_weight * (
+            if self._layers[layer_idx - 1].bias is not None:
+                weight_deltas[f"layers.{layer_idx - 1}.bias"] = self._eta_weight * (
                     nudged_error.mean(dim=0) - free_error.mean(dim=0)
                 )
 
@@ -305,7 +305,7 @@ try:  # noqa: PLR0915
     from computronium.acceleration import grid
 
     @triton.jit
-    def _pc_prediction_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _pc_prediction_kernel(  # noqa: PLR0913,PLR0917
         mu_ptr,
         W_ptr,
         b_ptr,
@@ -435,7 +435,7 @@ try:  # noqa: PLR0915
         )
 
     @triton.jit
-    def _pc_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _pc_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,
@@ -488,8 +488,8 @@ try:  # noqa: PLR0915
             )
             acc_nudged += post_n * pre_n
 
-        acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
-        acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]
+        acc_free /= B
+        acc_nudged /= B
 
         delta = lr * (acc_nudged - acc_free) / beta
 

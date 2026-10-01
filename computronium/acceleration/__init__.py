@@ -89,7 +89,7 @@ from computronium.core.utils.activations import (
 )
 
 
-def _register_standard_kernels() -> None:  # ruff: ignore[non-empty-init-module]
+def _register_standard_kernels() -> None:  # noqa: RUF067
     """Register standard kernel backends with KernelRegistry.
 
     Replaces the former families.register_all() binding table. Each backend is
@@ -149,7 +149,7 @@ def _register_standard_kernels() -> None:  # ruff: ignore[non-empty-init-module]
     register_contrastive_kernels()
 
 
-def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empty-init-module]
+def get_algorithm_kernels() -> dict[str, type[object]]:  # noqa: RUF067
     """Bind every family and return its backend class, keyed by family value."""
     # This function is kept for backwards compatibility but the dispatch layer
     # now uses coordinate matching (select_backend_class) instead of family lookups.
@@ -196,7 +196,7 @@ def get_algorithm_kernels() -> dict[str, type[object]]:  # ruff: ignore[non-empt
 # The one stated call site for the binding layer (TODO36 §4.3). Every family is
 # bound here, explicitly, so no kernel module registers as an import side effect
 # and the registry's contents cannot depend on which module was imported first.
-_register_standard_kernels()  # ruff: ignore[non-empty-init-module]  (the stated call site)
+_register_standard_kernels()  # noqa: RUF067  (the stated call site)
 
 __all__ = [
     "HAS_CUPY",

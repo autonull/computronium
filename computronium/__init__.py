@@ -268,7 +268,7 @@ if TYPE_CHECKING:
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
-_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
+_LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     # 6-D Joint Architecture (facade exports only)
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
@@ -747,7 +747,7 @@ def __dir__() -> list[str]:
     return sorted(__all__)
 
 
-def _verify_public_surface() -> None:  # ruff: ignore[non-empty-init-module]
+def _verify_public_surface() -> None:  # noqa: RUF067
     """Hold the declared surface to itself, once, at import time.
 
     Every test that imports the package inherits this, so a name in
@@ -760,4 +760,4 @@ def _verify_public_surface() -> None:  # ruff: ignore[non-empty-init-module]
     assert_public_surface(__all__, _LAZY, set(globals()))
 
 
-_verify_public_surface()  # ruff: ignore[non-empty-init-module]
+_verify_public_surface()  # noqa: RUF067

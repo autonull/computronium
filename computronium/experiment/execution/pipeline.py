@@ -574,18 +574,26 @@ class PipelineRunner:
             raise ValueError("SystemContext not initialized")
         env_dict = system_context.environment.to_provenance_dict()
         provenance = Provenance.from_dict({
-            **env_dict,
+            "env": env_dict,
             "dataset": self._config.run_spec.get("dataset", "unknown"),
             "dataset_version": self._config.run_spec.get("dataset_version", "1.0"),
             "code_sha": self._config.run_spec.get("code_sha", "unknown"),
-            "policy": self._config.policy.get_name() if self._config.policy else "unknown",
+            "policy": self._config.policy.get_name()
+            if self._config.policy
+            else "unknown",
             "links": {"run_id": self._config.run_id},
         })
 
-        batch_items = [
-            (p.coordinate, p.schedule, provenance, {})
-            for p in proposals
-        ]
+        # Deduplicate proposals by measurement_key to avoid duplicate key errors
+        seen_keys: set[str] = set()
+        batch_items = []
+        for p in proposals:
+            mkey = p.coordinate.measurement_key(p.schedule)
+            if mkey not in seen_keys:
+                seen_keys.add(mkey)
+                batch_items.append((p.coordinate, p.schedule, provenance, {}))
+            else:
+                logger.warning("Skipping duplicate measurement_key: %s", mkey)
 
         # Execute with failure isolation
         from computronium.experiment.execution.backends import (

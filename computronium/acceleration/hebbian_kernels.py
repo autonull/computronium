@@ -51,7 +51,7 @@ class HebbianKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
             else "cpu"
         )
         self._dtype = config.dtype
@@ -198,7 +198,7 @@ class HebbianKernelBackend:
 
             # Apply modulator to nudged phase if provided (3-factor)
             if modulator is not None and i == len(self._layers) - 1:
-                dst_nudged = dst_nudged * modulator  # ruff: ignore[non-augmented-assignment]
+                dst_nudged *= modulator
 
             delta = contrastive_hebbian_update(
                 src_free, dst_free, src_nudged, dst_nudged, self._learning_rate, beta
@@ -311,9 +311,7 @@ class ThreeFactorKernelBackend(HebbianKernelBackend):
 
         # Backproject modulator through output weights
         hidden_modulator = output_modulator @ self._out_layer.weight.data
-        hidden_modulator = hidden_modulator / max(  # ruff: ignore[non-augmented-assignment]
-            hidden_modulator.abs().max().item(), 1.0
-        )
+        hidden_modulator /= max(hidden_modulator.abs().max().item(), 1.0)
 
         # Hidden layers
         for i in range(len(self._layers)):
@@ -352,7 +350,7 @@ try:  # noqa: PLR0915
     from computronium.acceleration import grid
 
     @triton.jit
-    def _hebbian_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _hebbian_update_kernel(  # noqa: PLR0913,PLR0917
         pre_ptr,
         post_ptr,
         weight_ptr,
@@ -383,7 +381,7 @@ try:  # noqa: PLR0915
             )
             acc += post * pre
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc /= B
 
         if use_oja:
             # Oja's subtraction term: post^2 @ W
@@ -395,19 +393,19 @@ try:  # noqa: PLR0915
                     other=0.0,
                 )
                 post_sq += post * post
-            post_sq = post_sq / B  # ruff: ignore[non-augmented-assignment]
+            post_sq /= B
 
             weight = grid.load_2d(
                 weight_ptr, D_in, offs_out, offs_in, mask_out, mask_in
             )
-            acc = acc - post_sq * weight  # ruff: ignore[non-augmented-assignment]
+            acc -= post_sq * weight
 
         delta = lr * acc
 
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _three_factor_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _three_factor_hebbian_kernel(  # noqa: PLR0913,PLR0917
         pre_ptr,
         post_ptr,
         modulator_ptr,
@@ -443,13 +441,13 @@ try:  # noqa: PLR0915
             post_mod = post * mod
             acc += post_mod * pre
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc /= B
         delta = lr * acc
 
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _contrastive_hebbian_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _contrastive_hebbian_kernel(  # noqa: PLR0913,PLR0917
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,
@@ -496,8 +494,8 @@ try:  # noqa: PLR0915
             )
             acc_nudged += post_n * pre_n
 
-        acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
-        acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]
+        acc_free /= B
+        acc_nudged /= B
 
         delta = lr * (acc_nudged - acc_free) / beta
 

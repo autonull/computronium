@@ -418,7 +418,7 @@ class ICUModel:
                 record_id=f"{record_id}_{icu_record.feature_vector.interaction_key}",
                 seq=0,  # Will be assigned by store
                 run_id=run_id,
-                schema_version=1,
+                schema_version=2,
                 cell_key=hashlib.sha256(
                     f"{coord.substrate}|{coord.geometry}|{coord.dynamics}|{coord.plasticity}|{coord.credit}|{coord.update}".encode()
                 ).hexdigest()[:16],

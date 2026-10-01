@@ -60,7 +60,7 @@ class BackpropKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+        is_cuda = config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
         self._activation_name = str(config.extra.get("activation", "relu"))
@@ -155,7 +155,7 @@ class BackpropKernelBackend:
             if self._layers[i].bias is not None:
                 bias_grads[f"layers.{i}.bias"] = propagated.mean(dim=0)
 
-            propagated = propagated @ self._layers[i].weight.data  # ruff: ignore[non-augmented-assignment]
+            propagated @= self._layers[i].weight.data
 
         result = dict(weight_grads)
         result.update(bias_grads)

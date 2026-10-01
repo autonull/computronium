@@ -58,7 +58,7 @@ class FAKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+        is_cuda = config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 
@@ -423,7 +423,7 @@ try:  # noqa: PLR0915
             )
             acc += post * pre
 
-        acc = acc / B  # ruff: ignore[non-augmented-assignment]
+        acc /= B
         grid.store_2d(grad_ptr, acc, D_in, offs_out, offs_in, mask_out, mask_in)
 
     TRITON_IMPORTED_FA = True

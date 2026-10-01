@@ -44,7 +44,7 @@ def _one_hot(target: Tensor, like: Tensor) -> Tensor:
     return target
 
 
-def pcalm_settle_loop(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] (mirrors the eager settle loop)
+def pcalm_settle_loop(  # noqa: PLR0913,PLR0917
     acts: list[Tensor],
     dual_vars: list[Tensor],
     weights: Sequence[Tensor],
@@ -71,15 +71,13 @@ def pcalm_settle_loop(  # ruff: ignore[too-many-arguments, too-many-positional-a
             predicted = acts[i] @ weights[i].T
             b = biases[i]
             if b is not None:
-                predicted = predicted + b  # ruff: ignore[non-augmented-assignment] (graph-safe out-of-place)
+                predicted += b
             if i < len(activations):
                 predicted = activations[i](predicted)
             constraints.append(acts[i + 1] - predicted)
 
         for i in range(num_layers):
-            dual_vars[i] = dual_vars[i] + step_size * (  # ruff: ignore[non-augmented-assignment]
-                constraints[i] + alpha * dual_vars[i]
-            )
+            dual_vars[i] += step_size * (constraints[i] + alpha * dual_vars[i])
 
         new_acts: list[Tensor] = [acts[0]]
         for i in range(num_layers):
@@ -88,9 +86,9 @@ def pcalm_settle_loop(  # ruff: ignore[too-many-arguments, too-many-positional-a
                 z = acts[i + 1] @ weights[i + 1].T
                 b = biases[i + 1]
                 if b is not None:
-                    z = z + b  # ruff: ignore[non-augmented-assignment]
+                    z += b
                 v = constraints[i + 1] + dual_vars[i + 1] + rho * constraints[i + 1]
-                grad = grad - (v * (z > 0).to(v.dtype)) @ weights[i + 1]  # ruff: ignore[non-augmented-assignment]
+                grad -= (v * (z > 0).to(v.dtype)) @ weights[i + 1]
             new_acts.append(acts[i + 1] - step_size * grad)
 
         if beta > 0 and target is not None:
@@ -142,7 +140,8 @@ def _eager_dual_primal_update(
 
 TRITON_IMPORTED_PCALM = False
 try:
-    import triton  # ruff: ignore[unused-import]
+    import triton
+    import triton.language as tl
 
     TRITON_IMPORTED_PCALM = True
 except ImportError:
@@ -153,11 +152,10 @@ def _build_fused_kernel() -> _TritonKernel | None:
     """Compile the fused elementwise update kernel, or None without Triton."""
     if not TRITON_IMPORTED_PCALM:
         return None
-    import triton
     import triton.language as tl
 
     @triton.jit
-    def _fused_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] (kernel ABI)
+    def _fused_update_kernel(  # noqa: PLR0913,PLR0917
         h_ptr,
         c_ptr,
         lam_ptr,

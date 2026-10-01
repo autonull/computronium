@@ -260,7 +260,7 @@ class CompileMode:
     AUTO = "auto"
 
     # Model-specific presets
-    PRESETS: dict[str, dict] = {  # ruff: ignore[mutable-class-default]
+    PRESETS: dict[str, dict] = {  # noqa: RUF012 - class-level constant, not mutated
         "eqprop_mlp": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": False},
         "eqprop_rnn": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": True},
         "fa_mlp": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": False},
@@ -294,7 +294,6 @@ def compile_context(
         with compile_context(mode="reduce-overhead") as compile_fn:
             model = compile_fn(model)
     """
-    original_compile = torch.compile  # ruff: ignore[unused-variable]
     error_occurred = False
 
     def safe_compile(model, **kwargs):
@@ -431,9 +430,6 @@ class EqPropTritonFunction(Function):
             try:  # noqa: PLR0915
                 import triton
                 import triton.language as tl
-                from triton.language.extra import (
-                    libdevice,  # ruff: ignore[unused-import]
-                )
 
                 @triton.jit
                 def _contrastive_backward_kernel(
@@ -458,7 +454,7 @@ class EqPropTritonFunction(Function):
                     delta = (nudged_g - free_g) / beta
 
                     # Apply learning rate
-                    delta = delta * lr  # ruff: ignore[non-augmented-assignment]
+                    delta *= lr
 
                     # Update parameters in-place
                     param = tl.load(param_ptr + offs, mask=mask)
@@ -495,7 +491,7 @@ class EqPropTritonFunction(Function):
 
         # Nudged phase
         with torch.no_grad():
-            nudged_output = model.settle(input, target=target, beta=beta, steps=steps)  # ruff: ignore[unused-variable]
+            model.settle(input, target=target, beta=beta, steps=steps)
             ctx.nudged_acts = (
                 model.get_activations() if hasattr(model, "get_activations") else []
             )
@@ -565,14 +561,15 @@ def compile_settling_loop(
             fullgraph=False,
             dynamic=dynamic,
         )
-        logger.debug("Settling loop compiled with mode=%s", mode)
-        return compiled  # ruff: ignore[try-consider-else]
     except Exception as e:
         warnings.warn(
             f"torch.compile failed for settling loop: {e}. Using uncompiled.",
             RuntimeWarning,
         )
         return settling_fn
+    else:
+        logger.debug("Settling loop compiled with mode=%s", mode)
+        return compiled
 
 
 def compile_model_with_preset(

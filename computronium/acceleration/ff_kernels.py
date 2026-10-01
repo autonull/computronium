@@ -53,7 +53,7 @@ class FFKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+        is_cuda = config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 
@@ -332,7 +332,7 @@ class PEPITAKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+        is_cuda = config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 
@@ -470,7 +470,7 @@ class PEPITAKernelBackend:
 
         return weight_deltas
 
-    def kernel_train_step(  # ruff: ignore[too-many-locals]
+    def kernel_train_step(  # noqa: PLR0914
         self,
         model: torch.nn.Module,
         config: KernelConfig | None,
@@ -536,7 +536,7 @@ class PEPITAKernelBackend:
             x_mod = x + torch.mm(error, feedback.to(x.device).T)
             _out_m, act_m = _two_pass(x_mod)
 
-            inputs = [x] + act_s[:-1]  # ruff: ignore[collection-literal-concatenation]
+            inputs = [x, *act_s[:-1]]
             for layer, a_s, a_m, inp in zip(self._layers, act_s, act_m, inputs):
                 delta_a = a_m - a_s
                 layer.weight.data -= lr * torch.mm(delta_a.T, inp) / batch
@@ -612,13 +612,10 @@ try:  # noqa: PLR0915
     ):
         """Compute FF goodness: ||pos||^2 - ||neg||^2 - threshold"""
         pid_b = tl.program_id(0)
-        pid_d = tl.program_id(1)
 
         offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
-        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
 
         mask_b = offs_b < B
-        mask_d = offs_d < D  # ruff: ignore[unused-variable]
 
         pos_norm = tl.zeros((BLOCK_B,), dtype=tl.float32)
         neg_norm = tl.zeros((BLOCK_B,), dtype=tl.float32)
@@ -640,7 +637,7 @@ try:  # noqa: PLR0915
         tl.store(goodness_ptr + offs_b, goodness, mask=mask_b)
 
     @triton.jit
-    def _ff_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _ff_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
         pre_pos_ptr,
         post_pos_ptr,
         pre_neg_ptr,
@@ -692,8 +689,8 @@ try:  # noqa: PLR0915
             )
             acc_neg += post_n * pre_n
 
-        acc_pos = acc_pos / B  # ruff: ignore[non-augmented-assignment]
-        acc_neg = acc_neg / B  # ruff: ignore[non-augmented-assignment]
+        acc_pos /= B
+        acc_neg /= B
 
         delta = lr * (acc_pos - acc_neg)
 
@@ -746,7 +743,7 @@ try:  # noqa: PLR0915
         grid.store_2d(delta_ptr, delta, D_in, offs_out, offs_in, mask_out, mask_in)
 
     @triton.jit
-    def _pepita_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _pepita_contrastive_update_kernel(  # noqa: PLR0913,PLR0917
         pre_std_ptr,
         post_std_ptr,
         pre_err_ptr,
@@ -792,8 +789,8 @@ try:  # noqa: PLR0915
             )
             acc_err += post_e * pre_e
 
-        acc_std = acc_std / B  # ruff: ignore[non-augmented-assignment]
-        acc_err = acc_err / B  # ruff: ignore[non-augmented-assignment]
+        acc_std /= B
+        acc_err /= B
 
         delta = lr * (acc_std - acc_err)
 

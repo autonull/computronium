@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import compose_system_from_configs
-from computronium.experiment.learning.prior import get_dynamics_step_size
 from computronium.ontology import GeometryConfig
 
 if TYPE_CHECKING:

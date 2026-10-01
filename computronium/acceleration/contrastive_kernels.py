@@ -9,6 +9,7 @@ Reference: REFACTOR7 §5 - MEMORY-O(1) UNIFICATION
 
 from __future__ import annotations
 
+import itertools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
@@ -93,7 +94,7 @@ class BaseContrastiveKernel(ABC):
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
+            if config.hardware in {HardwareTarget.CUDA, HardwareTarget.TRITON}
             else "cpu"
         )
         self._dtype = config.dtype
@@ -313,14 +314,14 @@ class FAContrastiveKernel(BaseContrastiveKernel):
         # activity differs from its free counterpart locally (no autograd).
         nudged_acts = acts.copy()
         # Output layer is nudged directly toward the target.
-        nudged_acts[-1] = nudged_acts[-1] + self._beta * error  # ruff: ignore[non-augmented-assignment]
+        nudged_acts[-1] += self._beta * error
         for i in reversed(range(len(self._layers) - 1)):
             # nudged_hidden = hidden + beta * B_i @ error (via fb.T)
             fb = self._feedback_weights[i]
-            nudged_acts[i + 1] = nudged_acts[i + 1] + self._beta * (error @ fb.T)  # ruff: ignore[non-augmented-assignment]
+            nudged_acts[i + 1] += self._beta * (error @ fb.T)
             # Propagate the error to the previous layer along the forward
             # weights (the contrastive analogue of the FA backprojection).
-            error = error @ self._layers[i + 1].weight  # ruff: ignore[non-augmented-assignment]
+            error @= self._layers[i + 1].weight
 
         return nudged_acts
 
@@ -381,18 +382,18 @@ class HebbianContrastiveKernel(BaseContrastiveKernel):
     ) -> dict[str, Tensor]:
         updates: dict[str, Tensor] = {}
 
-        for i, (pre, post) in enumerate(zip(free_acts[:-1], free_acts[1:])):  # ruff: ignore[zip-instead-of-pairwise]
+        for i, (pre, post) in enumerate(itertools.pairwise(free_acts)):
             # Hebbian outer product
             delta = batched_outer_product(pre, post)
 
             if self._use_oja:
                 # Oja's rule: subtract post @ post.T * weight
                 weight = self._layers[i].weight
-                delta = delta - post.T @ post * weight / pre.shape[0]  # ruff: ignore[non-augmented-assignment]
+                delta -= post.T @ post * weight / pre.shape[0]
 
             # Apply third factor modulator if provided
             if self._modulator is not None:
-                delta = delta * self._modulator.mean()  # ruff: ignore[non-augmented-assignment]
+                delta *= self._modulator.mean()
 
             updates[f"layers.{i}.weight"] = self._lr * delta
 
@@ -500,11 +501,10 @@ class PEPITAContrastiveKernel(BaseContrastiveKernel):
         h = x
         for i, layer in enumerate(self._layers):
             h = layer(h)
-            if i < len(self._layers) - 1:  # ruff: ignore[collapsible-if]
+            if i < len(self._layers) - 1 and self._feedback_matrix is not None:
                 # Add error modulation via feedback matrix
-                if self._feedback_matrix is not None:
-                    # Simplified error modulation
-                    pass
+                # Simplified error modulation
+                pass
             h = self._activation(h) if i < len(self._layers) - 1 else h
             acts.append(h)
         return acts
@@ -596,7 +596,7 @@ class TPContrastiveKernel(BaseContrastiveKernel):
                 h = self._activation(h)
             # Nudge toward target - targets[i] aligns with layer i's output
             if i < len(targets):
-                h = h + self._beta * (targets[i] - h)  # ruff: ignore[non-augmented-assignment]
+                h += self._beta * (targets[i] - h)
             nudged_acts.append(h)
 
         return nudged_acts
@@ -652,12 +652,13 @@ class PCContrastiveKernel(BaseContrastiveKernel):
 
         for _ in range(self._infer_steps):
             mu_new = [x.clone()]  # Input clamped
-            for l in range(1, L + 1):  # ruff: ignore[ambiguous-variable-name]
+            for layer_idx in range(1, L + 1):
                 pred = self._activation(
-                    mu[l - 1] @ self._layers[l - 1].weight.T + self._layers[l - 1].bias
+                    mu[layer_idx - 1] @ self._layers[layer_idx - 1].weight.T
+                    + self._layers[layer_idx - 1].bias
                 )
-                error = mu[l] - pred
-                mu_new.append(mu[l] - self._eta_infer * error)
+                error = mu[layer_idx] - pred
+                mu_new.append(mu[layer_idx] - self._eta_infer * error)
             mu = mu_new
 
             if target is not None:
@@ -731,13 +732,13 @@ class SNNContrastiveKernel(BaseContrastiveKernel):
             i_in = input_spikes @ self._layers[0].weight.T + self._layers[0].bias
 
             # LIF dynamics
-            v = v + (-v / self._tau_mem + i_syn + i_in) * 1.0  # ruff: ignore[non-augmented-assignment]
-            i_syn = i_syn * (1 - 1.0 / self._tau_syn)  # ruff: ignore[non-augmented-assignment]
+            v += (-v / self._tau_mem + i_syn + i_in) * 1.0
+            i_syn *= 1 - 1.0 / self._tau_syn
 
             # Spike generation
             spikes = (v > self._threshold).float()
             v = torch.where(spikes.bool(), torch.zeros_like(v), v)
-            i_syn = i_syn + spikes  # ruff: ignore[non-augmented-assignment]
+            i_syn += spikes
 
             voltages.append(v.clone())
 
@@ -861,7 +862,7 @@ class TileContrastiveKernel(BaseContrastiveKernel):
                     target_vec = target.to(device=self._device, dtype=self._dtype)
                 # Only nudge if shapes match (output layer)
                 if h.shape == target_vec.shape:
-                    h = h + beta * (target_vec - h)  # ruff: ignore[non-augmented-assignment]
+                    h += beta * (target_vec - h)
 
             acts.append(h.clone())
 
@@ -889,7 +890,7 @@ class TileContrastiveKernel(BaseContrastiveKernel):
 
 
 class MEPContrastiveKernel(BaseContrastiveKernel):
-    """MEP contrastive kernel (Muon/Dion/Fisher + EP settle).
+    """Memory-Efficient Predictive Coding (MEP) contrastive kernel.
 
     For the contrastive path with a chain of Linear layers (from benchmark bind),
     we use a simple forward pass through the chain with output nudging.
@@ -932,7 +933,7 @@ class MEPContrastiveKernel(BaseContrastiveKernel):
             )
         else:
             target_vec = target.to(device=self._device, dtype=self._dtype)
-        acts[-1] = acts[-1] + self._beta * (target_vec - acts[-1])  # ruff: ignore[non-augmented-assignment]
+        acts[-1] += self._beta * (target_vec - acts[-1])
         return acts
 
     def _forward_chain(self, x: Tensor) -> list[Tensor]:
@@ -1024,7 +1025,7 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
             )
         else:
             target_vec = target.to(device=self._device, dtype=self._dtype)
-        acts[-1] = acts[-1] + self._beta * (target_vec - acts[-1])  # ruff: ignore[non-augmented-assignment]
+        acts[-1] += self._beta * (target_vec - acts[-1])
         return acts
 
     def _forward_chain(self, x: Tensor) -> list[Tensor]:
@@ -1064,9 +1065,9 @@ class O1MemoryContrastiveKernel(BaseContrastiveKernel):
             if hasattr(module, "activation"):
                 act = module.activation
                 if act == "relu":
-                    grad = grad * (state > 0).float()  # ruff: ignore[non-augmented-assignment]
+                    grad *= (state > 0).float()
                 elif act == "tanh":
-                    grad = grad * (1 - torch.tanh(state) ** 2)  # ruff: ignore[non-augmented-assignment]
+                    grad *= 1 - torch.tanh(state) ** 2
 
             grads.append(grad)
 

@@ -6,18 +6,18 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from computronium.experiment.execution.allocator import Abandonment, Promotion
     from computronium.experiment.execution.search_space import Proposal
-    from computronium.experiment.execution.allocator import Promotion, Abandonment
-    from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.execution.stage import StageTransition
+    from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
 
 @dataclass(frozen=True, slots=True)
 class Replication:
     """A request for additional replication seeds."""
 
-    coordinate: "Coordinate"
-    base_schedule: "Schedule"
+    coordinate: Coordinate
+    base_schedule: Schedule
     additional_seeds: int
     rationale: str
 
@@ -26,10 +26,10 @@ class Replication:
 class Decision:
     """Decision from S10 Decide stage."""
 
-    transition: "StageTransition"  # CONTINUE | COMPLETE | PAUSE | STOP
-    new_proposals: list["Proposal"] = field(default_factory=list)
-    promotions: list["Promotion"] = field(default_factory=list)
-    abandonments: list["Abandonment"] = field(default_factory=list)
+    transition: StageTransition  # CONTINUE | COMPLETE | PAUSE | STOP
+    new_proposals: list[Proposal] = field(default_factory=list)
+    promotions: list[Promotion] = field(default_factory=list)
+    abandonments: list[Abandonment] = field(default_factory=list)
     replications: list[Replication] = field(default_factory=list)
     rationale: str = ""
     budget_impact: float = 0.0
@@ -58,14 +58,16 @@ class RoundController:
 
     def should_continue(self, decision: Decision) -> bool:
         """Determine if the round loop should continue."""
+        from computronium.experiment.execution.stage import StageTransition
+
         self._decision = decision
         self._current_round += 1
 
-        if decision.transition.value == "COMPLETE":
+        if decision.transition == StageTransition.COMPLETE:
             return False
-        if decision.transition.value == "PAUSE":
+        if decision.transition == StageTransition.PAUSE:
             return False
-        if decision.transition.value == "STOP":
+        if decision.transition == StageTransition.STOP:
             return False
 
         # Check min rounds
@@ -76,15 +78,15 @@ class RoundController:
         if self._max_rounds is not None and self._current_round >= self._max_rounds:
             return False
 
-        return decision.transition.value == "CONTINUE"
+        return decision.transition == StageTransition.CONTINUE
 
 
 def create_decision(
-    transition: "StageTransition",
+    transition: StageTransition,
     *,
-    new_proposals: list["Proposal"] | None = None,
-    promotions: list["Promotion"] | None = None,
-    abandonments: list["Abandonment"] | None = None,
+    new_proposals: list[Proposal] | None = None,
+    promotions: list[Promotion] | None = None,
+    abandonments: list[Abandonment] | None = None,
     replications: list[Replication] | None = None,
     rationale: str = "",
     budget_impact: float = 0.0,
@@ -103,14 +105,15 @@ def create_decision(
 
 # Convenience factories
 def continue_round(
-    new_proposals: list["Proposal"] | None = None,
-    promotions: list["Promotion"] | None = None,
-    abandonments: list["Abandonment"] | None = None,
+    new_proposals: list[Proposal] | None = None,
+    promotions: list[Promotion] | None = None,
+    abandonments: list[Abandonment] | None = None,
     replications: list[Replication] | None = None,
     rationale: str = "",
     budget_impact: float = 0.0,
 ) -> Decision:
     from computronium.experiment.execution.stage import StageTransition
+
     return create_decision(
         StageTransition.CONTINUE,
         new_proposals=new_proposals,
@@ -127,6 +130,7 @@ def complete_run(
     budget_impact: float = 0.0,
 ) -> Decision:
     from computronium.experiment.execution.stage import StageTransition
+
     return create_decision(
         StageTransition.COMPLETE,
         rationale=rationale,
@@ -138,6 +142,7 @@ def pause_run(
     rationale: str = "",
 ) -> Decision:
     from computronium.experiment.execution.stage import StageTransition
+
     return create_decision(
         StageTransition.PAUSE,
         rationale=rationale,
@@ -148,6 +153,7 @@ def stop_run(
     rationale: str = "",
 ) -> Decision:
     from computronium.experiment.execution.stage import StageTransition
+
     return create_decision(
         StageTransition.STOP,
         rationale=rationale,
@@ -158,9 +164,9 @@ __all__ = [
     "Decision",
     "Replication",
     "RoundController",
-    "create_decision",
-    "continue_round",
     "complete_run",
+    "continue_round",
+    "create_decision",
     "pause_run",
     "stop_run",
 ]

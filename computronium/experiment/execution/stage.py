@@ -23,8 +23,6 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
-    from computronium.experiment.execution.search_space import Fragment as SearchSpaceFragment
-    from computronium.experiment.execution.search_space import StageContext as SearchSpaceStageContext
 
 
 class StageId(StrEnum):

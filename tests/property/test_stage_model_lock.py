@@ -189,14 +189,19 @@ class TestWrapperObligations:
                     if len(items) > 1 and item[0].cell_key() == "fail_cell":
                         # Simulate per-item failure
                         from computronium.experiment.schema.record import Record
-                        results.append(Record.create(
-                            run_id="test",
-                            coordinate=item[0],
-                            schedule=item[1],
-                            provenance=item[2],
-                            status=item[2].links.get("status") if hasattr(item[2], "links") else None,
-                            payload={"status": "failed"},
-                        ))
+
+                        results.append(
+                            Record.create(
+                                run_id="test",
+                                coordinate=item[0],
+                                schedule=item[1],
+                                provenance=item[2],
+                                status=item[2].links.get("status")
+                                if hasattr(item[2], "links")
+                                else None,
+                                payload={"status": "failed"},
+                            )
+                        )
                     else:
                         result = await super().submit_batch([item], store)
                         results.extend(result)

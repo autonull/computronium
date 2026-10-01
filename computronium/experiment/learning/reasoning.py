@@ -612,7 +612,7 @@ class ReasoningStore:
             record_id=f"hyp_{hypothesis.hypothesis_id}",
             seq=0,
             run_id=run_id,
-            schema_version=1,
+            schema_version=2,
             cell_key=hashlib.sha256(hypothesis.statement.encode()).hexdigest()[:16],
             measurement_key=hashlib.sha256(
                 f"{hypothesis.hypothesis_id}|{run_id}".encode()
@@ -704,7 +704,7 @@ class ReasoningStore:
             record_id=f"lit_{literature.literature_id}",
             seq=0,
             run_id=run_id,
-            schema_version=1,
+            schema_version=2,
             cell_key=hashlib.sha256(literature.title.encode()).hexdigest()[:16],
             measurement_key=hashlib.sha256(
                 f"{literature.literature_id}|{run_id}".encode()

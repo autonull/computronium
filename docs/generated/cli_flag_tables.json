@@ -319,7 +319,7 @@
       "kind": "reproducibility"
     },
     {
-      "flag": "reproducibility_class",
+      "flag": "reproducibility",
       "capability_id": "C33",
       "display_name": "Reproducibility class tracking",
       "kind": "reproducibility"
@@ -331,51 +331,51 @@
       "kind": "reproducibility"
     },
     {
-      "flag": "assessment",
+      "flag": "data_origin",
       "capability_id": "C34",
+      "display_name": "Data origin tags",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "i_cu",
+      "capability_id": "C34",
+      "display_name": "Data origin tags",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "transfer",
+      "capability_id": "C35",
+      "display_name": "Transfer provenance",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "provenance",
+      "capability_id": "C35",
+      "display_name": "Transfer provenance",
+      "kind": "reproducibility"
+    },
+    {
+      "flag": "assessment",
+      "capability_id": "C36",
       "display_name": "Assessment procedure versioning",
       "kind": "reproducibility"
     },
     {
       "flag": "procedure",
-      "capability_id": "C34",
+      "capability_id": "C36",
       "display_name": "Assessment procedure versioning",
-      "kind": "reproducibility"
-    },
-    {
-      "flag": "data_origin",
-      "capability_id": "C35",
-      "display_name": "Data origin tagging",
-      "kind": "reproducibility"
-    },
-    {
-      "flag": "split",
-      "capability_id": "C35",
-      "display_name": "Data origin tagging",
-      "kind": "reproducibility"
-    },
-    {
-      "flag": "transfer",
-      "capability_id": "C36",
-      "display_name": "Transfer provenance tracking",
-      "kind": "reproducibility"
-    },
-    {
-      "flag": "provenance",
-      "capability_id": "C36",
-      "display_name": "Transfer provenance tracking",
       "kind": "reproducibility"
     },
     {
       "flag": "comparison",
       "capability_id": "C37",
-      "display_name": "Matched-cost comparison guard",
+      "display_name": "Comparison guard",
       "kind": "governance"
     },
     {
       "flag": "guard",
       "capability_id": "C37",
-      "display_name": "Matched-cost comparison guard",
+      "display_name": "Comparison guard",
       "kind": "governance"
     },
     {
@@ -393,19 +393,13 @@
     {
       "flag": "icu",
       "capability_id": "C39",
-      "display_name": "I(C,U) leakage audit",
+      "display_name": "ICU calibration audit",
       "kind": "governance"
     },
     {
-      "flag": "leakage",
+      "flag": "calibration",
       "capability_id": "C39",
-      "display_name": "I(C,U) leakage audit",
-      "kind": "governance"
-    },
-    {
-      "flag": "audit",
-      "capability_id": "C39",
-      "display_name": "I(C,U) leakage audit",
+      "display_name": "ICU calibration audit",
       "kind": "governance"
     },
     {
@@ -439,7 +433,7 @@
       "kind": "governance"
     },
     {
-      "flag": "claims",
+      "flag": "maturity",
       "capability_id": "C41",
       "display_name": "Promotion predicates",
       "kind": "governance"
@@ -447,37 +441,37 @@
     {
       "flag": "effect_size",
       "capability_id": "C42",
-      "display_name": "Effect-size protocol",
+      "display_name": "Effect size protocol",
       "kind": "governance"
     },
     {
       "flag": "cohens_d",
       "capability_id": "C42",
-      "display_name": "Effect-size protocol",
+      "display_name": "Effect size protocol",
       "kind": "governance"
     },
     {
-      "flag": "budget",
+      "flag": "budget_tier",
       "capability_id": "C43",
       "display_name": "Budget tier system",
       "kind": "governance"
     },
     {
-      "flag": "tier",
+      "flag": "comparison",
       "capability_id": "C43",
       "display_name": "Budget tier system",
       "kind": "governance"
     },
     {
-      "flag": "operations",
+      "flag": "cli",
       "capability_id": "C44",
-      "display_name": "Run controller",
+      "display_name": "Surface CLI profiles",
       "kind": "governance"
     },
     {
-      "flag": "control",
+      "flag": "profiles",
       "capability_id": "C44",
-      "display_name": "Run controller",
+      "display_name": "Surface CLI profiles",
       "kind": "governance"
     },
     {
@@ -495,37 +489,37 @@
     {
       "flag": "conformance",
       "capability_id": "C46",
-      "display_name": "Conformance harness",
+      "display_name": "Conformance harness gate",
       "kind": "governance"
     },
     {
-      "flag": "ci",
+      "flag": "ci_gate",
       "capability_id": "C46",
-      "display_name": "Conformance harness",
+      "display_name": "Conformance harness gate",
       "kind": "governance"
     },
     {
-      "flag": "currency",
+      "flag": "currency_lock",
       "capability_id": "C47",
-      "display_name": "Currency lock",
+      "display_name": "Currency lock flags",
       "kind": "governance"
     },
     {
       "flag": "flags",
       "capability_id": "C47",
-      "display_name": "Currency lock",
+      "display_name": "Currency lock flags",
       "kind": "governance"
     },
     {
       "flag": "synthesis",
       "capability_id": "C48",
-      "display_name": "Question-first entry",
+      "display_name": "Synthesis policy question-first",
       "kind": "governance"
     },
     {
       "flag": "question_first",
       "capability_id": "C48",
-      "display_name": "Question-first entry",
+      "display_name": "Synthesis policy question-first",
       "kind": "governance"
     },
     {
@@ -567,31 +561,25 @@
     {
       "flag": "priors",
       "capability_id": "C51",
-      "display_name": "Prior single-source accessor",
+      "display_name": "Prior single source",
       "kind": "learning"
     },
     {
       "flag": "single_source",
       "capability_id": "C51",
-      "display_name": "Prior single-source accessor",
-      "kind": "learning"
-    },
-    {
-      "flag": "icu",
-      "capability_id": "C52",
-      "display_name": "Run-scoped ICU/Reasoning",
-      "kind": "learning"
-    },
-    {
-      "flag": "reasoning",
-      "capability_id": "C52",
-      "display_name": "Run-scoped ICU/Reasoning",
+      "display_name": "Prior single source",
       "kind": "learning"
     },
     {
       "flag": "k10",
       "capability_id": "C52",
-      "display_name": "Run-scoped ICU/Reasoning",
+      "display_name": "No global singletons",
+      "kind": "learning"
+    },
+    {
+      "flag": "singletons",
+      "capability_id": "C52",
+      "display_name": "No global singletons",
       "kind": "learning"
     },
     {
@@ -645,13 +633,13 @@
     {
       "flag": "claims",
       "capability_id": "C57",
-      "display_name": "Achieved-seed claim eligibility",
+      "display_name": "Achieved seed claim",
       "kind": "learning"
     },
     {
       "flag": "achieved_seeds",
       "capability_id": "C57",
-      "display_name": "Achieved-seed claim eligibility",
+      "display_name": "Achieved seed claim",
       "kind": "learning"
     },
     {

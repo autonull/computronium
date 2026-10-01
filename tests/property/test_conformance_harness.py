@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from computronium.experiment.schema.registries import (
-    CapabilityKind,
-    CapabilitySpec,
-    CapabilityStatus,
     CAPABILITIES_REGISTRY,
+    CapabilityStatus,
 )
+from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface.conformance import (
-    ConformanceHarness,
-    ConformanceStatus,
     CurrencyLock,
-    FlagProjectionLock,
     generate_flag_projection_lock,
     load_currency_lock,
     load_flag_projection_lock,
@@ -23,7 +20,6 @@ from computronium.experiment.surface.conformance import (
     save_currency_lock,
     save_flag_projection_lock,
 )
-from computronium.experiment.schema.seed_registries import seed_all_registries
 
 
 class TestRunVerifyingTest:

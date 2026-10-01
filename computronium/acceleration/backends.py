@@ -8,7 +8,7 @@ Provides auto-dispatch with profiling, benchmarking, and fallback chain.
 import time
 import warnings
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -41,7 +41,7 @@ __all__ = [
 ]
 
 
-class BackendType(str, Enum):  # ruff: ignore[replace-str-enum]
+class BackendType(StrEnum):  # noqa: UP042
     """Compute backend types in priority order."""
 
     TRITON = "triton"
@@ -128,17 +128,17 @@ class KernelProfiler:
                 _ = operation(*inputs)
 
             # Synchronize for accurate timing
-            if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+            if backend in {BackendType.TRITON, BackendType.CUDA, BackendType.CUPY}:
                 torch.cuda.synchronize()
 
             # Benchmark
             times = []
             for _ in range(self.benchmark_runs):
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+                if backend in {BackendType.TRITON, BackendType.CUDA, BackendType.CUPY}:
                     torch.cuda.synchronize()
                 start = time.perf_counter()
                 _ = operation(*inputs)
-                if backend in (BackendType.TRITON, BackendType.CUDA, BackendType.CUPY):  # ruff: ignore[literal-membership]
+                if backend in {BackendType.TRITON, BackendType.CUDA, BackendType.CUPY}:
                     torch.cuda.synchronize()
                 elapsed = time.perf_counter() - start
                 times.append(elapsed * 1000)  # ms
@@ -171,7 +171,7 @@ class KernelProfiler:
 
     def _prepare_inputs(self, shape: tuple[int, ...], backend: BackendType):
         """Prepare inputs for benchmarking based on backend."""
-        if backend in (BackendType.CUPY,):  # ruff: ignore[literal-membership]
+        if backend in {BackendType.CUPY}:
             import cupy as cp
 
             return [cp.random.randn(*shape).astype(cp.float32) for _ in range(2)]
@@ -273,7 +273,7 @@ class AutoDispatcher:
                 if method is not None:
                     try:
                         return method(*args, **kwargs)
-                    except Exception:  # ruff: ignore[try-except-continue]
+                    except Exception:  # noqa: S112 - try next backend
                         continue
         raise RuntimeError(f"No available backend for {algorithm}.{operation}")
 
@@ -359,11 +359,12 @@ def check_cupy_available() -> tuple[bool, str]:
         import cupy as cp
 
         _ = cp.zeros(10)
-        return True, "CuPy available with CUDA"  # ruff: ignore[try-consider-else]
     except ImportError:
         return False, "CuPy not installed. Install with: pip install cupy-cuda12x"
     except Exception as e:
         return False, f"CuPy installed but CUDA failed: {e}"
+    else:
+        return True, "CuPy available with CUDA"
 
 
 def check_triton_available() -> tuple[bool, str]:
@@ -420,7 +421,6 @@ def profile_kernel(
     shapes: list[tuple[int, ...]],
 ) -> dict[str, list[BackendBenchmark]]:
     """Profile a kernel operation across backends and shapes."""
-    profiler = KernelProfiler()  # ruff: ignore[unused-variable]
     # This is a placeholder - actual implementation would need
     # to extract the operation from the registered backend
     return {}

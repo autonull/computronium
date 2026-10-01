@@ -438,10 +438,10 @@ class Abandonment:
 
 
 __all__ = [
+    "Abandonment",
     "AllocationPolicy",
     "AllocationState",
     "EvidenceDrivenAllocator",
-    "PromotionCandidate",
     "Promotion",
-    "Abandonment",
+    "PromotionCandidate",
 ]

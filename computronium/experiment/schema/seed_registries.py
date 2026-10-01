@@ -1467,7 +1467,7 @@ CAPABILITIES = [
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_scientific_reproducibility",
         flags=("scientific", "independent_env"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C33",
         name="C33",
         kind=CapabilityKind.REPRODUCIBILITY,
@@ -1479,7 +1479,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::TestReproducibilityClasses::test_status_requires_reproducibility_class",
         flags=("reproducibility", "tracking"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C36",
         name="C36",
         kind=CapabilityKind.REPRODUCIBILITY,
@@ -1491,7 +1491,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::TestReproducibilityClasses::test_status_requires_assessment_procedure_version",
         flags=("assessment", "procedure"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C34",
         name="C34",
         kind=CapabilityKind.REPRODUCIBILITY,
@@ -1503,7 +1503,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestDataSplitProtocol::test_no_leakage_clean_split",
         flags=("data_origin", "i_cu"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C35",
         name="C35",
         kind=CapabilityKind.REPRODUCIBILITY,
@@ -1515,7 +1515,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::TestDataOriginAndTransferProvenance::test_transfer_mode_enum",
         flags=("transfer", "provenance"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C37",
         name="C37",
         kind=CapabilityKind.GOVERNANCE,
@@ -1527,7 +1527,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestComparisonGuards::test_matched_cost_comparison",
         flags=("comparison", "guard"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C38",
         name="C38",
         kind=CapabilityKind.GOVERNANCE,
@@ -1539,7 +1539,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestComparisonGuards::test_same_hardware_class_for_walltime",
         flags=("stratification", "hardware_class"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C39",
         name="C39",
         kind=CapabilityKind.GOVERNANCE,
@@ -1551,7 +1551,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_wp10_learning_integration_lock.py::TestSurrogateStoreWiring::test_effect_size_guards",
         flags=("icu", "calibration"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C40",
         name="C40",
         kind=CapabilityKind.GOVERNANCE,
@@ -1563,7 +1563,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestAlertPredicates::test_alert_on_resource_exhaustion",
         flags=("alerts", "predicates"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C41",
         name="C41",
         kind=CapabilityKind.GOVERNANCE,
@@ -1575,7 +1575,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestClaimPredicates::test_promoted_requires_l2_maturity",
         flags=("promotion", "maturity"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C42",
         name="C42",
         kind=CapabilityKind.GOVERNANCE,
@@ -1587,7 +1587,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestEffectSizeProtocol::test_effect_size_reports_cohens_d_with_ci",
         flags=("effect_size", "cohens_d"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C43",
         name="C43",
         kind=CapabilityKind.GOVERNANCE,
@@ -1599,7 +1599,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestEffectSizeProtocol::test_budget_tier_matching_required",
         flags=("budget_tier", "comparison"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C44",
         name="C44",
         kind=CapabilityKind.GOVERNANCE,
@@ -1623,7 +1623,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_public_surface_lock.py::test_service_manager_webhooks",
         flags=("service", "webhooks"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C46",
         name="C46",
         kind=CapabilityKind.GOVERNANCE,
@@ -1635,7 +1635,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_conformance_harness.py::TestConformanceHarness::test_required_capabilities_have_verifying_tests",
         flags=("conformance", "ci_gate"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C47",
         name="C47",
         kind=CapabilityKind.GOVERNANCE,
@@ -1647,7 +1647,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_conformance_harness.py::TestFlagProjectionLock::test_flag_projection_totality",
         flags=("currency_lock", "flags"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C48",
         name="C48",
         kind=CapabilityKind.GOVERNANCE,
@@ -1683,7 +1683,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_cross_task_transfer",
         flags=("transfer", "cross_task"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C51",
         name="C51",
         kind=CapabilityKind.LEARNING,
@@ -1695,7 +1695,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_wp10_learning_integration_lock.py::TestPriorSingleSource::test_ruler_tasks_resolve_via_registry",
         flags=("priors", "single_source"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C52",
         name="C52",
         kind=CapabilityKind.LEARNING,
@@ -1707,7 +1707,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_kernel_isolation_lock.py::TestRunScopedState::test_engine_singleton_removed",
         flags=("k10", "singletons"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C53",
         name="C53",
         kind=CapabilityKind.LEARNING,
@@ -1755,7 +1755,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_icu_feature_encoder",
         flags=("icu", "feature_encoder"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C57",
         name="C57",
         kind=CapabilityKind.LEARNING,
@@ -1767,7 +1767,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_statistical_protocol_lock.py::TestClaimPredicates::test_claim_eligible_requires_min_seeds",
         flags=("claims", "achieved_seeds"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C58",
         name="C58",
         kind=CapabilityKind.LEARNING,
@@ -2079,7 +2079,7 @@ CapabilitySpec(
         verifying_test="tests/property/test_wp11_surface_lock.py::TestDocumentedCommands::test_run_profiles_canonical_stages",
         flags=("cli", "surface"),
     ),
-CapabilitySpec(
+    CapabilitySpec(
         capability_id="C84",
         name="C84",
         kind=CapabilityKind.CORE,
