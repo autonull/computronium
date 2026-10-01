@@ -2883,6 +2883,24 @@ Definition of Done completes at WP13 close.
   ports from legacy and should be refactored or the module deleted when WP12
   removes the last legacy importer.
 
+### 2026-09-30 — Session Retrospective (Process Corrections)
+
+**Mistakes this session — don't repeat:**
+
+1. **Patched legacy code slated for deletion** — Spent time rerouting `autoscientist/compose.py` (WP12 delete target) instead of deleting the pillar wholesale. WP12 should be a bulk delete, not incremental migration.
+
+2. **Maintained duplicate hardcoded lists** — `GRID_UPDATES`, `GRID_DYNAMICS`, `GRID_CREDITS` in `experiment/execution/compose.py` should reflect `AXES_REGISTRIES[StructuralAxis.UPDATE].keys()` etc. Kernel owns the axis registry; no parallel lists.
+
+3. **Over-explained instead of acting** — Verbose responses to clarifying questions waste context. When user says "OK whatever", stop talking and ship diffs.
+
+**Operating rules going forward:**
+
+- **Delete legacy pillars wholesale** (WP12) — no incremental patches to code marked for deletion
+- **Registry reflection over hardcoding** — `AXES_REGISTRIES` is the single source; derive lists from it
+- **Kernel owns semantics** (§9.20) — legacy consumers reroute or die; no circular import workarounds
+- **Less prose, more diffs** — if a change needs >3 sentences of justification, it's probably wrong
+- **Trust the plan's own guards** — the remediation ledger (§9.1), isolation lock (§9.21), and kernel invariants (§9.20) exist to prevent these regressions; use them
+
 ### 2026-09-30 — WP14/WP15/WP16/WP17 Complete: SearchSpace/Stage Dispatch/Round Loop/Optuna Adapter
 
 - **SearchSpace/ProposalContext/Proposal canonical abstractions (WP14)**: Created `computronium/experiment/execution/search_space.py` with:
