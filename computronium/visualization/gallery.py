@@ -97,11 +97,8 @@ class DemoSpec:
 DEMOS: dict[str, DemoSpec] = {
     "compose_6axis": DemoSpec("D1", _fig_declared),
     "swap_credit": DemoSpec("D2", _fig_declared),
-    "swap_plasticity": DemoSpec("D3", _fig_declared),
-    "memory_budget": DemoSpec("D4", _fig_declared),
     "substrate_swap": DemoSpec("D6", _fig_declared),
     "spike_settle": DemoSpec("D7", _fig_declared),
-    "z3_frozen_theta": DemoSpec("D5", _fig_declared),
     "geometry_swap": DemoSpec("D8", _fig_declared),
     "graph_geometry_swap": DemoSpec("D9", _fig_declared),
     "attention_geometry_swap": DemoSpec("D10", _fig_declared),
@@ -113,16 +110,11 @@ DEMOS: dict[str, DemoSpec] = {
     "jpc_faithful_depth": DemoSpec("D14", _fig_declared),
     "uaxis_depth_frontier": DemoSpec("D15", _fig_declared),
     "uaxis_coverage": DemoSpec("D16", _fig_declared),
-    "paxis_pareto": DemoSpec("F3", _fig_declared),
     "update_ladder": DemoSpec("D18", _fig_declared),
     "credit_channel_map": DemoSpec("F4", _fig_declared),
-    "resource_vector": DemoSpec("F5", _fig_declared),
     "multi_psi_swap": DemoSpec("D17", _fig_declared, g_axis=True),
     "depth_harvest": DemoSpec("D19", _fig_declared, g_axis=True),
     "ntm_local": DemoSpec("D20", _fig_declared, g_axis=True),
-    "temporal_psi_migration": DemoSpec("D21", _fig_declared),
-    "mechanism_explorer": DemoSpec("D22", _fig_declared),
-    "evolution_search": DemoSpec("D24", _fig_declared),
     "pc_alm": DemoSpec("D23", _fig_declared),
 }
 

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from computronium.benchmarks.joint.z3_fixed_weights import Z3Operators
 from computronium.core.pipeline import run_train_step
 from computronium.core.plasticity.closed_form import (
     ClosedFormRidgePlasticity,
@@ -31,12 +32,11 @@ from computronium.core.plasticity.temporal_psi import (
     TemporalPsiPlasticity,
     create_temporal_psi_plasticity,
 )
-from computronium.experiments.joint.z3_fixed_weights import Z3Operators
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from computronium.autoscientist.objectives import ObjectiveSpec
+    from computronium.experiment.schema.registries import ObjectiveSpec
     from computronium.ontology.credit import CreditAssignment
     from computronium_lab.training import StabilityCertificate
 
@@ -540,11 +540,6 @@ def adapt_multi_objective(
     Returns:
         MultiObjectiveAdaptationResult with Pareto states and scalarized best.
     """
-    import pandas as pd
-
-    from computronium.hyperopt.metrics import scalarize_objectives
-    from computronium.visualization.atlas import pareto_top
-
     t0 = time.perf_counter()
     results: list[AdaptationResult] = []
 
@@ -561,7 +556,7 @@ def adapt_multi_objective(
         results.append(result)
 
     # Build objective vectors for Pareto computation
-    obj_names = [o.name.value for o in objectives]
+    obj_names = [o.name for o in objectives]
     rows: list[dict[str, float]] = []
     for r in results:
         row = {"mode": r.mode.value}
@@ -590,17 +585,14 @@ def adapt_multi_objective(
             walltime_s=time.perf_counter() - t0,
         )
 
-    df = pd.DataFrame(rows)
-    front = pareto_top(df, k=len(df), objectives=objectives)
-    pareto_indices = [
-        rows.index({**r, "mode": r["mode"]}) for r in front.to_dict("records")
+    front_indices = _pareto_indices(rows, objectives)
+    pareto_states = [results[i] for i in front_indices]
+    scalarized_best = results[
+        max(
+            range(len(rows)),
+            key=lambda i: _scalarized_score(rows[i], objectives),
+        )
     ]
-    pareto_states = [results[i] for i in pareto_indices]
-
-    # Scalarized best
-    df["scalarized_score"] = scalarize_objectives(df, objectives)
-    best_idx = df["scalarized_score"].idxmax()
-    scalarized_best = results[int(best_idx)]
 
     return MultiObjectiveAdaptationResult(
         pareto_states=pareto_states,
@@ -608,6 +600,45 @@ def adapt_multi_objective(
         scalarized_best=scalarized_best,
         walltime_s=time.perf_counter() - t0,
     )
+
+
+def _pareto_indices(
+    rows: list[dict[str, float]], objectives: Sequence[ObjectiveSpec]
+) -> list[int]:
+    """Indices of non-dominated rows under the configured objective directions."""
+    directions = {o.name for o in objectives}
+
+    def dominates(a: dict[str, float], b: dict[str, float]) -> bool:
+        strictly_better = False
+        for name in directions:
+            av, bv = a.get(name, 0.0), b.get(name, 0.0)
+            if directions[name] == "minimize":
+                av, bv = -av, -bv
+            if av < bv:
+                return False
+            if av > bv:
+                strictly_better = True
+        return strictly_better
+
+    return [
+        i
+        for i, row in enumerate(rows)
+        if not any(dominates(other, row) for j, other in enumerate(rows) if j != i)
+    ]
+
+
+def _scalarized_score(
+    row: dict[str, float], objectives: Sequence[ObjectiveSpec]
+) -> float:
+    """Weighted, direction-normalized scalar score (higher is better)."""
+    score = 0.0
+    for obj in objectives:
+        raw = row.get(obj.name)
+        if raw is None:
+            continue
+        value = -raw if obj.direction == "minimize" else raw
+        score += obj.weight * value
+    return score
 
 
 def _stability_certificate(

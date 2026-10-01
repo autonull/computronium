@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from computronium.analysis.recipe_cards import lookup as lookup_card
 from computronium_lab.synthesis.catalog import CATALOG, MechanismCandidate
 from computronium_lab.synthesis.predictor import ViabilityModel
 
@@ -108,19 +107,13 @@ def screen_config(cand: MechanismCandidate, spec: ProblemSpec) -> None:
 
 
 def card_factor(credit: str, update: str) -> tuple[float, str | None]:
-    """Soft prior from the measured recipe-card verdicts (TODO16 §0.3)."""
-    card = lookup_card(credit, update)
-    if card is None:
-        return 1.0, None
-    match card.status:
-        case "harm" | "closed":
-            return 0.2, card.status
-        case "boundary" | "peak_collapse" | "depth_wall_d2":
-            return 0.5, card.status
-        case "rescue" | "rescue_sharp" | "home" | "promoted":
-            return 1.1, card.status
-        case _:
-            return 1.0, card.status
+    """Soft prior for a (credit, update) pair.
+
+    The legacy recipe-card registry was retired with the pillar cleanup
+    (TODO44 Phase B); the neutral prior applies until a kernel-backed
+    replacement (PRIORS registry) is wired here.
+    """
+    return 1.0, None
 
 
 def _score_candidates(

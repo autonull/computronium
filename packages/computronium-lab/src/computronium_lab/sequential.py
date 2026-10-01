@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 from torch import Tensor
 
-from computronium.experiments.joint.z3_fixed_weights import (
+from computronium.benchmarks.joint.z3_fixed_weights import (
     create_last_symbol_task,
     create_parity_task,
     create_threshold_task,

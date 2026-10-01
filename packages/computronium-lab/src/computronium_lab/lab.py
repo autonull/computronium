@@ -11,7 +11,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader, TensorDataset
 
-from computronium.experiments.joint.tasks import gaussian_blobs
+from computronium.benchmarks.joint.tasks import gaussian_blobs
 from computronium_lab.presets import PRESETS, build_system_preset
 from computronium_lab.recipes import RECIPES, build_recipe
 from computronium_lab.synthesis.spec import Constraints, ProblemSpec
