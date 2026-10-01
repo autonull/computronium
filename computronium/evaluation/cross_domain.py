@@ -9,8 +9,6 @@ Provides unified benchmarking across all domains:
 - Time Series
 - Tabular
 - Scientific Simulation
-
-Integrates with KnowledgeBase for persistent storage and LeaderboardGenerator.
 """
 
 import json
@@ -30,9 +28,13 @@ from computronium.domains import (
     TimeSeriesTask,
     VisionTask,
 )
-from computronium.evaluation.base import BenchmarkResult
-from computronium.knowledge import KnowledgeBase, KnowledgeEntry
-from computronium.leaderboard.generator import LeaderboardEntry, LeaderboardGenerator
+
+# Optional stability package imports (for KnowledgeBase and Leaderboard)
+try:
+    from stability import KnowledgeBase, KnowledgeEntry
+    from stability import LeaderboardGenerator, LeaderboardEntry
+except ImportError:
+    KnowledgeBase = KnowledgeEntry = LeaderboardGenerator = LeaderboardEntry = None  # type: ignore[assignment,misc]
 
 logger = get_logger()
 
@@ -111,8 +113,12 @@ class CrossDomainBenchmarkSuite:
         leaderboard: LeaderboardGenerator | None = None,
         output_dir: str = "benchmark_results",
     ):
-        self.kb = kb or KnowledgeBase()
-        self.leaderboard = leaderboard or LeaderboardGenerator(output_dir=output_dir)
+        self.kb = kb
+        if self.kb is None and KnowledgeBase is not None:
+            self.kb = KnowledgeBase()
+        self.leaderboard = leaderboard
+        if self.leaderboard is None and LeaderboardGenerator is not None:
+            self.leaderboard = LeaderboardGenerator(output_dir=output_dir)
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -302,7 +308,9 @@ class CrossDomainBenchmarkSuite:
     def _store_in_kb(
         self, model_name: str, task_name: str, result: BenchmarkResult
     ) -> None:
-        """Store benchmark result in KnowledgeBase."""
+        """Store benchmark result in KnowledgeBase (if available)."""
+        if self.kb is None or KnowledgeEntry is None:
+            return
         entry = KnowledgeEntry(
             id=f"BENCH-{model_name}-{task_name}",
             topic="Benchmark",

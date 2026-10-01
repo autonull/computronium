@@ -1,10 +1,7 @@
 """Shared training-state containers (REFACTOR.md §4).
 
 Unifies the epoch-level checkpoint/trajectory types previously scattered
-across ``computronium.execution.training_dynamics`` (``TrainingCheckpoint``,
-``TrainingTrajectory``) and ``computronium.hyperopt.storage`` (trial epoch
-metrics). ``EpochCheckpoint`` is the canonical epoch-level record; both the
-execution path and the hyperopt persistence layer build on it.
+across the codebase. ``EpochCheckpoint`` is the canonical epoch-level record.
 """
 
 from __future__ import annotations

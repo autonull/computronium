@@ -327,7 +327,7 @@ def track_11_deep_network(verifier) -> TrackResult:  # ruff: ignore[too-many-loc
 
     logger.info("\n[11a] Creating %d-step model...", depth)
     model = create_native_eqprop_mlp(
-        input_dim, hidden_dim, output_dim, use_spectral_norm=True, max_steps=depth
+        input_dim, hidden_dim, output_dim, num_layers=depth, settle_steps=depth
     )
 
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
@@ -340,7 +340,7 @@ def track_11_deep_network(verifier) -> TrackResult:  # ruff: ignore[too-many-loc
     model.eval()
     x = X[:1]
     with torch.enable_grad():
-        out, _trajectory = model(x, return_trajectory=True)
+        out = model(x)
         loss = F.cross_entropy(out, y[:1])
         loss.backward()
 

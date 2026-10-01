@@ -3,12 +3,7 @@
 Implements WP6 deliverable: convert ruler-LR table and step-size override tables
 into prior *data*; delete the source code tables (R52, Q4, Q12).
 
-This module migrates the following legacy code tables to PriorSpec records:
-- `_ruler_lr` table from `computronium.autoscientist.campaign` (per-task LR)
-- `_STEP_SIZE_OVERRIDES` from `computronium.ontology.update` (dynamics×credit multipliers)
-- `_DYNAMICS_STEP_SIZE_OVERRIDES` from `computronium.autoscientist.compose` (dynamics step sizes)
-
-L11 Remediation: PRIORS registry becomes the single source. Accessor functions
+PRIORS registry becomes the single source. Accessor functions
 use `prior_value(name, context)` from the registry.
 """
 

@@ -4,9 +4,7 @@ Domains Package
 Domain abstraction layer with standard interfaces for vision, LM, RL, graph,
 tabular, time series, and scientific simulation.
 
-Also re-exports the merged task factory (``create_task``) and training
-utilities (``_TaskTrainer``, ``TaskProtocol``) that originated in
-``hyperopt/tasks.py``.
+Re-exports the merged task factory (``create_task``) and training utilities.
 """
 
 from computronium.domains.base import (

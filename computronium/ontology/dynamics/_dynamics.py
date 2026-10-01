@@ -739,8 +739,8 @@ class StateDynamics(Protocol):
         1. ``settle`` iterates until the convergence criterion is met or
            ``config.max_steps`` is reached. Not fewer.
         2. ``_settle_steps_used`` counts steps **actually executed**. It is
-           truth telemetry, consumed by ``analysis/instruments.py`` and
-           ``autoscientist/campaign.py`` to report a real horizon.
+           truth telemetry, consumed by ``analysis/instruments.py`` to report
+           a real horizon.
         3. The early-stop signal is a **separate** flag, ``_converged``, reset
            by ``_note_settle_start()`` at the start of *every* ``settle`` —
            including each phase of a free/nudged pair. Never test

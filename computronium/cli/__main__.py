@@ -1,13 +1,13 @@
 """Computronium CLI dispatcher (``comp``).
 
-Single public command surface over the Pillar-K thin adapters. Every top-level
+Single public command surface over the Kernel and Library adapters. Every top-level
 command maps to one module ``main``; the console-script table in
 ``pyproject.toml`` points at this entry point so the public API boundary stays
 one place.
 
 Usage::
 
-    comp <run|report|parity|repro|hpo|audit|frontier|rank|lab|validate|joint-validate|campaign|stability|benchmark|gallery|daemon|continuous> [args]
+    comp <report|parity|repro|validate|joint-validate|benchmark> [args]
 """
 
 from __future__ import annotations
@@ -25,23 +25,12 @@ if TYPE_CHECKING:
 # command -> (module, attribute). Resolved lazily to keep the import graph
 # shallow: the dispatcher itself must not drag in the zoo/execution layer.
 _SUBCOMMANDS: dict[str, tuple[str, str]] = {
-    "run": ("computronium.cli.run", "main"),
     "report": ("computronium.experiment.surface.cli", "main"),
     "parity": ("computronium.cli.parity", "main"),
     "repro": ("computronium.cli.repro", "main"),
-    "hpo": ("computronium.cli.hpo", "main"),
-    "frontier": ("computronium.cli.frontier", "main"),
-    "rank": ("computronium.cli.rank", "main"),
-    "lab": ("computronium.cli.lab", "main"),
     "validate": ("computronium.cli.validate", "main"),
     "joint-validate": ("computronium.cli.joint_validate", "main"),
-    "campaign": ("computronium.cli.campaign", "main"),
-    "scientist": ("computronium.cli.scientist", "main"),
-    "stability": ("computronium.cli.stability", "main"),
     "benchmark": ("computronium.cli.benchmark", "main"),
-    "gallery": ("computronium.cli.gallery", "main"),
-    "continuous": ("computronium.cli.continuous", "main"),
-    "daemon": ("computronium.cli.daemon", "main"),
 }
 
 _USAGE = "comp <" + "|".join(_SUBCOMMANDS) + "> [args]"

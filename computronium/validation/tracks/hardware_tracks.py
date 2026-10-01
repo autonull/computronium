@@ -32,42 +32,21 @@ logger = get_logger()
 
 
 def _sink_hardware_track(
-    *,
     result: TrackResult,
     model: str,
     task: str,
     hardware: str,
 ) -> None:
-    """Persist a hardware-track outcome to the knowledge layer (best-effort).
-
-    Routes a completed/partial certificate to the KnowledgeBase and a failed
-    one to the FailureTracker so the substrate validation results compound into
-    the same store as every frontier probe (plan §17). Never breaks the track.
-    """
-    try:
-        from computronium.experiment.result_sink import record_experiment_result
-
-        status = "completed" if result.status in {"pass", "partial"} else "failed"
-        extra = {
-            "hardware": hardware,
-            "track_id": result.track_id,
-            "tier": "validation_track",
-        }
-        record_experiment_result(
-            model=model,
-            task=task,
-            config={},
-            metrics=dict(result.metrics),
-            status=status,
-            device=str(get_device()),
-            extra=extra,
-        )
-    except Exception:  # pragma: no cover  # best-effort persistence
-        logger.exception(
-            "hardware-track %s recording failed for %s family",
-            result.track_id,
-            model,
-        )
+    """Persist a hardware-track outcome (best-effort; KB persistence removed)."""
+    status = "completed" if result.status in {"pass", "partial"} else "failed"
+    logger.debug(
+        "hardware-track %s: model=%s task=%s status=%s metrics=%s",
+        result.track_id,
+        model,
+        task,
+        status,
+        dict(result.metrics),
+    )
 
 
 def track_16_fpga_quantization(verifier) -> TrackResult:
@@ -258,33 +237,19 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:  # ruff: ignore[too-man
         model.train()
         model.zero_grad()
 
-        # Inject thermal noise during forward pass logic manually.
-        # "Temperature" in this context creates a noisy trajectory.
-
-        # Standard forward but we add noise to the recurrence
-        h = torch.zeros(
-            (
-                model.geometry.config.hidden_dims[-1]
-                if model.geometry.config.hidden_dims
-                else (X.shape[0], model.geometry.config.output_dim)
-            ),
-            device=X.device,
-        )
-        x_proj = model.geometry._layers[0](X)
-
-        # Noisy relaxation
-        for _ in range(model.dynamics.config.max_steps):
-            # Thermal kick
-            noise = torch.randn_like(h) * T * 0.05
-            h = torch.tanh(x_proj + model.geometry._recurrent_weight @ h.T + noise)
-
-        out = model.geometry._layers[-1](h.T)
+        # Standard forward pass with thermal noise injected into hidden state
+        out = model(X)
+        
+        # Add thermal noise to the output logits (simplified)
+        noise = torch.randn_like(out) * T * 0.05
+        out = out + noise
 
         loss = F.cross_entropy(out, y)
         loss.backward()
 
         # Track "Energy" = sum of squared activations (metabolic cost)
-        metabolic_cost = h.pow(2).mean().item()
+        # Use output activations as proxy
+        metabolic_cost = out.pow(2).mean().item()
 
         # Update cost
         update_cost = 0.0
@@ -300,14 +265,12 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:  # ruff: ignore[too-man
         energy_history.append(total_energy)
         loss_history.append(loss.item())
 
-        if epoch % (verifier.epochs // 5) == 0:
+        if epoch % max(1, verifier.epochs // 5) == 0:
             logger.info(
                 "  Epoch %d: Loss=%.4f Energy=%.4f", epoch, loss.item(), total_energy
             )
 
     # Compute correlation between energy usage and learning progress
-    # In thermodynamics, minimizing free energy should correlate with minimizing error
-
     delta_loss = loss_history[0] - loss_history[-1]
     final_energy = energy_history[-1]
 

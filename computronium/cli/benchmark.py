@@ -205,24 +205,24 @@ def _run_benchmark(args) -> int:
     # Map suite to experiment module and argument mappings
     suite_configs = {
         "adaptation_efficiency": {
-            "module": "computronium.experiments.joint.adaptation_efficiency",
+            "module": "computronium.benchmarks.joint.adaptation_efficiency",
             "epoch_arg": "--epochs",
         },
         "compute_efficiency": {
-            "module": "computronium.experiments.joint.compute_efficiency",
+            "module": "computronium.benchmarks.joint.compute_efficiency",
             "epoch_arg": "--epochs",
         },
         "structural_robustness": {
-            "module": "computronium.experiments.joint.structural_robustness",
+            "module": "computronium.benchmarks.joint.structural_robustness",
             "epoch_arg": "--epochs",
         },
         "algorithm_migration": {
-            "module": "computronium.experiments.joint.algorithm_migration",
+            "module": "computronium.benchmarks.joint.algorithm_migration",
             "epoch_arg": "--epochs-a0",
             "extra_args": ["--epochs-a1", str(args.epochs)],
         },
         "z3_fixed_weights": {
-            "module": "computronium.experiments.joint.z3_fixed_weights",
+            "module": "computronium.benchmarks.joint.z3_fixed_weights",
             "epoch_arg": "--meta-train-epochs",
             "extra_args": ["--eval-epochs", str(args.epochs)],
         },
@@ -467,7 +467,7 @@ def _compare_plasticity(args) -> int:
 
     # Run adaptation_efficiency suite with specified coordinates
     config = {
-        "module": "computronium.experiments.joint.adaptation_efficiency",
+        "module": "computronium.benchmarks.joint.adaptation_efficiency",
         "epoch_arg": "--epochs",
     }
 

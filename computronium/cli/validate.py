@@ -77,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         intermediate_mode = False
 
     # Import here to avoid loading heavy modules at dispatcher level
-    from computronium.validation.core import Verifier
+    from computronium.validation.verifier import Verifier
 
     verifier = Verifier(
         quick_mode=quick_mode,

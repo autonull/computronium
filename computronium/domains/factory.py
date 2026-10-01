@@ -1,7 +1,6 @@
 """
 Task factory for the merged task hierarchy.
 
-Moved from ``hyperopt/tasks.py`` during Phase 3.1 merge.
 All concrete task classes now live in ``domains/``.
 """
 

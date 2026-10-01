@@ -1,7 +1,6 @@
 """Generic gradient computation strategies (REFACTOR.md §7).
 
 Backpropagation, feedback-alignment, target-propagation, and Hebbian gradients.
-MEP-specific EP strategies live in ``zoo.mep.optimizers.strategies.gradient``.
 """
 
 from typing import Protocol, cast

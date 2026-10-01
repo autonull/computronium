@@ -6,7 +6,7 @@ from computronium.validation.analysis import (
     compute_energy,
     estimate_lyapunov,
 )
-from computronium.validation.core import Verifier
+from computronium.validation.verifier import Verifier
 from computronium.validation.notebook import (
     TrackResult,
     ValidationTrack,

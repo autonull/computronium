@@ -5,10 +5,6 @@ containers (training/epoch/trial) share a common base shape (epoch, step,
 extra) instead of each redefining it. ``BaseMetrics`` is the common ancestor;
 ``EpochMetrics`` is the canonical epoch-level container reused by benchmark
 runners.
-
-``TrialMetrics`` (with Pareto dominance logic) remains canonical in
-``computronium.hyperopt.metrics`` and imports ``BaseMetrics`` here for its
-shared shape.
 """
 
 from __future__ import annotations

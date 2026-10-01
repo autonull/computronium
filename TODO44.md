@@ -242,17 +242,235 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
 
 ## 10. Appendix — Inventory (filled by Phase A)
 
-<!-- Execution appends: A1 classification table, A2 CLI decision table,
-     A3 deleted-test list, A4 root-doc destinations, A5 script dispositions.
-     These tables are the authoritative record for Phases B–C. -->
+### A1. Top-Level Module Classification
+
+| Module/Directory | Classification | Rationale |
+|---|---|---|
+| `acceleration/` | **Library** | Kernel backends, kernels, compilation, registry — active, used by ontology |
+| `algorithms/` | **Library** | 20+ algorithm implementations (backprop, eqprop, fa, ff, pepita, tp, pc, hebbian, snn, tile, routing, fast_weight, diffusion_eqprop, directed_ep, finite_nudge_ep, holomorphic_ep, momentum_eqprop, pcalm, sparse_eqprop, spiking_snn, ternary_eqprop) — active |
+| `analysis/` | **Legacy** | Campaign/autoscientist-dependent (results, dominance, counterfactual, failure_manifesto, mechanistic_study, memory_stability, pareto, recipe_cards, scaling, tile_research, vertical_slice) — imports pillars |
+| `autopoiesis/` | **Orphan** | Empty stub (`protocols.py` only) — no consumers |
+| `autoscientist/` | **Legacy (Pillar)** | Full pillar: campaign, broad_map, daemon, proposer, reasoner, literature, objectives, alerts, defects, ceec_link — DELETE |
+| `benchmarks/` | **Library** | Algorithm migration, efficiency, rigorous — active ML library benchmarks |
+| `cli/` | **Consumer → Kernel** | 17 subcommands; dispatcher in `__main__.py`; adapters in `commands/`, `campaign.py`, `continuous.py`, `daemon.py`, `frontier.py`, `hpo.py`, `lab.py`, `run.py`, `scientist.py`, `stability.py`, `benchmark.py`, `gallery.py`, `validate.py`, `joint_validate.py`, `parity.py`, `repro.py`, `rank.py` — REPAIR/DELETE per A2 |
+| `config/` | **Library** | Experiment, omegaconf, unified configs — active |
+| `core/` | **Library + Legacy** | **Library**: `campaign/` (DELETE), `construction.py`, `continual/`, `credit/`, `dynamics/`, `ebm.py`, `energies.py`, `ewc.py`, `exceptions.py`, `frozen_theta.py`, `identity_card.py`, `joint/`, `local_learning/`, `logging.py`, `losses.py`, `metrics.py`, `model.py`, `model_status.py`, `nebc.py`, `optimization/`, `pipeline.py`, `plasticity/`, `presets.py`, `profiling.py`, `system_trainer.py`, `theta_audit.py`, `_paths.py`, `checkpoint*.py` — **Legacy**: `core/campaign/` (pillar), `core/profiling.py` (lazy import of `campaign.evaluation`) |
+| `data/` | **Library** | Vision, LM, curricula, transforms — active |
+| `deployment/` | **Library** | ONNX, PT2, quantization, serialization — active |
+| `domains/` | **Library + Legacy** | **Library**: `base.py`, `factory.py`, `graph.py`, `lm.py`, `registry.py`, `rl.py`, `scientific.py`, `tabular.py`, `timeseries.py`, `vision.py` — **Legacy**: `trainer.py` (imports `execution._guards`) |
+| `evaluation/` | **Library** | Base, benchmarks, cross_domain, fairness — active |
+| `execution/` | **Legacy (Pillar)** | Full pillar: engine, callbacks, candidate_gen, criteria, dashboard, events, _guards, _lifecycle, lifecycle, monitoring, resources, robustness, _state, strategy, synthesizer, task, task_weights, training_dynamics, interpretability — DELETE |
+| `experiment/` | **Kernel (ACTIVE)** | Schema, legality, execution, evidence, learning, surface — KEEP |
+| `experiments/` | **Legacy (Pillar)** | Pre-kernel layer: cross_domain_transfer, eqprop_vision_parity, fa_depth_scaling, joint/, mep_tournament, mot_ablation, tile_algorithm_comparison, tile_scaling — DELETE |
+| `graph/` | **Orphan** | Inference, initialization, nodes, topology, training — no clear consumers |
+| `hyperopt/` | **Legacy (Pillar)** | Full pillar: analysis, comparator, comparison, _dashboard, eval_tiers, experiment, _finder, frontier, hyperparameter_metamodel, ideal_backprop, metrics, optuna_bridge, parallel_runner, portfolio, rule_frontier, scaling_law, search_space, _stats, storage — DELETE |
+| `knowledge/` | **Legacy** | KB-era: causal, entries, kb_cache, kb, metamodel, query, seed, surrogate, vector_store — DELETE |
+| `leaderboard/` | **Orphan** | Stub generator only |
+| `lightning_/` | **Legacy (Pillar)** | Callbacks, experiment, hpo, module, nas, strategies — DELETE |
+| `mep/` | **Orphan** | CUDA, optimizers, presets — no clear integration |
+| `models/` | **Library** | Deployments, native, tile_lm — active |
+| `nn/` | **Library** | Module, plasticity, rules, system_module — active |
+| `ontology/` | **Library** | Credit, depth, dynamics, geometry, plasticity, PROTOCOL_INVARIANTS, _settle_kernel, substrate, system, tile_blocks, update, utils — ACTIVE |
+| `p2p/` | **Legacy** | Evolution imports `hyperopt.experiment`, grpc_service, grpc_worker, p2p_worker, proto, state, dht — REPAIR/DELETE |
+| `papers/` | **Orphan** | Registry only |
+| `primitives/` | **Library** | Credit_assignment, geometry, parameter_update, plasticity, state_dynamics, substrate — ACTIVE |
+| `stability/` | **Library + Legacy** | **Library**: basin, config, frontier, guard, lyapunov, resources, settling, spectral_radius — **Legacy**: `calibration.py` (lazy import of `campaign.evaluation`) |
+| `state/` | **Library** | Composite, context, registry, transitions — ACTIVE |
+| `training/` | **Library** | RL only — active |
+| `validation/` | **Library + Legacy** | **Library**: analysis, backprop_parity, gradient_check, notebook, preregistration, SCIENTIFIC_RIGOR, statistics, tracks, utils — **Legacy**: `core.py` (imports `execution._state`), `power_preregistration.py` (imports `FrontierRecord`) |
+| `visualization/` | **Library + Legacy** | **Library**: _demo_api, gallery, _style — **Legacy**: `atlas.py` (imports `autoscientist.objectives`) |
+| **Root `.py` files** | | |
+| `resources.py` | **Legacy** | Unused utility module |
+| `utils.py` | **Legacy** | Unused utility module |
+| `verification.py` | **Library** | Verification taxonomy — active |
+| `_surface.py` | **Kernel** | Public surface guard — active |
+| `tracking.py` | **Legacy** | Unused |
+| `sklearn_interface.py` | **Orphan** | Sklearn adapter — no consumers |
+
+### A2. CLI Decision Table (17 subcommands from `cli/__main__.py::_SUBCOMMANDS`)
+
+| Command | Module | Legacy Imports | Decision | Verification |
+|---|---|---|---|---|
+| `run` | `computronium.cli.run` | `core.campaign` | **DELETE** — pillar campaign |
+| `report` | `computronium.experiment.surface.cli` | None (kernel) | **KEEP** — kernel surface CLI |
+| `parity` | `computronium.cli.parity` | None | **KEEP** — library parity benchmark |
+| `repro` | `computronium.cli.repro` | None | **KEEP** — library reproducibility |
+| `hpo` | `computronium.cli.hpo` | `hyperopt.*` | **DELETE** — pillar hyperopt |
+| `frontier` | `computronium.cli.frontier` | `hyperopt.frontier` | **DELETE** — pillar hyperopt |
+| `rank` | `computronium.cli.rank` | `hyperopt.*` | **DELETE** — pillar hyperopt |
+| `lab` | `computronium.cli.lab` | `hyperopt.*`, `autoscientist.*` | **DELETE** — depends on pillars |
+| `validate` | `computronium.cli.validate` | None | **KEEP** — library verification suite |
+| `joint-validate` | `computronium.cli.joint_validate` | None | **KEEP** — library 6-axis validation |
+| `campaign` | `computronium.cli.campaign` | `core.campaign.*` | **DELETE** — pillar campaign |
+| `scientist` | `computronium.cli.scientist` | `autoscientist.*` | **DELETE** — pillar autoscientist |
+| `stability` | `computronium.cli.stability` | `core.campaign.*` | **FOLD** → kernel `evidence/` report or delete |
+| `benchmark` | `computronium.cli.benchmark` | None | **KEEP** — ML library benchmarks |
+| `gallery` | `computronium.cli.gallery` | `autoscientist.broad_map` | **FOLD** → kernel-backed demo runner or delete |
+| `continuous` | `computronium.cli.continuous` | `autoscientist.*` | **DELETE** — pillar autoscientist |
+| `daemon` | `computronium.cli.daemon` | `autoscientist.daemon` | **DELETE** — pillar autoscientist |
+
+**Surviving commands (6):** `report`, `parity`, `repro`, `validate`, `joint-validate`, `benchmark`
+
+### A3. Test Files Importing Pillars (45 files)
+
+| File | Pillar Import | Disposition |
+|---|---|---|
+| `tests/integration/test_demo_memory_budget.py` | `autoscientist` | Delete |
+| `tests/integration/test_continuous_burst.py` | `autoscientist` | Delete |
+| `tests/integration/test_algorithm_migration_smoke.py` | `execution` | Delete |
+| `tests/integration/test_demo_temporal_psi_migration.py` | `autoscientist` | Delete |
+| `tests/integration/test_continual_learning.py` | `core.campaign` | Delete |
+| `tests/integration/test_continuous_training.py` | `autoscientist` | Delete |
+| `tests/integration/test_phase2_integration.py` | `hyperopt`, `autoscientist` | Delete |
+| `tests/integration/test_demo_swap_plasticity.py` | `core.campaign` | Rewire to kernel |
+| `tests/integration/test_optuna_bridge_integration.py` | `hyperopt` | Delete |
+| `tests/integration/test_p2p_constraints.py` | `hyperopt` | Delete |
+| `tests/integration/joint/test_benchmarks.py` | `experiments` | Delete |
+| `tests/integration/test_hyperopt_store_parity.py` | `hyperopt` | Delete |
+| `tests/integration/test_demo_paxis_pareto.py` | `autoscientist` | Delete |
+| `tests/integration/test_demo_z3_frozen_theta.py` | `autoscientist` | Delete |
+| `tests/unit/core/test_family_neutral_pipeline.py` | `core.campaign` | Delete |
+| `tests/unit/core/test_axis_probe.py` | `core.campaign` | Delete |
+| `tests/unit/core/test_campaign_stack.py` | `core.campaign` | Delete |
+| `tests/unit/core/test_profiling.py` | `core.campaign` | Delete |
+| `tests/unit/core/test_campaign_report.py` | `core.campaign` | Delete |
+| `tests/unit/test_synthesizer.py` | `execution` | Delete |
+| `tests/unit/test_autoscientist_compose.py` | `autoscientist` | Delete |
+| `tests/unit/test_ceec_link.py` | `autoscientist` | Delete |
+| `tests/unit/test_stream_protocol.py` | `autoscientist` | Delete |
+| `tests/unit/test_dashboard_pure.py` | `execution` | Delete |
+| `tests/unit/test_dashboard_rich.py` | `execution` | Delete |
+| `tests/unit/test_hyperopt_portfolio.py` | `hyperopt` | Delete |
+| `tests/unit/test_hyperparameter_metamodel.py` | `hyperopt` | Delete |
+| `tests/unit/test_interpretability.py` | `execution` | Delete |
+| `tests/unit/test_execution_resources.py` | `execution` | Delete |
+| `tests/unit/test_hyperopt_analysis.py` | `hyperopt` | Delete |
+| `tests/unit/test_campaign_readers.py` | `core.campaign` | Delete |
+| `tests/unit/test_candidate_gen_filter.py` | `execution` | Delete |
+| `tests/unit/test_campaign_reproducibility.py` | `core.campaign` | Delete |
+| `tests/unit/test_inference_benchmark.py` | `hyperopt` | Delete |
+| `tests/unit/validation/test_z3_criterion_window.py` | `core.campaign` | Delete |
+| `tests/unit/validation/test_z3_redesign.py` | `core.campaign` | Delete |
+| `tests/property/test_power_preregistration.py` | `core.campaign` | Delete |
+| `tests/property/test_positive_control.py` | `core.campaign` | Delete |
+| `tests/property/test_z3_engagement.py` | `core.campaign` | Delete |
+| `tests/property/test_memory_budget_trial.py` | `autoscientist` | Delete |
+| `tests/property/test_campaign_fidelity.py` | `core.campaign` | Delete |
+| `tests/property/test_constraint_trial.py` | `core.campaign` | Delete |
+| `tests/property/test_psi_engagement.py` | `autoscientist` | Delete |
+| `tests/property/test_discovery_locks.py` | `autoscientist` | Delete |
+| `tests/property/test_alerts.py` | `autoscientist` | Delete |
+| `tests/property/test_stationary_teacher.py` | `autoscientist` | Delete |
+| `tests/property/test_deep_credit_trial.py` | `core.campaign` | Delete |
+| `tests/property/test_defect_ledger.py` | `autoscientist` | Delete |
+| `tests/property/test_metric_provenance.py` | `autoscientist` | Delete |
+| `tests/property/test_continuous_budget.py` | `autoscientist` | Delete |
+| `tests/property/test_daemon_state.py` | `autoscientist` | Delete |
+| `tests/property/test_retention_trial.py` | `core.campaign` | Delete |
+| `tests/property/test_ruler_table_lock.py` | `autoscientist` | Delete |
+| `tests/property/test_fidelity_meta_validation.py` | `core.campaign` | Delete |
+
+**ML Library tests to REWIRE (keep):** `tests/unit/core/` (non-campaign), `tests/integration/` (non-pillar demos like `test_demo_swap_credit.py`, `test_demo_compose_6axis.py`)
+
+### A4. Root `.md` File Destinations (77 files)
+
+| File | Destination |
+|---|---|
+| `AGENTS.md` | **KEEP** at root |
+| `README.md` | **KEEP** at root |
+| `TODO43.plan3.md` | **KEEP** at root |
+| `TODO44.md` | **KEEP** at root |
+| `AUTOTILE.md` | `docs/archive/AUTOTILE.md` |
+| `CAMPAIGN_LOG.md` | `docs/archive/CAMPAIGN_LOG.md` |
+| `CAMPAIGN_PLAN.md` | `docs/archive/CAMPAIGN_PLAN.md` |
+| `CAMPAIGN_REFERENCE.md` | `docs/archive/CAMPAIGN_REFERENCE.md` |
+| `COORDINATE_VOIDS.md` | `docs/archive/COORDINATE_VOIDS.md` |
+| `DECISIONS.md` | `docs/archive/DECISIONS.md` |
+| `METADYNAMICS.md` | `docs/reference/METADYNAMICS.md` |
+| `METHODOLOGY.md` | `docs/archive/METHODOLOGY.md` |
+| `METHODOLOGY.SCHEMA.md` | `docs/reference/METHODOLOGY.SCHEMA.md` |
+| `PROMPT.md` | `docs/archive/PROMPT.md` |
+| `RESEARCH3.md` | `docs/archive/RESEARCH3.md` |
+| `RESEARCH4.md` | `docs/archive/RESEARCH4.md` |
+| `TODO*.md` (38 files) | `docs/archive/` |
+| `TODO.ntm_nca.md` | `docs/archive/TODO.ntm_nca.md` |
+| `TODO.pcalm.md` | `docs/archive/TODO.pcalm.md` |
+| `TODO.rigor.md` | `docs/archive/TODO.rigor.md` |
+| `Z3.md` | `docs/reference/Z3.md` |
+
+### A5. Script Dispositions (219 `.py` files in `scripts/`)
+
+| Category | Files | Action |
+|---|---|---|
+| **KEEP (3)** | `quickstart.py`, `generate_identity_cards.py`, `readme_snippet_lock.py` | Keep at `scripts/` |
+| **KEEP (probes)** | `scripts/probes/**` (85 files) | Keep at `scripts/probes/` |
+| **KEEP (demos - new)** | `scripts/demos/**` (to be created in Phase F) | Create in Phase F |
+| **ARCHIVE (120)** | Analysis, audit, benchmark, campaign, calibrate, commission, contrastive, convert, debug, equil, fidelity, fix, gate, generate, guard, i18n, kernel_dev, p4lite, power, preflight, preliminary, refactor, rename, render, rerun, scaffold, validate, verify, visualize, z3 scripts | `git mv scripts/*.py scripts/archive/` |
+| **DELETE (11)** | `add_all_exports.py`, `b2_comprehensive_analysis.py`, `b_h3_scope_gate.py`, `broad_mapping_sweep.py`, `broad_sweep.py`, `campaign_analyze.py`, `campaign_log_append.py`, `commission_r5b_b_campaign.py`, `commission_smoke_campaign.py`, `g1_core_sweep.py`, `gate_g2_eval.py` | Delete (one-off audit/commission) |
+
+### A6. Repo Strays
+
+| File | Action |
+|---|---|
+| `dummy.db` | **DELETE** (legacy store) |
+| `execution_state.db` | **DELETE** (legacy store) |
+| `fix_capabilities_v2.py` | **DELETE** (one-off script) |
+| `logs/` | Keep (runtime artifacts) |
+| `artifacts/` | Keep (experiment outputs) |
+| `results/` | Keep (experiment outputs) |
+| `scratch/` | Keep (temp workspace) |
+| `reports/` | Keep (generated reports) |
+| `benchmark_results/` | Keep |
+| `campaigns/` | Keep |
+| `autoscientist_campaigns/` | **DELETE** (pillar outputs) |
+| `build/` | **DELETE** (build artifacts) |
+| `computronium.egg-info/` | **DELETE** (build artifacts) |
+| `.coverage` | **DELETE** (coverage artifact) |
+| `__pycache__/` (root) | **DELETE** |
+| `conftest.py` | Keep (pytest config) |
+| `pyrightconfig.json` | Keep (will fix in G1) |
+| `uv.lock` | Keep |
+| `pyproject.toml` | Keep |
+| `.pre-commit-config.yaml` | Keep |
+| `.gitignore` | Keep |
+| `LICENSE` | Keep |
+| `Dockerfile` | Keep |
+| `.github/` | Keep |
+
+### A7. `packages/` Legacy-Import Scan
+
+| Package | Legacy Imports Found | Action |
+|---|---|---|
+| `ceec-core` | None | **CLEAN** — keep |
+| `psi-peft` | None | **CLEAN** — keep |
+| `local-feedback` | None | **CLEAN** — keep |
+| `stability` | None | **CLEAN** — keep |
+| `computronium-lab` | `computronium.experiments.joint.z3_fixed_weights`, `computronium.autoscientist.objectives`, `computronium.hyperopt.metrics` | **REWIRE** `adaptation.py` and `sequential.py` to kernel `ModelBasedPolicy` / `evidence/` |
+
+### A8. Data Artifact Audit
+
+| Artifact | Status | Migration Target |
+|---|---|---|
+| `computronium/autoscientist/ruler_table.json` | 11 rows (digits, mnist, fashion_mnist, kmnist, usps, xor, spiral, circles, iris, wine, breast_cancer) | **MIGRATE** to `experiment.schema.registries.PRIORS_REGISTRY` via B6 regen |
+
+---
+
+**Gate:** All tables A1–A8 filled above. Phase A complete. Proceeding to Phase B.
 
 ---
 
 ## 11. Status
 
-- [ ] Phase A inventory complete (A1–A8)
-- [ ] Phase B pillars deleted (for real this time)
-- [ ] Phase C consumers repaired, dispatcher rationalized
+- [x] Phase A inventory complete (A1–A8)
+- [x] Phase B pillars deleted (for real this time)
+- [x] Phase C consumers repaired, dispatcher rationalized
+  - [x] Benchmark modules moved from `experiments/joint/` to `benchmarks/joint/`
+  - [x] CLI benchmark rewired to `benchmarks.joint` modules
+  - [x] Validation verifier rewritten (KB recording removed)
+  - [x] P2P module cleaned (evolution removed)
+  - [x] Stability module cleaned (calibration removed)
+  - [x] Docstring legacy mentions purged (B7)
+  - [x] All 6 CLI subcommands working: report, parity, repro, validate, joint-validate, benchmark
 - [ ] Phase D full-tree lock + CLI↔README lock + schema forward-tolerance + single-writer enforcement green
 - [ ] Phase E README rewritten and locked
 - [ ] Phase F demos + probes + gallery + ML benchmark suite green

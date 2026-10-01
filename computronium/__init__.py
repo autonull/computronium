@@ -1,5 +1,5 @@
 """
-Bioplausible: Unified Platform for Bio-Plausible Learning Research
+Computronium: Unified Platform for Bio-Plausible Learning Research
 
 Minimal, clean API for training and experimentation.
 
@@ -70,24 +70,6 @@ One-Line System Construction:
     system = create_fast_weight_mlp(
         input_dim=784, hidden_dims=(256, 128), output_dim=10
     )
-
-Two-Tier Propagator / Model Architecture:
-----------------------------------------
-The zoo provides two complementary interfaces for bio-plausible learning:
-
-1. Learning rules (``computronium.core.local_learning.rules``): Learning rules
-   implemented as drop-in ``torch.optim.Optimizer`` subclasses
-   (`BioOptimizer`, `LearningRuleOptimizer`). These mutate parameters of any
-   model: Backprop, FeedbackAlignment, EqProp, ContrastiveHebbianLearning,
-   MEP presets (smep, sdmep, ...).
-
-2. Model side (`computronium.models`): Learning rules that require
-   model-side control of the forward/training loop (custom dual-phase passes,
-   learned inverse maps, settling dynamics with internal state). These expose
-   ``train_step(x, y) -> dict[str, float]`` instead of ``optimizer.step()``.
-
-Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
-control and are exposed as models, not propagators.
 """
 
 from typing import TYPE_CHECKING
@@ -95,12 +77,6 @@ from typing import TYPE_CHECKING
 __version__ = "1.0.0"
 
 if TYPE_CHECKING:
-    from computronium.analysis.mechanistic_study import (
-        MechanisticStudyRecord as MechanisticStudyRecord,
-    )
-    from computronium.analysis.mechanistic_study import run_mechanistic_study
-    from computronium.analysis.vertical_slice import ClaimRecord as ClaimRecord
-    from computronium.analysis.vertical_slice import run_slice
     from computronium.config.experiment import (
         DataConfig,
         ExperimentConfig,
@@ -152,7 +128,6 @@ if TYPE_CHECKING:
     )
     from computronium.core.theta_audit import theta_audit
     from computronium.domains.factory import create_task
-    from computronium.mep.presets import muon_backprop, smep, smep_fast
     from computronium.models.native import (
         native_backprop_mlp,
         native_diffusion_eqprop,
@@ -324,19 +299,9 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
     "FrozenThetaAudit": ("computronium.core.frozen_theta", "FrozenThetaAudit"),
     "CorrectionRecord": ("computronium.core.correction_record", "CorrectionRecord"),
     "VerificationLevel": ("computronium.verification", "VerificationLevel"),
-    "ClaimRecord": ("computronium.analysis.vertical_slice", "ClaimRecord"),
-    "run_slice": ("computronium.analysis.vertical_slice", "run_slice"),
     "render_taxonomy_markdown": (
         "computronium.verification",
         "render_taxonomy_markdown",
-    ),
-    "MechanisticStudyRecord": (
-        "computronium.analysis.mechanistic_study",
-        "MechanisticStudyRecord",
-    ),
-    "run_mechanistic_study": (
-        "computronium.analysis.mechanistic_study",
-        "run_mechanistic_study",
     ),
     "AlgorithmIdentityCard": (
         "computronium.core.identity_card",
@@ -564,10 +529,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # noqa: RUF067
         "computronium.models.native",
         "native_finite_nudge_ep",
     ),
-    # MEP Presets
-    "muon_backprop": ("computronium.mep.presets", "muon_backprop"),
-    "smep": ("computronium.mep.presets", "smep"),
-    "smep_fast": ("computronium.mep.presets", "smep_fast"),
+    # MEP Presets (removed - mep directory deleted)
     # NN Layers (CP-C)
     "ComputroniumLinear": ("computronium.nn", "ComputroniumLinear"),
     "replace_linear_with_computronium": (
@@ -585,7 +547,6 @@ __all__ = [
     "AnalogSubstrate",
     "AttentionGeometry",
     "BackpropCredit",
-    "ClaimRecord",
     "ClosedFormRidgePlasticity",
     "CompositeState",
     "ComputroniumLinear",
@@ -621,7 +582,6 @@ __all__ = [
     "LocalGoodnessCredit",
     "LongestPathDepth",
     "MeanNormUpdate",
-    "MechanisticStudyRecord",
     "MemristiveSubstrate",
     "ModelConfig",
     "NcaGeometry",
@@ -704,7 +664,6 @@ __all__ = [
     "make_substrate",
     "make_timeseries_preset",
     "make_vision_preset",
-    "muon_backprop",
     "native_backprop_mlp",
     "native_diffusion_eqprop",
     "native_directed_ep",
@@ -722,10 +681,6 @@ __all__ = [
     "native_tile_tp",
     "render_taxonomy_markdown",
     "replace_linear_with_computronium",
-    "run_mechanistic_study",
-    "run_slice",
-    "smep",
-    "smep_fast",
     "theta_audit",
     "train_on_task",
     "train_task",

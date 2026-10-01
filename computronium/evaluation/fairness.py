@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
-from computronium.resources import ResourceUsage
+from stability.resources import ResourceUsage
 
 if TYPE_CHECKING:
     from collections.abc import Callable

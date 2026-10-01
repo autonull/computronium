@@ -1,7 +1,5 @@
 """
 Training utilities for the TaskProtocol interface.
-
-Moved from ``hyperopt/tasks.py`` during Phase 3.1 task hierarchy merge.
 """
 
 import contextlib
@@ -14,7 +12,6 @@ from torch import nn
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_loss
 from computronium.domains.base import DomainType
-from computronium.execution._guards import SafetyConfig, SafetyWrapper
 
 __all__ = [
     "TaskProtocol",
@@ -48,6 +45,7 @@ class TaskProtocol(Protocol):
         """Where batches live. Read-only here: ``DomainTask`` widens it to
         ``str | torch.device``, and a mutable attribute in a Protocol makes
         the protocol invariant, which no concrete task then satisfies."""
+        ...
 
     @property
     def input_dim(self) -> int | None: ...
@@ -92,37 +90,64 @@ def _accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
     return (preds.argmax(-1) == y).float().mean().item()
 
 
+class _SafetyConfig:
+    """Minimal safety config for task training (replaces deleted execution._guards)."""
+
+    def __init__(
+        self,
+        max_grad_norm: float = 1.0,
+        max_loss: float = 1e6,
+        check_finite: bool = True,
+    ):
+        self.max_grad_norm = max_grad_norm
+        self.max_loss = max_loss
+        self.check_finite = check_finite
+
+
+class _SafetyWrapper:
+    """Minimal safety wrapper for task training (replaces deleted execution._guards)."""
+
+    def __init__(self, config: _SafetyConfig):
+        self.config = config
+
+    def check_loss(self, loss: torch.Tensor) -> torch.Tensor:
+        if self.config.check_finite and not torch.isfinite(loss):
+            raise RuntimeError(f"Non-finite loss: {loss}")
+        if loss > self.config.max_loss:
+            raise RuntimeError(f"Loss exceeds maximum: {loss} > {self.config.max_loss}")
+        return loss
+
+    def clip_grad_norm(self, parameters, max_norm: float | None = None) -> float:
+        max_norm = max_norm or self.config.max_grad_norm
+        return nn.utils.clip_grad_norm_(parameters, max_norm)
+
+
 class _TaskTrainer:
     """Lightweight task-protocol trainer for plain ``nn.Module`` models.
 
     Runs the canonical forward/loss/backward/step loop over task batches with
-    inline validation, preserving the ``train_*``-prefixed metric shape
-    expected by hyperopt callers.
-
-    Supports:
-    - Learning rate schedulers (via ``scheduler_type``/``scheduler_kwargs``)
-    - Experiment tracking (via ``tracker``)
-    - Numerical safety (via ``safety_config``)
-    - Energy tracking placeholder (via ``track_energy``; no-op for plain modules)
+    inline validation, preserving the ``train_*``-prefixed metric shape.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def __init__(
         self,
         model: nn.Module,
         task: TaskProtocol,
-        device: str = "cpu",
+        device: str | torch.device = "cpu",
+        epochs: int = 10,
+        batches_per_epoch: int = 100,
+        batch_size: int = 32,
+        eval_batches: int | None = None,
         optimizer: torch.optim.Optimizer | None = None,
-        epochs: int = 1,
-        batches_per_epoch: int = 1,
-        grad_clip: float | None = None,
-        use_compile: bool = False,
+        lr: float = 1e-3,
+        grad_clip: float = 1.0,
         track_energy: bool = False,
         ablation_tags: dict | None = None,
-        output_dir: str = "",
-        tracker: _TrackerProtocol | None = None,
-        safety_config: SafetyConfig | None = None,
+        output_dir: str | None = None,
+        use_compile: bool = False,
         scheduler_type: str | None = None,
         scheduler_kwargs: dict | None = None,
+        safety_config: _SafetyConfig | None = None,
         **kwargs,
     ):
         self.model: nn.Module = cast("nn.Module", model)
@@ -132,15 +157,15 @@ class _TaskTrainer:
         self.batches_per_epoch = int(kwargs.pop("steps", batches_per_epoch))
         self.episodes_per_epoch = self.batches_per_epoch
         self.batch_size = int(kwargs.pop("batch_size", 32))
-        self.eval_batches = kwargs.pop("eval_batches", None)
+        self.eval_batches = eval_batches
         self.grad_clip = grad_clip
         self.track_energy = track_energy
         self.ablation_tags = ablation_tags or {}
         self.output_dir = output_dir
         self._loss = _resolve_task_loss(task)
-        self.tracker: _TrackerProtocol | None = tracker
-        self.safety_config = safety_config or SafetyConfig()
-        self.safety_wrapper = SafetyWrapper(self.safety_config)
+        self.tracker: _TrackerProtocol | None = None
+        self.safety_config = safety_config or _SafetyConfig()
+        self.safety_wrapper = _SafetyWrapper(self.safety_config)
         if use_compile:
             self.model = cast("nn.Module", torch.compile(self.model))
         lr = float(kwargs.pop("lr", 1e-3))
@@ -177,103 +202,70 @@ class _TaskTrainer:
                 end_factor=end_factor,
                 total_iters=total_iters,
             )
-        elif scheduler_type_lower == "cosine_warmup":
-            from torch.optim.lr_scheduler import SequentialLR
 
-            warmup_iters = scheduler_kwargs.get("warmup_iters", 5)
-            warmup = torch.optim.lr_scheduler.LinearLR(
-                self.optimizer,
-                start_factor=scheduler_kwargs.get("warmup_start_factor", 0.01),
-                end_factor=1.0,
-                total_iters=warmup_iters,
-            )
-            t_max = scheduler_kwargs.get("t_max", max(1, self.epochs - warmup_iters))
-            cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer, T_max=t_max
-            )
-            self.scheduler = SequentialLR(
-                self.optimizer,
-                schedulers=[warmup, cosine],
-                milestones=[warmup_iters],
-            )
-        else:
-            logger.warning("Unknown scheduler type: %s", scheduler_type)
+    def train(self) -> list[dict[str, float]]:
+        """Run training loop and return per-epoch metrics."""
+        self.task.setup()
+        history: list[dict[str, float]] = []
 
-    def _step_scheduler(self) -> None:
-        """Step the learning rate scheduler if present."""
-        if self.scheduler is not None:
-            self.scheduler.step()
+        for epoch in range(self.epochs):
+            self.model.train()
+            epoch_metrics: dict[str, float] = {}
 
-    def _log_metrics(self, metrics: dict[str, float]) -> None:
-        """Log metrics to tracker if available."""
-        if self.tracker is not None and hasattr(self.tracker, "log_metrics"):
-            self.tracker.log_metrics(metrics)
+            for _ in range(self.batches_per_epoch):
+                x, y = self.task.get_batch("train", self.batch_size)
+                x, y = x.to(self.device), y.to(self.device)
 
-    def _safe_step(self, loss: torch.Tensor) -> tuple[bool, dict[str, object]]:
-        """Execute a safe backward/step with gradient clipping and NaN checks."""
-        return self.safety_wrapper.safe_backward_and_step(
-            loss, self.optimizer, self.model, self.grad_clip
-        )
+                self.optimizer.zero_grad()
+                logits = self.model(x)
+                loss = self._loss(logits, y)
+                loss = self.safety_wrapper.check_loss(loss)
+                loss.backward()
+                self.safety_wrapper.clip_grad_norm(self.model.parameters(), self.grad_clip)
+                self.optimizer.step()
 
-    def _run_batches(self, split: str, no_grad: bool = False) -> dict[str, float]:
+                # Accumulate metrics
+                epoch_metrics.setdefault("train_loss", 0.0)
+                epoch_metrics["train_loss"] += loss.item()
+
+            # Average training metrics
+            for k in list(epoch_metrics):
+                if k.startswith("train_"):
+                    epoch_metrics[k] /= self.batches_per_epoch
+
+            # Validation
+            if self.eval_batches is not None:
+                val_metrics = self._validate()
+                epoch_metrics.update(val_metrics)
+
+            if self.scheduler:
+                self.scheduler.step()
+
+            if self.tracker:
+                self.tracker.log_metrics(epoch_metrics)
+
+            history.append(epoch_metrics)
+
+        return history
+
+    def _validate(self) -> dict[str, float]:
+        """Run validation batches."""
+        self.model.eval()
+        metrics: dict[str, float] = {}
         total_loss = 0.0
-        total_acc = 0.0
-        total_energy = 0.0
-        batches = self.eval_batches if (no_grad and self.eval_batches) else 1
-        ctx = torch.no_grad() if no_grad else contextlib.nullcontext()
-        with ctx:
-            for _ in range(int(batches)):
-                x, y = self.task.get_batch(split=split, batch_size=self.batch_size)
+        eval_batches = self.eval_batches
+        assert eval_batches is not None
+
+        with torch.no_grad():
+            for _ in range(eval_batches):
+                x, y = self.task.get_batch("val", self.batch_size)
                 x, y = x.to(self.device), y.to(self.device)
                 logits = self.model(x)
-                loss = compute_loss(self._loss, logits, y)
-                if not no_grad:
-                    success, step_info = self._safe_step(loss)
-                    if not success:
-                        logger.warning(
-                            "Step failed: %s, failure %d/%d",
-                            step_info.get("error"),
-                            self.safety_wrapper.consecutive_failures,
-                            self.safety_config.max_nan_retries,
-                        )
-                        if self.safety_wrapper.should_abort():
-                            self.safety_wrapper.handle_failure(self.optimizer)
-                            raise RuntimeError(
-                                f"Training aborted after {self.safety_config.max_nan_retries} consecutive failures"
-                            )
+                loss = self._loss(logits, y)
                 total_loss += loss.item()
-                total_acc += _accuracy(logits, y)
-        n = int(batches)
-        result = {"loss": total_loss / n, "accuracy": total_acc / n}
-        if self.track_energy:
-            result["energy"] = total_energy / n
-        return result
+                metrics.setdefault("val_acc", 0.0)
+                metrics["val_acc"] += _accuracy(logits, y)
 
-    def train_epoch(self) -> dict[str, float]:
-        """Run one epoch of training and return aggregated metrics."""
-        epoch_t0 = time.time()
-        self.model.train()
-        train_metrics = self._run_batches("train")
-        metrics: dict[str, float] = {f"train_{k}": v for k, v in train_metrics.items()}
-        metrics |= train_metrics
-
-        metrics["val_loss"] = float("nan")
-        metrics["val_accuracy"] = float("nan")
-        try:
-            val_metrics = self._run_batches("val", no_grad=True)
-            metrics["val_loss"] = val_metrics["loss"]
-            metrics["val_accuracy"] = val_metrics["accuracy"]
-        except (NotImplementedError, RuntimeError, KeyError, ValueError) as e:
-            logger.warning("Validation skipped for %s: %s", self.task.name, e)
-
-        # Step scheduler at epoch boundary
-        self._step_scheduler()
-
-        metrics["time"] = time.time() - epoch_t0
-        metrics["samples_seen"] = float(self.batches_per_epoch * self.batch_size)
-        metrics["lr"] = self.optimizer.param_groups[0]["lr"]
-
-        # Log to tracker
-        self._log_metrics(metrics)
-
+        metrics["val_loss"] = total_loss / eval_batches
+        metrics["val_acc"] /= eval_batches
         return metrics

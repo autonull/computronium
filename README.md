@@ -1111,23 +1111,6 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
 </details>
 
-### Frontier Record
-
-Defined in `computronium/core/campaign/frontier_record.py`:
-
-```python
-@dataclass(frozen=True, slots=True)
-class FrontierRecord:
-    coordinate: SystemCoordinate
-    task_loss: float
-    adaptation_time: int
-    rho_jacobian: float
-    lyapunov_local: float
-    settling_time: float
-    basin_stability: float
-    resources: ResourceUsage
-```
-
 ### 5-Level Benchmark Hierarchy
 
 <details>
@@ -1135,86 +1118,6 @@ class FrontierRecord:
 
 The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
 </details>
-
----
-
-### ⚠️ Research Status
-
-**Core abstractions, implementations, and verification infrastructure are under active development. Large-scale empirical campaigns and physical-hardware validation remain future work. The repository presents hypotheses and experimental machinery, not validated claims of superior learning efficiency.**
-
-## 🤖 Automated Research: Hypercube Campaigns
-
-The AutoScientist is an automated research agent that proposes, executes, and analyzes experiments across the 6-D ontology space. It uses chain-of-thought reasoning over ontology axes, retrieves prior art from arXiv, generates counterfactuals, and maintains a persistent knowledge base of experimental results.
-
-The 6-axis decomposition gives the **AutoScientist** a **structured search space** instead of a flat model list:
-
-
-| Campaign Type | Fixed Axes | Varied Axis | Example Hypothesis |
-|---------------|------------|-------------|-------------------|
-| Substrate Ablation | G, D, M, C, U | S: Digital → Memristive/Optical/Quantum | At what IR-drop does EqProp parity break? |
-| Epistemology Swap | S=Optical, G=TileMesh, D=EnergyMinimization | C: ThermodynamicContrast ↔ RandomProjectionsCredit | Does optical hardware favor FA (lower settling energy)? |
-| Kinetics Discovery | S, G, D, C | U: Euclidean ↔ Riemannian ↔ Spectral ↔ Natural | Can Spectral constraints stabilize Memristive settling? |
-| Plasticity Search | S, G, D, C, U | M: Null ↔ Routing ↔ FastWeight | Does routing reduce compute at stability margin? |
-| Composite | S=Memristive, D=EnergyMinimization, M=Routing | U=SpectralConstrained | "IR-drop (S) + Routing (M) + Spectral (U) → stable settling (D)" |
-| Stability-Plasticity Trade-off | S, G, D, C, U | M + ρ(J_F) constraint | Maximize adaptation s.t. ρ(J_F) ≈ 0.99 |
-
-**Key AutoScientist capabilities:**
-- 🧠 Chain-of-thought templates operating on ontology axes
-- 📚 arXiv retrieval + semantic search for prior art
-- 🔀 Counterfactual generator: "What if β schedule changed?"
-- 📊 Knowledge Base meta-analysis: scaling laws, algorithm fingerprinting, failure manifold clustering, algorithm phylogeny
-- 💾 Campaign persistence/resume (YAML+SQLite, git-like branching) — **includes joint state z, θ, ψ, σ**
-- 🖥️ Local LLM support (Ollama auto-pull, llama.cpp quantization, speculative decoding)
-- ⚡ **Joint Kernel Cache**: Persisted compiled kernels for `CoupledTransition.step`, plasticity updates, stability estimators
-- 🛡️ **Fault Tolerance**: Checkpoint-based recovery for multi-hour campaigns on spot instances
-
----
-
-## 🧪 Experiment Suite
-
-| Status | Meaning |
-|--------|---------|
-| **Implemented** | Experiment code exists |
-| **Run** | At least one reproducible execution exists |
-| **Analyzed** | Results have been systematically analyzed |
-| **Published** | Results reported externally |
-
-### 5-D Experiment Implementations
-
-| Experiment | File | Purpose |
-|------------|------|---------|
-| TileNet Scaling Sweep | `computronium/experiments/tile_scaling.py` | Depth/width scaling on MNIST/CIFAR-10 across tile algorithms + backprop |
-| EqProp Vision Parity | `computronium/experiments/eqprop_vision_parity.py` | EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN |
-| MEP Preset Tournament | `computronium/experiments/mep_tournament.py` | Factorized ablation: gradient×update×constraint×feedback with ANOVA + Sobol |
-| FA Depth Scaling | `computronium/experiments/fa_depth_scaling.py` | Extreme depth, MNIST + synthetic parity |
-| MoT Ablation | `computronium/experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
-| Cross-Domain Transfer | `computronium/experiments/cross_domain_transfer.py` | Vision→tabular/vision transfer, local vs global learning |
-| Tile Algorithm Comparison | `computronium/experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
-
-### 6-D Joint Experiments — In Development
-
-| Level | Experiment | File | Question | Toy Task / Constraint | Compare |
-|-------|------------|------|----------|----------------------|---------|
-| **1** | Adaptation Efficiency | `computronium/experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster than Null under matched compute? | Switching distribution (Phase A: y=f_A(x), Phase B: y=f_B(x)) | Null vs FastWeight vs Routing; adaptation time, energy |
-| **2** | Compute Efficiency | `computronium/experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? | Mixture-of-experts (one route needed per input) | Active units, gate entropy, effective matmul |
-| **3** | Structural Robustness | `computronium/experiments/joint/structural_robustness.py` | Can the system recover after topology/device damage via autonomous rerouting? | Zeroed weights, removed nodes, dead channels, noisy memristive | Null vs Routing vs SubstrateCoupled; recovery |
-| **3.5** | Algorithm Migration | `computronium/experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? | Task A₀: cumulative sum → Task A₁: last symbol | time(A₀→A₁), energy; parameter invariance: ‖θ_after − θ_before‖ = 0 |
-| **4** | Z3: Fixed Weights, Changing Algorithm | `computronium/experiments/joint/z3_fixed_weights.py` | Can frozen θ solve multiple tasks via ψ-mediated rule selection? | θ frozen. Tasks: parity, last-symbol, threshold. Operators: Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay | Adaptation time, energy, operator diversity; parameter invariance must be exact: ‖θ_after − θ_before‖ = 0 |
-
-<details>
-<summary><strong>Canonical 5-level benchmark hierarchy</strong> ⋯</summary>
-
-Canonical specification of the 5-level benchmark hierarchy (see *Stability-Plasticity Trade-off Hypothesis* above). All questions remain open.
-</details>
-
-Commands:
-```bash
-comp benchmark run --suite adaptation_efficiency
-comp benchmark run --suite compute_efficiency
-comp benchmark run --suite structural_robustness
-comp benchmark run --suite algorithm_migration
-comp benchmark run --suite z3_fixed_weights
-```
 
 ---
 
@@ -1246,9 +1149,6 @@ comp lab benchmark --domain vision --quick
 
 # Run specific model on MNIST
 comp lab core-train --model eqprop_mlp --task mnist --epochs 10
-
-# Cross-domain transfer: vision → LM
-uv run python -m computronium.experiments.cross_domain_transfer --source vision --targets tabular,vision
 ```
 
 ### 📝 Language Modeling Domain

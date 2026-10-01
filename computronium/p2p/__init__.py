@@ -1,7 +1,6 @@
 """Peer-to-peer distributed training (Kademlia DHT + gRPC)."""
 
 from computronium.p2p.dht import DHTNode
-from computronium.p2p.evolution import P2PEvolution, get_config_hash
 from computronium.p2p.grpc_service import (
     GRPCClient,
     GRPCConnectionPool,
@@ -15,9 +14,7 @@ __all__ = [
     "GRPCClient",
     "GRPCConnectionPool",
     "GRPCServer",
-    "P2PEvolution",
     "TileMeshServicer",
-    "get_config_hash",
     "load_state",
     "save_state",
 ]
