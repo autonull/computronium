@@ -609,7 +609,70 @@ Do **not** re-attempt `pytest tests/`. In order: decide the `testpaths` hole
 
 ---
 
+## 15. The unified-search requirement, and why the samplers are decorative
+
+The requirement (operator, 2026-10-01): *find the best configuration starting from
+zero assumptions — no hardcoding, no hidden assumptions limiting the possibilities
+— with the sampling process fully unified, so axes and hyperparameters are not
+treated differently; and constraints must still be expressible.*
+
+**The good news: the schema for this already exists.** `HyperparameterSpec`
+carries a typed `domain` (lo/hi or members), `axis_kind`
+(CONTINUOUS/INTEGER/CATEGORICAL/STRUCTURAL), `scale` (LOG), and an
+`availability` predicate; `AxisSpec` carries `axis_kind` and an availability
+predicate; `OptunaAdapter.adapt_hyperparameter` (`optuna_adapter.py:104`) maps
+*all four* kinds uniformly to Optuna distributions, honouring log-scale and
+conditional availability. `build_distributions` (`:165`) does the same across a
+whole space. The unified space is **designed**; nothing wires it up.
+
+### 15.1 Four defects, in the order they must be fixed
+
+1. **`ModelBasedPolicy` never learns.** `policy.py:517` calls `study.ask()`, but
+   the study is created with no distributions, so `trial.params` is empty and
+   control falls to `if not suggested_params:` → `affordable[idx]`, a positional
+   pick. And `study.tell()` **appears nowhere in the codebase**; there is no
+   `observe()` on the policy. So TPE/NSGA-II are created, asked, and never told
+   anything. **The "Optuna samplers we now support" do not currently search.**
+   This is the opposite of the intent and the most misleading thing found.
+2. **The space generator is hardcoded.** `search_space.py:174-206` truncates every
+   axis to `[:3]` or `[:2]`, builds one fixed `params` per combination via
+   `_build_default_params`, and pins `Schedule(fidelity="L0", seed=42, n_seeds=1,
+   epochs=1, batch_limit=0, task_id="default")`. Hyperparameters are *constants*;
+   the task is ignored. TODO43 **P1/P2/R2**, restated in new code.
+3. **The evaluator is a stub.** `backends.py:222` (§11.0).
+4. **No typed `RunSpec`.** The spec is `dict[str, object]`, `json.load`ed with no
+   validation (`surface/cli.py:261`).
+
+### 15.2 Why the policy is downstream of the space
+
+A policy that *generates* trials needs the unified distributions; today every
+policy instead **selects from a pre-enumerated candidate list** handed to it
+(`propose(candidates, …)`), and the enumeration is defect 2. So fixing the
+generator first makes every policy work uniformly — which is exactly the
+"fully unified" requirement — and only then is `ModelBasedPolicy` a two-line fix
+(`study.ask(distributions)` + `study.tell(...)` in `observe`).
+
+### 15.3 Build order
+
+| # | Piece | Fixes |
+|---|-------|-------|
+| 1 | Real evaluator: `Coordinate`+`Schedule` → compose → train → `Record` with accuracy | defect 3 |
+| 2 | Typed `RunSpec` (Pydantic v2) declaring axes, hyperparameter domains, constraints, schedule | defect 4, enables the rest |
+| 3 | Spec-driven candidate generator replacing `[:3]` + `_build_default_params`; schedule from spec | defect 2 |
+| 4 | `study.ask(distributions)` + `study.tell()` in `ModelBasedPolicy.observe` | defect 1 |
+| 5 | Campaign: `digits`, multi-axis × hyperparameter, Pareto + coverage + attribution | — |
+
+Task is `digits` (1,797 samples, 8×8, 10 classes) — cheap enough that a few
+hundred real cells is a few minutes, which is what makes a campaign
+demonstrable rather than aspirational.
+
+*Cross-check from the lab:* `Lab.explore` returns a frontier of **predicted**
+metrics from a static `CATALOG` and `synthesize` ranks a viability model. Those
+are priors (TODO43 P4). The campaign must train, never read the catalog.
+
 ## 14. The end-to-end target, stated so it can be checked
+
+
 
 **Objective: loosely satisfy TODO43's MUSTs through one runnable example.**
 Not all 88 requirements — a *named subset*, demonstrably exercised, so that
