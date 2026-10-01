@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import compose_system_from_configs
+from computronium.experiment.learning.prior import get_dynamics_step_size
 from computronium.ontology import GeometryConfig
 
 if TYPE_CHECKING:
@@ -53,20 +54,13 @@ GRID_UPDATES: tuple[str, ...] = (
     "euclidean",
     "adam",
     "local_adam",
-    "muon",
-    "unit_rms",
-    "riemannian_orthogonal",
-    "mean_norm",
-    "spectral_constrained",
     "ortho_adam",
     "lion",
     "elastic_consolidation",
+    "riemannian_orthogonal",
+    "muon",
+    "spectral_constrained",
 )
-
-_DYNAMICS_STEP_SIZE_OVERRIDES: Final[dict[str, float]] = {
-    "diffusion": 0.001,
-    "predictive_settling": 0.01,
-}
 
 _COMMON_GEOMETRY_KEYS: Final[frozenset[str]] = frozenset({
     "topology_type",

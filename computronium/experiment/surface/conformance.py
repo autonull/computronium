@@ -121,7 +121,9 @@ def run_verifying_test(
     try:
         result = subprocess.run(
             [
-                sys.executable,
+                "uv",
+                "run",
+                "python",
                 "-m",
                 "pytest",
                 node_id,

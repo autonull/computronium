@@ -20,7 +20,7 @@ from computronium.core.system_trainer import (
     extract_config,
 )
 from computronium.domains.registry import SUPPORTED_TASKS
-from computronium.experiment.param_estimator import resolve_native_model
+from computronium.experiment.learning.prior import get_dynamics_step_size
 from computronium.ontology import GeometryConfig
 
 if TYPE_CHECKING:
@@ -38,13 +38,6 @@ __all__ = [
 ]
 
 logger = get_logger(__name__)
-
-# Dynamics step_size overrides for stable settling.
-# Key: dynamics_type -> step_size value (replaces default)
-_DYNAMICS_STEP_SIZE_OVERRIDES: Final[dict[str, float]] = {
-    "diffusion": 0.001,  # Lower step_size for stable Langevin dynamics
-    "predictive_settling": 0.01,  # 0.1 diverges on wide layers (hidden=512 -> loss 1e22)
-}
 
 
 #: ``task -> "run" | "fenced"`` compatibility gate (P1.4). Fenced lanes fail
@@ -731,7 +724,7 @@ def compose_cell_system(
         geometry, input_dim=input_dim, output_dim=output_dim, param_budget=param_budget
     )
     try:
-        dynamics_step_size = _DYNAMICS_STEP_SIZE_OVERRIDES.get(dynamics, 0.1)
+        dynamics_step_size = get_dynamics_step_size(dynamics) or 0.1
         dcfg = getattr(StateDynamicsConfig, dynamics)(step_size=dynamics_step_size)
         ccfg = getattr(CreditAssignmentConfig, credit)()
         update_factory = getattr(ParameterUpdateConfig, update)
