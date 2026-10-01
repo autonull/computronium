@@ -21,6 +21,29 @@
 
 ---
 
+## 0. Scope Directives (binding, from the round owner)
+
+1. **No backwards compatibility (API).** No strangler adapters, no legacy importers, no old-shape
+   migration phases. abc3 §12.2 (four-phase store migration) and §12.3 (strangler migration)
+   are **dropped**. Legacy entry points (`broad_map`, `stack`, `hyperopt`, `execution`,
+   `lightning_`, computronium-lab research layer) are ported *into* the Kernel as catalog
+   entries, then deleted outright.
+2. **No backwards compatibility of any kind (supersedes TODO43 R79/K4 reader mandates).**
+   There are no users and no historical artifacts to preserve: legacy stores are abandoned
+   untouched (Directive 3) and no old-shape readers, migrations, or strangler phases exist.
+   The kernel schema carries a version integer and fails closed on unknown versions; the
+   `unknown` column preserves unrecognized fields verbatim as cheap forward tolerance for
+   in-flight data — not a compatibility contract. Schema changes before first external use
+   are free: rebuild the store or bump-and-fail-closed.
+3. **No data preservation.** `kb.sqlite`, `campaign.db`, `ledger.sqlite`, and Optuna `*.db`
+   are abandoned in place, untouched and read-only by neglect (never opened again). Only
+   `packages/ceec-core`'s content-addressed store is linked forward (it is an active
+   subsystem, not legacy data).
+4. **No time estimates.** Sequencing is dependency-ordered only.
+5. **Store decision:** DuckDB (embedded, SQLite-like) — see §1. MongoDB rejected.
+
+---
+
 ## Remaining Work Packages (Dependency-Ordered)
 
 ```text
