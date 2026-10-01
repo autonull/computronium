@@ -516,8 +516,13 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
         rng-seed offenders seeded, acceptance tier renamed `unified_kernel.py` →
         `test_unified_kernel.py` (tier lock), stage_model isolation test bounded (max_rounds=2)
   - [x] G5 version bumped to **3.0.0**; `RELEASE_NOTES_v3.0.0.md` written
-  - [ ] G6 `uv run pre-commit run --all-files` (run before the final commit)
-  - [ ] G4 remainder: repo-wide pyright (Register C scope), `pip-audit`
+  - [~] G6 `pre-commit run --all-files`: ruff-format/check + property suite green after a
+        repo-wide auto-fix sweep (lint baseline 543→440, committed); **pyright hook still
+        red repo-wide** (`--all-files` = pyright on all of computronium/ — ~35 legacy
+        findings in acceleration backends/validation tracks/cli/domains; per-file fixes
+        landed for eqprop_kernel_backend + pc_kernels config plumbing). Repo-wide pyright
+        = the remaining hygiene item below.
+  - [ ] G4 remainder: repo-wide pyright (Register C scope — hook blockers listed in §12), `pip-audit`
 
 ## 12. Session-2 handoff (2026-10-01)
 
@@ -556,5 +561,19 @@ C10 allocator telemetry defect fixed), Phase G through G5.
    - Gallery `_records()` consumers assume 21 records; any new demo must bump MIN_RECORDS back up.
    - `scripts/archive/` (120 files) + `docs/archive/` could shed one-off scripts entirely.
 
-**Gate state at handoff:** import smoke, kernel locks (30), snippet lock, CLI↔README lock,
-full pytest (3135 passed / 0 failed) all green. Version 3.0.0 in pyproject.
+**Gate state at handoff:** import smoke, kernel locks, snippet lock, CLI↔README lock,
+full pytest (3135 passed / 0 failed), staged pre-commit green, acceleration suite
+(265 passed) green. Version 3.0.0 in pyproject. G6 pyright-repo-wide + pip-audit remain.
+
+**Session-2 addendum (G6 partial):**
+- `computronium/acceleration/eqprop_kernel_backend.py`: config plumbing retyped
+  (`_num`/`_flag` coercion helpers, `_ArrayNamespace` Protocol for xp, LinearView layers).
+- `computronium/acceleration/pc_kernels.py`: same config-coercion treatment;
+  the 76-statement guarded Triton import ladder got per-file-ignores (PLR0915/PLW0717)
+  instead of an inline suppression (RUF105 fights plain noqa in this config).
+- `computronium/experiment/execution/pipeline.py`: blank-line fix only.
+- ruff auto-fix sweep (pre-commit) lowered repo-wide findings 543→440; ratchet re-baselined.
+- Next-session pyright queue (hook-blocking files): `pc_kernels.py` (13 — Optional access,
+  LinearView.parameters, Literal activation), `validation/tracks/{scaling,hardware}_tracks.py`
+  (System-vs-Module), `cli/validate.py:87` stale kwarg, `domains/trainer.py:122`,
+  `ontology/dynamics/_dynamics.py:641`, plus `stability/guard.py` wildcard-import warnings.
