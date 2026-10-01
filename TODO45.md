@@ -112,9 +112,16 @@ reduces the surface every later phase touches.
 - [ ] **R1.2** `tests/graph/` — deleted in the working tree. Confirm no suite depends on
       the graph geometry it covered; if one does, that is a real coverage gap to record,
       not a reason to restore the directory.
-- [x] **R1.3** `docs/archive/` removed (467 files, 8.7 MB). `pyproject.toml:222` ruff
-      exclude and the `README.md:361` research-program paragraph updated; no other
-      reference existed in CI, scripts, or tests.
+- [ ] **R1.3** ~~Delete `docs/archive/`~~ **WITHDRAWN. Do not execute.**
+      I deleted it; the operator overruled and it is restored (467 files, 8.7 MB).
+      The plan's justification — "git history is the archive" — is an argument,
+      not a mandate, and an 8.7 MB irreversible deletion is never an unattended
+      step. **Requires explicit per-instance sign-off.**
+      *Lesson worth keeping:* grepping for inbound references answers "will this
+      break something?", never "should this exist?". The restored archive turned
+      out to be the **only** remaining record of the deleted `tests/graph/`
+      suite (R1.2) — the very coverage R1.2 asks about. Deleting it would have
+      destroyed the evidence for a task on this same list.
 - [x] **R1.4** `pyrightconfig.json` excludes `**/*_pb2.py` / `**/*_pb2_grpc.py`.
       Measured: `computronium/p2p` **61 → 23** errors. `grpc_service.py` stays checked.
 - [x] **R1.5** **Void — the premise was wrong.** Those 16 files were not "re-serialized
@@ -328,6 +335,8 @@ in a loop, as a side effect of naming a directory.
 
 ### 12.2 Three fixes, all structural
 
+The `docs/archive/` deletion in the same commit was **withdrawn** — see R1.3.
+
 | Fix | Where | Effect |
 |-----|-------|--------|
 | **Demos are not correctness tests** | new `demo` marker, stamped in `tests/conftest.py` on every `test_demo_*.py` plus `test_gallery_lock.py`; `addopts` gains `not demo` | the 2.75 h artifact producers leave the default gate. `pytest -m demo` re-pins the gallery. Marking by *filename* in conftest means a newly added demo is excluded by construction, with no per-file edit to forget. |
@@ -358,7 +367,7 @@ gallery_lock"`, which the new `-m` in `addopts` would have silently emptied).
    and unused. Low priority: CI walltime is not the bottleneck this plan is
    about.
 
-### 12.4 Verified without running the suite
+### 12.4 Verified without a single suite run
 
 Collection only (`--collect-only`, seconds, no test bodies):
 
@@ -371,14 +380,51 @@ Ruff clean; pyright on the four touched files: 3 errors, all pre-existing
 fixture-body issues (`tests/conftest.py` 213, 222, 325) — the signature fix
 `items: list[object]` → `list[pytest.Item]` removed three more.
 
-### 12.5 Untested, and that is a real gap
+### 12.5 Integrity verification (no full suite)
 
-Nothing here has been *executed*. The next single run should be the default
-gate, once, to confirm `-n 4` and the marker behave and to collect G0.2's
-durations. One run, minutes, at round close — not per commit.
+Run in shards under `-n 4`, deliberately not as one suite:
 
-### 12.6 Next session
+| Shard | Result | Wall |
+|-------|--------|------|
+| imports: `computronium`, subpackages | ok — 142 `__all__` entries resolve | 3 s |
+| `comp` CLI exit codes (`--help`/bare/unknown/sub-help) | 0 / 1 / 2 / 0 / 0 — all as designed | 30 s |
+| `test_root_exports`, `test_readme_snippet_lock`, `test_timeout_marker_policy`, `test_triton_availability` | **60 passed** | 5 s |
+| `test_gallery_lock.py` (run as `-m demo`) | **2 passed** — 21 demos ≡ 21 manifest figures, renders | 7 s |
+| `tests/unit/` | **523 passed, 1 xfailed** | 117 s |
+| `tests/primitives/` | **419 passed** | 14 s |
+| `tests/algorithms/` + `tests/acceleration/` | **626 passed, 81 skipped** | 88 s |
+| `tests/property/` | 1548 passed, 16 skipped, 25 xfailed, 1 xpassed, **1 failed → fixed, see below** | 166 s |
 
-Do **not** re-attempt `pytest tests/`. In order: one default-gate run for G0.1
-counts + G0.2 durations → decide the `testpaths` hole (12.3) → Phase 2
+Total ~7 min wall, ~48 CPU-min. `-n 4` is worth ~7× here; `tests/unit/`
+alone was 24 CPU-min compressed into 2.
+
+**The one failure was mine, and the ratchet caught it.** During the archive
+restore I reverted `pyproject.toml` wholesale and silently dropped
+`"docs/archive"` from the ruff `exclude`. `test_lint_count_ratchet` failed
+2136 > 440 — 1703 of those were `docs/archive` being linted, exactly the gap.
+A pristine `4173ee58` worktree measures 433, confirming the baseline and that
+nothing about ruff 0.16.10 changed. Restored the exclude; ratchet passes.
+
+Two consequences worth carrying:
+- **Do not revert a config file wholesale.** `git checkout <ref> -- <file>`
+  then re-applying edits silently drops any edit made in between. That is how
+  the exclude vanished.
+- The ratchet earned its place. It is the only gate that would have noticed.
+
+### 12.6 Still unverified
+
+- **No single-session end-to-end run.** Every shard is internally consistent and
+  all four `testpaths` directories are green, but nothing has run the whole
+  gate in one process.
+- **`tests/acceptance/test_unified_kernel.py` (U1–U5) has still never run here.**
+  It is outside `testpaths`, and its declared budgets are 120–300 s per test.
+  Highest-value remaining check; §12.3 item 1 is the decision that governs it.
+- The hard kill at test 873 (G0.1) is **unexplained**. Removing the demos from
+  the default gate means it no longer blocks anything, but a silent death is a
+  defect, not a scheduling problem, and it is not diagnosed.
+
+### 12.7 Next session
+
+Do **not** re-attempt `pytest tests/`. In order: decide the `testpaths` hole
+(§12.3), run `tests/acceptance/` once to close U1–U5, then Phase 2
 (`comp run --spec-file`).
