@@ -250,7 +250,7 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 | StrategyProgression | `strategy_progression` | Progresses proposal strategies across rounds |
 | TrainerDriven | `trainer_driven` | Defers proposals to the trainer driver |
 
-**Kernel guarantees (locked in [`tests/acceptance/unified_kernel.py`](tests/acceptance/unified_kernel.py)):**
+**Kernel guarantees (locked in [`tests/acceptance/test_unified_kernel.py`](tests/acceptance/test_unified_kernel.py)):**
 
 | ID | Guarantee |
 |---|---|
@@ -315,7 +315,7 @@ Claims are labeled by verification level (§1) and governed by CEEC ([`packages/
 | Seeded axis effect (E3): credit-axis manipulation shifts outcomes, d ≈ −1.5, p < 0.01 | 5 | `scripts/probes/e3_seeded_axis_effect.py`, conformance audit |
 | Transfer provenance (E4): provenance-tagged records support transfer, d ≈ −1.52 | 5 | `scripts/probes/e4_transfer_provenance.py` |
 | Effect-size protocol (E2) | 5 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
-| Kernel guarantees U1–U5 | 4 | `tests/acceptance/unified_kernel.py` |
+| Kernel guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` |
 | Locked demo blocks (§3, §4) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` |
 | Conformance audit C1–C88 | 2–3 | `comp report conformance` |
 

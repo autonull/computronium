@@ -28,11 +28,16 @@ from computronium.domains import (
     TimeSeriesTask,
     VisionTask,
 )
+from computronium.evaluation.base import BenchmarkResult
 
 # Optional stability package imports (for KnowledgeBase and Leaderboard)
 try:
-    from stability import KnowledgeBase, KnowledgeEntry
-    from stability import LeaderboardGenerator, LeaderboardEntry
+    from stability import (
+        KnowledgeBase,
+        KnowledgeEntry,
+        LeaderboardEntry,
+        LeaderboardGenerator,
+    )
 except ImportError:
     KnowledgeBase = KnowledgeEntry = LeaderboardGenerator = LeaderboardEntry = None  # type: ignore[assignment,misc]
 

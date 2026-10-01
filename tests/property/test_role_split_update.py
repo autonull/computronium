@@ -31,6 +31,45 @@ LR = 0.05
 G = cast("Geometry", None)
 
 
+_INPUT_DIM = 16
+_HIDDEN_DIM = 24
+_OUTPUT_DIM = 4
+
+
+def _build_system(credit_cfg, update_cfg, *, seed: int, settle_steps: int = 10):
+    """Fixed S/G/D study cell with cell-specific C and U (mechanistic-study rebuild)."""
+    from computronium.core.system_trainer.factory import compose_system_from_configs
+    from computronium.ontology.dynamics import StateDynamicsConfig
+    from computronium.ontology.geometry import GeometryConfig
+    from computronium.ontology.substrate import SubstrateConfig
+
+    torch.manual_seed(seed)
+    return compose_system_from_configs(
+        substrate=SubstrateConfig(
+            precision="float32",
+            noise_level=0.0,
+            weight_bounds=None,
+            sparsity=0.0,
+            device="cpu",
+        ),
+        geometry=GeometryConfig.recurrent(
+            input_dim=_INPUT_DIM,
+            output_dim=_OUTPUT_DIM,
+            hidden_dims=(_HIDDEN_DIM,),
+            init_scale=0.1,
+        ),
+        dynamics=StateDynamicsConfig.energy_minimization(
+            max_steps=settle_steps,
+            convergence_threshold=1e-4,
+            convergence_start=5,
+            step_size=0.1,
+            beta=0.5,
+        ),
+        credit=credit_cfg,
+        update=update_cfg,
+    )
+
+
 def _params() -> dict[str, Tensor]:
     torch.manual_seed(7)
     return {
@@ -162,11 +201,6 @@ class TestEndToEnd:
     def test_system_train_step_with_role_split_update(self) -> None:
         """A composed 5-D system with a role-split update runs a train step;
         the readout moves under the muon rule (near-equal row norms)."""
-        from computronium.analysis.mechanistic_study import (
-            _INPUT_DIM,
-            _OUTPUT_DIM,
-            _build_system,
-        )
         from computronium.ontology.credit import CreditAssignmentConfig
 
         torch.manual_seed(0)

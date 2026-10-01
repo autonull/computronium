@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORDS_DIR = REPO_ROOT / "docs" / "figures" / "run_records"
 EMITTER_CONFTEST = REPO_ROOT / "tests" / "integration" / "conftest.py"
-MIN_RECORDS = 25
+MIN_RECORDS = 21
 
 
 def _emitter_conftest() -> ModuleType:

@@ -5,9 +5,14 @@ asserted rather than merely tracked in a plan document. The rule is one line:
 the total may go down, never up. A suppression added to buy a green run shows
 up here as a net increase, which is the failure mode §2.3 is about.
 
-Measured with ruff 0.16.6 (359, down from 671 at the start of the tranche); a
-different ruff version legitimately moves the count, so the version is recorded
-and a mismatch reports the measured number instead of failing opaquely.
+Measured with ruff 0.16.6 (543, re-baselined 2026-10-01 after the TODO44
+cleanup: the pillar deletions removed code but retired per-file-ignores, the
+docs/generated conformance stubs were excluded from lint, and restored
+Library modules (profiling, param_estimator, probe, stability calibration)
+re-entered the measured population; tranche-start count was 671, the
+pre-re-baseline figure 359). A different ruff version legitimately
+moves the count, so the version is recorded and a mismatch reports the
+measured number instead of failing opaquely.
 
 The 334 this file carried until 2026-09-27 was 28 below the tree it was
 supposed to describe: the acceleration tranche landed ~25 findings of real new
@@ -23,7 +28,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 359
+BASELINE = 543
 RUFF_VERSION = "0.16.6"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

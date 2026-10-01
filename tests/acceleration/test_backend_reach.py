@@ -112,6 +112,7 @@ def test_an_arm_trains_the_system_it_is_bound_to(name: str) -> None:
     if backend is None:
         pytest.skip(f"{name} has no attachable rung for its coordinate")
 
+    torch.manual_seed(0)
     before = {key: value.clone() for key, value in system.geometry.params.items()}
     metrics = system.train_step(
         torch.randn(BATCH, IN_FEATURES), torch.randint(0, CLASSES, (BATCH,))

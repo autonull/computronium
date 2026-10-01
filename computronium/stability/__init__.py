@@ -55,8 +55,17 @@ from stability import (
     spectral_radius as spectral_radius,
 )
 
+from computronium.stability.calibration import (
+    DEMO_GOOD_COORDINATES,
+    DISAGREEMENT_COORDINATES,
+    calibrate_demo_harvest,
+)
+
 __version__ = _stability.__version__
 
 __all__ = [  # ruff: ignore[invalid-all-object]
     *_stability.__all__,
+    "DEMO_GOOD_COORDINATES",
+    "DISAGREEMENT_COORDINATES",
+    "calibrate_demo_harvest",
 ]

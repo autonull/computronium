@@ -6,11 +6,12 @@ Helper functions for reproducibility and training utilities.
 
 import os
 import random
-import sys
 import subprocess
+import sys
 
 import numpy as np
 import torch
+from torch import nn
 
 from computronium.core.logging import get_logger
 
@@ -82,7 +83,7 @@ def capture_environment() -> dict[str, str]:
             .decode("ascii")
             .strip()
         )
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         pass
 
     return {

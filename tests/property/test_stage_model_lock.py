@@ -211,11 +211,13 @@ class TestWrapperObligations:
             run_id="test_failure_isolation",
             run_spec={},
             stages=[StageId.S1_FRAME, StageId.S2_SPACE],
-            budget=Budget.from_duration("1h"),
+            budget=Budget.from_duration("60s"),
             cost_model=SimpleCostModel(),
             policy=RoundRobinGridPolicy(),
             backend=FailingBackend(),
             checkpoint_dir=None,
+            max_rounds=2,
+            min_rounds=1,
         )
 
         runner = PipelineRunner(config, temp_store)

@@ -1,6 +1,6 @@
 """Shared support for kernel demos (TODO44 Phase F).
 
-Every demo composes the kernel exactly as ``tests/acceptance/unified_kernel.py``
+Every demo composes the kernel exactly as ``tests/acceptance/test_unified_kernel.py``
 does: RunSpec → SearchSpace → ProposalPolicy → PipelineRunner → RecordStore.
 """
 

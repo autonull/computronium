@@ -285,13 +285,10 @@ GETATTR_SHIMS: dict[str, str] = {
     "computronium/__init__.py": "_LAZY",
     "computronium/cli/__init__.py": "_LAZY",
     "computronium/core/__init__.py": "_LAZY",
-    "computronium/execution/__init__.py": "_LAZY",
     "computronium/algorithms/__init__.py": "_ALGORITHMS",
     "computronium/primitives/__init__.py": "_PRIMITIVES",
     "computronium/primitives/geometry/__init__.py": "_PRIMITIVES",
     "computronium/primitives/substrate/__init__.py": "_PRIMITIVES",
-    "computronium/knowledge/__init__.py": "DEFAULT_KB",
-    "computronium/knowledge/kb.py": "DEFAULT_KB",
 }
 
 
@@ -327,10 +324,9 @@ def test_getattr_population_is_enumerated() -> None:
 
 def test_hand_written_getattr_modules_resolve_exactly_one_name() -> None:
     """Each hand-written shim must resolve the one name the docstring claims."""
-    from computronium import knowledge
-    from computronium.knowledge import kb
-
-    for module in (knowledge, kb):
-        with pytest.raises(AttributeError):
-            module.KB  # ruff: ignore[useless-expression]  (the name that resolved to nothing)
-        assert module.DEFAULT_KB is not None
+    hand_written = [
+        module for module, kind in GETATTR_SHIMS.items() if kind not in _LAZY_TABLES
+    ]
+    # Post-cleanup (TODO44) no hand-written shims remain; the enumeration test
+    # above keeps it that way. If one reappears, assert its contract here.
+    assert hand_written == []

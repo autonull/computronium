@@ -1,7 +1,7 @@
 """Demo: U4 policy interchangeability — 4 policies, same RunSpec/Space/Store.
 
 Expected: identical record schema across policies; only search behavior
-differers. Same APIs as tests/acceptance/unified_kernel.py (U4).
+differers. Same APIs as tests/acceptance/test_unified_kernel.py (U4).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Demo: U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report).
 
 Expected: records persisted with unique measurement keys; run finishes
-completed. Same APIs as tests/acceptance/unified_kernel.py (U1).
+completed. Same APIs as tests/acceptance/test_unified_kernel.py (U1).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Demo: U3 multi-round pause/resume by run_id.
 
 Expected: no re-measurement after resume; store record count is monotonic.
-Same APIs as tests/acceptance/unified_kernel.py (U3).
+Same APIs as tests/acceptance/test_unified_kernel.py (U3).
 """
 
 from __future__ import annotations

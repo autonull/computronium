@@ -277,7 +277,8 @@ class TestGradientClipInUpdates:
             ParameterUpdateConfig.euclidean(step_size=0.1, grad_clip=0.5)
         )
 
-        # Create dummy params and pseudo_grads
+        # Create dummy params and pseudo_grads (seeded: TODO34 §1.5)
+        torch.manual_seed(0)
         params: dict[str, torch.Tensor] = {
             "weight1": torch.nn.Parameter(torch.randn(10, 10)),
             "weight2": torch.nn.Parameter(torch.randn(10, 10)),
@@ -313,7 +314,7 @@ class TestDiffusionRequiresNoise:
         import warnings
 
         substrate = SubstrateConfig.digital(noise_level=0.0)
-        geometry = GeometryConfig.feedforward(
+        geometry = GeometryConfig.recurrent(
             input_dim=16, output_dim=4, hidden_dims=(8,)
         )
         dynamics = StateDynamicsConfig.diffusion(max_steps=10)

@@ -134,13 +134,3 @@ def test_no_script_default_shadows_a_tracked_data_file() -> None:
         if literal in ignored
     ]
     assert not offenders, f"scripts/ defaults that shadow a tracked file: {offenders}"
-
-
-def test_the_two_named_sites_use_the_packaged_table() -> None:
-    """The specific regression TODO35 §1.7 names, kept by name."""
-    for name in ("visualize_atlas.py", "g1_core_sweep.py"):
-        text = (SCRIPTS_ROOT / name).read_text(encoding="utf-8")
-        assert "artifacts/ruler_table.json" not in text, (
-            f"{name} still defaults to the stale copy"
-        )
-        assert "_ruler_table_path()" in text

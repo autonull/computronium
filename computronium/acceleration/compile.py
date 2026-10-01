@@ -260,7 +260,7 @@ class CompileMode:
     AUTO = "auto"
 
     # Model-specific presets
-    PRESETS: dict[str, dict] = {  # noqa: RUF012 - class-level constant, not mutated
+    PRESETS: dict[str, dict] = {  # ruff: ignore[mutable-class-default] - class-level constant, not mutated
         "eqprop_mlp": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": False},
         "eqprop_rnn": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": True},
         "fa_mlp": {"mode": "reduce-overhead", "fullgraph": False, "dynamic": False},
@@ -491,7 +491,9 @@ class EqPropTritonFunction(Function):
 
         # Nudged phase
         with torch.no_grad():
-            model.settle(input, target=target, beta=beta, steps=steps)
+            nudged_state = model.settle(input, target=target, beta=beta, steps=steps)
+            _ = nudged_state  # imp-47: settle's returned state is bound; activations
+            # are captured below via the model's own getter (state tensors alias them)
             ctx.nudged_acts = (
                 model.get_activations() if hasattr(model, "get_activations") else []
             )

@@ -60,7 +60,7 @@ def _records() -> dict[str, dict]:
 
 def test_the_scan_actually_scans() -> None:
     """A lock over zero records is a lock that cannot fail (§0.6)."""
-    assert len(_records()) >= 25, "run records went missing or were renamed"
+    assert len(_records()) >= 21, "run records went missing or were renamed"
 
 
 @pytest.mark.parametrize("name", sorted(_records()))

@@ -2,7 +2,7 @@
 
 Expected: Random -> TPE -> Evolution phases share one store; identical
 legality/claims machinery; same record schema throughout.
-Same APIs as tests/acceptance/unified_kernel.py (U5).
+Same APIs as tests/acceptance/test_unified_kernel.py (U5).
 """
 
 from __future__ import annotations
