@@ -31,10 +31,13 @@ repo root      README.md, AGENTS.md, TODO43.plan3.md, TODO44.md, pyproject.toml,
 ```
 
 **Non-negotiables:**
-1. Zero imports of deleted pillars anywhere under `computronium/` (full-tree lock proves it).
+1. Zero imports of deleted pillars anywhere under `computronium/` + `packages/` (full-tree lock proves it).
 2. Every `comp` subcommand either works end-to-end or is removed from the dispatcher.
 3. Every README code block is runnable and every README claim is true at its stated strength.
 4. All current kernel gates stay green: U1–U5 (8), property locks, atomic-append, conformance audit.
+5. **ML Library benchmark suite** (5-level hierarchy) passes post-cleanup.
+6. **Single-writer enforcement**: all DuckDB writes flow through `RecordStore` + `threading.Lock` (no bypass).
+7. **Schema forward tolerance**: `unknown` JSON column preserves unrecognized fields across version bump.
 
 ---
 
@@ -43,15 +46,18 @@ repo root      README.md, AGENTS.md, TODO43.plan3.md, TODO44.md, pyproject.toml,
 Produce the authoritative keep/delete lists **before** deleting anything. Append results as
 Appendix tables in this file so execution never re-derives them.
 
-- [ ] **A1.** Classify every `computronium/` top-level module/dir: `Kernel | Library | Legacy | Orphan | Consumer`.
+- [ ] **A1.** Classify every `computronium/` top-level module/dir + root `.py` files:
+  `Kernel | Library | Legacy | Orphan | Consumer`.
   Known real legacy-import consumers (from grep, 2026-10-01):
   `cli/` (+`cli/commands/`), `analysis/`, `core/profiling.py`, `stability/calibration.py`,
   `validation/core.py`, `validation/power_preregistration.py`, `visualization/atlas.py`,
-  `domains/trainer.py`, `p2p/evolution.py`, `experiments/joint/*`.
+  `domains/trainer.py`, `p2p/evolution.py`, `experiments/joint/*`,
+  `acceleration/` (scan for legacy), `p2p/` (full scan beyond evolution.py),
+  root modules: `resources.py`, `utils.py`, `verification.py`, `_surface.py`, `tracking.py`, `sklearn_interface.py`.
 - [ ] **A2.** CLI decision table — every entry in `cli/__main__.py::_SUBCOMMANDS` (17 commands):
   `Keep (rewire) | Fold into surface CLI | Delete`. Verify each with `comp <cmd> --help` + smoke.
 - [ ] **A3.** Tests importing pillars: 45 files found — delete with pillars unless they lock a
-  surviving Library capability (then rewire imports only).
+  surviving Library capability (then rewire imports only). **ML library tests** (`tests/unit/core/`, `tests/integration/`) = rewire only.
 - [ ] **A4.** Root docs: 77 `.md` files, ~40 are `TODO*.md` plans → `docs/archive/`. Root keeps only
   `README.md, AGENTS.md, TODO43.plan3.md, TODO44.md`. Assign every other root `.md`
   (`CAMPAIGN_*.md`, `METHODOLOGY*.md`, `RESEARCH3/4.md`, `DECISIONS.md`, `AUTOTILE.md`,
@@ -61,10 +67,11 @@ Appendix tables in this file so execution never re-derives them.
   (one-off audit/commission scripts are dead weight).
 - [ ] **A6.** Repo strays: `fix_capabilities_v2.py`, scratch `*.json`, stale `*.db`/`*.sqlite`
   (Directive 3: abandon legacy stores — delete files too, not just neglect), `__pycache__` hygiene.
-- [ ] **A7.** `computronium-lab`: only `adaptation.py` imports legacy (`hyperopt.experiment`) —
-  rewire to kernel `ModelBasedPolicy` or drop the feature. Lab otherwise stays.
+- [ ] **A7.** `computronium-lab` + **all `packages/`**: full legacy-import scan (not just `adaptation.py`).
+  `ceec-core`, `psi-peft`, `local-feedback`, `stability` must be clean; `computronium-lab` rewire `adaptation.py` to kernel `ModelBasedPolicy` or drop.
+- [ ] **A8.** **Data artifact audit**: `autoscientist/ruler_table.json` → verify all entries migrated to PRIORS registry (B6 regen capabilities.json will confirm).
 
-**Gate:** tables A1–A7 filled in Appendix §10 before any deletion.
+**Gate:** tables A1–A8 filled in Appendix §10 before any deletion.
 
 ---
 
@@ -82,6 +89,7 @@ Appendix tables in this file so execution never re-derives them.
 - [ ] **B5.** Update `computronium/_surface.py` / `__init__.py` exports: remove any `__all__`/`_LAZY`
   entries pointing at deleted modules (the import-time `assert_public_surface` will flag them).
 - [ ] **B6.** Regenerate `docs/generated/capabilities.json` and rerun the codegen drift lock.
+  Verify `ruler_table.json` data fully migrated to PRIORS registry (A8).
 
 **Gate:** `uv run python -c "import computronium"` succeeds; dispatcher survives (C-phase may
 temporarily break subcommands — dispatcher table is fixed in C before the lock test lands).
@@ -125,6 +133,10 @@ Real imports only (docstring-only references are B7 cleanup):
   `_SUBCOMMANDS` (command set + one-line purpose). Drift fails CI — README stays referenceable.
 - [ ] **D3.** Keep `assert_public_surface` green (already validates `__all__`/`_LAZY` and
   README-documented modules resolve).
+- [ ] **D4.** **Schema forward-tolerance test**: write v3 record with extra fields → read on v4
+  schema → assert `unknown` column preserves them verbatim. (Directive 2: fail-closed + forward tolerance)
+- [ ] **D5.** **Single-writer enforcement test**: grep for `duckdb.connect` outside `evidence/store.py`;
+  assert all write paths go through `RecordStore.append()` + `threading.Lock`.
 
 ---
 
@@ -178,6 +190,9 @@ Built **programmatically on the kernel** (same APIs as `tests/acceptance/unified
   `conformance_evidence_audit.py` (targets: 46 pass / 42 skip / 0 fail; E3/E4 d≈-1.5, p<0.01).
 - [ ] **F3.** `comp gallery --run` re-pin `docs/figures/manifest.json` (accept changed figures; archive stale ones).
 - [ ] **F4.** `docs/generated/capabilities.json` regeneration + drift lock green.
+- [ ] **F5.** **ML Library benchmark suite**: `uv run comp benchmark run --suite all` (or equivalent entry
+  point) — 5-level hierarchy (adaptation, compute efficiency, structural robustness, algorithm
+  migration, Z3) passes post-cleanup.
 
 ---
 
@@ -190,6 +205,11 @@ Built **programmatically on the kernel** (same APIs as `tests/acceptance/unified
   files, targeted tests — output + walltime shown.
 - [ ] **G4.** Round-close gates: full `uv run python -m pytest` (record counts), repo-wide ruff/pyright
   now **in scope** (this IS the hygiene pass), `pip-audit`.
+- [ ] **G5.** **Version bump + release notes**: update `pyproject.toml` version to `3.0.0` (unified kernel);
+  generate `RELEASE_NOTES_v3.0.0.md` summarizing: legacy pillars deleted, kernel guarantees U1–U5,
+  WP18 ContrastDesign, Class E evidence, canonical README.
+- [ ] **G6.** **Full-tree pre-commit**: `uv run pre-commit run --all-files` (required because Phase B
+  commits a massive deletion; standard hook only runs on changed files).
 
 ---
 
@@ -213,6 +233,10 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
 | README overclaims | E style rules + existing 5-level taxonomy + `_surface` module check |
 | Lost historical context from root-doc moves | `git mv` only; `docs/archive/README.md` index; links updated in B3 |
 | computronium-lab breaks | A7 single-file rewire; Lab integration tests in `tests/platform/` gate it |
+| ML library benchmarks regress silently | F5 explicit gate; uses library APIs unaffected by kernel cleanup |
+| DuckDB write bypasses single-writer lock | D5 grep test; architectural review of `evidence/store.py` all write paths |
+| Schema forward tolerance broken | D4 property test; fail-closed + `unknown` column contract enforced |
+| Package dependency drift | A7 full `packages/` scan; G2 prune legacy-only deps post-sync |
 
 ---
 
@@ -226,10 +250,10 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
 
 ## 11. Status
 
-- [ ] Phase A inventory complete
+- [ ] Phase A inventory complete (A1–A8)
 - [ ] Phase B pillars deleted (for real this time)
 - [ ] Phase C consumers repaired, dispatcher rationalized
-- [ ] Phase D full-tree lock + CLI↔README lock green
+- [ ] Phase D full-tree lock + CLI↔README lock + schema forward-tolerance + single-writer enforcement green
 - [ ] Phase E README rewritten and locked
-- [ ] Phase F demos + probes + gallery green
-- [ ] Phase G gates pass, committed
+- [ ] Phase F demos + probes + gallery + ML benchmark suite green
+- [ ] Phase G gates pass, version bumped, release notes, committed
