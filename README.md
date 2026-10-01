@@ -245,12 +245,34 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 | StratifiedRandom | `stratified_random` | Coverage-biased random proposal over the space |
 | RoundRobinGrid | `round_robin_grid` | Systematic grid sweep |
 | UniformRandom | `uniform_random` | Plain uniform sampling |
-| ModelBased (TPE/NSGA-II) | `model_based` | Surrogate-guided search (Optuna TPE, NSGA-II for multi-objective) |
+| ModelBased (TPE/NSGA-II) | `model_based` | Optuna study with samplers/pruners. **Not yet searching:** the study is asked without distributions and results are never reported back, so proposals degrade to a positional pick. Tracked in TODO46 §3.4. |
 | Evolution | `evolution` | Population-based refinement |
 | StrategyProgression | `strategy_progression` | Progresses proposal strategies across rounds |
 | TrainerDriven | `trainer_driven` | Defers proposals to the trainer driver |
 
+**Kernel status, stated plainly.** The orchestration above is real and locked by
+U1–U5: policies, budget, allocation, one store, one measurement identity,
+pause/resume by `run_id`. What is **not** real yet is the measurement underneath
+it. The backend that would train a system and report an accuracy
+(`computronium/experiment/execution/backends.py`) is a documented placeholder, so
+a kernel run produces schema-valid records containing a walltime and a
+timestamp. Two consequences worth stating rather than discovering later:
+
+- **The search space does not yet vary hyperparameters.** The space generator
+  hardcodes MNIST's input shape and a `task_id="default"`, and gives every
+  coordinate one fixed parameter set (`search_space.py:174-206`). Hyperparameters
+  are constants; this is TODO43 **P2/R2**, open.
+- **The Optuna samplers do not learn.** `policy.py` calls `study.ask()` with no
+  distributions and never calls `study.tell()`, so TPE/NSGA-II cannot update from
+  results.
+
+The ML library above is unaffected: the §3 and §4 blocks compose and train real
+six-axis systems and assert real accuracies. The gap is in the kernel's
+evaluation seam, not in the learning substrate. TODO46 §1 and §3 track it with
+`file:line` references; `compose.py:474` already contains the unwired bridge.
+
 **Kernel guarantees (locked in [`tests/acceptance/test_unified_kernel.py`](tests/acceptance/test_unified_kernel.py)):**
+*These lock orchestration and evidence identity. They do not currently lock measurement: the backend behind them is a placeholder (see the kernel-status note below).*
 
 | ID | Guarantee |
 |---|---|
@@ -312,11 +334,11 @@ Claims are labeled by verification level (§1) and governed by CEEC ([`packages/
 
 | Claim | Level | Evidence |
 |---|---|---|
-| Seeded axis effect (E3): credit-axis manipulation shifts outcomes, d ≈ −1.5, p < 0.01 | 5 | `scripts/probes/e3_seeded_axis_effect.py`, conformance audit |
-| Transfer provenance (E4): provenance-tagged records support transfer, d ≈ −1.52 | 5 | `scripts/probes/e4_transfer_provenance.py` |
-| Effect-size protocol (E2) | 5 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
-| Kernel guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` |
-| Locked demo blocks (§3, §4) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` |
+| Seeded axis effect (E3): credit-axis manipulation shifts outcomes, d ≈ −1.5, p < 0.01 | 3 | `scripts/probes/e3_seeded_axis_effect.py` — **measured on `SyntheticGroundTruth`, a constructed response surface, not on a trained system.** This is evidence the analysis machinery detects an effect it was handed. It is not evidence that the system learns. |
+| Transfer provenance (E4): provenance-tagged records support transfer, d ≈ −1.52 | 3 | `scripts/probes/e4_transfer_provenance.py` — same constructed surface, same caveat |
+| Effect-size protocol (E2) | 2 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
+| Kernel orchestration guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` — guarantees *orchestration* (policy interchangeability, pause/resume, one store, one measurement identity). **The evaluator behind those tests is currently a placeholder** returning a walltime, so no measurement is actually made; see the kernel-status note below |
+| Locked demo blocks (§3, §4) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` — these *do* train and assert real accuracies |
 | Conformance audit C1–C88 | 2–3 | `comp report conformance` |
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.

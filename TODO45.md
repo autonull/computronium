@@ -1,5 +1,18 @@
 # TODO45.md — Usability First: Removals, Critical Path, Then Refinement
 
+> **SUPERSEDED by [TODO46.md](TODO46.md).** Retained as the record of what this
+> round verified and why its Phase 2 was aimed at the wrong 20% (the CLI rather
+> than the evaluator). Verified content is carried into TODO46 §5; open items
+> into §5 as well. **Do not start work from this file.**
+>
+> The three findings that ended this plan, all since confirmed in code:
+> the kernel's evaluator is a placeholder (`backends.py:222`), the search space
+> is hardcoded to MNIST's shape with a literal `task_id="default"`
+> (`search_space.py:174-206`), and the Optuna samplers never search
+> (`policy.py:517` — no distributions, no `study.tell()` anywhere). The compose
+> bridge that fixes the first of these already exists, unwired, with zero
+> callers (`compose.py:474`).
+
 **Follows:** TODO44 (core gates green; Register C hygiene remain)
 **Binding:** AGENTS.md in full
 **Supersedes:** the Phase A–G sequencing of the previous TODO45 draft.
