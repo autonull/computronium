@@ -280,18 +280,28 @@ def pytest_unconfigure(config: object) -> None:
         cwd_kb.unlink()
 
 
-def pytest_collection_modifyitems(config: object, items: list[object]) -> None:
+def pytest_collection_modifyitems(config: object, items: list[pytest.Item]) -> None:
     """Apply GPU-marked skips when CUDA is unavailable.
 
     Any test carrying ``gpu_only`` is skipped on CPU-only machines; ``gpu``
     tests run on whatever device is present (they should be device-agnostic).
+
+    Also stamps ``demo`` on every test under a ``test_demo_*.py`` module and on
+    the gallery figure lock. The demos train networks and re-render figures, so
+    their declared budgets sum to hours; they are artifact producers, not
+    correctness checks, and the default gate must not pay for them. Marking them
+    here rather than per file keeps a newly added demo out of the gate by
+    construction. ``pytest -m demo`` re-pins the gallery; the manifest drift
+    lock is what keeps them honest in between, and it is marked here so the demo
+    gate is one selection.
     """
-    if torch.cuda.is_available():
-        return
-    skip_gpu = pytest.mark.skip(reason="CUDA not available")
+    demo = pytest.mark.demo
     for item in items:
-        if "gpu_only" in item.keywords:
-            item.add_marker(skip_gpu)
+        name = item.path.name
+        if name.startswith("test_demo_") or name == "test_gallery_lock.py":
+            item.add_marker(demo)
+        if not torch.cuda.is_available() and "gpu_only" in item.keywords:
+            item.add_marker(pytest.mark.skip(reason="CUDA not available"))
 
 
 # --- E.2 Shared Fixtures (test reorg) ---

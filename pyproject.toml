@@ -184,10 +184,11 @@ markers = [
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
     "integration: integration tests requiring external deps or long runtime",
+    "demo: gallery demo — trains networks and re-pins docs/figures; run with -m demo",
     "filterwarnings: builtin, registered for --strict-markers compat",
     "timeout: marks tests with a timeout (requires pytest-timeout)",
 ]
-addopts = "--strict-markers --durations=25 -m 'not slow and not benchmark and not llm' -p no:warnings"
+addopts = "-n 4 --strict-markers --durations=25 -m 'not slow and not benchmark and not llm and not demo' -p no:warnings"
 # pytest-timeout is the kill, and its signal method already dumps the stack of
 # the test it stops. faulthandler's own 120s dump fired on every test that
 # legitimately runs longer than the default -- it printed "Timeout (0:02:00)!"
@@ -219,7 +220,7 @@ omit = [
 target-version = "py314"
 line-length = 88
 preview = true
-exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py", "docs/archive", "docs/generated"]
+exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py", "docs/generated"]
 
 [tool.ruff.lint]
 select = [

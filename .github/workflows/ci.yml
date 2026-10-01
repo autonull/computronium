@@ -30,7 +30,7 @@ jobs:
       - name: Property Tests (Fast CI Gate)
         run: uv run python -m pytest tests/property/ -q
       - name: Demo Gate (demonstration suite + figure lock)
-        run: uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
+        run: uv run python -m pytest tests/integration/ -m demo -q
       - name: Vertical Slice Gate (C.2: energy descent, gradient sign, J2 invariance, baseline digest)
         run: uv run python -m pytest tests/integration/test_vertical_slice_gate.py tests/property/test_vertical_slice.py -q
       - name: Drift Locks (README snippets, root exports)

@@ -7,8 +7,12 @@ the gallery and compares. A mismatch means one of two things, both caught:
 the code changed what it demonstrates (review the diff, re-pin the manifest
 deliberately) or the demo became nondeterministic (a bug — fix it).
 
-Runs after the demo tests (alphabetical file order in this directory), so
-the records on disk are from the same gate run.
+Reads the committed run records, so it is a data lock: the manifest, the
+records, and the rendered figure must agree. It does not depend on the demo
+tests having run in the same session — under xdist there is no such ordering to
+depend on. Detecting a demo whose *code* now produces different numbers is the
+demo gate's job (``pytest -m demo``); this lock is what makes that re-pin
+deliberate.
 """
 
 import hashlib

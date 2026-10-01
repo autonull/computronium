@@ -79,18 +79,25 @@ docs/         curated reference + generated (manifest locked)   # no archive/
 
 ## Phase 0 — Ground Truth (do first; everything else depends on it)
 
-- [ ] **G0.1** Full suite on a clean tree; record the *actual* pass/fail/skip counts.
-      The appendix figure (3539/10/108) predates the `tests/slow/` and `tests/graph/`
-      removals and is known stale.
-- [ ] **G0.2** Per-test walltime for the 20 slowest; feeds Phase 4's flake triage.
-- [ ] **G0.3** Reconcile the CLI inventory. The draft claimed 7 surviving commands
-      (including `gallery`); the dispatcher registers **6** and `comp --help` is a bare
-      usage string (`comp <report|parity|repro|validate|joint-validate|benchmark>`) that
-      exits 1 on a bare invocation. Decide: real argparse help tree, or document as-is.
-- [ ] **G0.4** Confirm the demo/manifest invariant still holds (measured: 21 `DEMOS`,
-      21 `docs/figures/manifest.json` figures — currently satisfied).
+- [x] **G0.1** ~~Full suite on a clean tree~~ → **re-scoped, see §12.** The premise
+      was wrong: "full suite" meant `pytest tests/`, which bypasses
+      `testpaths`. Serial, it hard-kills (no traceback, process gone) at test
+      **873/3699** — `tests/integration/test_demo_uaxis_muon_swap.py`. Not a
+      failure list; a *cost* problem. The default gate (`uv run python -m pytest`,
+      3241 tests) is a different and much cheaper thing.
+- [ ] **G0.2** Per-test walltime for the 20 slowest. `tests/conftest.py` already
+      censuses every test over 5 s at end of run and `addopts` carries
+      `--durations=25`; both now print on the *default gate*, which is minutes not
+      hours. Collect from that run; do not launch a separate one.
+- [x] **G0.3** **Decided: real argparse help tree.** `computronium/cli/__main__.py`
+      now builds one; `comp --help` prints a command table with per-command
+      summaries (exit 0), bare `comp` prints help to stderr (exit 1), unknown
+      command prints usage (exit 2), `comp <cmd> --help` forwards to that
+      command's own parser. The `_USAGE` literal is gone.
+- [x] **G0.4** Confirmed: 21 `DEMOS`, 21 `docs/figures/manifest.json` figures.
 
-**Gate:** a committed snapshot table of real numbers, replacing §11.
+**Gate:** a committed snapshot table of real numbers, replacing §11. — *partially
+met; §12 carries what was measured instead.*
 
 ---
 
@@ -101,19 +108,20 @@ reduces the surface every later phase touches.
 
 - [ ] **R1.1** `tests/slow/` — superseded by kernel demos/benchmarks. **Already deleted**
       in the working tree; `tests/test_timeout_marker_policy.py` `KNOWN_LONG` updated
-      to match. Needs a test run to confirm the timeout-marker lock still passes.
+      to match. Needs a default-gate run to confirm the timeout-marker lock passes.
 - [ ] **R1.2** `tests/graph/` — deleted in the working tree. Confirm no suite depends on
       the graph geometry it covered; if one does, that is a real coverage gap to record,
       not a reason to restore the directory.
-- [ ] **R1.3** `docs/archive/` — 467 files, 8.7 MB. Git history is the archive. Requires
-      touching `pyproject.toml:222` (ruff `exclude`) and `README.md:361` (research-program
-      paragraph that points at it).
-- [ ] **R1.4** Exclude generated protobuf from pyright. 61 errors sit in `p2p/`, of which
-      35 are in generated `p2p/proto/tile_mesh_pb2_grpc.py`. Hand-fixing generated output
-      is waste; add to pyright `exclude` alongside the existing `*_pb2*.py` ruff excludes.
-- [ ] **R1.5** Revert formatting-only churn in `docs/figures/run_records/*.json` (16 files
-      were re-serialized compactly — byte-different, value-identical). Left uncommitted by
-      a prior session; it inflates diffs and risks the manifest drift lock.
+- [x] **R1.3** `docs/archive/` removed (467 files, 8.7 MB). `pyproject.toml:222` ruff
+      exclude and the `README.md:361` research-program paragraph updated; no other
+      reference existed in CI, scripts, or tests.
+- [x] **R1.4** `pyrightconfig.json` excludes `**/*_pb2.py` / `**/*_pb2_grpc.py`.
+      Measured: `computronium/p2p` **61 → 23** errors. `grpc_service.py` stays checked.
+- [x] **R1.5** **Void — the premise was wrong.** Those 16 files were not "re-serialized
+      compactly"; they are demo-regenerated artifacts carrying a new
+      `provenance.git_commit` (commit `3a70b7fa`), i.e. value-different, and the churn
+      is already in history. Reverting would create the same diff for no gain. Nothing
+      to do.
 - [ ] **R1.6** Delete any subsystem that G0 shows is untested *and* unreferenced.
 
 **Gate:** tree is smaller, `ruff`/`pyright`/`pytest` all still resolve, no dangling refs.
@@ -300,3 +308,77 @@ that will fight the manifest drift lock → R1.5.
 | `docs/archive/` | 467 files, 8.7 MB | → R1.3 |
 | Test files by dir | primitives 145, property 133, algorithms 84, integration 56, unit 51, acceleration 15, ceec 14, platform 6, acceptance 1 | |
 | pytest totals | *unverified* | appendix figure is stale → G0.1 |
+
+---
+
+## 12. Session 2 — the suite was the product, not the check
+
+### 12.1 What actually happened to G0.1
+
+`pytest tests/` was launched twice, in the background, with polling. Both runs
+reached **test 873 of 3699** and then the process **died with no traceback** —
+not a failure, not a timeout, a hard kill. `--collect-only` puts test 873 at
+`tests/integration/test_demo_uaxis_muon_swap.py`. The suite had been "slow" for
+sessions; nobody had noticed it was *dying*, because nobody read past the 21%
+progress line.
+
+The cause is not one test. The 21 gallery demos declare budgets summing to
+**~9,900 s** (≈2.75 h) of declared worst case, and they were being run serially,
+in a loop, as a side effect of naming a directory.
+
+### 12.2 Three fixes, all structural
+
+| Fix | Where | Effect |
+|-----|-------|--------|
+| **Demos are not correctness tests** | new `demo` marker, stamped in `tests/conftest.py` on every `test_demo_*.py` plus `test_gallery_lock.py`; `addopts` gains `not demo` | the 2.75 h artifact producers leave the default gate. `pytest -m demo` re-pins the gallery. Marking by *filename* in conftest means a newly added demo is excluded by construction, with no per-file edit to forget. |
+| **Run 4-wide** | `addopts` gains `-n 4` (xdist 3.8 is already installed; nothing used it) | the default gate is ~4× walltime cheaper. `tests/conftest.py` already documents `-n 4` and its per-worker RNG consequence, so the suite was *written* for this and simply never ran that way. |
+| **Stop training the same arm twice** | `test_demo_uaxis_muon_swap.py` | `MULTI_SEEDS = range(5)` re-ran seed 0 for all 6 credit×update pairs already trained in the single-seed loop. 39 arms → 33, exactly (not approximately): `_run_arm` seeds torch itself. |
+
+Also: `test_gallery_lock.py`'s docstring claimed it "runs after the demo tests …
+records on disk are from the same gate run". Under xdist there is no such
+ordering, so the claim was never true. It now states what it actually locks —
+committed manifest ↔ committed records ↔ rendered figure — and says plainly
+that detecting a demo whose code now yields different numbers is the demo
+gate's job.
+
+CI's demo gate became `pytest tests/integration/ -m demo -q` (was `-k "demo or
+gallery_lock"`, which the new `-m` in `addopts` would have silently emptied).
+`AGENTS.md` fast-gate line updated to match.
+
+### 12.3 Two gate holes found while in there
+
+1. **`testpaths` omits four directories.** `tests/integration`, `tests/ceec`,
+   `tests/platform`, and **`tests/acceptance`** are outside the default gate.
+   `tests/acceptance/test_unified_kernel.py` holds the U1–U5 locks — the single
+   most important test file in the repo — and a bare `pytest` has never run it.
+   CI only reaches it because CI names directories explicitly.
+   → **Decision needed:** either add `acceptance` to `testpaths`, or state
+   plainly that CI is the gate and `pytest` is a fast lane.
+2. **CI runs everything serially** in seven explicit shards. xdist is available
+   and unused. Low priority: CI walltime is not the bottleneck this plan is
+   about.
+
+### 12.4 Verified without running the suite
+
+Collection only (`--collect-only`, seconds, no test bodies):
+
+| Selection | Result |
+|-----------|--------|
+| `pytest -m demo tests/integration/` | **25** selected, 245 deselected |
+| `pytest` (default gate) | **3241** collected, 51 deselected (`slow`/`benchmark`/`llm`) |
+
+Ruff clean; pyright on the four touched files: 3 errors, all pre-existing
+fixture-body issues (`tests/conftest.py` 213, 222, 325) — the signature fix
+`items: list[object]` → `list[pytest.Item]` removed three more.
+
+### 12.5 Untested, and that is a real gap
+
+Nothing here has been *executed*. The next single run should be the default
+gate, once, to confirm `-n 4` and the marker behave and to collect G0.2's
+durations. One run, minutes, at round close — not per commit.
+
+### 12.6 Next session
+
+Do **not** re-attempt `pytest tests/`. In order: one default-gate run for G0.1
+counts + G0.2 durations → decide the `testpaths` hole (12.3) → Phase 2
+(`comp run --spec-file`).

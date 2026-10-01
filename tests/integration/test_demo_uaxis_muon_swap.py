@@ -187,9 +187,12 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
     # lift is variance-aware asserted, not single-seed quoted.
     for credit_name in ("ff", "pepita", "ff_hybrid"):
         for update_name in _UPDATES:
-            seeded = [
+            # seed 0 was already trained above; _run_arm seeds torch itself,
+            # so reusing the cell is exact, not an approximation.
+            seeded = [accs[f"{credit_name}/{update_name}"]] + [
                 _run_arm(credit_name, update_name, train_data, seed=s)
                 for s in MULTI_SEEDS
+                if s != 0
             ]
             record["multi_seed"][f"{credit_name}/{update_name}"] = seeded
             print(f"{credit_name}/{update_name} seeds: {[round(a, 3) for a in seeded]}")

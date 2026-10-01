@@ -79,7 +79,7 @@
 *   **pytest + pytest-cov**: Coverage is opt-in (`--cov`); no floor until the API stabilizes.
 *   **Test execution tiers** — run the cheapest tier that can catch your change; always show output + walltime (never truncate failures):
     1. **Targeted** (default): only tests touching changed modules (`uv run python -m pytest tests/<path> -k <signature> -q`).
-    2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -k "demo or gallery_lock" -q`) + drift locks + property suite.
+    2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -m demo -q`) + drift locks + property suite.
     3. **Full suite**: round close or explicit request — never a per-commit habit.
 *   **hypothesis**: Use for property-based tests on pure logic.
 *   **Mocking**: Prefer Dependency Injection over `unittest.mock`. Use `pytest-mock` when strictly required.

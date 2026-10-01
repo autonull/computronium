@@ -6,7 +6,8 @@
   ],
   "exclude": [
     "**/__pycache__",
-    "archive",
+    "**/*_pb2.py",
+    "**/*_pb2_grpc.py",
     "computronium.egg-info"
   ],
   "executionEnvironments": [

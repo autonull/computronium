@@ -5,13 +5,14 @@ command maps to one module ``main``; the console-script table in
 ``pyproject.toml`` points at this entry point so the public API boundary stays
 one place.
 
-Usage::
+    Usage::
 
-    comp <report|parity|repro|validate|joint-validate|benchmark> [args]
+        comp <report|parity|repro|validate|joint-validate|benchmark> [args]
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 import warnings
 from typing import TYPE_CHECKING
@@ -33,7 +34,32 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "benchmark": ("computronium.cli.benchmark", "main"),
 }
 
-_USAGE = "comp <" + "|".join(_SUBCOMMANDS) + "> [args]"
+_SUMMARIES: dict[str, str] = {
+    "report": "Run/report a Unified Kernel experiment store",
+    "parity": "Check library-vs-kernel parity for an axis",
+    "repro": "Replay a recorded run and diff it",
+    "validate": "Validate a config or record against the schema",
+    "joint-validate": "Validate a composed multi-axis system",
+    "benchmark": "Run kernel benchmarks and emit a verdict",
+}
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the top-level help tree.
+
+    Returns:
+        Parser whose subparsers mirror :data:`_SUBCOMMANDS`; each subcommand
+        forwards its remainder to the owning module's parser.
+    """
+    parser = argparse.ArgumentParser(
+        prog="comp",
+        description="Computronium — experiment surface over the Kernel and Library.",
+        epilog="Run 'comp <command> --help' for that command's own options.",
+    )
+    sub = parser.add_subparsers(dest="command", metavar="<command>")
+    for name in _SUBCOMMANDS:
+        sub.add_parser(name, help=_SUMMARIES[name], add_help=False)
+    return parser
 
 
 def _load(command: str) -> Callable[[], int]:
@@ -54,13 +80,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         The adapter's exit code (``0`` when it returns ``None``).
     """
     args = list(sys.argv[1:] if argv is None else argv)
-    if not args or args[0] in {"-h", "--help"}:
-        print(_USAGE)
-        return 0 if args and args[0] in {"-h", "--help"} else 1
+    parser = _build_parser()
+    if not args:
+        parser.print_help(sys.stderr)
+        return 1
+    if args[0] in {"-h", "--help"}:
+        parser.print_help()
+        return 0
 
     command, rest = args[0], args[1:]
     if command not in _SUBCOMMANDS:
-        print(f"comp: unknown command {command!r}\n{_USAGE}")
+        print(
+            f"comp: unknown command {command!r}",
+            file=sys.stderr,
+        )
+        parser.print_usage(sys.stderr)
         return 2
 
     # Each adapter's argparse reads sys.argv[1:] when called with no explicit
