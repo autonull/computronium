@@ -314,6 +314,47 @@ Do **not** work file-by-file. Work the table below in ratio order. Each row is a
 
 ## 11. What session 2 taught the plan
 
+### 11.0 The finding that reorders everything: the kernel is a scaffold
+
+**U1–U5 pass — 8 tests in 11.22 s.** The orchestration is real and sound. But
+reading the path a record actually takes, it terminates in a stub:
+
+`computronium/experiment/execution/backends.py:222`
+```python
+def _evaluate_single(...) -> Record:
+    """This is a placeholder - actual evaluation integrates with the
+    ontology/system stack. For now, returns a minimal valid Record."""
+    payload = {"status": "evaluated", "walltime_s": ..., "seed": ...,
+               "fidelity": ..., "epochs_completed": ...}
+    status = Status(gate_verdict=GateVerdict.PENDING, maturity=Maturity.L0, ...)
+```
+
+`MultiprocessBackend._evaluate_single_process` (`:393`) is the same stub. S5
+("would call `compose_joint_system`"), S6 ("training is executed by the
+pipeline wrapper"), S7 ("would resolve objectives"), S9 (`confidence: 0.0`),
+and S11 ("would delegate to `surface.report`") are all coverage shells.
+
+**So: no training runs, no objective is measured, no accuracy exists.** A
+`comp run` today would produce schema-valid records containing `walltime_s` and
+a timestamp. Every one of Phase 2's items would be satisfiable, the gate would
+go green, and nothing would have been demonstrated.
+
+This inverts the phase. Phase 2 as written spends its effort on **CLI wiring**,
+which is already 80% there. The missing 80% is the **evaluation bridge**:
+`Coordinate` → six primitive config classes → `compose_system` → `SystemTrainer`
+→ measured objective → `Record` payload with a real number.
+
+Good news: that bridge is *already written by hand* in every
+`tests/integration/test_demo_*.py` — `FeedforwardGeometry(GeometryConfig.feedforward(...))`,
+`DigitalSubstrate(SubstrateConfig.digital(...))`, `SystemTrainer(...).fit()[-1]["train_acc"]`.
+The demos are the template; the kernel just never called them. Extracting that
+per-axis string → config-class mapping (the registries already exist for it) is
+mechanical, and it is the actual critical path.
+
+**Corollary for the plan's non-negotiable #1** — "one command produces
+reproducible evidence" — it is currently false, and no amount of CLI polish
+changes it. §11.7's spine is therefore re-cut around the bridge, not the CLI.
+
 ### 11.1 The plan's Phase 0 was itself the defect
 
 G0.1 said "run the full suite first, get real numbers." Doing so is what
@@ -379,16 +420,28 @@ measurement to a gate over running an investigation to produce a number.
 
 ### 11.7 Revised spine
 
-Phase 0 is measured. Phase 1 is reduced to R1.4 (done), R1.6 (pending G0), and
-one decision (§12.3, `testpaths`). Phase 2 is re-scoped above. The spine is now
-short enough to hold in one head:
+Phase 0 is measured. Phase 1 is reduced to R1.4 (done), R1.3 (withdrawn), R1.5
+(void), and R1.6. The spine, re-cut around §11.0:
 
-1. **Prove the kernel runs** — run U1–U5. Verification *and* feasibility for
-   Phase 2 in one act. Nothing else in the plan matters until this is known.
-2. **Make it demonstrable** — C2.0 → C2.1 → C2.2 → C2.3, ending in a runnable
-   example with asserted numbers.
-3. **Make it honest** — Phase 3, now that there is output to be honest about.
-4. **Everything else** — flakes, type hygiene, release.
+1. **Close the loop once, on one cell.** Replace `LocalBackend._evaluate_single`
+   with a real evaluation for a *single* axis combination: `Coordinate` → config
+   classes → `compose_system` → `SystemTrainer` → `Record` carrying a real
+   `train_acc`. One cell, one number, asserted by a test. This is the whole
+   product; everything else is orchestration that already works.
+2. **Generalize to the space.** The other five axes via the existing registries,
+   and `MultiprocessBackend` delegating to the same function (it must never hold
+   a second implementation).
+3. **Measure a real objective.** S7 resolves against `OBJECTIVES` instead of
+   passing proposals through. Until accuracy is in the payload, "evidence"
+   means nothing.
+4. **Then the CLI** (old C2.0–C2.2). Worth doing, worth nothing before the above.
+5. **Then the worked example** (C2.3) — which is now the *proof* rather than a
+   deliverable, and is only meaningful once step 1 holds.
+6. **Then honesty/docs** (Phase 3), which now has something true to describe.
+7. Flakes, type hygiene, release.
+
+Step 1 is deliberately one cell. A general evaluation bridge built before one
+cell works is how the current scaffold happened.
 
 ### Session 1 — A1 attempted, reverted, plan re-sequenced
 
@@ -435,6 +488,7 @@ that will fight the manifest drift lock → R1.5.
 | `docs/archive/` | 467 files, 8.7 MB | → R1.3 |
 | Test files by dir | primitives 145, property 133, algorithms 84, integration 56, unit 51, acceleration 15, ceec 14, platform 6, acceptance 1 | |
 | pytest totals | *unverified* | stale; real per-shard numbers now in §12.5 |
+| **U1–U5 acceptance** | **8 passed, 11.22 s** | orchestration is real; **evaluation is a stub** — see §11.0 |
 
 ---
 
