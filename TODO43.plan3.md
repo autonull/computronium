@@ -260,3 +260,197 @@ uv run python -m pytest tests/<touched_module> -k <signature> -q
 - **Test updates:** `test_wp10_learning_integration_lock.py` was updated to embed the expected (dynamics, credit) pairs and task lists directly, removing dependency on deleted legacy tables.
 - **Generated docs:** `docs/generated/capabilities.json` must be regenerated after PRIORS registry changes (via `write_generated_docs()`). The drift lock test (`test_codegen_drift_lock.py`) enforces this.
 - **Single seeding path confirmed:** `seed_all_registries()` clears PRIORS_REGISTRY then calls `register_all_priors()` — verified idempotent and order-independent.
+
+---
+
+## 1. Decision Log (from TODO43.plan.md)
+
+### 1.1 Store: DuckDB replaces SQLite + MessagePack + projected columns
+
+The NoSQL requirement (agile schema development) is met **without** a document DB: DuckDB is
+an embedded, zero-config, single-file engine with native nested types — document-style
+agility inside a SQL engine with real constraints.
+
+| Option | Verdict | Why |
+|---|---|---|
+| **DuckDB** | **Selected** | Native `STRUCT`/`JSON`/`MAP`/array columns — sections are typed, queryable, indexable by zone maps; no projections. Columnar analytics for claims/fronts/attribution. `vss` extension for the vector index **(experimental; optional capability — see §1.1.1)**. Parquet-native export/import (R73 nearly free). WAL + crash-safe. In-process, zero-config. |
+| PostgreSQL | Rejected | Server process violates the embedded/zero-config posture. |
+| MongoDB | Rejected | Server, no UNIQUE-constraint discipline for dedup keys without ceremony, weak relational integrity for `record_artifacts`, new operational surface, and gains nothing over DuckDB JSON columns. |
+
+**Supersessions to abc3:** §6.1.1 (MessagePack → native typed columns), §6.1.3 (projected
+columns → deleted; the columns *are* the source), §6.1.4 (hand-tuned index strategy →
+zone maps + ART as needed), §6.1.6 (WAL pragmas → DuckDB built-in), Appendix II DDL
+(→ §2 of this plan), §6.1.5 (artifact delegation targets `packages/ceec-core::CEECStore`).
+
+**Honest tradeoffs:**
+
+- **Single-writer-per-process is an application-level determinism/governance decision, not a DuckDB limitation.** DuckDB supports multiple writer threads within one process using MVCC/optimistic concurrency (DuckDB concurrency docs). The design concentrates writes: `ExecutionBackend.submit() -> list[Record]` returns records to the pipeline, and only the pipeline writes. **Binding rule:** all store writes flow through the orchestrating process's single `RecordStore` instance, guarded by a `threading.Lock` (PEP 703 — in-process parallel evaluation via `asyncio.TaskGroup` shares that instance; the GIL is not trusted). K8 dedup becomes in-process; `measurement_key` UNIQUE remains the enforcement. If a genuine multi-*process* writer requirement ever emerges, it is a new explicit K1 decision taken behind the `Store` Protocol seam — no legacy engine is pre-committed as the fallback.
+- **`seq` = authoritative persistence order, not deterministic experiment order.** The `threading.Lock` serializes access but does not guarantee concurrent workers acquire it in reproducible order. `seq` is the write-order authority (K8); the replay order comes from the recorded proposal/evaluation schedule (R26–R27).
+- **Tiny-commit latency.** DuckDB commits cost ~1–3 ms vs SQLite's ~0.5 ms. The binding
+  K7/K9 criterion is **overhead < 1% of median evaluation walltime** (evaluations run 1–10 s),
+  not abc3's SQLite-calibrated absolute priors. The harness records mean/p95/fraction;
+  batch appends per evaluation round amortize further.
+- **STRUCT field additions** require `ALTER TABLE … ALTER COLUMN` (a rewrite). Mitigation:
+  stable sections are typed STRUCTs; *open* surfaces (`params`, `payload`, `unknown`) are
+  `JSON` — new hyperparameters and telemetry need **zero DDL**. That is the agile-schema
+  requirement, satisfied.
+- **Cross-process access is exclusive, not concurrent.** DuckDB allows one
+  read-write process *or* many read-only processes — never both. While a
+  service-mode run holds the store, `comp-surface report/export` from another
+  process cannot open it. Mitigation: live reporting/steering route through the
+  service's control surface (WP11.4); standalone report/export run when idle, or
+  against an export bundle (R73) — both discharge the need without a store swap.
+  Should any future requirement ever justify a different store engine, that is a
+  new explicit K1 decision behind the `Store` Protocol seam; nothing is
+  pre-committed.
+
+#### 1.1.1 Vector Search: Optional Capability
+
+DuckDB's `vss` (Vector Similarity Search) extension is currently **experimental** (DuckDB docs). The Kernel treats vector retrieval as a **capability**, not a foundational persistence contract:
+
+```text
+VectorStore capability
+    ├── exact scan (brute-force `list_dot` / cosine) — always available
+    └── optional approximate index (HNSW via `vss` or external) — enabled when corpus warrants
+```
+
+The plan's existing fallback (small corpus → brute force, large corpus → HNSW) becomes the explicit contract. The `vector_index` table in §2 remains; the index *population strategy* is pluggable. This keeps the scientific kernel independent of a still-evolving optimization feature.
+
+**Embedding producer (open decision, K1-owned).** The `FLOAT[384]` column needs
+a source: (a) a deterministic hashing/feature-hashed embedder — no new
+dependency, semantics limited to lexical/structural similarity — or (b) a small
+local transformer model — semantic retrieval, but a new mandatory dependency
+requiring an explicit K1 decision, vendored/offline-installable (extension and
+model downloads must not require network at run time). S8 writes embeddings
+tagged with `embedding_version`, so the choice is revisable per version without
+schema change; brute-force retrieval semantics do not depend on the choice.
+
+### 1.2 Dependency decision (K1 discharge)
+
+`duckdb` enters as a mandatory runtime dependency by explicit decision (this plan, §1.1),
+via `uv add duckdb`, pinned in `uv.lock`. The dev-env smoke check becomes:
+`uv run python -c "import duckdb, optuna, scipy, torchvision, pytest"`.
+No other new mandatory runtime deps; the Kernel's metaprogramming stays stdlib
+(`typing`, `dataclasses`, `importlib`) per abc3 K1.
+
+---
+
+## 6. Class E Benchmarks (hierarchy of evidence, per WP5.5)
+
+| Class | Benchmark | Discharges |
+|---|---|---|
+| **E1 — Infrastructure** | Crash recovery (kill -9 during atomic append) | R12, R26 |
+| | Store overhead harness (mean/p95/fraction < 1% median eval walltime) | K7, K9 |
+| | Serialization round-trip (all sections, schema v1→v2 readers) | R79, K4 |
+| | Atomic append with artifacts (single transaction) | R60, K8 |
+| **E2 — Algorithmic** | Cost-to-rank vs uniform baseline | R46 |
+| | Surrogate acquisition vs predeclared baseline on held-out tasks (effect-size protocol) | R54 |
+| | Cost-model estimate-vs-actual error trend | R23, R24 |
+| | Divergence-bound replay (1357 s run) | R50 |
+| **E3 — Scientific** | Seeded axis-effect reproduction (independent seeds, CI on effect) | R86 |
+| | Effect survives independent environment (GPU arch, CUDA, PyTorch versions) | R86 |
+| | Effect transfers to predeclared held-out tasks (N≥10, paired, effect size) | R54, R86 |
+| **E4 — Generalization** | Cross-task transfer (explicit `transfer_source_ids`, `transfer_mode`) | R53, R55 |
+| | Cross-topology transfer | R53, R55 |
+| | Unseen substrate (zero-shot / few-shot) | R53, R55 |
+
+**Effect-size protocol (replaces "beats random"):**
+- `N_tasks ≥ 10` independent held-out tasks (predeclared, never used for surrogate training)
+- `N_seeds ≥ 5` independent repetitions **per task** (within-task repeated measures)
+- Fixed evaluation budget `B` with explicit `CostBudgetTier`:
+  - `EVAL_COUNT` — evaluation count budget (always comparable)
+  - `FLOPS` — FLOP budget (when FLOPs are meaningful/comparable)
+  - `WALLTIME` — walltime budget (ONLY valid within matched hardware class; requires
+    `hardware_class` provenance match)
+- Predeclared primary metric (e.g., best validation score at budget B)
+- **Primary inference unit: task.** For each task, aggregate seed-level results to a task-level
+  effect Δ_task = policy_metric(task) - baseline_metric(task). Primary comparison operates
+  over the distribution of Δ_task across tasks (paired where possible: same seeds, same tasks).
+- Seeds provide within-task uncertainty estimation; report seed-level variance alongside.
+- Optional: mixed-effects model `metric ~ policy + (1 | task) + (1 | task:seed)` for
+  simultaneous estimation.
+- Report: effect size (Cohen's d at task level), 95% CI, p-value (paired t-test or
+  Wilcoxon on task-level Δ_task).
+- Secondary: evaluations to reach target τ, area under curve.
+
+Probe/benchmark scripts live in `scripts/probes/` per repo convention: docstring states the
+measured-regime numbers and the demo/decision they informed. Any benchmark exceeding the
+5-minute foreground cell limit launches with
+`nohup uv run python … > logs/<name>.log 2>&1 &` and is polled at ≤2-minute intervals with a
+pre-registered kill time. Low benchmark results are treated as suspected implementation
+defects first (AGENTS.md), not accepted verdicts, until the harness itself is verified.
+
+---
+
+## 7. Definition of Done
+
+abc3 §21.1 items 1–12 (all) and §21.2 adjusted: ~~migration complete~~ → legacy stores
+abandoned untouched (Directive 3); schema versioning is fail-closed — no legacy readers,
+no migration machinery (Directive 2). Every Class S lock green, every Class E benchmark
+recorded as a store record, every Class P gate enforced in CI.
+
+**New acceptance criteria from feedback:**
+- WP1.5 scientific validity skeleton passes: synthetic fixture recovers known effect,
+  data splits enforced, comparison guards work, replay vs reproducibility distinguished.
+- WP5.5 statistical protocol lock passes: benchmark classes disjoint, effect-size protocol
+  fields present, I(C,U) data splits enforced, leakage audit runs.
+- Atomic append with artifacts: kill -9 during transaction → no partial state, no recovery needed.
+- Legality boundary lock: no heuristic exclusions in DECLARED constraints.
+- Status three-tier model: observations, assessments (with procedure version), derived claims
+  (pure queries only).
+
+**Stronger completion criteria (per Integration Reality Correction):**
+- Exactly one `RunSpec` model (typed, serializable, not `dict[str, Any]`).
+- Exactly one `SearchSpace` model derived from `AXES` + task + constraints.
+- Every proposal policy consumes that `SearchSpace` and emits the same `Proposal` type.
+- Every allocation policy consumes the same evidence and emits the same `AllocationPlan` type.
+- Every run executes the same S1–S11 stage graph via `Stage.run(ctx) -> Fragment` dispatch.
+- S3–S10 can repeat for arbitrarily many rounds (continuous round loop implemented).
+- AutoScientist/Synthesis, Optuna, Evolution, Random, TrainerDriven differ only in
+  proposal policy, not lifecycle or evidence semantics.
+- Continuous/Campaign differs only in budget, allocator, service/control behavior.
+- One `RecordStore` and one measurement identity.
+- No policy can bypass legality, provenance, novelty, failure handling, budget accounting,
+  or atomic persistence.
+- A run can pause, resume, replay, and continue with a different policy.
+- Claim eligibility computed exclusively from achieved evidence (not planned `n_seeds`).
+- E3 demonstrates known-effect recovery; E4 demonstrates held-out transfer.
+- Every C1–C88 capability either has real conformance evidence or an explicit retirement record.
+- Legacy pillars are physically gone and the import graph proves it.
+- Unified acceptance suite (U1–U5) passes for all three historical modes.
+
+Deferred to the hygiene pass (never per-commit, per AGENTS.md): repo-wide `ruff check` /
+`pyright` outside `experiment/`, full `pytest --cov`, `pip-audit`. The Kernel itself ships
+strict-clean from WP1 onward.
+
+---
+
+## Integration Reality Correction (2026-09-30 — Updated)
+
+**WP8–WP13 established the kernel primitives and most required functionality, but several completion bullets were satisfied structurally rather than end-to-end. These are not architectural reversions. The remaining work closes runtime integration seams and verifies that the individual components actually compose into the unified kernel described by abc3 §5.**
+
+**Progress Update (2026-09-30)**: WP14/WP15/WP16/WP17 have closed the major integration seams; WP19 has closed the failure isolation and runtime provenance seams:
+
+Explicit reclassification of completion status:
+
+| Area | Status to record |
+|---|---|
+| Axis/registry union | Complete |
+| Legality | Complete |
+| Store/artifacts | Complete, subject to atomicity clarification |
+| Stage definitions | **Complete** — runtime dispatch via `Stage.run(ctx) -> Fragment` |
+| Policy catalog | **Complete** — canonical SearchSpace/ProposalContext/Proposal interface |
+| Optuna integration | **Complete** — OptunaDistributionAdapter provides AXES-driven suggestion |
+| Allocator | **Complete** — integrated between rounds in round loop |
+| Continuous round loop | **Complete** — S3-S10 repeat with Decision-based termination |
+| Learning/store integration | Mostly complete |
+| Claim integrity | Helper complete; **all callers not yet normalized** |
+| Failure isolation | **Complete** — per-item Success/Failure via EvaluationResult, siblings continue |
+| Runtime provenance | **Complete** — EnvironmentSnapshot captured once per run, injected via SystemContext |
+| E1 | Complete |
+| E2 | Complete as a mechanism validation |
+| E3/E4 | Incomplete |
+| Legacy deletion | Incomplete |
+| Full C1–C88 proof | Incomplete |
+
+**Why this matters:** The current plan says "ModelBased policy completed" and "EvidenceDrivenAllocator integration hook" even though the corresponding runtime paths still contain stubs. The Stage Protocol is defined but `PipelineRunner` does not actually dispatch to `Stage.run()`, the policy interface still receives an empty candidate list, and the allocator hook is a no-op. These seams must close before the kernel is genuinely unified.
