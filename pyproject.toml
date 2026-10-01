@@ -287,6 +287,12 @@ ignore = [
     "RUF012",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
     "RUF013",  # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
+"computronium/acceleration/pc_kernels.py" = [
+    # The fused-kernel import block is one large guarded try (76 statements):
+    # splitting it would fork the Triton fallback ladder for no reader benefit.
+    "PLR0915", # too-many-statements — the guarded import ladder is one unit
+    "PLW0717", # too-many-statements-in-try-clause — ditto
+]
 "computronium/ontology/dynamics/_dynamics.py" = [
     "PLR6104", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics
 ]

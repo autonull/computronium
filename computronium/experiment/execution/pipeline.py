@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from computronium.experiment.execution.decision import Decision, RoundController
@@ -37,6 +36,7 @@ from computronium.experiment.execution.sysctx import (
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
+    from pathlib import Path
 
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator

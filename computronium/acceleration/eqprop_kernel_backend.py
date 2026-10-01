@@ -7,7 +7,7 @@ enabling unified benchmark/export/dispatch for EQPROP.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import numpy as np
 import torch
@@ -22,6 +22,13 @@ from computronium.acceleration.kernel_backend import (
     linear_views,
 )
 from computronium.acceleration.kernels import EqPropKernel
+
+
+class _ArrayNamespace(Protocol):
+    """The subset of numpy/cupy modules the kernel paths use."""
+
+    def asarray(self, obj: object) -> np.ndarray: ...
+
 
 if TYPE_CHECKING:
     from computronium.acceleration.kernels import EqPropKernel as EqPropKernelType
@@ -41,7 +48,7 @@ class EqPropKernelBackend:
     def __init__(self) -> None:
         self._kernel: EqPropKernelType | None = None
         self._config: KernelConfig | None = None
-        self._layers: list[torch.nn.Linear] = []
+        self._layers: list[LinearView] = []
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
         self._beta: float = 0.5
@@ -58,21 +65,36 @@ class EqPropKernelBackend:
         self._dtype = config.dtype
 
         extra = config.extra
-        input_dim = extra.get("input_dim", 784)
-        hidden_dim = extra.get("hidden_dim", 256)
-        output_dim = extra.get("output_dim", 10)
-        architecture = extra.get("architecture", "layered")
-        use_spectral_norm = extra.get("use_spectral_norm", True)
-        adaptive_epsilon = extra.get("adaptive_epsilon", True)
-        epsilon = extra.get("epsilon", 1e-3)
-        gamma = extra.get("gamma", 1.0)
-        beta = extra.get("beta", 0.5)
-        lr = extra.get("lr", extra.get("learning_rate", 0.01))
-        max_steps = extra.get("max_steps", config.settle_steps)
 
-        # Flatten input_dim if it's a tuple (spatial format like (C, H, W))
-        if isinstance(input_dim, tuple):
-            input_dim = math.prod(input_dim)
+        def _num(key: str, default: float) -> float:
+            value = extra.get(key, default)
+            return value if isinstance(value, (int, float)) else default
+
+        def _flag(key: str, default: bool) -> bool:
+            value = extra.get(key, default)
+            return value if isinstance(value, bool) else default
+
+        input_dim_raw = extra.get("input_dim", 784)
+        input_dim = (
+            math.prod(input_dim_raw)  # spatial format like (C, H, W)
+            if isinstance(input_dim_raw, tuple)
+            else int(input_dim_raw)
+            if isinstance(input_dim_raw, int)
+            else 784
+        )
+        hidden_dim = int(_num("hidden_dim", 256))
+        output_dim = int(_num("output_dim", 10))
+        architecture_raw = extra.get("architecture", "layered")
+        architecture = (
+            architecture_raw if isinstance(architecture_raw, str) else "layered"
+        )
+        use_spectral_norm = _flag("use_spectral_norm", True)
+        adaptive_epsilon = _flag("adaptive_epsilon", True)
+        epsilon = _num("epsilon", 1e-3)
+        gamma = _num("gamma", 1.0)
+        beta = _num("beta", 0.5)
+        lr = _num("lr", _num("learning_rate", 0.01))
+        max_steps = int(_num("max_steps", config.settle_steps))
 
         self._beta = beta
         self._lr = lr
@@ -134,7 +156,7 @@ class EqPropKernelBackend:
             return
 
         kernel = self._kernel
-        xp = kernel.xp
+        xp: _ArrayNamespace = kernel.xp  # type: ignore[assignment] # np or cp module
 
         if kernel.architecture == "layered" and len(self._layers) >= 2:
             self._sync_layer_to_kernel(self._layers[0], "embed", xp, kernel)
@@ -144,7 +166,9 @@ class EqPropKernelBackend:
             self._sync_layer_to_kernel(self._layers[1], "W_rec", xp, kernel)
             self._sync_layer_to_kernel(self._layers[-1], "W_out", xp, kernel)
 
-    def _sync_layer_to_kernel(self, layer, key: str, xp, kernel) -> None:
+    def _sync_layer_to_kernel(
+        self, layer: LinearView, key: str, xp: _ArrayNamespace, kernel: EqPropKernel
+    ) -> None:
         """Sync a single layer's weight and bias to kernel."""
         kernel.weights[key] = xp.asarray(layer.weight.detach().cpu().numpy())
         if layer.bias is not None:
@@ -212,7 +236,7 @@ class EqPropKernelBackend:
         self._sync_weights_to_kernel()
 
         kernel = self._kernel
-        xp = kernel.xp
+        xp: _ArrayNamespace = kernel.xp  # type: ignore[assignment] # np or cp module
 
         # Prepare input
         x_np = x.detach().cpu().numpy()
@@ -257,7 +281,7 @@ class EqPropKernelBackend:
         self._sync_weights_to_kernel()
 
         kernel = self._kernel
-        xp = kernel.xp
+        xp: _ArrayNamespace = kernel.xp  # type: ignore[assignment] # np or cp module
 
         # Prepare inputs
         x_np = x.detach().cpu().numpy()
@@ -292,7 +316,7 @@ class EqPropKernelBackend:
         self._sync_weights_to_kernel()
 
         kernel = self._kernel
-        xp = kernel.xp
+        xp: _ArrayNamespace = kernel.xp  # type: ignore[assignment] # np or cp module
 
         x_np = x.detach().cpu().numpy()
         if kernel.use_gpu:
@@ -302,7 +326,7 @@ class EqPropKernelBackend:
         logits_np = kernel.compute_output(h_star)
 
         if hasattr(logits_np, "get"):
-            logits_np = logits_np.get()
+            logits_np = logits_np.get()  # type: ignore[union-attr] # cupy -> numpy
         elif hasattr(logits_np, "__array__"):
             logits_np = np.asarray(logits_np)
         logits = torch.from_numpy(logits_np).to(device=self._device, dtype=self._dtype)

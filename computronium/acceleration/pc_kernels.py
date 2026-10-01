@@ -46,7 +46,7 @@ class PCKernelBackend:
 
     def __init__(self) -> None:
         self._config: KernelConfig | None = None
-        self._layers: list[torch.nn.Linear] = []
+        self._layers: list[LinearView] = []
         self._infer_steps: int = 10
         self._eta_infer: float = 0.1
         self._eta_weight: float = 0.01
@@ -67,10 +67,19 @@ class PCKernelBackend:
         self._dtype = config.dtype
 
         extra = config.extra
-        self._infer_steps = extra.get("infer_steps", 10)
-        self._eta_infer = extra.get("eta_infer", 0.1)
-        self._eta_weight = extra.get("eta_weight", 0.01)
-        self._activation = extra.get("activation", "tanh")
+
+        def _num(key: str, default: float) -> float:
+            value = extra.get(key, default)
+            return value if isinstance(value, (int, float)) else default
+
+        def _text(key: str, default: str) -> str:
+            value = extra.get(key, default)
+            return value if isinstance(value, str) else default
+
+        self._infer_steps = int(_num("infer_steps", 10))
+        self._eta_infer = _num("eta_infer", 0.1)
+        self._eta_weight = _num("eta_weight", 0.01)
+        self._activation = _text("activation", "tanh")
 
     def set_model_ref(
         self,
@@ -297,7 +306,7 @@ def _apply_activation(x: Tensor, activation: str) -> Tensor:
 
 
 # Triton kernels for fused PC operations
-try:  # noqa: PLR0915
+try:
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice
