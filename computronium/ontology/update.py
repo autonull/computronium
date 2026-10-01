@@ -49,68 +49,24 @@ _STEP_SEMANTICS: dict[str, StepSemantics] = {
     "natural_gradient": "per_element_displacement",
 }
 
-# Adaptive step_size overrides per (dynamics_type, credit_type) combo.
-# Reduces energy clamp frequency and numerical instability for problematic combinations.
-# Key: (dynamics_type, credit_type) -> step_size multiplier (applied to base step_size)
-_STEP_SIZE_OVERRIDES: dict[tuple[str, str], float] = {
-    ("energy_minimization", "random_projections"): 0.1,
-    ("energy_minimization", "gradient"): 0.5,
-    (
-        "energy_minimization",
-        "thermodynamic_contrast",
-    ): 0.00005,  # Was 0.0001, mean_norm has per_element_displacement semantics
-    (
-        "energy_minimization",
-        "pepita",
-    ): 0.0001,  # Was 0.0005, still clamping with mean_norm
-    ("energy_minimization", "local_goodness"): 0.0005,
-    ("energy_minimization", "temporal_trace"): 0.0001,  # Exploding loss with local_adam
-    ("energy_minimization", "target_inversion"): 0.1,
-    ("diffusion", "random_projections"): 0.05,
-    ("diffusion", "spectral_constrained"): 0.1,
-    ("diffusion", "homeostatic"): 0.1,
-    ("diffusion", "temporal_trace"): 0.0001,  # Was 0.0005, 93M explosion with mean_norm
-    ("diffusion", "target_inversion"): 0.1,
-    (
-        "lazy",
-        "temporal_trace",
-    ): 0.0001,  # Was 0.001, NaN/exploding with elastic_consolidation, mean_norm
-    ("lazy", "thermodynamic_contrast"): 0.001,  # Was 0.005, exploding with mean_norm
-    ("lazy", "random_projections"): 0.1,
-    ("lazy", "local_contrastive"): 0.0005,  # Was 0.005, exploding with unit_rms
-    ("lazy", "local_goodness"): 0.1,  # Spiked to 2.9e8 with mean_norm on wide layers
-    ("lazy", "pepita"): 0.001,  # Exploding loss with local_adam/ortho_adam
-    ("lazy", "gradient"): 0.01,  # ortho_adam SVD too slow (574s), zero accuracy
-    ("instantaneous", "temporal_trace"): 0.0001,  # Was 0.001, 1M explosion with lion
-    ("instantaneous", "pepita"): 0.01,
-    (
-        "pc_alm",
-        "thermodynamic_contrast",
-    ): 0.001,  # Spectral radius > 1.0 (dual dynamics amplification)
-    ("pc_alm", "pc_alm"): 0.001,  # Spectral radius > 1.0 (dual dynamics amplification)
-    ("instantaneous", "homeostatic"): 0.001,  # Very low accuracy (4.7%) with unit_rms
-    (
-        "spike_integration",
-        "temporal_trace",
-    ): 0.0001,  # Was 0.001, exploding with mean_norm
-    ("predictive_settling", "thermodynamic_contrast"): 0.5,
-    ("predictive_settling", "local_goodness"): 0.001,  # NaN with mean_norm
-    ("error_predictive_coding", "thermodynamic_contrast"): 0.1,
-    ("error_predictive_coding", "local_goodness"): 0.1,
-}
-
 
 def _apply_step_size_overrides(
     base_step_size: float,
     dynamics: str | None,
     credit: str | None,
 ) -> float:
-    """Apply adaptive step_size overrides for (dynamics, credit) combos."""
+    """Apply adaptive step_size overrides for (dynamics, credit) combos.
+
+    Uses PRIORS_REGISTRY via prior_value() as single source (L11).
+    Lazy import avoids circular dependency: ontology -> experiment -> ontology.
+    """
     if dynamics is None or credit is None:
         return base_step_size
-    key = (dynamics, credit)
-    multiplier = _STEP_SIZE_OVERRIDES.get(key)
-    if multiplier is not None:
+    from computronium.experiment.schema.registries import prior_value
+
+    result = prior_value(f"step_size_override_{dynamics}_{credit}")
+    if result is not None:
+        multiplier, _, _ = result
         return base_step_size * multiplier
     return base_step_size
 

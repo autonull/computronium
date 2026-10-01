@@ -2,7 +2,7 @@
 
 **Implements:** TODO43.abc3.md (SPEC-43 Rev 2.0) — the unified/hybrid design
 **Binds to:** `AGENTS.md` in full — toolchain, type system, architecture, async/thread safety, error/logging, testing tiers, commit checklist
-**Status:** Kernel primitives complete (WP1–WP11, WP14–WP17, WP19). Remaining: WP12.1 → WP12 → WP18 → WP13 → WP20 → WP21 → WP22.
+**Status:** Kernel primitives complete (WP1–WP11, WP14–WP17, WP19). **WP12.1 complete**. Remaining: WP12 → WP18 → WP13 → WP20 → WP21 → WP22.
 
 ---
 
@@ -24,34 +24,38 @@
 ## Remaining Work Packages (Dependency-Ordered)
 
 ```text
-WP12.1 Prior registry finalization        ──► WP12  Legacy pillar port & delete
-                                                 │
-                                                 ▼
-                                          WP18  Evidence & design integrity
-                                                 │
-                                                 ▼
-                                          WP13  Class E benchmarks (E3/E4)
-                                                 │
-                                                 ▼
-                                          WP20  Unified-kernel acceptance (U1–U5)
-                                                 │
-                                                 ▼
-                                          WP21  Legacy delete (blocked on WP20)
-                                                 │
-                                                 ▼
-                                          WP22  Full C1–C88 audit + DoD
+WP12.1 Prior registry finalization  ✅ COMPLETED ──► WP12  Legacy pillar port & delete
+                                                                      │
+                                                                      ▼
+                                                               WP18  Evidence & design integrity
+                                                                      │
+                                                                      ▼
+                                                               WP13  Class E benchmarks (E3/E4)
+                                                                      │
+                                                                      ▼
+                                                               WP20  Unified-kernel acceptance (U1–U5)
+                                                                      │
+                                                                      ▼
+                                                               WP21  Legacy delete (blocked on WP20)
+                                                                      │
+                                                                      ▼
+                                                               WP22  Full C1–C88 audit + DoD
 ```
 
 ---
 
-### WP12.1 — Prior Registry Finalization (blocks WP12)
+### WP12.1 — Prior Registry Finalization (blocks WP12) — ✅ COMPLETED
 
 **Must complete before WP12 bulk delete** — unblocks `ontology/update.py` reroute.
 
-- Reroute `computronium/ontology/update.py::_apply_step_size_overrides()` to `PRIORS_REGISTRY.prior_value()` (currently reads local legacy table; circular import blocker: ontology → experiment → ontology)
-- Delete legacy data tables in `prior.py` (`_RULER_LR_DATA`, `_STEP_SIZE_OVERRIDES_DATA`, `_DYNAMICS_STEP_SIZE_DATA`, JSON loader)
-- Rename catch-all prior `ruler_lr_*` → `ruler_lr_catchall` on deletion
-- Single seeding path: `seed_all_registries()` → `register_all_priors()` (idempotent, order-independent)
+- ✅ Reroute `computronium/ontology/update.py::_apply_step_size_overrides()` to `PRIORS_REGISTRY.prior_value()` (circular import resolved via lazy import)
+- ✅ Delete legacy data tables in `prior.py` (`_RULER_LR_DATA`, `_STEP_SIZE_OVERRIDES_DATA`, `_DYNAMICS_STEP_SIZE_OVERRIDES_DATA`, `_load_ruler_table`)
+- ✅ Rename catch-all prior `ruler_lr_*` → `ruler_lr_catchall` on deletion
+- ✅ Single seeding path: `seed_all_registries()` → `register_all_priors()` (idempotent, order-independent)
+- ✅ Updated test `tests/property/test_wp10_learning_integration_lock.py` to use PRIORS registry directly
+- ✅ Regenerated `docs/generated/capabilities.json` to match updated registry
+- ✅ All property tests pass (108 tests)
+- ✅ Integration demo tests pass (`test_demo_swap_credit`, `test_demo_compose_6axis`)
 
 ---
 
@@ -206,7 +210,7 @@ uv run python -m pytest tests/<touched_module> -k <signature> -q
 
 | WP | New / Modified Files |
 |---|---|
-| WP12.1 | `ontology/update.py`, `experiment/schema/prior.py`, `seed_registries.py` |
+| WP12.1 | `ontology/update.py` (rerouted to PRIORS), `experiment/learning/prior.py` (deleted legacy tables, renamed catchall), `tests/property/test_wp10_learning_integration_lock.py` (updated test), `docs/generated/capabilities.json` (regenerated) |
 | WP12 | Bulk delete of legacy pillars (see table) |
 | WP18 | `experiment/execution/contrast_design.py`, `schema/coordinate.py` (DataOrigin enum + schema_version bump), `tests/property/test_contrast_design_identifiability_lock.py` |
 | WP13 | Run `scripts/probes/e3_seeded_axis_effect.py`, `e4_transfer_provenance.py`, `conformance_evidence_audit.py` |
@@ -224,3 +228,12 @@ uv run python -m pytest tests/<touched_module> -k <signature> -q
 - **Store files pre-`task_id` STRUCT addition are unreadable** — rebuild per Directive 2
 - **Complexity noqa** on `compose.py` is temporary — refactor or delete when WP12 removes last legacy importer
 - **Schema version bump at WP18** (DataOrigin addition) — strict parsing, no migration; existing store files rebuilt
+
+### WP12.1 Implementation Notes (2026-09-30)
+
+- **Circular import resolution:** `ontology/update.py` → `experiment/schema/registries.py` via lazy import inside `_apply_step_size_overrides()` avoids the ontology→experiment→ontology cycle. This pattern should be reused for other cross-layer registry accesses.
+- **Legacy table deletion:** All three legacy data tables (`_RULER_LR_DATA`, `_STEP_SIZE_OVERRIDES_DATA`, `_DYNAMICS_STEP_SIZE_OVERRIDES_DATA`) and the `_load_ruler_table()` JSON loader were removed. Data is now inline in registration functions.
+- **Catch-all rename:** `ruler_lr_default` → `ruler_lr_catchall` clarifies this is a fallback for unknown tasks, not a task-specific entry.
+- **Test updates:** `test_wp10_learning_integration_lock.py` was updated to embed the expected (dynamics, credit) pairs and task lists directly, removing dependency on deleted legacy tables.
+- **Generated docs:** `docs/generated/capabilities.json` must be regenerated after PRIORS registry changes (via `write_generated_docs()`). The drift lock test (`test_codegen_drift_lock.py`) enforces this.
+- **Single seeding path confirmed:** `seed_all_registries()` clears PRIORS_REGISTRY then calls `register_all_priors()` — verified idempotent and order-independent.

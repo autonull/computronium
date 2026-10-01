@@ -26,19 +26,6 @@
     "override_scope": "coordinate"
   },
   {
-    "name": "ruler_lr_*",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.001,
-      "high": 0.1,
-      "center": 0.01
-    },
-    "description": "Ruler-calibrated learning rate for task '*' (feedforward topology)",
-    "confidence": 0.9,
-    "uncertainty": 0.0,
-    "override_scope": "coordinate"
-  },
-  {
     "name": "ruler_lr_breast_cancer",
     "distribution": "log_uniform",
     "params": {
@@ -52,6 +39,19 @@
     "override_scope": "coordinate"
   },
   {
+    "name": "ruler_lr_catchall",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 0.1,
+      "center": 0.01
+    },
+    "description": "Catch-all ruler-calibrated learning rate for unknown tasks (feedforward)",
+    "confidence": 0.9,
+    "uncertainty": 0.0,
+    "override_scope": "coordinate"
+  },
+  {
     "name": "ruler_lr_circles",
     "distribution": "log_uniform",
     "params": {
@@ -60,19 +60,6 @@
       "center": 0.01
     },
     "description": "Ruler-calibrated learning rate for task 'circles' (feedforward topology)",
-    "confidence": 0.9,
-    "uncertainty": 0.0,
-    "override_scope": "coordinate"
-  },
-  {
-    "name": "ruler_lr_default",
-    "distribution": "log_uniform",
-    "params": {
-      "low": 0.001,
-      "high": 0.1,
-      "center": 0.01
-    },
-    "description": "Default ruler-calibrated learning rate for unknown tasks (feedforward)",
     "confidence": 0.9,
     "uncertainty": 0.0,
     "override_scope": "coordinate"

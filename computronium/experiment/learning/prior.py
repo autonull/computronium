@@ -9,8 +9,7 @@ This module migrates the following legacy code tables to PriorSpec records:
 - `_DYNAMICS_STEP_SIZE_OVERRIDES` from `computronium.autoscientist.compose` (dynamics step sizes)
 
 L11 Remediation: PRIORS registry becomes the single source. Accessor functions
-use `prior_value(name, context)` from the registry. Legacy tables retained only
-for initial registration; consumers reroute behind thin adapters.
+use `prior_value(name, context)` from the registry.
 """
 
 from __future__ import annotations
@@ -22,95 +21,28 @@ from computronium.experiment.schema.registries import (
 )
 
 # =============================================================================
-# Legacy Data Tables (source of truth for INITIAL registration only)
-# =============================================================================
-# These tables are the canonical source for the initial PRIORS registry population.
-# After registration, all accessors MUST use `prior_value()` from the registry.
-# Legacy consumers (ontology/update.py, compose.py, campaign._ruler_lr) are
-# expected to reroute to the registry accessors; these tables will be deleted
-# in WP12 after all consumers migrate.
-
-
-# Ruler LR Table Migration (from computronium.autoscientist.campaign)
-_RULER_LR_DATA: dict[str, float] = {
-    "digits": 0.01,
-    "mnist": 0.01,
-    "fashion_mnist": 0.01,
-    "kmnist": 0.01,
-    "usps": 0.01,
-    "xor": 0.001,
-    "spiral": 0.01,
-    "circles": 0.01,
-    "iris": 0.001,
-    "wine": 0.001,
-    "breast_cancer": 0.01,
-    # Default for unknown tasks (feedforward)
-    "*": 0.01,
-    # Non-feedforward default (from topology LR probe)
-    "non_feedforward_default": 0.01,
-}
-
-
-def _load_ruler_table() -> dict[str, float]:
-    """Frozen ruler-LR table (WP12: legacy JSON read deleted; table ported above)."""
-    return dict(_RULER_LR_DATA)
-
-
-# Step Size Overrides Migration (from computronium.ontology.update)
-# Key: (dynamics, credit) -> multiplier
-_STEP_SIZE_OVERRIDES_DATA: dict[tuple[str, str], float] = {
-    ("energy_minimization", "random_projections"): 0.1,
-    ("energy_minimization", "gradient"): 0.5,
-    ("energy_minimization", "thermodynamic_contrast"): 0.00005,
-    ("energy_minimization", "pepita"): 0.0001,
-    ("energy_minimization", "local_goodness"): 0.0005,
-    ("energy_minimization", "temporal_trace"): 0.0001,
-    ("energy_minimization", "target_inversion"): 0.1,
-    ("diffusion", "random_projections"): 0.05,
-    ("diffusion", "spectral_constrained"): 0.1,
-    ("diffusion", "homeostatic"): 0.1,
-    ("diffusion", "temporal_trace"): 0.0001,
-    ("diffusion", "target_inversion"): 0.1,
-    ("lazy", "temporal_trace"): 0.0001,
-    ("lazy", "thermodynamic_contrast"): 0.001,
-    ("lazy", "random_projections"): 0.1,
-    ("lazy", "local_contrastive"): 0.0005,
-    ("lazy", "local_goodness"): 0.1,
-    ("lazy", "pepita"): 0.001,
-    ("lazy", "gradient"): 0.01,
-    ("instantaneous", "temporal_trace"): 0.0001,
-    ("instantaneous", "pepita"): 0.01,
-    ("pc_alm", "thermodynamic_contrast"): 0.001,
-    ("pc_alm", "pc_alm"): 0.001,
-    ("instantaneous", "homeostatic"): 0.001,
-    ("spike_integration", "temporal_trace"): 0.0001,
-    ("predictive_settling", "thermodynamic_contrast"): 0.5,
-    ("predictive_settling", "local_goodness"): 0.001,
-    ("error_predictive_coding", "thermodynamic_contrast"): 0.1,
-    ("error_predictive_coding", "local_goodness"): 0.1,
-}
-
-
-# Dynamics Step Size Overrides Migration (from computronium.autoscientist.compose)
-_DYNAMICS_STEP_SIZE_OVERRIDES_DATA: dict[str, float] = {
-    "diffusion": 0.001,
-    "predictive_settling": 0.01,
-}
-
-
-# =============================================================================
-# Registration Functions (populate PRIORS_REGISTRY from legacy tables)
+# Registration Functions (populate PRIORS_REGISTRY from inline data)
 # =============================================================================
 
 
 def _register_ruler_lr_priors() -> None:
     """Register ruler LR priors for each task."""
-    ruler_data = _load_ruler_table()
+    # Task-specific ruler LRs (feedforward topology)
+    ruler_lr_data: dict[str, float] = {
+        "digits": 0.01,
+        "mnist": 0.01,
+        "fashion_mnist": 0.01,
+        "kmnist": 0.01,
+        "usps": 0.01,
+        "xor": 0.001,
+        "spiral": 0.01,
+        "circles": 0.01,
+        "iris": 0.001,
+        "wine": 0.001,
+        "breast_cancer": 0.01,
+    }
 
-    for task, lr in ruler_data.items():
-        if task == "non_feedforward_default":
-            continue  # Handled separately
-
+    for task, lr in ruler_lr_data.items():
         prior = PriorSpec(
             name=f"ruler_lr_{task}",
             distribution="log_uniform",
@@ -126,25 +58,25 @@ def _register_ruler_lr_priors() -> None:
         )
         register_prior(prior)
 
-    # Register default for unknown tasks
-    default_lr = ruler_data.get("*", 0.01)
+    # Catch-all default for unknown tasks (feedforward)
+    default_lr = 0.01
     prior = PriorSpec(
-        name="ruler_lr_default",
+        name="ruler_lr_catchall",
         distribution="log_uniform",
         params={
             "low": default_lr * 0.1,
             "high": default_lr * 10.0,
             "center": default_lr,
         },
-        description="Default ruler-calibrated learning rate for unknown tasks (feedforward)",
+        description="Catch-all ruler-calibrated learning rate for unknown tasks (feedforward)",
         confidence=0.9,
         uncertainty=0.0,
         override_scope="coordinate",
     )
     register_prior(prior)
 
-    # Register non-feedforward default
-    nf_lr = _RULER_LR_DATA.get("non_feedforward_default", 0.01)
+    # Non-feedforward default (from topology LR probe)
+    nf_lr = 0.01
     prior = PriorSpec(
         name="ruler_lr_non_feedforward",
         distribution="log_uniform",
@@ -163,7 +95,39 @@ def _register_ruler_lr_priors() -> None:
 
 def _register_step_size_override_priors() -> None:
     """Register step size override priors for (dynamics, credit) combinations."""
-    for (dynamics, credit), multiplier in _STEP_SIZE_OVERRIDES_DATA.items():
+    step_size_overrides: dict[tuple[str, str], float] = {
+        ("energy_minimization", "random_projections"): 0.1,
+        ("energy_minimization", "gradient"): 0.5,
+        ("energy_minimization", "thermodynamic_contrast"): 0.00005,
+        ("energy_minimization", "pepita"): 0.0001,
+        ("energy_minimization", "local_goodness"): 0.0005,
+        ("energy_minimization", "temporal_trace"): 0.0001,
+        ("energy_minimization", "target_inversion"): 0.1,
+        ("diffusion", "random_projections"): 0.05,
+        ("diffusion", "spectral_constrained"): 0.1,
+        ("diffusion", "homeostatic"): 0.1,
+        ("diffusion", "temporal_trace"): 0.0001,
+        ("diffusion", "target_inversion"): 0.1,
+        ("lazy", "temporal_trace"): 0.0001,
+        ("lazy", "thermodynamic_contrast"): 0.001,
+        ("lazy", "random_projections"): 0.1,
+        ("lazy", "local_contrastive"): 0.0005,
+        ("lazy", "local_goodness"): 0.1,
+        ("lazy", "pepita"): 0.001,
+        ("lazy", "gradient"): 0.01,
+        ("instantaneous", "temporal_trace"): 0.0001,
+        ("instantaneous", "pepita"): 0.01,
+        ("pc_alm", "thermodynamic_contrast"): 0.001,
+        ("pc_alm", "pc_alm"): 0.001,
+        ("instantaneous", "homeostatic"): 0.001,
+        ("spike_integration", "temporal_trace"): 0.0001,
+        ("predictive_settling", "thermodynamic_contrast"): 0.5,
+        ("predictive_settling", "local_goodness"): 0.001,
+        ("error_predictive_coding", "thermodynamic_contrast"): 0.1,
+        ("error_predictive_coding", "local_goodness"): 0.1,
+    }
+
+    for (dynamics, credit), multiplier in step_size_overrides.items():
         prior = PriorSpec(
             name=f"step_size_override_{dynamics}_{credit}",
             distribution="log_normal",
@@ -181,7 +145,12 @@ def _register_step_size_override_priors() -> None:
 
 def _register_dynamics_step_size_priors() -> None:
     """Register dynamics step size override priors."""
-    for dynamics, step_size in _DYNAMICS_STEP_SIZE_OVERRIDES_DATA.items():
+    dynamics_step_sizes: dict[str, float] = {
+        "diffusion": 0.001,
+        "predictive_settling": 0.01,
+    }
+
+    for dynamics, step_size in dynamics_step_sizes.items():
         prior = PriorSpec(
             name=f"dynamics_step_size_{dynamics}",
             distribution="log_uniform",
@@ -222,14 +191,14 @@ def get_ruler_lr(task: str | None, topology: str | None = None) -> float:
             center, _, _ = result
             return center
 
-    # Fallback to non-feedforward or default
+    # Fallback to non-feedforward or catchall
     if topology not in {None, "feedforward"}:
         result = prior_value("ruler_lr_non_feedforward")
         if result is not None:
             center, _, _ = result
             return center
 
-    result = prior_value("ruler_lr_default")
+    result = prior_value("ruler_lr_catchall")
     if result is not None:
         center, _, _ = result
         return center
@@ -304,9 +273,6 @@ register_all_priors()
 
 
 __all__ = [
-    "_DYNAMICS_STEP_SIZE_OVERRIDES_DATA",
-    "_RULER_LR_DATA",
-    "_STEP_SIZE_OVERRIDES_DATA",
     "apply_dynamics_step_size",
     "apply_step_size_overrides",
     "get_dynamics_step_size",
