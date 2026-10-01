@@ -11,8 +11,6 @@ Common Triton/CuPy operations used across all bio-plausible algorithm kernels:
 
 from __future__ import annotations
 
-from typing import Literal
-
 import torch
 from stability.spectral_norm import spectral_normalized_weight
 from torch import Tensor
@@ -271,9 +269,9 @@ def predictive_coding_inference_step(
     mu: list[Tensor],
     x: Tensor,
     W: list[Tensor],
-    b: list[Tensor],
+    b: list[Tensor | None],
     eta_infer: float,
-    activation: Literal["relu", "tanh", "linear"] = "tanh",
+    activation: str = "tanh",
 ) -> list[Tensor]:
     """Predictive Coding inference step (PCN).
 
@@ -312,7 +310,11 @@ def predictive_coding_inference_step(
     mu_new[0] = x.clone()
 
     for layer_idx in range(1, L):
-        pred = act(mu[layer_idx - 1] @ W[layer_idx - 1].T + b[layer_idx - 1])
+        pre = mu[layer_idx - 1] @ W[layer_idx - 1].T
+        bias = b[layer_idx - 1]
+        if bias is not None:
+            pre += bias
+        pred = act(pre)
         error = mu[layer_idx] - pred
         mu_new[layer_idx] = mu[layer_idx] - eta_infer * error * act_deriv(mu[layer_idx])
 

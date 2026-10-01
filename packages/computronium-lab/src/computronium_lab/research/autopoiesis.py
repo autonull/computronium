@@ -23,11 +23,11 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
+from computronium.experiment.schema.registries import get_card_factor
 from computronium_lab.lab import Lab, synthetic_task
 from computronium_lab.synthesis.catalog import CATALOG, MechanismCandidate
 from computronium_lab.synthesis.engine import (
     OBJECTIVE_FIELDS,
-    card_factor,
     screen_config,
 )
 from computronium_lab.synthesis.predictor import ViabilityModel
@@ -275,7 +275,7 @@ class CoordinateGenome:
         """Predicted objective vector (screening only, never certification)."""
         candidate = self.candidate
         viability = _viability_model().predict(candidate.features(self.effective_spec))
-        factor, _ = card_factor(candidate.credit, candidate.update)
+        factor, _ = get_card_factor(candidate.credit, candidate.update)
         accuracy = viability * factor
         scale = self.size_scale
         return {
@@ -579,7 +579,7 @@ class SurrogateFitness:
         )
         row = candidate.candidate
         viability = _viability_model().predict(row.features(candidate.effective_spec))
-        factor, _ = card_factor(row.credit, row.update)
+        factor, _ = get_card_factor(row.credit, row.update)
         score = viability * factor
         limits = candidate.effective_spec.constraints
         scale = candidate.size_scale

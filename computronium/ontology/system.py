@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -39,7 +39,7 @@ from computronium.ontology.update import (
 from computronium.state import PlasticityConfig
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable, Iterator
 
     from computronium.acceleration.kernel_backend import KernelBackend
 
@@ -160,6 +160,31 @@ class System(Protocol[TS, TG, TD, TC, TU]):
         from computronium.core.pipeline import run_forward
 
         return run_forward(self.substrate, self.geometry, self.dynamics, x)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        """Call the system like a model: ``system(x)``."""
+        ...
+
+    @property
+    def training(self) -> bool:
+        """PyTorch compatibility: training mode flag."""
+        ...
+
+    def train(self, mode: bool = True) -> Self:
+        """Set training mode (nn.Module compat)."""
+        ...
+
+    def eval(self) -> Self:
+        """Set evaluation mode (nn.Module compat)."""
+        ...
+
+    def zero_grad(self, set_to_none: bool = True) -> None:
+        """Clear parameter gradients (nn.Module compat)."""
+        ...
+
+    def parameters(self) -> Iterable[Tensor]:
+        """Iterate over learnable parameters (nn.Module compat)."""
+        ...
 
     def attach_kernel_backend(self, backend: KernelBackend) -> None:
         """Attach a kernel backend for accelerated training.
@@ -1219,6 +1244,27 @@ class _AdaptedSystem:
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.forward(x)
+
+    @property
+    def training(self) -> bool:
+        return self._model.training
+
+    def train(self, mode: bool = True) -> Self:
+        self._model.train(mode)
+        return self
+
+    def eval(self) -> Self:
+        self._model.eval()
+        return self
+
+    def zero_grad(self, set_to_none: bool = True) -> None:
+        self._model.zero_grad(set_to_none)
+
+    def parameters(self) -> Iterator[Tensor]:
+        return self._model.parameters()
 
     def attach_kernel_backend(self, backend: KernelBackend) -> None:
         """Attach a kernel backend for accelerated training."""

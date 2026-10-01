@@ -162,8 +162,13 @@ class Record:
         status: Status,
         payload: dict[str, Any],
         unknown: dict[str, Any] | None = None,
-        schema_version: int = 3,
+        schema_version: int | None = None,
     ) -> Record:
+        from computronium.experiment.schema.versioning import current_schema_version
+
+        schema_version = (
+            current_schema_version() if schema_version is None else schema_version
+        )
         """Create a new record with computed identity keys."""
         cell_key = coordinate.cell_key()
         measurement_key = coordinate.measurement_key(schedule)

@@ -552,9 +552,7 @@ class StateDynamicsConfig:
         )
 
     @classmethod
-    def hyperparameters(
-        cls, primitive_name: str = ""
-    ) -> dict[str, tuple[float, float, str] | list[object] | dict[str, object]]:
+    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the state_dynamics axis.
 
         These are the knobs the dynamics config reads. The sweep unions the
@@ -567,7 +565,7 @@ class StateDynamicsConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         # Base hyperparameters available for all dynamics primitives
-        base = {
+        base: dict[str, object] = {
             "max_steps": {
                 "domain": (1, 200, "int"),
                 "availability": None,

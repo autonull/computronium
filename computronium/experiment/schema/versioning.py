@@ -105,6 +105,12 @@ class V1Reader:
 # Register version 1 reader
 SCHEMA_REGISTRY.register(1, V1Reader(), "Initial schema")
 
+# Register current unified-kernel reader (v3). V1Reader reads via Record.from_dict,
+# which round-trips every stored column including the `unknown` field.
+SCHEMA_REGISTRY.register(
+    3, V1Reader(), "Unified kernel schema v3 (fail-closed forward tolerance)"
+)
+
 
 def get_schema_registry() -> SchemaRegistry:
     """Get the global schema registry."""

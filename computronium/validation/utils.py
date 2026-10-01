@@ -14,15 +14,19 @@ Scientific Rigor Features:
 - Reproducibility tracking
 """
 
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
 import torch
-from torch import nn
 
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
 from computronium.core.trainer import dispatch_train_step
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.utils import seed_everything
+
+if TYPE_CHECKING:
+    from computronium.core.protocols import TrainableModel
 
 __all__ = [
     "classify_evidence_level",
@@ -73,7 +77,7 @@ def create_synthetic_dataset(
 
 
 def train_model(
-    model: nn.Module,
+    model: TrainableModel,
     X: torch.Tensor,
     y: torch.Tensor,
     epochs: int = 50,
@@ -102,7 +106,7 @@ def train_model(
             optimizer=optimizer,
             config=None,
         )
-        loss = float(metrics.get("loss", 0.0))
+        loss = float(cast("float", metrics.get("loss", 0.0)))
         losses.append(loss)
 
         grad_norm = sum(
@@ -115,9 +119,10 @@ def train_model(
                 track_id, seed, epoch, f"{name}_grad_norm", grad_norm
             )
 
-        logits = metrics.get("logits")
-        if logits is None:
-            logits = model(X)
+        logits_raw = metrics.get("logits")
+        logits = (
+            cast("torch.Tensor", logits_raw) if logits_raw is not None else model(X)
+        )
         acc = compute_accuracy(logits, y, scale=100)
         logger.debug(
             "  %s: %s loss=%.3f acc=%.1f%%",
@@ -140,7 +145,7 @@ def train_model(
     return losses
 
 
-def evaluate_accuracy(model: nn.Module, X: torch.Tensor, y: torch.Tensor) -> float:
+def evaluate_accuracy(model: TrainableModel, X: torch.Tensor, y: torch.Tensor) -> float:
     was_training = model.training
     model.eval()
     try:
@@ -262,7 +267,7 @@ def independent_ttest(group1: list[float], group2: list[float]) -> tuple[float, 
         return (0.0, 1.0)
 
     t_stat, p_val = stats.ttest_ind(group1, group2)
-    return (float(t_stat), float(p_val))
+    return (float(cast("float", t_stat)), float(cast("float", p_val)))
 
 
 def classify_evidence_level(n_samples: int, n_seeds: int, epochs: int) -> str:

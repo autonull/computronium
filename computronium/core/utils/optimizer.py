@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
 from torch import nn
+
+from computronium.core.protocols import TrainableModel
+
+if TYPE_CHECKING:
+    from torch.optim.optimizer import ParamsT as _TorchParamsT
 
 __all__ = ["OptimizerConfig", "create_optimizer"]
 
@@ -47,7 +52,7 @@ class OptimizerConfig:
 
 
 def create_optimizer(
-    model_or_params: nn.Module | ParamSpec,
+    model_or_params: nn.Module | TrainableModel | ParamSpec,
     config: OptimizerConfig,
 ) -> torch.optim.Optimizer:
     """Create a ``torch.optim`` optimizer from *config*.
@@ -68,12 +73,10 @@ def create_optimizer(
         ValueError: If ``config.name`` is not a supported optimizer family.
     """
     # Handle native System objects that have parameters() method
-    if (
-        hasattr(model_or_params, "parameters") and callable(model_or_params.parameters)
-    ) or isinstance(model_or_params, nn.Module):
-        params = model_or_params.parameters()
+    if isinstance(model_or_params, (nn.Module, TrainableModel)):
+        params = list(model_or_params.parameters())
     else:
-        params = model_or_params
+        params = cast("_TorchParamsT", list(model_or_params))
     match config.name:
         case "adam":
             return torch.optim.Adam(

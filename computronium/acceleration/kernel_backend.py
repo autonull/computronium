@@ -16,14 +16,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Protocol, cast, runtime_checkable
 
 import numpy as np
 import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from computronium.ontology import System
 
@@ -159,16 +159,14 @@ class KernelRegistry:
 
     _backends: ClassVar[dict[AlgorithmFamily, dict[HardwareTarget, type]]] = {}
     _instances: ClassVar[dict[tuple[AlgorithmFamily, HardwareTarget], object]] = {}
-    # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
+    # Auto-tuning cache: (algorithm, op_name, shape) -> best_hardware
     _autotune_cache: ClassVar[
-        dict[
-            tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
-        ]
+        dict[tuple[AlgorithmFamily, str, tuple[int, ...]], HardwareTarget]
     ] = {}
-    # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
+    # Benchmark results: (algorithm, op_name, shape) -> list of (hardware, time_ms)
     _benchmark_cache: ClassVar[
         dict[
-            tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
+            tuple[AlgorithmFamily, str, tuple[int, ...]],
             list[tuple[HardwareTarget, float]],
         ]
     ] = {}
@@ -307,7 +305,7 @@ class KernelRegistry:
             if backend is None:
                 continue
 
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[complex-structure] — benchmark ladder is one unit
                 if benchmark_fn is not None:
                     # Use custom benchmark function
                     time_ms = benchmark_fn(backend, shape)
@@ -344,7 +342,6 @@ class KernelRegistry:
         benchmark_runs: int,
     ) -> float:
         """Default benchmark using forward pass with random inputs."""
-        import time
 
         # Create dummy inputs based on shape
         if hasattr(backend, "initialize"):
@@ -355,50 +352,62 @@ class KernelRegistry:
                     KernelConfig,
                 )
 
+                name = getattr(backend, "name", AlgorithmFamily.BACKPROP)
                 config = KernelConfig(
-                    algorithm=backend.name
-                    if hasattr(backend, "name")
-                    else AlgorithmFamily.BACKPROP,
+                    algorithm=(
+                        name
+                        if isinstance(name, AlgorithmFamily)
+                        else AlgorithmFamily.BACKPROP
+                    ),
                     hardware=HardwareTarget.CPU,
                     extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
-                backend.initialize(config)
+                initialize = getattr(backend, "initialize")
+                if callable(initialize):
+                    initialize(config)
             except Exception:  # ruff: ignore[try-except-pass] - fallback to default backend
                 pass
 
         # Get the operation method
-        method = getattr(backend, op_name, None)
+        method = cast("Callable[..., object]", getattr(backend, op_name, None))
         if method is None:
             return float("inf")
 
         # Warmup
-        try:
-            for _ in range(warmup_runs):
-                if op_name == "forward":
-                    x = torch.randn(*shape, device="cpu")
-                    _ = method(x)
-                else:
-                    # For other ops, try with minimal args
-                    _ = method()
-        except Exception:
-            return float("inf")
+        cls._call_op(method, op_name, shape, warmup_runs)
 
         # Benchmark
+        times = cls._call_op(method, op_name, shape, benchmark_runs, time_each=True)
+        if not times:
+            return float("inf")
+        return float(np.mean(times))
+
+    @staticmethod
+    def _call_op(
+        method: Callable[..., object],
+        op_name: str,
+        shape: tuple[int, ...],
+        runs: int,
+        *,
+        time_each: bool = False,
+    ) -> list[float]:
+        """Invoke ``method`` ``runs`` times; optionally time each call (ms)."""
+        import time
+
         times = []
-        for _ in range(benchmark_runs):
+        for _ in range(runs):
             start = time.perf_counter()
             try:
                 if op_name == "forward":
                     x = torch.randn(*shape, device="cpu")
-                    _ = method(x)
+                    method(x)
                 else:
-                    _ = method()
+                    method()
             except Exception:
-                return float("inf")
-            elapsed = time.perf_counter() - start
-            times.append(elapsed * 1000)  # ms
-
-        return float(np.mean(times))
+                return []
+            if time_each:
+                times.append((time.perf_counter() - start) * 1000)
+        return times
 
     @classmethod
     def clear_autotune_cache(cls) -> None:
@@ -472,6 +481,10 @@ class LinearView:
 
     def __call__(self, x: Tensor) -> Tensor:
         return torch.nn.functional.linear(x, self.weight, self.bias)
+
+    def parameters(self) -> Iterator[Tensor]:
+        """Learnable tensors of this view (nn.Module compat)."""
+        return iter([p for p in (self.weight, self.bias) if p is not None])
 
 
 def _param_order(prefix: str) -> tuple[int, float | str]:

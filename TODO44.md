@@ -544,22 +544,15 @@ C10 allocator telemetry defect fixed), Phase G through G5.
 
 **Remaining work (in order):**
 1. G6: `uv run pre-commit run --all-files`; fix hook findings; final commit.
-2. G4 remainder: repo-wide pyright sweep (the LSP-visible files: `cli/validate.py:87`
-   `record_to_kb` stale kwarg; `validation/tracks/{scaling,hardware}_tracks.py` System-vs-Module
-   typing; `domains/trainer.py:122` Tensor→float; `ontology/dynamics/_dynamics.py:641` Mapping
-   covariance) + `pip-audit`. pyright on `core/profiling.py` has 3 pre-existing errors
-   (enumerate over Tensor|Module, pynvml optional imports) — hygiene-pass scope.
+2. G4 remainder: repo-wide pyright sweep + `pip-audit`. pyright on `core/profiling.py` has
+   3 pre-existing errors (enumerate over Tensor|Module, pynvml optional imports) — hygiene-pass scope.
 3. F5 full-rigor benchmark suites (`comp benchmark run --suite X` without `--quick`) — the
    quick-mode z3 gate is False; verify full-rigor verdicts before quoting any benchmark number.
 4. Improvements surfaced (candidates for TODO45):
-   - `synthesis.engine.card_factor` is a neutral prior — re-back from kernel PRIORS registry.
-   - PRIORS registry missing kmnist/usps/circles ruler rows (9/11 migrated).
-   - `Record.create` hardcodes `schema_version=3` default (duplicates `RecordStore._SCHEMA_VERSION`
-     — single-source it) and `SUPPORTED_SCHEMA_VERSIONS={3}` means true forward-tolerance bumps
-     need a migration story.
-   - `e3`/`e4` probe walltime logging writes `walltime_s: 0.0` (e3) — clock it honestly.
-   - Gallery `_records()` consumers assume 21 records; any new demo must bump MIN_RECORDS back up.
-   - `scripts/archive/` (120 files) + `docs/archive/` could shed one-off scripts entirely.
+    - `SUPPORTED_SCHEMA_VERSIONS={current}` means true forward-tolerance bumps need a
+      migration story (schema v3 now single-sourced; see session-3 notes).
+    - Gallery `_records()` consumers assume 21 records; any new demo must bump MIN_RECORDS back up.
+    - `scripts/archive/` (120 files) + `docs/archive/` could shed one-off scripts entirely.
 
 **Gate state at handoff:** import smoke, kernel locks, snippet lock, CLI↔README lock,
 full pytest (3135 passed / 0 failed), staged pre-commit green, acceleration suite
@@ -577,3 +570,53 @@ full pytest (3135 passed / 0 failed), staged pre-commit green, acceleration suit
   LinearView.parameters, Literal activation), `validation/tracks/{scaling,hardware}_tracks.py`
   (System-vs-Module), `cli/validate.py:87` stale kwarg, `domains/trainer.py:122`,
   `ontology/dynamics/_dynamics.py:641`, plus `stability/guard.py` wildcard-import warnings.
+
+**Session-3 (2026-10-01): pyright queue cleared, kernel dedup, card_factor re-backed**
+
+All session-2 pyright queue items fixed — every queued file is now at 0 errors:
+- **System/nn.Module typing (root fix, not per-site casts)**: `System` Protocol
+  (`ontology/system.py`) now declares the full nn.Module-compat surface it actually
+  guarantees (`__call__`, `training`, `train`/`eval`, `zero_grad`, `parameters`);
+  `_AdaptedSystem` gained the same delegates. New `computronium/core/protocols.py`:
+  `TrainableModel` structural Protocol (nn.Module and composed Systems both satisfy it).
+  `validation/utils.py` `train_model`/`evaluate_accuracy`, `core/trainer.py`
+  (`bptt_step`/`dispatch_train_step`/`_default_bptt_step`/`_make_ebm_trainer`) and
+  `core/utils/optimizer.py` `create_optimizer` re-typed against it; optimizer params
+  materialized as `list` and cast to torch's `ParamsT` for the optimizer constructors.
+  The tracks' System-vs-Module errors disappear without touching the track files.
+- `cli/validate.py` + `validation/verifier.py`: dead `--record-kb` flag / `record_to_kb`
+  kwarg deleted wholesale (KB recording is gone; no backwards compat).
+- `domains/trainer.py`: `clip_grad_norm` honestly returns `torch.Tensor`.
+- `ontology/dynamics/_dynamics.py`: `hyperparameters()` return simplified to
+  `dict[str, object]` (all 5 ontology registries already use that shape).
+- `acceleration/pc_kernels.py`: `settle` restructured around a local `mu`
+  (no Optional re-narrowing gaps); `backward`/`update_weights`/`compute_energy` use a
+  local `layer`/`bias` var so bias narrowing works; `LinearView.parameters()` added
+  (`kernel_backend.py`); `predictive_coding_inference_step` now accepts
+  `b: list[Tensor | None]` and skips None biases (bias-free layers no longer crash) and
+  takes `activation: str`; the 4 remaining Triton-DSL `libdevice.erf/exp` operator errors
+  got per-line `pyright: ignore` (untyped third-party DSL).
+- `acceleration/kernel_backend.py`: `_autotune_cache`/`_benchmark_cache` key types fixed
+  to the 3-tuples actually used (algorithm, op_name, shape); `_default_benchmark`
+  deduplicated into `_call_op` (warmup+timed runs share one path); backend duck-access
+  typed via `isinstance` narrowing + `Callable` cast.
+- `stability/guard.py`: wildcard re-export replaced with an explicit import list + `__all__`.
+
+Kernel dedup/quality fixes (session-2 §12 improvements, all done):
+- **Schema version single-sourced**: `SCHEMA_REGISTRY` now registers v3
+  (`experiment/schema/versioning.py`); `RecordStore._SCHEMA_VERSION`/
+  `SUPPORTED_SCHEMA_VERSIONS` derive from `current_schema_version()`, and
+  `Record.create(schema_version=None)` defaults to it — one source, no hardcoded 3s.
+- **`card_factor` re-backed from the kernel**: new `CARD_FACTORS` registry in
+  `experiment/schema/registries.py` (`register_card_factor`/`get_card_factor`, 13
+  canonical (credit, update) priors seeded). `computronium-lab` `synthesis/engine.py`
+  and `research/autopoiesis.py` import `get_card_factor` from the kernel instead of the
+  neutral local stub — the lab's soft priors now live in the kernel registry.
+- PRIORS audit: kmnist/usps/circles ruler rows were **already present** (44 priors total,
+  13 ruler_lr_*) — the session-2 "9/11 migrated" note was stale; nothing to migrate.
+- e3/e4 probes already clock `walltime_s` via `time.monotonic()` — no defect found;
+  the "0.0" note was stale.
+- Root `conftest.py` (empty docstring left after the OMP-pin move) deleted.
+
+**Still open:** F5 full-rigor suites, repo-wide pyright + pip-audit, pre-commit
+--all-files, final full-suite run (all queued for the session-3 measurement pass).

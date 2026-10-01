@@ -6,11 +6,13 @@ repos:
         entry: uv run ruff format
         language: system
         types: [python]
+        exclude: ^docs/
       - id: ruff-check
         name: ruff check
         entry: uv run ruff check --fix
         language: system
         types: [python]
+        exclude: ^docs/
       - id: pyright
         # Changed library files, the way the two ruff hooks above already are.
         # The gate used to be one hardcoded directory (`computronium/ontology`),

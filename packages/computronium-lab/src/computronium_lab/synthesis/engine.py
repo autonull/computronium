@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
+from computronium.experiment.schema.registries import get_card_factor
 from computronium_lab.synthesis.catalog import CATALOG, MechanismCandidate
 from computronium_lab.synthesis.predictor import ViabilityModel
 
@@ -106,16 +107,6 @@ def screen_config(cand: MechanismCandidate, spec: ProblemSpec) -> None:
     ).validate()
 
 
-def card_factor(credit: str, update: str) -> tuple[float, str | None]:
-    """Soft prior for a (credit, update) pair.
-
-    The legacy recipe-card registry was retired with the pillar cleanup
-    (TODO44 Phase B); the neutral prior applies until a kernel-backed
-    replacement (PRIORS registry) is wired here.
-    """
-    return 1.0, None
-
-
 def _score_candidates(
     candidates: tuple[MechanismCandidate, ...],
     spec: ProblemSpec,
@@ -126,7 +117,7 @@ def _score_candidates(
     for cand in candidates:
         screen_config(cand, spec)
         p = model.predict(cand.features(spec))
-        factor, verdict = card_factor(cand.credit, cand.update)
+        factor, verdict = get_card_factor(cand.credit, cand.update)
         if spec.constraints.continual and cand.continual_capable:
             factor *= 1.5
         effective = max(p * factor, measured.get(cand.name, 0.0))
@@ -253,7 +244,6 @@ __all__ = [
     "ExplorationBudgetExhausted",
     "ParetoOption",
     "SynthesisResult",
-    "card_factor",
     "explore",
     "filter_catalog",
     "register_objective",

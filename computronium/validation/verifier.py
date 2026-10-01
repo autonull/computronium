@@ -33,7 +33,6 @@ class Verifier:
         intermediate_mode: bool = False,
         seed: int = 42,
         output_dir: str | None = None,
-        record_to_kb: bool = False,  # accepted for CLI compatibility; KB recording removed
     ):
         self.quick_mode = quick_mode
         self.intermediate_mode = intermediate_mode

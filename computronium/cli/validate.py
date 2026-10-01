@@ -41,12 +41,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated track IDs to run (default: all)",
     )
     parser.add_argument(
-        "--record-kb",
-        action="store_true",
-        help="Record track results to knowledge base "
-        "(for comp report / failure-manifesto)",
-    )
-    parser.add_argument(
         "--output-dir",
         type=str,
         default="results",
@@ -84,7 +78,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         intermediate_mode=intermediate_mode,
         seed=args.seed,
         output_dir=args.output_dir,
-        record_to_kb=args.record_kb,
     )
 
     if args.list:

@@ -114,7 +114,7 @@ class _SafetyWrapper:
             raise RuntimeError(f"Loss exceeds maximum: {loss} > {self.config.max_loss}")
         return loss
 
-    def clip_grad_norm(self, parameters, max_norm: float | None = None) -> float:
+    def clip_grad_norm(self, parameters, max_norm: float | None = None) -> torch.Tensor:
         max_norm = max_norm or self.config.max_grad_norm
         return nn.utils.clip_grad_norm_(parameters, max_norm)
 

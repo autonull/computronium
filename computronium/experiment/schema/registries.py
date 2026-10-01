@@ -183,6 +183,53 @@ POLICIES_REGISTRY: Registry[PolicySpec] = Registry[PolicySpec]()
 STAGES_REGISTRY: Registry[StageSpec] = Registry[StageSpec]()
 CAPABILITIES_REGISTRY: Registry[CapabilitySpec] = Registry[CapabilitySpec]()
 
+# Card factors: soft priors for (credit, update) pairs used by synthesis engine.
+# (credit, update) -> (factor: float, verdict: str | None)
+CARD_FACTORS: dict[tuple[str, str], tuple[float, str | None]] = {}
+
+
+def register_card_factor(
+    credit: str, update: str, factor: float, verdict: str | None = None
+) -> None:
+    """Register a card factor for a (credit, update) pair."""
+    CARD_FACTORS[credit, update] = (factor, verdict)
+
+
+def get_card_factor(credit: str, update: str) -> tuple[float, str | None]:
+    """Get card factor for a (credit, update) pair; neutral default if unknown."""
+    return CARD_FACTORS.get((credit, update), (1.0, None))
+
+
+# Register default card factors (credit, update) -> (factor, verdict).
+# These are soft priors; factor > 1.0 favors the pair, < 1.0 disfavors.
+# Verdict is a human-readable label (e.g., "canonical", "experimental").
+def _register_default_card_factors() -> None:
+    # Canonical pairs (well-tested combinations)
+    register_card_factor("Backprop", "Euclidean", 1.0, "canonical")
+    register_card_factor("EquilibriumProp", "Euclidean", 1.0, "canonical")
+    register_card_factor("PredictiveCoding", "Euclidean", 1.0, "canonical")
+    register_card_factor("LocalGoodness", "Euclidean", 1.0, "canonical")
+    register_card_factor("Hebbian", "Euclidean", 1.0, "canonical")
+    register_card_factor("TargetProp", "Euclidean", 1.0, "canonical")
+
+    # Energy-minimizing dynamics + local credit
+    register_card_factor("LocalGoodness", "Euclidean", 1.2, "energy_local")
+    register_card_factor("ThermodynamicContrast", "Euclidean", 1.1, "energy_local")
+    register_card_factor("Homeostatic", "Euclidean", 1.1, "energy_local")
+    register_card_factor("Pepita", "Euclidean", 1.1, "energy_local")
+    register_card_factor("SpectralConstrained", "Euclidean", 1.1, "energy_local")
+
+    # Diffusion dynamics + temporal credit
+    register_card_factor("TemporalTrace", "Euclidean", 1.2, "diffusion_temporal")
+    register_card_factor("TemporalTrace", "Adam", 1.1, "diffusion_temporal")
+
+    # Predictive settling + contrastive credit
+    register_card_factor("LocalContrastive", "Euclidean", 1.1, "predictive_contrastive")
+
+
+_register_default_card_factors()
+
+
 # Convenience exports
 ALL_REGISTRIES = {
     "objectives": OBJECTIVES_REGISTRY,
@@ -286,6 +333,7 @@ def register_capability(spec: CapabilitySpec) -> None:
 __all__ = [
     "ALL_REGISTRIES",
     "CAPABILITIES_REGISTRY",
+    "CARD_FACTORS",
     "CONSTRAINTS_REGISTRY",
     "OBJECTIVES_REGISTRY",
     "POLICIES_REGISTRY",
@@ -303,8 +351,10 @@ __all__ = [
     "ProofKind",
     "StageId",
     "StageSpec",
+    "get_card_factor",
     "prior_value",
     "register_capability",
+    "register_card_factor",
     "register_constraint",
     "register_objective",
     "register_policy",

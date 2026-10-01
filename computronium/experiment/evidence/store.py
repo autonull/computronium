@@ -35,6 +35,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.versioning import current_schema_version
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -104,8 +105,8 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
     - Pydantic v2 validation at I/O boundaries
     """
 
-    _SCHEMA_VERSION = 3
-    SUPPORTED_SCHEMA_VERSIONS = frozenset({3})
+    _SCHEMA_VERSION = current_schema_version()
+    SUPPORTED_SCHEMA_VERSIONS = frozenset({_SCHEMA_VERSION})
 
     def __init__(self, config: StoreConfig) -> None:
         self._config = config

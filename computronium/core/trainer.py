@@ -11,13 +11,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, TypeIs, cast
 
 import torch
-from torch import nn
 
 from computronium.core.ebm import EBMTrainer
 from computronium.core.losses import compute_loss
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+    from computronium.core.protocols import TrainableModel
 
 
 class _TrainerConfigProtocol(Protocol):
@@ -47,14 +48,16 @@ def _is_learning_rule_optimizer(o: object) -> TypeIs[_LearningRuleOptimizer]:
     return bool(getattr(type(o), "_is_learning_rule", False))
 
 
-def _make_ebm_trainer(config: _TrainerConfigProtocol, model: nn.Module) -> EBMTrainer:
+def _make_ebm_trainer(
+    config: _TrainerConfigProtocol, model: TrainableModel
+) -> EBMTrainer:
     """Create an EBMTrainer from trainer config (legacy compat)."""
     lr = config.optimizer_kwargs.get("lr", 0.01)
     free_steps = config.extra.get("free_steps", 30)
     nudged_steps = config.extra.get("nudged_steps")
     beta = config.extra.get("beta", 0.1)
     return EBMTrainer(
-        model,
+        cast("torch.nn.Module", model),
         lr=float(lr) if isinstance(lr, int | float) else 0.01,
         free_steps=free_steps if isinstance(free_steps, int) else 30,
         nudged_steps=nudged_steps if isinstance(nudged_steps, int) else None,
@@ -64,7 +67,7 @@ def _make_ebm_trainer(config: _TrainerConfigProtocol, model: nn.Module) -> EBMTr
 
 
 def bptt_step(
-    model: nn.Module,
+    model: TrainableModel,
     optimizer: torch.optim.Optimizer,
     x: torch.Tensor,
     y: torch.Tensor,
@@ -80,7 +83,7 @@ def bptt_step(
 
 
 def _default_bptt_step(
-    model: nn.Module,
+    model: TrainableModel,
     optimizer: torch.optim.Optimizer,
 ) -> Callable[[torch.Tensor, torch.Tensor], dict[str, object]]:
     """Build the canonical BPTT closure bound to ``model`` and ``optimizer``."""
@@ -92,7 +95,7 @@ def _default_bptt_step(
 
 
 def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
-    model: nn.Module,
+    model: TrainableModel,
     x: torch.Tensor,
     y: torch.Tensor,
     adapt_input: Callable[[torch.Tensor], torch.Tensor],
@@ -123,9 +126,10 @@ def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-stat
             record_path(path)
 
     # Kernel backend path - consumes the attached backend directly
-    if config is not None and getattr(model, "_kernel_backend", None) is not None:
+    kernel_backend = getattr(model, "_kernel_backend", None)
+    if config is not None and kernel_backend is not None:
         _record("kernel")
-        backend = model._kernel_backend
+        backend = kernel_backend
         bespoke_step = getattr(backend, "kernel_train_step", None)
         contrastive_step = getattr(backend, "contrastive_step", None)
         if callable(bespoke_step):
@@ -145,7 +149,9 @@ def dispatch_train_step(  # ruff: ignore[complex-structure, too-many-return-stat
     match model:
         case EnergyModel() if config is not None:
             _record("energy")
-            return _make_ebm_trainer(config, model).train_step(x, y)
+            return _make_ebm_trainer(config, cast("torch.nn.Module", model)).train_step(
+                x, y
+            )
 
     rule = propagator
     if rule is not None and _is_learning_rule_optimizer(rule):
