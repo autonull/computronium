@@ -1200,7 +1200,7 @@ CAPABILITIES = [
         required=True,
         stage="S10_DECIDE",
         owner="allocator",
-        verifying_test="tests/property/test_continuous_budget.py::TestTarget::test_target_reached_is_hard_cap",
+        verifying_test="tests/property/test_allocator_promotion.py::TestEvidenceDrivenAllocation::test_first_observation_nominates_next_fidelity",
         flags=("allocation", "evidence_driven"),
     ),
     CapabilitySpec(

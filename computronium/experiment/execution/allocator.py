@@ -93,6 +93,8 @@ class AllocationState:
     # Telemetry
     divergence_score: float = 0.0
     stagnation_score: float = 0.0
+    diverged_cells: set[str] = field(default_factory=set)
+    stagnated_cells: set[str] = field(default_factory=set)
 
 
 class EvidenceDrivenAllocator:
@@ -164,6 +166,7 @@ class EvidenceDrivenAllocator:
         # Check for divergence
         if self._is_divergent(cell_key, score):
             self._state.divergence_score = score
+            self._state.diverged_cells.add(cell_key)
             logger.warning(
                 "Cell %s diverged at %s seed %d: score=%f",
                 cell_key,
@@ -178,6 +181,7 @@ class EvidenceDrivenAllocator:
         if self._is_stagnant(cell_key):
             logger.info("Cell %s stagnated at %s", cell_key, fidelity)
             self._state.stagnation_score = score
+            self._state.stagnated_cells.add(cell_key)
             return
 
         # Update or create promotion candidate
@@ -392,16 +396,8 @@ class EvidenceDrivenAllocator:
     def get_telemetry(self) -> dict[str, object]:
         """Get divergence/stagnation telemetry."""
         return {
-            "divergence_candidates": sum(
-                1
-                for c in self._state.promotion_candidates.values()
-                if c.divergence_score > 0
-            ),
-            "stagnation_candidates": sum(
-                1
-                for c in self._state.promotion_candidates.values()
-                if c.stagnation_score > 0
-            ),
+            "divergence_candidates": len(self._state.diverged_cells),
+            "stagnation_candidates": len(self._state.stagnated_cells),
             "fidelity_distribution": self._get_fidelity_distribution(),
         }
 

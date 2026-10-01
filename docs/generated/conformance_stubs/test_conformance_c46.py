@@ -3,6 +3,7 @@
 # This test is generated from the capability registry.
 # Do not edit manually - regenerate via codegen.
 
+import pytest
 from computronium.experiment.surface.conformance import run_verifying_test
 
 

@@ -471,10 +471,37 @@ Commit per phase (B, C, D, E, F) so any regression bisects cleanly.
   - [x] Stability module cleaned (calibration removed)
   - [x] Docstring legacy mentions purged (B7)
   - [x] All 6 CLI subcommands working: report, parity, repro, validate, joint-validate, benchmark
-- [x] Phase D full-tree import isolation lock created and passing (computronium/ clean; computronium-lab exempted per A7 for Phase D rework)
-  - [ ] CLI↔README lock
-  - [ ] Schema forward-tolerance test
-  - [ ] Single-writer enforcement test
-- [ ] Phase E README rewritten and locked
-- [ ] Phase F demos + probes + gallery + ML benchmark suite green
+- [x] Phase D full-tree import isolation lock created and passing
+  - [x] CLI↔README lock (`tests/property/test_cli_readme_lock.py`)
+  - [x] Schema forward-tolerance test (`tests/property/test_schema_forward_tolerance.py`;
+        note: store currently at schema v3/{3} — the bump test writes v2 and reads under v3)
+  - [x] Single-writer enforcement test (`tests/property/test_single_writer_enforcement.py`;
+        AST scan, TYPE_CHECKING-guarded imports allowed — `evidence/artifacts.py` only type-refs duckdb)
+- [x] Phase E README rewritten and locked
+  - Canonical 11-section README; two `<!-- lock: -->` demo blocks re-locked verbatim
+    against their (post-drift) demo tests — the snippet lock had PRE-EXISTING drift
+    (demo tests moved code into test functions); blocks updated to match tests
+  - Pre-existing `computronium-lab` pillar imports rewired (A7): `experiments.joint.*`
+    → `benchmarks.joint.*`, `autoscientist.objectives` → kernel `experiment.schema.registries`,
+    `hyperopt.metrics`/`visualization.atlas` helpers → local `_pareto_indices`/`_scalarized_score`
+    in `adaptation.py`; `synthesis.engine.card_factor` neutralized (recipe-card registry retired —
+    IMPROVEMENT: re-back from kernel PRIORS registry)
+- [x] Phase F demos + probes + gallery + ML benchmark suite green
+  - `scripts/demos/` created: 6 demos (U1/U4/U3/U5/multi-objective/contrast-design), all exit 0.
+    Shared `_support.py` mirrors `tests/acceptance/unified_kernel.py` APIs
+  - B2 leftovers deleted: 7 more pillar-importing test files (evolution_search, mechanism_explorer,
+    resource_vector, kb_store_parity, mep_integration, paper_claims, vertical_slice_gate)
+  - Gallery re-pinned: 8 stale DEMOS rows retired (D3/D4/D5/F3/F5/D21/D22/D24), stale run records +
+    figures deleted, orphan d28_broad_atlas.png deleted, manifest regenerated (21 figures);
+    `docs/RESULTS.md` → `docs/archive/RESULTS.md` (references retired demos)
+  - F2 evidence probes: conformance audit **46 pass / 42 skip / 0 fail** (all_green);
+    E3 d=-1.4991 p=0.0011; E4 d=-1.5186 p=0.00097 — plan targets hit exactly
+  - C10 defect fixed: allocator `get_telemetry()` read divergence/stagnation flags from
+    candidate objects it never writes — now tracked in `AllocationState.diverged_cells/stagnated_cells`;
+    new lock `tests/property/test_allocator_promotion.py`; C10 verifying_test re-pointed
+  - F4: codegen regen byte-identical (drift lock 3 passed); PRIORS carries 9 ruler_lr_* rows
+    (ruler_table migration verified; kmnist/usps/circles rows absent from PRIORS — see improvements)
+  - F5: `comp benchmark run --suite X --quick` — all 5 suites run end-to-end, exit 0.
+    NOTE: quick-mode verdicts are smoke-only (z3 gate_passed=False at 10 epochs —
+    IMPROVEMENT: run full-rigor suites before quoting verdicts)
 - [ ] Phase G gates pass, version bumped, release notes, committed

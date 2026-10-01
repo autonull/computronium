@@ -1,6 +1,6 @@
 # Objectives Registry
 
-Generated: 2026-09-30T22:15:53.370767
+Generated: 2026-10-01T13:24:41.292447
 Total: 36 objectives
 
 | Name | Direction | Weight | Normalizer | Axis Tag |

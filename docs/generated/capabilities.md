@@ -1,12 +1,12 @@
 # Capabilities Registry
 
-Generated: 2026-09-30T22:15:53.370161
+Generated: 2026-10-01T13:24:41.291842
 Total: 88 capabilities
 
 | ID | Name | Kind | Required | Stage | Owner | Verifying Test | Flags | Status |
 |----|------|------|----------|-------|-------|----------------|-------|--------|
 | C1 | Six-axis coordinate space | core | ✓ | S1_FRAME | schema | tests/property/test_experiment_registries_wiring_lock.py::test_all_registries_dict_completeness | axis, coordinate | active |
-| C10 | Evidence-driven allocation | core | ✓ | S10_DECIDE | allocator | tests/property/test_continuous_budget.py::TestTarget::test_target_reached_is_hard_cap | allocation, evidence_driven | active |
+| C10 | Evidence-driven allocation | core | ✓ | S10_DECIDE | allocator | tests/property/test_allocator_promotion.py::TestEvidenceDrivenAllocation::test_first_observation_nominates_next_fidelity | allocation, evidence_driven | active |
 | C11 | Replay and resume | core | ✓ | S6_TRAIN | replay | tests/property/test_atomic_append_kill_proof.py::TestAtomicAppendKillProof::test_monotonic_seq_across_concurrent_writes | replay, resume | active |
 | C12 | Three-tier status model | core | ✓ | S7_MEASURE | evidence | tests/property/test_statistical_protocol_lock.py::TestClaimPredicates::test_claim_eligible_requires_l2_fidelity | status, three_tier | active |
 | C13 | Claim eligibility predicates | core | ✓ | S7_MEASURE | evidence | tests/property/test_statistical_protocol_lock.py::TestClaimPredicates::test_claim_eligible_requires_pass_verdict | claims, predicates | active |
