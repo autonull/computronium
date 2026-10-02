@@ -2,9 +2,38 @@
 
 # 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
 
-**Computronium** is a composable ML library and an experiment kernel for studying how learning mechanisms interact with dynamics, writable state, communication, precision, and resource constraints. Its six-axis interface makes controlled comparisons mechanical; the kernel turns questions into measured, governed evidence.
+> **Computronium** is a composable ML library and experimental laboratory for studying how learning mechanisms interact with dynamics, writable state, communication, precision, and resource constraints. Its six-axis interface supports controlled comparisons; its research program investigates when particular combinations offer measurable benefits.
 
-The name ([Wikipedia](https://en.wikipedia.org/wiki/Computronium)) refers to the theoretical limit of physical computation — the framework bridges abstract learning algorithms and physical constraint models (optical, memristive, neuromorphic, biological, quantum).
+**Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium)): the theoretical limit of physical computation. The name reflects the framework's aim to bridge abstract algorithms and the physical constraints of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
+
+<details>
+<summary><strong>Motivation (the motivating hypothesis, not an established result)</strong> ⋯</summary>
+
+Modern deep learning has achieved remarkable results in mathematical abstraction. But abstraction hides physical cost. Natural intelligence operates without global clocks, infinite memory for backward passes, or perfect precision—emerging from local interactions, energy minimization, and physical constraints.
+
+The **search for computronium** is the motivating hypothesis: investigate learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency — and determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This is the *research agenda*; the library is usable independently of it, and no claim below is a conclusion of the search.
+</details>
+
+> **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
+
+The library is usable independently of the research hypotheses; the research program consists of ongoing empirical questions, not completed conclusions.
+
+| Aspect | What It Is | What You Get |
+|------|------------|--------------|
+| **📦 ML Library** | Composable learning systems behind one training API | Train and compare every implemented rule — Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint — under a single interface |
+| **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), experiment kernel, property-verified hypercube, stability-plasticity monitoring, **multi-objective Pareto frontier analysis** (configurable objectives per axis) | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation; **axis-aligned objective optimization** (accuracy, walltime, params, FLOPs, energy, latency, stability, plasticity, credit alignment, ruler-relative) |
+| **🧪 Scientific Program** | Hypotheses on locality, plasticity, stability, and physical constraints as first-class dimensions; stability-plasticity trade-off as controlled departure from contraction; resource-vector Pareto analysis (compute, memory, energy, latency, plastic-state capacity) | Ongoing empirical investigation—not validated claims. Large-scale campaigns and physical-hardware validation remain future work. |
+
+| Audience | Entry Point |
+|----------|-------------|
+| 🧠 **Natural Scientists & Physicists** | Energy-based local learning demo: Hebbian/contrastive rules with Lyapunov stability analysis, passivity checks, energy tracking |
+| 📊 **Data Scientists & ML Researchers** | Composable learning rules, local credit assignment, depth/compute scaling, systematic comparison across algorithms |
+| 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
+| 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, experiment kernel automation |
+
+The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
+
+---
 
 ## Contents
 
@@ -12,10 +41,28 @@ The name ([Wikipedia](https://en.wikipedia.org/wiki/Computronium)) refers to the
 - [Install](#install)
 - [60-second quickstart](#60-second-quickstart)
 - [The 6-axis ontology](#the-6-axis-ontology)
+- [ML Library Capabilities](#ml-library-capabilities)
+- [🧬 Coupled Dynamical Systems](#coupled-dynamical-systems)
+- [⚡ Energy, Stability, and Dynamical Invariants](#energy-stability-and-dynamical-invariants)
+- [🏗️ Core Architecture](#core-architecture)
+- [🔬 Validation Framework: Property-Verified Hypercube](#validation-framework-property-verified-hypercube)
+- [📐 Stability-Plasticity Trade-off Hypothesis](#stability-plasticity-trade-off-hypothesis)
+- [🌐 Evaluation Domains](#evaluation-domains)
 - [The Experiment Kernel](#the-experiment-kernel)
 - [CLI reference](#cli-reference)
 - [Demonstrations](#demonstrations)
 - [Evidence & claims](#evidence--claims)
+- [🌐 Distributed Training & P2P](#distributed-training--p2p)
+- [🚀 Deployment & Inference](#deployment--inference)
+- [📊 Analysis & Visualization (`computronium/analysis/`)](#analysis--visualization-computroniumanalysis)
+- [⚡ Hardware Acceleration (`computronium/acceleration/`)](#hardware-acceleration-computroniumacceleration)
+- [🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)](#shared-acceleration-layer-computroniumacceleration--registry--dispatch)
+- [🛠️ Kernel Development Workflow](#kernel-development-workflow)
+- [📚 Documentation & Bench Tools from Specs](#documentation--bench-tools-from-specs)
+- [🧪 Enhanced CLI Tools](#enhanced-cli-tools)
+- [🧪 Registry Integrity Locks (Extended Verification Framework)](#registry-integrity-locks-extended-verification-framework)
+- [🧭 CEEC Epistemic Operating System (`packages/ceec-core`)](#ceec-epistemic-operating-system-packagesceec-core)
+- [📦 Standalone Platform Packages (`packages/`)](#standalone-platform-packages-packages)
 - [For developers](#for-developers)
 - [Research program](#research-program)
 - [FAQ / Troubleshooting + Glossary](#faq--troubleshooting--glossary)
@@ -31,9 +78,18 @@ Computronium ships three layers, each usable independently:
 |---|---|---|
 | **ML Library** (`computronium` core) | Composable 6-axis learning systems behind one training API | Train and compare Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, and 6-D joint variants under a single `SystemTrainer` interface |
 | **Experiment Kernel** (`computronium.experiment`) | Question → RunSpec → policy → pipeline → evidence store → claims | Reproducible, resumable, policy-interchangeable experiments with a single DuckDB evidence store and fail-closed schema versioning |
-| **Scientific Program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability, and physical constraints; CEEC epistemic governance | Ongoing empirical investigation — claims below are labeled by verification level, never asserted beyond their evidence |
+| **Scientific Program** (hypotheses + governance) | Motivating hypotheses on locality, plasticity, stability, and physical constraints; standalone CEEC governance ledger (not integrated) | Ongoing empirical investigation — claims below are labeled by verification level, never asserted beyond their evidence |
 
 **Claim-strength discipline.** Every claim in this README is labeled by its verification level: (1) analytical, (2) machine-checked, (3) certified numerical, (4) sampled numerical, (5) empirical. Levels are defined in `computronium.verification` and enforced against banned overclaim phrases. The motivating hypothesis — that learning systems native to physical constraints (asynchrony, locality, limited precision, energy budgets) offer measurable benefits — is an *agenda*, not a result.
+
+| Audience | Entry Point |
+|----------|-------------|
+| 🧠 **Natural Scientists & Physicists** | Energy-based local learning demo: Hebbian/contrastive rules with Lyapunov stability analysis, passivity checks, energy tracking |
+| 📊 **Data Scientists & ML Researchers** | Composable learning rules, local credit assignment, depth/compute scaling, systematic comparison across algorithms |
+| 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
+| 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, experiment kernel automation |
+
+The ML library provides the composable primitives; the research framework provides the campaign infrastructure for systematic exploration; the scientific program articulates the hypotheses that guide exploration priorities.
 
 ---
 
@@ -116,28 +172,140 @@ Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 t
 
 ## The 6-axis ontology
 
-```text
+**Computronium models learning systems using 6 composable axes:**
+
+```
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 ```
 
-A system is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace. `SystemConfig.validate()` whitelists compatible combinations — the compatible region is the kernel's search space. The ontology is a design abstraction, not an established law.
+A **System is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace.** This decomposition is the framework's organizing abstraction for comparing learning systems. The space is a **compatibility-constrained subset** of the full Cartesian product — `SystemConfig.validate()` whitelists compatible combinations of primitives; the compatible region is the kernel's search space. The ontology is a design abstraction, not an established law of computation.
 
 | Axis | Symbol | Role | Primitives |
 |------|:------:|------|------------|
-| **Substrate** | $S$ | Physical state space: precision, noise, sparsity | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy`, `Complex`, `Sparse`, `Ternary` |
-| **Geometry** | $G$ | Topology & routing | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (node-edge), `SpatialLattice3D`, `NTM` (external-memory tape), `NCA` (neural cellular automaton) |
-| **StateDynamics** | $D$ | Forward evolution & settling | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics`, `Diffusion` |
-| **Plasticity** | $P$ | MetaDynamics: the rule as a writable variable (ψ) | `NullPlasticity`, `RoutingPlasticity`, `FastWeightPlasticity`, `SubstrateCoupledPlasticity`, `RuleStatePlasticity` (Z3), `ClosedFormRidgePlasticity`, `TemporalPsiPlasticity` |
-| **CreditAssignment** | $C$ | Error routing & pseudo-gradient | `ThermodynamicContrast` (EqProp), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (FF/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit`, `HomeostaticCredit` |
-| **ParameterUpdate** | $U$ | Slow parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
+| **🔩 Substrate** | $S$ | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy`, `Complex`, `Sparse`, `Ternary` |
+| **🔷 Geometry** | $G$ | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube), `NTM` (external-memory tape: controller + content-addressed read/write heads), `NCA` (neural cellular automaton: emergent spatial fabric) |
+| **🌀 StateDynamics** | $D$ | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation), `Diffusion` |
+| **🧬 Plasticity (MetaDynamics)** | $P$ | Mechanism elevating the computational rule to a dynamical variable. With external memory (NTM) and emergent substrates (NCA), the program becomes data that can be written, composed, and sequenced on fixed hardware (θ): reconfigurable program (ψ), unbounded tape (NTM memory). P-axis provides *architectural* benefits (lifecycle control, intervention, explicit routing); whether it outperforms standard recurrent memory on benchmarks is an open empirical question | `NullPlasticity` (Zero-Extension), `RoutingPlasticity` (gating/rerouting), `FastWeightPlasticity` (episode-local memory), `SubstrateCoupledPlasticity` (physical plasticity), `RuleStatePlasticity` (Z3: rule selection), `ClosedFormRidgePlasticity` (supervised ψ computed, not trained), `TemporalPsiPlasticity` (trace-decayed supervised ψ — forgetting enables task migration on frozen θ) |
+| **💡 CreditAssignment** | $C$ | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
+| **🔧 ParameterUpdate** | $U$ | Slow, persistent parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 
-**Substrate specs.** A substrate is a structured `SubstrateSpec` (execution model, device model, numeric representation, noise, constraints, cost) — not a string tag. Specs compose: "noisy, sparse, complex-valued" is one spec with three facets (`computronium/ontology/substrate/spec.py`, factory `make_substrate`).
+### Substrate Specifications
 
-**Identity cards.** Every Credit, Update, and Plasticity primitive carries an `AlgorithmIdentityCard` class attribute: reference equation, deviations from the literature, pseudo-gradient definition, validated limits, verification level. Rendered cards: [`docs/IDENTITY_CARDS.md`](docs/IDENTITY_CARDS.md); the strict generator (`scripts/generate_identity_cards.py --strict`) runs in pre-commit.
+<details>
+<summary><strong>SubstrateSpec: substrates as structured specifications, not string tags</strong> ⋯</summary>
 
-### One trainer, every credit rule
+A substrate is defined by an execution model, a device model, a numeric representation, noise, constraints, and cost — captured by the frozen `SubstrateSpec` dataclass (`computronium/ontology/substrate/spec.py`) with `make_substrate(spec)` as its factory. Specs compose: "noisy, sparse, complex-valued" is one spec with three facets. `SubstrateSpec.from_config`/`to_config` round-trip all legacy `SubstrateConfig` presets losslessly (including the ternary/complex/sparse digital family, which legacy configs cannot distinguish from fields alone — new code should construct specs directly).
+</details>
 
-The same coordinate trained through byte-identical wiring with a single swapped constructor argument — locked verbatim against [`tests/integration/test_demo_swap_credit.py`](tests/integration/test_demo_swap_credit.py); all three arms learn:
+### Geometry Primitives
+
+<details>
+<summary><strong>NTM Geometry (`NtmGeometry`, `GeometryConfig.ntm`)</strong> ⋯</summary>
+
+External-memory tape: LSTM controller + content-addressed heads; local credit learns copy via memory (0.958 @8000 steps, 3 seeds) — TODO.ntm_nca §11.14
+</details>
+
+<details>
+<summary><strong>NCA Geometry (`NcaGeometry`, `GeometryConfig.nca`)</strong> ⋯</summary>
+
+Neural cellular automaton fabric; local credit solves growing NCA (fg 1.000, 3 seeds) — TODO.ntm_nca §11.8
+</details>
+
+### CreditAssignment Primitives
+
+<details>
+<summary><strong>PEPITA / LEMMA Credit (`PepitaCredit`, `local_objective="lemma"`)</strong> ⋯</summary>
+
+Published PEPITA input-modulation credit (BP parity 0.884) and the naming distinction from per-layer closed-form LEMMA — TODO15 §11.1/§11.2
+</details>
+
+### Algorithm Identity Cards
+
+Every Credit, Update, and Plasticity primitive carries an
+`AlgorithmIdentityCard` class attribute: reference equation, deviations
+from the literature, the pseudo-gradient definition, validated limits,
+and its verification level. Rendered cards live in
+[`docs/IDENTITY_CARDS.md`](docs/IDENTITY_CARDS.md); the generator
+(`scripts/generate_identity_cards.py --strict`) is wired into
+pre-commit (C.1) and fails when a concrete primitive ships without
+one.
+
+---
+
+### Architecture Diagram
+
+```mermaid
+flowchart LR
+    S[Substrate] --> G[Geometry]
+    G --> D[StateDynamics]
+    D --> M[Plasticity]
+    M --> C[CreditAssignment]
+    C --> U[ParameterUpdate]
+    U --> S
+```
+
+**Schematic Coupling Diagram** — arrows denote *data flow through the
+ontology*, not execution order. The cyclic `U → S` edge represents
+physical state updates (parameter consolidation altering substrate
+state, e.g. memristive conductance), not a strict sequential pipeline.
+
+<details>
+<summary><strong>Why U → S cyclic dependency?</strong> ⋯</summary>
+
+The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
+</details>
+
+---
+
+## ML Library Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `P = NullPlasticity` slice) |
+| **Common training API** | `SystemTrainer` — single interface for all learning rules, including joint systems via duck-typed `train_step`/`forward` |
+| **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) — credit swap demonstrated live |
+| **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
+| **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights |
+| **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee |
+| **Multi-objective discovery** | `comp run` profiles with multi-objective config — configurable Pareto fronts across objectives (accuracy, walltime, params, FLOPs, memory, energy, latency, spectral radius, Lyapunov, ψ capacity, credit alignment, ruler-relative); objective-aware driver, multi-objective promotion (L1/L2) |
+| **EMA harvest** (`SystemTrainerConfig.harvest_mode`) | Probe-free streaming-weight harvest instrument; resurrected depth-50 (0.784→0.917) |
+| **Recipe cards** (`recipe_cards.py`) | Credit×Update→optimizer/geometry/config canonical-constructor registry |
+| **I(C,U) predictive model** (`fit_icu_model.py`, `icu_report.py`) | Learnability-interaction law with 0.944 held-out lattice accuracy |
+| **Frozen-θ ψ benchmarks** (L1/L2/L3/L3.5, `psi_engaged`) | Frozen-θ ψ-only adaptation, recovery, and migration with θ bitwise-invariance audits |
+| **P-axis expressiveness probes** | Fixed-θ ψ mechanisms verified at probe scale: Kolmogorov compression (short ψ unfolds 32×32 patterns, 2.66× ratio), NCA rule reconfiguration (K distinct patterns from one seed, θ SHA-invariant, 3 seeds), sequential composition over NTM tape (max/sum/median at O(1) depth); σ_max(J_F) stability-expressiveness frontier measured. Deep chaotic unfolding (E1) falsified with a mechanism boundary — composition-error compounding |
+| **I(C,U) ψ-orthogonality** | 3-seed measurement of ψ modulation on the credit×update surface: across tested configurations, observed ψ modulation averaged 2.0 percentage points (max 9.1 points, fa×muon routing). These measurements do not establish equivalence or negligibility; campaign-7.1 rows in `data/icu_measurements.csv`, `logs/w17_icu_fit.log` |
+| **Experiment sweeps / campaigns** | `comp run` / `comp benchmark` — structured hypercube exploration |
+| **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
+
+---
+
+### Architecture Diagram
+
+```mermaid
+flowchart LR
+    S[Substrate] --> G[Geometry]
+    G --> D[StateDynamics]
+    D --> M[Plasticity]
+    M --> C[CreditAssignment]
+    C --> U[ParameterUpdate]
+    U --> S
+```
+
+**Schematic Coupling Diagram** — arrows denote *data flow through the ontology*, not execution order. The cyclic `U → S` edge represents physical state updates (parameter consolidation altering substrate state, e.g. memristive conductance), not a strict sequential pipeline.
+
+<details>
+<summary><strong>Why U → S cyclic dependency?</strong> ⋯</summary>
+
+The cyclic dependency (U → S) reflects that parameter updates can alter substrate state (e.g., memristive conductance drift, weight quantization), which in turn affects subsequent forward passes. This is modeled explicitly in the joint transition operator.
+</details>
+
+---
+
+### Algebraic Composition (API)
+
+Construct systems by composing primitives across the six axes. The `System` generic and the `compose_*` factories catch invalid combinations at type-check time.
+
+**One trainer, every credit rule** — the same coordinate trained through byte-identical wiring with a single swapped constructor argument. The block is locked verbatim against its source demo test ([`tests/integration/test_demo_swap_credit.py`](tests/integration/test_demo_swap_credit.py)); all three arms learn:
 
 <!-- lock: swap_credit -->
 ```python
@@ -183,9 +351,7 @@ for name, credit in CREDIT_ARMS:
     system = compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(
-                input_dim=784, output_dim=10, hidden_dims=(32,)
-            )
+            GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
         ),
         dynamics=EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
@@ -221,9 +387,523 @@ Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`,
 
 ### Research Direction Models (Experimental Variants)
 
-**Research-direction models.** Formerly hardcoded families (holomorphic/directed/finite-nudge/ternary/momentum/sparse/diffusion EqProp) are coordinates in this space, available via `computronium.models.native`. They are framework-native expressions, not claims of novel algorithms.
+These are native implementations of research directions and experimental variants expressed as first-class ontology coordinates. Several may overlap prior literature:
+
+| Model | Coordinate | Description |
+|-------|------------|-------------|
+| `holomorphic_ep` | `QuantumSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Complex-valued Equilibrium Propagation using holomorphic (analytic) activation functions and conjugate-transpose feedback pathways — complex-valued, not quantum: the quantum label applies only when running on the specific simulated unitary-gate substrate. Enables complex-domain credit assignment with potential for phase-based computation. |
+| `directed_ep` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization × RandomProjections × EuclideanUpdate` | Directed/Asymmetric Equilibrium Propagation implementing Feedback Alignment within energy-based framework. Fixed random feedback matrices (no transport shortcut; FA is legitimate here — feedback is a fixed random matrix, not a transpose) with thermodynamic settling dynamics. |
+| `finite_nudge_ep` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast(beta≥1) × EuclideanUpdate` | Finite-Nudge Equilibrium Propagation using large β (finite nudge) instead of infinitesimal limit. Stronger supervision signals while maintaining equilibrium dynamics. |
+| `ternary_eqprop` | `TernarySubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Ternary-weight Equilibrium Propagation with STE-based quantization. Weights constrained to {-α, 0, +α}. |
+| `momentum_eqprop` | `DigitalSubstrate × RecurrentGeometry × EnergyMinimization(momentum) × ThermodynamicContrast × EuclideanUpdate` | Heavy-ball settling dynamics for faster equilibrium convergence. |
+| `sparse_eqprop` | `SparseSubstrate × RecurrentGeometry × EnergyMinimization × ThermodynamicContrast × EuclideanUpdate` | Dynamic sparsity masks with efficient sparse matmul. |
+| `diffusion_eqprop` | `DigitalSubstrate × RecurrentGeometry × DiffusionDynamics × ThermodynamicContrast × EuclideanUpdate` | Continuous-time diffusion settling dynamics. |
+
+These models are available via the native API in `computronium.models.native`:
+
+```python
+from computronium.models.native import (
+    create_native_holomorphic_ep,
+    create_native_directed_ep,
+    create_native_finite_nudge_ep,
+    create_native_ternary_eqprop,
+    create_native_momentum_eqprop,
+    create_native_sparse_eqprop,
+    create_native_diffusion_eqprop,
+)
+```
+
+<details>
+<summary><strong>Not claimed as novel algorithms</strong> ⋯</summary>
+
+These models are not claimed as novel algorithms; they are *framework-native expressions* of research directions that can be systematically compared, ablated, and extended within the 6-axis ontology. The framework contribution is their common compositional representation and systematic comparison infrastructure.
+</details>
 
 ---
+
+## 🧬 Coupled Dynamical Systems
+
+Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
+
+Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
+
+<details>
+<summary><strong>Joint transition operator</strong> ⋯</summary>
+
+By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_{\theta_e}(z_t, u_t, \xi_t, \Delta t_t; G, S, D, P)$ unifying fast neural activity, inputs $u_t$, stochastic contributions $\xi_t$, elapsed time $\Delta t_t$, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
+</details>
+
+<details>
+<summary><strong>Frozen-θ contract (Boundary Invariance, Stage-Boundary Invariance)</strong> ⋯</summary>
+
+Within an episode, persistent θ is invariant: `FrozenThetaAudit`
+(`computronium.core.frozen_theta`) snapshots geometry parameters,
+substrate state tensors, and optimizer parameter groups at entry and
+detects at exit — via clones, `Tensor._version` counters, and
+`data_ptr()` — **in-place mutations**, *mutate-then-restore* (version
+bumps survive a `copy_` rollback), **alias mutations**, and **storage
+rebinding** (including added/removed tensors). Violations raise
+`FrozenThetaError(AssertionError)`. This is enforced empirically
+(`tests/property/joint/test_frozen_theta_audit.py`, adversarial suite)
+— a sampled-numerical guard (Level 4), not a Level 1–3 derivation.
+</details>
+
+<details>
+<summary><strong>P-axis: architectural capabilities (not a validated expressiveness capability)</strong> ⋯</summary>
+
+The P-axis (ψ) provides **architectural** benefits independent of
+benchmark performance: lifecycle control (ψ as a first-class dynamical
+variable), intervention (frozen-θ ψ-only adaptation with bitwise θ
+audits), and explicit routing (state-dependent gating over the NTM
+tape or NCA fabric — the program becomes writable data on fixed
+hardware θ). Whether ψ-mediated mechanisms outperform standard
+recurrent memory on benchmarks remains an open empirical question;
+the E-probes below report what was measured at probe scale.
+</details>
+
+<details>
+<summary><strong>E-probe results (probe-scale evidence, not validated headline claims)</strong> ⋯</summary>
+
+Compression (E2), fabric reconfiguration (E3), and program sequencing
+over a tape (E4) are demonstrated at probe scale with frozen θ. Deep
+*chaotic* unfolding (E1) is **falsified** with a recorded mechanism
+boundary: under this architecture and precision, short-horizon local
+learning failed to achieve the one-step accuracy needed for reliable
+long-horizon rollout due to composition-error compounding (local
+credit of fixed horizon T cannot control N-step composition error
+unless T scales with N). A σ_max(J_F) stability–expressiveness
+frontier on the NCA fabric is measured: most patterns cost nothing;
+thin symmetric structure requires non-contractive rules.
+</details>
+
+<details>
+<summary><strong>Campaign first records (probe-scale evidence, not validated headline claims)</strong> ⋯</summary>
+
+**Credit × Update mechanistic study** (12 cells × 3 seeds, one-step
+reset-state + 30-step trajectory arms, norm-matched): Muon gave the
+best immediate transformation quality (eqprop×muon +0.324 vs euclidean
++0.221); the BP reference has the highest descent quality (+0.589) at
+the smallest displacement; lemma cells measured near-inert at matched
+norms. Records: `results/mechanistic_study/claim_record.json`.
+
+**Stability × Memory campaign** (648 cells × 3 seeds × 8 trials,
+store–delay–recall with contraction {0.5, 0.9, 1.05} × gate
+{selective, ungated} × coupling {open, coupled} × precision {f32, f16,
+bf16} × noise {0, 0.1} × readout {full, low-rank, 4-bit} × delay
+{1, 8, 32}): selective (cue-gated) memory retains ≈ 1.0 at every
+measured contraction rate and every delay, while ungated memory
+collapses with distractor count (≈ 0.08 at delay 32). Feedback
+coupling (memory into the state block) lowers the measured perturbation
+decay but leaves retention unchanged — retention reads the memory
+block only; the state-arm noise effect is reported separately as
+`state_noise_divergence`. Records: `results/memory_stability/
+claim_record.json`; scatter extraction via
+`retention_contraction_scatter`. Both campaigns are Level 4 (sampled
+numerical) / Level 5 (empirical).
+</details>
+
+---
+
+## ⚡ Energy, Stability, and Dynamical Invariants
+
+Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability analysis *before* implementation:
+
+<details>
+<summary><strong>Stability claims, stated at their actual strength</strong> ⋯</summary>
+
+**Symmetric topology + EnergyMinimization**: under documented regularity and discretization assumptions, the specified dynamics admit a Lyapunov argument; convergence to an equilibrium depends on additional conditions stated per implementation (property-locked, Level 4). **Directed topology** → requires a Control-Lyapunov formulation (certified numerically for PredictiveSettlingDynamics). **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA — Level 4 sampled numerical, consistent-with-descent, never proof.
+
+**Stability metrics are explicitly separated**: the Asymptotic Stability Margin is the spectral radius $\rho(J_F)$ (via `spectral_radius_from_jacobian`); the Transient Amplification Bound is $\|J_F\|_2$ (via `dominant_singular_value`). These are different quantities on nonnormal Jacobians; `estimate_directional_amplification` measures finite-difference growth along probed directions and certifies neither $\rho$ nor $\sigma_{\max}$. Older materials quoting the estimator as "ρ(J)" are flagged `requires_rerun` in `docs/CORRECTIONS.md`.
+</details>
+
+### Verification Taxonomy
+
+All claims in this repository are labeled by the 5-level taxonomy
+(`computronium.verification`), enforced by `tests/property/test_verification_labels.py`:
+
+| Level | Name | Meaning |
+|:-----:|------|---------|
+| 1 | Analytical | Pen-and-paper derivation |
+| 2 | Machine-checked | Proof assistant / solver certificate |
+| 3 | Certified numerical | Rigorous bound (interval arithmetic etc.) |
+| 4 | Sampled numerical | Property tests, finite-difference checks, seeds |
+| 5 | Empirical | Observed behavior, no bound |
+
+The CI gate relies primarily on **Level 4** (sampled numerical) and **Level 5** (empirical). No CI test confers Level 1–3 status; wording that says otherwise is a defect.
+
+<details>
+<summary><strong>Joint dynamics extension</strong> ⋯</summary>
+
+The joint extension of these dynamics — composite state $z_t = (x_t, \psi_t, \sigma_t)$, lifecycle registry, episode-boundary consolidation — is specified once in *Core Architecture* below. Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **experiment kernel** searches the declared ontology space and records experiment results.
+</details>
+
+---
+
+## 🏗️ Core Architecture
+
+### 1. Ontology Protocols (`computronium/ontology/`)
+
+<details>
+<summary><strong>Protocol details</strong> ⋯</summary>
+
+Five `Protocol` classes with PEP 695 generics, frozen slotted config dataclasses, and reference implementations for every primitive — pure, composable infrastructure. See `computronium/ontology/` for the full Protocol definitions.
+</details>
+
+- `Substrate` — `forward_operator`, `weight_update_operator`
+- `Geometry` — `forward`, `route`
+- `StateDynamics` — `settle`
+- `CreditAssignment` — `compute_pseudo_gradient`, `surrogate_objective`
+- `ParameterUpdate` — `step`
+
+### 2. Joint Architecture Protocols (`computronium/core/joint/`)
+
+<details>
+<summary><strong>Joint protocol details</strong> ⋯</summary>
+
+The joint dynamical system elevates the computational rule to a dynamical variable via the **CoupledTransition** protocol operating on `CompositeState`. Key types defined in `computronium/core/joint/state.py` and `computronium/core/joint/transition.py`.
+</details>
+
+- **CompositeState** — joint intra-episode state $z_t = (x_t, \psi_t, \sigma_t)$ with `activity`, `plastic`, `substrate` mappings
+- **SystemContext** — immutable context: `theta`, `geometry`, `substrate_physics`, `registry`, `config` (6-axis)
+- **StateVariable** — lifecycle metadata: `persistent`, `fast_plastic`, `substrate_owned`, `consolidatable`
+- **StateRegistry** — registers variables, validates lifecycle, provides lifecycle groups; resolves ontological overlaps where one physical variable serves multiple roles (e.g., memristive conductance as both substrate state and plastic medium)
+- **CoupledTransition** — linchpin protocol: `step(z, context) -> CompositeState` executing $z_{t+1} = F_\theta(z_t; G, S)$
+- **PlasticityPrimitive** — P-axis protocol: `step(psi, z, context) -> updated psi`
+- **StabilityMonitor** — `spectral_radius`, `lyapunov_exponent` estimation
+
+**Key Architectural Rule**: *Plasticity must not become a weight preprocessor.* Plasticity receives the full joint state $z = (x, \psi, \sigma)$, returns updated plastic state (not modified weights), and the joint transition remains $z_{t+1} = F_\theta(z_t; G, S)$. Credit assignment receives the full trajectory $\tau = [z_0, ..., z_T]$. Parameter update touches only `persistent`/`consolidatable` variables.
+
+### 3. System & Trainers
+
+| Component | Purpose |
+|-----------|---------|
+| `System[TS, TG, TD, TM, TC, TU]` | Generic 6-layer composition; invalid combos caught at type-check |
+| `compose_joint_system` | Composes a 6-axis joint system from primitives or configs; with `NullPlasticity` it delegates to the 5-D pipeline (J1 Zero-Extension) |
+| `SystemTrainer` | **Single training loop**: duck-types the joint training surface — any system exposing `train_step`/`forward`; executes `Geometry.forward → StateDynamics.settle → …` for the 5-D pipeline |
+| `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
+| `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
+| `Registry.to_system()` | One-call projection of any registered component |
+
+<details>
+<summary><strong>Zero-Extension Invariant</strong> ⋯</summary>
+
+$M=\text{Null}, \psi=\text{const}, \sigma=\sigma_0 \implies F_\theta(z)|_x = D_\theta(x)$. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
+</details>
+
+### 4. Factories (`computronium/core/system_trainer/`)
+
+Factory functions for composing systems from primitives or configs:
+
+```python
+from computronium.core.system_trainer import (
+    compose_system,
+    compose_system_from_configs,
+    extract_config,
+    compose_joint_system,
+    compose_joint_system_from_configs,
+    create_eqprop_system,
+    create_backprop_system,
+    create_fa_system,
+)
+
+# Config round-trip (L6 lock)
+configs = extract_config(system)
+system2 = compose_system_from_configs(**configs)
+assert extract_config(system2) == configs  # identity verified
+
+# Joint system composition
+joint = compose_joint_system(
+    substrate=DigitalSubstrate(SubstrateConfig.digital()),
+    geometry=RecurrentGeometry(...),
+    dynamics=EnergyMinimizationDynamics(...),
+    plasticity=RoutingPlasticity(...),
+    credit=ThermodynamicContrastCredit(),
+    update=EuclideanUpdate(),
+)
+```
+
+### 5. Substrate Models ✅
+
+| Substrate Model | What Is Modeled | Simulation vs. Physical | Verification |
+|-----------------|-----------------|-------------------------|--------------|
+| `DigitalSubstrate` | CPU/GPU execution | Native execution | — |
+| `MemristiveSubstrate` | Conductance matrices, bounded precision, IR-drop noise | Simulated energy / estimated energy | Gradient equivalence vs. digital; positive bounded conductance |
+| `NeuromorphicSubstrate` | Async spike routing, strict sparsity, passivity | Simulated spikes, no physical neuromorphic hardware | Property test: deterministic noise cancels in diff (‖na-nb‖ ≤ ‖a-b‖) |
+| `OpticalSubstrate` | Phase/amplitude encoding, coherent interference | Simulated phase; no physical optical hardware | Phase wrapping to [-π, π]; no NaN/inf outputs |
+| `QuantumSubstrate` | Parameterized unitary gates, parameter-shift rule | Simulated unitaries; no quantum hardware | Parameter-shift matches finite-difference (cosine ≥ 0.999) |
+
+<details>
+<summary><strong>Simulation vs. physical disclaimer</strong> ⋯</summary>
+
+Current substrate implementations are primarily computational models; physical-hardware validation is future work.
+</details>
+
+<details>
+<summary><strong>Energy terminology precision</strong> ⋯</summary>
+
+**Terminology:** *simulated energy*, *estimated energy*, *hardware-measured energy*. Avoid generic "energy efficiency" unless measurement methodology is stated.
+</details>
+
+---
+
+## 🔬 Validation Framework: Property-Verified Hypercube
+
+The framework enforces **correctness by construction** through a layered verification regime. The fast-CI gate validates the entire hypercube in seconds on CPU.
+
+### Verification Status Markers
+
+| Status | Meaning |
+|--------|---------|
+| **Implemented** | Code exists and runs |
+| **Verified** | Property-lock tests pass (Hypothesis, numerical equivalence — Level 4 sampled numerical) |
+| **Benchmarked** | Measured on tasks with reported metrics |
+| **Hypothesized** | Research question; not yet empirically established |
+| **Planned** | Future work; not yet implemented |
+
+<details>
+<summary><strong>Verification ≠ scientific superiority</strong> ⋯</summary>
+
+A passing invariant or numerical-equivalence test demonstrates **implementation correctness**, not scientific superiority.
+</details>
+
+### ✅ Property Locks (L1–L7 + S/G/D/C/U/M Axes + J1–J7)
+
+| Lock | Property | Key Assertions |
+|------|----------|----------------|
+| **L1** | Composed systems train & produce valid metrics | Backprop/FA/Tile systems train; loss≥0, accuracy∈[0,1] |
+| **L2** | Pipeline stages pure functions of preceding axes | Geometry.forward deterministic; credit independent of update; substrate noise only effect |
+| **L3** | Locality axioms: ThermodynamicContrast invariant to non-local perturb; FA feedback fixed at init & seed-independent | Layer-0 pseudo-gradient invariant; B matrices fixed; different seeds → different B |
+| **L4** | Lyapunov/energy: energy non-increasing; Control-Lyapunov for PredictiveSettling | Energy monotonic (EqProp); free energy non-increasing (PredictiveCoding); convergence threshold |
+| **L5** | Determinism: same seed + same device = bitwise equal params & metrics (CPU & GPU deterministic) | Parametrized over system factories |
+| **L6** | Round-trip & totality: configs round-trip identity; Registry.to_system() projects all registered models | Identity on configs; protocol conformance on projected systems |
+| **L7** | Distributed seam: SystemTrainer runs; fault tolerance | gRPC fault injection test captures lost workers, step, partial metrics |
+| **S-axis** | Neuromorphic passivity; Quantum parameter-shift equivalence | Deterministic noise cancellation; cosine ≥ 0.999 vs FD |
+| **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
+| **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
+| **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
+| **P-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
+| **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Invariant) | $F_\theta^\text{Null} = D_\theta$ within numerical tolerance |
+| **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
+| **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |
+| **J4** | substrate_owned variables respect substrate physics constraints | σ updates only via Substrate.forward_operator |
+| **J5** | consolidatable variables promoted only at episode boundaries | consolidate() only called at episode end |
+| **J6** | Cross-adapters preserve joint transition shape & registry semantics | Adapter output is valid CompositeState projection |
+| **J7** | Trajectory records contain full z = (x, ψ, σ) | JointTrajectory has activity, plastic, substrate at each step |
+
+### 🧬 Biologically Motivated Property Tests (Hypothesis-based)
+
+<details>
+<summary><strong>Not established biological axioms</strong> ⋯</summary>
+
+These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
+</details>
+
+| Motivated Constraint | Test | Method | Threshold |
+|------|------|--------|-----------|
+| **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 |
+| **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
+| **Contraction Mapping** | Relaxation operator Lipschitz < 1 | Pairwise distance ratio L < 1; directional amplification growth < 1 (`estimate_directional_amplification`) | Step sizes 0.1–0.5 |
+| **Fixed-Point Reliability** | Unique attractor from random initializations | Relative diff < 1e-3; Idempotence ‖T(h*)-h*‖ < 1e-4 | |
+| **Weight-Transport Freeness** | FA backward weights ≠ forward transpose; separate memory | ‖B - W^T‖ > 1e-3; data_ptr() distinct | standard_fa, adaptive_fa, DFA |
+| **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | biologically slow B regime |
+
+### ✅ Integration Verification Gates (All Passing)
+
+<details>
+<summary><strong>Scope disclaimer</strong> ⋯</summary>
+
+Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.
+</details>
+
+| Gate | Result |
+|------|--------|
+| Gradient equivalence (finite-difference) | CE families cos≥0.9: backprop, FA, DirectFA, StochasticFA, MEP-backprop; MSE families cos≥0.6: EqProp, MEP-EP, CHL |
+| Ontology layer equivalence | ThermodynamicContrast=Backprop under InstantaneousDynamics; RiemannianOrthogonal preserves orthogonality; EnergyMinimization converges |
+| Energy invariants (property-locked, Level 4) | Lyapunov descent, Control-Lyapunov, Substrate passivity, EqProp energy, Composition |
+| Kernel equivalence (Triton vs PyTorch) | max_diff < 1e-5, rel_diff < 1e-4 |
+| Kernel accuracy parity | FA, Backprop, PEPITA, DTP: kernel accuracy within 1% of reference on digits/synthetic |
+| Kernel verified specs | 25 specs `kernel_verified` (11 primitives + 14 algorithms), promoted via ladder: parity + microbench evidence + dispatch auto-routing |
+| Registry audit | 0 missing critical fields |
+| Reproducibility | Models bitwise reproducible |
+| Backprop parity | Runs successfully |
+| Static typing | 0 errors on `computronium/ontology` (pyright elevated-standard, pre-commit gated); repo-wide basic |
+| Formatting | Clean |
+
+### 🧪 Test Commands
+
+```bash
+# Property locks (fast CI gate) — 5-D
+uv run pytest tests/property/test_ontology_locks.py -q
+
+# Property locks (fast CI gate) — 6-D Joint Architecture
+uv run pytest tests/property/joint/ -q
+
+# Registry integrity locks
+uv run pytest tests/property/test_registry_completeness_lock.py -q
+uv run pytest tests/property/test_kernel_verified_promotion_rule.py -q
+uv run pytest tests/property/test_import_time_lock.py -q
+
+# Core ontology unit tests
+uv run pytest tests/unit/core/test_ontology.py -q
+
+# Primitive & Algorithm test suites (now in default testpaths)
+uv run pytest tests/primitives/ -q
+uv run pytest tests/algorithms/ -q
+uv run pytest tests/acceleration/ -q
+
+# Integration: gradient equivalence + energy proofs
+uv run pytest tests/integration/test_gradient_equivalence.py tests/integration/test_energy_invariants.py -q
+
+# Kernel equivalence (Triton vs PyTorch)
+uv run pytest tests/integration/test_kernel_equivalence.py -q
+
+# Kernel accuracy parity (end-to-end learning)
+uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
+
+# gRPC seam test
+uv run pytest tests/integration/test_grpc_seam.py -q
+
+# Demonstration suite (compose, swap credit, swap plasticity, memory wall, frozen θ) + figure lock
+uv run pytest tests/integration/ -k demo
+uv run pytest tests/integration/test_gallery_lock.py -q
+
+# Joint integration tests
+uv run pytest tests/integration/joint/ -q
+
+# Full suite (now collects primitives + algorithms + acceleration + unit + property)
+uv run pytest tests/ -q
+
+# Type checking (strict)
+uv run pyright .
+
+# Formatting & linting
+uv run ruff format --check . && uv run ruff check .
+```
+
+---
+
+## 📐 Stability-Plasticity Trade-off Hypothesis
+
+v1 relied on strict Lyapunov descent and global contraction. In the joint architecture, we recognize that global contraction is a *sufficient* condition for a unique fixed point, but not a *necessary* condition for useful computation. Systems can exhibit local contraction, multiple attractors, limit cycles, or metastable states.
+
+### The Hypothesis
+
+We formulate the research object as:
+
+```
+adaptive computation ↔ controlled departure from contraction
+```
+
+*Useful rule reconfiguration may require temporarily sacrificing some of the contraction/stability margin that a fixed computational attractor would maximize.*
+
+### Monitoring the Frontier
+
+The framework measures:
+
+| Metric | Purpose |
+|--------|---------|
+| $\rho(J_F)$ | Spectral radius of joint Jacobian — stability margin |
+| Local Lyapunov exponent | Sensitivity/divergence |
+| Settling time | Dynamical latency |
+| Basin stability | Robustness to perturbation |
+
+**Cheap fast-mode proxies (for CI)**: step-norm ratio, finite-difference perturbation growth, settle iterations, activation variance, gate entropy.
+
+**Deeper estimates (nightly/campaign)**: spectral radius via eigvals of the autograd Jacobian (`spectral_radius_from_jacobian`), transient amplification via SVD (`dominant_singular_value`), Lyapunov via QR, basin via sampling.
+
+### Resource Vector
+
+<details>
+<summary><strong>Resource vector definition</strong> ⋯</summary>
+
+The scientific claim is strictly about **resource scaling, locality, energy efficiency, and learnability** under constrained physical resources:
+
+$$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
+
+The campaign asks whether adaptive-rule systems occupy a superior Pareto frontier in $\mathcal{C}$.
+</details>
+
+### 5-Level Benchmark Hierarchy
+
+<details>
+<summary><strong>Experimental questions, not established results</strong> ⋯</summary>
+
+The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
+</details>
+
+---
+
+## 🌐 Evaluation Domains
+
+The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~25 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
+
+### 📊 Domain Overview
+
+| Domain | Tasks | Example Datasets | Models | Key Metrics |
+|--------|-------|------------------|--------|-------------|
+| **Vision** | 11 | MNIST, CIFAR-10/100, SVHN, Digits, synthetic (XOR, spirals) | 25+ | Accuracy, Loss, Energy, FLOPs |
+| **Language (LM)** | 4 | Tiny Shakespeare, char n-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy |
+| **Reinforcement Learning (RL)** | 3 (+2 planned) | CartPole, Pendulum, Acrobot; MountainCar, LunarLander (planned) | 8+ | Episode Return, Success Rate |
+| **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Acc, F1 |
+| **Tabular** | 3 (+2 planned) | Breast Cancer, Iris, Wine; Diabetes, California Housing (planned) | 10+ | Accuracy, R², AUC |
+| **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
+| **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
+
+### 🖼️ Vision Domain
+
+**Tasks**: `mnist`, `fashion_mnist`, `kmnist`, `usps`, `cifar10`, `cifar100`, `svhn`, `digits`, `xor`, `spiral`, `circles`  
+(image classification + synthetic boolean tasks)
+
+**Quick Commands**
+```bash
+# Quick verification run
+comp run quick-verify --dry-run
+
+# Run with store
+comp run quick-verify --store experiment.duckdb
+```
+
+### 📝 Language Modeling Domain
+
+**Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
+
+**Key Experiments**
+```bash
+# Quick verification run
+comp run quick-verify --dry-run
+```
+
+### 🎮 Reinforcement Learning Domain
+
+**Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
+
+**Key Experiments**
+```bash
+# Quick verification run
+comp run quick-verify --dry-run
+```
+
+### 🕸️ Graph Domain
+
+**Tasks**: `cora`, `citeseer`, `pubmed` (Planetoid citation networks, node classification)
+
+### 📋 Tabular Domain
+
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
+
+**Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
+
+### 📈 Time Series Domain
+
+**Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
+
+**Models**: RNN/LSTM/Transformer families across all credit assignments.
+
+### 🔬 Scientific Domain
+
+**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
+
+**Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
 
 ## The Experiment Kernel
 
@@ -245,7 +925,7 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 | Policy | Key | Behavior |
 |---|---|---|
 | StratifiedRandomPolicy | `stratified_random` | Stratified random sampling across the 6 axes. |
-| RoundRobinGridPolicy | `round_robin_grid` | Round-robin grid traversal across the 6 axes. |
+| RoundRobinGridPolicy | `round_robin_grid` | Systematic traversal of the run's own cell stream. |
 | UniformRandomPolicy | `uniform_random` | Uniform random sampling over the run's active space. |
 | ModelBasedPolicy | `model_based` | Model-based optimization using Optuna. |
 | EvolutionPolicy | `evolution` | Evolutionary search over the active space. |
@@ -352,7 +1032,7 @@ Programmatic demos built on the same kernel APIs as the acceptance suite live in
 
 ## Evidence & claims
 
-Claims are labeled by verification level (see *What is Computronium*) and governed by CEEC ([`packages/ceec-core`](packages/ceec-core)).
+Claims are labeled by verification level (see *What is Computronium*). CEEC ([`packages/ceec-core`](packages/ceec-core)) is a standalone governance ledger (not integrated; kernel records a `ceec_link` field for future use).
 
 | Claim | Level | Evidence |
 |---|---|---|
@@ -366,6 +1046,360 @@ Claims are labeled by verification level (see *What is Computronium*) and govern
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
 
 ---
+
+---
+
+## 🌐 Distributed Training & P2P
+
+### Multi-GPU Training
+
+PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` supports distributed TileNet sharding for large models.
+
+### P2P Coordinator System (gRPC + Kademlia)
+
+Decentralized coordination at `computronium/p2p/`:
+- 🔑 **Kademlia DHT** (`dht.py`): Peer discovery, KV storage, bootstrap nodes, async background operation. Integration test: 2-node connectivity + best-model propagation with score-based optimistic locking
+- 🔗 **gRPC Service** (`proto/tile_mesh.proto`, `grpc_service.py`): `TileMeshService` with `ExecuteStep`, `BroadcastParams`, `AggregateGradients`
+- 🏊 **Connection Pool** (`GRPCConnectionPool`): Peer lifecycle, health checks, retry/backoff
+- 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
+- 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
+
+P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` — the P2P layer is algorithm-agnostic).
+
+```bash
+# Start a gRPC TileMesh worker
+uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --device cpu
+```
+
+---
+
+## 🚀 Deployment & Inference
+
+### Model Export (`computronium/deployment/`)
+
+- 📦 **ONNX**: dynamic axes, opset 17+, TileNet deployment models export with 0 diff vs PyTorch
+- 🔗 **TorchScript**: trace method works for all TileNet models
+- 🔢 **INT8 Quantization**: dynamic PTQ, static PTQ, QAT preparation
+- ⚖️ **Ternary Quantization**: Post-training conversion to `TernaryLinear` ({-1, 0, +1}), STE-based, bit-operation counting
+- 🔬 **HLS/Verilog/NxSDK/SPICE**: FPGA/neuromorphic export via `acceleration/export.py`
+
+### Inference Engine
+
+`InferenceServer` — async inference service:
+- 📦 Dynamic batching (configurable max batch size/timeout)
+- ⚡ TensorRT optimization (fp16/int8, dynamic shapes)
+- 🌐 FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
+- 🔄 Graceful startup/shutdown via lifespan events
+
+---
+
+## 📊 Analysis & Visualization (`computronium/analysis/`)
+
+| Module | Purpose |
+|--------|---------|
+| `dynamics.py` | Energy trajectories, gradient alignment, tile heatmaps, convergence — interactive Plotly |
+| `scaling.py` | Power-law fitting, Chinchilla laws, `ScalingLawFitter`, bootstrap CIs, extrapolation |
+| `pareto.py` | Multi-objective Pareto frontier (accuracy, FLOPs, memory, energy, time), knee detection, 3D Plotly |
+| `ablation.py` | Leave-one-out, Sobol sensitivity indices, automated HTML/Markdown/JSON/CSV reports |
+| `genealogy.py` | Hyperparameter fingerprinting, PCA/t-SNE/UMAP, phylogenetic trees, algorithm maps |
+| `interpretability.py` | Weight spectra (SVD, condition number, effective rank), receptive fields, MI, concept alignment, causal mediation |
+| `energy_landscape.py` | 2D loss/energy slices (gradient-random, PCA, top-eigen), Hessian spectrum (Lanczos), 3D viz, minima detection |
+| `failure_manifesto.py` | Structured negative result docs: what failed, why, search space, partial successes, future hypotheses |
+| `tile_dynamics.py` | Tile settling trajectories, utilization, routing patterns |
+| `tile_profiler.py` | Per-tile compute/memory profiling |
+
+---
+
+## ⚡ Hardware Acceleration (`computronium/acceleration/`)
+
+| Module | Purpose |
+|--------|---------|
+| `kernels.py` | Pure NumPy/CuPy reference for correctness |
+| `triton_kernels.py` | Triton JIT fused ops for EqProp/MEP |
+| `fa_kernels.py` | Fused feedback projection, activation derivative, batched outer product |
+| `pc_kernels.py` | Fused prediction, error update, contrastive update (Predictive Coding) |
+| `hebbian_kernels.py` | Hebbian/Oja's rule, 3-factor, contrastive Hebbian |
+| `snn_kernels.py` | LIF step, STDP, contrastive STDP |
+| `ff_kernels.py` | Goodness threshold, contrastive FF/PEPITA updates |
+| `tp_kernels.py` | Target propagation inverse + target computation |
+| `tile_kernels.py` | Complete TileNet suite: 6 algorithms activity/weight update, routing (top-k/random/learned), multi-GPU NCCL sharding |
+| `mep_kernels.py` | Muon orthogonalization, Dion SVD, Fisher whitening, EP settle |
+| `backprop_kernels.py` | Fused BPTT baseline |
+| `contrastive_kernels.py` | Memory-efficient contrastive primitives (no stored activations; 10 algorithm families) |
+| `backends.py` | Auto-dispatch (TRITON > CUDA > CuPy > CPU > NumPy), `AutoDispatcher`, `KernelProfiler` |
+| `compile.py` | `torch.compile` integration: custom `EqPropFunction`/`EqPropTritonFunction` autograd, dynamic shapes, compile presets |
+| `kernel_backend.py` | `KernelRegistry` with shape-specific auto-tuning cache |
+
+- ⚡ Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
+- 🔄 Auto-dispatch with profile-guided backend selection
+- 🚀 Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
+- 🌐 Multi-GPU tile sharding support for large TileNet models
+- ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
+
+---
+
+## 🚀 Shared Acceleration Layer (`computronium/acceleration/` — Registry & Dispatch)
+
+The acceleration layer now provides a **unified registry** of **64 implementations** (43 primitives + 21 algorithms) across all 6 ontology axes, with a common `ImplementationSpec` metadata structure enabling automated tooling.
+
+### Registry Structure
+
+| Axis | Primitives | Algorithms | Total |
+|------|-----------|-----------|-------|
+| **Substrate** | 9 | — | 9 |
+| **Geometry** | 7 | — | 7 |
+| **StateDynamics** | 8 | — | 8 |
+| **Plasticity** | 7 | — | 7 |
+| **CreditAssignment** | 6 | — | 6 |
+| **ParameterUpdate** | 6 | — | 6 |
+| **Algorithms** | — | 21 | 21 |
+| **Total** | **43** | **21** | **64** |
+
+Each `ImplementationSpec` carries:
+- **Identity**: `id`, `name`, `axis`, `kind` (primitive/algorithm)
+- **Mathematics**: `summary`, `equations`, `invariants`, `notes`, `evidence_ids`, `tags`
+- **Kernel**: `supported_backends`, `kernel_technology` (compile/triton), `status` (reference_only/kernel_unverified/kernel_verified), `parity` tolerance
+- **Entrypoints**: `reference_entrypoint`, `kernel_entrypoint`, `cases_entrypoint`
+
+### Auto-Dispatch & Status Ladder
+
+```python
+from computronium.acceleration.dispatch import select_backend
+from computronium.acceleration.registry import get
+
+spec = get("primitive.state_dynamics.energy_minimization")
+backend = select_backend(
+    spec, "auto"
+)  # Returns "kernel" if status=kernel_verified, else "reference"
+```
+
+**Status ladder** (each rung requires evidence before promotion):
+1. `reference_only` — Pure Python/NumPy/CuPy reference implementation
+2. `kernel_unverified` — Kernel exists (`kernel.py`), parity not yet validated
+3. `kernel_verified` — Parity passes (max_abs_diff < tolerance), microbench evidence recorded, `dispatch.select_backend(spec, "auto")` routes to kernel
+
+**Current status**: 25 specs `kernel_verified` (11 primitives + 14 algorithms), up from 1 at TODO32 start. The kernel ladder promotes through `reference → torch.compile → Triton` (credit primitives skip compile rung due to autograd incompatibility).
+
+### Registry API
+
+```python
+from computronium.acceleration.registry import (
+    all_specs,
+    algorithms,
+    primitives,
+    get,
+    list_by_axis,
+)
+
+all_specs()  # → tuple[ImplementationSpec, ...] (all 64)
+algorithms()  # → 21 algorithm specs
+primitives()  # → 43 primitive specs
+get("primitive.credit_assignment.random_projections")
+list_by_axis()  # → {axis: [spec_ids]} dict for CLI/docs filtering
+```
+
+---
+
+## 🛠️ Kernel Development Workflow
+
+Tooling to promote kernels through the ladder with parity + microbench evidence at each rung.
+
+### `scaffold_kernel.py` — Generate Kernel Stubs
+
+```bash
+# Torch.compile rung (default first rung for StateDynamics primitives)
+uv run python scripts/scaffold_kernel.py \
+    --primitive primitive.state_dynamics.energy_minimization \
+    --technology compile
+
+# Triton rung (for credit primitives, or where compile insufficient)
+uv run python scripts/scaffold_kernel.py \
+    --primitive primitive.credit_assignment.random_projections \
+    --technology triton
+```
+
+Generates `kernel.py` with:
+- `is_available()` — runtime capability check
+- `step(case)` — kernel entrypoint delegating to reference when unavailable
+- Parity tolerance pulled from spec's `ParityTolerance`
+
+### `kernel_dev.py` — Watch & Re-test
+
+```bash
+# Watch mode: re-runs parity on file change (polling, no deps)
+uv run python scripts/kernel_dev.py \
+    --primitive primitive.credit_assignment.random_projections \
+    --watch
+
+# Single run
+uv run python scripts/kernel_dev.py \
+    --primitive primitive.credit_assignment.random_projections \
+    --once
+```
+
+### `validate_composition.py` — Algorithm Dependency Audit
+
+```bash
+# Validate all 21 algorithm specs
+uv run python scripts/validate_composition.py --all-algorithms
+
+# Validate single algorithm
+uv run python scripts/validate_composition.py --algorithm algorithm.backprop
+```
+
+Static check: each algorithm's `uses_primitives ⊆ actually-imported primitives`. Wired into CI (`.github/workflows/ci.yml`).
+
+---
+
+## 📚 Documentation & Bench Tools from Specs
+
+### `generate_docs.py` — Render Spec Metadata
+
+```bash
+# Generate all docs + implementation matrix
+uv run python scripts/generate_docs.py --all --output docs/generated/
+
+# Single implementation
+uv run python scripts/generate_docs.py --id primitive.state_dynamics.energy_minimization
+```
+
+Outputs:
+- `docs/generated/primitives/<axis>/<name>.md` — Purpose, Mathematics (equations), Invariants, Reference, Kernel, Parity tolerance, Status, Tags
+- `docs/generated/algorithms/<name>.md`
+- `docs/generated/IMPLEMENTATION_MATRIX.md` — from `matrix.py --format github-markdown`
+
+### `generate_property_tests.py` — Hypothesis Tests from Invariants
+
+```bash
+uv run python scripts/generate_property_tests.py --all --output tests/property/generated/
+```
+
+Generates 73 tests for 48 specs (excludes geometry/substrate with different interfaces):
+- **Deterministic seed**: same seed → bitwise-equal outputs
+- **Finite state**: no NaN/Inf in outputs (covers `state remains finite`, `activations remain finite`, `parameters remain finite`, etc.)
+
+### `bench_dashboard.py` — Latency/Memory vs Commit
+
+```bash
+# Generate dashboard plots from microbench JSONL artifacts
+uv run python scripts/bench_dashboard.py --input artifacts/benchmarks/ --png artifacts/bench_dashboard.png
+
+# Text summary only
+uv run python scripts/bench_dashboard.py --input artifacts/benchmarks/ --summary-only
+
+# Filter to specific spec
+uv run python scripts/bench_dashboard.py --input artifacts/benchmarks/ --spec primitive.state_dynamics.energy_minimization
+```
+
+Plots median/p95 latency and peak memory across git commits from microbench JSONL (which embeds git SHA via `--tag`).
+
+---
+
+## 🧪 Enhanced CLI Tools
+
+### `microbench.py` — Microbenchmark Runner
+
+```bash
+# Single implementation with full options
+uv run python -m computronium.acceleration.microbench \
+    --id primitive.state_dynamics.energy_minimization \
+    --backend kernel \
+    --device cuda \
+    --steps 10 \
+    --dtype float32 \
+    --seed 42 \
+    --warmup 3 \
+    --iterations 10 \
+    --format jsonl \
+    --output artifacts/benchmarks/energy_minimization.jsonl \
+    --tag $(git rev-parse HEAD)
+
+# All implementations (CI-friendly)
+uv run python -m computronium.acceleration.microbench --all --format csv --output bench.csv
+```
+
+**New flags**:
+- `--iterations` / `--warmup` — statistical measurement
+- `--output bench.jsonl` — resumable JSONL artifact (one line per iteration)
+- `--format csv` — summary CSV (median, p95, throughput, peak_mem_mb)
+- `--tag` — git SHA stamped into each row for regression tracking
+- Peak memory capture: `torch.cuda.max_memory_allocated` / CPU RSS delta
+
+### `matrix.py` — Implementation Matrix
+
+```bash
+# GitHub-flavored markdown (renders in PR comments)
+uv run python -m computronium.acceleration.matrix --format github-markdown
+
+# Composable filters for CI subsets
+uv run python -m computronium.acceleration.matrix \
+    --filter axis=state_dynamics,kind=primitive,status=kernel_unverified \
+    --format json
+```
+
+---
+
+## 🧪 Registry Integrity Locks (Extended Verification Framework)
+
+These locks protect the 64-spec registry from silent drift — extending TODO32's `test_dynamics_wiring_lock.py` doctrine.
+
+| Lock | File | Purpose |
+|------|------|---------|
+| **Completeness** | `tests/property/test_registry_completeness_lock.py` | Every ontology class ↔ exactly one primitive spec; every spec resolves to live class (13 tests) |
+| **Scaffolder round-trip** | Template rendering verified | `scaffold_primitive.py`/`scaffold_algorithm.py` output passes own tests |
+| **Structural equivalence** | Geometry/Substrate primitives | Factory determinism: same config → bitwise-equal state tensors; spec round-trip |
+| **Promotion rule** | `tests/property/test_kernel_verified_promotion_rule.py` | `kernel_verified` requires: (a) parity on CPU+GPU, (b) microbench JSONL evidence, (c) dispatch `auto` routes to kernel (25 tests) |
+
+---
+
+## 🧭 CEEC Epistemic Operating System (`packages/ceec-core`)
+
+**Standalone** epistemic governance ledger (TODO19 Epistemic Foundry) — not integrated into the experiment kernel. The kernel records a `ceec_link` field on claims (always `None` currently) for future integration.
+
+`Experiment → Artifact → Evidence → Derived → Belief → Gated Status → Decision`.
+**Full reference: [`CEEC.md`](CEEC.md)** — policies in `docs/ceec/`.
+
+| Module (`ceec.*`) | Purpose |
+|--------|---------|
+| `store.py` | Append-only SQLite ledger; content-addressed artifacts; DB-trigger immutability |
+| `gates.py` | Promotion/boundary gate engine, quarantine propagation, effective-status resolution |
+| `selection.py` | EV/cost experiment selection with pre-scoring hard-constraint filter and audited decisions |
+| `calibration.py` | Brier/log-score calibration, drift cadence, review flags |
+| `builders.py` | Payload builders: `experiment`, `gate_evidence`/`quality_flags`, `chance_verdict` |
+| `run.py` | Closed-loop runner `run_experiment`: pre-register → decide → probe → calibrate → optional gate |
+| `audit.py` | Ledger integrity audit + decision-quality audit |
+| `bootstrap.py` | Seeds instruments, hypotheses, goals, pre-registered experiments from `configs/ceec/` |
+| `schemas.py` | Mechanism-schema emission from gated evidence |
+| `probe_adapter.py` / `constraints.py` / `migrate/` / `cli.py` | Probe ingestion, constraint validators, migration, CLI |
+
+CLI: `ceec init|bootstrap|migrate|propose|decide|audit|calibration-report|status-history|quarantine-report|emit-schema|export`
+(or `uv run python -m ceec.cli`; `computronium/ceec/` is a legacy re-export
+shim of this package). Main ledger at `ceec/ceec.sqlite3`; campaign
+ledgers under `scratch/`.
+
+---
+
+## 📦 Standalone Platform Packages (`packages/`)
+
+Extracted, framework-free packages the repo depends on (uv workspace
+members, TODO20 Rule 6 — one implementation copy each; legacy
+`computronium.*` import paths are thin adapters):
+
+| Package | Import | What it is |
+|---|---|---|
+| `packages/ceec-core` | `ceec` | Standalone epistemic governance ledger (evidence/beliefs/gates/audit — **reference: [`CEEC.md`](CEEC.md)**); payload builders + closed-loop runner (`ceec.builders`/`ceec.run`); CLI `ceec` |
+| `packages/psi-peft` | `psi_peft` | Frozen-backbone task switching via temporal-ψ ridge readouts |
+| `packages/local-feedback` | `local_feedback` | Adaptive local feedback projections for local credit (X-ALI-001/002 validated) |
+| `packages/computronium-lab` | `computronium_lab` | Standalone high-level Lab API (used in probe scripts): compose/train/compare/report ontology coordinates + mechanism recipes; synthesis layer (`Lab.specify/synthesize/explore`), task tiers, validation campaigns, research layer (budgeted evolution, certified corpus, continual benchmark), instrument layer (ledger report renderer, one-shot research report) |
+| `packages/stability` | `stability` | Calibrated stability guard (`attach`, ROC-calibrated τ=1.029); stable-matrix helpers; CLI `stability` |
+
+Platform docs (recipe book, edge blueprint, external summary, release
+notes/manifest): `docs/platform/`. X-STA-002 validated the
+stable-amplification family: 4×–2600× transient retention over matched
+contractive controls at ρ=0.85, noise amplified at the same rate (retention
+gain, not SNR gain); shipped as the Lab `stable_amplification` recipe.
+
+`uv sync` installs them as editable workspace members automatically.
 
 ## For developers
 
