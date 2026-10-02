@@ -378,7 +378,79 @@ dependency order:
 
 Landed tickets leave the queue — the file gets shorter.
 
-## 7. Session log
+## 7. The Completion Proof
+
+The question "is it truly complete?" has a runnable answer. It is a single
+session, one commit, five artifacts. It runs **once**, after Phase F, and
+its green is the plan's terminal state — not another round of work but the
+evidence that the remaining work is fine-tuning.
+
+First, what such a proof *can* and *cannot* be. No proof shows the absence of
+unknown defects. What is provable is exactly three things: (i) the system
+delivers its purpose on measured data, (ii) every seam class that has ever
+bitten is locked by a falsifiable gate, and (iii) new work is additive — a
+contributor can extend the system without touching the seams. That triple is
+the honest maximal claim, and the proof below demonstrates all three.
+
+### CP-1 — The one-command campaign (purpose, delivered)
+From a clean checkout: `comp run examples/learning-rules-and-geometry-digits.yaml`
+→ `comp status --run-id` → `comp report`. Asserts, through the command
+surface only:
+- exit 0; declared records == stored records; walltime within the published
+  projection (D2's own number);
+- the report contains the per-credit table, claims with uncertainty (E1),
+  significance or an honest null (E2), the control named (E3), and a
+  non-empty `promotion_history` (Q2);
+- every number in the report is derivable from the store alone (the report
+  generator reads nothing else — asserted by construction and by the store
+  locks).
+
+### CP-2 — Reproducibility (the measurements mean what they say)
+- The same spec run twice yields the same `replay_hash` (TODO47 T2's lock,
+  now at campaign scale).
+- Every promoted cell replays within registered tolerance and the store
+  records the verdict (E4).
+
+### CP-3 — Coherence invariants (one selection, all structural locks)
+The full structural surface in one pytest selection, priced with `--co`
+first, backgrounded with `-rf --tb=line`:
+- no hyperparameter name declared by two axes (Q3);
+- exactly one `PRIORS_REGISTRY` (Q4);
+- a legal compose is silent (Q5);
+- lab boundary + claim-surface locks (T6);
+- CLI surface lock (F1), README numbers generated (F2), procedure-version
+  query (F4);
+- `LOCK_AUDIT.md` complete, no "stayed green" rows (Q7);
+- the round-close green: all `testpaths` shards once, backgrounded with a
+  kill time — the plan's first and only full run.
+
+### CP-4 — The defect-class ledger (the "rest is fine-tuning" argument)
+TODO46 §1 + TODO47 §6 record eleven measured defects. The ledger table names,
+for each: its class (seam merge, dead default, wrong identity, cost lie,
+vacuous gate, …), the lock that now fails when that mechanism is removed, and
+the session that falsified it. **The argument: every class with an instance
+in the record is closed by a lock; a future defect that belongs to a closed
+class is caught by its lock at landing, and a defect of an unknown class is,
+by definition, not foreseeable — it is archaeology (TODO46 §1), not a plan
+item.** That is precisely the sense in which "the rest is more or less
+fine-tuning": not that no defects remain, but that the system's response to
+defects is now a mechanism (lock at landing) rather than a session of
+re-derivation.
+
+### CP-5 — Fresh eyes (usability, demonstrated once)
+A person (or an agent) who has never read this repo follows `README.md`
+end-to-end: install → run the tiny example → read the report. Every question
+they must ask becomes a README ticket; when they finish without asking, CP-5
+is green. Run once; the F2 lock keeps it true afterwards.
+
+### The exit
+CP-1..CP-3 green in one session, CP-4's table complete, CP-5 walked once.
+Then this file is closed: the queue is empty, the proof is committed, and
+future work enters the registries (new primitives, new tasks, new claims)
+that the locks already govern — additive by construction. The plan files
+stop growing.
+
+## 8. Session log
 
 - **Plan verified and restructured.** E3's premise was corrected against the
   tree: `contrast_design` *is* wired (S1, `stages_impl.py:130`) — the
