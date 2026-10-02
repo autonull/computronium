@@ -26,7 +26,7 @@ s = compose_cell_system(
     update=UPD,
     lr=LR,
     geometry={"topology_type": "feedforward", "depth": 4, "hidden_dim": 20},
-    input_dim=IN,
+    input_shape=(IN,),
     output_dim=t.output_dim,
 )
 loader = t.train_dataloader

@@ -99,7 +99,10 @@ def test_digits_shape_reaches_the_geometry() -> None:
     """The task decides the geometry: 8x8 digits is 64 inputs, never 784."""
     from computronium.experiment.execution.evaluate import task_shape
 
-    assert task_shape(_schedule().task_id) == (64, 10)
+    shape = task_shape(_schedule().task_id)
+    assert shape.input_shape == (1, 8, 8)
+    assert shape.input_dim == 64
+    assert shape.output_dim == 10
 
 
 @pytest.mark.timeout(300)

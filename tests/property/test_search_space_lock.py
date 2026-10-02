@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import pytest
 
-from computronium.domains.factory import create_task
 from computronium.experiment.execution.search_space import (
     generate_candidates,
     iter_candidates,
@@ -154,18 +153,17 @@ def test_a_spec_without_a_task_fails() -> None:
 def test_task_shape_reaches_geometry_not_a_literal() -> None:
     """The composed geometry's width is the task's, whatever the space was."""
     from computronium.experiment.execution.compose import compose_cell_system
-    from computronium.experiment.execution.evaluate import _flat_input_dim
+    from computronium.experiment.execution.evaluate import task_shape
 
     spec = _narrowed_spec()
     coordinate, _ = generate_candidates(spec, search_space_from_spec(spec), limit=1)[0]
-    task = create_task("digits", device="cpu", quick_mode=True, num_workers=0)
-    task.setup()
-    width = _flat_input_dim(task)
+    shape = task_shape("digits")
+    width = shape.input_dim
     cell = compose_cell_system(
         coordinate=coordinate,
         geometry={},
-        input_dim=width,
-        output_dim=int(task.output_dim),
+        input_shape=shape.input_shape,
+        output_dim=shape.output_dim,
     )
     assert cell.params["geometry.input_dim"] == width
     assert cell.params["geometry.input_dim"] != 784
@@ -229,10 +227,10 @@ _COMPOSABLE_TOPOLOGIES = (
     "recurrent",
     "attention",
     "causal_transformer",
+    "tile",
     "tile_mesh",
     "conv",
     "spatial_lattice",
-    "nca",
     "ntm",
 )
 
@@ -260,14 +258,14 @@ def test_each_topology_composes_as_itself(topology: str) -> None:
         params={},
     )
     cell = compose_cell_system(
-        coordinate=coordinate, geometry={}, input_dim=64, output_dim=10
+        coordinate=coordinate, geometry={}, input_shape=(1, 8, 8), output_dim=10
     )
     assert cell.config.geometry.topology_type == topology
     with pytest.raises(ProposalComposeError, match="Unknown topology"):
         compose_cell_system(
             coordinate=Coordinate(**{**coordinate.to_dict(), "geometry": "nope"}),
             geometry={},
-            input_dim=64,
+            input_shape=(1, 8, 8),
             output_dim=10,
         )
 
@@ -288,22 +286,27 @@ def test_every_generated_cell_composes_for_the_task_shape() -> None:
     )
     assert len(cells) == 12
     assert len({c.geometry for c, _ in cells}) > 1
-    width, classes = task_shape("digits")
+    shape = task_shape("digits")
     for coordinate, _ in cells:
         config = compose_configs(
             coordinate=coordinate,
-            geometry=dict(coordinate.params),
-            input_dim=width,
-            output_dim=classes,
+            geometry={},
+            input_shape=shape.input_shape,
+            output_dim=shape.output_dim,
         )
         assert config.geometry.topology_type == coordinate.geometry
 
 
 def test_the_stream_needs_no_shape_to_be_well_formed() -> None:
     """Without a resolver the stream is the same shape, minus the legality filter."""
+    from computronium.experiment.execution.evaluate import TaskShape
+
     spec = _narrowed_spec()
     unfiltered = generate_candidates(spec, search_space_from_spec(spec), limit=5)
     filtered = generate_candidates(
-        spec, search_space_from_spec(spec), limit=5, shape=lambda _: (64, 10)
+        spec,
+        search_space_from_spec(spec),
+        limit=5,
+        shape=lambda _: TaskShape((1, 8, 8), 10),
     )
     assert unfiltered == filtered

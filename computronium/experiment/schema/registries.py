@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, Final, TypeVar
 
 from computronium.experiment.schema.registry import Registry
 
@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from computronium.experiment.legality.dsl import Expr
 
 SpecT = TypeVar("SpecT")
+
+# R25: a cell may exceed its declared parameter ceiling by this fraction and
+# still count as fair. Declared once, because both the registered predicate and
+# the evaluator's gate read it.
+PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,6 +341,7 @@ __all__ = [
     "CARD_FACTORS",
     "CONSTRAINTS_REGISTRY",
     "OBJECTIVES_REGISTRY",
+    "PARAM_BUDGET_TOLERANCE",
     "POLICIES_REGISTRY",
     "PRIORS_REGISTRY",
     "STAGES_REGISTRY",

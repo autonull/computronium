@@ -869,6 +869,8 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             batch_limit=schedule_struct["batch_limit"],
             budget_id=schedule_struct["budget_id"],
             task_id=schedule_struct["task_id"],
+            # Rows written before the ceiling existed declare none.
+            param_budget=schedule_struct.get("param_budget", 0),
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:

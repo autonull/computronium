@@ -31,7 +31,7 @@ from computronium.experiment.execution.policy import (
 )
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.schema.run_spec import RunSpec
+from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
 if TYPE_CHECKING:
@@ -69,6 +69,7 @@ def _make_run_spec(task: str = "digits") -> RunSpec:
         n_seeds=1,
         epochs=1,
         budget_seconds=60.0,
+        param_budget=MEASURED_PARAM_BUDGET,
     )
 
 
@@ -234,10 +235,10 @@ class TestU3_MultiRoundPauseResume:
     """U3: Same RunSpec → SearchSpace → Random/TPE/Evolution → Allocator → multi-round pipeline → pause → resume → report"""
 
     # 180 s was calibrated while most generated cells failed to compose, so the
-    # rounds were cheap. The space now filters for legality (TODO46 §3.3), so
-    # these rounds train ~10 real cells each; 900 s is the measured cost of
-    # three rounds plus resume on digits. A parameter ceiling for geometry
-    # (`RunSpec.param_budget`) is the remaining fix and is queued in TODO46.
+    # rounds were cheap; 900 s was the cost once they trained unconstrained. The
+    # spec's parameter ceiling (TODO46 §8 session 6) is the fix, and the ceiling
+    # is re-measured rather than assumed — see the measured cost in the session
+    # log.
     @pytest.mark.timeout(900)
     def test_u3_multi_round_with_allocator(self, tmp_path: Path) -> None:
         """Test multi-round pipeline with allocator promotion."""

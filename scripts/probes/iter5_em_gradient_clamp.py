@@ -31,7 +31,7 @@ for mult in MULTIPLIERS:
         credit="gradient",
         update="riemannian_orthogonal",
         geometry={"topology_type": "feedforward", "depth": 4, "hidden_dim": 20},
-        input_dim=IN,
+        input_shape=(IN,),
         output_dim=t.output_dim,
     )
     losses, accs, energies = [], [], []

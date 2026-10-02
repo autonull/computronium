@@ -49,7 +49,7 @@ def probe(dyn: str, credit: str, upd: str, depth: int, hidden: int) -> dict[str,
                 "depth": depth,
                 "hidden_dim": hidden,
             },
-            input_dim=input_dim,
+            input_shape=(input_dim,),
             output_dim=output_dim,
         )
 

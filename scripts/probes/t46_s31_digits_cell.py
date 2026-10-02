@@ -41,7 +41,7 @@ def run(task_name: str, credit: str, epochs: int = 1) -> tuple[float, float, flo
     cell = compose_cell_system(
         coordinate=coord,
         geometry={},
-        input_dim=input_dim,
+        input_shape=(input_dim,),
         output_dim=task.output_dim,
     )
     torch.manual_seed(0)

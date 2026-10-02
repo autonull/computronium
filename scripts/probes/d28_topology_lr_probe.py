@@ -56,7 +56,7 @@ def first_viable_cell(
     geometry = build_geometry_config(
         {"depth": 2, "hidden_dim": 64},
         topology=topology,
-        input_dim=64,
+        input_shape=(64,),
         output_dim=10,
     )
     for credit in GRID_CREDITS:

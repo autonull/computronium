@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.schema.record import Record
 
-__all__ = ["CellEvaluation", "cell_record", "evaluate_cell", "task_shape"]
+__all__ = ["CellEvaluation", "TaskShape", "cell_record", "evaluate_cell", "task_shape"]
 
 logger = get_logger(__name__)
 
@@ -56,6 +56,7 @@ class CellEvaluation:
 
     metrics: Mapping[str, float]
     params: Mapping[str, Any]
+    param_count: int
     walltime_s: float
     epochs_completed: int
     task_id: str
@@ -77,28 +78,45 @@ def _task(task_id: str, device: str) -> Any:
         return _TASK_CACHE[key]
 
 
-def _flat_input_dim(task: Any) -> int:
-    """The task's flattened input width — ``(1, 8, 8)`` becomes 64."""
-    shape = task.input_dim
-    if shape is None:
+@dataclass(frozen=True, slots=True)
+class TaskShape:
+    """What a task will be trained at: its own input shape and its class count.
+
+    The shape is carried whole rather than flattened, because a topology that
+    consumes space (a conv stack wants channels and a grid, an NCA wants a
+    grid) must be given the task's real extent instead of a guessed one.
+    """
+
+    input_shape: tuple[int, ...]
+    output_dim: int
+
+    @property
+    def input_dim(self) -> int:
+        """Flattened input width — ``(1, 8, 8)`` becomes 64."""
+        return math.prod(self.input_shape)
+
+
+def _task_shape(task: Any) -> TaskShape:
+    declared = task.input_dim
+    if declared is None:
         msg = f"task {task.name!r} declares no input_dim"
         raise EvaluationError("invalid_config", msg)
-    return (
-        int(math.prod(int(d) for d in shape))
-        if isinstance(shape, tuple | list)
-        else int(shape)
+    shape = (
+        tuple(int(d) for d in declared)
+        if isinstance(declared, tuple | list)
+        else (int(declared),)
     )
+    return TaskShape(input_shape=shape, output_dim=int(task.output_dim))
 
 
-def task_shape(task_id: str, device: str = "cpu") -> tuple[int, int]:
-    """The ``(input_dim, output_dim)`` a task will be trained at.
+def task_shape(task_id: str, device: str = "cpu") -> TaskShape:
+    """The shape a task will be trained at.
 
     The search space asks the evaluator for this rather than composing against
     a guessed shape: shape is a property of the task, and the space must
     filter cells with the same shape the evaluator will use.
     """
-    task = _task(task_id, device)
-    return _flat_input_dim(task), int(task.output_dim)
+    return _task_shape(_task(task_id, device))
 
 
 def _history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
@@ -114,6 +132,39 @@ def _history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
     }
     metrics["epochs_run"] = float(final.get("global_step", 0))
     return metrics
+
+
+def _within_ceiling(param_count: int, param_budget: int) -> bool:
+    """Whether a cell honoured the parameter ceiling its schedule declared.
+
+    The tolerance is R25's registered one, read from the same declaration as
+    the ``param_budget_fairness`` predicate, so a cell the constraint accepts is
+    a cell the gate passes.
+    """
+    from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
+
+    if param_budget <= 0:
+        return True
+    return param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE)
+
+
+def _defect(
+    complete: bool, within_ceiling: bool, param_count: int, param_budget: int
+) -> str:
+    match (complete, within_ceiling):
+        case (True, True):
+            return ""
+        case (False, True):
+            return "training stopped before the requested epochs"
+        case (True, False):
+            return (
+                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
+            )
+        case _:
+            return (
+                "training stopped before the requested epochs; "
+                f"{param_count} parameters exceeds the declared ceiling {param_budget}"
+            )
 
 
 def _finite(metrics: Mapping[str, float]) -> bool:
@@ -145,14 +196,14 @@ def evaluate_cell(
     import torch
 
     task = _task(schedule.task_id, "cpu")
-    input_dim = _flat_input_dim(task)
-    output_dim = int(task.output_dim)
+    shape = _task_shape(task)
 
     cell = compose_cell_system(
         coordinate=coordinate,
         geometry=dict(geometry or {}),
-        input_dim=input_dim,
-        output_dim=output_dim,
+        input_shape=shape.input_shape,
+        output_dim=shape.output_dim,
+        param_budget=schedule.param_budget,
     )
 
     config = SystemTrainerConfig(
@@ -186,6 +237,7 @@ def evaluate_cell(
     return CellEvaluation(
         metrics=metrics,
         params=dict(cell.params),
+        param_count=cell.param_count,
         walltime_s=walltime_s,
         epochs_completed=len(history),
         task_id=schedule.task_id,
@@ -241,6 +293,7 @@ def cell_record(
         )
 
     complete = evaluation.epochs_completed >= schedule.epochs
+    within_ceiling = _within_ceiling(evaluation.param_count, schedule.param_budget)
     payload: dict[str, Any] = {
         "status": "evaluated",
         **evaluation.metrics,
@@ -251,18 +304,23 @@ def cell_record(
         "fidelity": schedule.fidelity,
         "task_id": evaluation.task_id,
         "params": dict(evaluation.params),
+        "param_count": evaluation.param_count,
+        "param_budget": schedule.param_budget,
     }
+    passed = complete and within_ceiling
     return Record.create(
         run_id=provenance.links.get("run_id", str(uuid.uuid4())),
         coordinate=coordinate,
         schedule=schedule,
         provenance=provenance,
         status=Status(
-            gate_verdict=GateVerdict.PASS_ if complete else GateVerdict.FAIL,
-            defect="" if complete else "training stopped before the requested epochs",
-            cause=FailureCause.UNKNOWN if complete else FailureCause.TIMEOUT,
-            severity=Severity.LOW if complete else Severity.MEDIUM,
-            quarantine=not complete,
+            gate_verdict=GateVerdict.PASS_ if passed else GateVerdict.FAIL,
+            defect=_defect(
+                complete, within_ceiling, evaluation.param_count, schedule.param_budget
+            ),
+            cause=FailureCause.UNKNOWN if passed else FailureCause.CONSTRAINT_VIOLATION,
+            severity=Severity.LOW if passed else Severity.MEDIUM,
+            quarantine=not passed,
             maturity=Maturity.L0,
             uncertainty={},
             reproducibility=ReproducibilityClass.REPLAYABLE,

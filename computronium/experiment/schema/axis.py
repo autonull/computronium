@@ -90,6 +90,9 @@ class AxisSpec:
     axis_kind: StructuralAxis
     description: str = ""
     available: bool = True
+    # Why a primitive is unavailable, when it is. A retired row needs a
+    # recorded reason (R78), not a silent omission.
+    unavailable_reason: str | None = None
     availability_predicate: Expr | None = (
         None  # Conditional availability for the whole primitive
     )

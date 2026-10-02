@@ -6,11 +6,13 @@ single-source config classmethods and registries — no preset tables.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import compose_system_from_configs
+from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.harvest import ActiveSpace, harvest_schema
@@ -29,9 +31,11 @@ __all__ = [
     "GRID_UPDATES",
     "ComposedCell",
     "ProposalComposeError",
+    "_fit_geometry",
     "build_geometry_config",
     "compose_cell_system",
     "compose_configs",
+    "geometry_param_count",
 ]
 
 logger = get_logger(__name__)
@@ -77,9 +81,12 @@ _COMMON_GEOMETRY_KEYS: Final[frozenset[str]] = frozenset({
     "init_scale",
 })
 
+_DEFAULT_NUM_HEADS: Final[int] = 8
+
 _TOPOLOGY_KEYS: Final[dict[str, frozenset[str]]] = {
     "feedforward": frozenset({"residual"}),
     "recurrent": frozenset(),
+    "tile": frozenset({"neurons_per_tile", "tiles_per_layer"}),
     "tile_mesh": frozenset({"neurons_per_tile", "tiles_per_layer"}),
     "attention": frozenset({"num_heads", "head_dim"}),
     "spatial_lattice": frozenset({"lattice_dims", "connectivity_radius"}),
@@ -131,6 +138,18 @@ def _as_int_tuple(value: object, default: tuple[int, int, int]) -> tuple[int, in
     return default
 
 
+def _channel_count(input_shape: tuple[int, ...]) -> int:
+    """A per-example channel count: ``(3, 28, 28)`` is 3, ``(784,)`` is 1."""
+    return input_shape[0] if len(input_shape) > 1 else 1
+
+
+def _spatial_extent(input_shape: tuple[int, ...]) -> tuple[int, int]:
+    """The height and width a spatial topology should cover."""
+    return (
+        (int(input_shape[-2]), int(input_shape[-1])) if len(input_shape) > 2 else (1, 1)
+    )
+
+
 def _estimate_spatial_lattice_params(
     lattice_dims: tuple[int, int, int],
     hidden_dims: tuple[int, ...],
@@ -179,8 +198,82 @@ def _constrain_spatial_lattice_dims(
     return (1, 1, 1)
 
 
+def _fit_depth(dims: tuple[int, ...], depth: int, fallback: int) -> tuple[int, ...]:
+    """Widen or narrow a derived width tuple to exactly ``depth`` entries."""
+    if not dims:
+        return (fallback,) * depth
+    if len(dims) == depth:
+        return dims
+    if len(dims) > depth:
+        return dims[:depth]
+    return dims + (dims[-1],) * (depth - len(dims))
+
+
+def geometry_param_count(config: GeometryConfig) -> int:
+    """Learnable parameters a geometry config actually builds.
+
+    The ground truth, not an estimate: a ceiling enforced against an estimator
+    is only as trustworthy as the estimator, and the estimator is the thing that
+    has already been wrong (a conv cell sized from its channel counts alone
+    ignores the spatial extent of its input).
+    """
+    from computronium.ontology.geometry import geometry_from_config
+
+    return sum(p.numel() for p in geometry_from_config(config).params.values())
+
+
+def _fit_geometry(
+    mapping: Mapping[str, object],
+    *,
+    topology: str,
+    input_shape: tuple[int, ...],
+    output_dim: int,
+    param_budget: int,
+) -> GeometryConfig:
+    """The largest derived sizing whose built geometry fits ``param_budget``.
+
+    Derived sizing is a search over the ceiling itself, and the acceptance test
+    is the built module's parameter count. With no ceiling in force this is a
+    plain build, so an unconstrained run keeps the measured regime.
+    """
+
+    def build(budget: int) -> GeometryConfig:
+        return build_geometry_config(
+            dict(mapping),
+            topology=topology,
+            input_shape=input_shape,
+            output_dim=output_dim,
+            param_budget=budget,
+        )
+
+    if param_budget <= 0:
+        return build(0)
+    lo, hi, best = 1, param_budget, None
+    smallest = build(lo)
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        candidate = build(mid)
+        if geometry_param_count(candidate) <= param_budget:
+            best = candidate
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    # A cell that cannot fit even at minimum sizing is not silently enlarged:
+    # the tightest cell is returned and the evaluator's gate reports it.
+    return best or smallest
+
+
 def _allowed_keys(topology: str) -> frozenset[str]:
     return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
+
+
+_TILE_TOPOLOGIES: Final[frozenset[str]] = frozenset({"tile", "tile_mesh"})
+
+# Topologies whose width must divide evenly by the head count.
+_HEAD_SPLIT_TOPOLOGIES: Final[frozenset[str]] = frozenset({
+    "attention",
+    "causal_transformer",
+})
 
 
 def _auto_size_geometry(  # ruff: ignore[complex-structure] - one branch per topology
@@ -244,7 +337,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     geometry: dict[str, object],
     *,
     topology: str,
-    input_dim: int,
+    input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int = 0,
 ) -> GeometryConfig:
@@ -256,10 +349,11 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
             not a key: reading it out of the mapping defaulted every topology
             to ``feedforward``, so every non-feedforward cell was compiled as
             an MLP and then rejected for carrying keys an MLP has no use for.
-        input_dim: Flattened input width, from the task.
+        input_shape: The task's own input shape, channels first.
         output_dim: Class count, from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
     """
+    input_dim = math.prod(input_shape)
     if topology not in _TOPOLOGY_KEYS:
         msg = f"Unknown topology {topology!r}; allowed: {sorted(_TOPOLOGY_KEYS)}"
         raise ProposalComposeError(msg)
@@ -278,12 +372,24 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     depth = max(_as_int(geometry.get("depth"), 2), 1)
     hidden = _as_int(geometry.get("hidden_dim"), 64)
 
-    if not explicit_hidden or not explicit_depth:
-        hidden_dims, depth = _auto_size_geometry(
-            topology, param_budget, input_dim, output_dim, depth
-        )
-        hidden = hidden_dims[0] if hidden_dims else 64
-    else:
+    # Sizing is derived per component: a swept width is honoured while the
+    # depth it stacks into is still derived from the ceiling, so honouring one
+    # knob never silently discards the other. With no ceiling the derivation is
+    # the measured regime (64 wide, 2 deep).
+    derived_dims, derived_depth = _auto_size_geometry(
+        topology, param_budget, input_dim, output_dim, depth
+    )
+    if not explicit_depth:
+        depth = derived_depth
+    hidden_dims = (
+        (hidden,) * depth
+        if explicit_hidden
+        else _fit_depth(derived_dims, depth, hidden)
+    )
+    hidden = hidden_dims[0] if hidden_dims else hidden
+    if topology in _HEAD_SPLIT_TOPOLOGIES and not explicit_hidden:
+        heads = _as_int(geometry.get("num_heads"), _DEFAULT_NUM_HEADS)
+        hidden = max(heads, hidden - hidden % heads)
         hidden_dims = (hidden,) * depth
 
     init_scheme = str(geometry.get("init_scheme", "default"))
@@ -294,7 +400,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
 
     npt = _as_int(geometry.get("neurons_per_tile"), 0)
     tpl = _as_int(geometry.get("tiles_per_layer"), 0)
-    if topology == "tile_mesh" and param_budget > 0 and (npt == 0 or tpl == 0):
+    if topology in _TILE_TOPOLOGIES and param_budget > 0 and (npt == 0 or tpl == 0):
         if param_budget < 50000:
             npt = max(8, hidden // 4)
             tpl = max(2, depth // 2)
@@ -309,16 +415,21 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
     if tpl == 0:
         tpl = _as_int(geometry.get("tiles_per_layer"), 4)
 
-    nca_grid_hw = _as_int_pair(geometry.get("grid_hw"), (16, 16))
+    nca_grid_hw = _as_int_pair(geometry.get("grid_hw"), _spatial_extent(input_shape))
     if topology == "nca" and param_budget > 0 and "grid_hw" not in geometry:
+        # A CA grid may not exceed the task's own extent: its state contract is
+        # a grid the size of the input.
         max_grid_area = max(1, param_budget // max(1, hidden * hidden))
-        grid_side = max(4, int(max_grid_area**0.5))
+        task_side = min(_spatial_extent(input_shape))
+        grid_side = max(1, min(int(max_grid_area**0.5), task_side))
         nca_grid_hw = (grid_side, grid_side)
 
     conv_channels_raw = geometry.get("conv_channels")
     kernel_size = _as_int(geometry.get("kernel_size"), 3)
-    in_channels = _as_int(geometry.get("in_channels"), 3)
-    input_hw = _as_int_pair(geometry.get("input_hw"), (28, 28))
+    # Channels and extent are the task's, not literals: a conv stack built for
+    # 3x28x28 dies on a 1x8x8 task, and no gate said why.
+    in_channels = _as_int(geometry.get("in_channels"), _channel_count(input_shape))
+    input_hw = _as_int_pair(geometry.get("input_hw"), _spatial_extent(input_shape))
     pool_hw = _as_int_pair(geometry.get("pool_hw"), (2, 2))
     if topology == "conv" and param_budget > 0 and conv_channels_raw is None:
         base_channels = max(
@@ -357,8 +468,9 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 init_scale=init_scale,
                 init_scheme=init_scheme,  # type: ignore[arg-type]
             )
-        case "tile_mesh":
-            return GeometryConfig.tile_mesh(
+        case "tile" | "tile_mesh":
+            factory = getattr(GeometryConfig, topology)
+            return factory(
                 input_dim=input_dim,
                 output_dim=output_dim,
                 num_layers=depth,
@@ -372,7 +484,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 output_dim=output_dim,
                 hidden_dim=hidden,
                 num_layers=depth,
-                num_heads=_as_int(geometry.get("num_heads"), 8),
+                num_heads=_as_int(geometry.get("num_heads"), _DEFAULT_NUM_HEADS),
                 init_scale=init_scale,
             )
         case "spatial_lattice":
@@ -458,7 +570,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 vocab_size=input_dim,
                 d_model=hidden,
                 n_layers=depth,
-                n_heads=_as_int(geometry.get("num_heads"), 4),
+                n_heads=_as_int(geometry.get("num_heads"), _DEFAULT_NUM_HEADS),
                 seq_len=_as_int(geometry.get("seq_len"), 32),
             )
         case _:
@@ -496,12 +608,15 @@ class ComposedCell:
 
     The declaration is kept because the runtime module does not name its own
     topology, so "which cell was this?" is otherwise unanswerable from a
-    composed system.
+    composed system.  ``param_count`` is the measured size of the composed
+    system, so a declared parameter ceiling can be checked against the thing it
+    was declared for.
     """
 
     system: System
     config: Any
     params: Mapping[str, Any]
+    param_count: int
 
 
 # Harvested geometry names that mean the same thing as the composer's key.
@@ -512,14 +627,26 @@ _TASK_SHAPED: Final[frozenset[str]] = frozenset({"input_dim", "output_dim"})
 
 
 def _geometry_mapping(
-    active: ActiveSpace, geometry: Mapping[str, object], topology: str
+    active: ActiveSpace,
+    geometry: Mapping[str, object],
+    topology: str,
+    swept: Mapping[str, Any],
 ) -> dict[str, object]:
-    """Merge harvested geometry values under the composer's key names."""
+    """Merge the cell's *swept* geometry values under the composer's key names.
+
+    Only swept values are injected.  A resolved-but-unswept value is a prior or
+    a config default, and injecting it would be a hidden default answering a
+    sizing question the parameter ceiling owns: ``build_geometry_config``
+    treats an explicit ``hidden_dim``/``depth`` as a request to skip derived
+    sizing, so a prior of 64 would silently defeat a 10 000-parameter ceiling.
+    """
     allowed = _allowed_keys(topology)
     harvested = {
         _GEOMETRY_ALIASES.get(name, name): value
         for name, value in active.by_axis(StructuralAxis.GEOMETRY).items()
-        if name not in _TASK_SHAPED and (_GEOMETRY_ALIASES.get(name, name) in allowed)
+        if name in swept
+        and name not in _TASK_SHAPED
+        and (_GEOMETRY_ALIASES.get(name, name) in allowed)
     }
     return {**harvested, **geometry}
 
@@ -537,7 +664,7 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     *,
     coordinate: Coordinate,
     geometry: Mapping[str, object],
-    input_dim: int,
+    input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int = 0,
 ) -> Any:
@@ -553,7 +680,7 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     Args:
         coordinate: The six-axis selection and its hyperparameter overrides.
         geometry: Topology parameters; harvested geometry values fill the gaps.
-        input_dim: Flattened input width, derived from the task.
+        input_shape: The task's own input shape, channels first.
         output_dim: Class count, derived from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
 
@@ -577,10 +704,10 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     substrate_name = coordinate.substrate
     dynamics_name = coordinate.dynamics
 
-    gcfg = build_geometry_config(
-        _geometry_mapping(active, geometry, topology=coordinate.geometry),
+    gcfg = _fit_geometry(
+        _geometry_mapping(active, geometry, coordinate.geometry, coordinate.params),
         topology=coordinate.geometry,
-        input_dim=input_dim,
+        input_shape=input_shape,
         output_dim=output_dim,
         param_budget=param_budget,
     )
@@ -626,7 +753,7 @@ def compose_cell_system(
     *,
     coordinate: Coordinate,
     geometry: Mapping[str, object],
-    input_dim: int,
+    input_shape: tuple[int, ...],
     output_dim: int,
     param_budget: int = 0,
 ) -> ComposedCell:
@@ -635,7 +762,7 @@ def compose_cell_system(
     Args:
         coordinate: The six-axis selection and its hyperparameter overrides.
         geometry: Topology parameters; harvested geometry values fill the gaps.
-        input_dim: Flattened input width, derived from the task.
+        input_shape: The task's own input shape, channels first.
         output_dim: Class count, derived from the task.
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
 
@@ -646,20 +773,22 @@ def compose_cell_system(
     config = compose_configs(
         coordinate=coordinate,
         geometry=geometry,
-        input_dim=input_dim,
+        input_shape=input_shape,
         output_dim=output_dim,
         param_budget=param_budget,
     )
     active = harvest_schema().active(coordinate)
+    system = compose_system_from_configs(
+        config.substrate,
+        config.geometry,
+        config.dynamics,
+        config.credit,
+        config.update,
+    )
     return ComposedCell(
-        system=compose_system_from_configs(
-            config.substrate,
-            config.geometry,
-            config.dynamics,
-            config.credit,
-            config.update,
-        ),
+        system=system,
         config=config,
+        param_count=param_count(system),
         params=_effective_params(
             active,
             config.geometry,

@@ -30,7 +30,11 @@ from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
 )
-from computronium.experiment.schema.run_spec import Fidelity, RunSpec
+from computronium.experiment.schema.run_spec import (
+    MEASURED_PARAM_BUDGET,
+    Fidelity,
+    RunSpec,
+)
 from computronium.experiment.surface.report import (
     ReportGenerator,
     export_to_json,
@@ -53,6 +57,7 @@ class RunProfile:
     n_seeds: int
     epochs: int
     budget_seconds: float | None
+    param_budget: int  # Parameter ceiling for derived geometry sizing
     objectives: tuple[str, ...]  # Names from the OBJECTIVES registry
     policy: str  # Name from the POLICY catalog
     promotion_threshold: float  # Pareto frontier promotion threshold
@@ -72,6 +77,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=300.0,
         task="digits",
         policy="round_robin_grid",
+        param_budget=MEASURED_PARAM_BUDGET,
         objectives=("validation_accuracy", "walltime_total"),
         promotion_threshold=0.5,
         maturation=False,
@@ -99,6 +105,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=3600.0,
         task="digits",
         policy="round_robin_grid",
+        param_budget=MEASURED_PARAM_BUDGET,
         objectives=(
             "validation_accuracy",
             "walltime_total",
@@ -128,6 +135,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=7200.0,
         task="digits",
         policy="evolution",
+        param_budget=MEASURED_PARAM_BUDGET,
         objectives=("validation_accuracy", "walltime_total", "param_count"),
         promotion_threshold=0.8,
         maturation=False,
@@ -143,6 +151,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=None,
         task="digits",
         policy="evolution",
+        param_budget=MEASURED_PARAM_BUDGET,
         objectives=(
             "validation_accuracy",
             "walltime_total",
@@ -264,6 +273,7 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
         epochs=overrides.get("epochs", profile.epochs),
         budget_seconds=overrides.get("budget_seconds", profile.budget_seconds),
         objectives=tuple(overrides.get("objectives", profile.objectives)),
+        param_budget=int(overrides.get("param_budget", profile.param_budget)),
         policy=overrides.get("policy", profile.policy),
         promotion_threshold=overrides.get(
             "promotion_threshold", profile.promotion_threshold
@@ -300,6 +310,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             n_seeds=profile.n_seeds,
             epochs=profile.epochs,
             budget_seconds=profile.budget_seconds,
+            param_budget=profile.param_budget,
             policy=profile.policy,
         )
 

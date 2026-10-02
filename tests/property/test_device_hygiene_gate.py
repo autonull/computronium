@@ -57,7 +57,9 @@ def _viable_cells() -> list[tuple[str, str, str]]:
     cells: list[tuple[str, str, str]] = []
     from computronium.experiment.execution.compose import build_geometry_config
 
-    geometry = build_geometry_config(_GEOMETRY, topology=_TOPOLOGY, input_dim=64, output_dim=10)
+    geometry = build_geometry_config(
+        _GEOMETRY, topology=_TOPOLOGY, input_shape=(64,), output_dim=10
+    )
     for dynamics in _DYNAMICS:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         for credit in GRID_CREDITS:
@@ -99,7 +101,7 @@ def test_cell_survives_cpu_to_cuda_transition(cell: tuple[str, str, str]) -> Non
             params={},
         ),
         geometry=dict(_GEOMETRY),
-        input_dim=64,
+        input_shape=(64,),
         output_dim=10,
     ).system
     x_cpu = torch.randn(4, 64)

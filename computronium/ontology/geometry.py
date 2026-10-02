@@ -285,6 +285,36 @@ class GeometryConfig:
         )
 
     @classmethod
+    def tile(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        num_layers: int,
+        neurons_per_tile: int = 48,
+        tiles_per_layer: int = 4,
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        """TileNet with a tile graph the tile count is derived into.
+
+        The ``tile_mesh`` factory is the fixed-mesh variant of the same
+        geometry class; this is the row the GEOMETRY registry declared, which
+        had a backend alias and no factory.
+        """
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=(),
+            num_layers=num_layers,
+            topology_type="tile",
+            connectivity=None,
+            recurrent_weight=None,
+            init_scale=init_scale,
+            neurons_per_tile=neurons_per_tile,
+            tiles_per_layer=tiles_per_layer,
+        )
+
+    @classmethod
     def conv(
         cls,
         *,

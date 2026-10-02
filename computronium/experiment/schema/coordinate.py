@@ -72,6 +72,7 @@ class Coordinate:
                 "batch_limit": schedule.batch_limit,
                 "budget_id": schedule.budget_id,
                 "task_id": schedule.task_id,
+                "param_budget": schedule.param_budget,
             },
         }
         return hashlib.sha256(_canonical_json(combined).encode()).hexdigest()
@@ -121,6 +122,10 @@ class Schedule:
     batch_limit: int
     budget_id: str
     task_id: str = ""  # L17: Task identity for cross-task uniqueness
+    # A parameter ceiling changes what is trained, so it is part of the
+    # measurement: two cells differing only by ceiling must not share a
+    # measurement_key. 0 means unconstrained.
+    param_budget: int = 0
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -133,6 +138,8 @@ class Schedule:
             raise ValueError("epochs must be positive")
         if self.batch_limit < 0:
             raise ValueError("batch_limit must be non-negative")
+        if self.param_budget < 0:
+            raise ValueError("param_budget must be non-negative")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -143,6 +150,7 @@ class Schedule:
             "batch_limit": self.batch_limit,
             "budget_id": self.budget_id,
             "task_id": self.task_id,
+            "param_budget": self.param_budget,
         }
 
     @classmethod
@@ -155,6 +163,7 @@ class Schedule:
             batch_limit=data["batch_limit"],
             budget_id=data["budget_id"],
             task_id=data.get("task_id", ""),
+            param_budget=data.get("param_budget", 0),
         )
 
 

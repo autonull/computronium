@@ -48,7 +48,7 @@ def viable_cells(topology: str = "feedforward") -> list[tuple[str, str, str]]:
     geometry = build_geometry_config(
         {"depth": 2, "hidden_dim": 64},
         topology=topology,
-        input_dim=256,
+        input_shape=(256,),
         output_dim=10,
     )
     viable: list[tuple[str, str, str]] = []

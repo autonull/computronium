@@ -48,7 +48,8 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D11–D15 are fixed (D15 was found and fixed in §8 session 5).**
+**D1–D6 and D11–D17 are fixed (D15 was found and fixed in §8 session 5; D16
+and D17 were found and fixed in §8 session 6).**
 D7–D10 remain, and D14's fix is consumed by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
@@ -320,6 +321,36 @@ question it should have been asked. Fixed by making the topology an explicit
 argument with no default, so it cannot be lost, and by making the space filter
 for legality before proposing (§8 session 5).
 
+### D16 — Composition read a task's *width* and guessed the rest
+
+Found in session 6, by composing every topology against `digits` and reading
+the failures. `build_geometry_config` took `input_dim: int` and hardcoded the
+spatial facts: `in_channels = 3`, `input_hw = (28, 28)`, `grid_hw = (16, 16)`.
+A conv cell therefore compiled as a 3×28×28 CNN and died in the first forward
+with `shape '[-1, 3, 28, 28]' is invalid` on a 1×8×8 task. Same shape as D15: a
+default that silently answered a question it should have been asked. Fixed by
+carrying the task's own `input_shape` (channels first) through
+`evaluate → compose_configs → compose_cell_system → build_geometry_config`;
+channels and extent are now derived from it, and a conv cell trains.
+
+### D17 — Registered primitives the kernel cannot train, proposed anyway
+
+Two classes, one rule: *a registered row the run cannot honour is a claim the
+run makes and withdraws per cell.*
+
+- `tile` was registered as a geometry primitive with an ontology class, a
+  backend alias and **no `GeometryConfig` factory** and no `_TOPOLOGY_KEYS`
+  entry, so every `tile` cell died with `Unknown topology 'tile'`. Fixed: the
+  factory now exists (the derived-tile-graph variant of `TileMesh`), it is in
+  `_TOPOLOGY_KEYS`, and `tile` cells compose and train.
+- `nca` composes, validates, and then dies at runtime in
+  `NcaGeometry.step`: the state contract is `(B, C, H, W)` and the kernel's
+  trainer hands a geometry the batch. **Retired** — `AxisSpec.available=False`
+  with `unavailable_reason` recorded, which is a mechanism this plan had not
+  used before: a retired row leaves every space, so the run stops proposing
+  cells it can only fail. The fix is a `route`-level reshape plus a read-out,
+  which is a geometry feature, so it is queued rather than faked.
+
 ---
 
 ## 2. False completion marks, and the audit that must precede fixing
@@ -484,6 +515,29 @@ conditions. `HarvestedSchema.active(coord)` returns an `ActiveSpace`;
 param_budget)` returns `ComposedCell(system, params)`. No `lr`. No
 `inspect.signature` in composition. The MNIST-shape lock is a **ratchet pinned
 at seven `search_space.py` sites**, not a zero — those die with §3.3.
+
+### 3.0.2 A declared parameter ceiling — LANDED, see §8 session 6
+
+The doctrine's "shape and size are derived, not chosen" needed a *number* to
+derive from, and the number had to be declared somewhere a run states it.
+`RunSpec.param_budget` → `Schedule.param_budget` → composition and evaluation.
+`Schedule` is the honest channel: a ceiling changes what is trained, so it is in
+`measurement_key` and a cell differing only by ceiling is a different
+measurement while remaining the same cell.
+
+Derived sizing is **fitted, not estimated**: `_fit_geometry` binary-searches the
+ceiling and accepts a sizing only when the *built* geometry's parameter count
+fits. The old per-topology estimators under-counted conv (channels alone, no
+spatial extent) and NTM (memory slots alone), which is how a cell came to be
+declared legal at four times its ceiling.
+
+Acceptance, in `tests/property/test_param_budget_lock.py` (21 tests): every
+trainable topology fits `MEASURED_PARAM_BUDGET`; the space screens at the size
+the run will train; the ceiling is in the measurement key and not the cell key;
+a swept width is honoured while the ceiling still sizes the depth; a cell that
+cannot honour its ceiling fails the gate with `CONSTRAINT_VIOLATION` and names
+the ceiling; the R25 tolerance is declared once and read by both the registered
+predicate and the gate.
 
 ### 3.1 One cell, end to end, for real — LANDED, see §8 session 3
 
@@ -972,62 +1026,104 @@ filter). Also `scripts/demos/_support.make_search_space` and the acceptance
 suite's private `_build_search_space` — a third and fourth copy of
 `pipeline._build_search_space`, now `search_space_from_spec` for everyone.
 
+### Session 6
+
+**Landed: remaining-work item 1 (the parameter ceiling), item 2 (`tile`), and
+two new defects, D16 and D17.** `RunSpec.param_budget` reaches composition, the
+space filter and the evaluator through `Schedule`; `_fit_geometry` fits derived
+sizing against the built module's parameter count rather than an estimator of
+it; `MEASURED_PARAM_BUDGET` is the one declared ceiling the profiles and the
+acceptance suite use; `GeometryConfig.tile` exists and `tile` cells train; `nca`
+is retired with a recorded reason; and a task's `input_shape` — not just its
+width — reaches the composer.
+
+**The estimators were the defect, not just the missing number.**
+`_auto_size_geometry` sized a conv cell from its channel counts alone, ignoring
+the spatial extent of a 28×28 input, and an NTM from `h²` alone, ignoring its
+memory slots. Both produced cells declared legal at 4–7× the ceiling. Fitting
+the *built* module is what makes the ceiling mean something; a per-topology
+estimator is a second source of truth that is wrong in a way nothing checks.
+`geometry_param_count(config)` is now the single measure, read by `_fit_geometry`,
+by the space filter and by `ComposedCell.param_count`.
+
+**A ceiling is an upper bound, and the first value broke that.** 25 000 made the
+suite *slower* — 14:05 against session 5's 8:55 — because filling a ceiling
+builds a bigger cell than the unconstrained default (64×2, 8 970 parameters).
+10 000 is sized to that default, so a bounded run is never slower than an
+unbounded one, and it cuts exactly the cells that dominated: `spatial_lattice`
+composes unconstrained at **839 690** parameters (measured), `attention` at
+103 114, `ntm` at 38 139. This is the plan's own rule applied to itself: a
+number chosen for the largest thing it permits is not the number that bounds
+cost.
+
+**Measured, per cell, `digits`, CPU, 1 epoch / 4 batches, ceiling 10 000:**
+feedforward 9 815 (0.47 s), recurrent 9 666 (0.06 s), conv 9 689 (0.27 s),
+attention 5 218 (0.12 s), tile_mesh 7 611 (0.03 s), ntm 9 495 (0.07 s),
+spatial_lattice legal only under `instantaneous × gradient` (23 818 at 25 000,
+trains in the probe). `tile` trains at 13 865 unconstrained. `nca` composes and
+fails at runtime at every budget.
+
+**Acceptance suite: 8 passed in 9:14** (U3 287 s + 259 s, U4 162 s, U5 97 s,
+U1 53 s, U2 52 s) — every test inside its re-baselined timeout, where the
+25 000 ceiling had pushed U2 (120 s) and U4 (300 s) over. `tests/property` +
+`tests/unit` + `tests/ceec` green; `docs/generated/` re-pinned (only `nca`'s
+`available`, plus timestamps).
+
+**Verified:** `tests/property/test_param_budget_lock.py` (21, new),
+`test_search_space_lock.py` (24), `test_active_space_lock.py`,
+`test_run_spec_lock.py`, `test_stage_model_lock.py`,
+`test_serialization_roundtrip_lock.py`, `test_codegen_drift_lock.py` and
+`test_wp11_surface_lock.py` all pass; `ruff` + `pyright` clean on every changed
+module.
+
 ### Remaining work, in order
 
-1. **Geometry sizing: a parameter ceiling, declared in the spec.** The default
-   space now offers *legal* cells, and some of them are expensive — the
-   acceptance suite costs 8:55 because a `spatial_lattice` or `nca` cell on
-   `digits` trains for tens of seconds at compose's derived-free defaults
-   (`param_budget=0`). `compose._auto_size_geometry` already derives sizing from
-   a ceiling; nothing passes one. **Design note for whoever lands it:**
-   `RunSpec.param_budget` → the space filter *and* `evaluate_cell` must both
-   receive it, or the space will screen a small cell and the evaluator will train
-   a large one. Carrying it on `Schedule` is the honest channel (it changes the
-   measurement, so it belongs in `measurement_key`, and a cell differing only by
-   ceiling must not share a `cell_key`). Rule to keep: *swept* geometry values
-   are honoured; *unswept* sizing is derived from the ceiling, which means
-   `_geometry_mapping` must stop injecting harvested `hidden_dim`/`num_layers`
-   when a ceiling is in force. Until this lands, §3.6's cell budget cannot be
-   fixed — measure it, do not assume it.
-2. **`tile` has no `GeometryConfig.tile` factory.** It is registered as a
-   geometry primitive (and has an ontology `TileGeometry` class), but
-   `_TOPOLOGY_KEYS` has no `tile` entry, so every `tile` cell fails composition
-   with `Unknown topology 'tile'`. Either add the factory and the compose branch,
-   or retire the row with a recorded reason (R78). Today it is a registered
-   claim the run silently makes and then cannot honour.
-3. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
+1. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
    candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
    and §3.4 are one interface change. **First job: the
-   objective→payload-key mapping**, which session 4 exposed and session 5 left
-   exactly where it was — nothing turns `validation_accuracy` into `val_acc`, so
-   `study.tell(trial, value)` still has no value to tell. Also: the space now
-   carries real swept values in `Coordinate.params`, which is what
+   objective→payload-key mapping**, which session 4 exposed and sessions 5–6
+   left exactly where it was — nothing turns `validation_accuracy` into
+   `val_acc`, so `study.tell(trial, value)` still has no value to tell. The
+   space now carries real swept values in `Coordinate.params`, which is what
    `_coord_to_params`/`_param_names` in `ModelBasedPolicy` were written to
-   consume, so the interface has a producer for the first time.
-4. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
-   be *re-priced* against what sessions 3–5 changed: `test_active_space_lock.py`
-   and `test_search_space_lock.py` are the shape it asks for, and
-   `tests/acceptance` now shares the runner's space builder. Two of the seeded
-   `verifying_test` targets are themselves shape tests, so the lock will fail on
-   rows whose *metadata* is wrong, not just rows whose code is.
-5. **§4 item 4's remaining half** — locking README's fenced bash blocks.
+   consume, so the interface has a producer for the first time. Session 6 also
+   fixed half of a related seam: the geometry/hyperparameter double-meaning
+   `params` channel is gone (`_composable` no longer passes
+   `coordinate.params` as the geometry mapping), so `params` is one thing again.
+2. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
+   be *re-priced* against what sessions 3–6 changed: `test_active_space_lock.py`,
+   `test_search_space_lock.py` and `test_param_budget_lock.py` are the shape it
+   asks for, and `tests/acceptance` now shares the runner's space builder. Two
+   of the seeded `verifying_test` targets are themselves shape tests, so the
+   lock will fail on rows whose *metadata* is wrong, not just rows whose code
+   is. **Note the retirement precedent** (session 6, D17): a capability row can
+   now be `available=False` with a recorded `unavailable_reason`, and the
+   registry-driven lock should require the reason, not accept a bare `False`.
+3. **§4 item 4's remaining half** — locking README's fenced bash blocks.
+4. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
+   `NcaGeometry.route` to reshape a `(B, F)` batch into the `(B, C, H, W)` state
+   grid its `step` contract names, and to read class logits back out of the
+   grid. That is a geometry feature with credit/settle consequences — a
+   separate piece of work, and the reason the row carries a recorded reason
+   rather than a silent `available=False`.
 
-**Carried notes from sessions 3–5 that are still open:**
+**Carried notes from sessions 3–6 that are still open:**
 
-- `eval_batch`/`submit` in both backends passes a `params` dict that the
-  evaluator now reads as the **geometry mapping**, and `_composable` passes
-  `coordinate.params` as the same channel. So a hyperparameter named like a
-  geometry key reaches the composer as topology. `_TASK_SHAPED` and
-  `_GEOMETRY_ALIASES` paper over it. Decide the channel: geometry overrides and
-  hyperparameters are two things and should be two parameters.
+- **CLOSED in session 6 — the `params` channel.** `_composable` was passing
+  `coordinate.params` as the geometry mapping, so a hyperparameter named like a
+  geometry key reached the composer as topology. Swept geometry values now reach
+  composition through `_geometry_mapping(active, geometry, topology, swept)`,
+  which is keyed on `coordinate.params` itself, and the space filter passes
+  `geometry={}`. The backends' `params` argument is still named `params` while
+  the evaluator reads it as geometry; renaming it is cosmetic and unblocked.
 - `_TASK_CACHE` in `evaluate.py` keys on `(task_id, device)` and never evicts.
   Fine for a handful of tasks; a leak if a run sweeps many — and §3.6's
   multi-task spec will find it. `task_shape` now shares that cache.
 - `build_geometry_config` is the one remaining normalizer, and it still carries
   `_GEOMETRY_ALIASES` (`num_layers` → `depth`) because geometry factories spell
   the same knob three ways. That table is a §3.0 violation in miniature; it dies
-  with the geometry-axis normalization pass, and the lock should hold it to one
-  entry in the meantime.
+  with the geometry-axis normalization pass, and
+  `test_the_geometry_alias_table_does_not_grow` now holds it to one entry.
 - **Silent name filtering is still this plan's most productive defect shape.**
   Three instances so far: unknown objectives dropped by
   `pipeline._build_search_space` (fixed), `AxisSelection` silently ignoring an
@@ -1054,4 +1150,16 @@ suite's private `_build_search_space` — a third and fourth copy of
   rather than update both.
 - **A `dict[str, Any]` parameter is a place where nobody checked anything.**
   Typing one is what surfaced four tests passing `{"kind": "lock"}` as a spec
-  (session 4) and one `params` channel carrying two meanings (session 5).
+  (session 4) and one `params` channel carrying two meanings (session 5, closed
+  in session 6).
+- **A ceiling is a promise about cost, and the first value chosen broke it.**
+  `MEASURED_PARAM_BUDGET` was 25 000 when first landed, and the acceptance suite
+  got *slower* (14:05 against session 5's 8:55) because `_fit_geometry` fills a
+  ceiling: a 25 000-parameter feedforward trains slower than the unconstrained
+  8 970-parameter default. Sizing the ceiling to the unconstrained default
+  (10 000) is what actually bounded the cost. **A ceiling is an upper bound, and
+  a run that wants cheap cells must declare a small one — not a large one.**
+- **`_fit_geometry` builds geometry ~log₂(budget) times per cell**, inside the
+  space filter as well as the evaluator. Measured at 10–100 ms per cell today,
+  which is invisible against training; it is the first thing to become a problem
+  if a future plan filters millions of cells.

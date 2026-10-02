@@ -212,7 +212,7 @@ def test_active_values_reach_the_composed_configs() -> None:
     cell = compose_cell_system(
         coordinate=coordinate,
         geometry={},
-        input_dim=64,
+        input_shape=(64,),
         output_dim=10,
     )
     assert cell.params["geometry.hidden_dim"] == 48

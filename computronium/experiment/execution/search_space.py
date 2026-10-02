@@ -28,11 +28,12 @@ from computronium.experiment.schema.harvest import (
     HarvestedSchema,
     harvest_schema,
 )
+from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
-
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.evaluate import TaskShape
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.record import Record
@@ -43,7 +44,7 @@ if TYPE_CHECKING:
 # continuum; a run proposes ``limit`` points on it.
 _SWEEP_STEPS: Final = 5
 
-type ShapeResolver = Callable[[str], tuple[int, int]]
+type ShapeResolver = Callable[[str], TaskShape]
 
 # A scan bound, not a space bound: guards against a budget or a predicate that
 # admits nothing, which would otherwise make the candidate stream unbounded.
@@ -208,7 +209,9 @@ def _cell_params(
     return usable
 
 
-def _composable(coordinate: Coordinate, task: str, shape: ShapeResolver) -> bool:
+def _composable(
+    coordinate: Coordinate, task: str, shape: ShapeResolver, param_budget: int
+) -> bool:
     """Whether the cell's configs compose and validate for this task's shape.
 
     Legality is asked of the one mechanism that owns it —
@@ -216,20 +219,35 @@ def _composable(coordinate: Coordinate, task: str, shape: ShapeResolver) -> bool
     re-declared here as availability predicates, which would be a second source
     of truth for the same rules. A cell that cannot compose is not a cheap
     failure to discover after a training run.
-    """
-    from computronium.experiment.execution.compose import compose_configs
 
-    input_dim, output_dim = shape(task)
+    ``param_budget`` is the schedule's ceiling, so the space screens a cell at
+    the size the evaluator will train it; a space that screens a small cell and
+    a large one is the two-channel defect D5 named.
+    """
+    from computronium.experiment.execution.compose import (
+        compose_configs,
+        geometry_param_count,
+    )
+
+    task_shape = shape(task)
     try:
-        compose_configs(
+        config = compose_configs(
             coordinate=coordinate,
-            geometry=dict(coordinate.params),
-            input_dim=input_dim,
-            output_dim=output_dim,
+            geometry={},
+            input_shape=task_shape.input_shape,
+            output_dim=task_shape.output_dim,
+            param_budget=param_budget,
         )
     except ValueError, TypeError, KeyError:
         return False
-    return True
+    if param_budget <= 0:
+        return True
+    # The same R25 fairness rule the evaluator's gate applies, asked here so a
+    # cell that cannot honour its ceiling is never proposed: a cell that cannot
+    # fit is discovered by training, which is the expensive way to find out.
+    return geometry_param_count(config.geometry) <= param_budget * (
+        1 + PARAM_BUDGET_TOLERANCE
+    )
 
 
 def _schedule(spec: RunSpec, task: str) -> Schedule:
@@ -242,6 +260,7 @@ def _schedule(spec: RunSpec, task: str) -> Schedule:
         batch_limit=spec.batch_limit,
         budget_id="initial",
         task_id=task,
+        param_budget=spec.param_budget,
     )
 
 
@@ -294,7 +313,9 @@ def iter_candidates(
             continue
         seen.add(coordinate.measurement_key(schedule))
 
-        if shape is not None and not _composable(coordinate, schedule.task_id, shape):
+        if shape is not None and not _composable(
+            coordinate, schedule.task_id, shape, schedule.param_budget
+        ):
             continue
         if budget is not None and cost_model is not None:
             cost = cost_model.estimate_cost(

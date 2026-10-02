@@ -289,9 +289,7 @@ def _domain_from_enum(choices: list[str]) -> Domain:
     return Domain(members=tuple(choices))
 
 
-def declare(
-    declared: dict[str, HyperparameterSpec], hp: HyperparameterSpec
-) -> None:
+def declare(declared: dict[str, HyperparameterSpec], hp: HyperparameterSpec) -> None:
     """Record one hyperparameter declaration.
 
     Two axes may legitimately declare the same name — ``step_size`` is read by

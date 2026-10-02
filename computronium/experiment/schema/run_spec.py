@@ -15,13 +15,21 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
 
 RUN_SPEC_VERSION = 2
+
+# The ceiling the digits campaign measured (TODO46 §8 session 6). Sized to the
+# unconstrained default (a 64x2 feedforward is 8 970 parameters) so a bounded
+# run is not *slower* than an unbounded one, while cutting the cells that cost:
+# unconstrained, a lattice cell composes at 839 690 parameters and dominates the
+# suite. Every topology the kernel can train composes under 10 000 and trains
+# four batches in under 0.5 s; ``test_param_budget_lock.py`` holds both claims.
+MEASURED_PARAM_BUDGET: Final[int] = 10_000
 
 Fidelity = Literal["L0", "L1", "L2"]
 
@@ -75,7 +83,8 @@ class RunSpec(BaseModel):
     Versioned, diffable, and reproducible: a run's records are only as
     reproducible as this object, so it names its task, objectives, stage
     sequence, fidelity, seed plan, budget, policy, and the axis subsets and
-    hyperparameter domains to search (``axes=()`` means the whole registry).
+    hyperparameter domains to search (``axes=()`` means the whole registry), and
+    the parameter ceiling its cells are sized under.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -92,6 +101,9 @@ class RunSpec(BaseModel):
     batch_limit: _NONNEG = 0
     seed: _NONNEG = 0
     budget_seconds: Annotated[float, Field(gt=0)] | None = None
+    # A parameter ceiling for derived geometry sizing; 0 is unconstrained. It
+    # travels on the Schedule, because it changes what is trained.
+    param_budget: _NONNEG = 0
     policy: str | None = None
     axes: tuple[AxisSelection, ...] = ()
     hyperparameters: dict[str, Domain] = Field(default_factory=dict)
@@ -215,4 +227,10 @@ class RunSpec(BaseModel):
         }
 
 
-__all__ = ["RUN_SPEC_VERSION", "AxisSelection", "Fidelity", "RunSpec"]
+__all__ = [
+    "MEASURED_PARAM_BUDGET",
+    "RUN_SPEC_VERSION",
+    "AxisSelection",
+    "Fidelity",
+    "RunSpec",
+]

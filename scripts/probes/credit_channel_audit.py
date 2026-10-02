@@ -53,7 +53,7 @@ def main() -> None:
             credit=credit,
             update=update,
             geometry={"topology_type": "feedforward", "depth": 3, "hidden_dim": 32},
-            input_dim=20,
+            input_shape=(20,),
             output_dim=5,
         )
         trace = credit_trace(system, x, y, bp_reference=True)

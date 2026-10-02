@@ -8,7 +8,10 @@ policy catalog, stage definitions, and capability inventory.
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from computronium.experiment.execution.stage import STAGE_SPECS as EXEC_STAGE_SPECS
 from computronium.experiment.legality.dsl import expr_from_string
@@ -26,6 +29,7 @@ from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CONSTRAINTS_REGISTRY,
     OBJECTIVES_REGISTRY,
+    PARAM_BUDGET_TOLERANCE,
     POLICIES_REGISTRY,
     PRIORS_REGISTRY,
     STAGES_REGISTRY,
@@ -272,9 +276,23 @@ def _hyperparameter_spec(
 type PrimitiveRow = tuple[str, str, tuple[str, ...]]
 
 
-def _axis_primitives() -> tuple[
-    tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...
-]:
+# Primitives the kernel registers but cannot honour, with the reason recorded
+# (R78). An unavailable row is excluded from every space, so the run stops
+# proposing cells it would only fail: ``nca`` composes and validates, then dies
+# in ``NcaGeometry.step`` because the trainer hands a geometry the batch
+# (``(B, F)``) rather than the state grid (``(B, C, H, W)``) its contract names.
+# Restoring it needs a reshape and read-out in ``NcaGeometry.route``, which is a
+# geometry feature rather than a config row.
+_UNAVAILABLE: Final[Mapping[tuple[StructuralAxis, str], str]] = {
+    (StructuralAxis.GEOMETRY, "nca"): (
+        "NcaGeometry.step requires a (B, C, H, W) state grid; the kernel's "
+        "trainer supplies a flattened batch, so every nca cell fails at "
+        "runtime. Retired 2026-10-02 pending a route-level reshape."
+    ),
+}
+
+
+def _axis_primitives() -> tuple[tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...]:
     """Every axis primitive with its description and structural topology params."""
     substrate: tuple[PrimitiveRow, ...] = tuple((n, d, ()) for n, d in _SUBSTRATE_PRIMS)
     geometry = tuple(_GEOMETRY_PRIMS)
@@ -321,6 +339,8 @@ def _seed_axis_primitives() -> None:
                     name=name,
                     axis_kind=axis,
                     description=description,
+                    available=(axis, name) not in _UNAVAILABLE,
+                    unavailable_reason=_UNAVAILABLE.get((axis, name)),
                     accepted_params=_accepted_params(axis, name),
                     topology_params=tuple(
                         _hyperparameter_spec(p, axis.value, AxisKind.STRUCTURAL)
@@ -749,8 +769,10 @@ CONSTRAINTS = [
         name="param_budget_fairness",
         kind=ConstraintKind.FAIRNESS,
         description="Param budget tolerance 25% for fair comparison across axes",
-        predicate=expr_from_string("param_count <= param_budget * 1.25"),
-        params={"tolerance": 0.25},
+        predicate=expr_from_string(
+            f"param_count <= param_budget * {1 + PARAM_BUDGET_TOLERANCE}"
+        ),
+        params={"tolerance": PARAM_BUDGET_TOLERANCE},
         proof_kind=ProofKind.RESOURCE,
         origin="DECLARED",
     ),
