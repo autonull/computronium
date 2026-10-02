@@ -283,7 +283,12 @@ class TestU3_MultiRoundPauseResume:
 
     @pytest.mark.timeout(900)
     def test_u3_pause_resume_via_run_id(self, tmp_path: Path) -> None:
-        """Test that a run can be paused and resumed via run_id."""
+        """Test that a run can be paused and resumed via run_id.
+
+        ``max_rounds`` is exclusive in ``RoundController.should_continue``, so a
+        config of 1 executes no round at all: with that value the "first run"
+        measured nothing and ``round2_count >= round1_count`` was 0 >= 0.
+        """
         store_path = tmp_path / "u3_resume_store.duckdb"
         store_config = StoreConfig(path=store_path)
 
@@ -296,7 +301,7 @@ class TestU3_MultiRoundPauseResume:
                 run_id=run_id,
                 run_spec=run_spec,
                 policy_name="stratified_random",
-                max_rounds=1,
+                max_rounds=2,
                 store_path=tmp_path,
             )
             records1 = asyncio.run(_run_pipeline(config, store))
@@ -318,8 +323,8 @@ class TestU3_MultiRoundPauseResume:
 
             round2_count = len(store.query_records(run_id=run_id))
 
-            # Should have more records after resume (dedup prevents re-measurement)
-            assert round2_count >= round1_count
+            assert round1_count > 0
+            assert round2_count > round1_count
 
 
 # =============================================================================

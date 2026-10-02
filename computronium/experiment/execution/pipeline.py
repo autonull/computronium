@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from computronium.experiment.execution.backends import Failure, Success
 from computronium.experiment.execution.decision import Decision, RoundController
 from computronium.experiment.execution.stage import StageId, get_stage_spec
 from computronium.experiment.execution.sysctx import (
@@ -40,7 +41,10 @@ if TYPE_CHECKING:
 
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
-    from computronium.experiment.execution.backends import ExecutionBackend
+    from computronium.experiment.execution.backends import (
+        EvaluationResult,
+        ExecutionBackend,
+    )
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.policy import Policy
     from computronium.experiment.execution.search_space import SearchSpace
@@ -180,6 +184,33 @@ class PipelineRunner:
             StageId(n) for n in config.run_spec.stage_names
         ]
         self._shutdown = False
+        self._resume_completed_measurements()
+
+    def _resume_completed_measurements(self) -> None:
+        """Seed completed measurement keys from the store for this run_id.
+
+        Without this a resumed run re-measures every cell it already holds: the
+        batch dedup only saw one round, so the duplicate reached the store and
+        came back as a PERSISTENCE_ERROR rejection instead of a skip.
+        """
+        if not self._store.is_open:
+            return
+        keys = {
+            record.measurement_key
+            for record in self._store.query_records(run_id=self._config.run_id)
+        }
+        if keys:
+            self._state.completed_measurement_keys.update(keys)
+            logger.info(
+                "Resuming run %s: %d measurement(s) already stored",
+                self._config.run_id,
+                len(keys),
+            )
+
+    @property
+    def rejections(self) -> tuple[dict[str, Any], ...]:
+        """Every rejected cell this run classified, in order."""
+        return tuple(self._state.rejections)
 
     def _get_all_stage_specs(self):
         from computronium.experiment.execution.stage import STAGE_SPECS
@@ -528,6 +559,29 @@ class PipelineRunner:
                 )
             )
 
+    def _fresh_batch_items(
+        self, proposals: list[Proposal], provenance: Provenance
+    ) -> list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]:
+        """Proposals that still need measuring, deduplicated by measurement_key.
+
+        Keys already stored by an earlier launch of this run_id are already in
+        ``completed_measurement_keys``, so a resumed run skips them instead of
+        paying for a measurement the store will refuse.
+        """
+        seen: set[str] = set(self._state.completed_measurement_keys)
+        skipped = 0
+        items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
+        for proposal in proposals:
+            key = proposal.coordinate.measurement_key(proposal.schedule)
+            if key in seen:
+                skipped += 1
+                continue
+            seen.add(key)
+            items.append((proposal.coordinate, proposal.schedule, provenance, {}))
+        if skipped:
+            logger.info("Skipped %d already-measured proposal(s)", skipped)
+        return items
+
     async def _execute_batch_with_isolation(
         self,
         proposals: list[Proposal],
@@ -548,75 +602,60 @@ class PipelineRunner:
             logger.warning("No backend configured, skipping batch execution")
             return []
 
-        # Build batch items for backend
         system_context = self._state.system_context
         if system_context is None:
             raise ValueError("SystemContext not initialized")
-        env_dict = system_context.environment.to_provenance_dict()
-        provenance = self._provenance(env_dict)
+        provenance = self._provenance(system_context.environment.to_provenance_dict())
 
-        # Deduplicate proposals by measurement_key to avoid duplicate key errors
-        seen_keys: set[str] = set()
-        batch_items = []
-        for p in proposals:
-            mkey = p.coordinate.measurement_key(p.schedule)
-            if mkey not in seen_keys:
-                seen_keys.add(mkey)
-                batch_items.append((p.coordinate, p.schedule, provenance, {}))
-            else:
-                logger.warning("Skipping duplicate measurement_key: %s", mkey)
+        batch_items = self._fresh_batch_items(proposals, provenance)
+        if not batch_items:
+            return []
 
-        # Execute with failure isolation
-        from computronium.experiment.execution.backends import (
-            EvaluationResult,
-            Failure,
-            Success,
-        )
+        results = await self._config.backend.submit_batch(batch_items, self._store)
+        stored = self._persist_results(batch_items, results)
+        for record in stored:
+            self._observe(record)
+        return stored
 
-        results: list[EvaluationResult] = await self._config.backend.submit_batch(
-            batch_items, self._store
-        )
-
-        # Process results: persist successes, classify failures
-        successful_records: list[Record] = []
-        for i, result in enumerate(results):
+    def _persist_results(
+        self,
+        batch_items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
+        results: list[EvaluationResult],
+    ) -> list[Record]:
+        """Persist successes and classify every non-success; a sibling never aborts the batch."""
+        successful: list[Record] = []
+        for (coord, sched, _prov, _params), result in zip(batch_items, results):
             match result:
                 case Success(record=record):
                     try:
                         self._store.append(record)
-                        self._observe(record)
-                        successful_records.append(record)
-                        self._state.completed_measurement_keys.add(
-                            record.measurement_key
-                        )
                     except Exception as e:
                         logger.exception(
-                            "Failed to persist record for %s",
-                            proposals[i].coordinate.cell_key(),
+                            "Failed to persist record %s", coord.cell_key()
                         )
                         self._classify_rejection(
-                            coordinate=proposals[i].coordinate,
-                            schedule=proposals[i].schedule,
+                            coordinate=coord,
+                            schedule=sched,
                             cause="PERSISTENCE_ERROR",
                             message=str(e),
                         )
+                        continue
+                    successful.append(record)
+                    self._state.completed_measurement_keys.add(record.measurement_key)
                 case Failure(failure_event=event):
                     logger.warning(
                         "Evaluation failed for %s: %s",
-                        proposals[i].coordinate.cell_key(),
+                        coord.cell_key(),
                         event.error_message,
                     )
                     self._classify_rejection(
-                        coordinate=proposals[i].coordinate,
-                        schedule=proposals[i].schedule,
-                        cause=event.failure_cause.value
-                        if hasattr(event.failure_cause, "value")
-                        else str(event.failure_cause),
+                        coordinate=coord,
+                        schedule=sched,
+                        cause=getattr(event.failure_cause, "value", None)
+                        or str(event.failure_cause),
                         message=event.error_message,
                     )
-                    # Siblings continue - we don't raise the exception
-
-        return successful_records
+        return successful
 
     def _observe(self, record: Record) -> None:
         """Hand a stored measurement to the policy.

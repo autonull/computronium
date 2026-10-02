@@ -150,6 +150,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         self._artifact_store = None
 
     @property
+    def is_open(self) -> bool:
+        """Whether the store is inside its connection context."""
+        return self._conn is not None
+
+    @property
     def artifacts(self) -> ArtifactStore:
         """Access the artifact store."""
         if self._artifact_store is None:

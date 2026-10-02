@@ -62,12 +62,22 @@ here only so a reader of this file knows they exist:
 Eight tickets, ordered by *unblocking the deliverable*. Each ends in its own
 commit and its own named gate; **no ticket's gate is a whole shard.**
 
-### T1 — §3.7 gate 5: resume without duplicating or losing a measurement
+### T1 — DONE (§3.7 gate 5: resume without duplicating or losing a measurement)
 - **Does:** interrupt a run mid-flight, resume by `run_id`, and prove the store
   holds no duplicate `measurement_key` and no gap in coordinate coverage.
 - **Gate:** a new lock asserting both properties from the store alone, on a
   `digits` run interrupted after the first N records (tier 1, ~1 min).
 - **Blocked by:** nothing. **Unblocks:** T5.
+- **Landed:** `PipelineRunner._resume_completed_measurements` seeds
+  `completed_measurement_keys` from the store for its own `run_id`
+  (`pipeline.py:185`), and `_fresh_batch_items` (`pipeline.py:556`) drops
+  already-measured proposals instead of paying for a measurement the store
+  refuses. `RecordStore.is_open` guards the seed; `PipelineRunner.rejections`
+  exposes the classification list so a lock can read it.
+- **Gate:** `tests/property/test_resume_coverage_lock.py` — **27 s**, both
+  tests. 5-file selection (stage/sampler/kernel/resume locks + U3 acceptance)
+  **83 s**. Falsified by removing the seeding: both tests go red on the
+  `PERSISTENCE_ERROR` rejection list.
 
 ### T2 — §3.7 gate 6: replay hash
 - **Does:** wire `compute_replay_hash` (`replay.py`, exported, **zero callers**
@@ -190,4 +200,39 @@ then.
 
 ## 5. Session log
 
-*(empty — T1 is the next ticket.)*
+- **T1 landed.** The store was already correct — `UNIQUE(run_id,
+  measurement_key)` at `store.py:207` — which is why the first version of the
+  lock *passed with the mechanism removed*: the constraint swallows duplicates
+  and the pipeline classifies them as `PERSISTENCE_ERROR` rejections, so both
+  store-level properties held anyway (§1.4, second instance of the D25 shape).
+  The falsifiable property is the rejection list, not the record count.
+- **`max_rounds` is off by one and it hides it.** `RoundController.should_continue`
+  increments before it compares (`decision.py:64`), so `max_rounds=1` executes
+  **zero** rounds. `test_u3_pause_resume_via_run_id` used `max_rounds=1` for its
+  "first run" and asserted `round2_count >= round1_count` — `0 >= 0`, green for
+  four sessions (TODO46 §2, third false-✅). Fixed: first run uses 2, and the
+  assertion is now `round1_count > 0` and `round2_count > round1_count`. Worth
+  grepping the repo for other `max_rounds=1` configs before the campaign (T5)
+  sizes its cells.
+- **Resume is now per-run, not per-round, but the runner is still stateless
+  across launches.** The policy object restarts from its seed, so a resumed run
+  re-proposes round 1's cells, skips them all, and only starts adding coverage
+  from its second round. Harmless for coverage, but it means a resumed run burns
+  one round per launch. T5's campaign should resume rarely (checkpoint on
+  budget exhaustion, not on every cell) or this becomes N wasted rounds.
+
+## 6. Improvement opportunities found while landing T1
+
+1. **`RoundController` semantics.** `max_rounds` executing `max_rounds - 1`
+   rounds is a trap for every caller. Either rename to `total_rounds_inclusive`
+   or fix the comparison and update the callers — but pick one and lock it, or
+   the next `max_rounds=1` writes another vacuous gate.
+2. **`_merge_classification` appends untyped dicts** to the same list
+   `_classify_rejection` appends to, so a consumer of `PipelineRunner.rejections`
+   must use `.get("cause")`. A `Rejection` frozen dataclass (stage, cell_key,
+   coordinate, schedule, cause, message, timestamp) would let T3's record-set
+   comparison and the report read causes without defensive `.get`.
+3. **The store's dedup is the last line of defence and nothing measures it.**
+   A lock that a forced-duplicate append is refused *and* that a resume never
+   reaches that path is the §3.7 gate-5 statement in full; today the resume lock
+   covers the second half only.
