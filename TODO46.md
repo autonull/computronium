@@ -747,19 +747,53 @@ Run the cheapest tier that can catch the change. Never the full suite.
 
 | Tier | Scope | Cost | When |
 |---|---|---|---|
-| 0 | imports + `comp` exit codes | ~35 s | every commit |
-| 1 | the shard you touched | ~2 min | every commit |
-| 2 | gallery figure lock | 7 s | demo-adjacent |
-| 3 | one `testpaths` directory | 15 s – 2 min | round close |
-| 4 | all four + `tests/acceptance` | ~10 min | release candidate |
+| 0 | no-cost dry-run: AST/registry/schema locks for the change | seconds | before anything else |
+| 1 | the lock files the change touches, `digits` at 2–4 batches | 10–30 s | every commit |
+| 2 | one `testpaths` directory | 15 s – 2 min | round close |
+| 3 | the rest of the shard set | ~2 min | round close |
+| 4 | `tests/acceptance` (see §6.1 — priced before launch) | ~10 min, **re-measure first** | round close, backgrounded |
 | — | `pytest -m demo` | ~1 h | re-pinning the gallery only |
 
 **Never `pytest tests/`** — it bypasses `testpaths` and hard-killed twice at
 test 873/3699. `-n 4` is already in `addopts`.
 
-Standing rule from TODO45: a test run must be *priced before it is launched*,
-and a suite that is too slow to run is a defect in the suite, not a discipline
-problem.
+Standing rule from TODO45, sharpened into §6.1 by session 7: a test run must be
+*priced before it is launched*, a suite too slow to run is a defect in the
+suite, and the cheapest tier that can catch the change is the one that runs.
+
+### 6.1 Cost is a design constraint, not a discovery
+
+**Standing rule, operator directive.** Work in this plan is done with cheap
+executions, and preferably with **no-cost dry-runs**. Electricity and operator
+time are budgeted like parameter counts. A session that ends with an unfinished
+suite has spent the budget and bought nothing.
+
+- **Every gate gets a no-cost tier first.** A new claim needs an assertion that
+  runs *without training a cell* — an AST lock, a registry invariant, a
+  round-trip, a signature harvest. That tier is what catches the defect class
+  this plan is actually about (§2.0: defined, exported, never called), and it
+  runs in seconds. Only after it is green does a cell train.
+- **The measured regime for any training is `digits`, 1–2 epochs,
+  `batch_limit` 2–4, `MEASURED_PARAM_BUDGET`.** No other task, no larger
+  ceiling, no sweep, without a written reason in the session log.
+- **Price a run from a single ≤60 s measurement, never from an estimate.** If
+  per-cell cost is unknown, one cell answers it. An estimate that turned out to
+  be 3× low is how this session lost 25 minutes: `tests/acceptance` was launched
+  on a stale 9:14 figure after an uncharged validation pass had changed the
+  regime. The §6 cost column is a *measured* number or it is marked unknown.
+- **Foreground commands are ≤2 min. Anything longer is backgrounded** with a
+  pre-registered kill time and a poll interval, and the session continues with
+  work that does not depend on it. No cell blocks on a suite.
+- **Never launch a suite to find out whether a change is sound.** Run the
+  cheapest tier that can catch the change; a red suite is a statement about a
+  gate, not a probe.
+- **A test whose cost has grown past its tier is a defect in the test**, and the
+  fix is to charge the work to the run's own budget (`batch_limit`,
+  `param_budget`, `epochs`) rather than to the wall clock. Both times this plan
+  has met an exploding cost, the cause was a knob that grew outside the run's
+  declaration: `_fit_geometry` filling a 25 000 ceiling, then validation
+  iterating a whole split for a 2-batch cell.
+
 
 ---
 
@@ -784,6 +818,46 @@ problem.
   way, not understood.
 - Per-cell walltime, and therefore how many cells a campaign may afford.
   Estimated sub-second; **unmeasured** — measure before fixing a cell count.
+
+### 7.1 Open questions — operator input unblocks these
+
+Each is a fork this session could not decide alone, with the input that settles
+it. They are ordered by how much work they gate.
+
+1. **Should the acceptance gate itself get cheaper?** U1–U5 train real cells and
+   cost ~10 min, which makes them the most expensive thing in the plan and the
+   one a session is most tempted to skip (this session skipped them). Three
+   options: (a) keep the real regime and run the suite backgrounded only at round
+   close; (b) move U1–U5 to the measured regime (`digits`, 2 batches) and add
+   one demo-marked test at the full regime, so the *gate* is cheap and the
+   *evidence* is expensive-but-optional; (c) leave it. **(b) is my
+   recommendation** — the guarantee being locked is orchestration and measurement
+   identity, and neither needs 45 batches to be a real guarantee. Needs a
+   decision because it changes what the acceptance suite claims.
+2. **Is a `batch_limit`-bounded validation number admissible as a claim
+   objective?** `val_acc` at 4 batches is a bounded sample, and the payload does
+   not record that bound beside the value. Options: compute a full-split
+   validation only at L2/claim fidelity and keep L0/L1 bounded (cost falls where
+   it matters), or record `val_batches` beside `val_acc` and let every consumer
+   decide. This is a science call, not an engineering one.
+3. **Are the 32 unmeasured objectives research targets or noise?** They now carry
+   `unavailable_reason` and print as `unmeasured` in `docs/generated/`. Options:
+   keep them registered with reasons (status quo), or retire them to a separate
+   `RESEARCH_TARGETS` list so `OBJECTIVES` means *implemented*. The second is
+   more honest but changes what a registry consumer sees.
+4. **How far should §3.4's interface change go?** Replacing the candidate-list
+   `propose()` with a generating interface lets a policy choose structural axes,
+   which is what the campaign needs. Options: (a) full change now, including the
+   duplicated `StageContext`/`Fragment`/`Stage`/`Decision`/`Proposal` in
+   `search_space.py`; (b) staged — policies may propose a structural selection
+   only where the primitive declares the capability, with the WP14 lock written
+   alongside. (b) is cheaper and testable; (a) is finished sooner.
+5. **Campaign shape.** `digits` only, or a second small task for transfer? And
+   should §3.6 ship as a demo-marked test (reproducible, expensive, gallery-
+   pinnable) or as a script writing artifacts (cheap, not gated)? The second
+   question decides whether the campaign can ever be asserted, which the plan
+   requires.
+
 
 **Explicitly not claimed by this plan:** that TODO43 is satisfied; that the
 kernel searches; that the system produces scientific findings; that any README
@@ -1182,7 +1256,9 @@ module; `docs/generated/` re-pinned (objectives gain `metric_key` /
 `unavailable_reason`, and the objectives table prints `unmeasured`).
 **Not run here:** `tests/acceptance` and the full shard set, because an
 unbounded validation pass made both unaffordable before the bound landed. That
-gate is owed, at the measured regime, as the first thing a fresh session runs.
+gate is owed, at the measured regime, as the first thing a fresh session runs —
+and §6.1 exists because this session launched it on a stale price instead of
+measuring one cell first.
 
 **Honest limit of this session's claim.** The sampler gate proves the machinery
 learns on a *constructed* landscape, deliberately labelled as such in the test
