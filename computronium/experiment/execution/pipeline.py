@@ -210,6 +210,11 @@ class PipelineRunner:
         }
         if keys:
             self._state.completed_measurement_keys.update(keys)
+            # A policy that can tell where it was, continues from the store
+            # rather than replaying its first round into cells already measured.
+            resume = getattr(self._config.policy, "resume", None)
+            if resume is not None:
+                resume(len(keys))
             logger.info(
                 "Resuming run %s: %d measurement(s) already stored",
                 self._config.run_id,

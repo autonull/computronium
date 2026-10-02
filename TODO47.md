@@ -384,25 +384,40 @@ evaluation path (dataset, batch composition, step size, readout) — not a wider
 campaign. Until one cell beats chance on `digits`, §3.7 gate 2 can only be
 asserted as "measured variation", which is what the campaign lock says.
 
-## 7. Open regressions from T5 (do these first)
+## 7. Open regressions from T5 — CLOSED
 
-Three locks in `tests/property/test_run_ledger_lock.py` are red, all from the
-fixes above, all understood:
+All three are green: `tests/property/test_run_ledger_lock.py` — **7 tests,
+17.7 s**, down from 377 s. **Falsified**: removing the `resume()` call turns
+the resume lock red.
 
-- `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` — asserts
-  `len(resumed) > len(interrupted)`. `StratifiedRandomPolicy` restarts from its
-  seed, so a resumed run re-proposes round 1's cells and, now that exhausted
-  rounds terminate the loop, adds nothing. §5's session note ("a resumed run
-  burns one round per launch") is now "adds nothing"; the lock needs a policy
-  whose later rounds are genuinely fresh, or the runner needs to keep the
-  policy's position across launches.
-- `test_two_policies_over_one_store_measure_different_trials` — the model-based
-  arm measured nothing. Cause was defect 7 above; the fix (strided pool) landed
-  but was **not re-verified** before this session ended.
-- `test_a_diverged_run_hashes_differently_though_its_spec_did_not` — the lock's
-  premise is now false rather than the code being wrong: with a deterministic
-  policy, the extra round measures nothing new, so the run did not diverge.
-  Rewrite it to diverge through a policy that continues to fresh cells.
+The cost was in the fixture, not the mechanism. `_run_spec()` declared an
+*unrestricted* space, so a deterministic policy re-proposed its own first round
+and "the resume added coverage" was unobservable — and the file paid six minutes
+to prove nothing. A narrowed space with **more legal cells than one round
+proposes** (10) makes both properties observable and costs 1/20th.
 
-Also unverified this session: `tests/acceptance/test_unified_kernel.py` and
-`test_param_budget_lock.py` (both consume the changed walk/policy) were not run.
+- `resume` now continues instead of replaying. `Policy.resume(completed)` is
+  duck-typed: `StratifiedRandomPolicy` re-seeds from `seed + completed`,
+  `RoundRobinGridPolicy` advances its cursor by the store's completed count. The
+  runner calls it when it seeds `completed_measurement_keys`. Without it a
+  relaunch re-proposes round 1 exactly, every cell is already measured, the loop
+  correctly concludes the space it can reach is exhausted, and a resume adds
+  nothing at all.
+- **A lock's premise can be wrong without the code being wrong.** Two of them
+  asserted that a policy *forgets*: ``second == first`` on a re-launch, and that
+  an extra round diverges when a deterministic policy makes it measure nothing.
+  The first now asserts the store's invariant (no duplicate key, no refusal);
+  the second gets a space where a third round can still reach a fresh cell.
+  Weakening a lock is only honest when the invariant is stated at least as
+  strongly — the rewrite is in the file's history for that comparison.
+
+**Cost lesson, recorded because it cost this session a verdict:** running three
+files in one selection to save wall clock produced five failures and, when
+killed, no failure list — the same destruction §0.2 names. The ledger file alone
+was 17 s. **Price the file before choosing the selection, not after.**
+
+
+**Still unverified:** `tests/acceptance/test_unified_kernel.py`,
+`tests/property/test_param_budget_lock.py` and `test_policy_generation_lock.py`
+consume the changed walk/policy and were not re-run after the fixture change.
+They are round-close items.

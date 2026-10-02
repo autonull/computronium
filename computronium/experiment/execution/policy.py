@@ -262,8 +262,19 @@ class StratifiedRandomPolicy:
     """
 
     def __init__(self, *, seed: int | None = None) -> None:
+        self._seed = seed
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "stratified_random"
+
+    def resume(self, completed: int) -> None:
+        """Continue from where the store left off, rather than replay round one.
+
+        A relaunched run is handed a policy built from the run's own seed, so
+        without this it re-proposes its first round exactly; every cell is then
+        already measured, the loop correctly concludes the space it can reach is
+        exhausted, and a resume adds no coverage at all.
+        """
+        self._rng.seed((self._seed or 0) + completed)
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Propose cells by sampling uniformly within each structural stratum."""
@@ -306,6 +317,10 @@ class RoundRobinGridPolicy:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "round_robin_grid"
         self._cursor = 0
+
+    def resume(self, completed: int) -> None:
+        """Skip past the cells the store already holds."""
+        self._cursor += completed
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Propose the next ``ctx.n_propose`` cells of the stream, in order."""
