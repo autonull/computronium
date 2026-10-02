@@ -162,10 +162,35 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
 - **Blocked by:** T1, T2, T3, T4 — it is their integration, and running it
   before they pass means paying the most expensive tier against gates that do
   not yet exist.
-- **Cost discipline:** price **one cell** first, write the measured seconds per
-  cell into this file, and derive the cell count from that number. If the
-  campaign's cell budget exceeds one round close, it is a demo tier and stays
-  out of `testpaths`.
+- **Cost discipline — DONE, priced.** One cell is one `(coordinate, schedule)`
+  evaluated through the executor the backend calls (`cell_record`), measured in
+  `scripts/probes/_t5_cell_price.py` over three credits:
+
+  | task | batch_limit | s/cell |
+  |---|---|---|
+  | digits | 2 | 0.44 (first cell 1.06 — warmup) |
+  | digits | 8 | 0.23 |
+  | mnist | 2 | 0.16 |
+  | mnist | 8 | 0.33 |
+
+  **Budget 0.5 s/cell and the campaign is a normal test, not a demo.** The
+  shape below is 6 algorithms × 2 geometries × 2 tasks × 5 seeds = **120
+  measurements ≈ 60 s**, plus pipeline and store overhead; TODO46 §3.6's "a few
+  hundred real cells is a few minutes" holds, so the whole campaign fits one
+  round close and stays **in** `testpaths`. If a future axis multiplies that by
+  more than ~5, re-price and move it to the demo tier rather than growing it.
+- **Planned shape** (not every primitive on every axis, per §3.6): substrate
+  `digital`, plasticity `fast_weights`, update `euclidean` fixed; algorithms
+  = dynamics {energy_minimization, diffusion} × credit {thermodynamic_contrast,
+  local_contrastive, gradient}; geometry {feedforward, recurrent}; digits
+  primary, mnist transfer; L0, 1 epoch, measured param budget, 5 seeds.
+- **Gates 1-4 are CLI-shaped and still unimplemented**, which is the honest
+  status of this ticket: `comp run --spec examples/<file>.yaml` must write
+  records, a real `train_acc` must *move when the axis moves*, `comp report
+  --run-id <id>` must give claim+evidence+limitations from the store alone, and
+  `comp report status` must list the run. `examples/` **does not exist yet** —
+  the closest fixtures are `experiments/campaign_gate_tier0_digits.yaml` (a
+  different, older schema) and `campaigns/checkpoints/*.yaml`.
 
 ### T6 — §3.8 fold the lab in, last
 - **Does:** the kernel owns evaluation; the lab becomes a facade over it; the
