@@ -38,7 +38,7 @@ from computronium.experiment.schema.harvest import (
     harvest_schema,
     load_axis_config,
 )
-from computronium.experiment.schema.registries import PRIORS_REGISTRY
+from computronium.experiment.schema.registries import PRIORS_REGISTRY, prior_value
 from computronium.ontology.credit import CreditAssignmentConfig
 from computronium.ontology.dynamics import StateDynamicsConfig
 from computronium.ontology.geometry import GeometryConfig
@@ -97,10 +97,11 @@ def test_prior_center_falls_inside_the_declared_domain() -> None:
         if resolved is None:
             continue
         center = resolved[0]
+        lo, hi = spec.domain.lo, spec.domain.hi
         if spec.domain.members is not None:
             if center not in spec.domain.members:
                 illegal.append((spec.name, center, spec.domain.members))
-        elif not spec.domain.lo <= center <= spec.domain.hi:
+        elif lo is not None and hi is not None and not lo <= center <= hi:
             illegal.append((spec.name, center, spec.domain))
     assert not illegal, f"Priors whose center is outside the domain: {illegal}"
 
@@ -244,13 +245,7 @@ def test_conflicting_domains_are_a_registry_failure() -> None:
         (
             spec
             for spec in schema.hyperparameters
-            if len(
-                {
-                    s.domain
-                    for s in schema.hyperparameters
-                    if s.name == spec.name
-                }
-            )
+            if len({s.domain for s in schema.hyperparameters if s.name == spec.name})
             > 1
         ),
         None,
@@ -282,3 +277,34 @@ def test_axis_kinds_are_honoured_by_the_schema() -> None:
         AxisKind.INTEGER,
         AxisKind.CATEGORICAL,
     }
+
+
+def test_a_name_declared_by_two_axes_resolves_once_through_its_prior() -> None:
+    """``step_size`` is declared by dynamics (with a prior) and update (without).
+
+    Last-writer-wins over the per-axis specs would let the prior-less update
+    spec overwrite the dynamics prior's center with ``Domain.lo`` (1e-5) —
+    the defect that trained every unswept cell at a learning rate two orders
+    of magnitude below chance-relevant scale (TODO47 §6.1: digits never
+    learned; the fix measured val_acc 0.49 at the prior center vs 0.117 at
+    the bound). The resolved value must be the prior's center, once, for
+    every axis that declared the name.
+    """
+    schema = harvest_schema()
+    coordinate = Coordinate(
+        substrate="real",
+        geometry="feedforward",
+        dynamics="energy_minimization",
+        credit="gradient",
+        update="euclidean",
+        plasticity="null",
+        params={},
+    )
+    space = schema.active(coordinate)
+    spec = next(s for s in space.specs if s.name == "step_size")
+    center, _, _ = prior_value(spec.prior)  # type: ignore[arg-type]
+    assert space.values["step_size"] == center
+    # Both declaring axes see the same resolved value.
+    dynamics_step = space.by_axis(StructuralAxis.DYNAMICS)["step_size"]
+    update_step = space.by_axis(StructuralAxis.UPDATE)["step_size"]
+    assert dynamics_step == update_step == center

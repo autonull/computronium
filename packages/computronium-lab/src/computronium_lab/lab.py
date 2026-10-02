@@ -45,6 +45,9 @@ if TYPE_CHECKING:
         TransitionTask as StatePredictionTask,
     )
     from computronium_lab.synthesis.engine import ParetoOption, SynthesisResult
+    from computronium_lab.synthesis.predictor import (
+        ViabilityPredictor as ViabilityPredictor,
+    )
 
 PSI_ONLY = "psi_only"
 
@@ -157,7 +160,7 @@ class Lab:
         self,
         spec: ProblemSpec,
         *,
-        model: object | None = None,
+        model: ViabilityPredictor | None = None,
         include_evolved: bool = False,
     ) -> SynthesisResult:
         """Spec → best valid mechanism coordinate with provenance (T23.1.5).

@@ -170,7 +170,21 @@ class HarvestedSchema:
         if dead:
             raise InactiveHyperparameterError(dead, coordinate)
 
-        values = {spec.name: _resolve_value(spec, coordinate.params) for spec in active}
+        # A name several axes declare (``step_size``) resolves ONCE. Two specs
+        # for one name with different priors are a registry disagreement, and
+        # last-writer-wins here would let the prior-less update-axis spec
+        # overwrite the dynamics prior's center with Domain.lo — the defect
+        # that trained every unswept cell at 1e-5 (TODO47 §6.1). Prefer the
+        # spec that carries a prior; the axes share the resolved value.
+        declared: dict[str, HyperparameterSpec] = {}
+        for spec in active:
+            chosen = declared.get(spec.name)
+            if chosen is None or (spec.prior and not chosen.prior):
+                declared[spec.name] = spec
+        values = {
+            name: _resolve_value(spec, coordinate.params)
+            for name, spec in declared.items()
+        }
         return ActiveSpace(
             values=values,
             specs=tuple(active),

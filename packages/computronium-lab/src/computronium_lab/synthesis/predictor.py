@@ -53,6 +53,18 @@ GEOMETRY_CLASS: dict[str, str] = {
 DEFAULT_DEPTH_MAX = 2
 
 
+class ViabilityPredictor(Protocol):
+    """What synthesis needs from a viability model: predictions plus a reason.
+
+    The fitted ``ViabilityModel`` satisfies it; tests pin deterministic
+    predictions by passing a stand-in.
+    """
+
+    def predict(self, features: MechanismFeatures) -> float: ...
+
+    def rationale(self, features: MechanismFeatures) -> str: ...
+
+
 @dataclass(frozen=True, slots=True)
 class MechanismFeatures:
     """I(C,U,P) features for one candidate mechanism coordinate."""

@@ -14,11 +14,11 @@ from typing import TYPE_CHECKING
 
 from computronium.experiment.schema.registries import get_card_factor
 from computronium_lab.synthesis.catalog import CATALOG, MechanismCandidate
-from computronium_lab.synthesis.predictor import ViabilityModel
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from computronium_lab.synthesis.predictor import ViabilityPredictor
     from computronium_lab.synthesis.spec import ProblemSpec
 
 LOW_CONFIDENCE = 0.7
@@ -110,7 +110,7 @@ def screen_config(cand: MechanismCandidate, spec: ProblemSpec) -> None:
 def _score_candidates(
     candidates: tuple[MechanismCandidate, ...],
     spec: ProblemSpec,
-    model: ViabilityModel,
+    model: ViabilityPredictor,
     measured: Mapping[str, float],
 ) -> list[tuple[float, float, str | None, MechanismCandidate]]:
     scored: list[tuple[float, float, str | None, MechanismCandidate]] = []
@@ -127,7 +127,7 @@ def _score_candidates(
 
 def synthesize(
     spec: ProblemSpec,
-    model: ViabilityModel | None = None,
+    model: ViabilityPredictor | None = None,
     campaigns_run: dict[str, int] | None = None,
     frontier: Mapping[str, float] | None = None,
 ) -> SynthesisResult:
@@ -179,7 +179,7 @@ def synthesize(
 
 
 def explore(
-    spec: ProblemSpec, model: ViabilityModel | None = None
+    spec: ProblemSpec, model: ViabilityPredictor | None = None
 ) -> list[ParetoOption]:
     """Pareto frontier of constraint-satisfying mechanisms (T23.1.6)."""
     model = model or _shared_model()
@@ -216,7 +216,7 @@ def explore(
 
 def _provenance(
     spec: ProblemSpec,
-    model: ViabilityModel,
+    model: ViabilityPredictor,
     cand: MechanismCandidate,
     p: float,
     verdict: str | None,
@@ -235,7 +235,9 @@ def _provenance(
 
 
 @lru_cache(maxsize=1)
-def _shared_model() -> ViabilityModel:
+def _shared_model() -> ViabilityPredictor:
+    from computronium_lab.synthesis.predictor import ViabilityModel
+
     return ViabilityModel().fit()
 
 

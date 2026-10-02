@@ -175,21 +175,35 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
   axes of equal length advance together (observed).
 - **Gate 2 is asserted as measured variation, not learning.** `train_acc` is
   present, finite, in [0,1], and differs across credit rules; it is *not*
-  claimed to show a rule learning. See §6.1 — digits sits at chance in every
-  regime probed, which is the next session's first job.
+  claimed to show a rule learning. §6.1 is now resolved — the lr defect is
+  fixed and cells learn — so strengthening gate 2 to assert a non-chance
+  reference cell is queued work (T8-scale), not blocked.
 - **Cost, re-measured:** 0.11 s per record (49.6 s / 450). The original probe's
   0.44 s/cell priced `n_seeds=1`; a cell's real price is its seed plan.
 
-### T6 — §3.8 fold the lab in, last
+### T6 — §3.8 fold the lab in, last — **DONE**
 - **Does:** the kernel owns evaluation; the lab becomes a facade over it; the
   lab's *predicted* metrics stay labelled predicted everywhere and never enter a
   claim; anything that does not survive gets a retirement record (R78).
 - **Gate:** no second evaluation implementation exists, and the lab's own tests
   pass against the kernel's evaluator (tier 1–2).
-- **Blocked by:** T5. Folding earlier produces the second evaluator §3.8
-  forbids — the whole reason it is last.
+- **Blocked by:** T5. **Landed:** `history_metrics` is now the kernel's public,
+  single history→metrics extraction (`evaluate.py`), and the lab's
+  `train_with_certificates` consumes it. Retirement record (R78): the lab's own
+  fallback chain read `free_accuracy`/`loss` from trainer history — keys a
+  history row never carries — dead code hiding a second extraction; retired.
+  `Lab.synthesize` accepts an injectable viability model (`ViabilityPredictor`
+  protocol): the shared fit had drifted past LOW_CONFIDENCE for the CEEC test's
+  spec, silently retiring the exploratory branch (§1.4 shape) — the test now
+  pins a fixed low-confidence model. Boundary locks in `test_lab_boundary.py`:
+  the lab extracts measured metrics only through the kernel, never imports the
+  store/claim surface, and every synthesis prediction field is named
+  `predicted_*`. **Gate:** 4 lab files, 40 tests, ~53 s. The lab's adaptation
+  path (`_psi_eval`) survives: it measures ψ acquisition through a modulated
+  readout the cell evaluator structurally cannot express — a scoped lab
+  measurement, not a second cell evaluator.
 
-### T7 — D24: promotion has no stage
+### T7 — D24: promotion has no stage — **next**
 - **Does:** decide what promotes a cell (decision **D-a** below), then add the
   stage that writes `status.maturity` above `L0`. Today `promoted`,
   `filter_promoted` and the report's promotion-history section are permanently
@@ -197,7 +211,9 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
 - **Gate:** a lock asserting a promoted cell reaches `L2` and appears in
   `promotion_history`; plus the report's `Promoted:` count becomes non-zero on
   a run that earned it (tier 1).
-- **Blocked by:** decision D-a.
+- **Blocked by:** decision D-a. With digits now learning (§6.1), the D-a
+  default (i) is reachable by real runs: a PASS gate at declared fidelity with
+  `n_seeds` achieved seeds is no longer reserved for fabricated stores.
 
 ### T8 — The small ones (any order, any session)
 - `conformance.py` should **report** an `UNVERIFIED` row's recorded reason
@@ -362,27 +378,42 @@ Each of these was found by running the campaign, not by reading code; the
    over the run's own cell stream.
 9. **Checkpoints landed in the caller's cwd**, not beside the store.
 
-## 6.1 The finding that outranks all of the above
+## 6.1 The finding that outranks all of the above — **RESOLVED**
 
-**`digits` does not learn through `cell_record` in any regime probed**, so the
-campaign measures a real pipeline, not a real result. Measured
-(`energy_minimization` × `gradient`, the backprop-like reference, 64×2
-feedforward, chance = 0.1):
+**`digits` does not learn through `cell_record` in any regime probed** — and
+the cause was a schema defect, not a regime. The probe
+(`scripts/probes/todo47_digits_no_learning.py`) walked the path stage by
+stage: a linear probe on the raw pixels reaches **0.889** val_acc, so the
+signal is present; the composed reference cell trained at a frozen loss.
 
-| batch_limit | epochs | train_acc | val_acc | s/cell |
-|---|---|---|---|---|
-| 2 | 1 | 0.125 | 0.125 | 0.15 |
-| 8 | 3 | 0.109 | 0.125 | 0.61 |
-| 16 | 5 | 0.100 | 0.092 | 3.76 |
-| 64 | 30 | 0.121 | 0.094 | 7.7 |
-| 0 (full) | 1 | 0.104 | 0.094 | 2.1 |
+**Root cause: two `step_size` specs, last-writer-wins.** `step_size` is
+declared by both the dynamics axis (with prior
+`step_size_energy_minimization_backprop`, center 0.0316) and the update axis
+(prior-less). `HarvestedSchema.active()` built its `values` dict per spec, so
+the update-axis spec — whose resolution falls back to `Domain.lo` = 1e-5 —
+silently overwrote the dynamics prior's center for *every* unswept cell. The
+update lr was 1e-5 (then scaled to 5e-6), two orders below the prior's own
+sweep range; the loss froze at ln(10) across all epochs at every batch_limit,
+which is exactly the §6.1 table. `declare()`'s docstring says a same-name
+disagreement is a registry failure — it enforced nothing (the §0.4 shape, in
+the schema).
 
-AGENTS.md says to be skeptical of low-performing experiments because it usually
-means an implementation defect. Every regime is at or below chance, including
-the one that should be easiest, so the next session's first job is the
-evaluation path (dataset, batch composition, step size, readout) — not a wider
-campaign. Until one cell beats chance on `digits`, §3.7 gate 2 can only be
-asserted as "measured variation", which is what the campaign lock says.
+**Fix:** `active()` resolves each name once, preferring the prior-bearing
+spec. Lock: `test_a_name_declared_by_two_axes_resolves_once_through_its_prior`
+in `test_active_space_lock.py`. Measured through the full evaluator
+(10 epochs, 10 classes, chance 0.1):
+
+| step_size | train_acc | val_acc |
+|---|---|---|
+| 1e-5 (old default) | 0.138 | 0.117 |
+| 3.2e-3 | 0.084 | 0.094 |
+| 3.2e-2 (prior center) | 0.486 | **0.492** |
+
+The system learns; the campaign's gate 2 may now be strengthened beyond
+"measured variation" once the campaign YAML's sweep covers the prior's range
+(it declared 0.001–0.1, which spans the working point). All harvest/space
+locks (94) plus the run-ledger (33) and campaign (6, 78 s) locks are green
+after the fix.
 
 ## 7. Open regressions from T5 — CLOSED
 
