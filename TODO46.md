@@ -1429,6 +1429,21 @@ traceback. `tests/property/_readme.py` is the shared builder loader
    separate piece of work, and the reason the row carries a recorded reason
    rather than a silent `available=False`.
 
+6. **LOW PRIORITY — README content archaeology.** The README has been
+   rewritten several times (TODO43's canonical rewrite, TODO45's cost pass,
+   this session's generation). Every rewrite dropped *something*, and the drops
+   were never diffed: they were noticed, if at all, only by a reader who
+   remembered. Read `git log -p --follow -- README.md` back to a commit from
+   ≥2 days before the significant change and list what the old file carried
+   that the current one does not — sections, caveats, links, tables, measured
+   numbers. Recover the substance worth keeping into `docs/readme/*.md`; do
+   **not** restore text merely because it was there. **This is now cheap in a
+   way it was not:** the README is built from snippets, so a restored detail
+   lands in one file and is regenerated, and a detail that turns out to be
+   registry-derived is better served by a `<!-- gen: -->` block than by prose.
+   Recorded because the plan's own §1 is that defect class — content that
+   existed, was correct, and left without a marker.
+
 **Improvement opportunities found in session 8:**
 
 - **The generated-table mechanism generalises and nothing else uses it yet.**
