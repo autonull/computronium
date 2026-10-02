@@ -1739,6 +1739,40 @@ node id no longer collects), so the cache is not a usable pointer — see §6.2.
    Recorded because the plan's own §1 is that defect class — content that
    existed, was correct, and left without a marker.
 
+
+8. **§3.6 — the campaign.** `examples/*.yaml` as a **fixture, not a narrative**:
+   `digits` primary, `mnist` as the transfer task (§7.1-5), varying algorithms
+   (dynamics × credit × update) and topology with hyperparameters — not every
+   primitive on every axis. Still open from §7.1-5: demo-marked test
+   (expensive, gallery-pinnable, assertable) versus script writing artifacts
+   (cheap, not gated). **The plan's answer is that it must be assertable**, so
+   the demo route — and its cell budget must be priced before it is written.
+9. **§3.7 — the seven runnable assertions.** Gates 1–4 are reachable now that
+   D20/D21 landed and §3.5 gave the report its claims. **Gates 5, 6 and 7 are
+   open:** interrupt/resume with no duplicate `measurement_key`; same spec →
+   same `replay_hash` (`compute_replay_hash` still has **zero callers**, so this
+   gate needs wiring first); and `--policy stratified_random` then
+   `--policy model_based` over one store with comparable records. Plus the
+   operator's own criterion: which axis mattered, and a Pareto front over ≥2
+   objectives.
+10. **§3.8 — fold the lab in, last.** The kernel owns evaluation, the lab
+    becomes a facade over it, the lab's *predicted* metrics stay labelled
+    predicted and never enter a claim, and anything that does not survive gets
+    a retirement record (R78). **Blocked behind item 9** by design: folding
+    before the kernel owns evaluation would produce the second evaluator §3.8
+    forbids.
+11. **D24 — promotion has no stage.** `promoted`, `filter_promoted` and the
+    promotion-history section are permanently empty, because nothing writes
+    `status.maturity` above `L0` and `StageId` has no `PROMOTE`. Needs a
+    decision first (what promotes a cell: achieved seeds? an L2 gate? an
+    operator action?) and code second.
+12. **Two one-line judgements from session 9's follow-ons**, cheap and still
+    owed: `conformance.py` should *report* an `UNVERIFIED` row's recorded
+    reason rather than run its node id and print a pytest failure for a
+    capability it already knows is unverified; and
+    `codegen.generate_conformance_stubs` should stop emitting stubs for the 19
+    unverified rows — 19 files that exist to skip.
+
 ### 6.2 Spending less test time (operator directive, session 11)
 
 A session that ends with an unfinished suite has spent the budget and bought
