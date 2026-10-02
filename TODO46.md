@@ -175,6 +175,14 @@ objectives" (passes proposals through); S9 `:570` hardcodes
 `surface.report`" (returns a dict of counts). S5/S6/S7 duplicate the abandoned
 compose path, which now also has a real implementation in `compose.py`.
 
+**Owner: §3.1.** Leaving this unassigned is how two compose paths end up alive
+at once. When §3.1 lands the real evaluator, S5/S6 must **stop composing** and
+become coverage reporters of what the backend did — they duplicate
+`compose.py:474` today. S7's objective resolution is §3.4; S9's attribution and
+S11's report delegation are §3.5. A stage that has nothing to say emits an
+explicit empty fragment (abc3 §5.1, R39) rather than a plausible-looking
+placeholder with `confidence: 0.0`.
+
 ### D7 — The report renders statistics, not claims
 
 `experiment/surface/report.py:393` `generate_run_report` emits record counts,
@@ -244,6 +252,8 @@ historical record of what was believed. This section is the correction.
 | **WP17** — "Optuna-AXES distribution lock: `AxisSpec.kind` + `availability` drives `Trial.suggest_*`" | **Neither the lock nor the mechanism exists.** No `suggest_*` call anywhere; `study.tell()` absent | §D3 |
 | **WP20** — "Unified-kernel acceptance U1–U5, 8/8 PASSING" | Passes **vacuously**: orchestration over a stub evaluator. 11 s, no training | §D1 |
 | **WP13** — Class E3/E4 "scientific validity", d=−1.499, p=0.00106 | Measured on **`SyntheticGroundTruth`**, a constructed surface, and plan3 says so | §D8 |
+| **WP14** — "Canonical SearchSpace/Proposal lock: every policy with **no candidate list** produces legal proposals. Prevents silent reversion to candidate-list architecture." | **The lock does not exist** — no test file, no reference anywhere in `tests/`. It was the guard against precisely the architecture §3.3 was about to accept | §3.3 |
+| *(never marked)* **`compute_replay_hash`** — `replay.py:28` | Defined and exported in `replay.py:314`'s `__all__`, with **zero callers**. So §3.7's replay-hash gate has no implementation behind it either | §3.7 |
 
 `TODO43.plan3.md` also contains a section titled **"Integration Reality
 Correction"** which diagnosed all of this in advance:
@@ -258,6 +268,27 @@ Those were reclassified Incomplete, then the next session's notes declared "All
 work packages complete" and re-marked them ✅. **The failure is verification,
 not specification.**
 
+### 2.0 The one pattern behind every defect in §1
+
+Five of the ten defects are the same shape: **code that is defined, exported in
+`__all__`, and never called.**
+
+| Defined at | Exported | Callers |
+|---|---|---|
+| `backends.py:222` `_evaluate_single` | yes | produces the placeholder record |
+| `compose.py:474` `compose_cell_system` | yes, in `__all__` | **zero** |
+| `replay.py:28` `compute_replay_hash` | yes, in `__all__` | **zero** |
+| `optuna_adapter.py:165` `build_distributions` | yes | **zero** (never reaches `study.ask`) |
+| `claims.py` predicates | yes | no renderer (D7) |
+
+**Operating rule: `__all__` membership is not evidence of a call.** A grep for
+`__all__` proves a name is *offered*; a grep for call sites proves it is
+*used*, and only the second counts as implemented. Every audit in §2.1 reports
+call-site counts, not export counts.
+
+This is the single most useful thing §1 contains, because it converts a class of
+defects from "look for stubs" into a mechanical check.
+
 ### 2.1 Phase 0 of this plan — the audit
 
 Scope is deliberately the **critical path only** (not every WP): re-verify the
@@ -267,13 +298,20 @@ marks that bear on "does it work", and land one new lock.
    does it assert the mechanism, or only that a name is importable? A lock that
    asserts a *name* is the failure mode that produced this plan.
 2. Produce a table: claim → verifying test → does the test exercise the
-   mechanism (Y/N) → verdict.
-3. **New lock: no plan may mark a work package ✅ without a named verifying
-   test that exercises the mechanism.** Implemented as a check over the
-   `CAPABILITIES` registry, where each capability carries its
-   `verifying_test`. A capability whose verifying test is missing, or whose test
-   asserts nothing beyond importability, fails. This makes the *next*
-   false ✅ impossible rather than merely detecting this one.
+   mechanism (Y/N) → verdict. **Plus a call-site count per claim** (§2.0): a
+   capability with a verifying test and zero callers is *also* unimplemented,
+   and the count is what distinguishes the two.
+3. **New lock: no work package may be marked ✅ without a named verifying test
+   that exercises the mechanism.** Mechanically: for every `CAPABILITIES`
+   registry row, (a) `verifying_test` names a test that exists and collects,
+   (b) the test is not merely an import or attribute-existence assertion — it
+   must call at least one public entry point of the capability and assert on its
+   *output*, and (c) the capability's public entry point has ≥1 call site
+   outside its own module. (b) and (c) together are what would have caught all
+   five rows in §2.0. This makes the *next* false ✅ a test failure rather than a
+   review question.
+4. **Restore WP14** (§3.3) — the lock that was written to prevent a regression
+   nobody noticed occurring.
 
 ---
 
@@ -385,13 +423,22 @@ from the spec, not from `Schedule(fidelity="L0", seed=42, …, task_id="default"
 - Uniform treatment of structural axes and hyperparameters — they are both
   `AxisSpec`, and the availability predicate decides which are active.
 - The active space is **computed, never enumerated** (abc3 §3.1).
-- Retain the policies' `select from candidates` shape for now: the point is
-  that the candidate set is *derived from the spec*, so every policy benefits
-  and the samplers can then sample within it.
+- **Policies generate, they do not select from a list.** `plan3` §5 names this
+  as a guarded regression — the "Canonical SearchSpace/Proposal lock (WP14)":
+  *every policy, given the AXES snapshot, CONSTRAINTS, one task, a Budget, **no
+  candidate list**, and an empty store, produces legal proposals. Prevents
+  silent reversion to candidate-list architecture.* That lock **does not exist**
+  (fourth false ✅, §2), so nothing currently stops the regression. Build the
+  generating interface and the lock together; do not keep the interim
+  select-from-candidates shape, which is precisely the architecture the lock
+  was written to forbid, and which §3.4's `study.ask(distributions)` — a
+  generating operation — cannot coexist with anyway.
 
 **Gate:** a spec over `learning_rate ∈ {1e-4…1e-1, log}` and two credit
 primitives yields candidates at more than one lr (TODO43 **R2**); the task's
-shape reaches the geometry; `digits` produces an 8×8 input, never 784.
+shape reaches the geometry; `digits` produces an 8×8 input, never 784; and
+**WP14's lock passes** — a policy with an empty store and no candidate list
+still proposes.
 
 ### 3.4 Samplers that learn
 
@@ -458,7 +505,8 @@ On a clean checkout, CPU, no network:
 4. `comp report status` lists the run.
 5. Interrupt, resume by `run_id`: no duplicate `measurement_key`, no gap in
    coverage.
-6. Re-run the same spec: same `replay_hash` (R27).
+6. Re-run the same spec: same `replay_hash` (R27). **Note: `compute_replay_hash`
+   has zero callers today (§2) — this gate needs it wired first.**
 7. `--policy stratified_random` then `--policy model_based`: same store, same
    schema, comparable records (R16/R17).
 
@@ -482,24 +530,28 @@ against the kernel's evaluator.
 `docs/archive/` is **not modified** — it is the historical record. README is
 live text making live claims, and is corrected here.
 
-1. **E3/E4 relabeled.** They are machinery-validity evidence measured on a
-   constructed surface (`SyntheticGroundTruth`), not scientific findings about
-   learning mechanisms. Level 5 → whatever the level taxonomy actually assigns
-   to a synthetic-surface result, with the surface named inline.
-2. **U1–U5 restated precisely.** They guarantee *orchestration*
-   (policy interchangeability, pause/resume, one store, one measurement
-   identity). They do not guarantee that any measurement was made. Say so.
-3. **The policy table** must not advertise "Surrogate-guided search (Optuna
-   TPE, NSGA-II)" while §3.4 is undone. Until it is done, the row is marked
-   not-yet-searching.
-4. **`comp report run --profile default`** — already fixed to `quick-verify`
-   (that profile never existed; the documented command errored). H3.4's
-   remaining half — locking fenced bash blocks to tests — is still open;
-   documented invocations are verified by hand until it lands.
-5. **Add the kernel's real state.** One short, factual subsection: what the
-   kernel does today, what it does not, and where the §3 gates are. A reader
-   should not have to read the plan to learn that the samplers do not yet
-   search.
+**Items 1, 2, 3 and 5 landed in commit `4f69c649`; item 4's command fix landed
+in `04ec260e`.** Recorded here so a fresh session does not redo them. What
+remains open is item 4's other half.
+
+1. ~~**E3/E4 relabeled**~~ **DONE.** Both are now Level 3 and name
+   `SyntheticGroundTruth` inline as a constructed surface.
+2. ~~**U1–U5 restated precisely**~~ **DONE.** Labelled orchestration-guarantees
+   with an explicit note that the evaluator behind them is a placeholder.
+3. ~~**Policy table**~~ **DONE.** The `model_based` row reads "Not yet
+   searching," naming `policy.py` and pointing at §3.4.
+4. **OPEN — README bash blocks are still unlocked.** The
+   `--profile default` → `quick-verify` command fix landed; the *lock* over
+   fenced bash blocks did not. `test_cli_readme_lock` covers the command
+   **table**, which is exactly why it missed a documented command that errored.
+   Until it covers the blocks, documented invocations are verified by hand.
+5. ~~**Add the kernel's real state**~~ **DONE.** A "Kernel status, stated
+   plainly" subsection now states what the kernel does and does not, with
+   `file:line` references.
+
+**Standing item:** item 4 is a live honesty gap of the same class as the rest of
+this plan — a claim in README with nothing enforcing it. Do it with §2.1's
+other lock work rather than at the end.
 
 The plan's own §1 is the model: defects stated with `file:line`, not softened.
 
@@ -519,10 +571,12 @@ R1.5 — void; the premise was wrong.
 tests; only `property`'s true maximum is unmeasured and it comes free from the
 next run. R1.6 needs §2's audit to know what is genuinely unreferenced.
 
-**Deferred, and still right to defer.** Type hygiene — 1,095 pyright errors
-(root-caused in TODO45 §5; `object`→scalar coercion in 18 files is ~150 of
-them). It blocks nothing that this plan touches, and `p2p` is already down to 23
-after the pb2 exclusion.
+**Deferred, and still right to defer.** Type hygiene — **~1,057** pyright
+errors. (The 1,095 figure in TODO45 predates the pb2 exclusion that took `p2p`
+from 61 to 23; re-measure rather than trusting either number.) Root causes are
+in TODO45 §5 — `object`→scalar coercion across 18 files is ~150 of them. It
+blocks nothing this plan touches. The `System` vs `nn.Module` errors in
+`validation/tracks/{scaling,hardware}_tracks.py` are A5 and are untouched.
 
 **Superseded.** TODO45's Phase 2 (`comp run` as a CLI-wiring project). The CLI is
 already ~80% built and was the wrong 20%; §3 is the real Phase 2.
@@ -561,6 +615,8 @@ problem.
 | Another false ✅ | §2.1's registry-driven lock makes it a test failure, not a review question |
 | Removing D2's hardcoding changes every recorded number | Correct. Pre-existing run-records describe the old space; label them, don't reconcile them |
 | A limitation section becomes prose | Every line must be queryable from a record, or it is not shipped |
+| Policies generate from a spec-derived active space (§3.3) is more work than selecting from a list | It is the architecture the plans specify, and the WP14 lock forbids the alternative. The lock is the deliverable as much as the interface |
+| `__all__` membership keeps being mistaken for implementation (§2.0) | The audit reports call-site counts; the new lock requires ≥1 call site outside the defining module |
 
 **Unknowns, stated as unknowns:**
 
