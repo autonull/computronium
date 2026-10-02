@@ -1119,7 +1119,12 @@ def flow_metrics(
     sh = max(mh for _, mh in m)
     stride = sw + STYLE.step_gap
     cols = max(
-        1, min(STYLE.flow_max_cols, len(steps), int((w + STYLE.step_gap) // stride))
+        1,
+        min(
+            STYLE.flow_max_cols,
+            len(steps),
+            int((w + STYLE.step_gap) / stride + 0.5),
+        ),
     )
     rows = -(-len(steps) // cols)
     return cols, rows, sw, sh
@@ -1207,7 +1212,7 @@ def _pw_axes(row: AxesRow) -> float:
 def _pw_section(row: Section) -> float:
     return max(
         text_w(row.label, STYLE.label_font),
-        max((row_preferred_w(c) for c in row.rows), default=0.0),
+        max((row_preferred_w(c) for c in row.rows), default=0.0) + 12.0,
     )
 
 
@@ -1274,9 +1279,22 @@ def _rh_grouped(row: GroupedChipsRow, w: float) -> float:
     return grouped_chips_h(row.groups, w, row.gap)
 
 
+def _table_single_w(row: TableRow) -> float:
+    sample = row.rows if row.rows else (row.headers,)
+    return sum(_table_col_w(sample, row.headers, ci) for ci in range(len(row.headers)))
+
+
+def _table_k(row: TableRow, w: float) -> int:
+    n = len(row.rows) or 1
+    single = _table_single_w(row) or 1.0
+    k = max(1, int((w + 24.0) // (single + 24.0)))
+    return max(1, min(k, n))
+
+
 def _rh_table(row: TableRow, w: float) -> float:
-    half = (len(row.rows) + 1) // 2 if len(row.rows) > 12 else len(row.rows)
-    return 18.0 + 4.0 + 13.0 + half * 12.0
+    k = _table_k(row, w)
+    per = -(-len(row.rows) // k) if row.rows else 0
+    return 18.0 + 4.0 + 13.0 + per * 12.0
 
 
 def _rh_section(row: Section, w: float) -> float:
@@ -1855,8 +1873,9 @@ def _draw_table_row(
     row: TableRow, x: float, y: float, color: str, w: float
 ) -> tuple[str, float]:
     parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
-    half = (len(row.rows) + 1) // 2 if len(row.rows) > 12 else len(row.rows)
-    grids = [row.rows[:half], row.rows[half:]]
+    k = _table_k(row, w)
+    per = -(-len(row.rows) // k) if row.rows else 0
+    grids = [row.rows[i : i + per] for i in range(0, len(row.rows), per)] or [()]
     gx = x
     used_w = 0.0
     for gi, grid in enumerate(grids):
@@ -1900,11 +1919,11 @@ def _draw_table_row(
             gy += 12.0
         gx += sum(col_ws) + 24.0
     body_y = y + 18.0
-    body_h = 13.0 + half * 12.0
+    body_h = 13.0 + per * 12.0
     border = svg_rect(
         x - 6.0,
         body_y - 3.0,
-        used_w + 12.0,
+        max(used_w, w) + 12.0,
         body_h + 8.0,
         6.0,
         color + "08",

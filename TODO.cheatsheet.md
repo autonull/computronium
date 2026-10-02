@@ -274,6 +274,30 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== EPOCH-LOOP ONE-LINER + TIGHTER BOXES (2026-10-02k) ===
+
+- **Epoch loop renders as 5 stages in one row** — root cause was a
+  floor/off-by-one in `flow_metrics`: `cols = int((w + step_gap) //
+  stride)` comes out one short whenever `w` exactly equals the
+  five-step ideal (and `Section`'s 12 px inset pushed `w` below it,
+  wrapping 4+1 and dangling the loop-back polyline across rows).
+  `cols` now rounds with a 0.5 bias, `_pw_section` reserves the 12 px
+  inset in the section's preferred width, and the result is consistent:
+  `FlowRow` pref → Section pref → panel content width → child `w` →
+  same 5 columns when drawing. The loop-back return (dashed, last step →
+  first step bottom, "next step / until convergence") now closes over a
+  single row of steps.
+- **Tables fill their row instead of hugging the left** — `TableRow` no
+  longer hardcodes a two-grid split. `_table_k(row, w)` picks the grid
+  count that fits `w` (grid ≈ single-column width + 24 px gutter,
+  balanced row counts), `_rh_table` uses the same rule so heights and
+  borders stay consistent, and the border rect spans `max(used_w, w)`.
+  Side effect: wide single-column tables (SystemTrainerConfig, Record
+  fields) now paginate into as many side-by-side grids as width allows,
+  roughly halving their height and removing the empty right gutter of
+  their border box.
+- Geometry: SVG 149 KiB, 2957×2242, `--check` green, no label collisions.
+
 === TABLE BORDERS + SHARED HEADERS (2026-10-02j) ===
 
 - **Every `TableRow` now has a border** — rounded rect
