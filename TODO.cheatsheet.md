@@ -274,6 +274,34 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== SECTION WRAPPERS + CLI/ONTOLOGY INSETS (2026-10-02h) ===
+
+Implemented the three deferred items from the 2026-10-02g pass:
+
+- **`Section` row type** — `(label, rows)` container rendered as a tinted,
+  rounded sub-panel (`fill=color+0d`, `stroke=color+33`) with a bold small
+  header and child rows inset by 6 px. `row_h` = 22 header + children +
+  `row_gap` separators + padding; `row_preferred_w` = max(child widths).
+  Wired into `_PREFERRED_W`/`_ROW_H`/`_DRAW_ROW_HANDLERS`; `main()` chip
+  counting recurses through `Section` (`_row_chips`). Applied to system
+  (🏗 Composition / ⚙️ Configuration), train (🔁 Epoch loop / 📈 Telemetry),
+  evidence (🗃 Store & schema / 🏷 Discipline), surface (🖥 Surface / 📦
+  Packages). tasks/kernel/ontology/entry left flat (already grouped via
+  `GroupedChipsRow`/tables).
+- **CLI subcommands grouped by destination** — entry row is now a
+  `GroupedChipsRow` with three Groups: ▶ EXECUTION (run, benchmark),
+  📊 REPORTING (report, export, status, conformance), 🔍 TRUST (validate,
+  joint-validate, parity, repro). Mapping is curated (name → group), not
+  reflected — the reflection layer still supplies the names/summaries.
+- **Ontology internal flow** — the ontology panel now opens with a
+  `FlowRow` of the six axes (🟧substrate → … → 🧊update), each step's sub
+  naming its config class, making the axis composition order visible
+  inside the panel instead of only in the title.
+
+Gate: ruff format/check clean · pyright 0/0 · `--check` green
+(SVG 165 KiB, 3099×2469; ~195 inner chips = 189 prior + 6 ontology flow
+steps). No label collisions; legend and rail-gap checks still pass.
+
 === READABILITY PASS (2026-10-02g) ===
 
 User feedback applied: (a) no zoom-hint footer — SVG is vector, readers zoom;
