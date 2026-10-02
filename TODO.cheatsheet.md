@@ -274,6 +274,25 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== DOMAINS MERGED + SINGLE-GRID TABLES (2026-10-02l) ===
+
+- **Tasks panel: one grouped box** — the separate flat "🧩 N domains"
+  `ChipsRow` is gone. The `GroupedChipsRow` now lists *every* domain
+  from the registry as its own tinted group (missing ones, `timeseries`
+  and `scientific`, render as name-only groups suffixed
+  `· via create_task()` instead of disappearing), with the row label
+  carrying the totals:
+  `🧩 7 domains · 28 SUPPORTED_TASKS — offline-resolvable subset`.
+- **Tables are single-grid** — `_table_k` is now a constant 1, so
+  OBJECTIVES / PRIORS / RunSpec / SystemTrainerConfig / Record fields
+  each render as one column of rows with the border hugging the table's
+  measured width (not the old duplicated two-sub-grid layout that
+  stretched every border box ~2× past its content). `used_w` drives the
+  border; `_table_preferred_w` uses the natural single-column width.
+  Trade-off: panels get taller (SVG 149 KiB, 3263×2242) in exchange for
+  much tighter, cleaner boxes; inner chips count 126.
+- Gate: ruff format/check clean · pyright 0/0 · `--check` green.
+
 === EPOCH-LOOP ONE-LINER + TIGHTER BOXES (2026-10-02k) ===
 
 - **Epoch loop renders as 5 stages in one row** — root cause was a

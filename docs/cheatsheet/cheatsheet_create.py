@@ -676,21 +676,11 @@ def _entry_rows(b: Bundle) -> tuple[Row, ...]:
 
 
 def _tasks_rows(b: Bundle) -> tuple[Row, ...]:
-    task_chips = tuple(
-        Chip(
-            label=f"{DOMAIN_EMOJI.get(d, '📌')} {d}",
-            sub=f"{len(b.tasks.get(DOMAIN_GROUP[d], ()))} tasks"
-            if b.tasks.get(DOMAIN_GROUP[d])
-            else "via create_task()",
-            accent=COLORS["tasks"],
-            tooltip=f"{d} domain · {len(b.tasks.get(DOMAIN_GROUP[d], ()))} tasks",
-        )
-        for d in b.domains
-    )
     total_tasks = sum(len(v) for v in b.tasks.values())
     task_groups = tuple(
         Group(
-            name=f"{DOMAIN_EMOJI.get(d, '📌')} {d}",
+            name=f"{DOMAIN_EMOJI.get(d, '📌')} {d}"
+            + ("" if b.tasks.get(DOMAIN_GROUP[d]) else " · via create_task()"),
             chips=tuple(
                 Chip(
                     label=n,
@@ -702,15 +692,13 @@ def _tasks_rows(b: Bundle) -> tuple[Row, ...]:
             ),
         )
         for d in b.domains
-        if b.tasks.get(DOMAIN_GROUP[d])
     )
     return (
         TextRow(
             "🗺 create_task(name, device='cpu', quick_mode) → task.setup() → task.get_dataloader('train')"
         ),
-        ChipsRow(f"🧩 {len(b.domains)} domains (domains registry)", task_chips),
         GroupedChipsRow(
-            f"📋 SUPPORTED_TASKS ({total_tasks}) — offline-resolvable subset",
+            f"🧩 {len(b.domains)} domains · {total_tasks} SUPPORTED_TASKS — offline-resolvable subset",
             task_groups,
         ),
     )
@@ -1163,18 +1151,8 @@ def _table_col_w(
 
 
 def _table_preferred_w(row: TableRow) -> float:
-    rows, headers = row.rows, row.headers
-    half = (len(rows) + 1) // 2 if len(rows) > 12 else len(rows)
-    lrows, rrows = rows[:half], rows[half:]
-
-    def gw(rs: tuple[tuple[str, ...], ...]) -> float:
-        if not rs and not headers:
-            return 0.0
-        src = rs if rs else (headers,)
-        return sum(_table_col_w(src, headers, ci) for ci in range(len(headers)))
-
-    gw_total = gw(lrows) + (gw(rrows) + 24.0 if rrows else 0.0)
-    return min(max(text_w(row.label, STYLE.label_font), gw_total), STYLE.max_content_w)
+    gw = _table_single_w(row)
+    return min(max(text_w(row.label, STYLE.label_font), gw), STYLE.max_content_w)
 
 
 def _pw_chips(row: ChipsRow) -> float:
@@ -1285,10 +1263,7 @@ def _table_single_w(row: TableRow) -> float:
 
 
 def _table_k(row: TableRow, w: float) -> int:
-    n = len(row.rows) or 1
-    single = _table_single_w(row) or 1.0
-    k = max(1, int((w + 24.0) // (single + 24.0)))
-    return max(1, min(k, n))
+    return 1
 
 
 def _rh_table(row: TableRow, w: float) -> float:
@@ -1923,7 +1898,7 @@ def _draw_table_row(
     border = svg_rect(
         x - 6.0,
         body_y - 3.0,
-        max(used_w, w) + 12.0,
+        used_w + 12.0,
         body_h + 8.0,
         6.0,
         color + "08",
