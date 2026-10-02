@@ -70,6 +70,15 @@ Plan overview: developing `docs/diagram_create.py` to generate `docs/diagram.svg
 - Consider adding edge-label-rect containment check to `--check` validation (currently only checks panel bounds and edge endpoints).
 - The script runs zero-error on fresh checkout with `uv run python docs/diagram_create.py [--check]`.
 
+=== FEEDBACK FOR NEXT SESSION ===
+
+- SUPPORTED_TASKS: Currently rendered as a flat comma-separated FieldsRow; should be shown as **boxes grouped by the 7 Domains** rather than a cut-off list.
+- Config classes (SystemTrainerConfig, SubstrateConfig, etc.): Currently shown as comma-separated fields rows; should be shown as **individual ConfigBox chips/tiles** for visual discoverability.
+- Registries (Objectives, Priors, Capabilities, SearchSpace, ContrastDesign, etc.): Same issue — comma-separated lists should be **grouped into labeled chip boxes** so each row is scannable at a glance.
+- Emoji strategy: Review which items get emojis; add more discriminating icons per domain (e.g., distinct emoji per axis, per panel type, per registry) to improve visual scanning.
+- Apply this "boxes not lists" principle across ALL sections of the chart — any item currently rendered as a comma-separated `FieldsRow` or `TextRow` with many items should become a `ChipsRow` or custom grouped box layout.
+- Consider per-item tooltip text (SVG `<title>` tags) on hover for the boxed elements to convey full descriptions without label truncation.
+
 === FILES MODIFIED / CREATED ===
 
 - `docs/diagram_create.py` — completed and lint-clean (new script, ~850 lines after refactor)
