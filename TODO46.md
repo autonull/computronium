@@ -824,7 +824,21 @@ suite has spent the budget and bought nothing.
 Each is a fork this session could not decide alone, with the input that settles
 it. They are ordered by how much work they gate.
 
-1. **Should the acceptance gate itself get cheaper?** U1–U5 train real cells and
+**Decided:** *1* — move U1–U5 to the measured regime (`digits`, 2 batches) and
+add one demo-marked test at the full regime, so the gate is cheap and the
+evidence is expensive-but-optional. *7* — `mnist` is a valid secondary task:
+`task_shape("mnist")` returns `(1, 28, 28)` with 10 classes, and the D16 shape
+plumbing carries it to the composer unchanged. Its 60 000 samples cost nothing
+extra under `batch_limit`, which is the whole point of charging per-batch.
+
+**Answered by the operator, unresolved here:** *2* (is a bounded `val_acc`
+admissible as a claim objective?) and *3* (are the 32 unmeasured objectives
+targets or noise?). Session 7's default for both, so the next session is not
+blocked: record `val_batches` beside `val_acc` and keep every objective
+registered with its reason. Both are one-line reversals once decided.
+
+1. ~~**Should the acceptance gate itself get cheaper?**~~ **DECIDED (operator):
+   option (b).** U1–U5 train real cells and
    cost ~10 min, which makes them the most expensive thing in the plan and the
    one a session is most tempted to skip (this session skipped them). Three
    options: (a) keep the real regime and run the suite backgrounded only at round
@@ -852,7 +866,9 @@ it. They are ordered by how much work they gate.
    `search_space.py`; (b) staged — policies may propose a structural selection
    only where the primitive declares the capability, with the WP14 lock written
    alongside. (b) is cheaper and testable; (a) is finished sooner.
-5. **Campaign shape.** `digits` only, or a second small task for transfer? And
+5. **Campaign shape.** **DECIDED (operator): `digits` primary, `mnist` as the
+   transfer task** — `(1, 28, 28)`, 10 classes, verified this session. Still
+   open: demo-marked test versus script. And
    should §3.6 ship as a demo-marked test (reproducible, expensive, gallery-
    pinnable) or as a script writing artifacts (cheap, not gated)? The second
    question decides whether the campaign can ever be asserted, which the plan
@@ -1266,9 +1282,52 @@ docstring: it says nothing about which credit rule or topology is better. And
 §3.4 is half-landed — the study tunes a cell the space enumerated rather than
 choosing the cell. The remaining-work list is re-scoped to say so.
 
+### D20 — Two of §3.7's seven commands do not exist
+
+Found in session 7, by probing the CLI at tier 0 (five minutes, no training —
+§6.1's dry-run tier paying for itself immediately). The dispatcher is
+`comp {report,parity,repro,validate,joint-validate,benchmark}` and the kernel
+surface lives *under* `comp report {run,report,export,conformance,status}`.
+§3.7 asserts `comp run --spec-file <example>` and `comp report --run-id <id>`;
+neither invocation exists, and `--spec-file` is spelled `--spec`. So gate 1
+("run completes and writes records") and gate 3 ("report gives claim, evidence
+and limitations") are stated against commands that error out.
+
+This is §4 item 4's gap exactly as predicted: `test_cli_readme_lock` covers the
+command **table**, which is why a documented command that errors went unnoticed.
+Both are one commit — a `run`/`status` alias at the top level, or §3.7 rewritten
+to the real invocations — and the second is better, because the fix that also
+locks it is the bash-block lock §4 asks for.
+
+### D21 — `comp report status` crashes and reports success
+
+Same probe. With no store on disk, `comp report status` prints a raw
+`duckdb.IOException` traceback and **exits 0**. A status command that cannot read
+its store is reporting a run's absence as a success. §3.7 gate 4 depends on it.
+
+### D22 — `--dry-run` writes to the store and prints nothing
+
+Same probe, and the most consequential of the three, because it is the cheapest
+end-to-end check in the CLI and it is not one. `cli._cmd_run`'s dry-run branch
+calls `store.create_run()` **before** it checks `args.dry_run` (so a "no-op" run
+creates `experiment.duckdb` and a run row), and reports the plan through
+`logger.info`, which nothing configures — the command exits 0 having printed
+nothing at all.
+
+§6.1 makes the dry-run tier mandatory for every gate. It cannot be mandatory
+while the shipped dry-run has side effects and no output. Fixing it is cheap and
+unblocks the tier the whole cost discipline depends on: print the resolved spec,
+the space's primitive counts, the policy, and the first proposals to stdout, and
+move the store initialisation behind the dry-run branch.
+
 ### Remaining work, in order
 
-1. **§3.4 remainder — the candidate-list `propose()` signature.** The sampler
+0. **D22, then D20/D21, then the tier-0 CLI lock.** ~30 minutes, no training,
+   and it is what makes §6.1's dry-run tier real rather than aspirational.
+1. **D10** — add `tests/acceptance` to `testpaths`. One line; a bare `pytest`
+   has still never run the project's central claim.
+
+2. **§3.4 remainder — the candidate-list `propose()` signature.** The sampler
    now asks with harvested distributions and is told measured values, so §3.4's
    *learning* gate passes. What is **not** done is the interface change §3.3 and
    §3.4 were always going to be together: `propose(candidates, records, budget,
@@ -1290,7 +1349,7 @@ choosing the cell. The remaining-work list is re-scoped to say so.
    fixed half of a related seam: the geometry/hyperparameter double-meaning
    `params` channel is gone (`_composable` no longer passes
    `coordinate.params` as the geometry mapping), so `params` is one thing again.
-2. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
+3. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
    be *re-priced* against what sessions 3–6 changed: `test_active_space_lock.py`,
    `test_search_space_lock.py` and `test_param_budget_lock.py` are the shape it
    asks for, and `tests/acceptance` now shares the runner's space builder. Two
@@ -1299,8 +1358,10 @@ choosing the cell. The remaining-work list is re-scoped to say so.
    is. **Note the retirement precedent** (session 6, D17): a capability row can
    now be `available=False` with a recorded `unavailable_reason`, and the
    registry-driven lock should require the reason, not accept a bare `False`.
-3. **§4 item 4's remaining half** — locking README's fenced bash blocks.
-4. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
+4. **§4 item 4's remaining half** — locking README's fenced bash blocks, which
+   is the same lock that catches D20's class (a documented invocation that
+   errors) and now has a defect to catch.
+5. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
    `NcaGeometry.route` to reshape a `(B, F)` batch into the `(B, C, H, W)` state
    grid its `step` contract names, and to read class logits back out of the
    grid. That is a geometry feature with credit/settle consequences — a
