@@ -57,8 +57,8 @@ Plan overview: developing `docs/diagram_create.py` to generate `docs/diagram.svg
 
 === LINT / TYPE STATUS ===
 
-- `ruff format`: clean (file reformatted for consistency)
-- `ruff check`: **all checks passed**
+- `ruff format`: clean
+- `ruff check`: **all checks passed** (refactored `row_preferred_w`/`row_h` to stay within C901 complexity ≤10 and PLR0911 return-count ≤6 by extracting `grouped_chips_h` + `_grouped_chips_preferred_w` helpers)
 - `pyright` (strict): **0 errors, 0 warnings**
 - Dev-env smoke (`import optuna, scipy, torchvision, pytest`): passes
 - `tests/property/test_gallery_provenance_lock.py`: 85 passed
@@ -72,15 +72,42 @@ Plan overview: developing `docs/diagram_create.py` to generate `docs/diagram.svg
 
 === FEEDBACK FOR NEXT SESSION ===
 
-- SUPPORTED_TASKS: Currently rendered as a flat comma-separated FieldsRow; should be shown as **boxes grouped by the 7 Domains** rather than a cut-off list.
-- Config classes (SystemTrainerConfig, SubstrateConfig, etc.): Currently shown as comma-separated fields rows; should be shown as **individual ConfigBox chips/tiles** for visual discoverability.
-- Registries (Objectives, Priors, Capabilities, SearchSpace, ContrastDesign, etc.): Same issue — comma-separated lists should be **grouped into labeled chip boxes** so each row is scannable at a glance.
-- Emoji strategy: Review which items get emojis; add more discriminating icons per domain (e.g., distinct emoji per axis, per panel type, per registry) to improve visual scanning.
-- Apply this "boxes not lists" principle across ALL sections of the chart — any item currently rendered as a comma-separated `FieldsRow` or `TextRow` with many items should become a `ChipsRow` or custom grouped box layout.
-- Consider per-item tooltip text (SVG `<title>` tags) on hover for the boxed elements to convey full descriptions without label truncation.
+All feedback items from (2026-10-02) have been addressed:.
+
+1. **SUPPORTED_TASKS → grouped by 7 Domains** ✓ — Replaced flat `FieldsRow` with `GroupedChipsRow`: each domain is a `Group` with a colored emoji header and individual task-name chips. Tasks that are empty (timeseries, scientific) are omitted from the groups list. Each task chip has a `<title>` tooltip with the task name.
+
+2. **Config classes → individual ConfigBox chips** ✓ — Converted all `FieldsRow` config displays to `ChipsRow` with individual field-name chips: `SystemTrainerConfig` (19 fields → 19 chips), `RunSpec` fields (20 → chips), `Record` fields (18 → chips). Each chip uses `mono=True` and has a `<title>` tooltip.
+
+3. **Registries → labeled chip boxes** ✓ — Restructured `_kernel_rows()` registries from a single summary `ChipsRow` to:
+   - `GroupedChipsRow` with two `Group`s: `OBJECTIVES` (35 chips, measured=green ✓, research=amber) and `PRIORS` (28 chips). Both with `⚖️` headers showing counts.
+   - Separate `ChipsRow` for summary-only registries (CAPABILITIES, CONSTRAINTS, LEGALITY DSL, SearchSpace, ContrastDesign).
+   - Each registry chip has a `<title>` tooltip.
+
+4. **Emoji strategy** ✓ — Added discriminating icons: `🎯` for Objectives group, `⚖️` for Priors group, `⚙` for config names in axis boxes, `🧬` axis emoji prefix in axis box headers (🟧🟩🟦🟪🌸🧊 for S/G/D/P/C/U). Domain emojis retained in Tasks panel.
+
+5. **Boxes not lists across ALL sections** ✓ — All `FieldsRow` instances with multi-item content have been converted to `ChipsRow` or `GroupedChipsRow`:
+   - RunSpec fields → ChipsRow
+   - SystemTrainerConfig fields → ChipsRow
+   - Record fields → ChipsRow
+   - Task names → GroupedChipsRow (grouped by domain)
+   - Registry items → GroupedChipsRow / ChipsRow
+   - Remaining `TextRow` instances are descriptive prose (single long strings), not item lists — kept as `TextRow`.
+
+6. **Per-item tooltip text (SVG `<title>` tags)** ✓ — Added `tooltip: str | None` field to both `Chip` and `FlowStep` dataclasses. `draw_chip()` and `draw_flow_step()` wrap content in `<g><title>...</title>...</g>` when tooltip is set. 303 `<title>` elements in the final SVG covering: CLI commands, API symbols, demos, domain chips, task chips, stage flow steps, policies, objectives, priors, RunSpec fields, SystemTrainerConfig fields, record fields, store methods, claim tiers, surface CLI, verification levels, packages, and axis primitives (descriptions).
+
+=== NEW DATA MODEL: Group + GroupedChipsRow ===
+
+Added `Group` (name, chips, accent) and `GroupedChipsRow` (label, groups, gap) to the presentation model. Key rendering details:
+- `Chip.tooltip` — when set, `draw_chip` wraps output in `<g><title>...</title>...</g>`
+- `FlowStep.tooltip` — same wrapping in `draw_flow_step`
+- `grouped_chips_h()` — computes height for `GroupedChipsRow`; extracts decision logic from `row_h` match case to satisfy ruff complexity limits (C901: complexity ≤10, PLR0911: ≤6 returns)
+- `_grouped_chips_preferred_w()` — extracts preferred-width computation for `GroupedChipsRow` for the same reason
+- `row_h` and `row_preferred_w` were refactored to use single-return-per-case and match-case dispatch, reducing complexity from 11→8 and returns from 7→6
+- `_DRAW_ROW_HANDLERS` now includes `GroupedChipsRow: _draw_grouped_chips_row`
+- `main()` chip counting updated to include `sum(len(g.chips) for g in getattr(r, "groups", ()))`
 
 === FILES MODIFIED / CREATED ===
 
-- `docs/diagram_create.py` — completed and lint-clean (new script, ~850 lines after refactor)
-- `docs/diagram.svg` — generated SVG cheat-sheet (output of last successful run)
-- `docs/infographic.txt` — generated datafile (output of last successful run)
+- `docs/diagram_create.py` — implemented feedback items 1–6 (GroupedChipsRow model, tooltips, grouped registries, config field chips, task boxes by domain, axis emoji headers); refactored row_preferred_w/row_h for complexity limits; ~850 lines → ~930 lines
+- `docs/diagram.svg` — regenerated (161 KiB, 2523px tall × 2511px wide, 303 `<title>` tooltips, 253 inner chips)
+- `docs/infographic.txt` — regenerated (text datafile, unchanged structure — already grouped by domain)

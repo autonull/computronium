@@ -1,6 +1,6 @@
 ==============================================================================
 COMPUTRONIUM ARCHITECTURE — INFOGRAPHIC DATAFILE
-generated 2026-10-02 @ commit 6b5b19c7 by docs/diagram_create.py
+generated 2026-10-02 @ commit 2f100f88 by docs/diagram_create.py
 artifacts: docs/diagram.svg (directed graph) · this file (data)
 ==============================================================================
 
