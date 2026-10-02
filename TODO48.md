@@ -214,4 +214,11 @@ Landed tickets leave the queue — the file should get shorter.
 
 ## 5. Session log
 
-- **Q3 landed.** (session 1)
+- (empty — this file is the queue; landed tickets leave it shorter)
+
+---
+
+**The path beyond Q8 is `TODO49.md`** — Phases D–F (device as a schedule
+field, campaign economics, long-campaign survival, uncertainty, significance,
+contrast design, L2 by replay, CLI/docs/CI/versioning). Its Phase A–C are
+this file's queue, unchanged.
