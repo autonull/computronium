@@ -16,11 +16,19 @@ S11 Report    — Delegates to surface.report fragments
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
+    from computronium.experiment.execution.backends import ExecutionBackend
+    from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.policy import Policy
+    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.execution.sysctx import SystemContext
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
@@ -63,6 +71,24 @@ class StageTransition(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class Proposal:
+    """One cell a policy proposed to execute, with the reason it was proposed."""
+
+    coordinate: Coordinate
+    schedule: Schedule
+    rationale: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def proposal_id(self) -> str:
+        """A stable identity for this proposal."""
+        content = (
+            f"{self.coordinate.cell_key()}|{self.schedule.fidelity}|"
+            f"{self.schedule.seed}|{self.rationale}"
+        )
+        return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+@dataclass(frozen=True, slots=True)
 class Fragment:
     """Output fragment from a stage execution.
 
@@ -72,7 +98,7 @@ class Fragment:
 
     stage_id: StageId
     records: list[Record] = field(default_factory=list)
-    proposals: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
+    proposals: list[Proposal] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     coverage: dict[str, Any] = field(default_factory=dict)  # R18 coverage reporting
     classification: dict[str, Any] = field(
@@ -88,19 +114,19 @@ class StageContext:
     run_id: str
     run_spec: RunSpec
     stage_id: StageId
-    store: Any  # RecordStore
-    budget: Any  # Budget
-    cost_model: Any  # CostModel
-    policy: Any  # Policy
-    allocator: Any  # EvidenceDrivenAllocator | None
-    backend: Any  # ExecutionBackend
-    search_space: Any  # SearchSpace
+    store: RecordStore
+    budget: Budget
+    cost_model: CostModel
+    policy: Policy
+    allocator: EvidenceDrivenAllocator | None
+    backend: ExecutionBackend
+    search_space: SearchSpace
     completed_keys: set[str]
-    pending_candidates: list[tuple[Coordinate, Schedule]]
+    pending_proposals: list[Proposal]
     in_progress: list[tuple[Coordinate, Schedule]]
     stage_params: dict[str, Any]
     provenance: Any  # Provenance
-    system_context: Any  # SystemContext (R75/K10)
+    system_context: SystemContext
 
 
 @runtime_checkable
@@ -366,6 +392,7 @@ __all__ = [
     "STAGE_REGISTRY",
     "STAGE_SPECS",
     "Fragment",
+    "Proposal",
     "Stage",
     "StageContext",
     "StageGate",

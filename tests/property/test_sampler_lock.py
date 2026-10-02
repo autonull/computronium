@@ -26,10 +26,12 @@ from computronium.experiment.execution.budget import Budget, SimpleCostModel
 from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
 from computronium.experiment.execution.policy import (
     ModelBasedPolicy,
+    ProposalContext,
     create_policy,
     policy_context,
     resolve_objectives,
 )
+from computronium.experiment.execution.search_space import search_space_from_spec
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 from computronium.experiment.schema.harvest import harvest_schema
 from computronium.experiment.schema.metrics import (
@@ -50,6 +52,7 @@ from computronium.experiment.schema.record import (
     Status,
 )
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+from computronium.experiment.schema.run_spec import RunSpec
 
 _TASK_ID = "digits"
 _OPTIMAL_STEP_SIZE = 1e-2
@@ -117,15 +120,57 @@ def _budget() -> Budget:
     return Budget(started_at=0.0, target_cells=None, target_cost=None)
 
 
-def _proposal_cell(
-    policy: ModelBasedPolicy, **params: Any
-) -> tuple[Coordinate, Schedule]:
-    schedule = _schedule()
-    proposed = policy.propose(
-        [(_coordinate(**params), schedule)], [], _budget(), SimpleCostModel()
+def _run_spec(**overrides: Any) -> RunSpec:
+    fields: dict[str, Any] = {
+        "profile": "lock",
+        "task": _TASK_ID,
+        "objectives": ("validation_accuracy",),
+        "fidelity": "L0",
+        "n_seeds": 1,
+        "epochs": 1,
+        "seed": 0,
+    }
+    fields.update(overrides)
+    return RunSpec(**fields)
+
+
+def _context(
+    records: list[Record] | None = None, *, n_propose: int = 1, **overrides: Any
+) -> ProposalContext:
+    """One task's own space, one budget, and whatever the run has measured.
+
+    There is no candidate list to pass: the policy generates its cells, which
+    is the interface §3.3/§3.4 were always going to be together.
+    """
+    spec = _run_spec(**overrides)
+    return ProposalContext(
+        search_space=search_space_from_spec(spec, tasks=[_TASK_ID]),
+        spec=spec,
+        run_id="sampler",
+        budget=_budget(),
+        cost_model=SimpleCostModel(),
+        evidence=_History(records or []),
+        task=_TASK_ID,
+        n_propose=n_propose,
     )
-    assert proposed, "a model-based policy must propose from an affordable candidate"
-    return proposed[0]
+
+
+class _History:
+    """A store holding exactly the records a test measured."""
+
+    def __init__(self, records: list[Record]) -> None:
+        self._records = records
+
+    def query_records(
+        self, run_id: str | None = None, limit: int | None = None
+    ) -> list[Record]:
+        return self._records[:limit] if limit else list(self._records)
+
+
+def _proposal_cell(policy: ModelBasedPolicy) -> tuple[Coordinate, Schedule]:
+    proposals = list(policy.propose(_context()))
+    assert proposals, "a model-based policy must generate a cell from its own space"
+    return proposals[0].coordinate, proposals[0].schedule
 
 
 class TestObjectivesAreMeasurements:
@@ -306,13 +351,8 @@ class TestTheStudyLearns:
         told: list[tuple[Coordinate, Schedule]] = []
 
         for index, accuracy in enumerate((0.10, 0.40, 0.25)):
-            proposed = policy.propose(
-                [(_coordinate(), _schedule(seed=index))],
-                [],
-                _budget(),
-                SimpleCostModel(),
-            )
-            coordinate, schedule = proposed[0]
+            proposed = list(policy.propose(_context(seed=index)))
+            coordinate, schedule = proposed[0].coordinate, proposed[0].schedule
             told.append((coordinate, schedule))
             policy.observe(_record(coordinate, schedule, {"val_acc": accuracy}))
 
@@ -374,16 +414,15 @@ class TestTheStudyLearns:
     def test_the_sampler_differs_from_uniform_for_the_same_seed(self) -> None:
         from computronium.experiment.execution.policy import UniformRandomPolicy
 
-        model_based = ModelBasedPolicy(seed=7, objectives=("validation_accuracy",))
+        model_based = ModelBasedPolicy(
+            seed=7, objectives=("validation_accuracy",), spec=_run_spec()
+        )
         uniform = UniformRandomPolicy(seed=7)
-        candidates = [(_coordinate(), _schedule())]
 
         sampled = [_proposal_cell(model_based)[0].params.get("step_size")]
         random = [
-            coord.params.get("step_size")
-            for coord, _ in uniform.propose(
-                candidates, [], _budget(), SimpleCostModel()
-            )
+            proposal.coordinate.params.get("step_size")
+            for proposal in uniform.propose(_context(n_propose=10))
         ]
 
         assert sampled != random
@@ -397,12 +436,7 @@ class TestTheStudyLearns:
         ]
         resumed = ModelBasedPolicy(seed=0, objectives=("validation_accuracy",))
 
-        resumed.propose(
-            [(_coordinate(), _schedule(seed=9))],
-            history,
-            _budget(),
-            SimpleCostModel(),
-        )
+        list(resumed.propose(_context(history, seed=9)))
 
         assert resumed.completed_trials() == len(history)
         assert policy.completed_trials() == 0

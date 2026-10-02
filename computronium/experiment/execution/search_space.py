@@ -1,19 +1,18 @@
-"""Canonical search space and proposal abstractions (WP14).
+"""The active search space, computed from a run's own declaration.
 
-The abc3 architecture specifies:
-    Policy.propose(SearchContext) -> Iterator[Proposal]
-
-with the wrapper applying legality and novelty uniformly.
+The abc3 architecture specifies
+``Policy.propose(SearchContext) -> Iterator[Proposal]``: a policy *generates*
+cells from the space rather than choosing from a list handed to it
+(TODO46 §3.3, WP14). This module is what it generates them from.
 """
 
 from __future__ import annotations
 
-import hashlib
 import math
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import islice
-from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.schema.axis import (
     AXES_REGISTRIES,
@@ -31,12 +30,9 @@ from computronium.experiment.schema.harvest import (
 from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
 
 if TYPE_CHECKING:
-    from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.evaluate import TaskShape
-    from computronium.experiment.execution.policy import Policy
     from computronium.experiment.schema.axis import AxisSpec
-    from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
     from computronium.experiment.schema.run_spec import RunSpec
 
@@ -351,125 +347,9 @@ def generate_candidates(
     return list(islice(stream, limit))
 
 
-@dataclass(frozen=True, slots=True)
-class ProposalContext:
-    """Context passed to every policy's propose()."""
-
-    search_space: SearchSpace
-    budget: Budget
-    cost_model: CostModel
-    evidence: RecordStore
-    run_id: str
-
-
-@dataclass(frozen=True, slots=True)
-class Proposal:
-    """Single proposal from a policy."""
-
-    coordinate: Coordinate
-    schedule: Schedule
-    rationale: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def proposal_id(self) -> str:
-        """Generate a unique ID for this proposal."""
-        content = f"{self.coordinate.cell_key()}|{self.schedule.fidelity}|{self.schedule.seed}|{self.rationale}"
-        return hashlib.sha256(content.encode()).hexdigest()[:16]
-
-
-class ProposalPolicy(Protocol):
-    """Protocol for proposal policies."""
-
-    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
-        """Generate proposals from the search space."""
-        ...
-
-    def observe(self, record: Record) -> None:
-        """Incorporate a completed record into the policy's evidence base."""
-        ...
-
-    def get_name(self) -> str:
-        """Return the policy name."""
-        ...
-
-
-@dataclass(frozen=True, slots=True)
-class Decision:
-    """Decision from S10 Decide stage."""
-
-    transition: str  # CONTINUE | COMPLETE | PAUSE | STOP
-    new_proposals: list[Proposal] = field(default_factory=list)
-    promotions: list[Any] = field(default_factory=list)  # Promotion
-    abandonments: list[Any] = field(default_factory=list)  # Abandonment
-    replications: list[Any] = field(default_factory=list)  # Replication
-    rationale: str = ""
-    budget_impact: float = 0.0
-
-
-@runtime_checkable
-class Stage(Protocol):
-    """Protocol for pipeline stages."""
-
-    stage_id: StageId
-
-    async def run(self, ctx: StageContext) -> Fragment:
-        """Execute the stage and return a fragment."""
-        ...
-
-
-@dataclass(slots=True)
-class StageContext:
-    """Context passed to each stage during execution."""
-
-    run_id: str
-    run_spec: RunSpec
-    stage_id: StageId
-    store: RecordStore
-    budget: Budget
-    cost_model: CostModel
-    policy: Policy
-    allocator: EvidenceDrivenAllocator | None
-    backend: ExecutionBackend
-    search_space: SearchSpace
-    completed_keys: set[str]
-    pending_proposals: list[Proposal]
-    pending_candidates: list[tuple[Coordinate, Schedule]]
-    in_progress: list[tuple[Coordinate, Schedule]]
-    stage_params: dict[str, Any]
-    provenance: Any  # Provenance
-    system_context: SystemContext
-
-
-@dataclass(frozen=True, slots=True)
-class Fragment:
-    """Output fragment from a stage execution."""
-
-    stage_id: StageId
-    records: list[Record] = field(default_factory=list)
-    proposals: list[Proposal] = field(default_factory=list)
-    metadata: dict[str, Any] = field(default_factory=dict)
-    coverage: dict[str, Any] = field(default_factory=dict)
-    classification: dict[str, Any] = field(default_factory=dict)
-    decisions: list[Any] = field(default_factory=list)  # Decision objects
-
-
-# Forward references resolved at runtime
-from computronium.experiment.execution.allocator import (
-    EvidenceDrivenAllocator,  # noqa: E402
-)
-from computronium.experiment.execution.backends import ExecutionBackend  # ruff: ignore[module-import-not-at-top-of-file]
-from computronium.experiment.execution.stage import StageId  # ruff: ignore[module-import-not-at-top-of-file]
-from computronium.experiment.execution.sysctx import SystemContext  # ruff: ignore[module-import-not-at-top-of-file]
-
 __all__ = [
-    "Decision",
-    "Fragment",
-    "Proposal",
-    "ProposalContext",
-    "ProposalPolicy",
     "SearchSpace",
-    "Stage",
-    "StageContext",
+    "ShapeResolver",
     "generate_candidates",
     "iter_candidates",
     "narrow_domain",

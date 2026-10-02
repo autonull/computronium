@@ -43,10 +43,10 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.backends import ExecutionBackend
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.policy import Policy
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution.search_space import SearchSpace
+    from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
-        SearchSpace,
         StageContext,
     )
     from computronium.experiment.schema.record import Record
@@ -369,7 +369,7 @@ class PipelineRunner:
         impl_class = get_stage_implementation(stage_id)
         if impl_class is None:
             logger.warning("No implementation for stage %s, using no-op", stage_id)
-            from computronium.experiment.execution.search_space import Fragment
+            from computronium.experiment.execution.stage import Fragment
 
             return Fragment(stage_id=stage_id)
 
@@ -383,7 +383,7 @@ class PipelineRunner:
         except Exception as e:
             logger.exception("Stage %s failed", stage_id)
             # Return fragment with error info
-            from computronium.experiment.execution.search_space import Fragment
+            from computronium.experiment.execution.stage import Fragment
 
             fragment = Fragment(
                 stage_id=stage_id,
@@ -394,12 +394,7 @@ class PipelineRunner:
 
     def _create_stage_context(self, stage_id: StageId, stage_spec) -> StageContext:
         """Create StageContext for a stage."""
-        from computronium.experiment.execution.search_space import StageContext
-
-        # Convert pending proposals to (coord, sched) pairs for backward compatibility
-        pending_candidates = [
-            (p.coordinate, p.schedule) for p in self._state.pending_proposals
-        ]
+        from computronium.experiment.execution.stage import StageContext
 
         # Ensure required components are available
         budget = self._state.budget
@@ -436,7 +431,6 @@ class PipelineRunner:
             search_space=search_space,
             completed_keys=self._state.completed_measurement_keys,
             pending_proposals=self._state.pending_proposals,
-            pending_candidates=pending_candidates,
             in_progress=self._state.in_progress,
             stage_params=stage_spec.params,
             provenance=self._provenance(env_dict),
@@ -523,7 +517,7 @@ class PipelineRunner:
         )
 
         # Convert to Proposal objects
-        from computronium.experiment.execution.search_space import Proposal
+        from computronium.experiment.execution.stage import Proposal
 
         for coord, sched in proposals:
             self._state.pending_proposals.append(

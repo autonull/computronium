@@ -570,7 +570,7 @@ Serializes to the `runs.spec` JSON column; versioned; diffable.
 **Gate:** a bad spec fails naming the offending field; two specs diff cleanly
 (TODO43 **R41**); a run reproduces from its spec alone.
 
-### 3.3 Spec-driven space — LANDED, see §8 session 5
+### 3.3 Spec-driven space — LANDED, see §8 sessions 5 and 10
 
 Replace `search_space.py:174-206` with a generator that walks the harvested
 schema under the constraints in the spec, for the spec's task. Schedule comes
@@ -588,7 +588,9 @@ from the spec, not from `Schedule(fidelity="L0", seed=42, …, task_id="default"
   generating interface and the lock together; do not keep the interim
   select-from-candidates shape, which is precisely the architecture the lock
   was written to forbid, and which §3.4's `study.ask(distributions)` — a
-  generating operation — cannot coexist with anyway.
+  generating operation — cannot coexist with anyway. **Both landed in session 10**:
+  the generating interface is `Policy.propose(ctx) -> Iterator[Proposal]`, and
+  the lock is `tests/property/test_policy_generation_lock.py`.
 
 **Gate:** a spec over `learning_rate ∈ {1e-4…1e-1, log}` and two credit
 primitives yields candidates at more than one lr (TODO43 **R2**); the task's
@@ -1475,32 +1477,87 @@ touched; `docs/generated/` re-pinned.
 `platform`, and `pytest -m demo`. The first four do not touch the schema or the
 surface this session changed; the demo tier is gallery work.
 
+### Session 10
+
+**Landed: remaining-work item 2 — §3.3/§3.4's interface change, and the WP14 lock
+that now guards it.** The candidate list is gone from the policy layer. Every
+policy takes one argument:
+
+```python
+def propose(self, ctx: ProposalContext) -> Iterator[Proposal]: ...
+```
+
+`ProposalContext` (now in `policy.py`) carries the run's active space, its spec,
+its run id, its budget, its cost model, a `RecordSource` for the store, the
+task, the task's shape resolver and `n_propose`. There is no cell in it, so a
+policy *cannot* propose a cell the run did not declare — it has to generate one
+through `iter_candidates`, the one generator the space already had. `ctx.cells()`,
+`ctx.pool()` and `ctx.legal()` are the three doors into it; `legal()` is the
+single legality predicate, asked of the cells a policy *constructs* itself
+(a mutated cell is a cell nobody has composed yet).
+
+**Five smaller things the same change forced out, each a defect the old shape
+hid:**
+
+- **`StageContext.pending_candidates` had zero readers.** The live context
+  carried `pending_proposals`, the pipeline filled both, and stages read only the
+  latter — the two-channel shape §D5 named, one channel dead.
+- **S3 dropped `Schedule.param_budget`** when it re-seeded a cell for its data
+  origin, so a scheduled proposal silently lost the ceiling the run declared.
+- **`StrategyProgressionPolicy.stages` was typed `list[tuple[Policy, int]]`** for
+  a value the docstring calls a budget *fraction*.
+- **`ModelBasedPolicy` had two knobs for one thing** (`n_suggest` and the
+  context). The context owns it now.
+- **A policy constructed without `spec=` samples the whole harvested space**, and
+  the values it merges can be ones the harvest then refuses for that selection
+  (`InactiveHyperparameterError`). Those cells are now screened by `ctx.legal()`
+  and their trial is told `FAIL` rather than proposed — the failure is visible to
+  the sampler instead of becoming a training run that cannot compose.
+
+**The duplicate type declarations are gone, and in the direction the live code
+runs.** `search_space.py` no longer declares `Proposal`, `Fragment`,
+`StageContext`, `Stage`, `Decision`, `ProposalContext` or `ProposalPolicy`; it is
+the space generator and nothing else, which also removes its bottom-of-file
+runtime imports and the `search_space → stage → search_space` cycle. The canonical
+`Proposal`/`Fragment`/`StageContext`/`Stage` live in `stage.py` (whose own copies
+were the dead ones — `Fragment.proposals` was even typed as tuples). `ProposalContext`
+and the new `RecordSource` protocol live in `policy.py`, next to the `Policy`
+protocol they are the arguments of.
+
+**`tests/property/test_policy_generation_lock.py` is the WP14 lock the plan has
+been citing since session 1 as a false ✅.** Four claims over the shipped policy
+instances: each proposes from an empty store with no candidate list; every
+proposal's six axes are in the snapshot and its schedule is the spec's; every
+proposal actually composes for the task's shape; and — the guard — no policy's
+`propose` takes anything but `(self, ctx)`. The last one is the regression
+test: it fails the day someone adds a parameter back, rather than the day a run
+quietly stops exploring.
+
+**Verified:** `tests/property` 1719 passed / 2 failed → both fixed and re-run
+green (5:08); `tests/unit` 523 passed (2:28); `tests/acceptance` 8 passed
+(1:23); `ruff` + `pyright` clean on every module touched; README rebuilt (its
+policy table reads the new docstrings) and the build lock green.
+
+**Not run here:** `tests/primitives`, `algorithms`, `acceleration`, `ceec`,
+`platform`, `pytest -m demo` — none touches the schema or the surface this
+session changed.
+
 ### Remaining work, in order
 
 0. ~~**D22, then D20/D21, then the tier-0 CLI lock**~~ **DONE, §8 session 8.**
 1. ~~**D10** — add `tests/acceptance` to `testpaths`~~ **DONE, §8 session 8.**
 
-2. **§3.4 remainder — the candidate-list `propose()` signature.** The sampler
-   now asks with harvested distributions and is told measured values, so §3.4's
-   *learning* gate passes. What is **not** done is the interface change §3.3 and
-   §3.4 were always going to be together: `propose(candidates, records, budget,
-   cost_model)` still receives the cell stream and only optimizes the
-   hyperparameters within it. The structural six axes are still enumerated from
-   the spec's permitted primitives, so a model-based run cannot yet *choose* a
-   topology — it can only tune the cell the space handed it. Deleting the
-   candidate-list signature (and the `StageContext`/`Fragment`/`Stage`/
-   `Decision`/`Proposal` duplicates in `search_space.py`) is the next interface
-   change, and it is where the WP14 lock belongs. `study.ask(distributions)`
-   cannot coexist with the candidate-list `propose()` signature that `policy.py`
-   still has (D3), so §3.3 and §3.4 are one interface change. **The
-   objective→payload-key mapping is done** (`schema/metrics.py`, D19, session 7),
-   so the remaining work is the interface itself. The
-   space now carries real swept values in `Coordinate.params`, which is what
-   `_coord_to_params`/`_param_names` in `ModelBasedPolicy` were written to
-   consume, so the interface has a producer for the first time. Session 6 also
-   fixed half of a related seam: the geometry/hyperparameter double-meaning
-   `params` channel is gone (`_composable` no longer passes
-   `coordinate.params` as the geometry mapping), so `params` is one thing again.
+2. ~~**§3.4 remainder — the candidate-list `propose()` signature**~~ **DONE, §8
+   session 10.** `Policy.propose(ctx) -> Iterator[Proposal]` across all eight
+   policies, `ProposalContext` carrying the space/spec/task/budget/store instead
+   of a cell list, the `search_space.py` duplicates deleted, and WP14's lock
+   built and passing (`tests/property/test_policy_generation_lock.py`). §3.3 and
+   §3.4 were one interface change and are now one interface change. **Left
+   deliberately:** `EvidenceDrivenAllocator.propose(candidates, …)` still takes a
+   candidate list — that list is cells already measured and awaiting a promotion
+   decision, not a search space, so the architecture the lock forbids does not
+   apply to it.
+
 3. ~~**§2.1's audit table and the new lock**~~ **DONE, §8 session 9** — as code,
    not as a table: `surface/evidence.py` judges each row from the verifying
    test's AST, `capabilities.md` renders the verdict, and
@@ -1537,6 +1594,52 @@ surface this session changed; the demo tier is gallery work.
    registry-derived is better served by a `<!-- gen: -->` block than by prose.
    Recorded because the plan's own §1 is that defect class — content that
    existed, was correct, and left without a marker.
+
+**Improvement opportunities found in session 10:**
+
+- **The space generator is now the only way to get a cell, and it is
+  deterministic.** `iter_candidates` walks `k % len(names)` per axis, so two
+  policies given the same space and the same pool draw from an identical prefix —
+  which is exactly what makes the sampler's `seed` the only thing that
+  distinguishes its proposals from a random one's. A run that wants *coverage*
+  rather than sampling still has no way to say so: the round-robin policy rotates
+  over one pool, it does not enumerate the space. Worth deciding whether the
+  generator's stride is a declared policy or an implementation detail.
+- **`_POOL = 50` is an undeclared cost.** Every sampling policy walks 50 cells to
+  return `n_propose`, and each walk composes configs (~10–100 ms/cell). At
+  `n_propose=10` that is 5x the legality work the run needs, and it is invisible
+  against training — the same shape as session 8's `batch_limit` finding. It
+  belongs beside `MEASURED_PARAM_BUDGET` as a measured constant, or beside
+  `n_propose` in the context where it is visible.
+- **`ctx.legal()` is asked twice for generated cells** (once inside
+  `iter_candidates`, once by the policy). That is 2x geometry fitting for the
+  cells a policy did not modify. The duplicate is the price of one legality
+  predicate covering both generated and constructed cells; the alternative is two
+  predicates, which is worse. Worth a measurement before anyone calls it free.
+- **A `ModelBasedPolicy` built without `spec=` samples the entire harvested
+  space** and merges values the harvest may then refuse. The cells are now
+  screened, but the sampler is still being asked about hyperparameters the run
+  never declared — and the `FAIL` trials it accumulates are the study learning
+  from a policy that was configured wrong. `policy_context` always passes `spec`,
+  so the constructor allows a state the run never reaches; making it required
+  would be a one-line change with three call sites in tests.
+- **The `learning/surrogate.py` and `learning/benchmark.py` policies are a third
+  proposal interface** (`propose(n, context: dict) -> list[Coordinate]`), with
+  `context: dict` where this session's is a typed frozen dataclass. WP14's lock
+  only covers `POLICY_CATALOG`, so the guarded regression is guarded in one place
+  and unguarded in two. Whether the surrogate belongs in `POLICY_CATALOG` at all
+  (it answers a different question — what to search, not what to evaluate next)
+  is the open design question.
+- **`S7 Measure` is still a shell**: it copies `ctx.pending_proposals` into a
+  local named `measured`. §D6's shells got thinner this session by accident; this
+  one is the obvious next, and it is the stage §3.5's limitations section will
+  have to stop lying about.
+- **A lock over a signature is a lock over a spelling.** WP14's fourth test reads
+  `inspect.signature(...).parameters == ["self", "ctx"]`; renaming `ctx` to
+  `context` fails it, which is the right kind of strict only by accident. The
+  claim worth locking is "no parameter is a sequence of candidates", which a
+  behavioural test could make: assert the policy never *received* a cell. As
+  written, this lock is a convention with teeth.
 
 **Improvement opportunities found in session 9:**
 

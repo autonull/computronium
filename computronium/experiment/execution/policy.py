@@ -1,11 +1,20 @@
-"""Policy implementations for experiment execution (WP4/9)."""
+"""Policy implementations for experiment execution (WP4/9).
+
+A policy *generates* cells: ``propose(ctx)`` is handed the run's active space,
+its constraints, its task and its budget — never a list of candidates to choose
+between (TODO46 §3.3, plan3 WP14). The generator in
+:mod:`computronium.experiment.execution.search_space` is the one that walks the
+space, and :class:`ProposalContext` is the single place legality is applied.
+"""
 
 from __future__ import annotations
 
 import inspect
 import logging
 import random
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from dataclasses import dataclass, replace
+from itertools import islice
+from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
 import optuna
 from optuna.distributions import (
@@ -16,16 +25,29 @@ from optuna.distributions import (
 from optuna.study import StudyDirection
 
 from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
+from computronium.experiment.execution.search_space import (
+    ShapeResolver,
+    iter_candidates,
+)
+from computronium.experiment.execution.stage import Proposal
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.metrics import objective_metric, objective_values
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from computronium.experiment.execution.budget import Budget, CostModel
+    from computronium.experiment.execution.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
+
+# How many legal cells a policy draws before it chooses among them. A sampling
+# policy needs a pool to sample from; the pool is the run's own space, never a
+# list the caller enumerated.
+_POOL: Final = 50
 
 
 def resolve_objectives(
@@ -96,17 +118,117 @@ def _sampled_value(value: Any, distribution: BaseDistribution) -> Any:
 
 
 @runtime_checkable
-class Policy(Protocol):
-    """Protocol for allocation policies that decide which cells to execute next."""
+class RecordSource(Protocol):
+    """The slice of the record store a policy reads.
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose next cells to evaluate."""
+    The unified store is the only history (R71); naming the one method a policy
+    needs keeps that a structural fact rather than a convention.
+    """
+
+    def query_records(
+        self, run_id: str | None = None, limit: int | None = None
+    ) -> list[Record]:
+        """This run's completed measurements."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class ProposalContext:
+    """Everything a policy is given in place of a candidate list.
+
+    The axes snapshot and constraints are what the run's own space holds; the
+    store is the run's own history (R71). Nothing here is a cell, so a policy
+    cannot propose a cell the run did not declare — it has to generate one.
+    """
+
+    search_space: SearchSpace
+    spec: RunSpec
+    run_id: str
+    budget: Budget
+    cost_model: CostModel
+    evidence: RecordSource | None = None
+    task: str | None = None
+    shape: ShapeResolver | None = None
+    n_propose: int = 10
+
+    @property
+    def _scoped_space(self) -> SearchSpace:
+        """The space narrowed to this context's task, when it names one."""
+        if self.task is None or self.search_space.tasks == (self.task,):
+            return self.search_space
+        return replace(self.search_space, tasks=(self.task,))
+
+    def records(self, limit: int = 1000) -> list[Record]:
+        """This run's completed measurements. The store is the only history."""
+        if self.evidence is None:
+            return []
+        return self.evidence.query_records(run_id=self.run_id, limit=limit)
+
+    def cells(self, limit: int | None = None) -> Iterator[tuple[Coordinate, Schedule]]:
+        """Legal cells from the run's own space, in a deterministic order.
+
+        Args:
+            limit: Stop after this many cells; unbounded when ``None``.
+
+        Yields:
+            ``(coordinate, schedule)`` pairs the run may execute.
+        """
+        stream = iter_candidates(
+            self.spec,
+            self._scoped_space,
+            budget=self.budget,
+            cost_model=self.cost_model,
+            shape=self.shape,
+        )
+        yield from islice(stream, limit)
+
+    def pool(self) -> list[tuple[Coordinate, Schedule]]:
+        """The cells a sampling policy chooses among."""
+        return list(self.cells(limit=_POOL))
+
+    def legal(self, coordinate: Coordinate, schedule: Schedule) -> bool:
+        """Whether a cell this policy *constructed* is one the run may execute.
+
+        The generator screens the cells it walks, so this exists for the
+        policies that build their own — a mutated cell is a cell nobody has
+        composed yet, and an uncompposable cell is discovered by training.
+        """
+        from computronium.experiment.execution.search_space import _composable
+
+        if self.shape is not None and not _composable(
+            coordinate, schedule.task_id, self.shape, schedule.param_budget
+        ):
+            return False
+        return bool(_affordable([(coordinate, schedule)], self.budget, self.cost_model))
+
+
+def _dedupe(
+    proposals: Iterator[Proposal] | list[Proposal], limit: int
+) -> list[Proposal]:
+    """Drop a repeated cell, keeping the first rationale that reached it."""
+    seen: set[tuple[str, str, int]] = set()
+    unique: list[Proposal] = []
+    for proposal in proposals:
+        key = (
+            proposal.coordinate.cell_key(),
+            proposal.schedule.fidelity,
+            proposal.schedule.seed,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(proposal)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+@runtime_checkable
+class Policy(Protocol):
+    """Protocol for allocation policies that generate the cells to execute next."""
+
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Generate the next cells to evaluate from the run's own space."""
         ...
 
     def observe(self, record: Record) -> None:
@@ -128,32 +250,25 @@ class StratifiedRandomPolicy:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "stratified_random"
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose candidates using stratified random sampling."""
-        # Group candidates by axis values for stratification
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose cells by sampling uniformly within each structural stratum."""
         strata: dict[str, list[tuple[Coordinate, Schedule]]] = {}
-        for coord, sched in candidates:
-            key = f"{coord.substrate}|{coord.geometry}|{coord.dynamics}"
-            if key not in strata:
-                strata[key] = []
-            strata[key].append((coord, sched))
+        for coord, sched in ctx.pool():
+            strata.setdefault(
+                f"{coord.substrate}|{coord.geometry}|{coord.dynamics}", []
+            ).append((coord, sched))
 
-        # Sample from each stratum
-        proposals = []
-        per_stratum = max(1, 50 // max(1, len(strata)))
-        for stratum_candidates in strata.values():
-            self._rng.shuffle(stratum_candidates)
-            proposals.extend(stratum_candidates[:per_stratum])
-
-        # Filter by budget
-        affordable = _affordable(proposals, budget, cost_model)
-        return affordable[:50]
+        per_stratum = max(1, ctx.n_propose // max(1, len(strata)))
+        proposed = 0
+        for cells in strata.values():
+            self._rng.shuffle(cells)
+            for coord, sched in cells[:per_stratum]:
+                if not ctx.legal(coord, sched):
+                    continue
+                yield Proposal(coord, sched, self._name)
+                proposed += 1
+                if proposed >= ctx.n_propose:
+                    return
 
     def observe(self, record: Record) -> None:
         """Stratified random doesn't learn from observations."""
@@ -168,57 +283,48 @@ class RoundRobinGridPolicy:
     Systematically enumerates combinations, cycling through axes.
     """
 
+    _AXES: Final = (
+        "substrate",
+        "geometry",
+        "dynamics",
+        "plasticity",
+        "credit",
+        "update",
+    )
+
     def __init__(self, *, seed: int | None = None) -> None:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "round_robin_grid"
         self._indices: dict[str, int] = {}
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose candidates in round-robin order."""
-        # Group by each axis for round-robin
-        axis_groups: dict[str, dict[str, list[tuple[Coordinate, Schedule]]]] = {}
-        axes = ["substrate", "geometry", "dynamics", "plasticity", "credit", "update"]
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose cells in round-robin order over each axis's values."""
+        pool = ctx.pool()
+        axis_groups: dict[str, dict[str, list[tuple[Coordinate, Schedule]]]] = {
+            axis: {} for axis in self._AXES
+        }
+        for cell in pool:
+            coord, sched = cell
+            for axis in self._AXES:
+                axis_groups[axis].setdefault(getattr(coord, axis), []).append(cell)
 
-        for coord, sched in candidates:
-            for axis in axes:
-                value = getattr(coord, axis)
-                if axis not in axis_groups:
-                    axis_groups[axis] = {}
-                if value not in axis_groups[axis]:
-                    axis_groups[axis][value] = []
-                axis_groups[axis][value].append((coord, sched))
-
-        # Round-robin across each axis group
-        proposals = []
-        for axis in axes:
-            groups = axis_groups.get(axis, {})
-            if not groups:
-                continue
-            idx = self._indices.get(axis, 0)
-            values = list(groups.keys())
+        chosen: list[tuple[Coordinate, Schedule]] = []
+        for axis in self._AXES:
+            values = list(axis_groups[axis])
             if not values:
                 continue
-            value = values[idx % len(values)]
+            idx = self._indices.get(axis, 0)
+            chosen.extend(axis_groups[axis][values[idx % len(values)]])
             self._indices[axis] = (idx + 1) % len(values)
-            proposals.extend(groups[value])
 
-        # Deduplicate and filter by budget
-        seen = set()
-        unique = []
-        for coord, sched in proposals:
-            key = (coord.cell_key(), sched.fidelity, sched.seed)
-            if key not in seen:
-                seen.add(key)
-                unique.append((coord, sched))
-
-        affordable = _affordable(unique, budget, cost_model)
-        return affordable[:50]
+        proposed = 0
+        for coord, sched in chosen:
+            if not ctx.legal(coord, sched):
+                continue
+            yield Proposal(coord, sched, self._name)
+            proposed += 1
+            if proposed >= ctx.n_propose:
+                return
 
     def observe(self, record: Record) -> None:
         """Round-robin grid doesn't learn from observations."""
@@ -228,28 +334,19 @@ class RoundRobinGridPolicy:
 
 
 class UniformRandomPolicy:
-    """Uniform random sampling over all candidates."""
+    """Uniform random sampling over the run's active space."""
 
     def __init__(self, *, seed: int | None = None) -> None:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "uniform_random"
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose candidates uniformly at random."""
-        if not candidates:
-            return []
-
-        shuffled = candidates.copy()
-        self._rng.shuffle(shuffled)
-
-        affordable = _affordable(shuffled, budget, cost_model)
-        return affordable[:50]
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose cells drawn uniformly from the run's own space."""
+        pool = ctx.pool()
+        self._rng.shuffle(pool)
+        for coord, sched in islice(pool, ctx.n_propose):
+            if ctx.legal(coord, sched):
+                yield Proposal(coord, sched, self._name)
 
     def observe(self, record: Record) -> None:
         """Uniform random doesn't learn from observations."""
@@ -281,7 +378,6 @@ class ModelBasedPolicy:
         n_startup_trials: int = 10,
         objectives: tuple[str, ...] = ("validation_accuracy",),
         spec: RunSpec | None = None,
-        n_suggest: int = 10,
     ) -> None:
         """Declare the study.
 
@@ -293,8 +389,8 @@ class ModelBasedPolicy:
             objectives: Objective names from ``OBJECTIVES``; each must name a
                 measurement.
             spec: The run declaration, so the study samples the spec's own
-                narrowed hyperparameter domains and no others.
-            n_suggest: Upper bound on proposals per call.
+                narrowed hyperparameter domains and no others. How many cells a
+                call asks for is the context's ``n_propose``, not a second knob.
 
         Raises:
             UnknownObjectiveError: An objective is not registered.
@@ -305,7 +401,6 @@ class ModelBasedPolicy:
         self._seed = seed
         self._n_startup_trials = n_startup_trials
         self._spec = spec
-        self._n_suggest = n_suggest
         self._objectives, self._directions = resolve_objectives(objectives)
         self._name = f"model_based_{sampler}"
         self._study: optuna.Study | None = None
@@ -446,38 +541,34 @@ class ModelBasedPolicy:
             params={**coord.params, **suggested},
         )
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Ask the study for the next cells' hyperparameters.
 
-        Each affordable candidate is asked with the distributions its own active
-        space declares, so `suggest_*` runs against harvested domains narrowed
-        by the spec. A coordinate with no samplable dimension is proposed as it
-        stands: that is a fact about the cell, not an error.
+        The cells come from the run's own space and each is asked with the
+        distributions its own active space declares, so `suggest_*` runs against
+        harvested domains narrowed by the spec. A coordinate with no samplable
+        dimension is proposed as it stands: that is a fact about the cell, not an
+        error.
 
-        Returns:
+        Yields:
             The proposed cells, each paired with the trial its measurement will
             be told to.
         """
-        if not candidates:
-            return []
-        run_id = records[0].run_id if records else "unattributed"
-        study = self._get_or_rebuild_study(run_id, records)
-
-        proposals: list[tuple[Coordinate, Schedule]] = []
-        for coord, sched in _affordable(candidates, budget, cost_model)[
-            : self._n_suggest
-        ]:
-            trial = study.ask(self._distributions(coord))
+        study = self._get_or_rebuild_study(ctx.run_id, ctx.records())
+        for coord, sched in islice(ctx.cells(), ctx.n_propose):
+            distributions = self._distributions(coord)
+            if not distributions:
+                yield Proposal(coord, sched, self._name)
+                continue
+            trial = study.ask(distributions)
             proposed = self._with_params(coord, trial.params)
+            if not ctx.legal(proposed, sched):
+                # A value the harvest refuses for this selection is a cell
+                # nobody may train; asking again is cheaper than proposing it.
+                study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
+                continue
             self._pending[proposed.measurement_key(sched)] = trial.number
-            proposals.append((proposed, sched))
-        return proposals
+            yield Proposal(proposed, sched, self._name)
 
     def observe(self, record: Record) -> None:
         """Tell the study what the evaluator measured for a proposed cell.
@@ -517,7 +608,7 @@ class ModelBasedPolicy:
 
 
 class EvolutionPolicy:
-    """Evolutionary search over the 6-axis space.
+    """Evolutionary search over the active space.
 
     Maintains a population of cells, applies mutation/crossover,
     and selects based on fitness.
@@ -530,104 +621,79 @@ class EvolutionPolicy:
         mutation_rate: float = 0.1,
         crossover_rate: float = 0.5,
         seed: int | None = None,
+        objectives: tuple[str, ...] = ("validation_accuracy",),
     ) -> None:
         self._population_size = population_size
         self._mutation_rate = mutation_rate
         self._crossover_rate = crossover_rate
+        self._objectives, _ = resolve_objectives(objectives)
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "evolution"
         self._population: list[
             tuple[Coordinate, Schedule, float]
         ] = []  # (coord, sched, fitness)
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose candidates using evolutionary operators."""
-        # Update population with new records
-        for record in records:
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose children of the fittest cells the run has measured.
+
+        A population that has measured nothing is seeded from the run's own
+        space, so an evolution policy needs no candidate list to start either.
+        """
+        for record in ctx.records():
             self._add_to_population(record)
 
-        # If population not initialized, seed from candidates
-        if not self._population and candidates:
-            self._initialize_population(candidates)
-
-        # Select parents, apply variation, filter by budget
-        proposals = self._evolve(candidates, budget, cost_model)
-        return proposals[:20]
+        proposals = list(self._evolve(ctx))
+        if not self._population:
+            proposals.extend(
+                Proposal(coord, sched, self._name)
+                for coord, sched in islice(ctx.pool(), self._population_size)
+            )
+        return iter(proposals[: ctx.n_propose])
 
     def observe(self, record: Record) -> None:
         """Add record to population."""
         self._add_to_population(record)
 
     def _add_to_population(self, record: Record) -> None:
-        score = self._extract_score(record)
         coord = Coordinate.from_record(record)
-        self._population.append((coord, record.schedule, score))
-        # Keep top population_size
-        self._population.sort(key=lambda x: x[2], reverse=True)
+        self._population.append((coord, record.schedule, self._extract_score(record)))
+        self._population.sort(key=lambda member: member[2], reverse=True)
         self._population = self._population[: self._population_size]
 
-    def _initialize_population(
-        self, candidates: list[tuple[Coordinate, Schedule]]
-    ) -> None:
-        """Initialize population from candidates."""
-        shuffled = candidates.copy()
-        self._rng.shuffle(shuffled)
-        for coord, sched in shuffled[: self._population_size]:
-            self._population.append((coord, sched, 0.0))
-
-    def _evolve(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Apply evolutionary operators to generate proposals."""
+    def _evolve(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Apply evolutionary operators, keeping only cells the run may execute."""
         if not self._population:
-            return []
+            return
 
-        proposals = []
-        # Select top performers as parents
         parents = self._population[: max(2, self._population_size // 4)]
-
-        # Mutation: vary params
         for parent_coord, parent_sched, _ in parents:
-            if self._rng.random() < self._mutation_rate:
-                mutated_params = self._mutate_params(parent_coord.params)
-                mutated_coord = Coordinate(
-                    substrate=parent_coord.substrate,
-                    geometry=parent_coord.geometry,
-                    dynamics=parent_coord.dynamics,
-                    plasticity=parent_coord.plasticity,
-                    credit=parent_coord.credit,
-                    update=parent_coord.update,
-                    params=mutated_params,
-                )
-                proposals.append((mutated_coord, parent_sched))
-
-        # Crossover: combine two parents
-        if len(parents) >= 2 and self._rng.random() < self._crossover_rate:
-            p1, p2 = self._rng.sample(parents, 2)
-            crossed_params = self._crossover_params(p1[0].params, p2[0].params)
-            crossed_coord = Coordinate(
-                substrate=p1[0].substrate,
-                geometry=p1[0].geometry,
-                dynamics=p1[0].dynamics,
-                plasticity=p1[0].plasticity,
-                credit=p1[0].credit,
-                update=p1[0].update,
-                params=crossed_params,
+            if self._rng.random() >= self._mutation_rate:
+                continue
+            child = self._with_params(
+                parent_coord, self._mutate_params(parent_coord.params)
             )
-            proposals.append((crossed_coord, p1[1]))
+            if ctx.legal(child, parent_sched):
+                yield Proposal(child, parent_sched, self._name)
 
-        # Filter by budget
-        affordable = _affordable(proposals, budget, cost_model)
-        return affordable
+        if len(parents) >= 2 and self._rng.random() < self._crossover_rate:
+            first, second = self._rng.sample(parents, 2)
+            child = self._with_params(
+                first[0], self._crossover_params(first[0].params, second[0].params)
+            )
+            if ctx.legal(child, first[1]):
+                yield Proposal(child, first[1], self._name)
+
+    def _with_params(self, coord: Coordinate, params: dict[str, Any]) -> Coordinate:
+        """A coordinate carrying evolved hyperparameters."""
+        return Coordinate(
+            substrate=coord.substrate,
+            geometry=coord.geometry,
+            dynamics=coord.dynamics,
+            plasticity=coord.plasticity,
+            credit=coord.credit,
+            update=coord.update,
+            params={**coord.params, **params},
+        )
 
     def _mutate_params(self, params: dict[str, Any]) -> dict[str, Any]:
         """Mutate parameters by adding noise."""
@@ -656,12 +722,9 @@ class EvolutionPolicy:
         return crossed
 
     def _extract_score(self, record: Record) -> float:
-        for key in ("val_acc", "test_acc", "accuracy", "score", "loss"):
-            if key in record.payload:
-                val = record.payload[key]
-                if isinstance(val, (int, float)):
-                    return float(val)
-        return 0.0
+        """A record's measured score, or zero when it measured none."""
+        values = objective_values(self._objectives, record.payload)
+        return float(values[0]) if values is not None else 0.0
 
     def get_name(self) -> str:
         return self._name
@@ -670,8 +733,8 @@ class EvolutionPolicy:
 class SynthesisPolicy:
     """Synthesis policy: combines multiple policies' proposals.
 
-    Runs multiple policies in parallel and merges their proposals
-    with deduplication and budget awareness.
+    Runs multiple policies and merges their proposals with deduplication and
+    budget awareness.
     """
 
     def __init__(
@@ -684,31 +747,13 @@ class SynthesisPolicy:
         self._weights = weights or [1.0] * len(policies)
         self._name = "synthesis"
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose by combining sub-policy proposals."""
-        all_proposals = []
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose by combining sub-policy proposals, each weighted."""
+        merged: list[Proposal] = []
         for policy, weight in zip(self._policies, self._weights, strict=False):
-            props = policy.propose(candidates, records, budget, cost_model)
-            # Weight by repeating or sampling
-            weighted_count = max(1, int(len(props) * weight))
-            all_proposals.extend(props[:weighted_count])
-
-        # Deduplicate
-        seen = set()
-        unique = []
-        for coord, sched in all_proposals:
-            key = (coord.cell_key(), sched.fidelity, sched.seed)
-            if key not in seen:
-                seen.add(key)
-                unique.append((coord, sched))
-
-        return unique[:50]
+            weighted = replace(ctx, n_propose=max(1, int(ctx.n_propose * weight)))
+            merged.extend(list(islice(policy.propose(weighted), ctx.n_propose)))
+        return iter(_dedupe(merged, ctx.n_propose))
 
     def observe(self, record: Record) -> None:
         """Forward observation to all sub-policies."""
@@ -728,7 +773,7 @@ class StrategyProgressionPolicy:
 
     def __init__(
         self,
-        stages: list[tuple[Policy, int]],  # (policy, budget_fraction)
+        stages: list[tuple[Policy, float]],  # (policy, budget_fraction)
         *,
         current_stage: int = 0,
     ) -> None:
@@ -738,28 +783,22 @@ class StrategyProgressionPolicy:
         self._budget_consumed: float = 0.0
         self._total_budget: float | None = None
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose using current stage's policy."""
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose using the current stage's policy."""
         if not self._stages:
-            return []
+            return iter(())
 
-        # Update stage based on budget consumption
-        if self._total_budget is None and budget.target_cost:
-            self._total_budget = budget.target_cost
+        if self._total_budget is None and ctx.budget.target_cost:
+            self._total_budget = ctx.budget.target_cost
 
-        if self._total_budget and budget.cost_consumed > 0:
-            progress = budget.cost_consumed / self._total_budget
-            target_stage = int(progress * len(self._stages))
-            self._current_stage = min(target_stage, len(self._stages) - 1)
+        if self._total_budget and ctx.budget.cost_consumed > 0:
+            progress = ctx.budget.cost_consumed / self._total_budget
+            self._current_stage = min(
+                int(progress * len(self._stages)), len(self._stages) - 1
+            )
 
         policy, _ = self._stages[self._current_stage]
-        return policy.propose(candidates, records, budget, cost_model)
+        return policy.propose(ctx)
 
     def observe(self, record: Record) -> None:
         """Forward observation to current stage's policy."""
@@ -774,9 +813,9 @@ class StrategyProgressionPolicy:
 class TrainerDrivenPolicy:
     """Trainer-driven policy: proposals come from an external trainer.
 
-    The trainer (e.g., neural network) proposes cells based on
-    learned acquisition function. This is a placeholder for integration
-    with learned policies.
+    The trainer proposes cells from the same space this run declared; a trainer
+    that fails or stays silent hands the context to the fallback, which is how
+    a learned policy that has nothing to say does not end the run.
     """
 
     def __init__(
@@ -789,25 +828,17 @@ class TrainerDrivenPolicy:
         self._fallback = fallback or UniformRandomPolicy()
         self._name = "trainer_driven"
 
-    def propose(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        records: list[Record],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose using trainer or fallback."""
+    def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
+        """Propose using the trainer, or the fallback when it has nothing."""
         if self._trainer is not None and hasattr(self._trainer, "propose"):
             try:
-                proposals = self._trainer.propose(
-                    candidates, records, budget, cost_model
-                )
+                proposals = list(self._trainer.propose(ctx))
                 if proposals:
-                    return proposals
+                    return iter(proposals)
             except Exception as e:
                 logger.warning("Trainer propose failed, using fallback: %s", e)
 
-        return self._fallback.propose(candidates, records, budget, cost_model)
+        return self._fallback.propose(ctx)
 
     def observe(self, record: Record) -> None:
         """Forward observation to trainer and fallback."""
@@ -907,6 +938,8 @@ __all__ = [
     "EvolutionPolicy",
     "ModelBasedPolicy",
     "Policy",
+    "ProposalContext",
+    "RecordSource",
     "RoundRobinGridPolicy",
     "StrategyProgressionPolicy",
     "StratifiedRandomPolicy",
@@ -915,4 +948,5 @@ __all__ = [
     "UniformRandomPolicy",
     "create_policy",
     "policy_context",
+    "resolve_objectives",
 ]

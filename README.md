@@ -246,9 +246,9 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 |---|---|---|
 | StratifiedRandomPolicy | `stratified_random` | Stratified random sampling across the 6 axes. |
 | RoundRobinGridPolicy | `round_robin_grid` | Round-robin grid traversal across the 6 axes. |
-| UniformRandomPolicy | `uniform_random` | Uniform random sampling over all candidates. |
+| UniformRandomPolicy | `uniform_random` | Uniform random sampling over the run's active space. |
 | ModelBasedPolicy | `model_based` | Model-based optimization using Optuna. |
-| EvolutionPolicy | `evolution` | Evolutionary search over the 6-axis space. |
+| EvolutionPolicy | `evolution` | Evolutionary search over the active space. |
 | SynthesisPolicy | `synthesis` | Synthesis policy: combines multiple policies' proposals. |
 | StrategyProgressionPolicy | `strategy_progression` | Strategy progression: cycles through a sequence of policies. |
 | TrainerDrivenPolicy | `trainer_driven` | Trainer-driven policy: proposals come from an external trainer. |

@@ -340,7 +340,7 @@ class TestContrastDesignIntegration:
 
     def test_contrast_design_in_proposal_metadata(self) -> None:
         """Contrast design assignments can be embedded in Proposal metadata."""
-        from computronium.experiment.execution.search_space import Proposal
+        from computronium.experiment.execution.stage import Proposal
         from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
         factors = [Factor(name="lr", levels=(1e-4, 1e-2))]

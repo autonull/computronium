@@ -9,12 +9,11 @@ import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from computronium.experiment.execution.search_space import (
+    from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
         StageContext,
     )
-    from computronium.experiment.execution.stage import StageId
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,10 @@ from computronium.experiment.execution.stage import (
     StageId,  # noqa: E402
 )
 
+# How many cells S1 opens a run with. A round's own allocation is the stage
+# params' business; this is the exploration batch before any round exists.
+_FRAME_PROPOSALS = 10
+
 
 class FrameStage:
     """S1 Frame — Objective/operating-point resolution (R43 entry, with Synthesis)."""
@@ -32,10 +35,7 @@ class FrameStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Resolve objectives and operating points from RunSpec."""
-        from computronium.experiment.execution.search_space import (
-            Fragment,
-            generate_candidates,
-        )
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S1 Frame: Resolving objectives and operating points")
 
@@ -44,47 +44,25 @@ class FrameStage:
         objectives = run_spec.objectives
         operating_points = run_spec.operating_points
 
-        # Walk the spec's own space: primitives it permits, hyperparameters it
-        # sweeps, schedule it declares.
+        # The policy generates the opening cells from the spec's own space:
+        # primitives it permits, hyperparameters it sweeps, schedule it declares.
         from computronium.experiment.execution.evaluate import task_shape
+        from computronium.experiment.execution.policy import ProposalContext
 
-        candidates = generate_candidates(
-            run_spec,
-            search_space=ctx.search_space,
-            budget=ctx.budget,
-            cost_model=ctx.cost_model,
-            shape=task_shape,
-            limit=10,
-        )
-
-        # Emit proposals for initial exploration
-        proposals = []
-        if ctx.policy and candidates:
-            recent_records = []
-            if ctx.store:
-                try:
-                    recent_records = ctx.store.query_records(
-                        run_id=ctx.run_id, limit=1000
-                    )
-                except Exception:
-                    pass  # Store not initialized, use empty records
-            budget = ctx.budget
-            cost_model = ctx.cost_model
-
-            if budget and cost_model:
-                policy_proposals = ctx.policy.propose(
-                    candidates, recent_records, budget, cost_model
+        proposals = list(
+            ctx.policy.propose(
+                ProposalContext(
+                    search_space=ctx.search_space,
+                    spec=run_spec,
+                    run_id=ctx.run_id,
+                    budget=ctx.budget,
+                    cost_model=ctx.cost_model,
+                    evidence=ctx.store,
+                    shape=task_shape,
+                    n_propose=_FRAME_PROPOSALS,
                 )
-                for coord, sched in policy_proposals:
-                    from computronium.experiment.execution.search_space import Proposal
-
-                    proposals.append(
-                        Proposal(
-                            coordinate=coord,
-                            schedule=sched,
-                            rationale="frame_initial",
-                        )
-                    )
+            )
+        )
 
         return Fragment(
             stage_id=self.stage_id,
@@ -93,12 +71,10 @@ class FrameStage:
                 "objectives": list(objectives),
                 "operating_points": operating_points,
                 "proposal_count": len(proposals),
-                "candidate_count": len(candidates),
             },
             coverage={
                 "stage": self.stage_id.value,
                 "proposals_generated": len(proposals),
-                "candidates_generated": len(candidates),
             },
         )
 
@@ -110,7 +86,7 @@ class SpaceStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Snapshot active axes and run legality dry-run."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S2 Space: Snapshotting axes and running legality preview")
 
@@ -158,32 +134,29 @@ class ScheduleStage:
             Factor,
             create_contrast_design,
         )
-        from computronium.experiment.execution.search_space import Fragment, Proposal
+        from computronium.experiment.execution.stage import Fragment, Proposal
         from computronium.experiment.schema.coordinate import DataOrigin, Schedule
 
         logger.info(
             "S3 Schedule: Planning fidelity/seed/epoch with data-origin allocation"
         )
 
-        proposals = list(ctx.pending_candidates)
+        proposals = list(ctx.pending_proposals)
         if not proposals and ctx.policy:
-            # Use old policy interface for backward compatibility
-            recent_records = []
-            if ctx.store:
-                try:
-                    recent_records = ctx.store.query_records(
-                        run_id=ctx.run_id, limit=1000
-                    )
-                except Exception:
-                    pass  # Store not initialized, use empty records
-            budget = ctx.budget
-            cost_model = ctx.cost_model
+            from computronium.experiment.execution.policy import ProposalContext
 
-            if budget and cost_model:
-                policy_proposals = ctx.policy.propose(
-                    proposals, recent_records, budget, cost_model
+            proposals.extend(
+                ctx.policy.propose(
+                    ProposalContext(
+                        search_space=ctx.search_space,
+                        spec=ctx.run_spec,
+                        run_id=ctx.run_id,
+                        budget=ctx.budget,
+                        cost_model=ctx.cost_model,
+                        evidence=ctx.store,
+                    )
                 )
-                proposals.extend(policy_proposals)
+            )
 
         # Apply data-origin allocation from stage params
         allocation = ctx.stage_params.get(
@@ -232,7 +205,7 @@ class ScheduleStage:
             contrast_assignments: list[ContrastAssignment] = []
             if contrast_count > 0:
                 # Create factors from first proposal's params for contrast design
-                first_coord, _ = proposals[0]
+                first_coord = proposals[0].coordinate
                 factor_names = list(first_coord.params.keys())
                 if factor_names:
                     factors = [
@@ -251,7 +224,8 @@ class ScheduleStage:
             # while keeping the same cell_key (coordinate-only) for grouping
             contrast_idx = 0
             data_origin_seed_offset = 0
-            for i, (coord, sched) in enumerate(proposals):
+            for i, proposal in enumerate(proposals):
+                coord, sched = proposal.coordinate, proposal.schedule
                 data_origin = data_origins[i]
 
                 # Build metadata with data_origin and contrast info
@@ -283,6 +257,7 @@ class ScheduleStage:
                     batch_limit=sched.batch_limit,
                     budget_id=sched.budget_id,  # Keep original budget_id
                     task_id=sched.task_id,
+                    param_budget=sched.param_budget,
                 )
 
                 scheduled_proposals.append(
@@ -322,7 +297,7 @@ class GateStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce legality constraints on proposals."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
             ConstraintKind,
@@ -465,7 +440,7 @@ class ComposeStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Report the cells awaiting composition; do not compose them."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S5 Compose: Handing cells to the evaluator")
 
@@ -493,7 +468,7 @@ class TrainStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Report the cells queued for the backend."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S6 Train: Handing cells to the backend")
 
@@ -519,15 +494,13 @@ class MeasureStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Measure objectives and run probes."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S7 Measure: Measuring objectives and probes")
 
         # This would resolve objectives against OBJECTIVES registry
         # and compute probe metrics
-        measured = []
-        for record in ctx.pending_proposals:
-            measured.append(record)
+        measured = list(ctx.pending_proposals)
 
         return Fragment(
             stage_id=self.stage_id,
@@ -544,7 +517,7 @@ class RecordStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Persist records atomically with artifacts."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S8 Record: Atomic append with artifacts")
 
@@ -568,7 +541,7 @@ class AttributeStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Compute counterfactual axis attribution."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S9 Attribute: Computing axis attribution")
 
@@ -596,7 +569,7 @@ class DecideStage:
             complete_run,
             continue_round,
         )
-        from computronium.experiment.execution.search_space import Fragment, Proposal
+        from computronium.experiment.execution.stage import Fragment, Proposal
 
         logger.info("S10 Decide: Making promotion/continuation decisions")
 
@@ -660,7 +633,7 @@ class ReportStage:
 
     async def run(self, ctx: StageContext) -> Fragment:
         """Generate final report."""
-        from computronium.experiment.execution.search_space import Fragment
+        from computronium.experiment.execution.stage import Fragment
 
         logger.info("S11 Report: Generating report fragments")
 
