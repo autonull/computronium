@@ -134,7 +134,30 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             inline_threshold_mb=self._config.artifact_inline_threshold_mb,
             external_store_path=self._config.artifact_external_path,
         )
+        self._assert_identity_recomputable()
         return self
+
+    def _assert_identity_recomputable(self) -> None:
+        """Refuse a store that cannot reproduce a record's ``measurement_key``.
+
+        ``param_budget`` is part of the key and was not persisted, so a store
+        written before it was reads every schedule back with ``param_budget=0``
+        and no stored key recomputes from its own record. Appending to such a
+        store fails deep in DuckDB instead, so it is refused here.
+        """
+        if self._conn is None:
+            return
+        row = self._conn.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name = 'records' AND column_name = 'schedule'"
+        ).fetchone()
+        if row is not None and "param_budget" not in str(row[0]):
+            msg = (
+                f"store {self._config.path} has no schedule.param_budget; its "
+                "measurement_key cannot be recomputed from a stored record. "
+                "Write a new store."
+            )
+            raise StoreError(msg)
 
     def __exit__(
         self,
@@ -201,7 +224,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 params          JSON NOT NULL,
                 schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                                        epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
-                                       task_id TEXT) NOT NULL,
+                                       task_id TEXT, param_budget INTEGER) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                        quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
@@ -374,6 +397,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                             "batch_limit": record.schedule.batch_limit,
                             "budget_id": record.schedule.budget_id,
                             "task_id": record.schedule.task_id,
+                            "param_budget": record.schedule.param_budget,
                         },
                         json.dumps(record.provenance.to_dict()),
                         {
@@ -481,6 +505,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                             "batch_limit": record.schedule.batch_limit,
                             "budget_id": record.schedule.budget_id,
                             "task_id": record.schedule.task_id,
+                            "param_budget": record.schedule.param_budget,
                         },
                         json.dumps(record.provenance.to_dict()),
                         {

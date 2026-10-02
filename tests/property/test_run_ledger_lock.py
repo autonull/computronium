@@ -1,4 +1,4 @@
-"""TODO47 locks for a run's own bookkeeping: §3.7 gate 5 (resume) and gate 6 (replay hash).
+"""TODO47 locks for a run's own ledger: §3.7 gates 5 (resume), 6 (replay hash), 7 (two policies over one store).
 
 The lock reads the store alone. It asserts the two properties a resumed run
 must have — no duplicate ``measurement_key`` and no gap in coordinate coverage —
@@ -11,6 +11,13 @@ store, and classified as a PERSISTENCE_ERROR rejection.
 Gate 6 is the same discipline applied to ``runs.replay_hash``: the hash must be
 written when the run finishes, must repeat for the same declaration, and must
 change when the declaration changes — or it describes nothing.
+
+Gate 7 asks whether a second policy can measure over the same store and produce
+records the first one can be compared with. Two properties, one falsifiable: the
+model-based trial sequence must *differ* from the random one for the same seed
+(a policy that quietly replays the other one is not a policy comparison), and a
+measurement identity must be a function of the coordinate alone, so records from
+two policies are comparable at all.
 """
 
 from __future__ import annotations
@@ -24,7 +31,11 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.budget import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import StratifiedRandomPolicy
+from computronium.experiment.execution.policy import (
+    ModelBasedPolicy,
+    Policy,
+    StratifiedRandomPolicy,
+)
 from computronium.experiment.schema.run_spec import (
     MEASURED_BATCH_LIMIT,
     MEASURED_PARAM_BUDGET,
@@ -57,14 +68,19 @@ def _run_spec() -> RunSpec:
     )
 
 
-def _config(run_id: str, spec: RunSpec, rounds: int) -> PipelineConfig:
+def _config(
+    run_id: str,
+    spec: RunSpec,
+    rounds: int,
+    policy: Policy | None = None,
+) -> PipelineConfig:
     return PipelineConfig(
         run_id=run_id,
         run_spec=spec,
         budget=Budget.from_duration(f"{int(spec.budget_seconds or 0)}s"),
         cost_model=SimpleCostModel(),
         backend=LocalBackend(),
-        policy=StratifiedRandomPolicy(seed=42),
+        policy=policy or StratifiedRandomPolicy(seed=42),
         seed=spec.seed,
         max_rounds=rounds,
         min_rounds=1,
@@ -171,3 +187,57 @@ def test_a_diverged_run_hashes_differently_though_its_spec_did_not(
     long = _replay_hash_of(tmp_path, "replay_long.duckdb", spec, rounds=3)
 
     assert short != long
+
+
+def _two_policy_runs(tmp_path: Path) -> tuple[list[str], list[str]]:
+    """Run random then model-based over one store; return both key sequences."""
+    spec = _run_spec()
+    store_path = tmp_path / "two_policies.duckdb"
+    sequences: list[list[str]] = []
+
+    for name, policy in (
+        ("random", StratifiedRandomPolicy(seed=42)),
+        ("model_based", ModelBasedPolicy(sampler="tpe", seed=42, n_startup_trials=5)),
+    ):
+        with RecordStore(StoreConfig(path=store_path)) as store:
+            run_id = store.create_run(spec=spec)
+            asyncio.run(PipelineRunner(_config(run_id, spec, 2, policy), store).run())
+            store.finish_run(run_id, "completed")
+            sequences.append(_keys(store, run_id))
+
+    return sequences[0], sequences[1]
+
+
+def test_two_policies_over_one_store_measure_different_trials(tmp_path: Path) -> None:
+    """Same seed, same store, same task — and a different trial sequence.
+
+    Per session 7's honesty note: a model-based policy that proposed the random
+    policy's trials would be indistinguishable from it in the store.
+    """
+    random_keys, model_keys = _two_policy_runs(tmp_path)
+
+    assert random_keys, "the random policy measured nothing"
+    assert model_keys, "the model-based policy measured nothing"
+    assert random_keys != model_keys
+
+
+def test_measurement_identity_is_the_coordinate_alone(tmp_path: Path) -> None:
+    """A record's key recomputes from its own coordinate — whichever policy wrote it."""
+    from computronium.experiment.schema.coordinate import Coordinate
+
+    random_keys, model_keys = _two_policy_runs(tmp_path)
+
+    with RecordStore(StoreConfig(path=tmp_path / "two_policies.duckdb")) as store:
+        records = [
+            record
+            for keys in (random_keys, model_keys)
+            for record in store.query_records()
+            if record.measurement_key in set(keys)
+        ]
+
+    assert records
+    schema_versions = {record.schema_version for record in records}
+    assert len(schema_versions) == 1, "two policies wrote two record schemas"
+    for record in records:
+        coordinate = Coordinate.from_record(record)
+        assert coordinate.measurement_key(record.schedule) == record.measurement_key

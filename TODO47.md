@@ -99,13 +99,29 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
   what detects a diverged run. `test_a_diverged_run_hashes_differently_though_its_spec_did_not`
   pins that distinction — same spec, one extra round, different hash.
 
-### T3 — §3.7 gate 7: two policies over one store
+### T3 — DONE (§3.7 gate 7: two policies over one store)
 - **Does:** `--policy stratified_random` then `--policy model_based` against
   the same store, schema and task; records comparable (R16/R17), and per TODO46
   §8 session 7's honesty note the model-based trial sequence must *differ* from
   the random one for the same seed.
 - **Gate:** a lock comparing the two runs' record sets (tier 1–2).
 - **Blocked by:** nothing. **Unblocks:** T5.
+- **Landed:** `test_two_policies_over_one_store_measure_different_trials` and
+  `test_measurement_identity_is_the_coordinate_alone` in the renamed
+  `tests/property/test_run_ledger_lock.py` (was `test_resume_coverage_lock.py`;
+  it now holds gates 5-7 and one spec/config builder).
+- **Gate:** 7 tests / **53 s**. Falsified by pointing the "model_based" run at
+  `StratifiedRandomPolicy`: the sequence assertion goes red, which is the point
+  — identical sequences are the failure this gate exists to catch.
+- **A real defect fell out of it: the store could not reproduce a record's own
+  key.** `measurement_key` hashes `schedule.param_budget`, but the `schedule`
+  STRUCT (`store.py:202`) had no such column and neither insert site wrote one,
+  so every stored schedule read back with `param_budget=0` and *no stored
+  record's key recomputed from its own record*. `_parse_schedule`'s
+  `.get("param_budget", 0)` had been hiding this behind a comment about older
+  rows. Fixed by persisting the column at both append paths; a store written
+  before it is now refused at open with a clear message instead of failing deep
+  in DuckDB on append (`RecordStore._assert_identity_recomputable`).
 
 ### T4 — The operator's own criterion: which axis mattered
 - **Does:** `derive_claims` becomes per-*metric* rather than per-first-objective
@@ -226,6 +242,12 @@ then.
   assertion is now `round1_count > 0` and `round2_count > round1_count`. Worth
   grepping the repo for other `max_rounds=1` configs before the campaign (T5)
   sizes its cells.
+- **`test_wp11_surface_lock.py` is slow and flaky.** Alone it is **217 s** and
+  two runs of the same file failed *differently* — once on
+  `test_listings_deterministic`, once on a pytest-timeout (>120 s on a single
+  test). Unrelated to the store change (codegen does not read it), but it means
+  the property shard's price is not just long, it is not reproducible: raise the
+  per-test timeout for that file, or split it, before it is quoted as a gate.
 - **`compute_replay_hash` (per-cell) and `compute_run_replay_hash` (per-run)
   coexist and neither calls the other.** The per-cell one is still the one
   `test_replay_hash_deterministic` covers and nothing in production calls it.
