@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -172,6 +172,20 @@ class Schedule:
             "task_id": self.task_id,
             "param_budget": self.param_budget,
         }
+
+    @property
+    def seed_plan(self) -> tuple[Schedule, ...]:
+        """One single-seed schedule per seed this cell replicates over.
+
+        A record's identity is its own single-seed schedule, so this spells a
+        cell's replication plan in the terms the store holds: comparing a
+        stored record against a ``n_seeds=5`` schedule compares two things the
+        store never wrote, which is how a re-measurement goes unnoticed.
+        """
+        return tuple(
+            replace(self, seed=self.seed + offset, n_seeds=1)
+            for offset in range(self.n_seeds)
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Schedule:

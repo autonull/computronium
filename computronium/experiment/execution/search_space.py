@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from itertools import islice
+from itertools import islice, product
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.schema.axis import (
@@ -260,6 +260,54 @@ def _schedule(spec: RunSpec, task: str) -> Schedule:
     )
 
 
+def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
+    """How many cells the spec declares, before legality or budget filter it.
+
+    A consumer that wants a bounded window of the space needs this to stride
+    it: the head of a factorial is one setting of its outer axes, so a prefix
+    is not a sample of the space, it is a corner of it.
+    """
+    per_axis = [len(space.primitives(axis)) for axis in AXIS_KIND_ORDER]
+    if not space.tasks or not all(per_axis):
+        return 0
+    ladders = _swept(spec, harvest_schema())
+    steps = max((len(ladder) for ladder in ladders.values()), default=1)
+    return math.prod(per_axis) * len(space.tasks) * steps
+
+
+def _walk(spec: RunSpec, space: SearchSpace) -> Iterator[tuple[Coordinate, str]]:
+    """Every cell the spec declares, as ``(coordinate, task)``.
+
+    The axes are walked as a Cartesian product, so two axes of equal length are
+    *not* locked to each other: taking the k-th primitive on every axis makes
+    ``geometry`` and ``dynamics`` advance together, which silently measures one
+    diagonal of the space and reports it as the whole of it — a campaign whose
+    axes are confounded can name no axis effect. Sweep steps vary inside the
+    product, one per step of the run's longest ladder, so a run that sweeps
+    nothing emits one cell per combination rather than five identical ones.
+
+    Yields:
+        ``(coordinate, task)`` for every cell the spec declares.
+    """
+    per_axis = [space.primitives(axis) for axis in AXIS_KIND_ORDER]
+    if not space.tasks or not all(per_axis):
+        return
+    schema = harvest_schema()
+    ladders = _swept(spec, schema)
+    tasks = space.tasks
+    steps = max((len(ladder) for ladder in ladders.values()), default=1)
+    for values in product(*per_axis):
+        selection = {
+            axis.value: name for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
+        }
+        for task in tasks:
+            for step in range(steps):
+                params = _cell_params(
+                    Coordinate(**selection, params={}), schema, ladders, step
+                )
+                yield Coordinate(**selection, params=params), task
+
+
 def iter_candidates(
     spec: RunSpec,
     search_space: SearchSpace,
@@ -273,8 +321,7 @@ def iter_candidates(
     The active space is computed, never tabulated: each axis offers the
     primitives the spec permits, the harvested availability predicates decide
     which hyperparameters a selection can use, and the spec's own domains are
-    swept. Candidate ``k`` takes the ``k``-th primitive on every axis, so a
-    short prefix of the stream varies every axis rather than exhausting one.
+    swept, as a Cartesian product over the axes rather than a diagonal.
 
     Args:
         spec: The run declaration; names the task, fidelity, seed plan and the
@@ -289,22 +336,13 @@ def iter_candidates(
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
-    per_axis = {axis: search_space.primitives(axis) for axis in AXIS_KIND_ORDER}
-    if not search_space.tasks or not all(per_axis.values()):
-        return
-    schema = harvest_schema()
-    ladders = _swept(spec, schema)
-    tasks = search_space.tasks
     seen: set[str] = set()
-
-    for k in range(_MAX_SCAN):
-        selection = {
-            axis.value: names[k % len(names)] for axis, names in per_axis.items()
-        }
-        coordinate = Coordinate(**selection, params={})
-        params = _cell_params(coordinate, schema, ladders, k // len(selection))
-        coordinate = Coordinate(**selection, params=params)
-        schedule = _schedule(spec, tasks[k % len(tasks)])
+    scanned = 0
+    for coordinate, task in _walk(spec, search_space):
+        scanned += 1
+        if scanned > _MAX_SCAN:
+            return
+        schedule = _schedule(spec, task)
         if coordinate.measurement_key(schedule) in seen:
             continue
         seen.add(coordinate.measurement_key(schedule))
@@ -316,13 +354,13 @@ def iter_candidates(
         if budget is not None and cost_model is not None:
             cost = cost_model.estimate_cost(
                 (
-                    selection["substrate"],
-                    selection["geometry"],
-                    selection["dynamics"],
-                    selection["plasticity"],
-                    selection["credit"],
-                    selection["update"],
-                    params,
+                    coordinate.substrate,
+                    coordinate.geometry,
+                    coordinate.dynamics,
+                    coordinate.plasticity,
+                    coordinate.credit,
+                    coordinate.update,
+                    coordinate.params,
                 ),
                 schedule.to_dict(),
             )
@@ -350,6 +388,7 @@ def generate_candidates(
 __all__ = [
     "SearchSpace",
     "ShapeResolver",
+    "declared_cell_count",
     "generate_candidates",
     "iter_candidates",
     "narrow_domain",

@@ -153,44 +153,32 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
   real trade-off separates the two, and T5 is where the space gets wide enough
   to have one.
 
-### T5 — §3.6 the campaign (the one expensive ticket)
+### T5 — §3.6 the campaign — **LANDED, three regressions open (§7)**
 - **Does:** `examples/*.yaml` as a **fixture**: `digits` primary, `mnist` as the
-  transfer task, varying algorithms (dynamics × credit × update) and topology
+  transfer task, varying algorithms (dynamics × credit) and topology (geometry)
   with hyperparameters — not every primitive on every axis.
-- **Gate:** demo-marked test asserting the seven properties of TODO46 §3.7 plus
-  T1–T4's, so the campaign is assertable rather than narrated.
-- **Blocked by:** T1, T2, T3, T4 — it is their integration, and running it
-  before they pass means paying the most expensive tier against gates that do
-  not yet exist.
-- **Cost discipline — DONE, priced.** One cell is one `(coordinate, schedule)`
-  evaluated through the executor the backend calls (`cell_record`), measured in
-  `scripts/probes/_t5_cell_price.py` over three credits:
-
-  | task | batch_limit | s/cell |
-  |---|---|---|
-  | digits | 2 | 0.44 (first cell 1.06 — warmup) |
-  | digits | 8 | 0.23 |
-  | mnist | 2 | 0.16 |
-  | mnist | 8 | 0.33 |
-
-  **Budget 0.5 s/cell and the campaign is a normal test, not a demo.** The
-  shape below is 6 algorithms × 2 geometries × 2 tasks × 5 seeds = **120
-  measurements ≈ 60 s**, plus pipeline and store overhead; TODO46 §3.6's "a few
-  hundred real cells is a few minutes" holds, so the whole campaign fits one
-  round close and stays **in** `testpaths`. If a future axis multiplies that by
-  more than ~5, re-price and move it to the demo tier rather than growing it.
-- **Planned shape** (not every primitive on every axis, per §3.6): substrate
-  `digital`, plasticity `fast_weights`, update `euclidean` fixed; algorithms
-  = dynamics {energy_minimization, diffusion} × credit {thermodynamic_contrast,
-  local_contrastive, gradient}; geometry {feedforward, recurrent}; digits
-  primary, mnist transfer; L0, 1 epoch, measured param budget, 5 seeds.
-- **Gates 1-4 are CLI-shaped and still unimplemented**, which is the honest
-  status of this ticket: `comp run --spec examples/<file>.yaml` must write
-  records, a real `train_acc` must *move when the axis moves*, `comp report
-  --run-id <id>` must give claim+evidence+limitations from the store alone, and
-  `comp report status` must list the run. `examples/` **does not exist yet** —
-  the closest fixtures are `experiments/campaign_gate_tier0_digits.yaml` (a
-  different, older schema) and `campaigns/checkpoints/*.yaml`.
+- **Gate (green):** `tests/acceptance/test_campaign_lock.py` — 6 tests,
+  **101 s**, asserting §3.7 gates 1-4 *through the command surface* (a gate
+  stated against a Python API proves the API, not the command). Gates 5-7 stay
+  locked against the store alone in `test_run_ledger_lock.py`.
+- **Landed shape:** `examples/learning-rules-and-geometry-digits.yaml` —
+  dynamics {energy_minimization, lazy} × credit {thermodynamic_contrast,
+  gradient, random_projections} × geometry {feedforward, recurrent} × 2 tasks ×
+  5 seeds, `step_size` swept over 5 log-spaced points. That is 18 legal
+  structural cells × 5 sweep points = **90 cells × 5 seeds = 450 records in
+  49.6 s**, one `comp run`. `diffusion` was dropped from the planned axes
+  because it composes with *none* of the three planned credit rules (§5).
+- **Gate 1 is falsifiable:** without the `pending_proposals.clear()` fix the run
+  measures 10 cells and stops (observed); without the S3 seed fix it measures
+  1259 records of a 90-cell space and never terminates (observed); without the
+  Cartesian walk the campaign measures 6 of 18 structural cells, because two
+  axes of equal length advance together (observed).
+- **Gate 2 is asserted as measured variation, not learning.** `train_acc` is
+  present, finite, in [0,1], and differs across credit rules; it is *not*
+  claimed to show a rule learning. See §6.1 — digits sits at chance in every
+  regime probed, which is the next session's first job.
+- **Cost, re-measured:** 0.11 s per record (49.6 s / 450). The original probe's
+  0.44 s/cell priced `n_seeds=1`; a cell's real price is its seed plan.
 
 ### T6 — §3.8 fold the lab in, last
 - **Does:** the kernel owns evaluation; the lab becomes a facade over it; the
@@ -331,3 +319,90 @@ then.
    A lock that a forced-duplicate append is refused *and* that a resume never
    reaches that path is the §3.7 gate-5 statement in full; today the resume lock
    covers the second half only.
+
+## 6. Defects found while landing T5 (measured, with evidence)
+
+Each of these was found by running the campaign, not by reading code; the
+`file:line` is where it lived.
+
+1. **The candidate walk was a diagonal, so every campaign was confounded.**
+   `iter_candidates` took the k-th primitive on *every* axis, so two axes of
+   equal length advanced in lockstep: a run declaring 2 dynamics × 2 geometries
+   measured 2 cells, not 4, and a campaign could not name an axis effect at all
+   (§5's session-3 note, now a mechanism). `search_space._walk` is a Cartesian
+   product with the sweep step inside. `test_two_axes_are_not_locked_to_each_other`
+   replaces `test_a_short_prefix_still_varies_every_axis`, whose assertion *was*
+   the diagonal's property; prefix-variety is not a property of a factorial and
+   the anti-confounding statement is strictly stronger.
+2. **S3 shifted every proposal's seed, so a run never ended.** `stages_impl.py`
+   incremented `seed` per data origin "to get unique measurement_keys": the same
+   coordinate re-measured under a fresh key every round. Measured: 1259 records
+   for a 90-cell space, 13 min and counting. A data origin is metadata
+   (the docstring said so); the schedule now passes through unchanged.
+3. **Executed proposals stayed pending, so every run stopped after one round.**
+   S3 only asks the policy when `pending_proposals` is empty, and nothing
+   cleared it after S6. Measured: 10 records, run reported `completed`.
+4. **The backend discarded 4 of every 5 seeds.** `submit` evaluates the whole
+   seed plan; `submit_batch` returned `records[0]`. The cost was paid, the
+   measurement was dropped, and `n_seeds=5` produced five one-seed records.
+   `Success` now carries every record (`backends.Success.records`).
+5. **Resume compared the wrong identities.** `_fresh_batch_items` keyed a
+   proposal by its `n_seeds=5` schedule while the store keys records by their
+   `n_seeds=1` schedule, so no skip ever matched: re-measurement, paid for and
+   refused. `Schedule.seed_plan` now spells the plan in the store's terms.
+6. **`comp status --run-id` crashed** on a slots dataclass (`summary.__dict__`)
+   — §3.7 gate 4's own branch, which no test had entered.
+7. **A policy's pool was a corner, not a sample.** `ProposalContext.pool()`
+   took the first 50 cells of a factorial; with `ModelBasedPolicy` every one of
+   them was illegal and the policy measured *nothing*. Now strided across the
+   declared space (`search_space.declared_cell_count`).
+8. **`RoundRobinGridPolicy` re-proposed its prefix.** It chose one value per
+   axis and took the head of the list, so every round proposed the same 10
+   cells; a "grid traversal" that traverses one cell. It now carries a cursor
+   over the run's own cell stream.
+9. **Checkpoints landed in the caller's cwd**, not beside the store.
+
+## 6.1 The finding that outranks all of the above
+
+**`digits` does not learn through `cell_record` in any regime probed**, so the
+campaign measures a real pipeline, not a real result. Measured
+(`energy_minimization` × `gradient`, the backprop-like reference, 64×2
+feedforward, chance = 0.1):
+
+| batch_limit | epochs | train_acc | val_acc | s/cell |
+|---|---|---|---|---|
+| 2 | 1 | 0.125 | 0.125 | 0.15 |
+| 8 | 3 | 0.109 | 0.125 | 0.61 |
+| 16 | 5 | 0.100 | 0.092 | 3.76 |
+| 64 | 30 | 0.121 | 0.094 | 7.7 |
+| 0 (full) | 1 | 0.104 | 0.094 | 2.1 |
+
+AGENTS.md says to be skeptical of low-performing experiments because it usually
+means an implementation defect. Every regime is at or below chance, including
+the one that should be easiest, so the next session's first job is the
+evaluation path (dataset, batch composition, step size, readout) — not a wider
+campaign. Until one cell beats chance on `digits`, §3.7 gate 2 can only be
+asserted as "measured variation", which is what the campaign lock says.
+
+## 7. Open regressions from T5 (do these first)
+
+Three locks in `tests/property/test_run_ledger_lock.py` are red, all from the
+fixes above, all understood:
+
+- `test_resume_by_run_id_neither_duplicates_nor_loses_a_measurement` — asserts
+  `len(resumed) > len(interrupted)`. `StratifiedRandomPolicy` restarts from its
+  seed, so a resumed run re-proposes round 1's cells and, now that exhausted
+  rounds terminate the loop, adds nothing. §5's session note ("a resumed run
+  burns one round per launch") is now "adds nothing"; the lock needs a policy
+  whose later rounds are genuinely fresh, or the runner needs to keep the
+  policy's position across launches.
+- `test_two_policies_over_one_store_measure_different_trials` — the model-based
+  arm measured nothing. Cause was defect 7 above; the fix (strided pool) landed
+  but was **not re-verified** before this session ended.
+- `test_a_diverged_run_hashes_differently_though_its_spec_did_not` — the lock's
+  premise is now false rather than the code being wrong: with a deterministic
+  policy, the extra round measures nothing new, so the run did not diverge.
+  Rewrite it to diverge through a policy that continues to fresh cells.
+
+Also unverified this session: `tests/acceptance/test_unified_kernel.py` and
+`test_param_budget_lock.py` (both consume the changed walk/policy) were not run.

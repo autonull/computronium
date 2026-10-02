@@ -49,6 +49,11 @@ logger = logging.getLogger(__name__)
 # list the caller enumerated.
 _POOL: Final = 50
 
+# A traversing policy sees the whole space rather than a sampling window: a
+# cursor over a truncated pool silently measures the first N cells of a
+# campaign and reports a completed run.
+_TRAVERSAL_LIMIT: Final = 2048
+
 
 def resolve_objectives(
     objective_names: tuple[str, ...],
@@ -183,8 +188,18 @@ class ProposalContext:
         yield from islice(stream, limit)
 
     def pool(self) -> list[tuple[Coordinate, Schedule]]:
-        """The cells a sampling policy chooses among."""
-        return list(self.cells(limit=_POOL))
+        """A bounded, evenly spaced window of the run's own cells.
+
+        The space is a factorial, so its head is one setting of its outer axes:
+        a prefix is a corner, not a sample, and a policy choosing among one
+        corner cannot compare axes. The stride spreads the window across the
+        whole declared space and stays deterministic.
+        """
+        from computronium.experiment.execution.search_space import declared_cell_count
+
+        total = declared_cell_count(self.spec, self._scoped_space)
+        stride = max(1, total // _POOL)
+        return list(islice(self.cells(limit=total), 0, None, stride))
 
     def legal(self, coordinate: Coordinate, schedule: Schedule) -> bool:
         """Whether a cell this policy *constructed* is one the run may execute.
@@ -278,53 +293,36 @@ class StratifiedRandomPolicy:
 
 
 class RoundRobinGridPolicy:
-    """Round-robin grid traversal across the 6 axes.
+    """Systematic traversal of the run's own cell stream.
 
-    Systematically enumerates combinations, cycling through axes.
+    The space enumerates its cells as a factorial in a fixed order, so walking
+    that order and carrying a cursor across rounds *is* the grid: every cell is
+    proposed once, in a reproducible order, before any repeats. Choosing one
+    value per axis and taking the head of the list instead re-proposes the same
+    prefix every round, which measures ten cells and calls it a campaign.
     """
-
-    _AXES: Final = (
-        "substrate",
-        "geometry",
-        "dynamics",
-        "plasticity",
-        "credit",
-        "update",
-    )
 
     def __init__(self, *, seed: int | None = None) -> None:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "round_robin_grid"
-        self._indices: dict[str, int] = {}
+        self._cursor = 0
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
-        """Propose cells in round-robin order over each axis's values."""
-        pool = ctx.pool()
-        axis_groups: dict[str, dict[str, list[tuple[Coordinate, Schedule]]]] = {
-            axis: {} for axis in self._AXES
-        }
-        for cell in pool:
-            coord, sched = cell
-            for axis in self._AXES:
-                axis_groups[axis].setdefault(getattr(coord, axis), []).append(cell)
-
-        chosen: list[tuple[Coordinate, Schedule]] = []
-        for axis in self._AXES:
-            values = list(axis_groups[axis])
-            if not values:
-                continue
-            idx = self._indices.get(axis, 0)
-            chosen.extend(axis_groups[axis][values[idx % len(values)]])
-            self._indices[axis] = (idx + 1) % len(values)
-
+        """Propose the next ``ctx.n_propose`` cells of the stream, in order."""
+        pool = list(ctx.cells(limit=_TRAVERSAL_LIMIT))
+        if not pool:
+            return
+        start = self._cursor % len(pool)
         proposed = 0
-        for coord, sched in chosen:
+        for offset in range(len(pool)):
+            coord, sched = pool[(start + offset) % len(pool)]
             if not ctx.legal(coord, sched):
                 continue
             yield Proposal(coord, sched, self._name)
             proposed += 1
             if proposed >= ctx.n_propose:
-                return
+                break
+        self._cursor = start + proposed
 
     def observe(self, record: Record) -> None:
         """Round-robin grid doesn't learn from observations."""

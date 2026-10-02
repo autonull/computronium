@@ -135,7 +135,7 @@ class ScheduleStage:
             create_contrast_design,
         )
         from computronium.experiment.execution.stage import Fragment, Proposal
-        from computronium.experiment.schema.coordinate import DataOrigin, Schedule
+        from computronium.experiment.schema.coordinate import DataOrigin
 
         logger.info(
             "S3 Schedule: Planning fidelity/seed/epoch with data-origin allocation"
@@ -219,11 +219,9 @@ class ScheduleStage:
                     )
                     contrast_assignments = list(contrast_design.assignments)
 
-            # Assign schedules with data_origin in metadata
-            # Use different seeds for different data_origins to get unique measurement_keys
-            # while keeping the same cell_key (coordinate-only) for grouping
+            # Stamp each proposal's data origin into metadata; the schedule
+            # itself is untouched, so identity is the cell's own.
             contrast_idx = 0
-            data_origin_seed_offset = 0
             for i, proposal in enumerate(proposals):
                 coord, sched = proposal.coordinate, proposal.schedule
                 data_origin = data_origins[i]
@@ -243,27 +241,16 @@ class ScheduleStage:
                     metadata["matched_group"] = contrast_assignment.matched_group
                     contrast_idx += 1
 
-                # Use different seed for each data_origin to get unique measurement_key
-                # while preserving the same coordinate (cell_key)
-                new_seed = sched.seed + data_origin_seed_offset
-                data_origin_seed_offset += 1
-
-                # Create new schedule with modified seed
-                new_sched = Schedule(
-                    fidelity=sched.fidelity,
-                    seed=new_seed,
-                    n_seeds=sched.n_seeds,
-                    epochs=sched.epochs,
-                    batch_limit=sched.batch_limit,
-                    budget_id=sched.budget_id,  # Keep original budget_id
-                    task_id=sched.task_id,
-                    param_budget=sched.param_budget,
-                )
-
+                # The schedule is carried through unchanged: a data origin is
+                # metadata, so the same cell scheduled under a second origin is
+                # the same measurement and must hash to the same key. Shifting
+                # the seed to keep keys apart re-measures one coordinate every
+                # round under a fresh name — invisible to the store's dedup and
+                # paid for on every round, forever.
                 scheduled_proposals.append(
                     Proposal(
                         coordinate=coord,
-                        schedule=new_sched,
+                        schedule=sched,
                         rationale=f"schedule_{data_origin.value}",
                         metadata=metadata,
                     )
@@ -400,7 +387,7 @@ class GateStage:
             )
 
             # Check legality using the legality engine
-            hard_violations, soft_violations = engine.evaluate_record(
+            hard_violations, _soft_violations = engine.evaluate_record(
                 record, ConstraintEnforcement.S4_EXPANSION
             )
             is_legal = len(hard_violations) == 0

@@ -222,16 +222,37 @@ class RunSpec(BaseModel):
     def load(cls, path: str | Path) -> Self:
         """Validate a spec file.
 
+        The format follows the suffix — ``.yaml``/``.yml`` are YAML, ``.json``
+        is JSON — so a spec written by hand and a spec emitted by
+        ``to_dict`` load through one declaration and neither is guessed at.
+
         Raises:
-            ValueError: the file is not JSON, or names an unknown field, an
-                unresolvable task, objective, stage or policy.
+            ValueError: the suffix names no known format, the file does not
+                parse, or it names an unknown field, an unresolvable task,
+                objective, stage or policy.
         """
-        raw = Path(path).read_text(encoding="utf-8")
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            msg = f"{path} is not valid JSON: {exc}"
-            raise ValueError(msg) from exc
+        spec_path = Path(path)
+        raw = spec_path.read_text(encoding="utf-8")
+        suffix = spec_path.suffix.lower()
+        if suffix in {".yaml", ".yml"}:
+            import yaml
+
+            try:
+                data = yaml.safe_load(raw)
+            except yaml.YAMLError as exc:
+                msg = f"{spec_path} is not valid YAML: {exc}"
+                raise ValueError(msg) from exc
+        elif suffix == ".json":
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                msg = f"{spec_path} is not valid JSON: {exc}"
+                raise ValueError(msg) from exc
+        else:
+            msg = (
+                f"{spec_path}: unknown spec format {suffix!r}; use .json, .yaml or .yml"
+            )
+            raise ValueError(msg)
         return cls.model_validate(data)
 
     def diff(self, other: RunSpec) -> dict[str, tuple[Any, Any]]:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -27,9 +27,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class Success:
-    """Successful evaluation result."""
+    """Successful evaluation result.
 
-    record: Record
+    One item is one cell across the schedule's whole seed plan, so it carries
+    every seed's record: dropping the seeds past the first pays for them and
+    then reports a one-seed measurement as a replicated one.
+    """
+
+    records: tuple[Record, ...]
+
+    @property
+    def record(self) -> Record:
+        """The first seed's record — the item's own identity."""
+        return self.records[0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,17 +157,12 @@ class _ThreadedBackend:
         store: RecordStore,
     ) -> list[Record]:
         """Evaluate one coordinate across the schedule's seeds."""
-        records = []
-        for seed_offset in range(schedule.n_seeds):
-            seed_schedule = replace(
-                schedule, seed=schedule.seed + seed_offset, n_seeds=1
+        return [
+            await asyncio.to_thread(
+                self._evaluate, coordinate, seed_schedule, provenance, params
             )
-            records.append(
-                await asyncio.to_thread(
-                    self._evaluate, coordinate, seed_schedule, provenance, params
-                )
-            )
-        return records
+            for seed_schedule in schedule.seed_plan
+        ]
 
     async def submit_batch(
         self,
@@ -175,7 +180,7 @@ class _ThreadedBackend:
             try:
                 records = await self.submit(coord, sched, prov, params, store)
                 if records:
-                    return Success(record=records[0])
+                    return Success(records=tuple(records))
                 return Failure(
                     failure_event=self._create_failure_event(
                         coord, sched, prov, "No records returned"

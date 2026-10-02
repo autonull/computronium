@@ -13,7 +13,7 @@ import argparse
 import asyncio
 import json
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -173,9 +173,12 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     # Run command
-    p_run = sub.add_parser("run", help="Execute a run profile")
+    p_run = sub.add_parser("run", help="Execute a run profile or a spec file")
     p_run.add_argument(
-        "profile", choices=list(RUN_PROFILES.keys()), help="Run profile to execute"
+        "profile",
+        nargs="?",
+        choices=list(RUN_PROFILES.keys()),
+        help="Run profile to execute (omit when --spec names the run)",
     )
     p_run.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
     p_run.add_argument("--run-id", default=None, help="Existing run ID to resume")
@@ -350,12 +353,34 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
     return "\n".join(lines)
 
 
-def _cmd_run(args: argparse.Namespace) -> int:
-    """Execute a run profile."""
-    profile = RUN_PROFILES[args.profile]
-    overrides = _load_overrides(args.overrides)
-    profile = _apply_overrides(profile, overrides)
+def _resolve_spec(args: argparse.Namespace) -> RunSpec:
+    """The run's declaration: the spec file's, or a profile's.
 
+    A file is the whole declaration, so the profile-shaped flags that would
+    edit it (``--overrides``, ``--task``) are refused rather than silently
+    dropped: a run whose stored spec differs from the file it was given is a
+    run nobody can reproduce.
+    """
+    if args.spec is not None:
+        ignored = [
+            flag
+            for flag, value in (("--overrides", args.overrides), ("--task", args.task))
+            if value is not None
+        ]
+        if ignored:
+            raise ValueError(
+                f"--spec is the run's declaration; {', '.join(ignored)} cannot edit it"
+            )
+        return RunSpec.load(args.spec)
+
+    if args.profile is None:
+        raise ValueError(
+            "comp run needs a profile or --spec; profiles: "
+            f"{', '.join(RUN_PROFILES)}, or a spec file"
+        )
+    profile = _apply_overrides(
+        RUN_PROFILES[args.profile], _load_overrides(args.overrides)
+    )
     logger.info(f"Executing profile: {profile.name}")
     logger.info(f"  Task: {profile.task}, Stages: {profile.stages}")
     logger.info(
@@ -363,24 +388,23 @@ def _cmd_run(args: argparse.Namespace) -> int:
         f" Epochs: {profile.epochs}"
     )
     logger.info(f"  Objectives: {profile.objectives}")
+    return RunSpec(
+        profile=profile.name,
+        task=args.task or profile.task,
+        objectives=profile.objectives,
+        stages=tuple(profile.stages),
+        fidelity=profile.fidelity,
+        n_seeds=profile.n_seeds,
+        epochs=profile.epochs,
+        budget_seconds=profile.budget_seconds,
+        param_budget=profile.param_budget,
+        policy=profile.policy,
+    )
 
-    # The spec is the run's single declaration: a file's, or the profile's.
-    if args.spec:
-        spec = RunSpec.load(args.spec)
-    else:
-        spec = RunSpec(
-            profile=profile.name,
-            task=args.task or profile.task,
-            objectives=profile.objectives,
-            stages=tuple(profile.stages),
-            fidelity=profile.fidelity,
-            n_seeds=profile.n_seeds,
-            epochs=profile.epochs,
-            budget_seconds=profile.budget_seconds,
-            param_budget=profile.param_budget,
-            policy=profile.policy,
-        )
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    """Execute a run from a spec file or a named profile."""
+    spec = _resolve_spec(args)
     policy_name = spec.policy or "round_robin_grid"
 
     # A dry run writes nothing: not a store, not a run row, not a checkpoint.
@@ -411,7 +435,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
             cost_model=SimpleCostModel(),
             policy=policy,
             backend=LocalBackend(),
-            checkpoint_dir=Path(f"checkpoints/{run_id}"),
+            # Checkpoints live beside the store, not in whatever directory the
+            # command happened to be run from: a store path is the run's only
+            # declaration of where its evidence is.
+            checkpoint_dir=Path(args.store).parent / "checkpoints" / run_id,
             seed=spec.seed,
         )
 
@@ -545,7 +572,11 @@ def _cmd_status(args: argparse.Namespace) -> int:
             if summary is None:
                 logger.error(f"Run {args.run_id} not found")
                 return 1
-            print(json.dumps(summary.__dict__, default=str, indent=2))
+            # A slots dataclass has no __dict__: reading one is the crash
+            # §3.7 gate 4 exists to catch, in the branch that reports a run.
+            print(
+                json.dumps(asdict(summary), default=str, indent=2)
+            )
         else:
             runs = ReportGenerator(store).list_runs()
             if not runs:
@@ -575,9 +606,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if handler is None:
             return 2
         return handler(args)
-    except FileNotFoundError, ValueError, json.JSONDecodeError:
-        logger.exception("surface CLI error")
-        return 1
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        # A refused declaration is the user's input, not an internal fault: a
+        # traceback here reads as a crash of the tool rather than of the run.
+        print(f"comp {args.command}: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

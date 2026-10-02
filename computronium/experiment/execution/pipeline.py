@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from computronium.experiment.execution.backends import Failure, Success
 from computronium.experiment.execution.decision import Decision, RoundController
@@ -57,6 +57,10 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
+
+# Rounds that may measure nothing while still proposing fresh cells before the
+# run concludes they cannot measure anything.
+_MAX_FRUITLESS_ROUNDS: Final = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +134,11 @@ class PipelineState:
     round_controller: RoundController | None = None
     # Search space
     search_space: SearchSpace | None = None
+    # Whether the last batch contained a cell this run had never proposed, and
+    # how many rounds in a row have measured nothing while fresh cells existed
+    # (a failing cell must not spin the loop forever).
+    last_batch_was_all_seen: bool = False
+    fruitless_rounds: int = 0
     # System context with environment snapshot (WP19/R75/K10)
     system_context: SystemContext | None = None
 
@@ -303,7 +312,14 @@ class PipelineRunner:
                 break
 
     async def _run_round_loop(self, all_records: list[Record]) -> None:
-        """Run S3-S10 round loop with Decision-based termination."""
+        """Run S3-S10 round loop with Decision-based termination.
+
+        A round that stores nothing new ends the run: the policy has exhausted
+        the space the spec declares (or the budget can no longer afford a cell),
+        and S10's decision is a constant CONTINUE, so nothing else would ever
+        say so. An undeclared run limit would instead hide the exhaustion
+        behind a truncation.
+        """
         round_controller = self._state.round_controller
         if round_controller is None:
             from computronium.experiment.execution.decision import RoundController
@@ -317,7 +333,30 @@ class PipelineRunner:
         while round_controller.should_continue(self._get_decision_from_fragments()):
             if self._shutdown:
                 break
+            before = len(all_records)
             await self._execute_round(all_records)
+            if len(all_records) > before:
+                self._state.fruitless_rounds = 0
+                continue
+            # Nothing was stored. If the round proposed nothing the run had not
+            # already measured, the policy has no fresh cell left and the space
+            # it can reach is exhausted; if it did propose fresh cells and they
+            # all failed, the loop retries a bounded number of times rather
+            # than spinning forever on a cell that cannot be measured.
+            if self._state.last_batch_was_all_seen:
+                logger.info(
+                    "Round %d re-proposed only measured cells; the space this "
+                    "policy reaches is exhausted",
+                    round_controller.current_round,
+                )
+                break
+            self._state.fruitless_rounds += 1
+            if self._state.fruitless_rounds >= _MAX_FRUITLESS_ROUNDS:
+                logger.info(
+                    "%d rounds measured nothing despite fresh cells; stopping",
+                    self._state.fruitless_rounds,
+                )
+                break
 
     async def _execute_round(self, all_records: list[Record]) -> None:  # ruff: ignore[complex-structure]
         """Execute a single round of S3-S10 stages."""
@@ -364,6 +403,10 @@ class PipelineRunner:
                 )
                 all_records.extend(successful_records)
                 fragment.records.extend(successful_records)
+                # Executed is not pending: leaving them queued makes S3 skip
+                # the policy next round, so a run re-proposes the same cells
+                # and stops after one round of a space it never entered.
+                self._state.pending_proposals.clear()
 
         # S7 Measure
         if StageId.S7_MEASURE in self._stages:
@@ -585,24 +628,29 @@ class PipelineRunner:
     def _fresh_batch_items(
         self, proposals: list[Proposal], provenance: Provenance
     ) -> list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]]:
-        """Proposals that still need measuring, deduplicated by measurement_key.
+        """The still-unmeasured seeds of every proposal, as single-seed items.
 
-        Keys already stored by an earlier launch of this run_id are already in
-        ``completed_measurement_keys``, so a resumed run skips them instead of
-        paying for a measurement the store will refuse.
+        Identity is the store's: a record is keyed by its own ``n_seeds=1``
+        schedule, so a proposal whose seeds were measured in an earlier round —
+        or in an earlier launch of this ``run_id`` — is skipped seed by seed
+        rather than as a whole cell. Skipping the whole cell would drop the
+        seeds it has never run; re-measuring all of them spends the store's
+        patience, not the run's.
         """
         seen: set[str] = set(self._state.completed_measurement_keys)
         skipped = 0
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
         for proposal in proposals:
-            key = proposal.coordinate.measurement_key(proposal.schedule)
-            if key in seen:
-                skipped += 1
-                continue
-            seen.add(key)
-            items.append((proposal.coordinate, proposal.schedule, provenance, {}))
+            for schedule in proposal.schedule.seed_plan:
+                key = proposal.coordinate.measurement_key(schedule)
+                if key in seen:
+                    skipped += 1
+                    continue
+                seen.add(key)
+                items.append((proposal.coordinate, schedule, provenance, {}))
+        self._state.last_batch_was_all_seen = not items
         if skipped:
-            logger.info("Skipped %d already-measured proposal(s)", skipped)
+            logger.info("Skipped %d already-measured seed(s)", skipped)
         return items
 
     async def _execute_batch_with_isolation(
@@ -649,22 +697,27 @@ class PipelineRunner:
         successful: list[Record] = []
         for (coord, sched, _prov, _params), result in zip(batch_items, results):
             match result:
-                case Success(record=record):
-                    try:
-                        self._store.append(record)
-                    except Exception as e:
-                        logger.exception(
-                            "Failed to persist record %s", coord.cell_key()
+                case Success(records=records):
+                    stored_here: list[Record] = []
+                    for record in records:
+                        try:
+                            self._store.append(record)
+                        except Exception as e:
+                            logger.exception(
+                                "Failed to persist record %s", coord.cell_key()
+                            )
+                            self._classify_rejection(
+                                coordinate=coord,
+                                schedule=sched,
+                                cause="PERSISTENCE_ERROR",
+                                message=str(e),
+                            )
+                            continue
+                        stored_here.append(record)
+                        self._state.completed_measurement_keys.add(
+                            record.measurement_key
                         )
-                        self._classify_rejection(
-                            coordinate=coord,
-                            schedule=sched,
-                            cause="PERSISTENCE_ERROR",
-                            message=str(e),
-                        )
-                        continue
-                    successful.append(record)
-                    self._state.completed_measurement_keys.add(record.measurement_key)
+                    successful.extend(stored_here)
                 case Failure(failure_event=event):
                     logger.warning(
                         "Evaluation failed for %s: %s",

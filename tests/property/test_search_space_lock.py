@@ -180,18 +180,45 @@ def test_the_stream_is_deterministic_and_duplicate_free() -> None:
     assert len(set(keys)) == len(keys)
 
 
-def test_a_short_prefix_still_varies_every_axis() -> None:
-    """No axis is exhausted before the next one starts: the truncation defect."""
+def test_two_axes_are_not_locked_to_each_other() -> None:
+    """Every combination of two varying axes appears: no diagonal walk.
+
+    Taking the k-th primitive on every axis advances two axes of equal length
+    together, so a run declaring two dynamics x two geometries measures two
+    cells and calls them four. The combinations are the property; the order
+    they arrive in is not.
+    """
+    spec = _narrowed_spec(
+        dynamics=("energy_minimization", "instantaneous"),
+        credit=("gradient", "pepita"),
+        geometry=("feedforward", "recurrent"),
+    )
+    cells = generate_candidates(spec, search_space_from_spec(spec), limit=64)
+    pairs = {(c.dynamics, c.geometry) for c, _ in cells}
+
+    assert pairs == {
+        ("energy_minimization", "feedforward"),
+        ("energy_minimization", "recurrent"),
+        ("instantaneous", "feedforward"),
+        ("instantaneous", "recurrent"),
+    }
+
+
+def test_every_declared_primitive_reaches_the_stream() -> None:
+    """A narrowed axis is fully represented: no value is never proposed."""
     spec = _narrowed_spec(
         dynamics=("energy_minimization", "instantaneous", "diffusion"),
         credit=("gradient", "pepita", "homeostatic"),
         update=("euclidean", "adam", "lion"),
     )
     space = search_space_from_spec(spec)
-    cells = generate_candidates(spec, space, limit=3)
-    assert len({c.dynamics for c, _ in cells}) == 3
-    assert len({c.credit for c, _ in cells}) == 3
-    assert len({c.update for c, _ in cells}) == 3
+    cells = generate_candidates(spec, space, limit=3 * 3 * 3)
+    for axis, expected in (
+        ("dynamics", {"energy_minimization", "instantaneous", "diffusion"}),
+        ("credit", {"gradient", "pepita", "homeostatic"}),
+        ("update", {"euclidean", "adam", "lion"}),
+    ):
+        assert {getattr(c, axis) for c, _ in cells} == expected
 
 
 def test_a_spec_domain_outside_the_harvested_one_is_rejected() -> None:
@@ -284,8 +311,10 @@ def test_every_generated_cell_composes_for_the_task_shape() -> None:
     cells = generate_candidates(
         spec, search_space_from_spec(spec), shape=task_shape, limit=12
     )
+    # Variety across axes is not asserted here: the walk is a factorial, so a
+    # short prefix shares its outer axes. `test_two_axes_are_not_locked_to_each
+    # _other` states that property, and the campaign gate states it on records.
     assert len(cells) == 12
-    assert len({c.geometry for c, _ in cells}) > 1
     shape = task_shape("digits")
     for coordinate, _ in cells:
         config = compose_configs(

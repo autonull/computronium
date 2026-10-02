@@ -1,0 +1,56 @@
+# The §3.6 campaign, as a fixture: a run declaration an external researcher
+# can execute, not a narrative about one.
+#
+#   comp run --spec examples/learning-rules-and-geometry-digits.yaml \
+#       --store campaign.duckdb
+#   comp report --store campaign.duckdb --run-id <id>
+#   comp status  --store campaign.duckdb
+#
+# The question it can answer is deliberately narrow: does the *learning rule*
+# (dynamics x credit) or the *topology* (geometry) move validation accuracy at
+# a fixed parameter ceiling? Every cell is the same task, fidelity, seed plan
+# and parameter budget, so the axes are comparable; nothing here ranks rules
+# outside this regime.
+#
+# Cost, measured (TODO47 T5, scripts/probes/_t5_cell_price.py): ~0.2-0.5 s per
+# cell at batch_limit 2. The space holds 2 dynamics x 3 credits x 2 geometries
+# x 2 tasks x 5 hyperparameter points; budget_seconds caps the run rather than
+# the declaration bounding it.
+
+version: 2
+profile: campaign
+
+# digits is primary; mnist is the transfer task the same cells are measured on.
+task: digits
+tasks: [mnist]
+
+objectives: [validation_accuracy, walltime_total, param_count]
+
+fidelity: L0
+n_seeds: 5
+epochs: 1
+batch_limit: 2
+seed: 0
+param_budget: 10000
+budget_seconds: 300
+policy: round_robin_grid
+
+axes:
+  - axis: substrate
+    primitives: [digital]
+  - axis: plasticity
+    primitives: [fast_weights]
+  - axis: update
+    primitives: [euclidean]
+  - axis: dynamics
+    primitives: [energy_minimization, lazy]
+  - axis: credit
+    primitives: [thermodynamic_contrast, gradient, random_projections]
+  - axis: geometry
+    primitives: [feedforward, recurrent]
+
+# Width and settle step are the hyperparameters that matter at L0; both are
+# narrowed from their harvested domains, so a typo here fails the run.
+hyperparameters:
+  hidden_dim: {lo: 32, hi: 256, scale: log}
+  step_size: {lo: 0.001, hi: 0.1, scale: log}

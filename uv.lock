@@ -456,6 +456,7 @@ dependencies = [
     { name = "psi-peft" },
     { name = "pydantic" },
     { name = "pytorch-lightning" },
+    { name = "pyyaml" },
     { name = "stability" },
     { name = "torch" },
     { name = "torch-geometric" },
@@ -664,6 +665,7 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'" },
     { name = "pytorch-lightning", specifier = ">=2.6.6" },
     { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.6.6" },
+    { name = "pyyaml" },
     { name = "rich", marker = "extra == 'console'" },
     { name = "rich", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
@@ -1393,8 +1395,8 @@ name = "httpcore2"
 version = "2.13.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "h11" },
-    { name = "truststore" },
+    { name = "h11", marker = "sys_platform != 'emscripten'" },
+    { name = "truststore", marker = "sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/f3/1db7aa2bc2524062192bb0e0323969492d1883152a232fe36eea65f4e35c/httpcore2-2.13.1.tar.gz", hash = "sha256:e0aa977abe17e69a3b820a24542a6fa88702676d83880b8d194dcd18408e5103", size = 68071 }
 wheels = [
