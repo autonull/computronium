@@ -5,9 +5,14 @@ command maps to one module ``main``; the console-script table in
 ``pyproject.toml`` points at this entry point so the public API boundary stays
 one place.
 
-    Usage::
+Usage::
 
-        comp <report|parity|repro|validate|joint-validate|benchmark> [args]
+        comp <command> [args]
+
+    where ``command`` is a parity/repro/validate/benchmark adapter or one of
+    the kernel surface's own subcommands (``run``, ``report``, ``export``,
+    ``conformance``, ``status``), promoted to the top level so a run is one
+    command rather than two.
 """
 
 from __future__ import annotations
@@ -23,19 +28,32 @@ warnings.filterwarnings("ignore", category=UserWarning)
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-# command -> (module, attribute). Resolved lazily to keep the import graph
-# shallow: the dispatcher itself must not drag in the zoo/execution layer.
-_SUBCOMMANDS: dict[str, tuple[str, str]] = {
-    "report": ("computronium.experiment.surface.cli", "main"),
-    "parity": ("computronium.cli.parity", "main"),
-    "repro": ("computronium.cli.repro", "main"),
-    "validate": ("computronium.cli.validate", "main"),
-    "joint-validate": ("computronium.cli.joint_validate", "main"),
-    "benchmark": ("computronium.cli.benchmark", "main"),
+_SURFACE = "computronium.experiment.surface.cli"
+
+# command -> (module, attribute, argv prefix). Resolved lazily to keep the
+# import graph shallow: the dispatcher itself must not drag in the zoo/execution
+# layer. The surface's own subcommands are promoted with their name as the
+# prefix, so ``comp run`` and ``comp run run`` reach the same parser and there
+# is no second command tree to keep in step.
+_SUBCOMMANDS: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "run": (_SURFACE, "main", ("run",)),
+    "report": (_SURFACE, "main", ("report",)),
+    "export": (_SURFACE, "main", ("export",)),
+    "conformance": (_SURFACE, "main", ("conformance",)),
+    "status": (_SURFACE, "main", ("status",)),
+    "parity": ("computronium.cli.parity", "main", ()),
+    "repro": ("computronium.cli.repro", "main", ()),
+    "validate": ("computronium.cli.validate", "main", ()),
+    "joint-validate": ("computronium.cli.joint_validate", "main", ()),
+    "benchmark": ("computronium.cli.benchmark", "main", ()),
 }
 
 _SUMMARIES: dict[str, str] = {
-    "report": "Run/report a Unified Kernel experiment store",
+    "run": "Execute a run profile (dry-run with --dry-run)",
+    "report": "Generate report from store",
+    "export": "Export store data for round-trip",
+    "conformance": "Check capability conformance",
+    "status": "Show run/store status",
     "parity": "Check library-vs-kernel parity for an axis",
     "repro": "Replay a recorded run and diff it",
     "validate": "Validate a config or record against the schema",
@@ -63,7 +81,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _load(command: str) -> Callable[[], int]:
-    module_name, attr = _SUBCOMMANDS[command]
+    module_name, attr, _ = _SUBCOMMANDS[command]
     module = __import__(module_name, fromlist=[attr])
     return getattr(module, attr)
 
@@ -98,8 +116,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     # Each adapter's argparse reads sys.argv[1:] when called with no explicit
-    # argv, so rewrite it to look like the command was invoked directly.
-    sys.argv = [f"comp {command}", *rest]
+    # argv, so rewrite it to look like the command was invoked directly — with
+    # the promoted surface subcommand's own name in front of the remainder.
+    prefix = _SUBCOMMANDS[command][2]
+    sys.argv = [f"comp {command}", *prefix, *rest]
     try:
         return int(_load(command)() or 0)
     except SystemExit as exc:

@@ -303,21 +303,27 @@ six-axis systems and assert real accuracies.
 
 | Command | Purpose |
 |---|---|
-| `report` | Kernel surface CLI: run/report/export/conformance/status on the evidence store |
+| `run` | Execute a run profile (dry-run with --dry-run) |
+| `report` | Generate report from store |
+| `export` | Export store data for round-trip |
+| `conformance` | Check capability conformance |
+| `status` | Show run/store status |
 | `parity` | Kernel-vs-PyTorch accuracy parity benchmark |
 | `repro` | Library reproducibility checks |
 | `validate` | Library verification suite |
 | `joint-validate` | 6-axis joint-architecture validation |
 | `benchmark` | ML library benchmark suite (5-level hierarchy) |
 
-This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly.
+This table is locked against the dispatcher by `tests/property/test_cli_readme_lock.py` — set and purpose lines must match exactly, and every fenced `bash` block in this README is executed by that lock, so a documented invocation that errors fails CI.
 
-Kernel operations via `comp report`:
+Kernel operations:
 
 ```bash
-uv run comp report --help            # report/export/conformance/status subcommands
-uv run comp report run quick-verify --store experiment.duckdb
-uv run comp report status --store experiment.duckdb
+uv run comp --help                    # every command above
+uv run comp run quick-verify --dry-run   # resolve the plan; writes nothing
+uv run comp run quick-verify --store experiment.duckdb
+uv run comp status --store experiment.duckdb
+uv run comp report --run-id <id> --store experiment.duckdb
 ```
 
 ---
@@ -348,7 +354,7 @@ Claims are labeled by verification level (§1) and governed by CEEC ([`packages/
 | Effect-size protocol (E2) | 2 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
 | Kernel orchestration guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` — guarantees *orchestration* (policy interchangeability, pause/resume, one store, one measurement identity). **The evaluator behind those tests is currently a placeholder** returning a walltime, so no measurement is actually made; see the kernel-status note below |
 | Locked demo blocks (§3, §4) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` — these *do* train and assert real accuracies |
-| Conformance audit C1–C88 | 2–3 | `comp report conformance` |
+| Conformance audit C1–C88 | 2–3 | `comp conformance` |
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
 

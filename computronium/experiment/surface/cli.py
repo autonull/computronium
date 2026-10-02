@@ -282,6 +282,74 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
     )
 
 
+def _open_store(path: str) -> RecordStore | None:
+    """Open an existing store read-only, or report its absence and return None.
+
+    A read command against a store that was never created has nothing to say;
+    duckdb's own failure for it is an IO traceback, which reads as a crash
+    rather than as the absence it is.
+    """
+    store_path = Path(path)
+    if not store_path.exists():
+        print(f"No store at {store_path} \u2014 nothing to read.", file=sys.stderr)
+        return None
+    return RecordStore(StoreConfig(path=store_path, read_only=True))
+
+
+def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
+    """The plan a run would execute: space, policy, and the first cells.
+
+    Computed from the spec through the same builders the runner uses, so a dry
+    run is evidence the spec is executable rather than a restatement of it.
+    """
+    from computronium.experiment.execution.evaluate import task_shape
+    from computronium.experiment.execution.pipeline import _resolve_tasks
+    from computronium.experiment.execution.search_space import (
+        iter_candidates,
+        search_space_from_spec,
+    )
+    from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
+
+    tasks = _resolve_tasks(PipelineConfig(run_id="dry-run", run_spec=spec))
+    space = search_space_from_spec(spec, tasks=tasks)
+    lines = [
+        f"profile: {spec.profile}",
+        f"task(s): {', '.join(tasks)}",
+        f"fidelity: {spec.fidelity}  epochs: {spec.epochs}  seeds: {spec.n_seeds}",
+        f"batch_limit: {spec.batch_limit}  param_budget: {spec.param_budget}",
+        f"budget: {spec.budget_seconds if spec.budget_seconds is not None else 'none'}",
+        f"policy: {policy_name}",
+        f"objectives: {', '.join(spec.objectives) or 'all'}",
+        f"spec version: {spec.version}",
+    ]
+    for axis in StructuralAxis:
+        names = space.primitives(axis)
+        lines.append(
+            f"axis {axis.value}: {len(names)} \u2014 {', '.join(names) or 'none'}"
+        )
+
+    cells: list[str] = []
+    for coordinate, schedule in iter_candidates(spec, space, shape=task_shape):
+        swept = (
+            ", ".join(f"{k}={v:.4g}" for k, v in sorted(coordinate.params.items()))
+            or "no swept params"
+        )
+        selection = ", ".join(
+            f"{axis.value}={getattr(coordinate, axis.value)}"
+            for axis in AXIS_KIND_ORDER
+        )
+        cells.append(
+            f"  cell {len(cells) + 1}: {schedule.fidelity} seed={schedule.seed} "
+            f"{selection} [{swept}]"
+        )
+        if len(cells) >= limit:
+            break
+    lines.append(f"first {len(cells)} legal cell(s):")
+    lines.extend(cells)
+    return "\n".join(lines)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     """Execute a run profile."""
     profile = RUN_PROFILES[args.profile]
@@ -313,19 +381,17 @@ def _cmd_run(args: argparse.Namespace) -> int:
             policy=profile.policy,
         )
 
-    # Initialize store
+    policy_name = spec.policy or "round_robin_grid"
+
+    # A dry run writes nothing: not a store, not a run row, not a checkpoint.
+    if args.dry_run:
+        print(_dry_run_report(spec, policy_name=policy_name))
+        return 0
+
     store_config = StoreConfig(path=Path(args.store))
     with RecordStore(store_config) as store:
-        # Create or resume run
         run_id = args.run_id or store.create_run(spec=spec)
         logger.info(f"Run ID: {run_id}")
-
-        if args.dry_run:
-            logger.info("DRY RUN - would execute pipeline with config:")
-            logger.info(f"  Run ID: {run_id}")
-            logger.info(f"  Spec version: {spec.version}")
-            logger.info(f"  Budget: {spec.budget_seconds}s")
-            return 0
 
         budget = (
             Budget.from_duration(_duration_str(spec.budget_seconds))
@@ -335,7 +401,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
         # The spec is the only place a policy's arguments come from, so the
         # sampler learns on the run's objectives and its own swept domains.
-        policy_name = spec.policy or "round_robin_grid"
         policy = create_policy(policy_name, **policy_context(spec, policy_name))
 
         # Create pipeline config — the spec supplies stages, seed and policy
@@ -369,8 +434,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 def _cmd_report(args: argparse.Namespace) -> int:
     """Generate report from store."""
-    store_config = StoreConfig(path=Path(args.store), read_only=True)
-    with RecordStore(store_config) as store:
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
         # Determine run_id
         run_id = args.run_id
         if run_id is None:
@@ -407,8 +474,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
 def _cmd_export(args: argparse.Namespace) -> int:
     """Export store data for round-trip."""
-    store_config = StoreConfig(path=Path(args.store), read_only=True)
-    with RecordStore(store_config) as store:
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
         if args.format == "json":
             export_to_json(store, args.output, args.run_id)
         elif args.format == "parquet":
@@ -419,8 +488,10 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 def _cmd_conformance(args: argparse.Namespace) -> int:
     """Check capability conformance."""
-    store_config = StoreConfig(path=Path(args.store), read_only=True)
-    with RecordStore(store_config) as store:
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
         if args.list_only:
             print("Registered Capabilities:")
             print("=" * 60)
@@ -465,8 +536,10 @@ def _check_capability(
 
 def _cmd_status(args: argparse.Namespace) -> int:
     """Show run/store status."""
-    store_config = StoreConfig(path=Path(args.store), read_only=True)
-    with RecordStore(store_config) as store:
+    store = _open_store(args.store)
+    if store is None:
+        return 1
+    with store:
         if args.run_id:
             summary = ReportGenerator(store).run_summary(args.run_id)
             if summary is None:

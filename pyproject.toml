@@ -171,7 +171,9 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/unit", "tests/property", "tests/primitives", "tests/algorithms", "tests/acceleration"]
+# tests/acceptance holds U1-U5 — the suite that proves the kernel works. Leaving
+# it out means a bare `pytest` has never run the project's central claim (TODO46 D10).
+testpaths = ["tests/unit", "tests/property", "tests/primitives", "tests/algorithms", "tests/acceleration", "tests/acceptance"]
 # NiceGUI Screen tests register pages in-test; no repo-root main.py (empty →
 # get_path_to_main_file returns None and the plugin's in-process ui.run path runs).
 main_file = ""
