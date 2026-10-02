@@ -26,7 +26,7 @@ def main() -> int:
         store, store_path = fresh_store(Path(tmp), "u3")
         run_spec = make_run_spec("digits")
         with store:
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
             config = make_pipeline_config(
                 run_id, run_spec, "stratified_random", 2, Path(tmp)
             )

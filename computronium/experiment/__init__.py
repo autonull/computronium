@@ -34,6 +34,12 @@ from computronium.experiment.schema.record import (
     Status,
 )
 from computronium.experiment.schema.registry import Registry, RegistryDiff
+from computronium.experiment.schema.run_spec import (
+    RUN_SPEC_VERSION,
+    AxisSelection,
+    Fidelity,
+    RunSpec,
+)
 
 __all__ = [
     "AXES_REGISTRIES",
@@ -41,13 +47,16 @@ __all__ = [
     "DYNAMICS_REGISTRY",
     "GEOMETRY_REGISTRY",
     "PLASTICITY_REGISTRY",
+    "RUN_SPEC_VERSION",
     "SUBSTRATE_REGISTRY",
     "UPDATE_REGISTRY",
     "AxisKind",
     "AxisPrimitive",
+    "AxisSelection",
     "AxisSpec",
     "Domain",
     "FailureCause",
+    "Fidelity",
     "GateVerdict",
     "HyperparameterSpec",
     "Maturity",
@@ -55,6 +64,7 @@ __all__ = [
     "Registry",
     "RegistryDiff",
     "ReproducibilityClass",
+    "RunSpec",
     "Scale",
     "Severity",
     "Status",

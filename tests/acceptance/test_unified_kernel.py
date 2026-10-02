@@ -30,8 +30,8 @@ from computronium.experiment.execution.policy import (
     UniformRandomPolicy,
 )
 from computronium.experiment.execution.search_space import SearchSpace
-from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
 if TYPE_CHECKING:
@@ -49,35 +49,22 @@ def _seed_registries() -> None:
     seed_all_registries()
 
 
-def _make_run_spec(task: str = "digits") -> dict:
+def _make_run_spec(task: str = "digits") -> RunSpec:
     """Create a minimal RunSpec for testing."""
-    return {
-        "profile": "acceptance",
-        "task": task,
-        "objectives": ["accuracy", "walltime_s"],
-        "stages": [
-            "s1_frame",
-            "s2_space",
-            "s3_schedule",
-            "s4_gate",
-            "s5_compose",
-            "s6_train",
-            "s7_measure",
-            "s8_record",
-            "s9_attribute",
-            "s10_decide",
-            "s11_report",
-        ],
-        "fidelity": "L0",
-        "seeds": 1,
-        "epochs": 1,
-        "budget_seconds": 60.0,
-    }
+    return RunSpec(
+        profile="acceptance",
+        task=task,
+        objectives=("validation_accuracy", "walltime_total"),
+        fidelity="L0",
+        n_seeds=1,
+        epochs=1,
+        budget_seconds=60.0,
+    )
 
 
 def _make_pipeline_config(
     run_id: str,
-    run_spec: dict,
+    run_spec: RunSpec,
     policy_name: str = "stratified_random",
     max_rounds: int = 2,
     store_path: Path | None = None,
@@ -105,14 +92,13 @@ def _make_pipeline_config(
     return PipelineConfig(
         run_id=run_id,
         run_spec=run_spec,
-        stages=[StageId(s) for s in run_spec["stages"]],
-        budget=Budget.from_duration(f"{int(run_spec['budget_seconds'])}s"),
+        budget=Budget.from_duration(f"{int(run_spec.budget_seconds or 0)}s"),
         cost_model=SimpleCostModel(),
         policy=policy,
         allocator=EvidenceDrivenAllocator(promotion_threshold=0.05),
         backend=LocalBackend(),
         checkpoint_dir=store_path / "checkpoints" / run_id if store_path else None,
-        seed=42,
+        seed=run_spec.seed,
         max_rounds=max_rounds,
         min_rounds=1,
     )
@@ -170,7 +156,7 @@ class TestU1_SynthesisPolicyPipeline:
 
         with RecordStore(store_config) as store:
             run_spec = _make_run_spec("digits")
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(
                 run_id=run_id,
@@ -225,7 +211,7 @@ class TestU2_ModelBasedPolicyPipeline:
 
         with RecordStore(store_config) as store:
             run_spec = _make_run_spec("digits")
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(
                 run_id=run_id,
@@ -275,7 +261,7 @@ class TestU3_MultiRoundPauseResume:
 
         with RecordStore(store_config) as store:
             run_spec = _make_run_spec("digits")
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
 
             config = _make_pipeline_config(
                 run_id=run_id,
@@ -312,7 +298,7 @@ class TestU3_MultiRoundPauseResume:
 
         # First run - limited rounds
         with RecordStore(store_config) as store:
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
             config = _make_pipeline_config(
                 run_id=run_id,
                 run_spec=run_spec,
@@ -382,12 +368,11 @@ class TestU4_PolicyInterchangeability:
 
         for policy_name, policy in policies:
             with RecordStore(store_config) as store:
-                run_id = store.create_run(spec=run_spec, spec_version=2)
+                run_id = store.create_run(spec=run_spec)
 
                 config = PipelineConfig(
                     run_id=run_id,
                     run_spec=run_spec,
-                    stages=[StageId(s) for s in run_spec["stages"]],
                     budget=Budget.from_duration("60s"),
                     cost_model=SimpleCostModel(),
                     policy=policy,
@@ -442,7 +427,7 @@ class TestU5_CrossPolicyEvidenceReuse:
 
         # Phase 1: Random policy explores
         with RecordStore(store_config) as store:
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
             config = _make_pipeline_config(
                 run_id=run_id,
                 run_spec=run_spec,
@@ -458,7 +443,7 @@ class TestU5_CrossPolicyEvidenceReuse:
 
         # Phase 2: TPE uses evidence from Phase 1
         with RecordStore(store_config) as store:
-            run_id2 = store.create_run(spec=run_spec, spec_version=2)
+            run_id2 = store.create_run(spec=run_spec)
             config = _make_pipeline_config(
                 run_id=run_id2,
                 run_spec=run_spec,
@@ -477,7 +462,7 @@ class TestU5_CrossPolicyEvidenceReuse:
 
         # Phase 3: Evolution uses all evidence
         with RecordStore(store_config) as store:
-            run_id3 = store.create_run(spec=run_spec, spec_version=2)
+            run_id3 = store.create_run(spec=run_spec)
             config = _make_pipeline_config(
                 run_id=run_id3,
                 run_spec=run_spec,

@@ -25,12 +25,12 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.budget import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import RoundRobinGridPolicy
-from computronium.experiment.execution.stage import StageId
+from computronium.experiment.execution.policy import create_policy
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
 )
+from computronium.experiment.schema.run_spec import Fidelity, RunSpec
 from computronium.experiment.surface.report import (
     ReportGenerator,
     export_to_json,
@@ -48,11 +48,13 @@ class RunProfile:
     name: str
     description: str
     stages: list[str]  # Stage IDs to execute
-    fidelity: str  # L0, L1, L2
-    seeds: int
+    fidelity: Fidelity  # L0, L1, L2
+    task: str  # The task this profile measures
+    n_seeds: int
     epochs: int
     budget_seconds: float | None
-    objectives: tuple[str, ...]
+    objectives: tuple[str, ...]  # Names from the OBJECTIVES registry
+    policy: str  # Name from the POLICY catalog
     promotion_threshold: float  # Pareto frontier promotion threshold
     maturation: bool  # Whether to run maturation after
     deep_tier: bool  # Whether to run deep-tier claim-grade
@@ -65,10 +67,12 @@ RUN_PROFILES: dict[str, RunProfile] = {
         description="Fast sanity check: L0 smoke + L1 evidence on few seeds",
         stages=["s1_frame", "s2_space", "s3_schedule", "s4_gate", "s5_compose"],
         fidelity="L1",
-        seeds=1,
+        n_seeds=1,
         epochs=3,
         budget_seconds=300.0,
-        objectives=("accuracy", "walltime_s"),
+        task="digits",
+        policy="round_robin_grid",
+        objectives=("validation_accuracy", "walltime_total"),
         promotion_threshold=0.5,
         maturation=False,
         deep_tier=False,
@@ -90,10 +94,18 @@ RUN_PROFILES: dict[str, RunProfile] = {
             "s11_report",
         ],
         fidelity="L0",
-        seeds=1,
+        n_seeds=1,
         epochs=1,
         budget_seconds=3600.0,
-        objectives=("accuracy", "walltime_s", "param_count", "flops", "memory_mb"),
+        task="digits",
+        policy="round_robin_grid",
+        objectives=(
+            "validation_accuracy",
+            "walltime_total",
+            "param_count",
+            "flops",
+            "memory_usage",
+        ),
         promotion_threshold=0.7,
         maturation=True,
         deep_tier=True,
@@ -111,10 +123,12 @@ RUN_PROFILES: dict[str, RunProfile] = {
             "s10_decide",
         ],
         fidelity="L2",
-        seeds=5,
+        n_seeds=5,
         epochs=10,
         budget_seconds=7200.0,
-        objectives=("accuracy", "walltime_s", "param_count"),
+        task="digits",
+        policy="evolution",
+        objectives=("validation_accuracy", "walltime_total", "param_count"),
         promotion_threshold=0.8,
         maturation=False,
         deep_tier=False,
@@ -124,12 +138,14 @@ RUN_PROFILES: dict[str, RunProfile] = {
         description="Claim-grade L2 re-runs with CEEC governance (N≥10 seeds)",
         stages=["s8_record", "s9_attribute", "s10_decide", "s11_report"],
         fidelity="L2",
-        seeds=10,
+        n_seeds=10,
         epochs=20,
         budget_seconds=None,
+        task="digits",
+        policy="evolution",
         objectives=(
-            "accuracy",
-            "walltime_s",
+            "validation_accuracy",
+            "walltime_total",
             "param_count",
             "flops",
             "energy_per_step",
@@ -156,7 +172,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
     p_run.add_argument("--run-id", default=None, help="Existing run ID to resume")
     p_run.add_argument("--spec", default=None, help="RunSpec JSON file")
-    p_run.add_argument("--spec-version", type=int, default=1, help="RunSpec version")
+    p_run.add_argument(
+        "--task", default=None, help="Override the profile's task (ignored with --spec)"
+    )
     p_run.add_argument(
         "--overrides", default=None, help="JSON overrides for profile parameters"
     )
@@ -215,6 +233,15 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _duration_str(seconds: float) -> str:
+    """Seconds as the duration string ``Budget.from_duration`` parses."""
+    if seconds >= 3600:
+        return f"{int(seconds / 3600)}h"
+    if seconds >= 60:
+        return f"{int(seconds / 60)}m"
+    return f"{int(seconds)}s"
+
+
 def _load_overrides(overrides_str: str | None) -> dict[str, Any]:
     """Load JSON overrides for profile parameters."""
     if not overrides_str:
@@ -232,10 +259,12 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
         profile,
         stages=overrides.get("stages", profile.stages),
         fidelity=overrides.get("fidelity", profile.fidelity),
-        seeds=overrides.get("seeds", profile.seeds),
+        task=overrides.get("task", profile.task),
+        n_seeds=overrides.get("n_seeds", profile.n_seeds),
         epochs=overrides.get("epochs", profile.epochs),
         budget_seconds=overrides.get("budget_seconds", profile.budget_seconds),
         objectives=tuple(overrides.get("objectives", profile.objectives)),
+        policy=overrides.get("policy", profile.policy),
         promotion_threshold=overrides.get(
             "promotion_threshold", profile.promotion_threshold
         ),
@@ -251,69 +280,59 @@ def _cmd_run(args: argparse.Namespace) -> int:
     profile = _apply_overrides(profile, overrides)
 
     logger.info(f"Executing profile: {profile.name}")
-    logger.info(f"  Stages: {profile.stages}")
+    logger.info(f"  Task: {profile.task}, Stages: {profile.stages}")
     logger.info(
-        f"  Fidelity: {profile.fidelity}, Seeds: {profile.seeds}, Epochs: {profile.epochs}"
+        f"  Fidelity: {profile.fidelity}, n_seeds: {profile.n_seeds},"
+        f" Epochs: {profile.epochs}"
     )
     logger.info(f"  Objectives: {profile.objectives}")
 
-    # Load or create run spec
+    # The spec is the run's single declaration: a file's, or the profile's.
     if args.spec:
-        with Path(args.spec).open(encoding="utf-8") as f:
-            spec = json.load(f)
+        spec = RunSpec.load(args.spec)
     else:
-        spec = {
-            "profile": profile.name,
-            "stages": profile.stages,
-            "fidelity": profile.fidelity,
-            "seeds": profile.seeds,
-            "epochs": profile.epochs,
-            "objectives": list(profile.objectives),
-            "budget_seconds": profile.budget_seconds,
-        }
+        spec = RunSpec(
+            profile=profile.name,
+            task=args.task or profile.task,
+            objectives=profile.objectives,
+            stages=tuple(profile.stages),
+            fidelity=profile.fidelity,
+            n_seeds=profile.n_seeds,
+            epochs=profile.epochs,
+            budget_seconds=profile.budget_seconds,
+            policy=profile.policy,
+        )
 
     # Initialize store
     store_config = StoreConfig(path=Path(args.store))
     with RecordStore(store_config) as store:
         # Create or resume run
-        run_id = args.run_id or store.create_run(
-            spec=spec, spec_version=args.spec_version
-        )
+        run_id = args.run_id or store.create_run(spec=spec)
         logger.info(f"Run ID: {run_id}")
 
         if args.dry_run:
             logger.info("DRY RUN - would execute pipeline with config:")
             logger.info(f"  Run ID: {run_id}")
-            logger.info(f"  Profile: {profile.name}")
-            logger.info(f"  Budget: {profile.budget_seconds}s")
+            logger.info(f"  Spec version: {spec.version}")
+            logger.info(f"  Budget: {spec.budget_seconds}s")
             return 0
 
-        # Create budget
-        budget = None
-        if profile.budget_seconds is not None:
-            # Convert seconds to duration string format
-            if profile.budget_seconds >= 3600:
-                duration_str = f"{int(profile.budget_seconds / 3600)}h"
-            elif profile.budget_seconds >= 60:
-                duration_str = f"{int(profile.budget_seconds / 60)}m"
-            else:
-                duration_str = f"{int(profile.budget_seconds)}s"
-            budget = Budget.from_duration(duration_str)
+        budget = (
+            Budget.from_duration(_duration_str(spec.budget_seconds))
+            if spec.budget_seconds is not None
+            else None
+        )
 
-        # Convert string stage names to StageId enum
-        stage_ids = [StageId(s) for s in profile.stages]
-
-        # Create pipeline config
+        # Create pipeline config — the spec supplies stages, seed and policy
         pipeline_config = PipelineConfig(
             run_id=run_id,
             run_spec=spec,
-            stages=stage_ids,
             budget=budget,
             cost_model=SimpleCostModel(),
-            policy=RoundRobinGridPolicy(),
+            policy=create_policy(spec.policy or "round_robin_grid"),
             backend=LocalBackend(),
             checkpoint_dir=Path(f"checkpoints/{run_id}"),
-            seed=42,
+            seed=spec.seed,
         )
 
         # Run pipeline

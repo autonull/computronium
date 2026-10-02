@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 
 class StageId(StrEnum):
@@ -85,7 +86,7 @@ class StageContext:
     """Context passed to each stage during execution."""
 
     run_id: str
-    run_spec: dict[str, Any]
+    run_spec: RunSpec
     stage_id: StageId
     store: Any  # RecordStore
     budget: Any  # Budget

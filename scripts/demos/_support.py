@@ -25,37 +25,26 @@ from computronium.experiment.execution.policy import (
 from computronium.experiment.execution.search_space import SearchSpace
 from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema.record import Record
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
-STAGES = (
-    "s1_frame",
-    "s2_space",
-    "s3_schedule",
-    "s4_gate",
-    "s5_compose",
-    "s6_train",
-    "s7_measure",
-    "s8_record",
-    "s9_attribute",
-    "s10_decide",
-    "s11_report",
-)
+STAGES = tuple(s.value for s in StageId)
 
 
-def make_run_spec(task: str = "digits") -> dict[str, Any]:
-    return {
-        "profile": "acceptance",
-        "task": task,
-        "objectives": ["accuracy", "walltime_s"],
-        "stages": list(STAGES),
-        "fidelity": "L0",
-        "seeds": 1,
-        "epochs": 1,
-        "budget_seconds": 60.0,
-    }
+def make_run_spec(task: str = "digits") -> RunSpec:
+    return RunSpec(
+        profile="acceptance",
+        task=task,
+        objectives=("validation_accuracy", "walltime_total"),
+        stages=STAGES,
+        fidelity="L0",
+        n_seeds=1,
+        epochs=1,
+        budget_seconds=60.0,
+    )
 
 
-def make_search_space() -> SearchSpace:
+def make_search_space(task: str = "digits") -> SearchSpace:
     from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
     from computronium.experiment.schema.registries import (
         CONSTRAINTS_REGISTRY,
@@ -72,7 +61,7 @@ def make_search_space() -> SearchSpace:
         axes_snapshot=tuple(axes_snapshot),
         constraints=tuple(CONSTRAINTS_REGISTRY.values()),
         objectives=tuple(OBJECTIVES_REGISTRY.values()),
-        tasks=("default",),
+        tasks=(task,),
     )
 
 
@@ -92,7 +81,7 @@ def make_policy(name: str):
 
 def make_pipeline_config(
     run_id: str,
-    run_spec: dict[str, Any],
+    run_spec: RunSpec,
     policy_name: str,
     max_rounds: int,
     checkpoint_root: Path | None,
@@ -100,14 +89,13 @@ def make_pipeline_config(
     return PipelineConfig(
         run_id=run_id,
         run_spec=run_spec,
-        stages=[StageId(s) for s in run_spec["stages"]],
-        budget=Budget.from_duration(f"{int(run_spec['budget_seconds'])}s"),
+        budget=Budget.from_duration(f"{int(run_spec.budget_seconds or 0)}s"),
         cost_model=SimpleCostModel(),
         policy=make_policy(policy_name),
         allocator=EvidenceDrivenAllocator(promotion_threshold=0.05),
         backend=LocalBackend(),
         checkpoint_dir=checkpoint_root / run_id if checkpoint_root else None,
-        seed=42,
+        seed=run_spec.seed,
         max_rounds=max_rounds,
         min_rounds=1,
     )

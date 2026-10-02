@@ -41,8 +41,8 @@ class FrameStage:
 
         # Extract objectives from run_spec
         run_spec = ctx.run_spec
-        objectives = run_spec.get("objectives", ("accuracy",))
-        operating_points = run_spec.get("operating_points", {})
+        objectives = run_spec.objectives
+        operating_points = run_spec.operating_points
 
         # Generate initial candidates from search space
         candidates = generate_initial_candidates(

@@ -22,6 +22,7 @@ from computronium.experiment.evidence.claims import (
     filter_promoted,
 )
 from computronium.experiment.schema.record import GateVerdict
+from computronium.experiment.schema.run_spec import RunSpec
 
 __all__ = [
     "ExportBundle",
@@ -40,7 +41,7 @@ class RunSummary:
     """Summary of a single run from the store."""
 
     run_id: str
-    spec: dict[str, Any] | None
+    spec: RunSpec | None
     spec_version: int
     status: str
     budget_consumed_s: float | None
@@ -246,7 +247,7 @@ class ReportGenerator:
         """Budget consumed per run (declared vs consumed when available)."""
         results = []
         for info in self._store.query_runs(run_id=run_id):
-            declared = (info.spec or {}).get("budget_seconds")
+            declared = info.spec.budget_seconds if info.spec else None
             results.append({
                 "run_id": info.run_id,
                 "status": info.status,

@@ -23,7 +23,7 @@ def main() -> int:
         counts: dict[str, int] = {}
         with store:
             for policy in policies:
-                run_id = store.create_run(spec=run_spec, spec_version=2)
+                run_id = store.create_run(spec=run_spec)
                 config = make_pipeline_config(run_id, run_spec, policy, 2, Path(tmp))
                 records = run_pipeline(config, store)
                 counts[policy] = len(records)

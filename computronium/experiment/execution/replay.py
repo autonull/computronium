@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class Checkpoint:
     """
 
     run_id: str
-    run_spec: dict[str, Any]  # RunSpec as dict
+    run_spec: RunSpec
     completed_measurement_keys: frozenset[str]
     pending_candidates: list[tuple[Coordinate, Schedule]]  # Not yet started
     in_progress: list[tuple[Coordinate, Schedule]]  # Started but not completed
@@ -78,7 +79,7 @@ class Checkpoint:
         """Write checkpoint to JSON file."""
         data = {
             "run_id": self.run_id,
-            "run_spec": self.run_spec,
+            "run_spec": self.run_spec.to_dict(),
             "completed_measurement_keys": list(self.completed_measurement_keys),
             "pending_candidates": [
                 {"coordinate": c.to_dict(), "schedule": s.to_dict()}
@@ -102,7 +103,7 @@ class Checkpoint:
         data = json.loads(path.read_text(encoding="utf-8"))
         return cls(
             run_id=data["run_id"],
-            run_spec=data["run_spec"],
+            run_spec=RunSpec.from_dict(data["run_spec"]),
             completed_measurement_keys=frozenset(data["completed_measurement_keys"]),
             pending_candidates=[
                 (
@@ -246,7 +247,7 @@ def resume_run(
 
 def create_checkpoint(
     run_id: str,
-    run_spec: dict[str, Any],
+    run_spec: RunSpec,
     completed_keys: frozenset[str],
     pending: list[tuple[Coordinate, Schedule]],
     in_progress: list[tuple[Coordinate, Schedule]],
@@ -273,6 +274,7 @@ def create_checkpoint(
 def periodic_checkpoint(
     store: RecordStore,
     run_id: str,
+    run_spec: RunSpec,
     checkpoint_dir: Path,
     interval_seconds: float = 60.0,
 ) -> Path:
@@ -281,6 +283,7 @@ def periodic_checkpoint(
     Args:
         store: RecordStore to query
         run_id: Run ID
+        run_spec: The run's typed spec, so the checkpoint resumes a described run
         checkpoint_dir: Directory for checkpoint files
         interval_seconds: Minimum interval between checkpoints (not enforced here)
 
@@ -296,7 +299,7 @@ def periodic_checkpoint(
 
     checkpoint = Checkpoint(
         run_id=run_id,
-        run_spec={},  # Would need to be passed in
+        run_spec=run_spec,
         completed_measurement_keys=completed_keys,
         pending_candidates=[],
         in_progress=[],

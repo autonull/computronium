@@ -20,7 +20,7 @@ def main() -> int:
         store, _ = fresh_store(Path(tmp), "u1")
         with store:
             run_spec = make_run_spec("digits")
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
             config = make_pipeline_config(run_id, run_spec, "synthesis", 2, Path(tmp))
             records = run_pipeline(config, store)
             stored = store.query_records(run_id=run_id)

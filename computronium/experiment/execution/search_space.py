@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.axis import AxisSpec
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
+    from computronium.experiment.schema.run_spec import RunSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -541,7 +542,7 @@ class StageContext:
     """Context passed to each stage during execution."""
 
     run_id: str
-    run_spec: dict[str, Any]
+    run_spec: RunSpec
     stage_id: StageId
     store: RecordStore
     budget: Budget

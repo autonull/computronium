@@ -24,7 +24,7 @@ def main() -> int:
         all_records = []
         with store:
             for phase in phases:
-                run_id = store.create_run(spec=run_spec, spec_version=2)
+                run_id = store.create_run(spec=run_spec)
                 config = make_pipeline_config(run_id, run_spec, phase, 2, Path(tmp))
                 records = run_pipeline(config, store)
                 assert records, f"{phase} produced no records"

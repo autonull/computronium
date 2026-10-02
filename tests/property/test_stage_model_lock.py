@@ -19,6 +19,7 @@ from computronium.experiment.execution.pipeline import PipelineConfig
 from computronium.experiment.execution.stage import STAGE_SPECS, StageId
 from computronium.experiment.schema.coordinate import Provenance
 from computronium.experiment.schema.registries import STAGES_REGISTRY
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.surface.cli import RUN_PROFILES
 
 
@@ -28,7 +29,9 @@ class TestStageModelLock:
     @pytest.fixture(autouse=True)
     def _seed_registries(self) -> None:
         """Seed registries before each test."""
-        from computronium.experiment.schema.seed_registries import seed_all_registries
+        from computronium.experiment.schema.seed_registries import (
+            seed_all_registries,
+        )
 
         seed_all_registries()
 
@@ -120,7 +123,7 @@ class TestWrapperObligations:
 
         config = PipelineConfig(
             run_id="test_coverage",
-            run_spec={"profile": "test"},
+            run_spec=RunSpec(task="digits", profile="test"),
             stages=[StageId.S1_FRAME],
             budget=Budget.from_duration("1h"),
             cost_model=SimpleCostModel(),
@@ -153,7 +156,7 @@ class TestWrapperObligations:
             store = RecordStore(StoreConfig(path=Path(tmp) / "test.duckdb"))
             config = PipelineConfig(
                 run_id="test_classification",
-                run_spec={},
+                run_spec=RunSpec(task="digits"),
                 stages=[StageId.S1_FRAME],
                 budget=Budget.from_duration("1h"),
                 cost_model=SimpleCostModel(),
@@ -209,7 +212,7 @@ class TestWrapperObligations:
 
         config = PipelineConfig(
             run_id="test_failure_isolation",
-            run_spec={"task": "digits"},
+            run_spec=RunSpec(task="digits"),
             stages=[StageId.S1_FRAME, StageId.S2_SPACE],
             budget=Budget.from_duration("60s"),
             cost_model=SimpleCostModel(),
@@ -346,7 +349,7 @@ class TestReplayResumeIntegration:
         store_config = StoreConfig(path=tmp_path / "test.duckdb")
         with RecordStore(store_config) as temp_store:
             # Create the run first
-            run_id = temp_store.create_run(spec={"test": "spec"}, spec_version=1)
+            run_id = temp_store.create_run(spec=RunSpec(task="digits"))
 
             # Update record with actual run_id
             record = Record.create(

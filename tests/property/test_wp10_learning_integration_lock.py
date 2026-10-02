@@ -52,6 +52,7 @@ from computronium.experiment.schema.record import (
     Status,
 )
 from computronium.experiment.schema.registries import prior_value
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
 
@@ -154,7 +155,7 @@ class TestCrossTaskIdentity:
 
     def test_both_tasks_persist(self, _store: RecordStore) -> None:
         """L17: cross-task records coexist; no false duplicate rejection."""
-        run_id = _store.create_run(spec={"kind": "lock"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="lock"))
         _store.append(_record(run_id, seed=7, task_id="task-a", record_idx=0))
         _store.append(_record(run_id, seed=7, task_id="task-b", record_idx=1))
         assert len(_store.query_records(run_id=run_id)) == 2
@@ -163,7 +164,7 @@ class TestCrossTaskIdentity:
 class TestAchievedSeedClaims:
     def test_mid_replication_run_not_eligible(self, _store: RecordStore) -> None:
         """L20: 2 achieved seeds of planned 5 → not claim-eligible."""
-        run_id = _store.create_run(spec={"kind": "lock"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="lock"))
         first = _record(run_id, seed=1)
         _store.append(first)
         _store.append(_record(run_id, seed=2))
@@ -171,7 +172,7 @@ class TestAchievedSeedClaims:
 
     def test_full_replication_eligible(self, _store: RecordStore) -> None:
         """L20: 5 achieved seeds → eligible."""
-        run_id = _store.create_run(spec={"kind": "lock"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="lock"))
         first = _record(run_id, seed=1)
         _store.append(first)
         for seed in (2, 3, 4, 5):
@@ -301,7 +302,7 @@ class TestSurrogateStoreWiring:
         self, _store: RecordStore
     ) -> None:
         """L7: surrogate trains on exploration ∪ policy_selected only."""
-        run_id = _store.create_run(spec={"kind": "lock"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="lock"))
         _store.append(_record(run_id, 1, origin=DataOrigin.EXPLORATION))
         _store.append(_record(run_id, 2, origin=DataOrigin.POLICY_SELECTED))
         _store.append(_record(run_id, 3, origin=DataOrigin.CALIBRATION))

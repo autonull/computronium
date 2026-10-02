@@ -50,6 +50,7 @@ if TYPE_CHECKING:
         StageContext,
     )
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class PipelineConfig:
     """Configuration for the pipeline runner."""
 
     run_id: str
-    run_spec: dict[str, Any]
+    run_spec: RunSpec
     stages: list[StageId] = field(default_factory=list)
     budget: Budget | None = None
     cost_model: CostModel | None = None
@@ -82,20 +83,17 @@ class PipelineConfig:
 
 
 def _resolve_tasks(config: PipelineConfig) -> tuple[str, ...]:
-    """The run's task names, validated against the task registry.
+    """The run's task names: the spec's, unless the config overrides them.
 
-    A run must name resolvable tasks: the evaluator loads one by name, so an
-    unresolvable task is a run that measures nothing while reporting success.
+    ``RunSpec`` already refused an unresolvable task, so an empty result means
+    the run measured nothing and the override must be checked here.
     """
+    names = tuple(config.task_ids) or config.run_spec.task_names
+    if not names:
+        msg = f"run {config.run_id} names no task"
+        raise ValueError(msg)
     from computronium.domains.registry import SUPPORTED_TASKS
 
-    spec = config.run_spec or {}
-    names = tuple(config.task_ids) or tuple(
-        n for n in (spec.get("task"), *spec.get("tasks", ())) if n
-    )
-    if not names:
-        msg = f"run {config.run_id} names no task; known: {sorted(SUPPORTED_TASKS)}"
-        raise ValueError(msg)
     unknown = [n for n in names if n not in SUPPORTED_TASKS]
     if unknown:
         msg = f"unknown task(s) {unknown}; available: {sorted(SUPPORTED_TASKS)}"
@@ -179,7 +177,7 @@ class PipelineRunner:
             system_context=system_context,
         )
         self._stages = config.stages or [
-            s.stage_id for s in self._get_all_stage_specs()
+            StageId(n) for n in config.run_spec.stage_names
         ]
         self._shutdown = False
 
@@ -378,7 +376,7 @@ class PipelineRunner:
         constraints = list(CONSTRAINTS_REGISTRY.values())
 
         # Get objectives from run_spec or all
-        objective_names = run_spec.get("objectives", [])
+        objective_names = run_spec.objectives
         if objective_names:
             objectives = [
                 OBJECTIVES_REGISTRY[name]
@@ -478,17 +476,20 @@ class PipelineRunner:
             pending_candidates=pending_candidates,
             in_progress=self._state.in_progress,
             stage_params=stage_spec.params,
-            provenance=Provenance(
-                env=env_dict,
-                dataset=self._config.run_spec.get("dataset", "unknown"),
-                dataset_version=self._config.run_spec.get("dataset_version", "1.0"),
-                code_sha=self._config.run_spec.get("code_sha", "unknown"),
-                policy=self._config.policy.get_name()
-                if self._config.policy
-                else "unknown",
-                links={"run_id": self._config.run_id},
-            ),
+            provenance=self._provenance(env_dict),
             system_context=system_context,
+        )
+
+    def _provenance(self, env_dict: dict[str, Any]) -> Provenance:
+        """The run's provenance: environment plus the spec's own declarations."""
+        spec = self._config.run_spec
+        return Provenance(
+            env=env_dict,
+            dataset=spec.dataset,
+            dataset_version=spec.dataset_version,
+            code_sha=spec.code_sha,
+            policy=self._config.policy.get_name() if self._config.policy else "unknown",
+            links={"run_id": self._config.run_id},
         )
 
     def _merge_coverage(self, coverage: dict[str, Any]) -> None:
@@ -595,16 +596,7 @@ class PipelineRunner:
         if system_context is None:
             raise ValueError("SystemContext not initialized")
         env_dict = system_context.environment.to_provenance_dict()
-        provenance = Provenance.from_dict({
-            "env": env_dict,
-            "dataset": self._config.run_spec.get("dataset", "unknown"),
-            "dataset_version": self._config.run_spec.get("dataset_version", "1.0"),
-            "code_sha": self._config.run_spec.get("code_sha", "unknown"),
-            "policy": self._config.policy.get_name()
-            if self._config.policy
-            else "unknown",
-            "links": {"run_id": self._config.run_id},
-        })
+        provenance = self._provenance(env_dict)
 
         # Deduplicate proposals by measurement_key to avoid duplicate key errors
         seen_keys: set[str] = set()

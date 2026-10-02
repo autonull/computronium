@@ -480,7 +480,7 @@ assertion — **the same coordinate with `credit` swapped must produce a
 different `train_acc`**. A number that does not respond to the axis you varied
 is a fabricated result, and no amount of schema validity changes that.
 
-### 3.2 Typed `RunSpec`
+### 3.2 Typed `RunSpec` — LANDED, see §8 session 4
 
 Pydantic v2 at the I/O boundary, mirroring frozen dataclasses internally
 (AGENTS.md data-modelling; ceec-core precedent). Declares: task, objective
@@ -802,12 +802,71 @@ continuous resolution, not a quantized one.
 `tests/acceptance` 8 passed (3:04), `tests/ceec` 125 passed, `ruff` + `pyright`
 clean on the changed modules.
 
+### Session 4
+
+**Landed: §3.2.** `computronium/experiment/schema/run_spec.py` declares
+`RunSpec` and `AxisSelection` as frozen Pydantic v2 models with
+`extra="forbid"`. Every consumer that previously read a `dict[str, Any]` now
+reads a checked object: `PipelineConfig.run_spec`, both `StageContext`
+declarations (`stage.py` and `search_space.py`, which duplicated each other),
+`Checkpoint.run_spec`, `RunInfo.spec`, and `RunSummary.spec`.
+`tests/property/test_run_spec_lock.py`, 17 tests, is the gate.
+
+**Three incompatible spec dialects existed** — CLI/profile, `question_first`,
+and the demo/test literal — and they disagreed on spelling (`seeds` vs
+`n_seeds`), on `operating_point` vs `operating_points`, and on which keys
+existed at all. They are now one model. `question_first()` returns a `RunSpec`
+and takes the task as a required argument.
+
+**Nine of the eighteen keys the old dicts carried were write-only** — no code
+read them. Under `extra="forbid"` they are now a validation error, which is the
+point: `data_origin_allocation` and `contrast_quota` were always S3 *stage*
+params (`stages_impl.py:185,194` read them from `ctx.stage_params`), and a
+spec that claimed to carry them was dead config.
+
+**Four objectives in every `RUN_PROFILES` entry did not exist.**
+`accuracy`, `walltime_s` and `memory_mb` were invented at the call site, and
+`pipeline._build_search_space` filtered unknown names out with no message — so
+the profiles silently searched on *no objectives at all*. The profiles now
+name registry rows (`validation_accuracy`, `walltime_total`, `param_count`,
+`flops`, `memory_usage`, `energy_per_step`). **The objective→metric-key mapping
+is now missing and is §3.4's first job:** the evaluator emits `train_acc`,
+`train_loss`, `val_acc`, `walltime_s`, and nothing maps `validation_accuracy`
+onto `val_acc`.
+
+**`spec_version` had three sources** (CLI default 1, `create_run` default 1,
+eight test call sites passing 2). The spec now declares its own `version`
+(`RUN_SPEC_VERSION = 2`) and `create_run(spec)` has no version parameter, so
+the store cannot record a version the spec does not claim. Reading a persisted
+spec is **fail-closed** (`RecordStore._read_spec` raises `StoreError` naming the
+run) — a spec nobody can re-read means a run nobody can reproduce.
+
+**Other DRY fixes in the same pass.** `RunProfile` gained `task`, `policy` and
+`n_seeds` and is now the *only* place a profile is described;
+`PipelineRunner._provenance` replaced two duplicated five-field constructions
+(and a pointless `Provenance.from_dict` round-trip); `PipelineConfig.seed=42`
+is now `spec.seed`; `cli.py`'s three-branch seconds→duration string became
+`_duration_str`; `_get_all_stage_specs` died with the stage-source change.
+
+**The CLI now validates at load.** `comp run --spec <file>` was a bare
+`json.load` with a traceback on failure; it is `RunSpec.load`, and `--spec-
+version` is gone. `--task` overrides the profile's task. Profile-driven runs
+previously produced a spec with *no task* and would have died in `_resolve_tasks`
+— the D14 fix from session 3 was reachable only from a spec file.
+
+**Verified:** `tests/property` + `tests/unit` + `tests/ceec` 2237 passed (3:51);
+`tests/acceptance` 8 passed (3:47); `ruff`/`pyright` clean on every changed
+module (`experiment/probe.py`'s 15 pyright errors are pre-existing and
+untouched). `demo_unified_pipeline.py` runs (19 records). `comp run --spec` on a
+bad spec exits 1 naming `seeds`; a valid one trains.
+
+**Not done, deliberately:** the `constraints` half of the §3.2 field list.
+`CONSTRAINTS_REGISTRY` is global and unconditional today, so a spec field for
+it would be a fourth write-only key.
+
 ### Remaining work, in order
 
-1. **§3.2 `RunSpec`.** Now the blocking item: §3.3's generator consumes the
-   spec's task, axis subsets and domains, and §D14 showed the task has to arrive
-   from the spec rather than a literal. Typed, versioned, diffable.
-2. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
+1. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
    which the §3.0.1 ratchet is holding at exactly seven. The ratchet failing is
    the signal that §3.3 landed; lower it to zero in the same commit.
 3. **§2.1's audit table and the new lock.** Still not written. The mechanism for
@@ -818,7 +877,10 @@ clean on the changed modules.
    before launching; it may be cheaper to fix the registry metadata first.
 4. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
    candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
-   and §3.4 are one interface change, not two.
+   and §3.4 are one interface change, not two. **First job: the
+   objective→payload-key mapping**, which session 4 exposed by making objective
+   names real (see above); nothing yet turns `validation_accuracy` into
+   `val_acc`, so `study.tell(trial, value)` has no value to tell.
 5. **§4 item 4's remaining half** — locking README's fenced bash blocks.
 
 **Three things to watch that the plan does not currently say:**
@@ -841,3 +903,27 @@ clean on the changed modules.
   `ConflictingHyperparameterError`. Narrowed to import failure only. The same
   silent-skip shape is worth grepping for elsewhere before trusting any registry
   count.
+- **Silent name filtering is this plan's most productive defect shape.** Two
+  instances found in one pass: unknown objectives dropped by
+  `pipeline._build_search_space`, and unknown *axis primitive* names that any
+  `AxisSelection` may now reject. A filter that drops an unrecognised name is a
+  claim the run silently did not make. Grep for `if .* in .*REGISTRY` filters
+  and for `logger.warning`-then-continue; each is a candidate.
+- **Three `create_run(spec=...)` callers had been passing `{"kind": "lock"}`-shaped
+  dicts that were never valid specs** (tests in `test_wp10_learning_integration_lock`,
+  `test_stage_model_lock`, `test_wp11_surface_lock`, `test_serialization_roundtrip_lock`).
+  Typing the parameter is what surfaced them. The pattern generalises: a
+  `dict[str, Any]` parameter is a place where nobody checked anything.
+- **`StageContext`, `Fragment`, `Stage`, `Decision` and `Proposal` are declared
+  twice** — in `execution/stage.py` and again in `execution/search_space.py`.
+  `pipeline.py` imports some from each. §3.3/§3.4 should delete the
+  `search_space.py` copies rather than update both.
+- **`scripts/demos/_support.py:make_search_space` is a third copy of
+  `pipeline._build_search_space`**, and it hardcoded `tasks=("default",)` —
+  D14's last holdout, now `"digits"`. Delete it once the runner can build the
+  space from the spec.
+- **The `--spec-version` flag is gone from the CLI** but `spec_version` remains
+  a column and a `RunInfo` field; it is now derived, and `report.py:408` prints
+  it. A run row whose `spec_version` disagrees with its `spec.version` is now
+  unrepresentable through the API but still constructible by direct SQL — the
+  fail-closed read is what catches it.

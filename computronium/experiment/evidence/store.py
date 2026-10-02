@@ -35,6 +35,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import current_schema_version
 
 if TYPE_CHECKING:
@@ -65,7 +66,7 @@ class RunInfo:
     """Public read-model row for the runs table."""
 
     run_id: str
-    spec: dict[str, Any] | None
+    spec: RunSpec | None
     spec_version: int
     status: str
     budget_consumed_s: float | None
@@ -237,13 +238,38 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             "CREATE INDEX IF NOT EXISTS idx_artifacts_record_id ON artifacts(record_id)"
         )
 
+    @staticmethod
+    def _read_spec(run_id: str, raw: str | None) -> RunSpec | None:
+        """Parse a persisted spec, failing closed on one that no longer validates.
+
+        A spec that cannot be validated is drift, not an inconvenience: it
+        names fields the run no longer understands, so a report built from it
+        would be describing a run that cannot be reproduced.
+        """
+        if not raw:
+            return None
+        try:
+            return RunSpec.from_dict(json.loads(raw))
+        except (ValueError, json.JSONDecodeError) as exc:
+            msg = f"run {run_id} has a spec that does not validate: {exc}"
+            raise StoreError(msg) from exc
+
     def create_run(
         self,
         run_id: str | None = None,
-        spec: dict[str, Any] | None = None,
-        spec_version: int = 1,
+        spec: RunSpec | None = None,
     ) -> str:
-        """Create a new run and return its run_id."""
+        """Create a new run and return its run_id.
+
+        Args:
+            run_id: Identifier to use; a UUID4 when omitted.
+            spec: The run's typed spec. Its ``version`` is the persisted
+                ``spec_version`` — the spec declares its own version, so a
+                caller cannot record a version the spec does not claim.
+
+        Returns:
+            The run_id written.
+        """
         if self._conn is None:
             raise StoreError("Connection not initialized")
         if run_id is None:
@@ -256,8 +282,8 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 """,
                 [
                     run_id,
-                    json.dumps(spec) if spec else None,
-                    spec_version,
+                    json.dumps(spec.to_dict()) if spec else None,
+                    spec.version if spec else 0,
                     "running",
                     datetime.now(),
                 ],
@@ -974,7 +1000,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         return [
             RunInfo(
                 run_id=row[0],
-                spec=json.loads(row[1]) if row[1] else None,
+                spec=self._read_spec(row[0], row[1]),
                 spec_version=row[2],
                 status=row[3],
                 budget_consumed_s=row[4],
@@ -1199,7 +1225,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         runs = [
             {
                 "run_id": info.run_id,
-                "spec": info.spec,
+                "spec": info.spec.to_dict() if info.spec else None,
                 "spec_version": info.spec_version,
                 "status": info.status,
                 "budget_consumed_s": info.budget_consumed_s,

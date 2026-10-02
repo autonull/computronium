@@ -43,7 +43,7 @@ def main() -> int:
         print(f"objective directions: {directions}")
         with store:
             run_spec = make_run_spec("digits")
-            run_id = store.create_run(spec=run_spec, spec_version=2)
+            run_id = store.create_run(spec=run_spec)
             config = make_pipeline_config(
                 run_id, run_spec, "stratified_random", 3, Path(tmp)
             )

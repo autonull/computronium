@@ -20,6 +20,7 @@ from computronium.experiment.evidence.store import (
     RecordStore,
     StoreConfig,
 )
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface import cli
 from computronium.experiment.surface.codegen import (
@@ -75,7 +76,7 @@ def _intent_dict(intent_id: str = "intent-1") -> dict[str, object]:
 
 class TestIntentPersistence:
     def test_round_trip(self, _store: RecordStore) -> None:
-        run_id = _store.create_run(spec={"kind": "test"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
         record = _store.record_intent(run_id, _intent_dict())
         assert record.payload["kind"] == "operator_intent"
         found = _store.query_intent_records(run_id)
@@ -83,14 +84,14 @@ class TestIntentPersistence:
         assert found[0].record_id == record.record_id
 
     def test_redelivery_dedups(self, _store: RecordStore) -> None:
-        run_id = _store.create_run(spec={"kind": "test"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
         _store.record_intent(run_id, _intent_dict())
         with pytest.raises(DuplicateMeasurementError):
             _store.record_intent(run_id, _intent_dict())
 
     def test_run_scoping(self, _store: RecordStore) -> None:
-        run_a = _store.create_run(spec={"kind": "a"})
-        run_b = _store.create_run(spec={"kind": "b"})
+        run_a = _store.create_run(spec=RunSpec(task="digits", profile="a"))
+        run_b = _store.create_run(spec=RunSpec(task="digits", profile="b"))
         _store.record_intent(run_a, _intent_dict("intent-a"))
         assert len(_store.query_intent_records(run_a)) == 1
         assert len(_store.query_intent_records(run_b)) == 0
@@ -99,7 +100,7 @@ class TestIntentPersistence:
 
 class TestPublicExports:
     def test_snapshot_keys_serializable(self, _store: RecordStore) -> None:
-        run_id = _store.create_run(spec={"kind": "test"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
         _store.record_intent(run_id, _intent_dict())
         snapshot = _store.export_snapshot(run_id)
         assert set(snapshot) == {"records", "runs", "artifacts", "vector_index"}
@@ -108,7 +109,7 @@ class TestPublicExports:
         json.dumps(snapshot, default=str)
 
     def test_export_json_round_trip(self, _store: RecordStore, tmp_path: Path) -> None:
-        run_id = _store.create_run(spec={"kind": "test"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
         _store.record_intent(run_id, _intent_dict())
         out = export_to_json(_store, tmp_path / "bundle.json", run_id)
         data = json.loads(out.read_text(encoding="utf-8"))
@@ -116,7 +117,7 @@ class TestPublicExports:
         assert data["records"][0]["payload"]["kind"] == "operator_intent"
 
     def test_handoff_mentions_intents(self, _store: RecordStore) -> None:
-        run_id = _store.create_run(spec={"kind": "test"})
+        run_id = _store.create_run(spec=RunSpec(task="digits", profile="test"))
         _store.record_intent(run_id, _intent_dict())
         text = narrative_handoff_summary(_store, run_id)
         assert "Operator intents on record: 1" in text
@@ -125,16 +126,29 @@ class TestPublicExports:
 
 class TestQuestionFirst:
     def test_spec_shape(self) -> None:
-        spec = question_first("validation_accuracy", {"budget_seconds": 60})
-        assert spec["kind"] == "question_first"
-        assert spec["policy"] == "synthesis"
-        assert spec["objectives"] == ["validation_accuracy"]
-        assert spec["stages"] == list(QUESTION_FIRST_STAGES)
-        assert spec["data_origin_allocation"]["exploration"] == 0.6
+        spec = question_first("validation_accuracy", "digits", {"budget_seconds": 60})
+        assert spec.profile == "question_first"
+        assert spec.policy == "synthesis"
+        assert spec.objectives == ("validation_accuracy",)
+        assert spec.stages == QUESTION_FIRST_STAGES
+        assert spec.task_names == ("digits",)
+        assert spec.budget_seconds == 60.0
 
     def test_unknown_objective_rejected(self) -> None:
-        with pytest.raises(KeyError):
-            question_first("not_an_objective")
+        with pytest.raises(ValueError, match="unknown objective"):
+            question_first("not_an_objective", "digits")
+
+    def test_unknown_operating_point_field_rejected(self) -> None:
+        with pytest.raises(ValueError, match="unknown field"):
+            question_first("validation_accuracy", "digits", {"epochs": 2, "lr": 0.1})
+
+    def test_write_only_keys_are_not_spec_fields(self) -> None:
+        # data_origin_allocation and contrast_quota are S3 *stage* params;
+        # a spec that carries them is dead config the stages never read.
+        with pytest.raises(ValueError, match="data_origin_allocation"):
+            RunSpec.model_validate(
+                {"task": "digits", "data_origin_allocation": {"exploration": 0.6}}
+            )
 
 
 class TestCodegenDrift:

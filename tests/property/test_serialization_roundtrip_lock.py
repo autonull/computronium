@@ -28,6 +28,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import SCHEMA_REGISTRY
 
 
@@ -89,7 +90,7 @@ def _make_record(
 def _open_store(tmpdir: str) -> RecordStore:
     store = RecordStore(StoreConfig(path=Path(tmpdir) / "roundtrip.duckdb"))
     store.__enter__()
-    store.create_run("run-rt", spec_version=1)
+    store.create_run("run-rt", spec=RunSpec(task="digits"))
     return store
 
 
