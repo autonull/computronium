@@ -184,17 +184,92 @@ was touched.
 
 === NEW IMPROVEMENT OPPORTUNITIES (2026-10-02c) ===
 
-- **Elbow label for `train→evidence`** sits just above the band-3/band-4 gap
-  (y≈2119–2134 vs gap 2134–2206) because `train` is shorter than its band, so
-  `s.bottom` is above the band floor. It overlaps no panel (verified), but
-  nudging elbow labels to the true band-gap midpoint would center them more
-  evenly. Low priority.
-- **Label-vs-label collision check** — `_verify_layout` guards labels against
-  panels and canvas, but two edge labels in the same gap channel could still
-  overlap each other if labels grow; a pairwise label-intersection check would
-  close that. Not currently triggered.
-- **Legend additions** — could add a legend swatch for the dashed purple
-  back-edge (evidence → entry feedback loop) and for the axis color family, so
-  the color-coding key is complete.
-- **High-DPI render** — emit a 2× (or `@2x`) variant / add `shape-rendering`
-  hints for crisper text when the SVG is viewed large.
+All four items implemented in the 2026-10-02d session (details below):
+
+- ~~Elbow label for `train→evidence`~~ ✓ — elbow lanes now snap to the
+  band-gap midpoint via `_gap_y()`; `train→evidence` lane moved from
+  y≈2126 to 2170 (exact gap midpoint 2134–2206). All four elbow labels
+  verified at gap midpoints (464/1217/1789/2170).
+- ~~Label-vs-label collision check~~ ✓ — `_verify_layout` now collects every
+  edge-label rect and raises on any pairwise intersection
+  (`_rects_overlap`). Proved its worth immediately: it caught a **real**
+  pre-existing collision between the two left-rail labels
+  (`entry→system` and `surface→entry` both rendered at the same
+  gap-2 position, x-ranges 30–228 vs 50–213). Fixed by staggering the
+  parallel-rail labels around the gap midpoint (`rail_label_offset` = ±18):
+  outer rail above, inner rail below.
+- ~~Legend additions~~ ✓ — LEGEND now carries item *kinds*: 8 panel swatches +
+  a dashed purple arrow swatch ("dashed: evidence → next question") + a
+  6-square axis-color strip ("axis colors S G D P C U"). 10 items in 5 cols ×
+  2 rows (was 8 in 4×2). `_legend_metrics(kind)` centralizes swatch widths;
+  the old "ontology (S G D P C U)" text shortened to "ontology" since the
+  axis row now carries that.
+- ~~High-DPI render~~ ✓ — root `<svg>` now carries
+  `shape-rendering="geometricPrecision" text-rendering="geometricPrecision"`,
+  and `--hd` writes `docs/diagram@2x.svg` (same vectors, 2× pixel size via
+  `render_svg(scale=2.0)` — 5022×5094 px). The 2× file is **on-demand, not
+  committed** (162 KiB duplicate); decide if it should be tracked.
+
+=== WHAT WAS DONE (2026-10-02d) ===
+
+All work in `docs/diagram_create.py` only (~2032 → ~2090 lines). No source
+file outside the diagram script touched.
+
+- **Elbow lane centering** — `edge_points()` default case now uses
+  `lane = _gap_y(ly, s.bottom, d.y)` instead of the raw
+  `(s.bottom + d.y) / 2.0` midpoint. `_gap_y` returns the containing
+  band-gap's midpoint (or the nearest one), so elbow horizontals now pass
+  through the true gap center even when the source panel is shorter than its
+  band. Labels stay 8 px above the lane, as before.
+- **Pairwise label-collision check** — extracted `_verify_edge()` (canvas
+  bounds + panel intersection + edge-point bounds, returns the label rect;
+  keeps `_verify_layout` under C901) and added a nested pairwise
+  `_rects_overlap` pass over all 11 edge-label rects.
+- **Left-rail label stagger** — new `Style.rail_label_offset` (18.0):
+  `margin-left` labels render at gap-midpoint − 18, `margin-left-up` at
+  + 18, so the two near-parallel rails' labels never share a y-band. Both
+  remain inside the 72 px gap channel (rects 1190–1205 / 1226–1241 inside
+  gap 1181–1253).
+- **Legend kinds** — `LEGEND` entries became 3-tuples
+  `(kind, key, label)` with kind ∈ {`panel`, `dash`, `axes`};
+  `render_legend` dispatches on kind (dashed polyline with `arrp` marker /
+  six 5 px axis-color squares / plain swatch). New Style constants:
+  `legend_dash_w`, `legend_axis_sq`, `legend_axis_gap`.
+- **Hi-DPI** — `render_svg(..., scale: float = 1.0)` scales only the
+  `width`/`height` attributes (viewBox unchanged); `main()` gained `--hd`
+  writing `OUT_SVG_HD = docs/diagram@2x.svg`. Module docstring updated.
+
+**Gate status (2026-10-02d):** dev-env smoke · `ruff format`/`ruff check`
+clean · `pyright` 0 errors/0 warnings · `uv run python
+docs/diagram_create.py --check --hd` → "check: svg parses, all
+panels/edges/labels within canvas" (now incl. pairwise label collisions).
+`docs/diagram.svg` regenerated (162 KiB, same 2547×2511 canvas; legend grew,
+elbow lanes re-centered); `docs/infographic.txt` re-pinned (only the
+stale commit-hash line moved d89f34ff → 4cf655af).
+
+**Commit hygiene note:** the tree also carries unrelated in-flight changes
+from another workstream (`computronium/experiment/evidence/{claims,store}.py`,
+`experiment/surface/report.py`, new `evidence/limitations.py` +
+`tests/property/test_claim_report_lock.py`). They were left untouched and
+excluded from the diagram commit; stage paths explicitly when committing.
+
+=== NEW IMPROVEMENT OPPORTUNITIES (2026-10-02d) ===
+
+- **Legend geometry is unverified** — `_verify_layout` checks panels, edges,
+  and edge-labels, but the legend's right-anchored block (x0 derived from
+  `canvas_w`, which is content-driven) is not containment-checked. If panel
+  widths grow, the legend could drift onto a panel. Cheap to add: legend item
+  rects vs canvas + band-0 top.
+- **`_gap_y` nearest-gap fallback is silent** — a rail label can land in a
+  gap its rail segment only grazes (currently benign: `entry→system`
+  midpoint falls between gaps 1 and 2 and lands in gap 2, which the outer
+  rail fully crosses). If bands get dense, assert the chosen gap actually
+  intersects the label's rail/segment span in `_verify_edge`.
+- **2× artifact policy** — `docs/diagram@2x.svg` is on-demand (`--hd`).
+  Decide: keep untracked (current) or commit it for a hi-DPI preview out of
+  the box. If committed, note it in the README's dev section.
+- **Elbow lane vs destination panel** — lanes now sit at gap midpoints; a
+  very short gap (`band_gap` < ~40) plus a wide label could push a label
+  onto the destination panel's top edge. The panel-intersection check would
+  catch it; no layout change needed, just a note for anyone tuning
+  `band_gap`.

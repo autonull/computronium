@@ -19,7 +19,10 @@ script is touched.
 
 Usage::
 
-    uv run python docs/diagram_create.py [--check]
+    uv run python docs/diagram_create.py [--check] [--hd]
+
+``--hd`` additionally writes ``docs/diagram@2x.svg``, a 2x-pixel-size
+variant for high-DPI previews (same vectors, doubled physical size).
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_SVG = ROOT / "docs" / "diagram.svg"
+OUT_SVG_HD = ROOT / "docs" / "diagram@2x.svg"
 OUT_TXT = ROOT / "docs" / "infographic.txt"
 
 # ---------------------------------------------------------------------------
@@ -971,6 +975,10 @@ class Style:
     group_inset: float = 6.0
     legend_gap: float = 14.0
     legend_swatch: float = 11.0
+    legend_dash_w: float = 22.0
+    legend_axis_sq: float = 5.0
+    legend_axis_gap: float = 2.5
+    rail_label_offset: float = 18.0
 
 
 STYLE = Style()
@@ -1264,7 +1272,7 @@ def edge_points(e: Edge, ly: Layout) -> list[tuple[float, float]]:
                 (d.x if s.x < d.x else d.x + d.w, d.cy),
             ]
         case _:
-            lane = (s.bottom + d.y) / 2.0
+            lane = _gap_y(ly, s.bottom, d.y)
             return [(s.cx, s.bottom), (s.cx, lane), (d.cx, lane), (d.cx, d.y)]
 
 
@@ -1282,15 +1290,16 @@ def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
     s = ly.pos[e.src]
     match e.route:
         case "margin-left":
+            # outer rail: above the gap midpoint (inner-rail label sits below)
             return (
                 left_rail_x(ly, True) + 8.0,
-                _gap_y(ly, pts[1][1], pts[2][1]),
+                _gap_y(ly, pts[1][1], pts[2][1]) - STYLE.rail_label_offset,
                 "start",
             )
         case "margin-left-up":
             return (
                 left_rail_x(ly, False) + 8.0,
-                _gap_y(ly, pts[1][1], pts[2][1]),
+                _gap_y(ly, pts[1][1], pts[2][1]) + STYLE.rail_label_offset,
                 "start",
             )
         case "margin-right":
@@ -1313,30 +1322,51 @@ def _label_hits_panel(rx: float, ry: float, ew: float, eh: float, p: Pos) -> boo
     return rx < p.x + p.w and rx + ew > p.x and ry < p.y + p.h and ry + eh > p.y
 
 
+def _rects_overlap(
+    a: tuple[float, float, float, float], b: tuple[float, float, float, float]
+) -> bool:
+    return (
+        a[0] < b[0] + b[2]
+        and a[0] + a[2] > b[0]
+        and a[1] < b[1] + b[3]
+        and a[1] + a[3] > b[1]
+    )
+
+
+def _verify_edge(e: Edge, ly: Layout) -> tuple[float, float, float, float]:
+    """Raise if an edge or its label is out of bounds or overlaps a panel."""
+    rx, ry, ew, eh, _ = edge_label_placement(e, ly)
+    if not (
+        rx >= -6
+        and rx + ew <= ly.canvas_w + 6
+        and ry >= -6
+        and ry + eh <= ly.canvas_h + 6
+    ):
+        raise RuntimeError(f"edge-label {e.label!r} ({e.src}->{e.dst}) out of canvas")
+    for key, p in ly.pos.items():
+        if _label_hits_panel(rx, ry, ew, eh, p):
+            raise RuntimeError(f"edge-label {e.label!r} overlaps panel {key}")
+    for x, y in edge_points(e, ly):
+        if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
+            raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
+    return (rx, ry, ew, eh)
+
+
 def _verify_layout(ly: Layout) -> None:
-    """Raise if any panel, edge, or edge-label lies outside the canvas."""
+    """Raise if any panel, edge, or edge-label is out of bounds or collides."""
     for key, p in ly.pos.items():
         if not (p.x >= 0 and p.x + p.w <= ly.canvas_w):
             raise RuntimeError(f"panel {key} out of canvas horizontally")
         if not (p.y > 0 and p.y + p.h < ly.canvas_h):
             raise RuntimeError(f"panel {key} out of canvas vertically")
-    for e in build_edges():
-        rx, ry, ew, eh, _ = edge_label_placement(e, ly)
-        if not (
-            rx >= -6
-            and rx + ew <= ly.canvas_w + 6
-            and ry >= -6
-            and ry + eh <= ly.canvas_h + 6
-        ):
-            raise RuntimeError(
-                f"edge-label {e.label!r} ({e.src}->{e.dst}) out of canvas"
-            )
-        for key, p in ly.pos.items():
-            if _label_hits_panel(rx, ry, ew, eh, p):
-                raise RuntimeError(f"edge-label {e.label!r} overlaps panel {key}")
-        for x, y in edge_points(e, ly):
-            if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
-                raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
+    rects = [(e, _verify_edge(e, ly)) for e in build_edges()]
+    for i, (ea, ra) in enumerate(rects):
+        for eb, rb in rects[i + 1 :]:
+            if _rects_overlap(ra, rb):
+                raise RuntimeError(
+                    f"edge-label {ea.label!r} ({ea.src}->{ea.dst}) collides with "
+                    f"edge-label {eb.label!r} ({eb.src}->{eb.dst})"
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -1726,46 +1756,91 @@ def draw_panel(panel: Panel, p: Pos) -> str:
     return "".join(parts)
 
 
-LEGEND: tuple[tuple[str, str], ...] = (
-    ("entry", "entry"),
-    ("tasks", "tasks & data"),
-    ("kernel", "kernel"),
-    ("ontology", "ontology (S G D P C U)"),
-    ("system", "system"),
-    ("train", "training"),
-    ("evidence", "evidence"),
-    ("surface", "surface"),
+LEGEND: tuple[tuple[str, str, str], ...] = (
+    ("panel", "entry", "entry"),
+    ("panel", "tasks", "tasks & data"),
+    ("panel", "kernel", "kernel"),
+    ("panel", "ontology", "ontology"),
+    ("panel", "system", "system"),
+    ("panel", "train", "training"),
+    ("panel", "evidence", "evidence"),
+    ("panel", "surface", "surface"),
+    ("dash", "", "dashed: evidence → next question"),
+    ("axes", "", "axis colors S G D P C U"),
 )
 
 
+def _legend_metrics(kind: str) -> tuple[float, float]:
+    """(swatch width, text x-offset from item origin) for a legend item kind."""
+    match kind:
+        case "dash":
+            return STYLE.legend_dash_w, STYLE.legend_dash_w + 4.0
+        case "axes":
+            w = 6.0 * STYLE.legend_axis_sq + 5.0 * STYLE.legend_axis_gap
+            return w, w + 4.0
+        case _:
+            return STYLE.legend_swatch, STYLE.legend_swatch + 4.0
+
+
 def render_legend(canvas_w: float) -> str:
-    widths = [text_w(LEGEND[i][1], STYLE.legend_font) for i in range(len(LEGEND))]
-    n_cols = 4
+    totals = [
+        _legend_metrics(kind)[1] + text_w(label, STYLE.legend_font)
+        for kind, _, label in LEGEND
+    ]
+    n_cols = 5
     col_w = [
-        max(
-            15.0 + widths[i],
-            15.0 + widths[i + n_cols] if i + n_cols < len(widths) else 0.0,
-        )
+        max(totals[i], totals[i + n_cols] if i + n_cols < len(totals) else 0.0)
         for i in range(n_cols)
     ]
     x0 = canvas_w - STYLE.margin - sum(col_w) - (n_cols - 1) * STYLE.legend_gap
-    parts = []
-    for i, (key, label) in enumerate(LEGEND):
+    parts: list[str] = []
+    for i, (kind, key, label) in enumerate(LEGEND):
         col = i % n_cols
         row_i = i // n_cols
         sx = x0 + sum(col_w[:col]) + col * STYLE.legend_gap
         sy = 66.0 + row_i * 15.0
-        parts.append(svg_rect(sx, sy - 9.0, STYLE.legend_swatch, 9.0, 2.0, COLORS[key]))
-        parts.append(svg_text(sx + 15.0, sy, label, STYLE.legend_font, "#475569"))
+        sw_w, text_dx = _legend_metrics(kind)
+        match kind:
+            case "dash":
+                parts.append(
+                    svg_poly(
+                        [(sx, sy - 4.5), (sx + sw_w - 5.0, sy - 4.5)],
+                        "#9333ea",
+                        1.5,
+                        True,
+                        "arrp",
+                    )
+                )
+            case "axes":
+                for ax_i, ax in enumerate(tuple(AXIS_COLOR)):
+                    parts.append(
+                        svg_rect(
+                            sx + ax_i * (STYLE.legend_axis_sq + STYLE.legend_axis_gap),
+                            sy - 4.5,
+                            STYLE.legend_axis_sq,
+                            STYLE.legend_axis_sq,
+                            1.0,
+                            AXIS_COLOR[ax],
+                        )
+                    )
+            case _:
+                parts.append(
+                    svg_rect(sx, sy - 9.0, STYLE.legend_swatch, 9.0, 2.0, COLORS[key])
+                )
+        parts.append(svg_text(sx + text_dx, sy, label, STYLE.legend_font, "#475569"))
     return "".join(parts)
 
 
-def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
+def render_svg(
+    panels: tuple[Panel, ...], ly: Layout, b: Bundle, scale: float = 1.0
+) -> str:
     pmap = {p.key: p for p in panels}
     parts = [
         (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{ly.canvas_w:.0f}" '
-            f'height="{ly.canvas_h:.0f}" viewBox="0 0 {ly.canvas_w:.0f} {ly.canvas_h:.0f}" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{ly.canvas_w * scale:.0f}" height="{ly.canvas_h * scale:.0f}" '
+            f'viewBox="0 0 {ly.canvas_w:.0f} {ly.canvas_h:.0f}" '
+            f'shape-rendering="geometricPrecision" text-rendering="geometricPrecision" '
             f'font-family="{SANS}">'
         ),
         "<defs>",
@@ -1992,6 +2067,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check", action="store_true", help="validate output geometry after writing"
     )
+    parser.add_argument(
+        "--hd",
+        action="store_true",
+        help="also write docs/diagram@2x.svg (2x pixel size for hi-DPI previews)",
+    )
     args = parser.parse_args(argv)
 
     b = collect()
@@ -2003,6 +2083,9 @@ def main(argv: list[str] | None = None) -> int:
 
     OUT_SVG.write_text(svg, encoding="utf-8")
     OUT_TXT.write_text(txt, encoding="utf-8")
+    if args.hd:
+        OUT_SVG_HD.write_text(render_svg(panels, ly, b, scale=2.0), encoding="utf-8")
+        print(f"wrote {OUT_SVG_HD.relative_to(ROOT)} (2x variant)")
     n_chips = sum(
         len(getattr(r, "chips", ()))
         + len(getattr(r, "steps", ()))
