@@ -48,11 +48,9 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D11–D18 are fixed (D15 was found and fixed in §8 session 5; D16
-and D17 were found and fixed in §8 session 6; D18 and D19 were found and fixed
-in §8 session 7).**
-D7–D10 remain, D18–D19 are recorded in §8 session 7, and D14's fix is consumed
-by §3.3.
+**D1–D6 and D10–D22 are fixed.** D15 was found and fixed in §8 session 5, D16
+and D17 in session 6, D18 and D19 in session 7, and D20–D22 in session 8.
+**D7–D9 remain**, and D14's fix is consumed by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
@@ -1282,7 +1280,7 @@ docstring: it says nothing about which credit rule or topology is better. And
 §3.4 is half-landed — the study tunes a cell the space enumerated rather than
 choosing the cell. The remaining-work list is re-scoped to say so.
 
-### D20 — Two of §3.7's seven commands do not exist
+### D20 — Two of §3.7's seven commands do not exist — FIXED, §8 session 8
 
 Found in session 7, by probing the CLI at tier 0 (five minutes, no training —
 §6.1's dry-run tier paying for itself immediately). The dispatcher is
@@ -1299,13 +1297,14 @@ Both are one commit — a `run`/`status` alias at the top level, or §3.7 rewrit
 to the real invocations — and the second is better, because the fix that also
 locks it is the bash-block lock §4 asks for.
 
-### D21 — `comp report status` crashes and reports success
+### D21 — `comp report status` crashes and reports success — FIXED, §8 session 8
 
 Same probe. With no store on disk, `comp report status` prints a raw
-`duckdb.IOException` traceback and **exits 0**. A status command that cannot read
-its store is reporting a run's absence as a success. §3.7 gate 4 depends on it.
+`duckdb.IOException` traceback and exits 1 (session 7 recorded this as exit 0;
+the probe in session 8 measured 1 — the defect is the traceback either way, a
+known state reported as an internal error). §3.7 gate 4 depends on it.
 
-### D22 — `--dry-run` writes to the store and prints nothing
+### D22 — `--dry-run` writes to the store and prints nothing — FIXED, §8 session 8
 
 Same probe, and the most consequential of the three, because it is the cheapest
 end-to-end check in the CLI and it is not one. `cli._cmd_run`'s dry-run branch
@@ -1320,12 +1319,74 @@ unblocks the tier the whole cost discipline depends on: print the resolved spec,
 the space's primitive counts, the policy, and the first proposals to stdout, and
 move the store initialisation behind the dry-run branch.
 
+### Session 8
+
+**Landed: remaining-work items 0, 1 and 4** — the three tier-0 items, chosen
+because they cost no training and unblock every later gate.
+
+**D20 — the kernel surface is promoted to the top level.** `comp run`,
+`comp report`, `comp export`, `comp conformance` and `comp status` are now
+top-level commands, each forwarding to the surface parser with its own
+subcommand name injected as an argv prefix. There is no second command tree and
+no alias table to keep in step: `comp run` and `comp report run` reach the same
+handler. §3.7's gates 1, 3 and 4 are now stated against commands that exist.
+`--spec-file` remains `--spec`; §3.7 is written against `--spec`.
+
+**D21 — a read command against an absent store says so and exits 1.**
+`_open_store` replaces four copies of the read-only `StoreConfig`/`RecordStore`
+pair. The `duckdb.IOException` traceback *was* a truthfulness defect in a
+different direction than §1 recorded: it exits 1, not 0, but it reports a
+known state (there is no store) as an internal error.
+
+**D22 — `--dry-run` now writes nothing and prints the plan.** The store is
+initialised behind the branch, and `_dry_run_report` prints the resolved spec,
+the per-axis primitive counts, the policy, and the first five *legal* cells —
+computed through the same `search_space_from_spec` / `iter_candidates` /
+`task_shape` path the runner uses, so a dry run is evidence the spec is
+executable rather than a restatement of it. Measured: 1.5 s, no training, no
+files. This is the tier §6.1 makes mandatory, and it is now real.
+
+**D10 — `tests/acceptance` is in `testpaths`.** A bare `pytest` runs U1–U5 for
+the first time in the project's history. Their cost (~9 min) is now visible in
+`pyproject.toml` rather than hidden in a CI invocation that named directories.
+
+**§4 item 4 — README is generated, and the claim lock came free.** The README's
+prose lives in `docs/readme/*.md`, one self-contained file per section, and
+`docs/readme/build_readme.py` assembles them. The order is the generator's
+decision (`_SECTIONS`), not the file names', so reordering or renaming a section
+is one list. Three tables are substituted from the code at build time — the
+`comp` dispatcher, `POLICY_CATALOG` (with each policy's own docstring), and the
+demo scripts on disk — and the contents list is derived from the headings that
+exist. A README row can no longer advertise a command or a policy that was
+removed, because the row is the registry.
+
+**Two README claims were stale the moment generation landed, which is the
+argument for it.** The `comp` table's five purpose lines had drifted from
+`_SUMMARIES`, and the policy table described `model_based` as searching when it
+searches hyperparameters within a spec-selected cell. Both now render from the
+source, and the nuance that does *not* belong in a table is prose in
+`kernel.md`.
+
+**Locks.** `tests/property/test_readme_build_lock.py` (8): the committed README
+equals the build; every snippet contributes; the manifest is the only ordering
+and an unlisted snippet fails; every `<!-- gen: -->` marker resolves to a real
+generator and none survives the build; the CLI/policy/demo tables name exactly
+what the registries hold; every contents anchor resolves to a heading.
+`tests/property/test_cli_readme_lock.py` (11) grew the bash-block lock §4 asked
+for: every fenced `bash` block in the README is parsed against the real parsers,
+so a documented invocation that does not exist is a test failure (D20's class),
+and it now asserts the tier-0 tier itself — a dry run prints a plan and leaves
+the directory empty, and `status` on an absent store exits 1 without a
+traceback. `tests/property/_readme.py` is the shared builder loader
+(`docs/readme` is prose, not a package).
+
+**Cost.** Everything here was tier 0–1: 20 tests, ~11 s, no training, no
+`experiment.duckdb` written.
+
 ### Remaining work, in order
 
-0. **D22, then D20/D21, then the tier-0 CLI lock.** ~30 minutes, no training,
-   and it is what makes §6.1's dry-run tier real rather than aspirational.
-1. **D10** — add `tests/acceptance` to `testpaths`. One line; a bare `pytest`
-   has still never run the project's central claim.
+0. ~~**D22, then D20/D21, then the tier-0 CLI lock**~~ **DONE, §8 session 8.**
+1. ~~**D10** — add `tests/acceptance` to `testpaths`~~ **DONE, §8 session 8.**
 
 2. **§3.4 remainder — the candidate-list `propose()` signature.** The sampler
    now asks with harvested distributions and is told measured values, so §3.4's
@@ -1358,15 +1419,40 @@ move the store initialisation behind the dry-run branch.
    is. **Note the retirement precedent** (session 6, D17): a capability row can
    now be `available=False` with a recorded `unavailable_reason`, and the
    registry-driven lock should require the reason, not accept a bare `False`.
-4. **§4 item 4's remaining half** — locking README's fenced bash blocks, which
-   is the same lock that catches D20's class (a documented invocation that
-   errors) and now has a defect to catch.
+4. ~~**§4 item 4's remaining half**~~ **DONE, §8 session 8** — and more than the
+   bash-block lock: README is now *built* from `docs/readme/*.md`, with every
+   table that can be read from the code substituted at build time.
 5. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
    `NcaGeometry.route` to reshape a `(B, F)` batch into the `(B, C, H, W)` state
    grid its `step` contract names, and to read class logits back out of the
    grid. That is a geometry feature with credit/settle consequences — a
    separate piece of work, and the reason the row carries a recorded reason
    rather than a silent `available=False`.
+
+**Improvement opportunities found in session 8:**
+
+- **The generated-table mechanism generalises and nothing else uses it yet.**
+  `docs/generated/` already carries `axes.md`, `objectives.md`, `capabilities.md`
+  and `stages.md`; the README links them but does not show a single number from
+  them. A `<!-- gen:... -->` for the measured-objective count (36 registered, 4
+  measured) or the per-axis primitive count would turn a prose claim into a
+  rendered fact, and the same generator would serve `docs/readme/*.md` and the
+  operator-facing docs.
+- **A snippet can now drift from its own subject without failing anything.**
+  `ontology.md`'s primitive table is prose; `docs/generated/axes.md` is the
+  registry. The build makes the *tables* honest and leaves the hand-written ones
+  exactly as trustworthy as they were, which is worth remembering before
+  treating the generated README as verified end to end.
+- **`scripts/readme_snippet_lock.py` and the new build lock are two locks over
+  one file.** The snippet lock (verbatim code blocks vs their source tests) and
+  the build lock (README vs snippets) are orthogonal and both needed, but the
+  snippet lock reads `README.md` while its sources are now in
+  `docs/readme/*.md` — it should read the snippet, so a README that has never
+  been rebuilt cannot pass it.
+- **The dispatcher's `_SUMMARIES` is now user-facing text in two places**
+  (README table, `comp --help`) and is the single source for both. Good. But
+  `RunProfile.description` and `AxisSpec`/`ObjectiveSpec` prose are still only
+  rendered in `docs/generated/`, and the same substitution would serve them.
 
 **Improvement opportunities found in session 7, beyond the landed fixes:**
 
