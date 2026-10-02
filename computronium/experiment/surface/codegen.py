@@ -463,13 +463,14 @@ def _write_objectives_md(path: Path) -> None:
         f"Generated: {datetime.now().isoformat()}",
         f"Total: {len(objectives)} objectives",
         "",
-        "| Name | Direction | Weight | Normalizer | Axis Tag |",
-        "|------|-----------|--------|------------|----------|",
+        "| Name | Direction | Weight | Normalizer | Axis Tag | Metric |",
+        "|------|-----------|--------|------------|----------|--------|",
     ]
     for obj in objectives:
         lines.append(
             f"| {obj['name']} | {obj['direction']} | {obj['weight']} | "
-            f"{obj['normalizer'] or '-'} | {obj['axis_tag'] or '-'} |"
+            f"{obj['normalizer'] or '-'} | {obj['axis_tag'] or '-'} | "
+            f"{obj['metric_key'] or 'unmeasured'} |"
         )
     path.write_text("\n".join(lines), encoding="utf-8")
 

@@ -8,6 +8,7 @@ policy catalog, stage definitions, and capability inventory.
 from __future__ import annotations
 
 import inspect
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ from computronium.experiment.schema.axis import (
     StructuralAxis,
     register_axis_spec,
 )
+from computronium.experiment.schema.metrics import MEASURED_OBJECTIVES
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CONSTRAINTS_REGISTRY,
@@ -354,9 +356,34 @@ def _seed_axis_primitives() -> None:
 # OBJECTIVES — Gate 1/2: full Appendix B.7 union (~39 objectives)
 # Task, cost, substrate, ruler-relative, stability, plasticity objectives
 # Extended with weight, normalizer, axis_tag (L16)
+#
+# Whether a row is measurable is NOT decided here: `schema.metrics` owns that
+# single declaration, and `_measured` stamps each row with the payload key that
+# satisfies it or the reason no measurement produces it.
 # =============================================================================
 
-OBJECTIVES = [
+
+def _measured(objectives: list[ObjectiveSpec]) -> list[ObjectiveSpec]:
+    """Stamp each objective with its measurement, or the reason it lacks one."""
+    measured = list(MEASURED_OBJECTIVES)
+    return [
+        replace(
+            objective,
+            metric_key=MEASURED_OBJECTIVES[objective.name],
+        )
+        if objective.name in MEASURED_OBJECTIVES
+        else replace(
+            objective,
+            unavailable_reason=(
+                "registered ahead of measurement: the evaluator emits no payload "
+                f"key for it. Measured objectives: {measured}"
+            ),
+        )
+        for objective in objectives
+    ]
+
+
+OBJECTIVES = _measured([
     # Task objectives
     ObjectiveSpec(
         name="validation_accuracy",
@@ -651,7 +678,7 @@ OBJECTIVES = [
         normalizer="minmax",
         axis_tag="task",
     ),
-]
+])
 
 
 # =============================================================================

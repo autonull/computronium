@@ -241,7 +241,8 @@ class SubstrateConfig:
             "precision": {
                 "domain": ["float32", "float16", "bfloat16", "int8", "int4", "binary"]
             },
-            "device": {"domain": ["cpu", "cuda", "mps", "fpga"]},
+            # Structural: the run chooses its device, not the search.
+            "device": {"domain": ["cpu", "cuda", "mps", "fpga"], "kind": "structural"},
             "weight_bounds_lo": {
                 "domain": (-10.0, 0.0, "linear"),
                 "availability": expr_from_string(

@@ -245,34 +245,43 @@ Question ──► RunSpec ──► SearchSpace ──► ProposalPolicy ──
 | StratifiedRandom | `stratified_random` | Coverage-biased random proposal over the space |
 | RoundRobinGrid | `round_robin_grid` | Systematic grid sweep |
 | UniformRandom | `uniform_random` | Plain uniform sampling |
-| ModelBased (TPE/NSGA-II) | `model_based` | Optuna study with samplers/pruners. **Not yet searching:** the study is asked without distributions and results are never reported back, so proposals degrade to a positional pick. Tracked in TODO46 §3.4. |
+| ModelBased (TPE/NSGA-II) | `model_based` | Optuna study with samplers/pruners. Asks with distributions harvested from the coordinate's own active space, and is told the objective values the evaluator measured on return. Searches **hyperparameters**; the six structural axes come from the spec-derived cell stream. |
 | Evolution | `evolution` | Population-based refinement |
 | StrategyProgression | `strategy_progression` | Progresses proposal strategies across rounds |
 | TrainerDriven | `trainer_driven` | Defers proposals to the trainer driver |
 
-**Kernel status, stated plainly.** The orchestration above is real and locked by
-U1–U5: policies, budget, allocation, one store, one measurement identity,
-pause/resume by `run_id`. What is **not** real yet is the measurement underneath
-it. The backend that would train a system and report an accuracy
-(`computronium/experiment/execution/backends.py`) is a documented placeholder, so
-a kernel run produces schema-valid records containing a walltime and a
-timestamp. Two consequences worth stating rather than discovering later:
+**Kernel status, stated plainly.** The orchestration is real and locked by
+U1–U5, and so is the measurement under it: `execution/evaluate.py` composes a
+coordinate into a `System`, trains it with `SystemTrainer` on the run's own
+task, and records measured `train_acc`/`val_acc`/`val_loss` with a gate verdict
+*derived* from what happened. A cell's hyperparameters are searched (a
+`RunSpec.hyperparameters` sweep, narrowed against the harvested domain), and the
+model-based policy samples the same harvested space and learns from the values
+told back. Four claims are worth stating rather than leaving to be discovered:
 
-- **The search space does not yet vary hyperparameters.** The space generator
-  hardcodes MNIST's input shape and a `task_id="default"`, and gives every
-  coordinate one fixed parameter set (`search_space.py:174-206`). Hyperparameters
-  are constants; this is TODO43 **P2/R2**, open.
-- **The Optuna samplers do not learn.** `policy.py` calls `study.ask()` with no
-  distributions and never calls `study.tell()`, so TPE/NSGA-II cannot update from
-  results.
+- **The search space is the spec, not a table.** `search_space_from_spec` walks
+  the registries under the spec's constraints for the spec's task, and filters
+  for legality at the size the run will train. The seven hardcoded MNIST-shape
+  sites are gone (`test_active_space_lock`).
+- **The samplers learn over hyperparameters only.** Structural axes are
+  enumerated from the spec's permitted primitives; the sampler optimizes the
+  continuous/integer/categorical knobs a cell's selection activates. Deleting
+  the candidate-list `propose()` signature entirely is TODO46 §3.4's remainder.
+- **Four of the 36 registered objectives are measured.** `schema/metrics.py`
+  declares the measured namespace, and every objective row is stamped with the
+  payload key that satisfies it or the reason nothing emits one —
+  `docs/generated/objectives.md` shows which. `flops`, `memory_usage` and
+  `energy_per_step` are registered research targets; a run that names one is
+  refused rather than optimized against a number that does not exist.
+- **No campaign has been run yet.** The measured regime is real, but nothing
+  here is evidence about which credit rule or topology is better on a
+  scientific question. TODO46 §3.6/§3.7 is that work.
 
 The ML library above is unaffected: the §3 and §4 blocks compose and train real
-six-axis systems and assert real accuracies. The gap is in the kernel's
-evaluation seam, not in the learning substrate. TODO46 §1 and §3 track it with
-`file:line` references; `compose.py:474` already contains the unwired bridge.
+six-axis systems and assert real accuracies.
 
 **Kernel guarantees (locked in [`tests/acceptance/test_unified_kernel.py`](tests/acceptance/test_unified_kernel.py)):**
-*These lock orchestration and evidence identity. They do not currently lock measurement: the backend behind them is a placeholder (see the kernel-status note below).*
+*These lock orchestration, evidence identity and measurement: every cell they run is composed and trained by `execution/evaluate.py`.*
 
 | ID | Guarantee |
 |---|---|

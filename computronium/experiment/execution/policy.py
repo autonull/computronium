@@ -2,19 +2,28 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import random
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import optuna
+from optuna.distributions import (
+    BaseDistribution,
+    FloatDistribution,
+    IntDistribution,
+)
 from optuna.study import StudyDirection
 
+from computronium.experiment.execution.optuna_adapter import OptunaDistributionAdapter
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.metrics import objective_metric, objective_values
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 logger = logging.getLogger(__name__)
 
@@ -22,30 +31,68 @@ logger = logging.getLogger(__name__)
 def resolve_objectives(
     objective_names: tuple[str, ...],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Resolve objective names and directions from OBJECTIVES registry.
+    """Resolve objective names and directions from the OBJECTIVES registry.
 
     Args:
-        objective_names: Tuple of objective names from run spec.
+        objective_names: Objective names from the run spec.
 
     Returns:
-        Tuple of (resolved_names, resolved_directions) where directions
-        are "maximize" or "minimize" per objective.
+        The registry's names and, per objective, its direction.
+
+    Raises:
+        UnknownObjectiveError: A name is not a registered objective.
+        UnmeasuredObjectiveError: A name is registered but no measurement
+            produces it. A study told an objective nobody measured would
+            optimize a number that does not exist, which is the silent maximize
+            this replaces.
     """
-    resolved_names = []
-    resolved_directions = []
-
     for name in objective_names:
-        spec = OBJECTIVES_REGISTRY.get(name)
-        if spec is not None:
-            resolved_names.append(spec.name)
-            resolved_directions.append(spec.direction)
-        else:
-            # Fallback: assume maximize for unknown objectives
-            resolved_names.append(name)
-            resolved_directions.append("maximize")
-            logger.warning("Objective '%s' not in registry, assuming maximize", name)
+        objective_metric(name)
+    specs = [OBJECTIVES_REGISTRY[name] for name in objective_names]
+    return tuple(spec.name for spec in specs), tuple(spec.direction for spec in specs)
 
-    return tuple(resolved_names), tuple(resolved_directions)
+
+def _cost(coord: Coordinate, sched: Schedule, cost_model: CostModel) -> float:
+    """What the cost model charges one cell."""
+    return cost_model.estimate_cost(
+        (
+            coord.substrate,
+            coord.geometry,
+            coord.dynamics,
+            coord.plasticity,
+            coord.credit,
+            coord.update,
+            coord.params,
+        ),
+        sched.to_dict(),
+    )
+
+
+def _affordable(
+    candidates: list[tuple[Coordinate, Schedule]],
+    budget: Budget,
+    cost_model: CostModel,
+) -> list[tuple[Coordinate, Schedule]]:
+    """The candidates this budget can still pay for.
+
+    One implementation for every policy: five copies of this loop differed only
+    in their risk of drifting apart.
+    """
+    return [
+        (coord, sched)
+        for coord, sched in candidates
+        if budget.target_cost is None
+        or budget.cost_consumed + _cost(coord, sched, cost_model) <= budget.target_cost
+    ]
+
+
+def _sampled_value(value: Any, distribution: BaseDistribution) -> Any:
+    """A coordinate's value in the type its distribution samples."""
+    if isinstance(distribution, FloatDistribution):
+        return float(value)
+    if isinstance(distribution, IntDistribution):
+        return int(value)
+    return value
 
 
 @runtime_checkable
@@ -105,7 +152,7 @@ class StratifiedRandomPolicy:
             proposals.extend(stratum_candidates[:per_stratum])
 
         # Filter by budget
-        affordable = self._filter_affordable(proposals, budget, cost_model)
+        affordable = _affordable(proposals, budget, cost_model)
         return affordable[:50]
 
     def observe(self, record: Record) -> None:
@@ -113,33 +160,6 @@ class StratifiedRandomPolicy:
 
     def get_name(self) -> str:
         return self._name
-
-    def _filter_affordable(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
 
 
 class RoundRobinGridPolicy:
@@ -197,7 +217,7 @@ class RoundRobinGridPolicy:
                 seen.add(key)
                 unique.append((coord, sched))
 
-        affordable = self._filter_affordable(unique, budget, cost_model)
+        affordable = _affordable(unique, budget, cost_model)
         return affordable[:50]
 
     def observe(self, record: Record) -> None:
@@ -205,33 +225,6 @@ class RoundRobinGridPolicy:
 
     def get_name(self) -> str:
         return self._name
-
-    def _filter_affordable(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
 
 
 class UniformRandomPolicy:
@@ -255,7 +248,7 @@ class UniformRandomPolicy:
         shuffled = candidates.copy()
         self._rng.shuffle(shuffled)
 
-        affordable = self._filter_affordable(shuffled, budget, cost_model)
+        affordable = _affordable(shuffled, budget, cost_model)
         return affordable[:50]
 
     def observe(self, record: Record) -> None:
@@ -264,39 +257,19 @@ class UniformRandomPolicy:
     def get_name(self) -> str:
         return self._name
 
-    def _filter_affordable(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
-
 
 class ModelBasedPolicy:
     """Model-based optimization using Optuna.
 
-    Supports TPE, NSGA-II, GP, Random samplers with MedianPruner/HyperbandPruner.
-    Trials persisted as records; study rebuilt from store on resume (R71, P7).
+    The study is *asked* with distributions derived from the harvested active
+    space and *told* the objective values the evaluator measured, so TPE and
+    NSGA-II can learn. Before, the study was created with no distributions and
+    never told anything: `trial.params` was always empty and every proposal
+    fell through to indexing a list (TODO46 §D3).
+
+    Trials are the store's records, not a private Optuna database (R71): the
+    study is rebuilt from the run's records on first use, so an interrupted run
+    resumes with the history it actually measured.
     """
 
     def __init__(
@@ -306,179 +279,171 @@ class ModelBasedPolicy:
         pruner: str | None = None,  # "median", "hyperband", None
         seed: int | None = None,
         n_startup_trials: int = 10,
-        objectives: tuple[str, ...] = (
-            "accuracy",
-        ),  # Objective names from OBJECTIVES registry
-        directions: tuple[str, ...]
-        | None = None,  # "maximize" or "minimize" per objective
+        objectives: tuple[str, ...] = ("validation_accuracy",),
+        spec: RunSpec | None = None,
+        n_suggest: int = 10,
     ) -> None:
+        """Declare the study.
+
+        Args:
+            sampler: Optuna sampler name.
+            pruner: Optuna pruner name, or ``None``.
+            seed: Sampler seed; the same seed must reproduce a trial sequence.
+            n_startup_trials: Random trials before the sampler models.
+            objectives: Objective names from ``OBJECTIVES``; each must name a
+                measurement.
+            spec: The run declaration, so the study samples the spec's own
+                narrowed hyperparameter domains and no others.
+            n_suggest: Upper bound on proposals per call.
+
+        Raises:
+            UnknownObjectiveError: An objective is not registered.
+            UnmeasuredObjectiveError: An objective has no measurement behind it.
+        """
         self._sampler_name = sampler
         self._pruner_name = pruner
         self._seed = seed
         self._n_startup_trials = n_startup_trials
-        self._objectives = objectives
-        self._directions = directions or tuple("maximize" for _ in objectives)
+        self._spec = spec
+        self._n_suggest = n_suggest
+        self._objectives, self._directions = resolve_objectives(objectives)
         self._name = f"model_based_{sampler}"
         self._study: optuna.Study | None = None
         self._run_id: str | None = None
-        self._param_names: list[str] = []  # Parameter names for trial mapping
+        self._pending: dict[str, int] = {}
 
     def _create_sampler(self) -> optuna.samplers.BaseSampler:
-        """Create Optuna sampler based on configuration."""
-        if self._sampler_name == "tpe":
-            return optuna.samplers.TPESampler(
-                seed=self._seed, n_startup_trials=self._n_startup_trials
-            )
-        elif self._sampler_name == "nsga2":
-            return optuna.samplers.NSGAIISampler(seed=self._seed, population_size=50)
-        elif self._sampler_name == "gp":
-            return optuna.samplers.GPSampler(
-                seed=self._seed, n_startup_trials=self._n_startup_trials
-            )
-        elif self._sampler_name == "random":
-            return optuna.samplers.RandomSampler(seed=self._seed)
-        else:
-            return optuna.samplers.TPESampler(
-                seed=self._seed, n_startup_trials=self._n_startup_trials
-            )
+        """The declared sampler. An unknown name is a typo, not a silent TPE."""
+        match self._sampler_name:
+            case "tpe":
+                return optuna.samplers.TPESampler(
+                    seed=self._seed, n_startup_trials=self._n_startup_trials
+                )
+            case "nsga2":
+                return optuna.samplers.NSGAIISampler(
+                    seed=self._seed, population_size=50
+                )
+            case "gp":
+                return optuna.samplers.GPSampler(
+                    seed=self._seed, n_startup_trials=self._n_startup_trials
+                )
+            case "random":
+                return optuna.samplers.RandomSampler(seed=self._seed)
+            case name:
+                msg = f"unknown sampler {name!r}; available: tpe, nsga2, gp, random"
+                raise ValueError(msg)
 
     def _create_pruner(self) -> optuna.pruners.BasePruner | None:
-        """Create Optuna pruner based on configuration."""
-        if self._pruner_name == "median":
-            return optuna.pruners.MedianPruner(
-                n_startup_trials=self._n_startup_trials,
-                n_warmup_steps=5,
-                interval_steps=1,
-            )
-        elif self._pruner_name == "hyperband":
-            return optuna.pruners.HyperbandPruner(
-                min_resource=1,
-                max_resource=50,
-                reduction_factor=3,
-            )
-        return None
+        """The declared pruner, or ``None``."""
+        match self._pruner_name:
+            case "median":
+                return optuna.pruners.MedianPruner(
+                    n_startup_trials=self._n_startup_trials,
+                    n_warmup_steps=5,
+                    interval_steps=1,
+                )
+            case "hyperband":
+                return optuna.pruners.HyperbandPruner(
+                    min_resource=1, max_resource=50, reduction_factor=3
+                )
+            case None:
+                return None
+            case name:
+                msg = f"unknown pruner {name!r}; available: median, hyperband, None"
+                raise ValueError(msg)
 
     def _create_study(self, run_id: str) -> optuna.Study:
-        """Create a new Optuna study with sampler and pruner."""
-        sampler = self._create_sampler()
-        pruner = self._create_pruner()
+        """A study with the declared directions — one or many."""
+        directions = [
+            StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
+            for d in self._directions
+        ]
+        return optuna.create_study(
+            sampler=self._create_sampler(),
+            pruner=self._create_pruner(),
+            direction=directions[0],
+            directions=directions if len(directions) > 1 else None,
+            study_name=f"exp_{run_id}",
+        )
 
-        def _to_study_direction(d: str) -> StudyDirection:
-            return (
-                StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
-            )
+    def _distributions(self, coordinate: Coordinate) -> dict[str, BaseDistribution]:
+        """The samplable dimensions for one coordinate.
 
-        if len(self._objectives) == 1:
-            direction = (
-                _to_study_direction(self._directions[0])
-                if self._directions
-                else StudyDirection.MAXIMIZE
-            )
-            study = optuna.create_study(
-                sampler=sampler,
-                pruner=pruner,
-                direction=direction,
-                study_name=f"exp_{run_id}",
-            )
-        else:
-            # Multi-objective
-            directions = (
-                [_to_study_direction(d) for d in self._directions]
-                if self._directions
-                else [StudyDirection.MAXIMIZE] * len(self._objectives)
-            )
-            study = optuna.create_study(
-                sampler=sampler,
-                pruner=pruner,
-                directions=directions,
-                study_name=f"exp_{run_id}",
-            )
-        return study
+        Availability, domain and scale are the harvested ones, narrowed only by
+        the spec. Nothing is sampled for a hyperparameter the coordinate's own
+        selection cannot use.
+        """
+        return OptunaDistributionAdapter.distributions(coordinate, spec=self._spec)
 
     def _rebuild_study_from_records(
         self, run_id: str, records: list[Record]
     ) -> optuna.Study:
-        """Rebuild Optuna study from stored records (R71).
+        """Rebuild the study from the store's records (R71).
 
-        Uses optuna.trial.create_trial to reconstruct trial history
-        without a private Optuna database.
+        No private Optuna database: the unified store stays the only store, and a
+        resumed run resumes from the measurements it actually made.
         """
         study = self._create_study(run_id)
-
         for record in records:
             trial = self._record_to_trial_obj(record)
             if trial is not None:
                 study.add_trial(trial)
-
         return study
 
     def _get_or_rebuild_study(self, run_id: str, records: list[Record]) -> optuna.Study:
-        """Get existing study or rebuild from records."""
+        """The study for this run, rebuilt from records the first time."""
         if self._study is None or self._run_id != run_id:
             self._run_id = run_id
             self._study = self._rebuild_study_from_records(run_id, records)
+            self._pending.clear()
         return self._study
 
     def _record_to_trial_obj(self, record: Record) -> optuna.trial.FrozenTrial | None:
-        """Convert record to Optuna FrozenTrial for study reconstruction."""
+        """One record as a completed trial, or ``None``.
+
+        A record whose gate did not pass, or whose payload did not measure
+        every objective, is not history the study may fit.
+        """
+        if record.status.gate_verdict.value != "PASS":
+            return None
+        values = objective_values(self._objectives, record.payload)
+        if values is None:
+            return None
+        coordinate = Coordinate.from_record(record)
+        distributions = self._distributions(coordinate)
+        params = {
+            name: _sampled_value(value, distributions[name])
+            for name, value in coordinate.params.items()
+            if name in distributions
+        }
+        sampled = {name: distributions[name] for name in params}
         try:
-            # Extract parameter values from record params
-            params = {}
-            for name in self._param_names:
-                if name in record.params:
-                    params[name] = record.params[name]
-
-            # Extract objective values
-            values = []
-            for obj_name in self._objectives:
-                if obj_name in record.payload:
-                    val = record.payload[obj_name]
-                    if isinstance(val, (int, float)):
-                        values.append(float(val))
-                    else:
-                        return None
-                else:
-                    return None
-
-            # Create trial state
-            state = optuna.trial.TrialState.COMPLETE
-            if record.status.gate_verdict.value != "PASS":
-                state = optuna.trial.TrialState.FAIL
-
             return optuna.trial.create_trial(
                 params=params,
-                distributions={},  # Will be inferred
-                values=values,
-                state=state,
+                distributions=sampled,
+                values=list(values),
+                state=optuna.trial.TrialState.COMPLETE,
             )
-        except Exception as e:
-            logger.warning("Failed to convert record to trial: %s", e)
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "record %s is not representable as a trial: %s",
+                record.measurement_key[:12],
+                exc,
+            )
             return None
 
-    def _coord_to_params(self, coord: Coordinate) -> dict[str, float]:
-        """Extract parameter values from coordinate for trial suggestion."""
-        params = {}
-        for name in self._param_names:
-            if name in coord.params:
-                val = coord.params[name]
-                if isinstance(val, (int, float)):
-                    params[name] = float(val)
-        return params
-
-    def _params_to_coord(
-        self, params: dict[str, float], template_coord: Coordinate, schedule: Schedule
-    ) -> Coordinate:
-        """Create a new coordinate with suggested parameters."""
-        new_params = template_coord.params.copy()
-        new_params.update(params)
+    def _with_params(self, coord: Coordinate, suggested: dict[str, Any]) -> Coordinate:
+        """A coordinate carrying the trial's suggested hyperparameters."""
+        if not suggested:
+            return coord
         return Coordinate(
-            substrate=template_coord.substrate,
-            geometry=template_coord.geometry,
-            dynamics=template_coord.dynamics,
-            plasticity=template_coord.plasticity,
-            credit=template_coord.credit,
-            update=template_coord.update,
-            params=new_params,
+            substrate=coord.substrate,
+            geometry=coord.geometry,
+            dynamics=coord.dynamics,
+            plasticity=coord.plasticity,
+            credit=coord.credit,
+            update=coord.update,
+            params={**coord.params, **suggested},
         )
 
     def propose(
@@ -488,101 +453,67 @@ class ModelBasedPolicy:
         budget: Budget,
         cost_model: CostModel,
     ) -> list[tuple[Coordinate, Schedule]]:
-        """Propose candidates using Optuna's suggestion."""
+        """Ask the study for the next cells' hyperparameters.
+
+        Each affordable candidate is asked with the distributions its own active
+        space declares, so `suggest_*` runs against harvested domains narrowed
+        by the spec. A coordinate with no samplable dimension is proposed as it
+        stands: that is a fact about the cell, not an error.
+
+        Returns:
+            The proposed cells, each paired with the trial its measurement will
+            be told to.
+        """
         if not candidates:
             return []
-
-        # Determine run_id
-        run_id = (
-            records[0].run_id
-            if records
-            else (candidates[0][1].budget_id if candidates else "default")
-        )
-
-        # Update study with observed records
+        run_id = records[0].run_id if records else "unattributed"
         study = self._get_or_rebuild_study(run_id, records)
 
-        # Extract parameter names from first candidate if not set
-        if not self._param_names and candidates:
-            self._param_names = list(candidates[0][0].params.keys())
-
-        # Filter affordable candidates
-        affordable = self._filter_affordable(candidates, budget, cost_model)
-        if not affordable:
-            return []
-
-        # Use Optuna to suggest new parameter configurations
-        proposals = []
-        n_suggest = min(10, len(affordable))
-
-        for _ in range(n_suggest):
-            trial = study.ask()
-
-            # Map suggested params to a coordinate
-            suggested_params = trial.params
-            if not suggested_params:
-                # Fallback: pick from affordable
-                idx = trial.number % len(affordable)
-                proposals.append(affordable[idx])
-                continue
-
-            # Use first affordable as template
-            template_coord, template_sched = affordable[0]
-            new_coord = self._params_to_coord(
-                suggested_params, template_coord, template_sched
-            )
-
-            # Find matching affordable candidate or use template with new params
-            matched = False
-            for coord, sched in affordable:
-                if all(
-                    abs(coord.params.get(k, 0) - v) < 1e-6
-                    for k, v in suggested_params.items()
-                    if k in coord.params
-                ):
-                    proposals.append((coord, sched))
-                    matched = True
-                    break
-
-            if not matched:
-                proposals.append((new_coord, template_sched))
-
+        proposals: list[tuple[Coordinate, Schedule]] = []
+        for coord, sched in _affordable(candidates, budget, cost_model)[
+            : self._n_suggest
+        ]:
+            trial = study.ask(self._distributions(coord))
+            proposed = self._with_params(coord, trial.params)
+            self._pending[proposed.measurement_key(sched)] = trial.number
+            proposals.append((proposed, sched))
         return proposals
 
     def observe(self, record: Record) -> None:
-        """Incorporate record into Optuna study."""
-        # The study is rebuilt from records on each propose call
-        # This method is kept for protocol compatibility
+        """Tell the study what the evaluator measured for a proposed cell.
+
+        A record this policy did not propose, or one whose payload measured
+        none of its objectives, leaves no value to tell: inventing one is the
+        silent maximize §3.4 names.
+        """
+        study = self._study
+        if study is None:
+            return
+        trial_number = self._pending.pop(record.measurement_key, None)
+        if trial_number is None:
+            return
+        values = (
+            objective_values(self._objectives, record.payload)
+            if record.status.gate_verdict.value == "PASS"
+            else None
+        )
+        if values is None:
+            study.tell(trial_number, state=optuna.trial.TrialState.FAIL)
+            return
+        study.tell(trial_number, list(values))
+
+    def completed_trials(self) -> int:
+        """How many measurements the study has learned from."""
+        if self._study is None:
+            return 0
+        return sum(
+            1
+            for trial in self._study.trials
+            if trial.state is optuna.trial.TrialState.COMPLETE
+        )
 
     def get_name(self) -> str:
         return self._name
-
-    def _filter_affordable(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
 
 
 class EvolutionPolicy:
@@ -635,15 +566,7 @@ class EvolutionPolicy:
 
     def _add_to_population(self, record: Record) -> None:
         score = self._extract_score(record)
-        coord = Coordinate(
-            substrate=record.substrate,
-            geometry=record.geometry,
-            dynamics=record.dynamics,
-            plasticity=record.plasticity,
-            credit=record.credit,
-            update=record.update,
-            params=record.params,
-        )
+        coord = Coordinate.from_record(record)
         self._population.append((coord, record.schedule, score))
         # Keep top population_size
         self._population.sort(key=lambda x: x[2], reverse=True)
@@ -703,7 +626,7 @@ class EvolutionPolicy:
             proposals.append((crossed_coord, p1[1]))
 
         # Filter by budget
-        affordable = self._filter_affordable(proposals, budget, cost_model)
+        affordable = _affordable(proposals, budget, cost_model)
         return affordable
 
     def _mutate_params(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -742,33 +665,6 @@ class EvolutionPolicy:
 
     def get_name(self) -> str:
         return self._name
-
-    def _filter_affordable(
-        self,
-        candidates: list[tuple[Coordinate, Schedule]],
-        budget: Budget,
-        cost_model: CostModel,
-    ) -> list[tuple[Coordinate, Schedule]]:
-        affordable = []
-        for coord, sched in candidates:
-            cost = cost_model.estimate_cost(
-                (
-                    coord.substrate,
-                    coord.geometry,
-                    coord.dynamics,
-                    coord.plasticity,
-                    coord.credit,
-                    coord.update,
-                    coord.params,
-                ),
-                sched.to_dict(),
-            )
-            if (
-                budget.target_cost is None
-                or budget.cost_consumed + cost <= budget.target_cost
-            ):
-                affordable.append((coord, sched))
-        return affordable
 
 
 class SynthesisPolicy:
@@ -940,23 +836,70 @@ POLICY_CATALOG: dict[str, type[Policy]] = {
 
 
 def create_policy(name: str, **kwargs: Any) -> Policy:
-    """Create a policy instance by name.
+    """Create a policy by name.
 
     Args:
-        name: Policy name from POLICY_CATALOG
-        **kwargs: Policy-specific arguments
+        name: A key of :data:`POLICY_CATALOG`.
+        **kwargs: Constructor arguments for that policy.
 
     Returns:
-        Policy instance.
+        The policy instance.
 
     Raises:
-        ValueError: If policy name not found.
+        ValueError: The name is unknown, or the policy does not accept one of
+            the arguments. A silently dropped argument is dead config, and a
+            run that believes it declared a search dimension has not.
     """
     if name not in POLICY_CATALOG:
-        raise ValueError(
-            f"Unknown policy: {name}. Available: {sorted(POLICY_CATALOG.keys())}"
+        msg = f"unknown policy {name!r}; available: {sorted(POLICY_CATALOG)}"
+        raise ValueError(msg)
+    policy_cls = POLICY_CATALOG[name]
+    accepted = _accepted_kwargs(policy_cls)
+    unsupported = sorted(set(kwargs) - accepted)
+    if unsupported:
+        msg = (
+            f"policy {name!r} does not accept {unsupported}; "
+            f"it accepts {sorted(accepted)}"
         )
-    return POLICY_CATALOG[name](**kwargs)
+        raise ValueError(msg)
+    return policy_cls(**kwargs)
+
+
+def policy_context(spec: RunSpec, name: str) -> dict[str, Any]:
+    """The run arguments one policy is offered.
+
+    A signature is not evidence of which knobs a primitive reads (TODO46 §D13),
+    but it is evidence of which keyword names a call may carry, so it is
+    harvested here rather than re-declared per policy. A policy that declares
+    none of these is not a learner; that is a fact about it, not an error.
+
+    Args:
+        spec: The run declaration.
+        name: The chosen policy's catalog key.
+
+    Returns:
+        The subset of ``seed``, ``objectives`` and ``spec`` that this policy
+        accepts. Objectives are a tuple, defaulting to the measured primary
+        when a spec names none.
+
+    Raises:
+        ValueError: The policy name is unknown.
+    """
+    if name not in POLICY_CATALOG:
+        msg = f"unknown policy {name!r}; available: {sorted(POLICY_CATALOG)}"
+        raise ValueError(msg)
+    accepted = _accepted_kwargs(POLICY_CATALOG[name])
+    context = {
+        "seed": spec.seed,
+        "objectives": spec.objectives or ("validation_accuracy",),
+        "spec": spec,
+    }
+    return {key: value for key, value in context.items() if key in accepted}
+
+
+def _accepted_kwargs(policy_cls: type[Policy]) -> set[str]:
+    """The keyword names one policy's constructor may carry."""
+    return set(inspect.signature(policy_cls).parameters) - {"self"}
 
 
 __all__ = [
@@ -971,4 +914,5 @@ __all__ = [
     "TrainerDrivenPolicy",
     "UniformRandomPolicy",
     "create_policy",
+    "policy_context",
 ]

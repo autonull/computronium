@@ -25,7 +25,13 @@ PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveSpec:
-    """Specification for an objective function."""
+    """Specification for an objective function.
+
+    An objective name is not a measurement. ``metric_key`` names the payload key
+    that satisfies it; without one the row is a research target awaiting a
+    measurement, and it says so in ``unavailable_reason`` — the same
+    recorded-reason rule an unavailable ``AxisSpec`` follows (TODO46 §D17).
+    """
 
     name: str
     description: str = ""
@@ -33,6 +39,21 @@ class ObjectiveSpec:
     weight: float = 1.0  # Weight in multi-objective optimization
     normalizer: str | None = None  # Normalizer function name (e.g., "minmax", "zscore")
     axis_tag: str | None = None  # Axis this objective primarily relates to
+    metric_key: str | None = None  # Payload key a record carries it in
+    unavailable_reason: str | None = None  # Required when metric_key is None
+
+    def stamped(self) -> ObjectiveSpec:
+        """This row carrying a measurement, or the reason it lacks one."""
+        if self.metric_key is not None:
+            return self
+        if self.unavailable_reason:
+            return self
+        msg = (
+            f"objective {self.name!r} declares no metric_key, so it needs an "
+            "unavailable_reason: an unmeasurable objective without a recorded "
+            "reason is a claim the run withdraws silently"
+        )
+        raise ValueError(msg)
 
 
 class ConstraintKind(StrEnum):
@@ -247,8 +268,14 @@ ALL_REGISTRIES = {
 
 
 def register_objective(spec: ObjectiveSpec) -> None:
-    """Register an objective specification."""
-    OBJECTIVES_REGISTRY.register(spec)
+    """Register an objective specification.
+
+    Raises:
+        ValueError: The row is unmeasured and records no reason. Registration is
+            where the rule bites, because that is where a run can start
+            searching on it.
+    """
+    OBJECTIVES_REGISTRY.register(spec.stamped())
 
 
 def register_constraint(spec: ConstraintSpec) -> None:

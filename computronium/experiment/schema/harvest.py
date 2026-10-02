@@ -310,6 +310,41 @@ def declare(declared: dict[str, HyperparameterSpec], hp: HyperparameterSpec) -> 
         )
 
 
+def _from_dict(name: str, spec: dict[str, Any], axis_name: str) -> HyperparameterSpec:
+    """One fully-declared hyperparameter: domain, kind, availability, prior."""
+    domain_spec = spec.get("domain")
+    domain, axis_kind = _domain_and_kind(name, domain_spec)
+    availability = spec.get("availability")
+    if isinstance(availability, str):
+        availability = expr_from_string(availability)
+    # A knob the primitive reads but a run may not choose: the task's own shape,
+    # the run's device. Declared structural so no sweep and no sampler moves it.
+    return HyperparameterSpec(
+        name=name,
+        domain=domain,
+        axis_kind=(
+            AxisKind.STRUCTURAL if spec.get("kind") == "structural" else axis_kind
+        ),
+        axis_name=axis_name,
+        availability=availability,
+        prior=spec.get("prior"),
+        override_scope=spec.get("override_scope", "coordinate"),
+    )
+
+
+def _domain_and_kind(name: str, domain_spec: Any) -> tuple[Domain, AxisKind]:
+    """A declared domain and the kind of axis it is sampled on."""
+    if isinstance(domain_spec, tuple) and len(domain_spec) == 3:
+        lo, hi, scale = domain_spec
+        if scale == "int":
+            return _domain_from_range(lo, hi, "linear"), AxisKind.INTEGER
+        return _domain_from_range(lo, hi, scale), AxisKind.CONTINUOUS
+    if isinstance(domain_spec, list):
+        return _domain_from_enum(domain_spec), AxisKind.CATEGORICAL
+    msg = f"invalid domain spec for {name}: {domain_spec}"
+    raise ValueError(msg)
+
+
 def _parse_hyperparameters(
     hp_dict: dict[str, Any], axis_name: str
 ) -> list[HyperparameterSpec]:
@@ -356,37 +391,7 @@ def _parse_hyperparameters(
                 )
             )
         elif isinstance(spec, dict):
-            # Full spec with availability, prior, override_scope
-            domain_spec = spec.get("domain")
-            if isinstance(domain_spec, tuple) and len(domain_spec) == 3:
-                lo, hi, scale = domain_spec
-                if scale == "int":
-                    domain = _domain_from_range(lo, hi, "linear")
-                    axis_kind = AxisKind.INTEGER
-                else:
-                    domain = _domain_from_range(lo, hi, scale)
-                    axis_kind = AxisKind.CONTINUOUS
-            elif isinstance(domain_spec, list):
-                domain = _domain_from_enum(domain_spec)
-                axis_kind = AxisKind.CATEGORICAL
-            else:
-                raise ValueError(f"Invalid domain spec for {name}: {domain_spec}")
-
-            availability = spec.get("availability")
-            if isinstance(availability, str):
-                availability = expr_from_string(availability)
-
-            specs.append(
-                HyperparameterSpec(
-                    name=name,
-                    domain=domain,
-                    axis_kind=axis_kind,
-                    axis_name=axis_name,
-                    availability=availability,
-                    prior=spec.get("prior"),
-                    override_scope=spec.get("override_scope", "coordinate"),
-                )
-            )
+            specs.append(_from_dict(name, spec, axis_name))
         else:
             raise ValueError(f"Unknown hyperparameter spec format for {name}: {spec}")
     return specs

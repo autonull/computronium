@@ -152,6 +152,18 @@ class RunSpec(BaseModel):
                 f"harvested: {sorted(harvested)}"
             )
             raise ValueError(msg)
+        structural = sorted(
+            h
+            for h, spec in harvested.items()
+            if self.hyperparameters.get(h) is not None
+            and spec.axis_kind.value == "structural"
+        )
+        if structural:
+            msg = (
+                f"hyperparameter(s) {structural} are structural — derived from the "
+                "task or chosen by the run — and cannot be swept"
+            )
+            raise ValueError(msg)
         duplicated = sorted({
             s.axis for s in self.axes if [x.axis for x in self.axes].count(s.axis) > 1
         })

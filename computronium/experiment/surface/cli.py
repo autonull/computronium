@@ -25,7 +25,10 @@ from computronium.experiment.evidence.store import RecordStore, StoreConfig
 from computronium.experiment.execution.backends import LocalBackend
 from computronium.experiment.execution.budget import Budget, SimpleCostModel
 from computronium.experiment.execution.pipeline import PipelineConfig, PipelineRunner
-from computronium.experiment.execution.policy import create_policy
+from computronium.experiment.execution.policy import (
+    create_policy,
+    policy_context,
+)
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
@@ -104,14 +107,12 @@ RUN_PROFILES: dict[str, RunProfile] = {
         epochs=1,
         budget_seconds=3600.0,
         task="digits",
-        policy="round_robin_grid",
+        policy="model_based",
         param_budget=MEASURED_PARAM_BUDGET,
         objectives=(
             "validation_accuracy",
             "walltime_total",
             "param_count",
-            "flops",
-            "memory_usage",
         ),
         promotion_threshold=0.7,
         maturation=True,
@@ -156,8 +157,6 @@ RUN_PROFILES: dict[str, RunProfile] = {
             "validation_accuracy",
             "walltime_total",
             "param_count",
-            "flops",
-            "energy_per_step",
         ),
         promotion_threshold=0.9,
         maturation=False,
@@ -334,13 +333,18 @@ def _cmd_run(args: argparse.Namespace) -> int:
             else None
         )
 
+        # The spec is the only place a policy's arguments come from, so the
+        # sampler learns on the run's objectives and its own swept domains.
+        policy_name = spec.policy or "round_robin_grid"
+        policy = create_policy(policy_name, **policy_context(spec, policy_name))
+
         # Create pipeline config — the spec supplies stages, seed and policy
         pipeline_config = PipelineConfig(
             run_id=run_id,
             run_spec=spec,
             budget=budget,
             cost_model=SimpleCostModel(),
-            policy=create_policy(spec.policy or "round_robin_grid"),
+            policy=policy,
             backend=LocalBackend(),
             checkpoint_dir=Path(f"checkpoints/{run_id}"),
             seed=spec.seed,

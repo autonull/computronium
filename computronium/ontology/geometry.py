@@ -551,12 +551,10 @@ class GeometryConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         return {
-            "input_dim": {
-                "domain": (1, 8192, "int")
-            },  # Structural - dataset-determined
-            "output_dim": {
-                "domain": (1, 8192, "int")
-            },  # Structural - dataset-determined
+            # Structural: the task decides both. A run that swept them would be
+            # searching for the shape of its data (TODO46 §3.0).
+            "input_dim": {"domain": (1, 8192, "int"), "kind": "structural"},
+            "output_dim": {"domain": (1, 8192, "int"), "kind": "structural"},
             "hidden_dim": {"domain": (8, 4096, "log"), "prior": "hidden_width"},
             "num_layers": {"domain": (1, 12, "int"), "prior": "hidden_depth"},
             "init_scale": {"domain": (1e-3, 10.0, "log")},

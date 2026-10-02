@@ -6,7 +6,10 @@ import hashlib
 import json
 from dataclasses import dataclass, fields
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from computronium.experiment.schema.record import Record
 
 
 def _canonical_json(obj: Any) -> str:
@@ -88,6 +91,23 @@ class Coordinate:
             "update": self.update,
             "params": self.params,
         }
+
+    @classmethod
+    def from_record(cls, record: Record) -> Coordinate:
+        """The coordinate a record was measured at.
+
+        Records store the six axes flat; reconstructing the coordinate from
+        those fields is done here so no consumer assembles it a second way.
+        """
+        return cls(
+            substrate=record.substrate,
+            geometry=record.geometry,
+            dynamics=record.dynamics,
+            plasticity=record.plasticity,
+            credit=record.credit,
+            update=record.update,
+            params=dict(record.params),
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Coordinate:

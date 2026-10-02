@@ -590,6 +590,7 @@ class PipelineRunner:
                 case Success(record=record):
                     try:
                         self._store.append(record)
+                        self._observe(record)
                         successful_records.append(record)
                         self._state.completed_measurement_keys.add(
                             record.measurement_key
@@ -622,6 +623,25 @@ class PipelineRunner:
                     # Siblings continue - we don't raise the exception
 
         return successful_records
+
+    def _observe(self, record: Record) -> None:
+        """Hand a stored measurement to the policy.
+
+        The policy is where a learning policy learns, and until this call
+        existed `observe` had zero call sites outside its own module: the study
+        was asked, never told (TODO46 §D3).
+        """
+        policy = self._config.policy
+        if policy is None:
+            return
+        try:
+            policy.observe(record)
+        except Exception:
+            logger.exception(
+                "Policy %s failed to observe %s",
+                policy.get_name(),
+                record.measurement_key[:12],
+            )
 
     def _check_gate(self, fragment: Fragment, stage_spec) -> bool:
         """Check if stage gate passes."""

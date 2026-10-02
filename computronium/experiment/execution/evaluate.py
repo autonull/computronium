@@ -15,14 +15,16 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
+from itertools import islice
 from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.experiment.execution.compose import compose_cell_system
+from computronium.experiment.schema.metrics import HISTORY_METRICS
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
 
     from computronium.experiment.schema.coordinate import (
         Coordinate,
@@ -126,9 +128,7 @@ def _history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
         raise EvaluationError("runtime_error", msg)
     final = history[-1]
     metrics = {
-        key: float(value)
-        for key, value in final.items()
-        if key in {"train_acc", "train_loss", "train_energy", "val_acc", "val_loss"}
+        key: float(value) for key, value in final.items() if key in HISTORY_METRICS
     }
     metrics["epochs_run"] = float(final.get("global_step", 0))
     return metrics
@@ -171,6 +171,45 @@ def _finite(metrics: Mapping[str, float]) -> bool:
     return all(math.isfinite(v) for v in metrics.values())
 
 
+class _Batches:
+    """A bounded view of a data provider: ``batch_limit`` batches, then stop.
+
+    Validation is charged at the same ceiling as training. An unbounded
+    validation pass would make a 2-batch cell cost 45 batch-forwards, which is
+    how one honest measurement turned a 9-minute acceptance suite into a
+    25-minute one.
+    """
+
+    __slots__ = ("_limit", "_source")
+
+    def __init__(self, source: Any, limit: int) -> None:
+        self._source = source
+        self._limit = limit
+
+    def __iter__(self) -> Iterator[Any]:
+        return islice(iter(self._source), self._limit)
+
+    def __len__(self) -> int:
+        return min(self._limit, len(self._source))
+
+
+def _val_batches(task: Any, limit: int | None) -> Any | None:
+    """The task's validation split, bounded, or ``None`` when it declares none.
+
+    Without it the evaluator can only report what the cell fit, and
+    ``validation_accuracy`` — the primary objective of every profile — would be
+    a name with no number behind it.
+    """
+    from computronium.domains.base import TaskSplit
+
+    try:
+        loader = task.get_dataloader(TaskSplit.VAL)
+    except (LookupError, ValueError, NotImplementedError) as exc:
+        logger.info("task %s declares no validation split: %s", task.name, exc)
+        return None
+    return _Batches(loader, limit) if limit else loader
+
+
 def evaluate_cell(
     coordinate: Coordinate,
     schedule: Schedule,
@@ -206,11 +245,13 @@ def evaluate_cell(
         param_budget=schedule.param_budget,
     )
 
+    limit = schedule.batch_limit or None
     config = SystemTrainerConfig(
         max_epochs=schedule.epochs,
         device=device,
         seed=schedule.seed,
-        limit_train_batches=schedule.batch_limit or None,
+        limit_train_batches=limit,
+        limit_val_batches=limit,
         track_flops=False,
         track_memory=False,
     )
@@ -219,7 +260,10 @@ def evaluate_cell(
     start = time.monotonic()
     try:
         with SystemTrainer(
-            cell.system, config, task.get_dataloader("train")
+            cell.system,
+            config,
+            task.get_dataloader("train"),
+            val_data=_val_batches(task, config.limit_val_batches),
         ) as trainer:
             history = trainer.fit()
     except EvaluationError:

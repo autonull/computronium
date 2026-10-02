@@ -48,9 +48,11 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D11–D17 are fixed (D15 was found and fixed in §8 session 5; D16
-and D17 were found and fixed in §8 session 6).**
-D7–D10 remain, and D14's fix is consumed by §3.3.
+**D1–D6 and D11–D18 are fixed (D15 was found and fixed in §8 session 5; D16
+and D17 were found and fixed in §8 session 6; D18 and D19 were found and fixed
+in §8 session 7).**
+D7–D10 remain, D18–D19 are recorded in §8 session 7, and D14's fix is consumed
+by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
@@ -1076,9 +1078,131 @@ U1 53 s, U2 52 s) — every test inside its re-baselined timeout, where the
 `test_wp11_surface_lock.py` all pass; `ruff` + `pyright` clean on every changed
 module.
 
+### D18 — The policy was never told what the run measured
+
+Found in session 7, wiring §3.4. `Policy.observe` was declared on the protocol
+and implemented by eight classes, and **`policy.observe(record)` had zero call
+sites outside `policy.py`** — the pipeline stored each record and moved on. So
+even a policy that resolved its objectives had no way to learn; the store was
+the only evidence path and nothing read it back into the search. The sixth
+instance of §2.0's pattern, and the one that made §3.4's gate unmeasurable.
+Fixed: `PipelineRunner._observe` hands every stored record to the policy, and
+`ModelBasedPolicy.observe` tells the trial it asked.
+
+### D19 — An objective name was never a measurement
+
+Found in session 7. `OBJECTIVES` registered **36 objectives**; the evaluator
+emitted payload keys for **four** of them, and nothing recorded the difference.
+`resolve_objectives` read an unknown name as "maximize" with a warning, and
+`RunSpec` accepted every registered name, so a profile could declare
+`optimises: [flops, memory_usage]` and `study.tell` still had no value. This is
+§2.0's pattern again, one level up: the registry advertised a capability and no
+call site existed.
+
+Fixed by declaring the measured namespace once (`schema/metrics.py`), stamping
+every `ObjectiveSpec` with the `metric_key` that satisfies it **or** the
+`unavailable_reason` (registration refuses a row with neither — the D17
+recorded-reason precedent), and making resolution fail closed. `docs/generated/
+objectives.md` now prints `unmeasured` on 32 of 36 rows. **The fix was not only
+bookkeeping**: `validation_accuracy`, the primary objective of every profile, was
+itself unmeasurable, because `evaluate_cell` passed the trainer no validation
+split at all. The task's val split is now wired, bounded by the schedule's
+`batch_limit`.
+
+### Session 7
+
+**Landed: §3.4's learning half.** `ModelBasedPolicy` asks the study with
+distributions derived from the coordinate's own harvested active space and tells
+it the objective values the evaluator measured. `study.tell` exists; it is called
+from `observe`, which the pipeline now calls for every stored record (D18). The
+study is still rebuilt from the store's records and never from a private Optuna
+DB (R71 held).
+
+**`OptunaDistributionAdapter` was rewritten, not extended.** It had zero callers,
+walked `AxisSpec.topology_params` (declared "structural params, not searched"),
+and fabricated a `Record` to satisfy an availability predicate that the harvest
+had already decided — three ways to be wrong at once. It now maps
+`HyperparameterSpec → BaseDistribution` over `harvest_schema().active(coord)`,
+narrowed by the spec through the same `narrow_domain` the space uses, so there
+is one validation of a spec's domain rather than two. Availability is not
+re-asked; a second opinion could only disagree with the first.
+
+**D19 (new) — 36 registered objectives, 4 measured.** `schema/metrics.py` is the
+one declaration of the measured namespace and of which objective names those
+payload keys satisfy. `ObjectiveSpec` gained `metric_key` and
+`unavailable_reason`; `register_objective` refuses a row with neither, which is
+D17's recorded-reason rule applied to the objective registry. `resolve_objectives`
+is fail-closed (`UnknownObjectiveError` / `UnmeasuredObjectiveError` instead of a
+warning and a silent maximize), and `objective_values` returns `None` rather than
+a number for a payload that measured none of its objectives — a trial told a
+value it never earned is the defect, not the missing `tell`.
+
+**The mapping exposed a second, larger gap.** `validation_accuracy` is the
+primary objective of every profile, and nothing emitted `val_acc`: the evaluator
+constructed `SystemTrainer` with no validation split, so a cell could only report
+what it had just fit. The task's val split is now wired, **bounded by the same
+`batch_limit` as training** (`SystemTrainerConfig.limit_val_batches`, new). The
+bound is not an optimisation: an unbounded validation pass makes a 2-batch cell
+pay a whole split's forward passes, and doing that to the whole acceptance suite
+turned a 9:14 baseline into an unfinished 25 minutes. First cheap measurement of
+the change: `digits`, one cell, 2 batches — validation costs one forward pass per
+training batch, so a cell's cost moves by tens of percent, not by a factor.
+**This is session 6's ceiling lesson again, applied to a different knob: a
+measurement that is not charged to the run's own budget will eventually be
+charged to the wall clock instead.**
+
+**The task's own shape was a searchable hyperparameter.** Geometry declared
+`input_dim` and `output_dim` as swept integers — with a comment saying
+"Structural - dataset-determined" — and substrate declared `device`. A search
+would have been free to search for the width of its own data. Both are now
+`"kind": "structural"` in their `hyperparameters()` declaration, the harvest
+records the kind, and a `RunSpec` that sweeps a structural knob is refused by
+name. §3.0's "shape and size are derived, not chosen" was a doctrine; it is now
+enforced at the schema boundary.
+
+**Two smaller findings, both fixed in place.** `noise_level` declares a LOG scale
+over `(0.0, 1.0)`, which no sampler can invert; the adapter keeps a declared log
+scale wherever the bounds permit it and drops it where they do not, rather than
+raising on a harvested row nobody chose. And `create_policy` now refuses an
+argument its policy does not accept instead of the caller guessing which
+policies take what: `policy_context(spec, name)` harvests the accepted keywords
+from the class signature — the one question a signature answers truthfully
+(D13) — and a lock asserts `model_based` receives objectives, seed and spec while
+`round_robin_grid` receives none of them.
+
+**Cost.** `production-map` now runs `model_based` instead of
+`round_robin_grid`, so a profile exercises the sampler rather than a positional
+pick, and no profile names an unmeasured objective any more.
+
+**Verified:** `tests/property/test_sampler_lock.py` (27, new) plus the six lock
+files this touches (146 passed, 12.5 s), `test_search_space_lock.py` (24, 26 s),
+and the digits evaluation cases from `test_cell_evaluation_lock.py` — deliberately
+cheap, all on `digits` at 2–4 batches. `ruff` + `pyright` clean on every changed
+module; `docs/generated/` re-pinned (objectives gain `metric_key` /
+`unavailable_reason`, and the objectives table prints `unmeasured`).
+**Not run here:** `tests/acceptance` and the full shard set, because an
+unbounded validation pass made both unaffordable before the bound landed. That
+gate is owed, at the measured regime, as the first thing a fresh session runs.
+
+**Honest limit of this session's claim.** The sampler gate proves the machinery
+learns on a *constructed* landscape, deliberately labelled as such in the test
+docstring: it says nothing about which credit rule or topology is better. And
+§3.4 is half-landed — the study tunes a cell the space enumerated rather than
+choosing the cell. The remaining-work list is re-scoped to say so.
+
 ### Remaining work, in order
 
-1. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
+1. **§3.4 remainder — the candidate-list `propose()` signature.** The sampler
+   now asks with harvested distributions and is told measured values, so §3.4's
+   *learning* gate passes. What is **not** done is the interface change §3.3 and
+   §3.4 were always going to be together: `propose(candidates, records, budget,
+   cost_model)` still receives the cell stream and only optimizes the
+   hyperparameters within it. The structural six axes are still enumerated from
+   the spec's permitted primitives, so a model-based run cannot yet *choose* a
+   topology — it can only tune the cell the space handed it. Deleting the
+   candidate-list signature (and the `StageContext`/`Fragment`/`Stage`/
+   `Decision`/`Proposal` duplicates in `search_space.py`) is the next interface
+   change, and it is where the WP14 lock belongs. `study.ask(distributions)` cannot coexist with the
    candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
    and §3.4 are one interface change. **First job: the
    objective→payload-key mapping**, which session 4 exposed and sessions 5–6
@@ -1107,7 +1231,27 @@ module.
    separate piece of work, and the reason the row carries a recorded reason
    rather than a silent `available=False`.
 
-**Carried notes from sessions 3–6 that are still open:**
+**Improvement opportunities found in session 7, beyond the landed fixes:**
+
+- **The measured namespace is declared in `schema/metrics.py` but only four of
+  36 objectives use it.** `flops`, `memory_usage` and `energy_per_step` are one
+  config flag away (`SystemTrainerConfig.track_flops`/`track_memory`, and
+  `EpochResource.forward_flops`/`peak_memory_mb` already exist) — the honest
+  version of "enable the tracker" is *turn them on, pay for them, and record
+  them*, which needs a cost measurement, not a registry edit.
+- **`Coordinate.cell_key`'s docstring says "structural axes only (no schedule)"
+  and the body includes `params`.** The measurement identity depends on it, so
+  the docstring is wrong, not the code. Unfixed; a one-line correction nobody
+  needs until they read the hash.
+- **`cell_key` and `measurement_key` re-serialise the same seven fields twice.**
+  One private `_identity()` would make "the cell key and the measurement key
+  cannot disagree" structural instead of reviewed.
+- **`_parse_hyperparameters` now has three declaration shapes** (tuple, list,
+  dict) and the dict one carries four optional keys. The next declaration format
+  added will make it a parser; the registry-driven lock should require an
+  example per shape.
+
+**Carried notes from sessions 3–7 that are still open:**
 
 - **CLOSED in session 6 — the `params` channel.** `_composable` was passing
   `coordinate.params` as the geometry mapping, so a hyperparameter named like a

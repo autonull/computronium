@@ -113,7 +113,7 @@ def _lerp(lo: float, hi: float, t: float) -> float:
     return lo + (hi - lo) * t
 
 
-def _narrow(spec_domain: Domain, harvested: Domain, name: str) -> Domain:
+def narrow_domain(spec_domain: Domain, harvested: Domain, name: str) -> Domain:
     """Intersect a spec's domain with the harvested one.
 
     The harvested declaration is the primitive's truth; the spec may only
@@ -177,7 +177,7 @@ def _swept(spec: RunSpec, schema: HarvestedSchema) -> dict[str, tuple[Any, ...]]
     specs_by_name = schema.by_name()
     return {
         name: _ladder(
-            _narrow(domain, specs_by_name[name].domain, name),
+            narrow_domain(domain, specs_by_name[name].domain, name),
             specs_by_name[name].axis_kind,
         )
         for name, domain in spec.hyperparameters.items()
@@ -472,5 +472,6 @@ __all__ = [
     "StageContext",
     "generate_candidates",
     "iter_candidates",
+    "narrow_domain",
     "search_space_from_spec",
 ]
