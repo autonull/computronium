@@ -1,6 +1,6 @@
 ==============================================================================
 COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE
-generated 2026-10-02 @ commit cefe05fe by docs/cheatsheet/cheatsheet_create.py
+generated 2026-10-02 @ commit 22eea0a3 by docs/cheatsheet/cheatsheet_create.py
 artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)
 ==============================================================================
 

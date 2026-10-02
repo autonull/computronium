@@ -496,6 +496,12 @@ class Section:
 
 
 @dataclass(frozen=True, slots=True)
+class Columns:
+    rows: tuple[Row, ...]
+    gap: float = 20.0
+
+
+@dataclass(frozen=True, slots=True)
 class TableRow:
     label: str
     headers: tuple[str, ...]
@@ -512,6 +518,7 @@ Row = (
     | GroupedChipsRow
     | TableRow
     | Section
+    | Columns
 )
 
 
@@ -743,13 +750,6 @@ def _kernel_rows(b: Bundle) -> tuple[Row, ...]:
         )
     )
     return (
-        ChipsRow(
-            f"🧾 RunSpec fields ({len(b.run_spec_fields)})",
-            tuple(
-                Chip(label=f, mono=True, accent=COLORS["kernel"], tooltip=f)
-                for f in b.run_spec_fields
-            ),
-        ),
         FlowRow(
             f"▶ Pipeline S1–S{len(b.stages)} — PipelineRunner, registry-locked stages",
             stage_steps,
@@ -758,16 +758,23 @@ def _kernel_rows(b: Bundle) -> tuple[Row, ...]:
             f"🧠 Policies — POLICY_CATALOG · {len(b.policies)} · interchangeable per round (U4)",
             policy_chips,
         ),
-        TableRow(
-            f"🎯 OBJECTIVES ({len(b.objectives)}) — {len(measured)} measured ✓, {len(b.objectives) - len(measured)} research targets 🔬",
-            ("objective", "status"),
-            tuple((o, "✓ measured" if m else "🔬 target") for o, m in b.objectives),
-        ),
-        TableRow(
-            f"⚖️ PRIORS ({len(b.priors)} seeded)",
-            ("prior",),
-            tuple((p,) for p in b.priors),
-        ),
+        Columns((
+            TableRow(
+                f"🎯 OBJECTIVES ({len(b.objectives)}) — {len(measured)} ✓ / {len(b.objectives) - len(measured)} 🔬",
+                ("objective", "status"),
+                tuple((o, "✓ measured" if m else "🔬 target") for o, m in b.objectives),
+            ),
+            TableRow(
+                f"⚖️ PRIORS ({len(b.priors)})",
+                ("prior",),
+                tuple((pr,) for pr in b.priors),
+            ),
+            TableRow(
+                f"🧾 RunSpec fields ({len(b.run_spec_fields)})",
+                ("field",),
+                tuple((f,) for f in b.run_spec_fields),
+            ),
+        )),
         ChipsRow("🧮 Registry counts & DSLs", registry_summary),
     )
 
@@ -820,12 +827,10 @@ def _system_rows(b: Bundle) -> tuple[Row, ...]:
         Section(
             "⚙️ Configuration",
             (
-                ChipsRow(
+                TableRow(
                     f"⚙ SystemTrainerConfig ({len(b.configs['SystemTrainerConfig'])} fields)",
-                    tuple(
-                        Chip(label=f, mono=True, accent=COLORS["train"], tooltip=f)
-                        for f in b.configs["SystemTrainerConfig"]
-                    ),
+                    ("field",),
+                    tuple((f,) for f in b.configs["SystemTrainerConfig"]),
                 ),
             ),
         ),
@@ -882,10 +887,6 @@ def _evidence_rows(b: Bundle) -> tuple[Row, ...]:
     store_chips = tuple(
         Chip(label=m, accent=COLORS["evidence"], tooltip=m) for m in b.store_methods[:8]
     )
-    record_chips = tuple(
-        Chip(label=f, mono=True, accent=COLORS["evidence"], tooltip=f)
-        for f in b.record_fields
-    )
     return (
         Section(
             "🗃 Store & schema",
@@ -894,9 +895,10 @@ def _evidence_rows(b: Bundle) -> tuple[Row, ...]:
                     f"RecordStore methods ({len(b.store_methods)}) — threading lock · atomic append",
                     store_chips,
                 ),
-                ChipsRow(
-                    f"Record fields ({len(b.record_fields)}, schema v{b.schema_version} — fail-closed)",
-                    record_chips,
+                TableRow(
+                    f"🧾 Record fields ({len(b.record_fields)}, schema v{b.schema_version} — fail-closed)",
+                    ("field",),
+                    tuple((f,) for f in b.record_fields),
                 ),
             ),
         ),
@@ -970,21 +972,7 @@ _ROW_BUILDERS: dict[str, Callable[[Bundle], tuple[Row, ...]]] = {
     "entry": _entry_rows,
     "tasks": _tasks_rows,
     "kernel": _kernel_rows,
-    "ontology": lambda b: (
-        FlowRow(
-            "🔗 Axis flow — each axis consumes the previous stage's contracts",
-            tuple(
-                FlowStep(
-                    label=f"{AXIS_EMOJI[a]} {a}",
-                    sub=CONFIG_FOR_AXIS[a],
-                    color=AXIS_COLOR[a],
-                    tooltip=f"{a} · fed by {CONFIG_FOR_AXIS[a]}",
-                )
-                for a in b.axes
-            ),
-        ),
-        AxesRow(_axis_boxes(b)),
-    ),
+    "ontology": lambda b: (AxesRow(_axis_boxes(b)),),
     "system": _system_rows,
     "train": _train_rows,
     "evidence": _evidence_rows,
@@ -1223,6 +1211,25 @@ def _pw_section(row: Section) -> float:
     )
 
 
+def _pw_columns(row: Columns) -> float:
+    ws = [min(row_preferred_w(c), STYLE.max_content_w) for c in row.rows]
+    return min(sum(ws) + row.gap * (len(row.rows) - 1), STYLE.max_content_w)
+
+
+def _col_widths(row: Columns, w: float) -> list[float]:
+    ws = [min(row_preferred_w(c), STYLE.max_content_w) for c in row.rows]
+    total = sum(ws) + row.gap * (len(ws) - 1)
+    if total > w and total > 0:
+        scale = (w - row.gap * (len(ws) - 1)) / sum(ws)
+        ws = [x * scale for x in ws]
+    return ws
+
+
+def _rh_columns(row: Columns, w: float) -> float:
+    ws = _col_widths(row, w)
+    return max((row_h(c, cw) for c, cw in zip(row.rows, ws, strict=True)), default=0.0)
+
+
 _PREFERRED_W: dict[type, Callable[..., float]] = {
     ChipsRow: _pw_chips,
     FlowRow: _pw_flow,
@@ -1232,6 +1239,7 @@ _PREFERRED_W: dict[type, Callable[..., float]] = {
     GroupedChipsRow: _grouped_chips_preferred_w,
     TableRow: _table_preferred_w,
     Section: _pw_section,
+    Columns: _pw_columns,
 }
 
 
@@ -1285,6 +1293,7 @@ _ROW_H: dict[type, Callable[..., float]] = {
     GroupedChipsRow: _rh_grouped,
     TableRow: _rh_table,
     Section: _rh_section,
+    Columns: _rh_columns,
 }
 
 
@@ -1906,10 +1915,25 @@ def _draw_section(
     return "".join(parts), h
 
 
+def _draw_columns(
+    row: Columns, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    parts: list[str] = []
+    cx = x
+    h = 0.0
+    for c, cw in zip(row.rows, _col_widths(row, w), strict=True):
+        sub, ch = draw_row(c, cx, y, color, cw)
+        parts.append(sub)
+        cx += cw + row.gap
+        h = max(h, ch)
+    return "".join(parts), h
+
+
 _DRAW_ROW_HANDLERS = {
     ChipsRow: _draw_chips_row,
     TableRow: _draw_table_row,
     Section: _draw_section,
+    Columns: _draw_columns,
     FlowRow: _draw_flow_row,
     FieldsRow: _draw_fields_row,
     TextRow: _draw_text_row,
@@ -2342,7 +2366,7 @@ def main(argv: list[str] | None = None) -> int:
     OUT_TXT.write_text(txt, encoding="utf-8")
 
     def _row_chips(r: Row) -> int:
-        if isinstance(r, Section):
+        if isinstance(r, (Section, Columns)):
             return sum(_row_chips(c) for c in r.rows)
         return (
             len(getattr(r, "chips", ()))

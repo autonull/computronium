@@ -274,6 +274,29 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== TABLES EVERYWHERE + COLUMN PACKING (2026-10-02i) ===
+
+User-directed layout consolidation:
+
+- **`Columns` row type** — `(rows, gap=20)` arranges child rows
+  horizontally; `_pw_columns` sums preferred widths (capped at
+  `max_content_w`), `_col_widths` scales children proportionally when the
+  pack exceeds the panel width, `_rh_columns` = tallest child.
+- **Kernel registry tables pack three-across** — `🎯 OBJECTIVES` ·
+  `⚖️ PRIORS` · `🧾 RunSpec fields` now render side-by-side via
+  `Columns` (objectives split into two sub-grids, priors/runspec are
+  single-column mono lists split >12 rows). RunSpec's chip wall (20
+  boxes) and the stacked objectives/priors tables are gone.
+- **Ontology flow row removed** — the redundant `FlowRow` above the axis
+  boxes was deleted; `AxesRow` is the only ontology row again.
+- **SystemTrainerConfig & Record fields → `TableRow`** — both are now
+  mono field lists (`("field",)` single-column, split two-across >12
+  rows) instead of chip rows.
+
+Gate: ruff format/check clean · pyright 0/0 · `--check` green
+(SVG 149 KiB, 2960×2242 — smaller again; inner chips ~133 since table
+contents no longer count as chips). No label collisions.
+
 === SECTION WRAPPERS + CLI/ONTOLOGY INSETS (2026-10-02h) ===
 
 Implemented the three deferred items from the 2026-10-02g pass:
