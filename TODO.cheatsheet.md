@@ -274,6 +274,25 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== WHY EMPTY DOMAINS + Columns Space-Between (2026-10-02m) ===
+
+- **Why `timeseries`/`scientific` are empty:** they are members of the
+  `DomainType` enum (`domains/base.py`) and resolve via
+  `create_task(...)`, but `SUPPORTED_TASKS`
+  (`domains/registry.py:29`, the offline-capable fixture list the
+  cheatsheet reflects) has *no* concrete task entries for them — only
+  VISION/LM/RL/GRAPH/TABULAR are registered. So the group box renders
+  empty on purpose, with the suffix "· via create_task()". If that ever
+  changes, the group picks up chips automatically via the same
+  reflection path.
+- **`Columns` packs space-between** — the three registry tables no longer
+  hug the left and leave the rest of the kernel band blank; leftover
+  width is distributed evenly into the gutters between column children
+  (`extra = max(0, w - sum(prefs) - gaps) / (n-1)`). Child widths stay
+  at their natural preferred widths (snug borders), only the spacing
+  flexes. `_col_x` dead-code removed; `_rh_columns`/`_col_widths` still
+  shrink-on-overflow only, which is space-between-compatible.
+
 === DOMAINS MERGED + SINGLE-GRID TABLES (2026-10-02l) ===
 
 - **Tasks panel: one grouped box** — the separate flat "🧩 N domains"

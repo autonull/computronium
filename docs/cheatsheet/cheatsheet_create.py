@@ -1928,13 +1928,17 @@ def _draw_columns(
     row: Columns, x: float, y: float, color: str, w: float
 ) -> tuple[str, float]:
     parts: list[str] = []
-    cx = x
     h = 0.0
-    for c, cw in zip(row.rows, _col_widths(row, w), strict=True):
+    leftover = w - sum(min(row_preferred_w(c), STYLE.max_content_w) for c in row.rows)
+    leftover -= row.gap * max(0, len(row.rows) - 1)
+    extra = max(0.0, leftover) / (len(row.rows) - 1) if len(row.rows) > 1 else 0.0
+    cx = x
+    for c in row.rows:
+        cw = min(row_preferred_w(c), STYLE.max_content_w)
         sub, ch = draw_row(c, cx, y, color, cw)
         parts.append(sub)
-        cx += cw + row.gap
         h = max(h, ch)
+        cx += cw + row.gap + extra
     return "".join(parts), h
 
 
