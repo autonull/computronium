@@ -89,6 +89,22 @@
   ~10 s, which exceeds some shards' entire runtime).
 *   **Demos are artifact producers, not checks.** The `demo` marker is stamped in
   `tests/conftest.py` by filename; `pytest -m demo` is the only way to run them.
+*   **Select tests by symbol, not by directory.** `grep -rn <symbol> tests/
+  --include=*.py`, then run the 2-4 files it names. A whole `testpaths`
+  directory is a round-close artifact, never a feature gate: it costs ~5x, is
+  the only tier that gets hard-killed, and its cost is quoted stale.
+*   **A run that may be interrupted writes `-rf --tb=line` to a log.** pytest
+  writes its summary at session end, so a hard kill takes the run's only
+  artifact — and recovering it means re-running it.
+*   **A killed run yields no verdict: collect, do not re-run.**
+  `pytest <dir> --co -q > ids.txt` runs no test code (~40 s) and locates a
+  failure from the progress line. **Never `--lf`/`--ff` here**:
+  `.pytest_cache/v/cache/lastfailed` holds 520 entries, most with node ids that
+  no longer collect.
+*   **A lock's fixture must contain the case the lock exists for.** If removing
+  the mechanism cannot fail the fixture, the lock is a comment (TODO46 D25).
+*   **One shard run per round close, never per commit** — and never a re-run of
+  a shard already green "to confirm".
 *   **hypothesis**: Use for property-based tests on pure logic.
 *   **Mocking**: Prefer Dependency Injection over `unittest.mock`. Use `pytest-mock` when strictly required.
 *   **Fixtures**: Use fixtures over setup/teardown; `@pytest.mark.parametrize` over duplicated tests.

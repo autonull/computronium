@@ -1,5 +1,10 @@
 # TODO46.md — Close the Gaps, Then Make It Demonstrably Work
 
+**Remaining work:** continued in `TODO47.md`, which is a queue and not a
+narrative. This file is now **frozen as the evidence record** — §1-§8 are not
+edited, summarised or re-derived; new defect findings go to TODO47 §2's
+"deliberately not in the queue" and are pulled into the queue explicitly.
+
 **Supersedes:** TODO45.md (marked superseded; its verified content is carried into
 §5 here). **Requirements source:** `docs/archive/TODO43.md` (R1–R88, K1–K10),
 design source `docs/archive/TODO43.abc3.md`, plans `TODO43.plan.md` /
