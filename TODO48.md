@@ -60,11 +60,23 @@ before, its measured price. No ticket's gate is a whole shard.
 
 ## Phase A — The loop produces meaning
 
-### Q1 — Does any credit rule separate? The campaign, re-run on a working lr
-- **Does:** run the T5 campaign (`examples/learning-rules-and-geometry-digits.yaml`)
-  with the lr fix landed and read what it says about credit rules. This is the
-  system's purpose and it has never been measured under a working learning
-  rate. Report the per-credit accuracy table, not a verdict.
+### Q1 — LANDED — Does any credit rule separate? The campaign, re-run on a working lr
+- **Landed (this session):** the illegal-candidate seam defect fixed — two
+  proposal paths built `ProposalContext` without a shape resolver (S3's
+  fallback `stages_impl.py` and the policy kwargs path), so the space leaked
+  cells `SystemConfig.validate` rejects (lazy × recurrent: 15 of 105 in the
+  campaign space, 150 instant-failure evaluations per campaign). Legality now
+  reaches every proposal path: `policy_context` threads the shape when a
+  policy accepts it, S3's fallback passes `shape=task_shape` like S1.
+  Verified in-process (0 illegal submitted) and at campaign scale
+  (`comp run` on the campaign YAML: 450 records, 0 failures, completed).
+  Gate: campaign lock 7 passed, **152 s** (campaign fixture ~140 s; the
+  reference-cell probe inside gate 2b is ~7 s). The per-credit table at the
+  campaign's own fidelity is flat (train_acc ≈ 0.10 for all three credits at
+  1 epoch / batch_limit 2) — the regime prices coverage, not learning; gate
+  2b now pins the reference cell's property at the regime where it is real
+  (step_size 0.03162, 10 epochs, batch_limit 0: train_acc 0.56 vs chance
+  0.1, probe 6.7 s).
 - **Blocks on nothing. Unblocks:** whether the multiplier audit (Q1b) is
   measured or speculative, and whether gate 2 can be strengthened (D-g).
 - **Gate:** strengthen `test_campaign_lock.py` gate 2 (**78 s**, existing):
@@ -451,6 +463,39 @@ that the locks already govern — additive by construction. The plan files
 stop growing.
 
 ## 8. Session log
+
+- **Q1 landed (second session of the plan).** The §8 notes below the line
+  are the first session's archaeology, kept for the defect-class ledger.
+  What landed, in order:
+  1. **Seam fix (illegal-candidate leak):** `policy_context` threads a shape
+     resolver into the policies that accept one (cli run path); S3 Schedule's
+     fallback `ProposalContext` passes `shape=task_shape` like S1's. The
+     defect: two of three proposal paths screened legality, one didn't, so
+     round 2 of a campaign proposed cells `SystemConfig.validate` rejects
+     (lazy × recurrent), 150 instant failures per campaign run. Found by
+     instrumenting stage `run()` methods + `LocalBackend.submit_batch` in a
+     one-off driver (the failure appeared only in round ≥2, invisible to any
+     single-stage probe). Changed files: `policy.py` (policy_context
+     signature + filter), `stages_impl.py` (S3), `cli.py` (thread shape).
+  2. **Campaign re-run clean:** 450 records, 0 failures, completed
+     (`logs/q1_run3.log`). Per-credit table flat at the campaign's fidelity
+     (1 epoch / batch_limit 2): all three credits ≈ 0.10 train_acc. Q1b
+     (multiplier audit) is now the next measure: the flat table at 1 epoch
+     says nothing about rule separation, so the audit probes at 10 epochs.
+  3. **Gate 2 strengthened (D-g option (i)):** gate 2b composes the campaign's
+     own axes (digital/fast_weights/euclidean × feedforward ×
+     energy_minimization × gradient), the sweep point nearest the prior
+     center (step_size 0.03162), 10 epochs, batch_limit 0 — the regime
+     TODO47 §6.1's table measured — and asserts train_acc > 1.5 × chance
+     (measured 0.56, probe ~7 s). Campaign lock green, 7 passed, 152 s,
+     run once.
+- **Cost notes:** the campaign fixture costs ~140 s (450 records), not the
+  78 s quoted in the gate list — one re-pricing owed to the gate table
+  (campaign lock ~150 s). `ruff check` on `policy.py` reports 4 pre-existing
+  S311 findings on untouched lines (inline `# ruff: ignore` comments name the
+  old rule wording); pyright reports 2 pre-existing `query_records`-signature
+  errors, also present at HEAD. Both are Register C hygiene, not landed-work
+  defects.
 
 - **Q1 started, campaign run aborted (session cut short by walltime).**
   Dev-env smoke green; checkout clean; the campaign

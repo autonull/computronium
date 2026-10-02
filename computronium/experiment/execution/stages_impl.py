@@ -143,6 +143,7 @@ class ScheduleStage:
 
         proposals = list(ctx.pending_proposals)
         if not proposals and ctx.policy:
+            from computronium.experiment.execution.evaluate import task_shape
             from computronium.experiment.execution.policy import ProposalContext
 
             proposals.extend(
@@ -154,6 +155,10 @@ class ScheduleStage:
                         budget=ctx.budget,
                         cost_model=ctx.cost_model,
                         evidence=ctx.store,
+                        # S1 screens with the shape; a context without it
+                        # proposes cells SystemConfig.validate rejects (the
+                        # lazy x recurrent walk), discovered by training.
+                        shape=task_shape,
                     )
                 )
             )

@@ -425,7 +425,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
         # The spec is the only place a policy's arguments come from, so the
         # sampler learns on the run's objectives and its own swept domains.
-        policy = create_policy(policy_name, **policy_context(spec, policy_name))
+        from computronium.experiment.execution.evaluate import task_shape
+
+        policy = create_policy(
+            policy_name, **policy_context(spec, policy_name, shape=task_shape)
+        )
 
         # Create pipeline config — the spec supplies stages, seed and policy
         pipeline_config = PipelineConfig(
@@ -574,9 +578,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
                 return 1
             # A slots dataclass has no __dict__: reading one is the crash
             # §3.7 gate 4 exists to catch, in the branch that reports a run.
-            print(
-                json.dumps(asdict(summary), default=str, indent=2)
-            )
+            print(json.dumps(asdict(summary), default=str, indent=2))
         else:
             runs = ReportGenerator(store).list_runs()
             if not runs:

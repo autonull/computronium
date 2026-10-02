@@ -909,7 +909,9 @@ def create_policy(name: str, **kwargs: Any) -> Policy:
     return policy_cls(**kwargs)
 
 
-def policy_context(spec: RunSpec, name: str) -> dict[str, Any]:
+def policy_context(
+    spec: RunSpec, name: str, *, shape: ShapeResolver | None = None
+) -> dict[str, Any]:
     """The run arguments one policy is offered.
 
     A signature is not evidence of which knobs a primitive reads (TODO46 §D13),
@@ -937,8 +939,16 @@ def policy_context(spec: RunSpec, name: str) -> dict[str, Any]:
         "seed": spec.seed,
         "objectives": spec.objectives or ("validation_accuracy",),
         "spec": spec,
+        # A policy without a shape resolver proposes cells the evaluator's own
+        # validation rejects (lazy x recurrent, observed): the space cannot
+        # screen legality without the shape, so it must reach the policy.
+        "shape": shape,
     }
-    return {key: value for key, value in context.items() if key in accepted}
+    return {
+        key: value
+        for key, value in context.items()
+        if key in accepted and value is not None
+    }
 
 
 def _accepted_kwargs(policy_cls: type[Policy]) -> set[str]:

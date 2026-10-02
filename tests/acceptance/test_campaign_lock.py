@@ -16,11 +16,13 @@ store overhead. If the example grows past ~5 minutes, re-price it and move this
 to the demo tier rather than letting the default shard absorb it.
 
 Honest reading of the numbers: the campaign measures *a real pipeline on a real
-task*, and the claims asserted below are its arithmetic. The ``digits`` cells do
-not learn in this regime — ``val_acc`` sits at the 0.1 chance level for every
-rule and topology (measured; TODO47 §6) — so the axis impact asserted here is
-reported, not interpreted. A test that called that "which rule learns better"
-would be asserting noise.
+task*, and the claims asserted below are its arithmetic. At the campaign's own
+fidelity (L0, 1 epoch, batch_limit 2) the ``digits`` cells sit at chance — the
+regime prices coverage, not learning (measured; TODO47 §6, TODO48 Q1) — so the
+axis impact asserted here is reported, not interpreted. The reference cell's
+learning is asserted separately, at the regime where it is real (gate 2b).
+A test that called the 1-epoch table "which rule learns better" would be
+asserting noise.
 """
 
 from __future__ import annotations
@@ -171,6 +173,64 @@ def test_gate_2_records_carry_a_real_train_acc_that_varies_across_cells(
         f"every credit rule produced the same train_acc: {means}"
     )
     print(f"\ncampaign train_acc by credit rule: {means}")
+
+
+def test_gate_2b_the_reference_cell_learns() -> None:
+    """The ``gradient`` reference cell beats 1.5x chance (TODO48 Q1, D-g).
+
+    The campaign's own fidelity (L0, 1 epoch, batch_limit 2) prices coverage,
+    not learning; the reference cell's property is measured at the regime
+    where learning is real — the sweep point nearest the step_size prior
+    center, 10 epochs, unlimited batches (TODO47 §6.1's table). The cell is
+    the campaign's own axes composition, not a fabricated one: reverting the
+    ``active()`` resolve-once fix returns this gate to a frozen loss at
+    chance.
+    """
+    from computronium.experiment.execution.evaluate import cell_record
+    from computronium.experiment.schema.coordinate import (
+        Coordinate,
+        Provenance,
+        Schedule,
+    )
+    from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET
+    from computronium.experiment.schema.seed_registries import seed_all_registries
+
+    seed_all_registries()
+    record = cell_record(
+        Coordinate(
+            substrate="digital",
+            geometry="feedforward",
+            dynamics="energy_minimization",
+            plasticity="fast_weights",
+            credit="gradient",
+            update="euclidean",
+            params={"depth": 2, "hidden_dim": 64, "step_size": 0.03162},
+        ),
+        Schedule(
+            fidelity="L0",
+            seed=0,
+            n_seeds=1,
+            epochs=10,
+            batch_limit=0,
+            budget_id="campaign_lock",
+            task_id="digits",
+            param_budget=MEASURED_PARAM_BUDGET,
+        ),
+        provenance=Provenance(
+            env={},
+            dataset="digits",
+            dataset_version="1.0",
+            code_sha="campaign_lock",
+            policy="campaign_lock",
+            links={},
+        ),
+    )
+    train_acc = float(record.payload["train_acc"])
+    chance = 1.0 / 10.0
+    assert train_acc > 1.5 * chance, (
+        f"the reference cell cannot learn in this regime: train_acc={train_acc}"
+    )
+    print(f"\nreference cell train_acc: {train_acc:.4f}")
 
 
 def test_gate_3_report_gives_claims_evidence_and_limitations_from_the_store(
