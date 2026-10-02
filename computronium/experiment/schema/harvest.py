@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import MISSING, dataclass, field, fields
+from typing import TYPE_CHECKING, Any
 
-from computronium.experiment.legality.dsl import expr_from_string, or_
+from computronium.experiment.legality.dsl import (
+    CoordinateContext,
+    evaluate,
+    expr_from_string,
+)
 from computronium.experiment.schema.axis import (
     AxisKind,
     Domain,
     HyperparameterSpec,
     Scale,
     StructuralAxis,
+    get_axis_spec,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from computronium.experiment.legality.dsl import Expr
+    from computronium.experiment.schema.coordinate import Coordinate
 
 
 class ConflictingHyperparameterError(ValueError):
@@ -26,6 +37,92 @@ class ConflictingHyperparameterError(ValueError):
         )
 
 
+class InactiveHyperparameterError(ValueError):
+    """Raised when a coordinate carries a hyperparameter its selection cannot use.
+
+    Dead configuration is a defect, not a harmless extra: the value would be
+    silently discarded at composition time.
+    """
+
+    def __init__(self, names: tuple[str, ...], coordinate: object) -> None:
+        self.names = names
+        self.coordinate = coordinate
+        super().__init__(
+            f"Hyperparameters {', '.join(names)} are inactive for coordinate "
+            f"{getattr(coordinate, 'cell_key', lambda: coordinate)()!s}"
+        )
+
+
+# Structural axis -> (module path, config class). The single source of the
+# axis/config correspondence, shared by harvesting and composition.
+AXIS_CONFIG_CLASSES: dict[StructuralAxis, tuple[str, str]] = {
+    StructuralAxis.SUBSTRATE: ("computronium.ontology.substrate", "SubstrateConfig"),
+    StructuralAxis.GEOMETRY: ("computronium.ontology.geometry", "GeometryConfig"),
+    StructuralAxis.DYNAMICS: ("computronium.ontology.dynamics", "StateDynamicsConfig"),
+    StructuralAxis.PLASTICITY: ("computronium.state.transitions", "PlasticityConfig"),
+    StructuralAxis.CREDIT: ("computronium.ontology.credit", "CreditAssignmentConfig"),
+    StructuralAxis.UPDATE: ("computronium.ontology.update", "ParameterUpdateConfig"),
+}
+
+AXIS_KIND_ORDER: tuple[StructuralAxis, ...] = (
+    StructuralAxis.SUBSTRATE,
+    StructuralAxis.GEOMETRY,
+    StructuralAxis.DYNAMICS,
+    StructuralAxis.PLASTICITY,
+    StructuralAxis.CREDIT,
+    StructuralAxis.UPDATE,
+)
+
+
+def load_axis_config(axis: StructuralAxis) -> Any | None:
+    """Import an axis's config class, or None when the axis has none."""
+    module_path, class_name = AXIS_CONFIG_CLASSES[axis]
+    try:
+        module = __import__(module_path, fromlist=[class_name])
+    except ImportError:
+        return None
+    return getattr(module, class_name, None)
+
+
+@dataclass(frozen=True, slots=True)
+class ActiveSpace:
+    """The hyperparameters a coordinate's own primitive selection can accept.
+
+    Produced by availability predicates alone, so composition never has to ask
+    which knobs a factory happens to accept.
+    """
+
+    values: Mapping[str, Any]
+    specs: tuple[HyperparameterSpec, ...]
+    inactive: frozenset[str]
+
+    def by_axis(self, axis: StructuralAxis) -> dict[str, Any]:
+        """Effective values belonging to one structural axis.
+
+        A name several axes declare (``step_size`` is read by both dynamics and
+        update) resolves once and reaches each axis that declared it.
+        """
+        return {
+            s.name: self.values[s.name] for s in self.specs if s.axis_name == axis.value
+        }
+
+    def by_axis_specs_for(self, axis: StructuralAxis) -> tuple[HyperparameterSpec, ...]:
+        """The active specs belonging to one structural axis."""
+        return tuple(s for s in self.specs if s.axis_name == axis.value)
+
+    def for_axis(self, axis: StructuralAxis, primitive: str) -> dict[str, Any]:
+        """Active values for one axis, restricted to what its primitive accepts.
+
+        The restriction is a harvested fact (``AxisSpec.accepted_params``), not a
+        signature inspection, so composition never asks a factory what it takes.
+        """
+        axis_spec = get_axis_spec(axis, primitive)
+        if axis_spec is None:
+            return {}
+        values = self.by_axis(axis)
+        return {k: v for k, v in values.items() if k in axis_spec.accepted_params}
+
+
 @dataclass(frozen=True, slots=True)
 class HarvestedSchema:
     """Result of harvesting hyperparameters from all registered axis primitives."""
@@ -33,6 +130,52 @@ class HarvestedSchema:
     hyperparameters: tuple[HyperparameterSpec, ...]
     axis_kind_order: tuple[StructuralAxis, ...]
     version: int
+    by_axis_specs: Mapping[StructuralAxis, tuple[HyperparameterSpec, ...]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+
+    def by_name(self) -> dict[str, HyperparameterSpec]:
+        """Hyperparameter specs keyed by name."""
+        return {h.name: h for h in self.hyperparameters}
+
+    def active(self, coordinate: Coordinate) -> ActiveSpace:
+        """Resolve the active space for a coordinate's primitive selection.
+
+        Availability is decided by the predicates declared in ``AXES`` — for the
+        primitive and for the hyperparameter — evaluated against the coordinate.
+        No axis-name comparisons live here, so a new pairing needs a spec row.
+
+        Args:
+            coordinate: The primitive selection and its overrides.
+
+        Returns:
+            ActiveSpace carrying effective values, active specs, and the names
+            the predicates excluded.
+
+        Raises:
+            InactiveHyperparameterError: The coordinate carries a parameter its
+                own selection cannot use.
+        """
+        ctx = CoordinateContext(coordinate)
+        active: list[HyperparameterSpec] = []
+        inactive: set[str] = set()
+        for axis in self.axis_kind_order:
+            for spec in self.by_axis_specs.get(axis, ()):
+                if _available(spec, coordinate, ctx):
+                    active.append(spec)
+                else:
+                    inactive.add(spec.name)
+
+        dead = tuple(sorted(n for n in coordinate.params if n in inactive))
+        if dead:
+            raise InactiveHyperparameterError(dead, coordinate)
+
+        values = {spec.name: _resolve_value(spec, coordinate.params) for spec in active}
+        return ActiveSpace(
+            values=values,
+            specs=tuple(active),
+            inactive=frozenset(inactive),
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
@@ -86,6 +229,56 @@ class HarvestedSchema:
         )
 
 
+def _available(
+    spec: HyperparameterSpec, coordinate: Coordinate, ctx: CoordinateContext
+) -> bool:
+    """Whether a hyperparameter is usable by a coordinate's primitive selection.
+
+    Both predicates must hold: the selected primitive for the spec's axis must
+    be available, and the hyperparameter's own availability expression must be
+    satisfied. Both come from ``AXES``.
+    """
+    axis = StructuralAxis(spec.axis_name)
+    axis_spec = get_axis_spec(axis, getattr(coordinate, spec.axis_name))
+    if axis_spec is None or not axis_spec.available:
+        return False
+    predicates: list[Expr] = []
+    if axis_spec.availability_predicate is not None:
+        predicates.append(axis_spec.availability_predicate)
+    if spec.availability is not None:
+        predicates.append(spec.availability)
+    return all(evaluate(p, ctx) for p in predicates)
+
+
+def _config_default(spec: HyperparameterSpec) -> Any:
+    """The config dataclass's own default for a hyperparameter — the last resort."""
+    config_cls = load_axis_config(StructuralAxis(spec.axis_name))
+    if config_cls is None:
+        return spec.domain.members[0] if spec.domain.members else spec.domain.lo
+    match = {f.name: f for f in fields(config_cls)}
+    if spec.name not in match:
+        return spec.domain.members[0] if spec.domain.members else spec.domain.lo
+    field = match[spec.name]
+    if field.default is not MISSING:
+        return field.default
+    if field.default_factory is not MISSING:
+        return field.default_factory()
+    return spec.domain.members[0] if spec.domain.members else spec.domain.lo
+
+
+def _resolve_value(spec: HyperparameterSpec, overrides: Mapping[str, Any]) -> Any:
+    """Resolve a hyperparameter's effective value: override, then prior, then default."""
+    if spec.name in overrides:
+        return overrides[spec.name]
+    if spec.prior:
+        from computronium.experiment.schema.registries import prior_value
+
+        resolved = prior_value(spec.prior)
+        if resolved is not None:
+            return resolved[0]
+    return _config_default(spec)
+
+
 def _domain_from_range(lo: float, hi: float, scale: str) -> Domain:
     """Create a Domain from range parameters."""
     return Domain(lo=lo, hi=hi, scale=Scale(scale))
@@ -94,6 +287,29 @@ def _domain_from_range(lo: float, hi: float, scale: str) -> Domain:
 def _domain_from_enum(choices: list[str]) -> Domain:
     """Create a Domain from enumerated choices."""
     return Domain(members=tuple(choices))
+
+
+def declare(
+    declared: dict[str, HyperparameterSpec], hp: HyperparameterSpec
+) -> None:
+    """Record one hyperparameter declaration.
+
+    Two axes may legitimately declare the same name — ``step_size`` is read by
+    both dynamics and update — but they must mean the same thing by it. A
+    disagreement is a registry failure, not a silent merge.
+    """
+    existing = declared.get(hp.name)
+    if existing is None:
+        declared[hp.name] = hp
+        return
+    if existing.domain != hp.domain or existing.axis_kind != hp.axis_kind:
+        raise ConflictingHyperparameterError(
+            hp.name,
+            [
+                f"{existing.axis_kind.value}.{existing.axis_name}",
+                f"{hp.axis_kind.value}.{hp.axis_name}",
+            ],
+        )
 
 
 def _parse_hyperparameters(
@@ -194,96 +410,23 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
     Raises:
         ConflictingHyperparameterError: If a hyperparameter name has conflicting definitions.
     """
-    axis_kind_order = (
-        StructuralAxis.SUBSTRATE,
-        StructuralAxis.GEOMETRY,
-        StructuralAxis.DYNAMICS,
-        StructuralAxis.PLASTICITY,
-        StructuralAxis.CREDIT,
-        StructuralAxis.UPDATE,
-    )
+    per_axis: dict[StructuralAxis, tuple[HyperparameterSpec, ...]] = {}
+    declared: dict[str, HyperparameterSpec] = {}
 
-    all_hyperparameters: dict[str, HyperparameterSpec] = {}
-
-    # Map structural axes to their config classes
-    axis_config_classes = {
-        StructuralAxis.SUBSTRATE: (
-            "computronium.ontology.substrate",
-            "SubstrateConfig",
-        ),
-        StructuralAxis.GEOMETRY: ("computronium.ontology.geometry", "GeometryConfig"),
-        StructuralAxis.DYNAMICS: (
-            "computronium.ontology.dynamics",
-            "StateDynamicsConfig",
-        ),
-        StructuralAxis.PLASTICITY: (
-            "computronium.state.transitions",
-            "PlasticityConfig",
-        ),
-        StructuralAxis.CREDIT: (
-            "computronium.ontology.credit",
-            "CreditAssignmentConfig",
-        ),
-        StructuralAxis.UPDATE: (
-            "computronium.ontology.update",
-            "ParameterUpdateConfig",
-        ),
-    }
-
-    for axis_kind in axis_kind_order:
-        module_path, class_name = axis_config_classes[axis_kind]
-        try:
-            module = __import__(module_path, fromlist=[class_name])
-            config_cls = getattr(module, class_name)
-            hp_dict = config_cls.hyperparameters()
-            # Assign to all primitives in this axis
-            axis_name = axis_kind.value
-            specs = _parse_hyperparameters(hp_dict, axis_name)
-            for hp in specs:
-                # Check for conflicts
-                if hp.name in all_hyperparameters:
-                    existing = all_hyperparameters[hp.name]
-                    if (
-                        existing.domain != hp.domain
-                        or existing.axis_kind != hp.axis_kind
-                    ):
-                        raise ConflictingHyperparameterError(
-                            hp.name,
-                            [
-                                f"{existing.axis_kind.value}.{existing.axis_name}",
-                                f"{hp.axis_kind.value}.{hp.axis_name}",
-                            ],
-                        )
-                    # Merge availabilities if different
-                    if hp.availability and existing.availability:
-                        hp = HyperparameterSpec(
-                            name=hp.name,
-                            domain=hp.domain,
-                            axis_kind=hp.axis_kind,
-                            axis_name=hp.axis_name,
-                            availability=or_(existing.availability, hp.availability),
-                            prior=hp.prior or existing.prior,
-                            override_scope=hp.override_scope,
-                        )
-                    elif hp.availability and not existing.availability:
-                        hp = HyperparameterSpec(
-                            name=hp.name,
-                            domain=hp.domain,
-                            axis_kind=hp.axis_kind,
-                            axis_name=hp.axis_name,
-                            availability=hp.availability,
-                            prior=hp.prior or existing.prior,
-                            override_scope=hp.override_scope,
-                        )
-                all_hyperparameters[hp.name] = hp
-        except Exception:
-            # If config class doesn't have hyperparameters() or fails, skip
-            pass
+    for axis_kind in AXIS_KIND_ORDER:
+        config_cls = load_axis_config(axis_kind)
+        if config_cls is None:
+            continue
+        specs = _parse_hyperparameters(config_cls.hyperparameters(), axis_kind.value)
+        for hp in specs:
+            declare(declared, hp)
+        per_axis[axis_kind] = tuple(specs)
 
     return HarvestedSchema(
-        hyperparameters=tuple(all_hyperparameters.values()),
-        axis_kind_order=axis_kind_order,
+        hyperparameters=tuple(declared.values()),
+        axis_kind_order=AXIS_KIND_ORDER,
         version=version,
+        by_axis_specs=per_axis,
     )
 
 
@@ -303,9 +446,14 @@ def get_hyperparameter_spec(name: str) -> HyperparameterSpec | None:
 
 
 __all__ = [
+    "AXIS_KIND_ORDER",
+    "ActiveSpace",
     "ConflictingHyperparameterError",
     "HarvestedSchema",
+    "InactiveHyperparameterError",
+    "declare",
     "get_hyperparameter_names",
     "get_hyperparameter_spec",
     "harvest_schema",
+    "load_axis_config",
 ]

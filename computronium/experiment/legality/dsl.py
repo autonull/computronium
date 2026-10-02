@@ -303,19 +303,46 @@ _COORD_AXES = frozenset({
 })
 
 
-class EvaluationContext:
+class CoordinateContext:
+    """Resolve variables from a bare coordinate.
+
+    The single source of truth for coordinate-derived variables, shared by
+    record evaluation and by schema availability (which must decide before
+    anything has been measured).
+    """
+
+    def __init__(self, coordinate: Coordinate) -> None:
+        self.coordinate = coordinate
+
+    def resolve_var(self, name: str) -> Any:  # ruff: ignore[too-many-return-statements] - expected for resolver
+        """Resolve a coordinate axis or hyperparameter name."""
+        if name in _COORD_AXES:
+            return getattr(self.coordinate, name)
+
+        if name.startswith("params."):
+            return self.coordinate.params.get(name.split(".", 1)[1])
+
+        if name in self.coordinate.params:
+            return self.coordinate.params[name]
+
+        return None
+
+
+class EvaluationContext(CoordinateContext):
     """Context for evaluating expressions against a record."""
 
     def __init__(self, record: Record) -> None:
         self.record = record
-        self.coordinate = Coordinate(
-            substrate=record.substrate,
-            geometry=record.geometry,
-            dynamics=record.dynamics,
-            plasticity=record.plasticity,
-            credit=record.credit,
-            update=record.update,
-            params=record.params,
+        super().__init__(
+            Coordinate(
+                substrate=record.substrate,
+                geometry=record.geometry,
+                dynamics=record.dynamics,
+                plasticity=record.plasticity,
+                credit=record.credit,
+                update=record.update,
+                params=record.params,
+            )
         )
 
     def resolve_var(self, name: str) -> Any:  # ruff: ignore[too-many-return-statements] - expected for resolver
@@ -324,15 +351,6 @@ class EvaluationContext:
         if name.startswith("schedule."):
             field = name.split(".", 1)[1]
             return getattr(self.record.schedule, field, None)
-
-        # Coordinate structural axes
-        if name in _COORD_AXES:
-            return getattr(self.coordinate, name)
-
-        # Params (hyperparameters)
-        if name.startswith("params."):
-            key = name.split(".", 1)[1]
-            return self.coordinate.params.get(key)
 
         # Status fields
         if name.startswith("status."):
@@ -349,15 +367,11 @@ class EvaluationContext:
             field = name.split(".", 1)[1]
             return getattr(self.record.provenance, field, None)
 
-        # Direct coordinate params
-        if name in self.coordinate.params:
-            return self.coordinate.params[name]
-
-        return None
+        return super().resolve_var(name)
 
 
 def _eval_binary(  # ruff: ignore[complex-structure, too-many-return-statements] - binary op dispatcher
-    left: Expr, right: Expr, ctx: EvaluationContext, op: str
+    left: Expr, right: Expr, ctx: CoordinateContext, op: str
 ) -> bool:
     """Evaluate binary comparison."""
     left_val = _eval_value(left, ctx)
@@ -387,7 +401,7 @@ def _eval_binary(  # ruff: ignore[complex-structure, too-many-return-statements]
             raise ValueError(f"Unknown binary op: {op}")
 
 
-def _eval_value(expr: Expr, ctx: EvaluationContext) -> Any:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches] - match/case evaluator
+def _eval_value(expr: Expr, ctx: CoordinateContext) -> Any:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches] - match/case evaluator
     """Evaluate an expression to its actual value (not coerced to bool)."""
     match expr:
         case Var(name):
@@ -473,7 +487,7 @@ def _eval_value(expr: Expr, ctx: EvaluationContext) -> Any:  # ruff: ignore[comp
             raise ValueError(f"Unknown expression type: {type(expr)}")
 
 
-def evaluate(expr: Expr, ctx: EvaluationContext) -> bool:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
+def evaluate(expr: Expr, ctx: CoordinateContext) -> bool:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
     """Evaluate an expression as a predicate (coerced to bool)."""
     return bool(_eval_value(expr, ctx))
 
@@ -590,6 +604,7 @@ def call(func: str, *args: Expr) -> Call:
 __all__ = [
     "Call",
     "Const",
+    "CoordinateContext",
     "Eq",
     "EvaluationContext",
     "Expr",

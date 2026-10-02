@@ -6,21 +6,28 @@ single-source config classmethods and registries — no preset tables.
 
 from __future__ import annotations
 
-import inspect
-from typing import TYPE_CHECKING, Final
+from dataclasses import dataclass, fields
+from typing import TYPE_CHECKING, Any, Final
 
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import compose_system_from_configs
-from computronium.experiment.learning.prior import get_dynamics_step_size
+from computronium.experiment.learning.prior import apply_dynamics_step_size
+from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.harvest import ActiveSpace, harvest_schema
 from computronium.ontology import GeometryConfig
+from computronium.ontology.dynamics import StateDynamicsConfig
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from computronium.experiment.schema.coordinate import Coordinate
     from computronium.ontology import System
 
 __all__ = [
     "GRID_CREDITS",
     "GRID_DYNAMICS",
     "GRID_UPDATES",
+    "ComposedCell",
     "ProposalComposeError",
     "build_geometry_config",
     "compose_cell_system",
@@ -176,7 +183,7 @@ def _allowed_keys(topology: str) -> frozenset[str]:
     return _COMMON_GEOMETRY_KEYS | _TOPOLOGY_KEYS.get(topology, frozenset())
 
 
-def _auto_size_geometry(  # noqa: C901, PLR0911
+def _auto_size_geometry(  # ruff: ignore[complex-structure] - one branch per topology
     topology: str, param_budget: int, input_dim: int, output_dim: int, depth: int
 ) -> tuple[tuple[int, ...], int]:
     if param_budget <= 0:
@@ -471,22 +478,67 @@ def _build_substrate_config(substrate_name: str, dynamics: str):
     return factory()
 
 
+@dataclass(frozen=True, slots=True)
+class ComposedCell:
+    """A composed cell plus the hyperparameters it was actually given (R6)."""
+
+    system: System
+    params: Mapping[str, Any]
+
+
+# Harvested geometry names that mean the same thing as the composer's key.
+_GEOMETRY_ALIASES: Final[Mapping[str, str]] = {"num_layers": "depth"}
+
+# Geometry values the task determines; never taken from a hyperparameter.
+_TASK_SHAPED: Final[frozenset[str]] = frozenset({"input_dim", "output_dim"})
+
+
+def _geometry_mapping(
+    active: ActiveSpace, geometry: Mapping[str, object], topology: str
+) -> dict[str, object]:
+    """Merge harvested geometry values under the composer's key names."""
+    allowed = _allowed_keys(topology)
+    harvested = {
+        _GEOMETRY_ALIASES.get(name, name): value
+        for name, value in active.by_axis(StructuralAxis.GEOMETRY).items()
+        if name not in _TASK_SHAPED and (_GEOMETRY_ALIASES.get(name, name) in allowed)
+    }
+    return {**harvested, **geometry}
+
+
+def _axis_factory(config_cls: Any, primitive: str) -> Any:
+    """Resolve an axis name to its config factory through the ontology surface."""
+    factory = getattr(config_cls, primitive, None)
+    if not callable(factory):
+        msg = f"Unknown cell axis: {primitive!r} is not a config factory"
+        raise ProposalComposeError(msg)
+    return factory
+
+
 def compose_cell_system(
     *,
-    dynamics: str,
-    credit: str,
-    update: str,
-    geometry: dict[str, object],
+    coordinate: Coordinate,
+    geometry: Mapping[str, object],
     input_dim: int,
     output_dim: int,
-    lr: float = 1e-3,
-    substrate: str = "digital",
     param_budget: int = 0,
-) -> System:
-    """Compose a full grid cell (dynamics × credit × update × topology).
+) -> ComposedCell:
+    """Compose a full grid cell from a coordinate and the harvested schema.
 
-    Every axis named explicitly by the coverage proposer, all built from the
-    single-source config classmethods and registries — no preset tables.
+    What each primitive can accept is decided by availability predicates in
+    ``AXES``, evaluated against ``coordinate`` — not by inspecting factories and
+    not by branching on pairs of axis names. Adding a coupling between two axes
+    is a spec row.
+
+    Args:
+        coordinate: The six-axis selection and its hyperparameter overrides.
+        geometry: Topology parameters; harvested geometry values fill the gaps.
+        input_dim: Flattened input width, derived from the task.
+        output_dim: Class count, derived from the task.
+        param_budget: Parameter ceiling for derived sizing; 0 disables it.
+
+    Returns:
+        ComposedCell carrying the system and the effective hyperparameter values.
     """
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -494,45 +546,43 @@ def compose_cell_system(
         StateDynamicsConfig,
     )
     from computronium.ontology.system import SystemConfig
+    from computronium.state.transitions import PlasticityConfig
+
+    active = harvest_schema().active(coordinate)
+    substrate_name = coordinate.substrate
+    dynamics_name = coordinate.dynamics
 
     gcfg = build_geometry_config(
-        geometry, input_dim=input_dim, output_dim=output_dim, param_budget=param_budget
+        _geometry_mapping(active, geometry, topology=str(coordinate.geometry)),
+        input_dim=input_dim,
+        output_dim=output_dim,
+        param_budget=param_budget,
     )
-    try:
-        dynamics_step_size = get_dynamics_step_size(dynamics) or 0.1
-        dcfg = getattr(StateDynamicsConfig, dynamics)(step_size=dynamics_step_size)
-        ccfg = getattr(CreditAssignmentConfig, credit)()
-        update_factory = getattr(ParameterUpdateConfig, update)
-        kwargs = (
-            {"step_size": lr, "dynamics": dynamics, "credit": credit}
-            if "step_size" in inspect.signature(update_factory).parameters
-            else {}
-        )
-        ucfg = update_factory(**kwargs)
-    except AttributeError as exc:
-        msg = f"Unknown cell axis: {exc.args[0]!r} is not a config factory"
-        raise ProposalComposeError(msg) from exc
 
-    if (
-        dcfg.dynamics_type == "energy_minimization"
-        and ccfg.credit_type == "thermodynamic_contrast"
-    ):
-        ccfg = CreditAssignmentConfig.thermodynamic_contrast(beta=dcfg.beta)
-    elif dcfg.dynamics_type == "pc_alm" and ccfg.credit_type in {
-        "pc_alm",
-        "thermodynamic_contrast",
-    }:
-        ccfg = CreditAssignmentConfig(
-            credit_type=ccfg.credit_type,
-            beta=dcfg.beta,
-            feedback_matrix=ccfg.feedback_matrix,
-            local_objective=ccfg.local_objective,
-            orthogonal_init=ccfg.orthogonal_init,
-            feedback_scale=ccfg.feedback_scale,
-            credit_norm=ccfg.credit_norm,
-        )
+    d_factory = _axis_factory(StateDynamicsConfig, dynamics_name)
+    dcfg = d_factory(**{
+        **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
+        "step_size": apply_dynamics_step_size(
+            active.values.get("step_size", _config_default_step_size(d_factory)),
+            dynamics_name,
+        ),
+    })
 
-    substrate_config = _build_substrate_config(substrate, dynamics)
+    c_factory = _axis_factory(CreditAssignmentConfig, coordinate.credit)
+    ccfg = c_factory(**active.for_axis(StructuralAxis.CREDIT, coordinate.credit))
+
+    u_factory = _axis_factory(ParameterUpdateConfig, coordinate.update)
+    ucfg = u_factory(
+        **active.for_axis(StructuralAxis.UPDATE, coordinate.update),
+        dynamics=dynamics_name,
+        credit=coordinate.credit,
+    )
+
+    substrate_config = _build_substrate_config(substrate_name, dynamics_name)
+    m_factory = _axis_factory(PlasticityConfig, coordinate.plasticity)
+    mcfg = m_factory(
+        **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)
+    )
 
     SystemConfig(
         substrate=substrate_config,
@@ -540,11 +590,47 @@ def compose_cell_system(
         dynamics=dcfg,
         credit=ccfg,
         update=ucfg,
+        plasticity=mcfg,
     ).validate()
-    return compose_system_from_configs(
-        substrate_config,
-        gcfg,
-        dcfg,
-        ccfg,
-        ucfg,
+    return ComposedCell(
+        system=compose_system_from_configs(
+            substrate_config,
+            gcfg,
+            dcfg,
+            ccfg,
+            ucfg,
+        ),
+        params=_effective_params(active, gcfg, dcfg, ccfg, ucfg),
     )
+
+
+def _effective_params(
+    active: ActiveSpace, gcfg: GeometryConfig, *configs: Any
+) -> dict[str, Any]:
+    """Record what each composed config actually holds, keyed ``axis.name``.
+
+    ``step_size`` is read by both dynamics and update, and the update factory
+    scales it by the registered (dynamics, credit) prior, so a single flat name
+    would record one axis' value under both.
+    """
+    by_axis = {
+        StructuralAxis.GEOMETRY: gcfg,
+        StructuralAxis.DYNAMICS: configs[0],
+        StructuralAxis.CREDIT: configs[1],
+        StructuralAxis.UPDATE: configs[2],
+    }
+    effective: dict[str, Any] = {}
+    for axis, config in by_axis.items():
+        for spec in active.by_axis_specs_for(axis):
+            effective[f"{axis.value}.{spec.name}"] = getattr(
+                config, spec.name, active.values[spec.name]
+            )
+    return effective
+
+
+def _config_default_step_size(factory: Any) -> float:
+    """The step size a dynamics factory would take from its dataclass default."""
+    for field in fields(StateDynamicsConfig):
+        if field.name == "step_size" and isinstance(field.default, float):
+            return field.default
+    return 0.1

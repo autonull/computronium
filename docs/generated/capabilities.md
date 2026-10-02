@@ -1,6 +1,6 @@
 # Capabilities Registry
 
-Generated: 2026-10-01T13:24:41.291842
+Generated: 2026-10-01T20:24:08.220849
 Total: 88 capabilities
 
 | ID | Name | Kind | Required | Stage | Owner | Verifying Test | Flags | Status |

@@ -240,6 +240,47 @@ directories explicitly. A fast lane that silently omits the project's central
 claim is a false-negative generator. **Decision: add `tests/acceptance`**;
 `tests/ceec` and `tests/platform` decided on their merits.
 
+### D11 — Every registry is empty at runtime; only tests seed them
+
+Found in session 2, while wiring §3.0.1. `seed_all_registries()` had **zero
+callers outside `tests/`** — the sixth instance of §2.0's pattern, and the most
+consequential. On a clean checkout `comp run` would find an empty
+`OBJECTIVES_REGISTRY`, an empty `POLICIES_REGISTRY`, and an empty
+`AXES_REGISTRIES`: no objectives to resolve, no policy to ask, no axis primitive
+to compose. Every passing test seeded by hand first
+(`tests/acceptance/test_unified_kernel.py:49`, and six lock files), which is why
+nothing caught it. **Fixed** — `seed_registries.py` calls `seed_all_registries()`
+at import, matching `learning/prior.py`'s precedent.
+
+### D12 — The PRIORS list was seeded, then cleared one line later
+
+Also found in session 2, and D11's shape from the other side.
+`seed_registries.py` registered all 28 `PRIORS` rows, then executed
+`PRIORS_REGISTRY.clear()` to make `learning.prior` independent of import order —
+discarding them. The two sources are **disjoint** (verified: zero name overlap;
+44 live + 28 dead = 72). Consequences: `docs/generated/priors.json` re-pinned
+from 44 to 72; and `_dynamics.py:590` declared
+`prior="step_size_energy_minimization_backprop"`, a prior that **did not exist**,
+so `step_size` silently fell back to its domain edge. **Fixed** — clear once,
+after the import, then register both sources. Both defects were invisible because
+`verify_registry_completeness()` reported the post-clear number and a lock
+asserted against it.
+
+### D13 — Factory signatures are not evidence of which knobs a primitive reads
+
+The premise D5 acted on. Every ontology config factory mirrors its **whole**
+dataclass field set with defaults, so `inspect.signature(update_factory)` cannot
+distinguish "this primitive reads `momentum`" from "the dataclass has a
+`momentum`". The `step_size` gate D5 removed was deciding a real question from a
+signal that cannot answer it. The single true signal is the **availability
+predicate**, which is why §3.0.1's answer is a predicate rather than a narrower
+reflection.
+
+What a signature *does* answer truthfully is which keyword names a call may
+carry. That is now harvested once into `AxisSpec.accepted_params` at seed time,
+so composition reads a fact instead of re-deriving it. This is the one place
+reflection remains, and it is a harvest rather than a decision.
+
 ---
 
 ## 2. False completion marks, and the audit that must precede fixing
@@ -395,6 +436,15 @@ Acceptance:
   that every default reaching a `Coordinate` is traceable to `AXES`. This is the
   same trick as `test_lint_count_ratchet` — which earned its keep by catching a
   config error nobody noticed.
+
+#### 3.0.1 LANDED — see §8 session 2 for the full record
+
+`tests/property/test_active_space_lock.py` (16 tests) holds the acceptance
+conditions. `HarvestedSchema.active(coord)` returns an `ActiveSpace`;
+`compose_cell_system(*, coordinate, geometry, input_dim, output_dim,
+param_budget)` returns `ComposedCell(system, params)`. No `lr`. No
+`inspect.signature` in composition. The MNIST-shape lock is a **ratchet pinned
+at seven `search_space.py` sites**, not a zero — those die with §3.3.
 
 ### 3.1 One cell, end to end, for real
 
@@ -657,3 +707,64 @@ closed on the strength of a module existing.
 
 **Start here:** §2.1 (the audit), because three ✅ marks are wrong and one new
 lock prevents the next. Then §3.1.
+
+### Session 2
+
+**Landed: §3.0.1 in full.** `HarvestedSchema.active(coordinate)` resolves the
+active space from availability predicates; `ActiveSpace.for_axis(axis, primitive)`
+restricts it to a harvested `accepted_params` set; `compose_cell_system` takes a
+`Coordinate` and no `lr`, composes all six axes including `plasticity`, and
+returns `ComposedCell(system, params)` — the effective values, keyed
+`axis.name`, recorded per R6. `tests/property/test_active_space_lock.py`, 16
+tests, is the acceptance list turned into tests.
+
+**Three new defects found while doing it** — D11, D12, D13 above. All three are
+§2.0's pattern; D11 is the second time this plan's own mechanism (a registry that
+nothing calls) has cost real work. Two of them were *seeded and then discarded*,
+which is worse than unwired: the data existed, was correct, and was deleted by
+the next line.
+
+**Method note worth keeping.** D11 and D12 were invisible because
+`verify_registry_completeness()` reports what *survives* and a lock asserted
+against that number. A completeness check that counts a registry cannot tell you
+about a registry that was cleared. If the count is wrong, the lock is wrong with
+it.
+
+### Remaining work, in order
+
+1. **§3.1, one cell end to end, for real.** Now unblocked and now the whole
+   critical path: `compose_cell_system` composes, so the remaining question is
+   only whether a composed `System` trains on `digits` through `SystemTrainer`.
+   The gate is one coordinate, one real `train_acc`, and the falsification
+   assertion — **swapping `credit` must change `train_acc`**. Both backends'
+   stubs (`backends.py:222`, `backends.py:393`) die here, and
+   `MultiprocessBackend` must delegate rather than re-implement.
+2. **§2.1's audit table and the new lock.** Still not written. The mechanism for
+   it now exists in spirit (`test_active_space_lock.py` is the shape), but
+   §2.1-3 asks for it over all 88 `CAPABILITIES` rows, and two of the seeded
+   `verifying_test` targets are themselves shape tests — so that lock will fail
+   on rows whose *metadata* is wrong, not just rows whose code is. Price it
+   before launching; it may be cheaper to fix the registry metadata first.
+3. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
+   which the §3.0.1 ratchet is holding at exactly seven. The ratchet failing is
+   the signal that §3.3 landed; lower it to zero in the same commit.
+4. **§3.2 `RunSpec`** before §3.3, since §3.3's generator consumes the spec's axis
+   subsets and domains.
+5. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
+   candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
+   and §3.4 are one interface change, not two.
+6. **§4 item 4's remaining half** — locking README's fenced bash blocks.
+
+**Two things to watch that the plan does not currently say:**
+
+- `build_geometry_config` (`compose.py`) is now the one remaining normalizer, and
+  it is inconsistent with the schema: geometry factories spell the same knob
+  `hidden_dims` / `hidden_dim` and `num_layers` / `depth` / `n_layers`, so
+  compose carries a `_GEOMETRY_ALIASES` translation table. That table is a §3.0
+  violation in miniature. It dies with a geometry-axis normalization pass; until
+  then the lock should hold it to one entry.
+- `harvest_schema()` used to swallow every exception per axis
+  (`except Exception: pass`), which also swallowed its own
+  `ConflictingHyperparameterError`. Narrowed to import failure only. The same
+  silent-skip shape is worth grepping for elsewhere before trusting any registry
+  count.

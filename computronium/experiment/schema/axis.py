@@ -95,6 +95,7 @@ class AxisSpec:
     )
     prior: str | None = None  # PriorSpec for this primitive
     override_scope: str = "coordinate"  # "coordinate" | "run" | "global"
+    accepted_params: frozenset[str] = frozenset()  # Harvested from the factory once
     topology_params: tuple[
         HyperparameterSpec, ...
     ] = ()  # Structural params (not searched)

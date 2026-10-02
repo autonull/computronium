@@ -1,5 +1,46 @@
 [
   {
+    "name": "adam_beta1",
+    "distribution": "uniform",
+    "params": {
+      "low": 0.8,
+      "high": 0.99
+    },
+    "description": "Adam beta1 prior (Gate 2 addition)",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "adam_beta2",
+    "distribution": "uniform",
+    "params": {
+      "low": 0.99,
+      "high": 0.9999
+    },
+    "description": "Adam beta2 prior (Gate 2 addition)",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "batch_size",
+    "distribution": "categorical",
+    "params": {
+      "choices": [
+        32,
+        64,
+        128,
+        256,
+        512
+      ]
+    },
+    "description": "Batch size prior (Gate 2 addition)",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
     "name": "dynamics_step_size_diffusion",
     "distribution": "log_uniform",
     "params": {
@@ -24,6 +65,150 @@
     "confidence": 0.85,
     "uncertainty": 0.0,
     "override_scope": "coordinate"
+  },
+  {
+    "name": "lr_ruler_arithmetic",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for Arithmetic",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_cifar10",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CIFAR-10",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_cifar100",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CIFAR-100",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_copyshake",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for CopyShake",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_imagenet",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for ImageNet",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_listops",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for ListOps",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_mnist",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.0001,
+      "high": 0.1
+    },
+    "description": "Ruler LR prior for MNIST",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_ptb",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for PTB",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_squad",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for SQuAD",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_sst2",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for SST-2",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "lr_ruler_wikitext2",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1e-05,
+      "high": 0.01
+    },
+    "description": "Ruler LR prior for WikiText-2",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "muon_momentum",
+    "distribution": "uniform",
+    "params": {
+      "low": 0.8,
+      "high": 0.99
+    },
+    "description": "Muon momentum prior (Gate 2 addition)",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "ruler_lr_breast_cancer",
@@ -193,6 +378,102 @@
     "confidence": 0.9,
     "uncertainty": 0.0,
     "override_scope": "coordinate"
+  },
+  {
+    "name": "step_size_diffusion_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for Diffusion \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_energy_minimization",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.01,
+      "high": 0.5
+    },
+    "description": "Dynamics-level step size prior for EnergyMinimization",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_energy_minimization_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for EnergyMinimization \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_energy_minimization_fa",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for EnergyMinimization \u00d7 FeedbackAlignment",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_error_predictive_coding_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for ErrorPredictiveCoding \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_error_predictive_coding_fa",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for ErrorPredictiveCoding \u00d7 FeedbackAlignment",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_instantaneous_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for Instantaneous \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_lazy_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for Lazy \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   },
   {
     "name": "step_size_override_diffusion_homeostatic",
@@ -541,5 +822,65 @@
     "confidence": 0.8,
     "uncertainty": 0.0,
     "override_scope": "coordinate"
+  },
+  {
+    "name": "step_size_pc_alm_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for PC-ALM \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_predictive_settling",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.01,
+      "high": 0.5
+    },
+    "description": "Dynamics-level step size prior for PredictiveSettling",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_predictive_settling_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for PredictiveSettling \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_predictive_settling_fa",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for PredictiveSettling \u00d7 FeedbackAlignment",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
+  },
+  {
+    "name": "step_size_spike_integration_backprop",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 0.001,
+      "high": 1.0
+    },
+    "description": "Step size prior for SpikeIntegration \u00d7 Backprop",
+    "confidence": 1.0,
+    "uncertainty": 0.0,
+    "override_scope": ""
   }
 ]

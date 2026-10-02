@@ -7,6 +7,7 @@ policy catalog, stage definitions, and capability inventory.
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from computronium.experiment.execution.stage import STAGE_SPECS as EXEC_STAGE_SPECS
@@ -268,80 +269,65 @@ def _hyperparameter_spec(
     )
 
 
+type PrimitiveRow = tuple[str, str, tuple[str, ...]]
+
+
+def _axis_primitives() -> tuple[
+    tuple[StructuralAxis, tuple[PrimitiveRow, ...]], ...
+]:
+    """Every axis primitive with its description and structural topology params."""
+    substrate: tuple[PrimitiveRow, ...] = tuple((n, d, ()) for n, d in _SUBSTRATE_PRIMS)
+    geometry = tuple(_GEOMETRY_PRIMS)
+    dynamics = tuple(_DYNAMICS_PRIMS)
+    credit = tuple(_CREDIT_PRIMS)
+    update = tuple(_UPDATE_PRIMS)
+    plasticity = tuple(_PLASTICITY_PRIMS)
+    return (
+        (StructuralAxis.SUBSTRATE, substrate),
+        (StructuralAxis.GEOMETRY, geometry),
+        (StructuralAxis.DYNAMICS, dynamics),
+        (StructuralAxis.PLASTICITY, plasticity),
+        (StructuralAxis.CREDIT, credit),
+        (StructuralAxis.UPDATE, update),
+    )
+
+
+def _accepted_params(axis: StructuralAxis, primitive: str) -> frozenset[str]:
+    """The knob names a primitive's config factory accepts.
+
+    Harvested once, here, so composition never reflects on a signature. Every
+    factory mirrors its config dataclass, so a wide signature is not evidence of
+    use; this is the narrower truth about which names a call may carry.
+    """
+    from computronium.experiment.schema.harvest import load_axis_config
+
+    config_cls = load_axis_config(axis)
+    factory = getattr(config_cls, primitive, None)
+    if not callable(factory):
+        return frozenset()
+    return frozenset(inspect.signature(factory).parameters)
+
+
 def _seed_axis_primitives() -> None:
     """Register one AxisSpec per primitive in AXES_REGISTRIES.
 
     Structural topology params are attached per primitive; searchable
     hyperparameters remain the harvest layer's concern (L2).
     """
-    for name, description in _SUBSTRATE_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.SUBSTRATE,
-                description=description,
+    for axis, primitives in _axis_primitives():
+        for name, description, topology in primitives:
+            register_axis_spec(
+                AxisSpec(
+                    name=name,
+                    axis_kind=axis,
+                    description=description,
+                    accepted_params=_accepted_params(axis, name),
+                    topology_params=tuple(
+                        _hyperparameter_spec(p, axis.value, AxisKind.STRUCTURAL)
+                        for p in topology
+                    ),
+                )
             )
-        )
-    for name, description, topology in _GEOMETRY_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.GEOMETRY,
-                description=description,
-                topology_params=tuple(
-                    _hyperparameter_spec(p, "geometry", AxisKind.STRUCTURAL)
-                    for p in topology
-                ),
-            )
-        )
-    for name, description, topology in _DYNAMICS_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.DYNAMICS,
-                description=description,
-                topology_params=tuple(
-                    _hyperparameter_spec(p, "dynamics", AxisKind.STRUCTURAL)
-                    for p in topology
-                ),
-            )
-        )
-    for name, description, topology in _CREDIT_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.CREDIT,
-                description=description,
-                topology_params=tuple(
-                    _hyperparameter_spec(p, "credit", AxisKind.STRUCTURAL)
-                    for p in topology
-                ),
-            )
-        )
-    for name, description, topology in _UPDATE_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.UPDATE,
-                description=description,
-                topology_params=tuple(
-                    _hyperparameter_spec(p, "update", AxisKind.STRUCTURAL)
-                    for p in topology
-                ),
-            )
-        )
-    for name, description, topology in _PLASTICITY_PRIMS:
-        register_axis_spec(
-            AxisSpec(
-                name=name,
-                axis_kind=StructuralAxis.PLASTICITY,
-                description=description,
-                topology_params=tuple(
-                    _hyperparameter_spec(p, "plasticity", AxisKind.STRUCTURAL)
-                    for p in topology
-                ),
-            )
-        )
 
 
 # =============================================================================
@@ -2173,17 +2159,15 @@ def seed_all_registries() -> None:
     for constraint in CONSTRAINTS:
         register_constraint(constraint)
 
-    # Priors
-    for prior in PRIORS:
-        register_prior(prior)
-
-    # Learning priors (L11 single-source: ruler-LR + step-size overrides live
-    # in learning.prior; seed_all must not drop them when it clears PRIORS).
-    # The import itself registers as a side effect when first loaded, so clear
-    # after importing to make seeding independent of import order.
+    # Priors. learning.prior registers on import (ruler-LR + step-size
+    # overrides), so the single clear goes after that import and both sources
+    # are registered. Clearing between them silently discarded this list, and
+    # the names here are disjoint from learning.prior's.
     from computronium.experiment.learning.prior import register_all_priors
 
     PRIORS_REGISTRY.clear()
+    for prior in PRIORS:
+        register_prior(prior)
     register_all_priors()
 
     # Policies
@@ -2197,6 +2181,9 @@ def seed_all_registries() -> None:
     # Capabilities
     for cap in CAPABILITIES:
         register_capability(cap)
+
+
+seed_all_registries()
 
 
 def verify_registry_completeness() -> dict[str, int]:

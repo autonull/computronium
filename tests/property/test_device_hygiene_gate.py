@@ -25,6 +25,7 @@ from computronium.experiment.execution.compose import (
     GRID_UPDATES,
     compose_cell_system,
 )
+from computronium.experiment.schema.coordinate import Coordinate
 from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -87,13 +88,19 @@ def _id(cell: tuple[str, str, str]) -> str:
 def test_cell_survives_cpu_to_cuda_transition(cell: tuple[str, str, str]) -> None:
     dynamics, credit, update = cell
     system = compose_cell_system(
-        dynamics=dynamics,
-        credit=credit,
-        update=update,
+        coordinate=Coordinate(
+            substrate="digital",
+            geometry="feedforward",
+            dynamics=dynamics,
+            plasticity="null",
+            credit=credit,
+            update=update,
+            params={},
+        ),
         geometry=dict(_GEOMETRY),
         input_dim=64,
         output_dim=10,
-    )
+    ).system
     x_cpu = torch.randn(4, 64)
     y_cpu = torch.randint(0, 10, (4,))
 
