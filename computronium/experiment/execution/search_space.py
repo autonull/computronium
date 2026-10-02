@@ -200,7 +200,9 @@ def generate_initial_candidates(
                                 params=params,
                             )
 
-                            # Create default schedule
+                            # The schedule's task is the space's task: the
+                            # evaluator resolves a task by name, so "default"
+                            # would fail every cell (TODO46 §D2).
                             schedule = Schedule(
                                 fidelity="L0",
                                 seed=42,
@@ -208,7 +210,7 @@ def generate_initial_candidates(
                                 epochs=1,
                                 batch_limit=0,
                                 budget_id="initial",
-                                task_id="default",
+                                task_id=search_space.tasks[0],
                             )
 
                             # Check budget

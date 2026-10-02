@@ -209,7 +209,7 @@ class TestWrapperObligations:
 
         config = PipelineConfig(
             run_id="test_failure_isolation",
-            run_spec={},
+            run_spec={"task": "digits"},
             stages=[StageId.S1_FRAME, StageId.S2_SPACE],
             budget=Budget.from_duration("60s"),
             cost_model=SimpleCostModel(),

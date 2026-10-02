@@ -449,44 +449,48 @@ class GateStage:
 
 
 class ComposeStage:
-    """S5 Compose — compose_joint_system bridge; effective-value recording (R6)."""
+    """S5 Compose — coverage of what the evaluator will compose.
+
+    Composition happens once, in ``evaluate.cell_record``; a second compose path
+    here is how the pipeline and the kernel drifted apart (TODO46 §D6). This
+    stage therefore composes nothing and says what it was given.
+    """
 
     stage_id = StageId.S5_COMPOSE
 
     async def run(self, ctx: StageContext) -> Fragment:
-        """Compose joint systems from coordinates."""
+        """Report the cells awaiting composition; do not compose them."""
         from computronium.experiment.execution.search_space import Fragment
 
-        logger.info("S5 Compose: Composing joint systems")
+        logger.info("S5 Compose: Handing cells to the evaluator")
 
-        composed = []
-        for proposal in ctx.pending_proposals:
-            # This would call compose_joint_system from the ontology
-            # For now, just pass through
-            composed.append(proposal)
-
+        pending = list(ctx.pending_proposals)
         return Fragment(
             stage_id=self.stage_id,
-            proposals=composed,
-            metadata={"composed_count": len(composed)},
-            coverage={"stage": "compose", "systems_composed": len(composed)},
+            proposals=pending,
+            metadata={
+                "composed_by": "experiment.execution.evaluate.cell_record",
+                "axes": sorted({p.coordinate.dynamics for p in pending}),
+            },
+            coverage={"stage": "compose", "cells_queued": len(pending)},
         )
 
 
 class TrainStage:
-    """S6 Train — SystemTrainer settle bridge; guard/divergence telemetry (R50/R51)."""
+    """S6 Train — coverage of the cells the backend will train.
+
+    The evaluator owns the training loop (``SystemTrainer`` inside
+    ``evaluate.evaluate_cell``); this stage reports the submission and emits no
+    records of its own.
+    """
 
     stage_id = StageId.S6_TRAIN
 
     async def run(self, ctx: StageContext) -> Fragment:
-        """Execute training via backend.
-
-        Note: Actual execution is handled by the pipeline's _execute_batch_with_isolation
-        which calls the backend. This stage just provides coverage info.
-        """
+        """Report the cells queued for the backend."""
         from computronium.experiment.execution.search_space import Fragment
 
-        logger.info("S6 Train: Executing training")
+        logger.info("S6 Train: Handing cells to the backend")
 
         if not ctx.backend:
             logger.warning("No backend configured, skipping training")
@@ -494,15 +498,12 @@ class TrainStage:
                 stage_id=self.stage_id, coverage={"stage": "train", "skipped": True}
             )
 
-        # Training is executed by the pipeline wrapper via _execute_batch_with_isolation
-        # This stage just reports coverage
-        proposal_count = len(ctx.pending_proposals)
-
+        proposals = list(ctx.pending_proposals)
         return Fragment(
             stage_id=self.stage_id,
-            records=[],  # Records are produced by backend execution in pipeline
-            metadata={"proposals_submitted": proposal_count},
-            coverage={"stage": "train", "proposals_submitted": proposal_count},
+            proposals=proposals,
+            metadata={"trained_by": type(ctx.backend).__name__},
+            coverage={"stage": "train", "proposals_submitted": len(proposals)},
         )
 
 

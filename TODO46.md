@@ -48,8 +48,10 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
+**D1–D6 and D11–D13 are fixed; D1 is fixed in §8 session 3.** D7–D10 and D14
+remain.
 
-### D1 — The evaluator is a placeholder (the critical path)
+### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
 `computronium/experiment/execution/backends.py:222`
 
@@ -281,6 +283,18 @@ carry. That is now harvested once into `AxisSpec.accepted_params` at seed time,
 so composition reads a fact instead of re-deriving it. This is the one place
 reflection remains, and it is a harvest rather than a decision.
 
+### D14 — No run ever named a real task
+
+`pipeline.py:370` fell back to `tasks = ("default",)` when the config carried
+none, and `search_space.py:211` stamped `task_id="default"` on every generated
+schedule. No task by that name exists (`domains/registry.py` `SUPPORTED_TASKS`).
+The stub evaluator never resolved a task, so the name was never checked and no
+test failed; wiring the real evaluator (§3.1) turned 5 acceptance tests red with
+`unknown task 'default'`. **The task must come from the run spec and be
+validated against the registry** — a run that names no task should fail loudly
+rather than measure nothing. Fixed in §8 session 3; §3.3's spec-driven space
+consumes the same seam.
+
 ---
 
 ## 2. False completion marks, and the audit that must precede fixing
@@ -446,7 +460,7 @@ param_budget)` returns `ComposedCell(system, params)`. No `lr`. No
 `inspect.signature` in composition. The MNIST-shape lock is a **ratchet pinned
 at seven `search_space.py` sites**, not a zero — those die with §3.3.
 
-### 3.1 One cell, end to end, for real
+### 3.1 One cell, end to end, for real — LANDED, see §8 session 3
 
 Replace `LocalBackend._evaluate_single` with a real evaluation:
 
@@ -730,33 +744,92 @@ against that number. A completeness check that counts a registry cannot tell you
 about a registry that was cleared. If the count is wrong, the lock is wrong with
 it.
 
+### Session 3
+
+**Landed: §3.1.** `computronium/experiment/execution/evaluate.py` is the
+kernel's only evaluator: task → shape → `compose_cell_system` →
+`SystemTrainer.fit()` → metrics. `evaluate_cell` returns a `CellEvaluation`
+(measured metrics, effective params, walltime, epochs, task); `cell_record`
+wraps it in a `Record` whose gate verdict is *derived* — PASS only when the
+requested epochs ran and the metrics are finite, FAIL + quarantine when a cell
+did not.
+
+Both backends now share one `_ThreadedBackend` whose only evaluation body calls
+`cell_record`. `LocalBackend` and `MultiprocessBackend` are two-line subclasses,
+so a stub cannot return in one class while the other trains. The D1 stubs are
+gone, and with them the duplicate `_create_failure_event`.
+
+**D1's other half was the `params` plumbing.** `Coordinate.params` never
+reached composition; the evaluator passes the backend's `params` as the geometry
+mapping, and hyperparameter overrides are resolved from the coordinate by
+`harvest_schema().active()` as before.
+
+**D14 (new) — `task_id="default"` was a task no evaluator could resolve.** Five
+sites hardcoded it (`search_space.py:83,211,429`, `optuna_adapter.py:62`,
+`stages_impl` pass-through, `pipeline.py:370`). The stub evaluator never
+resolved a task, so the name was never checked; wiring a real evaluator turned
+5 acceptance tests red with `unknown task 'default'`. Fixed properly rather than
+by renaming: `pipeline._resolve_tasks` reads the task names from the run spec
+(`task` / `tasks`), validates them against `SUPPORTED_TASKS`, and raises naming
+the offenders — **a run that names no task now fails loudly instead of
+measuring nothing.** `generate_initial_candidates` takes its schedule's task from
+`search_space.tasks[0]`, so the space owns the task rather than a literal.
+This is §3.3's `task_id` seam, closed early because §3.1 could not pass without
+it.
+
+**D6 partially closed.** `ComposeStage` and `TrainStage` no longer hold a
+second compose path or a "training is executed elsewhere" note; both now report
+what they handed to the evaluator and name who owns composition. `S7`'s
+objective resolution remains §3.4's job, and `S9`/`S11` remain §3.5's.
+
+**Measured regime** (`scripts/probes/t46_s31_digits_cell.py`, digits, CPU,
+feedforward/energy_minimization/fast_weights): 1 epoch ≈ 0.06–0.6 s; task setup
+≈ 1 s, so tasks are cached per process in `evaluate._TASK_CACHE` (lock-guarded —
+free-threaded CPython, AGENTS.md). U1–U5 acceptance went from 11 s to **185 s**
+because they now train. That is the cost of the stub being gone, and it is the
+number §3.6's cell budget must be built on.
+
+**Falsification is real but coarse.** Across `thermodynamic_contrast`,
+`local_contrastive`, `pepita`, `gradient`, `homeostatic` on `digits`, accuracy
+and loss do move — but at 4 batches accuracy is quantized to 1/128 and several
+credits tie exactly on it. The lock therefore asserts on
+`(train_acc, train_loss)` jointly; asserting on accuracy alone **failed under
+`-n 4`** and would have been a flaky gate, not a real signal. Learnings for
+§3.3's gate ("candidates at more than one lr"): pick a discriminator with
+continuous resolution, not a quantized one.
+
+**Verified:** `tests/property` 1570 passed (2:03), `tests/unit` 523 passed,
+`tests/acceptance` 8 passed (3:04), `tests/ceec` 125 passed, `ruff` + `pyright`
+clean on the changed modules.
+
 ### Remaining work, in order
 
-1. **§3.1, one cell end to end, for real.** Now unblocked and now the whole
-   critical path: `compose_cell_system` composes, so the remaining question is
-   only whether a composed `System` trains on `digits` through `SystemTrainer`.
-   The gate is one coordinate, one real `train_acc`, and the falsification
-   assertion — **swapping `credit` must change `train_acc`**. Both backends'
-   stubs (`backends.py:222`, `backends.py:393`) die here, and
-   `MultiprocessBackend` must delegate rather than re-implement.
-2. **§2.1's audit table and the new lock.** Still not written. The mechanism for
+1. **§3.2 `RunSpec`.** Now the blocking item: §3.3's generator consumes the
+   spec's task, axis subsets and domains, and §D14 showed the task has to arrive
+   from the spec rather than a literal. Typed, versioned, diffable.
+2. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
+   which the §3.0.1 ratchet is holding at exactly seven. The ratchet failing is
+   the signal that §3.3 landed; lower it to zero in the same commit.
+3. **§2.1's audit table and the new lock.** Still not written. The mechanism for
    it now exists in spirit (`test_active_space_lock.py` is the shape), but
    §2.1-3 asks for it over all 88 `CAPABILITIES` rows, and two of the seeded
    `verifying_test` targets are themselves shape tests — so that lock will fail
    on rows whose *metadata* is wrong, not just rows whose code is. Price it
    before launching; it may be cheaper to fix the registry metadata first.
-3. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
-   which the §3.0.1 ratchet is holding at exactly seven. The ratchet failing is
-   the signal that §3.3 landed; lower it to zero in the same commit.
-4. **§3.2 `RunSpec`** before §3.3, since §3.3's generator consumes the spec's axis
-   subsets and domains.
-5. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
+4. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
    candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
    and §3.4 are one interface change, not two.
-6. **§4 item 4's remaining half** — locking README's fenced bash blocks.
+5. **§4 item 4's remaining half** — locking README's fenced bash blocks.
 
-**Two things to watch that the plan does not currently say:**
+**Three things to watch that the plan does not currently say:**
 
+- `eval_batch`/`submit` in both backends passed a `params` dict that the stub
+  ignored; the evaluator now reads it as the geometry mapping, so a caller
+  passing hyperparameters there gets them applied to topology rather than
+  silently dropped. §3.3 should decide whether `params` is one channel or two.
+- `_TASK_CACHE` in `evaluate.py` keys on `(task_id, device)` and never evicts.
+  Fine for a campaign over a handful of tasks; it is a leak if a run sweeps
+  many tasks, and §3.6's multi-task spec will find it.
 - `build_geometry_config` (`compose.py`) is now the one remaining normalizer, and
   it is inconsistent with the schema: geometry factories spell the same knob
   `hidden_dims` / `hidden_dim` and `num_layers` / `depth` / `n_layers`, so

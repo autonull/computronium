@@ -81,6 +81,28 @@ class PipelineConfig:
     code_sha: str = "unknown"
 
 
+def _resolve_tasks(config: PipelineConfig) -> tuple[str, ...]:
+    """The run's task names, validated against the task registry.
+
+    A run must name resolvable tasks: the evaluator loads one by name, so an
+    unresolvable task is a run that measures nothing while reporting success.
+    """
+    from computronium.domains.registry import SUPPORTED_TASKS
+
+    spec = config.run_spec or {}
+    names = tuple(config.task_ids) or tuple(
+        n for n in (spec.get("task"), *spec.get("tasks", ())) if n
+    )
+    if not names:
+        msg = f"run {config.run_id} names no task; known: {sorted(SUPPORTED_TASKS)}"
+        raise ValueError(msg)
+    unknown = [n for n in names if n not in SUPPORTED_TASKS]
+    if unknown:
+        msg = f"unknown task(s) {unknown}; available: {sorted(SUPPORTED_TASKS)}"
+        raise ValueError(msg)
+    return names
+
+
 @dataclass(slots=True)
 class PipelineState:
     """Mutable state for pipeline execution."""
@@ -366,8 +388,9 @@ class PipelineRunner:
         else:
             objectives = list(OBJECTIVES_REGISTRY.values())
 
-        # Get tasks
-        tasks = tuple(self._config.task_ids) if self._config.task_ids else ("default",)
+        # Get tasks: the spec names them, and the evaluator resolves each by
+        # name, so an unresolvable name fails every cell instead of measuring.
+        tasks = _resolve_tasks(self._config)
 
         return SearchSpace(
             axes_snapshot=tuple(axes_snapshot),

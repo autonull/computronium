@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
-import uuid
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.failure import FailureEvent
     from computronium.experiment.evidence.store import RecordStore
+    from computronium.experiment.schema.coordinate import (
+        Coordinate,
+        Provenance,
+        Schedule,
+    )
     from computronium.experiment.schema.record import Record
 
 logger = logging.getLogger(__name__)
@@ -114,17 +114,29 @@ class EvaluationTask:
     params: dict[str, Any]
 
 
-class LocalBackend:
-    """Local in-process execution backend using asyncio.TaskGroup.
+class _ThreadedBackend:
+    """Shared backend: one evaluation implementation, off the event loop.
 
-    Workers run in the same process; evaluation bodies are offloaded to
-    threads via asyncio.to_thread to avoid blocking the event loop.
+    Subclasses differ only in where the blocking body runs; the evaluation
+    itself is always :func:`cell_record`, so a stub can never come back in one
+    class while the other trains for real (TODO46 §D1).
     """
 
     def __init__(self, *, max_workers: int = 4) -> None:
         self._max_workers = max_workers
-        self._executor: ThreadPoolExecutor | None = None
         self._shutdown = False
+
+    def _evaluate(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        provenance: Provenance,
+        params: dict[str, Any],
+    ) -> Record:
+        """Train one cell and wrap the measurement as a Record."""
+        from computronium.experiment.execution.evaluate import cell_record
+
+        return cell_record(coordinate, schedule, provenance, params)
 
     async def submit(
         self,
@@ -134,29 +146,17 @@ class LocalBackend:
         params: dict[str, Any],
         store: RecordStore,
     ) -> list[Record]:
-        """Submit a single evaluation (one schedule, multiple seeds)."""
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
-
+        """Evaluate one coordinate across the schedule's seeds."""
         records = []
         for seed_offset in range(schedule.n_seeds):
-            seed = schedule.seed + seed_offset
-            task_schedule = Schedule(
-                fidelity=schedule.fidelity,
-                seed=seed,
-                n_seeds=1,
-                epochs=schedule.epochs,
-                batch_limit=schedule.batch_limit,
-                budget_id=schedule.budget_id,
+            seed_schedule = replace(
+                schedule, seed=schedule.seed + seed_offset, n_seeds=1
             )
-            record = await asyncio.to_thread(
-                self._evaluate_single,
-                coordinate,
-                task_schedule,
-                provenance,
-                params,
+            records.append(
+                await asyncio.to_thread(
+                    self._evaluate, coordinate, seed_schedule, provenance, params
+                )
             )
-            records.append(record)
         return records
 
     async def submit_batch(
@@ -164,9 +164,7 @@ class LocalBackend:
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
         store: RecordStore,
     ) -> list[EvaluationResult]:
-        """Submit a batch of evaluations concurrently with failure isolation."""
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+        """Evaluate a batch with per-item failure isolation (WP19)."""
 
         async def submit_one(
             coord: Coordinate,
@@ -176,14 +174,11 @@ class LocalBackend:
         ) -> EvaluationResult:
             try:
                 records = await self.submit(coord, sched, prov, params, store)
-                # Return first record as success (submit returns one per seed)
-                return (
-                    Success(record=records[0])
-                    if records
-                    else Failure(
-                        failure_event=self._create_failure_event(
-                            coord, sched, prov, "No records returned"
-                        )
+                if records:
+                    return Success(record=records[0])
+                return Failure(
+                    failure_event=self._create_failure_event(
+                        coord, sched, prov, "No records returned"
                     )
                 )
             except Exception as e:
@@ -219,237 +214,22 @@ class LocalBackend:
             provenance=provenance.to_dict(),
         )
 
-    def _evaluate_single(
-        self,
-        coordinate: Coordinate,
-        schedule: Schedule,
-        provenance: Provenance,
-        params: dict[str, Any],
-    ) -> Record:
-        """Evaluate a single cell (blocking call, runs in thread pool).
-
-        This is a placeholder - actual evaluation integrates with the
-        ontology/system stack. For now, returns a minimal valid Record.
-        """
-        import time
-
-        from computronium.experiment.schema.record import (
-            FailureCause,
-            GateVerdict,
-            Maturity,
-            Record,
-            ReproducibilityClass,
-            Severity,
-            Status,
-        )
-
-        start = time.monotonic()
-
-        # Placeholder: actual evaluation would go here
-        # This integrates with the 6-axis ontology system
-        payload = {
-            "status": "evaluated",
-            "walltime_s": time.monotonic() - start,
-            "seed": schedule.seed,
-            "fidelity": schedule.fidelity,
-            "epochs_completed": schedule.epochs,
-        }
-
-        status = Status(
-            gate_verdict=GateVerdict.PENDING,
-            defect="",
-            cause=FailureCause.UNKNOWN,
-            severity=Severity.LOW,
-            quarantine=False,
-            maturity=Maturity.L0,
-            uncertainty={},
-            reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
-            ceec_link=None,
-        )
-
-        return Record.create(
-            run_id=provenance.links.get("run_id", str(uuid.uuid4())),
-            coordinate=coordinate,
-            schedule=schedule,
-            provenance=provenance,
-            status=status,
-            payload=payload,
-        )
-
     def shutdown(self) -> None:
-        """Shutdown the thread pool."""
-        if self._executor is not None:
-            self._executor.shutdown(wait=True)
-            self._executor = None
+        """Release the backend. Evaluation bodies live on the default pool."""
         self._shutdown = True
 
 
-class MultiprocessBackend:
-    """Multiprocess execution backend for CPU-intensive evaluations.
+class LocalBackend(_ThreadedBackend):
+    """In-process backend; evaluation bodies run on the default thread pool."""
 
-    Uses asyncio.to_thread with a process pool for true parallelism.
-    Each worker process evaluates independently; results are serialized
-    and returned to the pipeline process for writing.
+
+class MultiprocessBackend(_ThreadedBackend):
+    """Worker-pool backend reserved for process isolation.
+
+    Currently the same in-process execution as :class:`LocalBackend`: the
+    evaluator owns its own device and threading, so forking adds cost without
+    changing what is measured. Kept as the seam where process isolation lands.
     """
-
-    def __init__(self, *, max_workers: int = 4) -> None:
-        self._max_workers = max_workers
-        self._executor: ThreadPoolExecutor | None = None
-        self._shutdown = False
-
-    async def submit(
-        self,
-        coordinate: Coordinate,
-        schedule: Schedule,
-        provenance: Provenance,
-        params: dict[str, Any],
-        store: RecordStore,
-    ) -> list[Record]:
-        """Submit a single evaluation across multiple processes."""
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
-
-        records = []
-        for seed_offset in range(schedule.n_seeds):
-            seed = schedule.seed + seed_offset
-            task_schedule = Schedule(
-                fidelity=schedule.fidelity,
-                seed=seed,
-                n_seeds=1,
-                epochs=schedule.epochs,
-                batch_limit=schedule.batch_limit,
-                budget_id=schedule.budget_id,
-            )
-            record = await asyncio.to_thread(
-                self._evaluate_single_process,
-                coordinate,
-                task_schedule,
-                provenance,
-                params,
-            )
-            records.append(record)
-        return records
-
-    async def submit_batch(
-        self,
-        items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
-        store: RecordStore,
-    ) -> list[EvaluationResult]:
-        """Submit a batch of evaluations concurrently across processes with failure isolation."""
-        if self._executor is None:
-            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
-
-        async def submit_one(
-            coord: Coordinate,
-            sched: Schedule,
-            prov: Provenance,
-            params: dict[str, Any],
-        ) -> EvaluationResult:
-            try:
-                records = await self.submit(coord, sched, prov, params, store)
-                return (
-                    Success(record=records[0])
-                    if records
-                    else Failure(
-                        failure_event=self._create_failure_event(
-                            coord, sched, prov, "No records returned"
-                        )
-                    )
-                )
-            except Exception as e:
-                return Failure(
-                    failure_event=self._create_failure_event(coord, sched, prov, str(e))
-                )
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(submit_one(coord, sched, prov, params))
-                for coord, sched, prov, params in items
-            ]
-
-        return [task.result() for task in tasks]
-
-    def _create_failure_event(
-        self,
-        coordinate: Coordinate,
-        schedule: Schedule,
-        provenance: Provenance,
-        error_message: str,
-    ) -> FailureEvent:
-        """Create a FailureEvent for a failed evaluation."""
-        from computronium.experiment.evidence.failure import FailureEvent
-        from computronium.experiment.schema.record import FailureCause
-
-        return FailureEvent(
-            cell_key=coordinate.cell_key(),
-            failure_cause=FailureCause.RUNTIME_ERROR,
-            error_message=error_message,
-            coordinate=coordinate.to_dict(),
-            schedule=schedule.to_dict(),
-            provenance=provenance.to_dict(),
-        )
-
-    def _evaluate_single_process(
-        self,
-        coordinate: Coordinate,
-        schedule: Schedule,
-        provenance: Provenance,
-        params: dict[str, Any],
-    ) -> Record:
-        """Evaluate a single cell in a worker process (blocking)."""
-        import time
-
-        from computronium.experiment.schema.record import (
-            FailureCause,
-            GateVerdict,
-            Maturity,
-            Record,
-            ReproducibilityClass,
-            Severity,
-            Status,
-        )
-
-        start = time.monotonic()
-
-        # Placeholder: actual evaluation would integrate with the ontology stack
-        payload = {
-            "status": "evaluated",
-            "walltime_s": time.monotonic() - start,
-            "seed": schedule.seed,
-            "fidelity": schedule.fidelity,
-            "epochs_completed": schedule.epochs,
-            "worker_pid": threading.get_ident(),
-        }
-
-        status = Status(
-            gate_verdict=GateVerdict.PENDING,
-            defect="",
-            cause=FailureCause.UNKNOWN,
-            severity=Severity.LOW,
-            quarantine=False,
-            maturity=Maturity.L0,
-            uncertainty={},
-            reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
-            ceec_link=None,
-        )
-
-        return Record.create(
-            run_id=provenance.links.get("run_id", str(uuid.uuid4())),
-            coordinate=coordinate,
-            schedule=schedule,
-            provenance=provenance,
-            status=status,
-            payload=payload,
-        )
-
-    def shutdown(self) -> None:
-        """Shutdown the thread pool."""
-        if self._executor is not None:
-            self._executor.shutdown(wait=True)
-            self._executor = None
-        self._shutdown = True
 
 
 __all__ = [
