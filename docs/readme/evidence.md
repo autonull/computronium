@@ -1,6 +1,6 @@
 ## Evidence & claims
 
-Claims are labeled by verification level (see *What is Computronium*) and governed by CEEC ([`packages/ceec-core`](packages/ceec-core)).
+Claims are labeled by verification level (see *What is Computronium*). CEEC ([`packages/ceec-core`](packages/ceec-core)) is a standalone governance ledger (not integrated; kernel records a `ceec_link` field for future use).
 
 | Claim | Level | Evidence |
 |---|---|---|
