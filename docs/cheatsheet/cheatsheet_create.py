@@ -1858,24 +1858,28 @@ def _draw_table_row(
     half = (len(row.rows) + 1) // 2 if len(row.rows) > 12 else len(row.rows)
     grids = [row.rows[:half], row.rows[half:]]
     gx = x
-    drawn = 0
+    used_w = 0.0
     for gi, grid in enumerate(grids):
         if not grid:
             continue
         gy = y + 18.0
         col_ws = [_table_col_w(grid, row.headers, ci) for ci in range(len(row.headers))]
-        for ci, h in enumerate(row.headers):
-            parts.append(
-                svg_text(
-                    gx + sum(col_ws[:ci]),
-                    gy + 9.0,
-                    h.upper(),
-                    STYLE.sub_font,
-                    color,
-                    "700",
+        used_w += sum(col_ws) + (24.0 if gi else 0.0)
+        if gi == 0:
+            for ci, h in enumerate(row.headers):
+                parts.append(
+                    svg_text(
+                        gx + sum(col_ws[:ci]),
+                        gy + 9.0,
+                        h.upper(),
+                        STYLE.sub_font,
+                        color,
+                        "700",
+                    )
                 )
-            )
-        gy += 13.0
+            gy += 13.0
+        else:
+            gy += 13.0  # keep rows aligned under the first grid's header
         for r in grid:
             for ci, cell in enumerate(r):
                 fill = (
@@ -1894,9 +1898,20 @@ def _draw_table_row(
                     )
                 )
             gy += 12.0
-            drawn += 1
         gx += sum(col_ws) + 24.0
-    return "".join(parts), 18.0 + 4.0 + 13.0 + half * 12.0
+    body_y = y + 18.0
+    body_h = 13.0 + half * 12.0
+    border = svg_rect(
+        x - 6.0,
+        body_y - 3.0,
+        used_w + 12.0,
+        body_h + 8.0,
+        6.0,
+        color + "08",
+        color + "55",
+        1.0,
+    )
+    return border + "".join(parts), 18.0 + 4.0 + body_h
 
 
 def _draw_section(
@@ -2018,7 +2033,7 @@ def draw_panel(panel: Panel, p: Pos) -> str:
             p.x + 16.0,
             p.y + 23.0,
             _fit(panel.title, 15.0, p.w - 40.0),
-            13.5,
+            15.0,
             color,
             "800",
         ),
@@ -2167,7 +2182,7 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
             svg_poly(
                 pts,
                 color,
-                1.8 if not e.dashed else 1.5,
+                2.6 if e.primary else (1.5 if e.dashed else 1.6),
                 e.dashed,
                 "arrp" if e.dashed else "arr",
             )

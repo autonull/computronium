@@ -274,6 +274,26 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== TABLE BORDERS + SHARED HEADERS (2026-10-02j) ===
+
+- **Every `TableRow` now has a border** — rounded rect
+  (`fill=color+08`, `stroke=color+55`, rx 6) enclosing the header + rows,
+  so Objectives / Priors / RunSpec / SystemTrainerConfig / Record fields
+  read as five distinct boxes inside the `Columns` band. Border width uses
+  the measured column widths (`used_w`), not the full panel width.
+- **Split-grid header dedupe** — when a `TableRow` wraps into two
+  side-by-side sub-grids (>12 rows), the column labels
+  (`objective|status`, `prior`, `field`, …) are drawn once over the first
+  sub-grid; the continuation grid reserves the same 13 px row so both
+  halves stay vertically aligned instead of repeating the same labels.
+- Incidental fixes: primary-spine edge width (2.6 vs 1.6) and the 15.0 pt
+  panel title size from the 2026-10-02g pass had silently failed to apply
+  (ruff re-wrap changed the source string, so the replace missed); both
+  are now actually in effect.
+
+Gate: ruff format/check clean · pyright 0/0 · `--check` green
+(SVG 149 KiB, 2960×2242 — unchanged geometry, only table fills).
+
 === TABLES EVERYWHERE + COLUMN PACKING (2026-10-02i) ===
 
 User-directed layout consolidation:
