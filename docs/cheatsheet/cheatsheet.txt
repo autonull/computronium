@@ -1,7 +1,7 @@
 ==============================================================================
-COMPUTRONIUM ARCHITECTURE — INFOGRAPHIC DATAFILE
-generated 2026-10-02 @ commit 4cf655af by docs/diagram_create.py
-artifacts: docs/diagram.svg (directed graph) · this file (data)
+COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE
+generated 2026-10-02 @ commit fdc99d09 by docs/cheatsheet/cheatsheet_create.py
+artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)
 ==============================================================================
 
 OUTER GRAPH (directed edges between panels)

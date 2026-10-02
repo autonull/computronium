@@ -4,12 +4,13 @@ Collects live architecture facts by code reflection (kernel axis
 registries, config schemas, task/CLI/stage/policy catalogs, registry
 counts) and renders two artifacts:
 
-* ``docs/diagram.svg`` -- a directed architecture graph: a coarse outer
-  flow (entry -> tasks/kernel -> ontology -> system -> training ->
-  evidence -> surface) whose panels are themselves small directed
-  graphs (nested insets of primitives, pipeline stages, config fields,
-  and the training loop).
-* ``docs/infographic.txt`` -- the same content as a structured datafile.
+* ``docs/cheatsheet/cheatsheet.svg`` -- a directed architecture graph: a
+  coarse outer flow (entry -> tasks/kernel -> ontology -> system ->
+  training -> evidence -> surface) whose panels are themselves small
+  directed graphs (nested insets of primitives, pipeline stages, config
+  fields, and the training loop).
+* ``docs/cheatsheet/cheatsheet.txt`` -- the same content as a structured
+  datafile.
 
 The layout is fully content-driven: chip/step/panel sizes and canvas
 dimensions are computed from the reflected data; style constants live
@@ -19,10 +20,7 @@ script is touched.
 
 Usage::
 
-    uv run python docs/diagram_create.py [--check] [--hd]
-
-``--hd`` additionally writes ``docs/diagram@2x.svg``, a 2x-pixel-size
-variant for high-DPI previews (same vectors, doubled physical size).
+    uv run python docs/cheatsheet/cheatsheet_create.py [--check]
 """
 
 from __future__ import annotations
@@ -43,10 +41,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT_SVG = ROOT / "docs" / "diagram.svg"
-OUT_SVG_HD = ROOT / "docs" / "diagram@2x.svg"
-OUT_TXT = ROOT / "docs" / "infographic.txt"
+ROOT = Path(__file__).resolve().parent.parent.parent
+HERE = Path(__file__).resolve().parent
+OUT_SVG = HERE / "cheatsheet.svg"
+OUT_TXT = HERE / "cheatsheet.txt"
 
 # ---------------------------------------------------------------------------
 # 1. Reflection: pull the architecture facts out of the live codebase
@@ -1831,15 +1829,12 @@ def render_legend(canvas_w: float) -> str:
     return "".join(parts)
 
 
-def render_svg(
-    panels: tuple[Panel, ...], ly: Layout, b: Bundle, scale: float = 1.0
-) -> str:
+def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
     pmap = {p.key: p for p in panels}
     parts = [
         (
-            f'<svg xmlns="http://www.w3.org/2000/svg" '
-            f'width="{ly.canvas_w * scale:.0f}" height="{ly.canvas_h * scale:.0f}" '
-            f'viewBox="0 0 {ly.canvas_w:.0f} {ly.canvas_h:.0f}" '
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{ly.canvas_w:.0f}" '
+            f'height="{ly.canvas_h:.0f}" viewBox="0 0 {ly.canvas_w:.0f} {ly.canvas_h:.0f}" '
             f'shape-rendering="geometricPrecision" text-rendering="geometricPrecision" '
             f'font-family="{SANS}">'
         ),
@@ -1907,7 +1902,7 @@ def render_svg(
             STYLE.margin,
             ly.canvas_h - 24.0,
             (
-                "regenerate: uv run python docs/diagram_create.py · datafile: docs/infographic.txt · "
+                "regenerate: uv run python docs/cheatsheet/cheatsheet_create.py · datafile: docs/cheatsheet/cheatsheet.txt · "
                 "ontology reflected from experiment.schema.axis.AXES_REGISTRIES · kernel from execution.{stage,policy} registries"
             ),
             9.0,
@@ -1919,7 +1914,7 @@ def render_svg(
 
 
 # ---------------------------------------------------------------------------
-# 6. Datafile rendering (docs/infographic.txt)
+# 6. Datafile rendering (docs/cheatsheet/cheatsheet.txt)
 # ---------------------------------------------------------------------------
 
 
@@ -2033,11 +2028,11 @@ def render_txt(b: Bundle, panels: tuple[Panel, ...]) -> str:
     out: list[str] = []
     add = out.append
     add("=" * 78)
-    add("COMPUTRONIUM ARCHITECTURE — INFOGRAPHIC DATAFILE")
+    add("COMPUTRONIUM ARCHITECTURE — CHEATSHEET DATAFILE")
     add(
-        f"generated {datetime.date.today().isoformat()} @ commit {b.commit} by docs/diagram_create.py"
+        f"generated {datetime.date.today().isoformat()} @ commit {b.commit} by docs/cheatsheet/cheatsheet_create.py"
     )
-    add("artifacts: docs/diagram.svg (directed graph) · this file (data)")
+    add("artifacts: docs/cheatsheet/cheatsheet.svg (directed graph) · this file (data)")
     add("=" * 78)
     add("")
     add("OUTER GRAPH (directed edges between panels)")
@@ -2067,11 +2062,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check", action="store_true", help="validate output geometry after writing"
     )
-    parser.add_argument(
-        "--hd",
-        action="store_true",
-        help="also write docs/diagram@2x.svg (2x pixel size for hi-DPI previews)",
-    )
     args = parser.parse_args(argv)
 
     b = collect()
@@ -2083,9 +2073,6 @@ def main(argv: list[str] | None = None) -> int:
 
     OUT_SVG.write_text(svg, encoding="utf-8")
     OUT_TXT.write_text(txt, encoding="utf-8")
-    if args.hd:
-        OUT_SVG_HD.write_text(render_svg(panels, ly, b, scale=2.0), encoding="utf-8")
-        print(f"wrote {OUT_SVG_HD.relative_to(ROOT)} (2x variant)")
     n_chips = sum(
         len(getattr(r, "chips", ()))
         + len(getattr(r, "steps", ()))

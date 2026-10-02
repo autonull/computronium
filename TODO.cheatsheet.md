@@ -273,3 +273,27 @@ excluded from the diagram commit; stage paths explicitly when committing.
   onto the destination panel's top edge. The panel-intersection check would
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
+
+=== RENAME + 2x REMOVAL (2026-10-02e) ===
+
+User feedback: SVG is inherently scalable — the 2× variant was unwanted.
+
+- **2x removed** — `--hd` flag, `OUT_SVG_HD`, `render_svg(scale=...)` all
+  deleted; `docs/diagram@2x.svg` deleted. The `geometricPrecision`
+  shape/text-rendering hints on the root `<svg>` were kept (rendering
+  quality, not duplication). The "2× artifact policy" opportunity from the
+  2026-10-02d list is closed: no 2× artifact at all.
+- **Files moved + standardized under `docs/cheatsheet/`** (via `git mv`,
+  history preserved):
+  - `docs/diagram_create.py` → `docs/cheatsheet/cheatsheet_create.py`
+  - `docs/diagram.svg` → `docs/cheatsheet/cheatsheet.svg`
+  - `docs/infographic.txt` → `docs/cheatsheet/cheatsheet.txt`
+  - Script's `ROOT` is now `parent.parent.parent`; `OUT_SVG`/`OUT_TXT`
+    resolve relative to the script's own dir (`HERE`).
+- **In-script references updated**: module docstring (artifact paths +
+  usage), SVG footer regenerate line, datafile header
+  ("…CHEATSHEET DATAFILE", generator line, artifacts line), section
+  comment 6. No other repo file referenced the old paths (grep-verified;
+  no test lock covers the cheatsheet).
+- **Regenerated** with `uv run python docs/cheatsheet/cheatsheet_create.py
+  --check` — green; 162 KiB SVG, same 2547×2511 canvas.
