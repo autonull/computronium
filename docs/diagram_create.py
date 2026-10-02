@@ -415,8 +415,10 @@ class Chip:
 
     @property
     def w(self) -> float:
-        label_w = text_w(self.label, 10.5 if not self.mono else 9.5)
-        sub_w = text_w(self.sub, 8.5) if self.sub else 0.0
+        label_w = text_w(
+            self.label, STYLE.chip_font if not self.mono else STYLE.mono_font
+        )
+        sub_w = text_w(self.sub, STYLE.sub_font) if self.sub else 0.0
         return 18 + max(label_w, sub_w)
 
     @property
@@ -961,6 +963,14 @@ class Style:
     step_label_font: float = 10.5
     step_sub_font: float = 8.0
     edge_font: float = 9.5
+    legend_font: float = 8.5
+    group_header_font: float = 9.5
+    axis_header_font: float = 11.0
+    axis_cfg_font: float = 9.0
+    axis_field_font: float = 8.0
+    group_inset: float = 6.0
+    legend_gap: float = 14.0
+    legend_swatch: float = 11.0
 
 
 STYLE = Style()
@@ -1047,11 +1057,14 @@ def flow_metrics(
 
 def box_natural_w(box: AxisBox) -> float:
     chip_w = max((c.w for c in box.primitives), default=0.0)
-    header_w = text_w(f"{AXIS_SYMBOL[box.axis]} · {box.axis}", 11.0)
+    header_w = text_w(f"{AXIS_SYMBOL[box.axis]} · {box.axis}", STYLE.axis_header_font)
     fields = " · ".join(box.config_fields[:4])
     if len(box.config_fields) > 4:
         fields += f" · +{len(box.config_fields) - 4}"
-    cfg_w = max(text_w(f"⚙ {box.config_name}", 9.0), text_w(fields, 8.0))
+    cfg_w = max(
+        text_w(f"⚙ {box.config_name}", STYLE.axis_cfg_font),
+        text_w(fields, STYLE.axis_field_font),
+    )
     return 12.0 + max(chip_w, header_w, cfg_w) + 12.0
 
 
@@ -1126,10 +1139,9 @@ def grouped_chips_h(groups: tuple[Group, ...], w: float, gap: float) -> float:
     """Total height of a GroupedChipsRow content above its baseline y."""
     ty = 22.0
     for i, g in enumerate(groups):
-        if g.name:
-            ty += 14.0
+        name_h = 14.0 if g.name else 0.0
         _, h = chip_positions(g.chips, gap, w)
-        ty += h
+        ty += 2 * STYLE.group_inset + name_h + h
         if i < len(groups) - 1:
             ty += gap
     return ty
@@ -1267,6 +1279,7 @@ def _gap_y(ly: Layout, y1: float, y2: float) -> float:
 
 def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
     pts = edge_points(e, ly)
+    s = ly.pos[e.src]
     match e.route:
         case "margin-left":
             return (
@@ -1283,9 +1296,47 @@ def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
         case "margin-right":
             return (right_rail_x(ly) - 8.0, _gap_y(ly, pts[1][1], pts[2][1]), "end")
         case "h-gap":
-            return ((pts[0][0] + pts[1][0]) / 2.0, pts[0][1] - 8.0, "middle")
+            return ((pts[0][0] + pts[1][0]) / 2.0, s.y - 24.0, "middle")
         case _:
             return ((pts[1][0] + pts[2][0]) / 2.0, pts[1][1] - 8.0, "middle")
+
+
+def edge_label_placement(e: Edge, ly: Layout) -> tuple[float, float, float, float, str]:
+    """Bounding box (x, y, w, h) and anchor of an edge's label, as rendered."""
+    lx, ly_, anchor = edge_label(e, ly)
+    w = text_w(e.label, STYLE.edge_font) + 12.0
+    tx = lx - w + 4.0 if anchor == "end" else lx
+    return (tx - 4.0, ly_ - 9.0, w, 15.0, anchor)
+
+
+def _label_hits_panel(rx: float, ry: float, ew: float, eh: float, p: Pos) -> bool:
+    return rx < p.x + p.w and rx + ew > p.x and ry < p.y + p.h and ry + eh > p.y
+
+
+def _verify_layout(ly: Layout) -> None:
+    """Raise if any panel, edge, or edge-label lies outside the canvas."""
+    for key, p in ly.pos.items():
+        if not (p.x >= 0 and p.x + p.w <= ly.canvas_w):
+            raise RuntimeError(f"panel {key} out of canvas horizontally")
+        if not (p.y > 0 and p.y + p.h < ly.canvas_h):
+            raise RuntimeError(f"panel {key} out of canvas vertically")
+    for e in build_edges():
+        rx, ry, ew, eh, _ = edge_label_placement(e, ly)
+        if not (
+            rx >= -6
+            and rx + ew <= ly.canvas_w + 6
+            and ry >= -6
+            and ry + eh <= ly.canvas_h + 6
+        ):
+            raise RuntimeError(
+                f"edge-label {e.label!r} ({e.src}->{e.dst}) out of canvas"
+            )
+        for key, p in ly.pos.items():
+            if _label_hits_panel(rx, ry, ew, eh, p):
+                raise RuntimeError(f"edge-label {e.label!r} overlaps panel {key}")
+        for x, y in edge_points(e, ly):
+            if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
+                raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
 
 
 # ---------------------------------------------------------------------------
@@ -1364,7 +1415,7 @@ def draw_chip(chip: Chip, x: float, y: float, color: str) -> str:
             x + 10.0,
             ty,
             chip.label + (" ✗" if not chip.enabled else ""),
-            10.5 if not chip.mono else 9.5,
+            STYLE.chip_font if not chip.mono else STYLE.mono_font,
             "#1e293b",
             "600",
             family=fam,
@@ -1373,7 +1424,11 @@ def draw_chip(chip: Chip, x: float, y: float, color: str) -> str:
     if chip.sub:
         parts.append(
             svg_text(
-                x + 10.0, y + 26.0, _fit(chip.sub, 8.5, chip.w - 14.0), 8.5, "#64748b"
+                x + 10.0,
+                y + 26.0,
+                _fit(chip.sub, STYLE.sub_font, chip.w - 14.0),
+                STYLE.sub_font,
+                "#64748b",
             )
         )
     rendered = "".join(parts)
@@ -1390,21 +1445,23 @@ def draw_flow_step(
         svg_text(
             x + w / 2.0,
             y + 16.0,
-            _fit(step.label, 10.5, w - 10.0),
-            10.5,
+            _fit(step.label, STYLE.step_label_font, w - 10.0),
+            STYLE.step_label_font,
             "#1e293b",
             "700",
             anchor="middle",
         ),
     ]
     if step.sub:
-        for i, line in enumerate(_wrap_text(step.sub, 8.0, w - 12.0)[:2]):
+        for i, line in enumerate(
+            _wrap_text(step.sub, STYLE.step_sub_font, w - 12.0)[:2]
+        ):
             parts.append(
                 svg_text(
                     x + w / 2.0,
                     y + 28.0 + i * 10.0,
                     line,
-                    8.0,
+                    STYLE.step_sub_font,
                     "#64748b",
                     anchor="middle",
                 )
@@ -1431,7 +1488,7 @@ _DRAW_ROW_HANDLERS: dict[type, Callable[..., tuple[str, float]]] = {}
 def _draw_chips_row(
     row: ChipsRow, x: float, y: float, color: str, w: float
 ) -> tuple[str, float]:
-    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
     if not row.chips:
         return "".join(parts), 18.0
     positions, h = chip_positions(row.chips, row.gap, w)
@@ -1531,16 +1588,40 @@ def _draw_axes_row(
 def _draw_grouped_chips_row(
     row: GroupedChipsRow, x: float, y: float, color: str, w: float
 ) -> tuple[str, float]:
-    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
     ty = y + 22.0
+    gi = STYLE.group_inset
+    pad = 3.0
     for i, g in enumerate(row.groups):
-        if g.name:
-            parts.append(svg_text(x, ty + 6, g.name, 9.5, g.accent or color, "700"))
-            ty += 14.0
+        name_h = 14.0 if g.name else 0.0
         positions, h = chip_positions(g.chips, row.gap, w)
+        cluster_right = max(
+            (px + c.w for (px, _), c in zip(positions, g.chips, strict=True)),
+            default=0.0,
+        )
+        name_w = text_w(g.name, STYLE.group_header_font) if g.name else 0.0
+        span = max(cluster_right, name_w)
+        tint = g.accent or color
+        parts.append(
+            svg_rect(
+                x - pad,
+                ty,
+                span + 2 * pad,
+                gi + name_h + h + gi,
+                8.0,
+                tint + "14",
+                tint + "40",
+                0.8,
+            )
+        )
+        if g.name:
+            parts.append(
+                svg_text(x, ty + gi + 6.0, g.name, STYLE.group_header_font, tint, "700")
+            )
+        ty += gi + name_h
         for (px, py), chip in zip(positions, g.chips, strict=True):
             parts.append(draw_chip(chip, x + px, ty + py, color))
-        ty += h
+        ty += h + gi
         if i < len(row.groups) - 1:
             ty += row.gap
     return "".join(parts), ty - y
@@ -1573,10 +1654,10 @@ def draw_axis_box(box: AxisBox, x: float, y: float, bw: float) -> str:
             y + 19.0,
             _fit(
                 f"{AXIS_EMOJI[box.axis]} {AXIS_SYMBOL[box.axis]} · {box.axis}",
-                11.0,
+                STYLE.axis_header_font,
                 bw - 16.0,
             ),
-            11.0,
+            STYLE.axis_header_font,
             color,
             "800",
         )
@@ -1595,9 +1676,11 @@ def draw_axis_box(box: AxisBox, x: float, y: float, bw: float) -> str:
             x + 11.0,
             cfg_y + 14.0,
             _fit(
-                f"⚙ {box.config_name} · {len(box.config_fields)} fields", 9.0, bw - 22.0
+                f"⚙ {box.config_name} · {len(box.config_fields)} fields",
+                STYLE.axis_cfg_font,
+                bw - 22.0,
             ),
-            9.0,
+            STYLE.axis_cfg_font,
             "#1e293b",
             "700",
             family=MONO,
@@ -1607,8 +1690,8 @@ def draw_axis_box(box: AxisBox, x: float, y: float, bw: float) -> str:
         svg_text(
             x + 11.0,
             cfg_y + 28.0,
-            _fit(shown, 8.0, bw - 22.0),
-            8.0,
+            _fit(shown, STYLE.axis_field_font, bw - 22.0),
+            STYLE.axis_field_font,
             "#64748b",
             family=MONO,
         )
@@ -1656,19 +1739,24 @@ LEGEND: tuple[tuple[str, str], ...] = (
 
 
 def render_legend(canvas_w: float) -> str:
-    col_w = []
-    for i in range(4):
-        items = [LEGEND[i], LEGEND[i + 4]]
-        col_w.append(max(26.0 + text_w(t[1], 8.5) for t in items))
-    x0 = canvas_w - STYLE.margin - sum(col_w) - 3.0 * 14.0
+    widths = [text_w(LEGEND[i][1], STYLE.legend_font) for i in range(len(LEGEND))]
+    n_cols = 4
+    col_w = [
+        max(
+            15.0 + widths[i],
+            15.0 + widths[i + n_cols] if i + n_cols < len(widths) else 0.0,
+        )
+        for i in range(n_cols)
+    ]
+    x0 = canvas_w - STYLE.margin - sum(col_w) - (n_cols - 1) * STYLE.legend_gap
     parts = []
     for i, (key, label) in enumerate(LEGEND):
-        col = i % 4
-        row_i = i // 4
-        sx = x0 + sum(col_w[:col]) + col * 14.0
+        col = i % n_cols
+        row_i = i // n_cols
+        sx = x0 + sum(col_w[:col]) + col * STYLE.legend_gap
         sy = 66.0 + row_i * 15.0
-        parts.append(svg_rect(sx, sy - 9.0, 11.0, 9.0, 2.0, COLORS[key]))
-        parts.append(svg_text(sx + 15.0, sy, label, 8.5, "#475569"))
+        parts.append(svg_rect(sx, sy - 9.0, STYLE.legend_swatch, 9.0, 2.0, COLORS[key]))
+        parts.append(svg_text(sx + 15.0, sy, label, STYLE.legend_font, "#475569"))
     return "".join(parts)
 
 
@@ -1726,15 +1814,17 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
     for key, p in ly.pos.items():
         parts.append(f'<g filter="url(#sh)">{draw_panel(pmap[key], p)}</g>')
     for e in build_edges():
-        lx, ly_, anchor = edge_label(e, ly)
-        w = text_w(e.label, STYLE.edge_font) + 12.0
-        tx = lx - w + 4.0 if anchor == "end" else lx
-        parts.append(
-            svg_rect(tx - 4.0, ly_ - 9.0, w, 15.0, 4.0, "white", "#e2e8f0", 0.8)
-        )
+        rx, ry, ew, eh, anchor = edge_label_placement(e, ly)
+        parts.append(svg_rect(rx, ry, ew, eh, 4.0, "white", "#e2e8f0", 0.8))
         parts.append(
             svg_text(
-                tx, ly_ + 2.0, e.label, STYLE.edge_font, "#334155", "600", anchor=anchor
+                rx + 4.0,
+                ry + 11.0,
+                e.label,
+                STYLE.edge_font,
+                "#334155",
+                "600",
+                anchor=anchor,
             )
         )
     parts.append(
@@ -1933,16 +2023,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         ET.fromstring(svg)  # ruff: ignore[suspicious-xml-element-tree-usage] — parses our own generated SVG
-        for key, p in ly.pos.items():
-            if not (p.x >= 0 and p.x + p.w <= ly.canvas_w):
-                raise RuntimeError(f"panel {key} out of canvas horizontally")
-            if not (p.y > 0 and p.y + p.h < ly.canvas_h):
-                raise RuntimeError(f"panel {key} out of canvas vertically")
-        for e in build_edges():
-            for x, y in edge_points(e, ly):
-                if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
-                    raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
-        print("check: svg parses, all panels/edges within canvas")
+        _verify_layout(ly)
+        print("check: svg parses, all panels/edges/labels within canvas")
     return 0
 
 

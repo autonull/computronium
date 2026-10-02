@@ -65,10 +65,22 @@ Plan overview: developing `docs/diagram_create.py` to generate `docs/diagram.svg
 
 === REMAINING WORK / IMPROVEMENT OPPORTUNITIES ===
 
-- Legend column widths: compute from label text widths instead of hardcoded estimates; currently uses `text_w` with 8.5pt font and fixed col layout.
-- Edge label placement refinement: ensure margin-edge labels fall in gap channels without overlapping panels; tested conceptually but not yet validated pixel-perfectly.
-- Consider adding edge-label-rect containment check to `--check` validation (currently only checks panel bounds and edge endpoints).
-- The script runs zero-error on fresh checkout with `uv run python docs/diagram_create.py [--check]`.
+All items below were completed in the 2026-10-02c session (see the
+"WHAT WAS DONE (2026-10-02c)" section for details):
+
+- ~~Legend column widths~~ ✓ — now computed from label text widths via
+  `text_w(label, STYLE.legend_font)`; swatch/gap/col geometry all driven by
+  `Style` (`legend_swatch`, `legend_gap`, `legend_font`).
+- ~~Edge label placement refinement~~ ✓ — `h-gap` labels moved from panel
+  vertical-center into the horizontal gap channel above the source band
+  (`s.y - 24`); pixel-verified (probe) that all 11 labels sit inside a band
+  gap and overlap **zero** panels.
+- ~~Edge-label-rect containment check in `--check`~~ ✓ — extracted
+  `_verify_layout()`; now asserts every edge-label rect is within canvas
+  bounds **and** does not intersect any panel rect (`_label_hits_panel`).
+  `edge_label_placement()` centralizes the rect math shared by render + check.
+- The script runs zero-error on fresh checkout with
+  `uv run python docs/diagram_create.py [--check]`.
 
 === FEEDBACK FOR NEXT SESSION ===
 
@@ -116,3 +128,73 @@ Added `Group` (name, chips, accent) and `GroupedChipsRow` (label, groups, gap) t
 
 - **Visual hierarchy / box grouping**: The chip boxes now sprawl across wide canvases. Wrap groups of related chips in visual containers (sub-panels, bordered `<g>` groups, or shaded background regions) and separate groups with whitespace/padding so the "boxes not lists" principle doesn't itself become a wall of boxes. Consider a two-level layout: each panel's rows are already grouped, but within ChipsRows the individual chips lack visual containment.
 - **Variable font sizing**: Inner items consistently use the same font size (10.5pt chips, 9.5pt sub text). Smaller text for chip sub-labels, group headers, and config field names would improve zoom-in readability without sacrificing screen-fit. The current `text_w()` metric already supports variable sizes — parameterize font sizes per element type (e.g., group header 8.5pt, chip label 10.5pt, chip sub 8.0pt) via `Style` constants for centralized tuning.
+
+=== WHAT WAS DONE (2026-10-02c) ===
+
+Both open improvement opportunities above were implemented, and all three
+"REMAINING WORK" items are closed. No source file outside the diagram script
+was touched.
+
+- **Variable font sizing (centralized)** — Every hardcoded font size is now a
+  `Style` constant. Added `legend_font` (8.5), `group_header_font` (9.5),
+  `axis_header_font` (11.0), `axis_cfg_font` (9.0), `axis_field_font` (8.0).
+  `Chip.w`/`draw_chip`/`draw_flow_step`/`draw_axis_box`/`box_natural_w`/
+  `render_legend`/row-labels all read from `Style` instead of magic numbers.
+  All values are **value-preserving** (identical pt sizes), so chip/step/panel
+  metrics are unchanged — the only canvas growth comes from group padding.
+- **Visual hierarchy / box grouping** — Each `Group` inside a
+  `GroupedChipsRow` is now wrapped in a shaded, rounded, tinted container
+  (`fill=<accent>14`, `stroke=<accent>40`, sw 0.8, rx 8) with symmetric
+  `group_inset` (6.0) vertical padding, so the objectives/priors and per-domain
+  task clusters read as contained boxes rather than a wall of chips. The
+  container hugs the chip cluster (`span = max(cluster_right, name_w)`, 3px
+  side pad) and does **not** reflow chips (chips still wrap at full content
+  width), keeping the layout deterministic. `grouped_chips_h()` was updated to
+  add `2 * group_inset` per group so panel heights stay consistent with the
+  rendered containers.
+- **Legend column widths** — `render_legend()` now computes each column width
+  from `text_w(label, STYLE.legend_font)` (was a hardcoded `26.0 + text_w`
+  estimate); swatch width and inter-column gap come from `Style`.
+- **Edge label placement refinement** — `h-gap` edge labels were sitting at the
+  source panel's vertical center (risking overlap with panel row content in the
+  narrow 72px inter-panel gutter). `edge_label()` now places `h-gap` labels in
+  the horizontal band-gap channel **above** the source band (`s.y - 24`).
+  Verified by probe: all 11 labels land inside a `band_gaps` strip and
+  intersect **zero** panels.
+- **`--check` validation hardened** — Extracted `_verify_layout(ly)` from
+  `main()`. It now asserts, per edge label: (a) the label rect is within canvas
+  bounds (±6), and (b) the label rect does not intersect any panel
+  (`_label_hits_panel`). `edge_label_placement(e, ly)` returns the exact
+  (x, y, w, h, anchor) the renderer draws, so render and check share one source
+  of truth (DRY). `main()`'s check block shrank to `ET.fromstring(svg);
+  _verify_layout(ly)`.
+
+**Files modified/created (2026-10-02c):**
+- `docs/diagram_create.py` — font centralization, group containers, legend
+  width fix, h-gap label channel, `_verify_layout`/`edge_label_placement`/
+  `_label_hits_panel`; ~1950 → ~2030 lines
+- `docs/diagram.svg` — regenerated (161 KiB, **2547px tall × 2511px wide**,
+  303 `<title>` tooltips, 7 new group containers)
+- `docs/infographic.txt` — regenerated (structure unchanged; data reflects live
+  codebase)
+
+**Gate status (2026-10-02c):** `ruff format` clean · `ruff check` all passed ·
+`pyright` 0 errors/0 warnings · `uv run python docs/diagram_create.py
+--check` → "check: svg parses, all panels/edges/labels within canvas".
+
+=== NEW IMPROVEMENT OPPORTUNITIES (2026-10-02c) ===
+
+- **Elbow label for `train→evidence`** sits just above the band-3/band-4 gap
+  (y≈2119–2134 vs gap 2134–2206) because `train` is shorter than its band, so
+  `s.bottom` is above the band floor. It overlaps no panel (verified), but
+  nudging elbow labels to the true band-gap midpoint would center them more
+  evenly. Low priority.
+- **Label-vs-label collision check** — `_verify_layout` guards labels against
+  panels and canvas, but two edge labels in the same gap channel could still
+  overlap each other if labels grow; a pairwise label-intersection check would
+  close that. Not currently triggered.
+- **Legend additions** — could add a legend swatch for the dashed purple
+  back-edge (evidence → entry feedback loop) and for the axis color family, so
+  the color-coding key is complete.
+- **High-DPI render** — emit a 2× (or `@2x`) variant / add `shape-rendering`
+  hints for crisper text when the SVG is viewed large.
