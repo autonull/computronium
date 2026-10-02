@@ -10,13 +10,17 @@ Implements WP5 deliverable: evidence/claims.py — full predicate suite:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import DataOrigin
 from computronium.experiment.schema.record import GateVerdict, Record
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from computronium.experiment.evidence.protocol import ComparisonGuard, CostBudget
     from computronium.experiment.evidence.store import RecordStore
 
@@ -46,71 +50,12 @@ def claim_eligible(record: Record) -> bool:
     )
 
 
-def claim_eligible_by_achieved_seeds(
-    record: Record,
-    store: "RecordStore",  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
-    min_seeds: int = 5,
-    run_id: str | None = None,
-) -> bool:
-    """Check if a record is eligible for claim based on *achieved* seeds.
+def replication_key(record: Record) -> str:
+    """The record's replication key: coordinate + schedule, without seed.
 
-    Unlike claim_eligible() which uses the planned schedule.n_seeds,
-    this function queries the store to count how many seeds actually
-    completed with PASS gate verdict for this replication key.
-
-    This prevents runs that died mid-replication from being considered
-    claim-eligible (L20 remediation).
-
-    Args:
-        record: The record to check.
-        store: The RecordStore to query for achieved seeds.
-        min_seeds: Minimum required achieved seeds (default 5 per protocol).
-        run_id: Optional run ID to scope the query.
-
-    Returns:
-        True if achieved seeds >= min_seeds and other criteria met.
+    One definition of measurement identity, read by claim eligibility, the
+    achieved-seed count, the claim table and the limitations.
     """
-    """Check if a record is eligible for claim based on *achieved* seeds.
-
-    Unlike claim_eligible() which uses the planned schedule.n_seeds,
-    this function queries the store to count how many seeds actually
-    completed with PASS gate verdict for this replication key.
-
-    This prevents runs that died mid-replication from being considered
-    claim-eligible (L20 remediation).
-
-    Args:
-        record: The record to check.
-        store: The RecordStore to query for achieved seeds.
-        min_seeds: Minimum required achieved seeds (default 5 per protocol).
-        run_id: Optional run ID to scope the query.
-
-    Returns:
-        True if achieved seeds >= min_seeds and other criteria met.
-    """
-    # Basic eligibility checks (same as claim_eligible)
-    if not (
-        record.status.gate_verdict.value == "PASS"
-        and not record.status.quarantine
-        and record.schedule.fidelity == "L2"
-    ):
-        return False
-
-    # Compute replication key from record
-    rep_key = _compute_replication_key(record)
-
-    # Count achieved seeds
-    achieved = store.count_achieved_seeds(
-        replication_key=rep_key,
-        run_id=run_id or record.run_id,
-        gate_verdict=GateVerdict.PASS_,
-    )
-
-    return achieved >= min_seeds
-
-
-def _compute_replication_key(record: Record) -> str:
-    """Compute replication key from record (coordinate + schedule without seed)."""
     return (
         f"{record.cell_key}|"
         f"{record.schedule.fidelity}|"
@@ -121,6 +66,44 @@ def _compute_replication_key(record: Record) -> str:
     )
 
 
+def claim_eligible_by_achieved_seeds(
+    record: Record,
+    store: "RecordStore",  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
+    min_seeds: int = 5,
+    run_id: str | None = None,
+) -> bool:
+    """Check if a record is eligible for claim based on *achieved* seeds.
+
+    Unlike claim_eligible(), which reads the *planned* ``schedule.n_seeds``,
+    this queries the store for the seeds that actually completed with a PASS
+    gate verdict for this replication key, so a run that died mid-replication
+    is not claim-eligible (L20 remediation).
+
+    Args:
+        record: The record to check.
+        store: The RecordStore to query for achieved seeds.
+        min_seeds: Minimum required achieved seeds (default 5 per protocol).
+        run_id: Optional run ID to scope the query.
+
+    Returns:
+        True if achieved seeds >= min_seeds and other criteria met.
+    """
+    if not (
+        record.status.gate_verdict.value == "PASS"
+        and not record.status.quarantine
+        and record.schedule.fidelity == "L2"
+    ):
+        return False
+
+    achieved = store.count_achieved_seeds(
+        replication_key=replication_key(record),
+        run_id=run_id or record.run_id,
+        gate_verdict=GateVerdict.PASS_,
+    )
+
+    return achieved >= min_seeds
+
+
 def claim_eligible_strict(record: Record, min_seeds: int = 5) -> bool:
     """Strict claim eligibility with configurable minimum seeds."""
     return (
@@ -129,6 +112,195 @@ def claim_eligible_strict(record: Record, min_seeds: int = 5) -> bool:
         and record.schedule.fidelity == "L2"
         and record.schedule.n_seeds >= min_seeds
     )
+
+
+# =============================================================================
+# Claim Derivation (R35/R64) — claims, with n and variance or not at all
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class Claim:
+    """One claim a run makes about one axis value, with its evidence attached.
+
+    R64: a claim carries n and variance. Both are required fields, so a claim
+    without them is not expressible rather than merely discouraged.
+
+    Attributes:
+        metric: The payload key the claim is about.
+        axis: The structural axis the claim varies.
+        value: The axis value the claim is about.
+        n: Measurements behind the claim (seeds across cells).
+        mean: Mean of the metric over those measurements.
+        variance: Sample variance of the metric over those measurements.
+        cells: Distinct cells (replication keys) contributing.
+    """
+
+    metric: str
+    axis: str
+    value: str
+    n: int
+    mean: float
+    variance: float
+    cells: int
+
+    def __post_init__(self) -> None:
+        if self.n < 1:
+            msg = f"Claim.n must be at least 1, got {self.n}"
+            raise ValueError(msg)
+        if not math.isfinite(self.mean) or not math.isfinite(self.variance):
+            msg = f"Claim metrics must be finite: mean={self.mean} variance={self.variance}"
+            raise ValueError(msg)
+        if self.variance < 0.0:
+            msg = f"Claim.variance must be non-negative, got {self.variance}"
+            raise ValueError(msg)
+
+    def render(self) -> str:
+        """The claim as one report line, evidence included."""
+        return (
+            f"{self.axis}={self.value}: {self.metric}={self.mean:.4f} "
+            f"±{math.sqrt(self.variance):.4f} (n={self.n}, cells={self.cells})"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AxisImpact:
+    """Which axis moved the metric most, and by how much.
+
+    Attributes:
+        axis: The axis with the widest spread between its values' means.
+        metric: The metric the spread was measured on.
+        best_value: The axis value with the highest mean.
+        worst_value: The axis value with the lowest mean.
+        spread: Absolute difference between the two means.
+    """
+
+    axis: str
+    metric: str
+    best_value: str
+    worst_value: str
+    spread: float
+
+    def render(self) -> str:
+        """The impact as one report line."""
+        return (
+            f"{self.axis} mattered most for {self.metric}: "
+            f"{self.best_value} vs {self.worst_value} by {self.spread:.4f}"
+        )
+
+
+def derive_claims(
+    records: Sequence[Record],
+    *,
+    metric: str,
+    achieved: Mapping[str, int] | None = None,
+    min_seeds: int = 5,
+) -> tuple[Claim, ...]:
+    """Group claim-eligible records by axis value and summarise each group.
+
+    Eligibility is a filter the run does not apply to itself: a record
+    contributes only when it passed its gate, is not quarantined, and its
+    replication key reached ``min_seeds`` passing seeds. The achieved-seed
+    count is the honest one — ``claim_eligible`` reads the *planned*
+    ``schedule.n_seeds``, which the per-seed executor stamps as 1.
+
+    Args:
+        records: The run's records (or any slice of them).
+        metric: The payload key to claim about.
+        achieved: Achieved PASS seeds per replication key, as
+            ``RecordStore.count_achieved_seeds`` reports them. Without it, a
+            record's own gate verdict is the only filter.
+        min_seeds: Seeds a cell must have reached to contribute.
+
+    Returns:
+        One claim per axis value that reached ``min_seeds`` measurements,
+        ordered by axis then by descending mean.
+    """
+    grouped: dict[tuple[str, str], list[Record]] = {}
+    for record in records:
+        if not _contributes(record, achieved=achieved, min_seeds=min_seeds):
+            continue
+        value = record.payload.get(metric)
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            continue
+        for axis in StructuralAxis:
+            grouped.setdefault((axis.value, getattr(record, axis.value)), []).append(
+                record
+            )
+
+    claims: list[Claim] = []
+    for (axis, value), group in grouped.items():
+        if len(group) < min_seeds:
+            continue
+        values = [float(r.payload[metric]) for r in group]
+        mean = sum(values) / len(values)
+        variance = (
+            sum((v - mean) ** 2 for v in values) / (len(values) - 1)
+            if len(values) > 1
+            else 0.0
+        )
+        claims.append(
+            Claim(
+                metric=metric,
+                axis=axis,
+                value=value,
+                n=len(values),
+                mean=mean,
+                variance=variance,
+                cells=len({replication_key(r) for r in group}),
+            )
+        )
+    return tuple(sorted(claims, key=lambda c: (c.axis, -c.mean, c.value)))
+
+
+def strongest_axis(claims: Sequence[Claim]) -> AxisImpact | None:
+    """The axis whose values' means spread widest on the claimed metric.
+
+    Args:
+        claims: Claims from one run, possibly over several metrics.
+
+    Returns:
+        The widest axis, or ``None`` when every axis has a single value.
+    """
+    by_axis: dict[tuple[str, str], dict[str, float]] = {}
+    for claim in claims:
+        by_axis.setdefault((claim.metric, claim.axis), {})[claim.value] = claim.mean
+    if not by_axis:
+        return None
+    (metric, axis), means = max(
+        by_axis.items(),
+        key=lambda item: (max(item[1].values()) - min(item[1].values()), item[0][1]),
+    )
+    if len(means) < 2:
+        return None
+    spread = (
+        means[best := max(means, key=lambda value: (means[value], value))]
+        - means[min(means, key=lambda value: (means[value], value))]
+    )
+    if spread <= 0.0:
+        return None
+    worst = min(means, key=lambda value: (means[value], value))
+    return AxisImpact(
+        axis=axis,
+        metric=metric,
+        best_value=best,
+        worst_value=worst,
+        spread=spread,
+    )
+
+
+def _contributes(
+    record: Record,
+    *,
+    achieved: Mapping[str, int] | None,
+    min_seeds: int,
+) -> bool:
+    """Whether one record may back a claim (R35/R64 filter, never an assertion)."""
+    if record.status.gate_verdict.value != "PASS" or record.status.quarantine:
+        return False
+    if achieved is None:
+        return True
+    return achieved.get(replication_key(record), 0) >= min_seeds
 
 
 # =============================================================================
@@ -571,14 +743,14 @@ def group_by_replication_key(records: list[Record]) -> dict[str, list[Record]]:
     """Group records by replication_key (coordinate + schedule without seed)."""
     groups: dict[str, list[Record]] = {}
     for r in records:
-        # Replication key excludes seed
-        rep_key = f"{r.cell_key}|{r.schedule.fidelity}|{r.schedule.n_seeds}|{r.schedule.epochs}|{r.schedule.batch_limit}|{r.schedule.budget_id}"
-        groups.setdefault(rep_key, []).append(r)
+        groups.setdefault(replication_key(r), []).append(r)
     return groups
 
 
 __all__ = [
     "Alert",
+    "AxisImpact",
+    "Claim",
     "alert_on_constraint_violation",
     "alert_on_divergence",
     "alert_on_resource_exhaustion",
@@ -590,6 +762,7 @@ __all__ = [
     "claim_eligible_by_achieved_seeds",
     "claim_eligible_strict",
     "compare_matched_cost",
+    "derive_claims",
     "evaluation_data_allowed",
     "filter_by_data_origin",
     "filter_by_maturity",
@@ -604,10 +777,12 @@ __all__ = [
     "is_test_data",
     "promotable",
     "promoted",
+    "replication_key",
     "robust",
     "same_budget_tier",
     "same_data_origin",
     "same_hardware_class",
+    "strongest_axis",
     "training_data_allowed",
     "valid_comparison",
 ]

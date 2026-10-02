@@ -48,9 +48,10 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D10–D23 are fixed.** D15 was found and fixed in §8 session 5, D16
-and D17 in session 6, D18 and D19 in session 7, D20–D22 in session 8, and D23 in
-session 9. **D7–D9 remain**, and D14's fix is consumed by §3.3.
+**D1–D6 and D10–D26 are fixed.** D15 was found and fixed in §8 session 5, D16
+and D17 in session 6, D18 and D19 in session 7, D20–D22 in session 8, D23 in
+session 9, and D24–D26 in session 11. **D7 and D8 are fixed by §3.5 and §4;
+D9 (the lab fold) remains**, and D14's fix is consumed by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
@@ -186,7 +187,7 @@ S11's report delegation are §3.5. A stage that has nothing to say emits an
 explicit empty fragment (abc3 §5.1, R39) rather than a plausible-looking
 placeholder with `confidence: 0.0`.
 
-### D7 — The report renders statistics, not claims
+### D7 — The report renders statistics, not claims — FIXED, §8 session 11
 
 `experiment/surface/report.py:393` `generate_run_report` emits record counts,
 maturity and gate-verdict distributions, coordinate coverage and a Pareto
@@ -350,6 +351,64 @@ run makes and withdraws per cell.*
   used before: a retired row leaves every space, so the run stops proposing
   cells it can only fail. The fix is a `route`-level reshape plus a read-out,
   which is a geometry feature, so it is queued rather than faked.
+
+### D24 — Nothing ever promotes a record
+
+Found in session 11, while making the report render claims. `promoted(record)`,
+`filter_promoted` and `ReportGenerator.promotion_history` all exist and are
+read by the report and the handoff summary — and **no code path ever sets
+`status.maturity` above `L0`** (`evaluate.py:330,368` and
+`stages_impl.py:393` are the only writers, all `Maturity.L0`). There is no
+promotion stage at all: `StageId` runs S1…S11 and S8 is `RECORD`, not
+`PROMOTE`. So `Promoted: 0` in every report is not a measurement, it is a
+constant. The seventh instance of §2.0's pattern, and the one that would make a
+maturity-promotion claim in the README unfalsifiable.
+
+**Not fixed here.** Promotion needs a decision (what promotes a cell: achieved
+seeds? a gate at L2? an operator action?) and a stage that writes maturity,
+which is §3.7-adjacent work rather than report work. Recorded rather than
+silently removed, and the report keeps printing the count so the constant is
+visible.
+
+### D25 — The store's claim prefilter ignored the parameter it was given
+
+Found in session 11, same pass. `RecordStore.claim_eligible_prefilter(fidelity,
+min_n_seeds)` documented
+
+```
+WHERE status.gate_verdict = 'PASS' AND NOT status.quarantine
+AND schedule.fidelity = ? AND schedule.n_seeds >= ?
+```
+
+and implemented the first three. The seed condition was never in the query, so
+`min_n_seeds` was a knob that decided nothing — §3.0's shape in the store.
+Worse, **the test that appeared to lock it passed for the wrong reason**:
+`test_claim_eligible_prefilter_uses_protocol_fields` asserts two L2 records
+come back, and the fidelity filter alone produced exactly those two, so the
+seed clause could have been absent and the lock would still be green. The same
+class as `test_required_capabilities_are_active` (session 9): a lock that
+enforces nothing reads exactly like one that enforces something.
+
+Fixed: `query_records` gained a `min_n_seeds` filter, the prefilter passes it,
+the lock's fixture gained the record the filter exists for — **one seed of a
+five-seed cell, `L2` and `PASS`, which is how the executor writes every record**
+— and the comment above the assertion now says why that record is there.
+
+### D26 — The report's Pareto front defaulted to a key nothing measures
+
+Found in session 11, by running the report on a run whose records were
+measured. `pareto_frontier` and `fronts_by_fidelity` both defaulted to
+`objectives=("accuracy", "param_count")`, and **`accuracy` is not a key the
+evaluator emits** (§D19: the measured namespace is `train_acc`, `train_loss`,
+`val_acc`, `val_loss`, `walltime_s`, `param_count`). So the section rendered
+`(no claim-eligible records)` on a run with 15 passing records — a known state
+reported as an empty finding, the same shape as D21's absent store.
+
+Fixed: the default is the run's own declared objective (`objective_metric`)
+against `param_count`, and the section heading prints the keys it actually
+used, so a front over a metric nobody measures is visible rather than implied.
+
+---
 
 ---
 
@@ -618,7 +677,7 @@ records observed. Then assert `suggest_*` was actually called — e.g. by
 comparing a `ModelBasedPolicy` trial sequence against a `UniformRandomPolicy`
 one for the same seed, which must differ.
 
-### 3.5 Claims, evidence, limitations in the report
+### 3.5 Claims, evidence, limitations in the report — LANDED, see §8 session 11
 
 - Claim rendering over the **existing** predicates in `claims.py`
   (`claim_eligible`, `claim_eligible_strict`, `promoted`, `robust`,
@@ -1542,6 +1601,83 @@ policy table reads the new docstrings) and the build lock green.
 `platform`, `pytest -m demo` — none touches the schema or the surface this
 session changed.
 
+### Session 11
+
+**Landed: §3.5, and D24–D26.** The report now renders claims and limitations;
+both are derived from records, and a claim is *inexpressible* without its
+evidence.
+
+**A claim is a required-field object, not a rendered sentence.** `Claim`
+(`evidence/claims.py`) carries `metric`, `axis`, `value`, `n`, `mean`,
+`variance`, `cells`; `n` and `variance` have no defaults, so R64's "a claim
+line carries n and variance" is enforced by construction rather than by
+convention — and `__post_init__` refuses `n < 1`, a non-finite mean or a
+negative variance. `derive_claims(records, metric, achieved, min_seeds)` groups
+claim-eligible records by axis value and summarises each group; `strongest_axis`
+answers the operator's own criterion ("which axis mattered") from the same
+claims rather than from a second analysis.
+
+**Eligibility is a filter the run does not apply to itself.** A record
+contributes only if it passed its gate, is not quarantined, **and its
+replication key reached `min_seeds` passing seeds**. That last clause is
+`claim_eligible_by_achieved_seeds`' semantics, not `claim_eligible`'s: the
+executor writes one record per seed with `schedule.n_seeds == 1`, so the
+*planned*-seed predicate is unsatisfiable for every record a run actually
+writes. The predicate is left alone (`test_statistical_protocol_lock` locks it
+and it is the documented R35 rule); the cell-level truth is a new store method,
+`claim_eligible_replication_keys`, which answers "which cells achieved their
+seeds" in **one grouped query** rather than one query per cell.
+
+**Limitations are counts with their filter attached.** `LimitationKind` names
+the seven things a record stream can answer for — quarantined cells, failures
+by cause, gates never reached, cells short of their declared seeds, fidelity
+not reached, declared objectives no measurement satisfies, and *no eligible
+claim at all*. `Limitation` carries `count` and `evidence`, and refuses to be
+constructed without the second, so the report prints the filter beside every
+line and the lock recomputes each count from the records. The derivations are a
+table (`_DERIVATIONS`), one small function per kind — adding a limitation is a
+row, not a branch in a 60-line function.
+
+**Measured, not fabricated.** The lock's fixture trains real `digits` cells
+through `cell_record` at the measured regime (1 epoch, 2 batches,
+`MEASURED_PARAM_BUDGET`), 3 s for the module's seven cells, and one of the two
+credit cells deliberately stops at 2 of 5 seeds so the abandoned-cell line has
+something true to say. On that run the report prints claims for the two full
+credits, `cells=1` each, and exactly one `[cells_abandoned]` line — and the
+report *before* the fix would have said `Claim Eligible: 12`.
+
+**Three new defects fell out of reading the report's own output** — D24, D25,
+D26 above. All three are "a known state reported as a measurement":
+`Promoted: 0` is a constant (nothing promotes), the store's claim prefilter
+ignored its seed filter *and the lock for it passed for the wrong reason*, and
+the Pareto section named a payload key nothing emits.
+
+**DRY in the same pass.** Four definitions of the replication key existed
+(`claims._compute_replication_key`, an inline f-string in
+`report.claim_eligible_table`, one in `group_by_replication_key`, and the
+store's SQL parser) — now one Python function and one SQL column list with a
+shared formatter, so "the cell key and the measurement key cannot disagree" is
+structural. `axis_coverage`'s six-axis tuple literal is `StructuralAxis`;
+`count_by_axis` takes a `StructuralAxis` rather than re-declaring the six as a
+`Literal`; `pipeline._is_claim_eligible` (a fourth copy of the predicate) now
+calls the predicate. `claims.claim_eligible_by_achieved_seeds` carried its
+docstring **twice**, verbatim, from an earlier edit.
+
+**Verified:** `tests/property/test_claim_report_lock.py` (22, new) plus the
+two protocol locks whose fixtures it touches — 89 passed in 13 s; `ruff` and
+`pyright` clean on every module this session touched.
+
+**Not verified here, stated plainly:** the `tests/property` shard was launched
+twice and both runs were **hard-killed with no summary** (the §7 unknown, now
+observed twice more — at 65% of the combined shard and at 92% of `property`
+alone). The second run showed **one failure at ~48% that I did not identify**:
+by the operator's instruction not to keep spending test time hunting it, it is
+recorded rather than chased. `tests/property/test_ontology_parity.py` and the
+other 216 entries in `.pytest_cache/v/cache/lastfailed` are **stale** (that
+node id no longer collects), so the cache is not a usable pointer — see §6.2.
+`tests/unit` and `tests/acceptance` were not re-run this session; both touch
+`query_records(run_id=...)` by keyword, which is the only signature change.
+
 ### Remaining work, in order
 
 0. ~~**D22, then D20/D21, then the tier-0 CLI lock**~~ **DONE, §8 session 8.**
@@ -1573,14 +1709,22 @@ session changed.
 4. ~~**§4 item 4's remaining half**~~ **DONE, §8 session 8** — and more than the
    bash-block lock: README is now *built* from `docs/readme/*.md`, with every
    table that can be read from the code substituted at build time.
-5. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
+5. ~~**§3.5 — claims, evidence, limitations in the report**~~ **DONE, §8
+   session 11.** `Claim` (n and variance required), `derive_claims` over the
+   achieved-seed filter, `strongest_axis` for "which axis mattered",
+   `evidence/limitations.py` with seven derived kinds each carrying its filter,
+   and both sections rendered by `generate_run_report` from the store alone.
+   **Left deliberately:** promotion (D24) — nothing sets maturity above `L0`,
+   so `Promoted:` stays 0 and the promotion-history section is honest about
+   being empty until a promotion stage exists.
+6. **`nca` is retired, not fixed** (D17, session 6). Restoring it needs
    `NcaGeometry.route` to reshape a `(B, F)` batch into the `(B, C, H, W)` state
    grid its `step` contract names, and to read class logits back out of the
    grid. That is a geometry feature with credit/settle consequences — a
    separate piece of work, and the reason the row carries a recorded reason
    rather than a silent `available=False`.
 
-6. **LOW PRIORITY — README content archaeology.** The README has been
+7. **LOW PRIORITY — README content archaeology.** The README has been
    rewritten several times (TODO43's canonical rewrite, TODO45's cost pass,
    this session's generation). Every rewrite dropped *something*, and the drops
    were never diffed: they were noticed, if at all, only by a reader who
@@ -1594,6 +1738,78 @@ session changed.
    registry-derived is better served by a `<!-- gen: -->` block than by prose.
    Recorded because the plan's own §1 is that defect class — content that
    existed, was correct, and left without a marker.
+
+### 6.2 Spending less test time (operator directive, session 11)
+
+A session that ends with an unfinished suite has spent the budget and bought
+nothing — and a session that re-runs a shard to *find out* what failed has spent
+it twice. Session 11 launched `tests/property` twice for one feature and got
+nothing from either. The rules that would have prevented it:
+
+1. **A feature change names its tests; it never launches a `testpaths`
+   directory.** The cheap step is `grep -rn <symbol> tests/ --include=*.py`
+   (~1 s) followed by running the 2–4 files it names. Whole-shard runs happen
+   at round close, backgrounded, once. Session 3–10 all did this; session 11
+   did not, and the difference was ~12 minutes and no verdict.
+2. **Collect before you execute.** `pytest <dir> --co -q > ids.txt` runs no
+   test code and takes ~40 s; slicing that file locates a failure in a killed
+   run without re-running anything. Guessing a failure's position from a
+   progress percentage is strictly worse and cost a 10-minute run here.
+3. **A killed run produces no verdict, so make it produce a list.** Any launch
+   expected to be interrupted writes `-rf --tb=line` to a log: the failure list
+   survives the kill even when the summary does not.
+4. **Do not trust `.pytest_cache/v/cache/lastfailed` in this repo.** 520
+   entries, most of them stale — node ids drift as tests are renamed, and
+   `--lf` selects tests that no longer collect. Reset it (or use `--ff` with a
+   fresh cache) or ignore it.
+5. **One measurement, then act.** Re-running a shard that was already green to
+   "confirm" is the same waste as re-running a red one to investigate.
+6. **Price by symbol, not by directory.** A change to `evidence/` does not need
+   `tests/property/biology/`; a change to `evaluate.py` does need the training
+   tier, and only that tier.
+
+**Worth automating (not done):** `scripts/probes/related_tests.py <module>`
+would do step 1 in one second by grepping `tests/` for the module's public
+symbols, printing the candidate test files ranked by match count. It is the
+same trick as the AST locks, applied to the *test selection* rather than to the
+code, and it is the cheapest possible intervention against this session's
+worst habit.
+
+**Improvement opportunities found in session 11:**
+
+- **The report asks the store the same question three times.** `claims()`
+  computes `achieved_seeds()` (one query *per cell*); `limitations()` calls
+  `claims()` *and* `achieved_seeds()` again; `run_summary()` calls
+  `claim_eligible_records()`. At 50 cells that is ~150 round trips to print one
+  page. The grouped query behind `claim_eligible_replication_keys` already
+  returns achieved counts — deriving `achieved_seeds` from one grouped query
+  instead of a per-cell loop is the fix, and §6.1's rule applies verbatim: cost
+  hidden in a loop is cost nobody prices.
+- **A claim is reported for axes the run did not vary.** With one geometry
+  value, `geometry=feedforward: val_acc=… (n=10)` is a measurement but not a
+  comparison. Restricting claims to axes with ≥2 observed values would leave
+  the section carrying only what it can support; today it carries four
+  single-value lines the reader has to skip.
+- **`Claim` reports one metric; a run declares several.** The metric is the
+  run's first *measured* objective, so `optimises=[val_acc, walltime_s]`
+  yields claims about one of them. §3.6 wants a Pareto over ≥2 objectives, so
+  `derive_claims` will need to be per-metric rather than per-first-objective —
+  a change to the lock, not to the model.
+- **Two more predicates read payload keys nothing writes.** `robust()` reads
+  `seed_metrics` and `generalizes()` reads `task_metrics`; neither is in
+  `MEASURED_METRICS`, so `generalizes` is structurally `False` and `robust`
+  silently falls back to counting planned seeds. That is D19's shape in
+  `claims.py`, and the same fix applies: declare the key in `schema/metrics.py`
+  or retire the predicate with a reason.
+- **Promotion has no stage, so three report sections are permanently empty**
+  (D24). Worth the §2.0 call-site treatment: every report section that renders
+  nothing for every conceivable run is either unimplemented or dead, and the
+  report cannot tell you which.
+- **The seed filter nobody could see is now visible, and it empties a set.**
+  `claim_eligible_prefilter` with `min_n_seeds=5` returns nothing for any run
+  the executor writes. That is the *record-level* predicate being honest; the
+  cell-level one is `claim_eligible_replication_keys`. Worth checking, at the
+  next round close, that no consumer wants the old (over-inclusive) behaviour.
 
 **Improvement opportunities found in session 10:**
 

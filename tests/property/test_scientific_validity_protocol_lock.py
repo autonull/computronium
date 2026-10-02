@@ -477,6 +477,9 @@ class TestScientificValidityProtocolIntegration:
                     ("L2", 5, GateVerdict.PASS_),
                     ("L2", 10, GateVerdict.PASS_),
                     ("L2", 5, GateVerdict.FAIL),  # Should be excluded
+                    # One seed of a five-seed cell, as the executor writes it:
+                    # L2 and PASS, but its own schedule plans a single seed.
+                    ("L2", 1, GateVerdict.PASS_),
                 ]):
                     sched = Schedule(
                         fidelity=fidelity,
@@ -517,7 +520,11 @@ class TestScientificValidityProtocolIntegration:
                     )
                     store.append(record)
 
-                # Prefilter: L2, n_seeds >= 5, PASS, not quarantined
+                # Prefilter: L2, n_seeds >= 5, PASS, not quarantined. The
+                # per-seed record above is the case the seed filter exists for:
+                # before the filter was implemented, the fidelity and verdict
+                # conditions alone happened to exclude it, and the lock below
+                # passed for the wrong reason.
                 eligible = store.claim_eligible_prefilter(fidelity="L2", min_n_seeds=5)
                 # Should get 2 records: (L2, 5) and (L2, 10)
                 assert len(eligible) == 2

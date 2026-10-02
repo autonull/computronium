@@ -11,7 +11,7 @@ import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Final, Literal, Self
 
 import duckdb
 
@@ -39,7 +39,11 @@ from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import current_schema_version
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pydantic import BaseModel
+
+    from computronium.experiment.schema.axis import StructuralAxis
 
 
 class DuplicateMeasurementError(Exception):
@@ -541,13 +545,15 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             return None
         return self._row_to_record(row)
 
-    def query_records(
+    def query_records(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - a query builder's filters are one parameter each
         self,
         run_id: str | None = None,
+        *,
         cell_key: str | None = None,
         gate_verdict: GateVerdict | None = None,
         fidelity: str | None = None,
         quarantine: bool | None = None,
+        min_n_seeds: int | None = None,
         data_origin: str | None = None,
         payload_kind: str | None = None,
         limit: int | None = None,
@@ -561,6 +567,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             gate_verdict: Filter by gate verdict.
             fidelity: Filter by schedule fidelity (L0/L1/L2).
             quarantine: Filter by quarantine status.
+            min_n_seeds: Filter to schedules that *plan* at least this many seeds.
             data_origin: Filter by provenance.data_origin (exploration/policy_selected/calibration/test).
             payload_kind: Filter by payload.kind (e.g., "icu", "hypothesis", "literature").
             limit: Maximum number of records to return.
@@ -587,6 +594,9 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         if quarantine is not None:
             conditions.append("status.quarantine = ?")
             params.append(quarantine)
+        if min_n_seeds is not None:
+            conditions.append("schedule.n_seeds >= ?")
+            params.append(int(min_n_seeds))
         if data_origin is not None:
             conditions.append("json_extract_string(provenance, '$.data_origin') = ?")
             params.append(data_origin)
@@ -633,17 +643,54 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         fidelity: str = "L2",
         min_n_seeds: int = 5,
     ) -> list[Record]:
-        """SQL prefilter for claim eligibility.
+        """SQL prefilter for claim eligibility (R35).
 
-        Claim prefilter: WHERE status.gate_verdict = 'PASS'
-        AND NOT status.quarantine
-        AND schedule.fidelity = 'L2'
-        AND schedule.n_seeds >= 5
+        ``WHERE status.gate_verdict = 'PASS' AND NOT status.quarantine
+        AND schedule.fidelity = ? AND schedule.n_seeds >= ?`` — the same four
+        conditions ``claims.claim_eligible`` reads, so the store and the pure
+        predicate cannot disagree. ``min_n_seeds`` filters the *planned* seed
+        count, which is what the predicate asks; the *achieved* count is a
+        property of a replication group, and
+        :meth:`claim_eligible_replication_keys` is where that is decided.
         """
         return self.query_records(
             gate_verdict=GateVerdict.PASS_,
             fidelity=fidelity,
             quarantine=False,
+            min_n_seeds=min_n_seeds,
+        )
+
+    def claim_eligible_replication_keys(
+        self,
+        run_id: str | None = None,
+        min_n_seeds: int = 5,
+        fidelity: str = "L2",
+    ) -> tuple[str, ...]:
+        """Replication keys that *achieved* ``min_n_seeds`` distinct passing seeds.
+
+        Claim eligibility is a property of a cell, not of one of its seeds: the
+        executor writes one record per seed with ``schedule.n_seeds == 1``, so
+        no record-level filter can answer it. One grouped query, so the answer
+        costs one round trip rather than one per cell.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        conditions = ["status.gate_verdict = ?", "schedule.fidelity = ?"]
+        params: list[Any] = [GateVerdict.PASS_.value, fidelity]
+        if run_id is not None:
+            conditions.append("run_id = ?")
+            params.append(run_id)
+        query = (
+            f"SELECT {_REPLICATION_COLUMNS}, COUNT(DISTINCT schedule.seed) "
+            "FROM records WHERE "
+            + " AND ".join(conditions)
+            + f" GROUP BY {_REPLICATION_COLUMNS}"
+        )
+        rows = self._conn.execute(query, params).fetchall()  # ruff: ignore[hardcoded-sql-expression] - static columns, bound params
+        return tuple(
+            format_replication_key(row[:6])
+            for row in rows
+            if row[6] >= int(min_n_seeds)
         )
 
     # =========================================================================
@@ -898,13 +945,11 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         run_id: str | None = None,
         gate_verdict: GateVerdict | None = GateVerdict.PASS_,
     ) -> int:
-        """Count achieved seeds for a replication key.
-
-        Groups records by replication_key components (coordinate + schedule without seed)
-        and counts distinct seeds that have PASS gate verdict.
+        """Count distinct seeds achieved for one replication key.
 
         Args:
-            replication_key: The replication key (computed from coordinate + schedule_without_seed).
+            replication_key: The replication key, as ``claims.replication_key``
+                formats it (coordinate + schedule without seed).
             run_id: Optional run ID filter.
             gate_verdict: Filter by gate verdict (default PASS).
 
@@ -913,51 +958,19 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         """
         if self._conn is None:
             raise StoreError("Connection not initialized")
-
-        # Build replication key components from the provided replication_key
-        # The replication_key format is: cell_key|fidelity|n_seeds|epochs|batch_limit|budget_id
-        parts = replication_key.split("|")
-        if len(parts) != 6:
-            # Fallback: try to compute from cell_key and schedule components
-            pass
-
-        cell_key = parts[0]
-        fidelity = parts[1]
-        n_seeds = int(parts[2])
-        epochs = int(parts[3])
-        batch_limit = int(parts[4])
-        budget_id = parts[5]
-
-        conditions = [
-            "cell_key = ?",
-            "schedule.fidelity = ?",
-            "schedule.n_seeds = ?",
-            "schedule.epochs = ?",
-            "schedule.batch_limit = ?",
-            "schedule.budget_id = ?",
-        ]
-        params: list[Any] = [
-            cell_key,
-            fidelity,
-            n_seeds,
-            epochs,
-            batch_limit,
-            budget_id,
-        ]
+        conditions, params = _replication_predicate(replication_key)
         if gate_verdict is not None:
             conditions.append("status.gate_verdict = ?")
             params.append(gate_verdict.value)
-
         if run_id is not None:
             conditions.append("run_id = ?")
             params.append(run_id)
-
-        where_clause = " WHERE " + " AND ".join(conditions)
-
-        # Count distinct seeds
-        query = f"SELECT COUNT(DISTINCT schedule.seed) FROM records{where_clause}"
-        result = self._conn.execute(query, params).fetchone()
-        return result[0] if result is not None else 0
+        query = (
+            "SELECT COUNT(DISTINCT schedule.seed) FROM records WHERE "
+            + " AND ".join(conditions)
+        )
+        row = self._conn.execute(query, params).fetchone()  # ruff: ignore[hardcoded-sql-expression] - static conditions, bound params
+        return row[0] if row is not None else 0
 
     def count_records(self, run_id: str | None = None) -> int:
         """Count records, optionally filtered by run_id."""
@@ -1090,9 +1103,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
 
     def count_by_axis(
         self,
-        axis: Literal[
-            "substrate", "geometry", "dynamics", "plasticity", "credit", "update"
-        ],
+        axis: StructuralAxis,
         run_id: str | None = None,
     ) -> dict[str, int]:
         """Count records grouped by a structural axis value (axis coverage, R18)."""
@@ -1399,6 +1410,44 @@ except ImportError:
     RecordOutputModel = _MissingPydantic  # type: ignore[assignment]
 
 
+# A replication key is ``cell_key|fidelity|n_seeds|epochs|batch_limit|budget_id``
+# (claims.replication_key); one SQL condition list and one formatter, so the
+# store and the pure predicate cannot disagree about what a cell is.
+_REPLICATION_COLUMNS: Final[str] = (
+    "cell_key, schedule.fidelity, schedule.n_seeds, schedule.epochs, "
+    "schedule.batch_limit, schedule.budget_id"
+)
+_REPLICATION_CONDITIONS: Final[tuple[str, ...]] = (
+    "cell_key = ?",
+    "schedule.fidelity = ?",
+    "schedule.n_seeds = ?",
+    "schedule.epochs = ?",
+    "schedule.batch_limit = ?",
+    "schedule.budget_id = ?",
+)
+
+
+def format_replication_key(parts: Sequence[object]) -> str:
+    """Format a replication key from its six parts, in the canonical order."""
+    return "|".join(str(part) for part in parts)
+
+
+def _replication_predicate(replication_key: str) -> tuple[list[str], list[Any]]:
+    """Split a replication key into its SQL conditions and bound parameters."""
+    parts = replication_key.split("|")
+    if len(parts) != 6:
+        msg = f"malformed replication key: {replication_key!r}"
+        raise StoreError(msg)
+    return [*_REPLICATION_CONDITIONS], [
+        parts[0],
+        parts[1],
+        int(parts[2]),
+        int(parts[3]),
+        int(parts[4]),
+        parts[5],
+    ]
+
+
 __all__ = [
     "DuplicateMeasurementError",
     "ProvenanceModel",
@@ -1413,6 +1462,7 @@ __all__ = [
     "TableName",
     "TableSlice",
     "UnsupportedSchemaVersionError",
+    "format_replication_key",
     "validate_record_input",
     "validate_record_output",
 ]

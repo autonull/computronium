@@ -662,13 +662,10 @@ class PipelineRunner:
         return True
 
     def _is_claim_eligible(self, record: Record) -> bool:
-        """Check if record is claim-eligible (pure predicate)."""
-        return (
-            record.status.gate_verdict.value == "PASS"
-            and not record.status.quarantine
-            and record.schedule.fidelity == "L2"
-            and record.schedule.n_seeds >= 5
-        )
+        """Check if record is claim-eligible (the one predicate, not a copy)."""
+        from computronium.experiment.evidence.claims import claim_eligible
+
+        return claim_eligible(record)
 
     async def _create_checkpoint(self) -> None:
         """Create a periodic checkpoint."""

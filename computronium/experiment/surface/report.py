@@ -15,17 +15,32 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
+    from computronium.experiment.schema.run_spec import RunSpec
 
 from computronium.experiment.evidence.claims import (
     Alert,
+    AxisImpact,
+    Claim,
     check_all_alerts,
+    derive_claims,
     filter_promoted,
+    replication_key,
+    strongest_axis,
 )
+from computronium.experiment.evidence.limitations import (
+    Limitation,
+    derive_limitations,
+    replication_keys_of,
+)
+from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.metrics import objective_metric
 from computronium.experiment.schema.record import GateVerdict
-from computronium.experiment.schema.run_spec import RunSpec
 
 __all__ = [
+    "AxisImpact",
+    "Claim",
     "ExportBundle",
+    "Limitation",
     "ReportGenerator",
     "RunSummary",
     "export_to_json",
@@ -80,12 +95,9 @@ class ReportGenerator:
             return None
 
         record_count = self._store.count_records(run_id)
-        claim_eligible_records = self._store.claim_eligible_prefilter()
-        claim_eligible_count = sum(
-            1 for r in claim_eligible_records if r.run_id == run_id
-        )
-        promoted_records = filter_promoted(claim_eligible_records)
-        promoted_count = sum(1 for r in promoted_records if r.run_id == run_id)
+        eligible = self.claim_eligible_records(run_id)
+        claim_eligible_count = len(eligible)
+        promoted_count = len(filter_promoted(eligible))
 
         return RunSummary(
             run_id=info.run_id,
@@ -110,15 +122,22 @@ class ReportGenerator:
                 results.append(summary)
         return results
 
-    def claim_eligible_records(self, run_id: str | None = None) -> list[Record]:
-        """Get all claim-eligible records, optionally filtered by run."""
-        records = self._store.claim_eligible_prefilter()
-        if run_id:
-            records = [r for r in records if r.run_id == run_id]
-        return records
+    def claim_eligible_records(self, run_id: str) -> list[Record]:
+        """The records of every cell that achieved the claim-grade seed count.
 
-    def promoted_records(self, run_id: str | None = None) -> list[Record]:
-        """Get all promoted records, optionally filtered by run."""
+        Eligibility is decided per *cell*, by achieved passing seeds: the
+        executor writes one record per seed, so a record-level filter cannot
+        see a replication group. One definition, read by every consumer here.
+        """
+        cells = set(self._store.claim_eligible_replication_keys(run_id))
+        return [
+            record
+            for record in self._store.query_records(run_id=run_id)
+            if replication_key(record) in cells
+        ]
+
+    def promoted_records(self, run_id: str) -> list[Record]:
+        """Get the promoted records of a run."""
         eligible = self.claim_eligible_records(run_id)
         return filter_promoted(eligible)
 
@@ -135,20 +154,24 @@ class ReportGenerator:
 
     def pareto_frontier(
         self,
-        run_id: str | None = None,
-        objectives: tuple[str, str] = ("accuracy", "param_count"),
+        run_id: str,
+        objectives: tuple[str, str] | None = None,
         maximize: tuple[bool, bool] = (True, False),
     ) -> list[dict[str, Any]]:
-        """Compute Pareto frontier from store records.
+        """Compute the Pareto frontier over a run's claim-eligible cells.
 
         Args:
-            run_id: Optional run filter
-            objectives: Tuple of (primary, secondary) objective keys from payload
-            maximize: Tuple of (maximize_primary, maximize_secondary)
+            run_id: Run filter.
+            objectives: Primary and secondary payload keys. Defaults to the
+                run's own declared objective against parameter count — a front
+                over a key no measurement emits is an empty section, not a
+                finding.
+            maximize: Tuple of (maximize_primary, maximize_secondary).
 
         Returns:
-            List of dicts with record_id, coordinate, and objective values
+            List of dicts with record_id, coordinate, and objective values.
         """
+        objectives = objectives or self.front_objectives(run_id)
         eligible = self.claim_eligible_records(run_id)
         if not eligible:
             return []
@@ -228,16 +251,65 @@ class ReportGenerator:
     def axis_coverage(self, run_id: str | None = None) -> dict[str, dict[str, int]]:
         """Per-axis stratification of records (R18 axis-coverage section)."""
         return {
-            axis: self._store.count_by_axis(axis, run_id)  # type: ignore[arg-type]
-            for axis in (
-                "substrate",
-                "geometry",
-                "dynamics",
-                "plasticity",
-                "credit",
-                "update",
-            )
+            axis.value: self._store.count_by_axis(axis, run_id)
+            for axis in StructuralAxis
         }
+
+    def achieved_seeds(self, run_id: str | None = None) -> dict[str, int]:
+        """Achieved passing seeds per replication key — one query per cell."""
+        keys = replication_keys_of(self._store.query_records(run_id=run_id))
+        return {
+            key: self._store.count_achieved_seeds(replication_key=key, run_id=run_id)
+            for key in keys
+        }
+
+    def claims(self, run_id: str) -> tuple[Claim, ...]:
+        """The claims a run makes, each with n and variance (R35/R64).
+
+        The metric is the run's first *measured* objective — declared, not
+        guessed. A run whose objectives nothing measures makes no claim.
+        """
+        metric = self._claim_metric(run_id)
+        if metric is None:
+            return ()
+        return derive_claims(
+            self._store.query_records(run_id=run_id),
+            metric=metric,
+            achieved=self.achieved_seeds(run_id),
+        )
+
+    def limitations(self, run_id: str) -> tuple[Limitation, ...]:
+        """Every limitation derivable from the run's records, none asserted."""
+        spec = self._spec(run_id)
+        return derive_limitations(
+            self._store.query_records(run_id=run_id),
+            achieved=self.achieved_seeds(run_id),
+            n_seeds=spec.n_seeds if spec else None,
+            fidelity=spec.fidelity if spec else None,
+            objectives=spec.objectives if spec else (),
+            claim_count=len(self.claims(run_id)),
+        )
+
+    def _spec(self, run_id: str) -> RunSpec | None:
+        """The run's persisted spec, or None when the run is unknown."""
+        info = self._store.query_run(run_id)
+        return info.spec if info is not None else None
+
+    def front_objectives(self, run_id: str) -> tuple[str, str]:
+        """The axes a Pareto front defaults to: the claimed metric, then size."""
+        return self._claim_metric(run_id) or "param_count", "param_count"
+
+    def _claim_metric(self, run_id: str) -> str | None:
+        """The payload key the run's first measured objective resolves to."""
+        spec = self._spec(run_id)
+        if spec is None:
+            return None
+        for name in spec.objectives:
+            try:
+                return objective_metric(name)
+            except LookupError:
+                continue
+        return None
 
     def failures_by_cause(self, run_id: str | None = None) -> dict[str, int]:
         """Count failed records grouped by recorded failure cause."""
@@ -258,11 +330,12 @@ class ReportGenerator:
 
     def fronts_by_fidelity(
         self,
-        run_id: str | None = None,
-        objectives: tuple[str, str] = ("accuracy", "param_count"),
+        run_id: str,
+        objectives: tuple[str, str] | None = None,
         maximize: tuple[bool, bool] = (True, False),
     ) -> dict[str, list[dict[str, Any]]]:
         """Pareto frontier per fidelity level (R86 fronts-by-fidelity)."""
+        objectives = objectives or self.front_objectives(run_id)
         records = self._store.query_records(run_id=run_id)
         by_fidelity: dict[str, list[Any]] = {}
         for record in records:
@@ -280,7 +353,7 @@ class ReportGenerator:
             fronts[fidelity] = self._pareto_subset(eligible, objectives, maximize)
         return fronts
 
-    def promotion_history(self, run_id: str | None = None) -> list[dict[str, Any]]:
+    def promotion_history(self, run_id: str) -> list[dict[str, Any]]:
         """Promoted records in persistence (seq) order — promotion history."""
         promoted = filter_promoted(self.claim_eligible_records(run_id))
         promoted.sort(key=lambda r: r.seq)
@@ -296,18 +369,14 @@ class ReportGenerator:
             for r in promoted
         ]
 
-    def claim_eligible_table(self, run_id: str | None = None) -> list[dict[str, Any]]:
+    def claim_eligible_table(self, run_id: str) -> list[dict[str, Any]]:
         """Flat claim-eligible table rows for reporting (R85)."""
         rows = []
         for r in self.claim_eligible_records(run_id):
-            replication_key = (
-                f"{r.cell_key}|{r.schedule.fidelity}|{r.schedule.n_seeds}|"
-                f"{r.schedule.epochs}|{r.schedule.batch_limit}|{r.schedule.budget_id}"
-            )
             rows.append({
                 "record_id": r.record_id,
                 "cell_key": r.cell_key,
-                "replication_key": replication_key,
+                "replication_key": replication_key(r),
                 "coordinate": f"{r.substrate}/{r.geometry}/{r.dynamics}/"
                 f"{r.plasticity}/{r.credit}/{r.update}",
                 "fidelity": r.schedule.fidelity,
@@ -391,6 +460,95 @@ class ReportGenerator:
         ]
 
 
+def _section(title: str) -> list[str]:
+    """A report section heading."""
+    return ["", title]
+
+
+def _claims_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Claims, each with n and variance, and which axis mattered most."""
+    lines = _section(
+        "Claims (n and variance are mandatory; a claim line is not prose):"
+    )
+    claims = generator.claims(run_id)
+    if not claims:
+        return [*lines, "  (none — see Limitations)"]
+    impact = strongest_axis(claims)
+    if impact is not None:
+        lines.append(f"  {impact.render()}")
+    lines.extend(f"  {claim.render()}" for claim in claims)
+    return lines
+
+
+def _limitations_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Limitations, each naming the filter that re-derives it."""
+    lines = _section("Limitations (every line re-derivable from a record):")
+    limitations = generator.limitations(run_id)
+    if not limitations:
+        return [*lines, "  (none)"]
+    for limitation in limitations:
+        lines.append(f"  [{limitation.kind}] {limitation.detail}")
+        lines.append(f"      evidence: {limitation.evidence}")
+    return lines
+
+
+def _distribution_section(
+    title: str, distribution: dict[str, int], indent: str = "  "
+) -> list[str]:
+    """One count-by-value section."""
+    return _section(title) + [
+        f"{indent}{name}: {count}" for name, count in sorted(distribution.items())
+    ]
+
+
+def _pareto_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """The claim-eligible Pareto front, or why there is none."""
+    lines = _section("Pareto Frontier (declared objective vs param_count):")
+    pareto = generator.pareto_frontier(run_id)
+    if not pareto:
+        return [*lines, "  (no claim-eligible records)"]
+    return [
+        *lines,
+        *(
+            f"  {point['record_id'][:16]}... acc={point['primary']:.4f} "
+            f"params={point['secondary']:.0f} "
+            f"[{point['coordinate']['dynamics']}/{point['coordinate']['credit']}/"
+            f"{point['coordinate']['update']}]"
+            for point in pareto[:10]
+        ),
+    ]
+
+
+def _alerts_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Records carrying an alert, with the alert kinds."""
+    lines = _section("Records with Alerts:")
+    alerted = generator.records_with_alerts(run_id)
+    if not alerted:
+        return [*lines, "  (no alerts)"]
+    return [
+        *lines,
+        *(
+            f"  {record.record_id[:16]}... ["
+            f"{', '.join(f'{a.alert_type}:{a.severity}' for a in alerts)}]"
+            for record, alerts in alerted[:20]
+        ),
+    ]
+
+
+def _coverage_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Unique cells with their seed counts."""
+    lines = _section("Coordinate Coverage (unique cell_keys with seed counts):")
+    return [
+        *lines,
+        *(
+            f"  {cell_key[:16]}...: {n_seeds} seeds"
+            for cell_key, n_seeds in sorted(
+                generator.coordinate_coverage(run_id).items()
+            )
+        ),
+    ]
+
+
 def generate_run_report(store: RecordStore, run_id: str) -> str:
     """Generate a human-readable report for a single run."""
     generator = ReportGenerator(store)
@@ -412,48 +570,18 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         f"  Total Records: {summary.record_count}",
         f"  Claim Eligible: {summary.claim_eligible_count}",
         f"  Promoted: {summary.promoted_count}",
-        "",
-        "Maturity Distribution:",
+        *_distribution_section(
+            "Maturity Distribution:", generator.maturity_distribution(run_id)
+        ),
+        *_distribution_section(
+            "Gate Verdict Distribution:", generator.gate_verdict_distribution(run_id)
+        ),
+        *_coverage_section(generator, run_id),
+        *_claims_section(generator, run_id),
+        *_limitations_section(generator, run_id),
+        *_pareto_section(generator, run_id),
+        *_alerts_section(generator, run_id),
     ]
-
-    maturity_dist = generator.maturity_distribution(run_id)
-    for maturity, count in sorted(maturity_dist.items()):
-        lines.append(f"  {maturity}: {count}")
-
-    lines.append("")
-    lines.append("Gate Verdict Distribution:")
-    verdict_dist = generator.gate_verdict_distribution(run_id)
-    for verdict, count in sorted(verdict_dist.items()):
-        lines.append(f"  {verdict}: {count}")
-
-    lines.append("")
-    lines.append("Coordinate Coverage (unique cell_keys with seed counts):")
-    coverage = generator.coordinate_coverage(run_id)
-    for cell_key, n_seeds in sorted(coverage.items()):
-        lines.append(f"  {cell_key[:16]}...: {n_seeds} seeds")
-
-    lines.append("")
-    lines.append("Pareto Frontier (accuracy vs param_count):")
-    pareto = generator.pareto_frontier(run_id)
-    if pareto:
-        for p in pareto[:10]:
-            lines.append(
-                f"  {p['record_id'][:16]}... acc={p['primary']:.4f} params={p['secondary']:.0f} "
-                f"[{p['coordinate']['dynamics']}/{p['coordinate']['credit']}/{p['coordinate']['update']}]"
-            )
-    else:
-        lines.append("  (no claim-eligible records)")
-
-    lines.append("")
-    lines.append("Records with Alerts:")
-    alerted = generator.records_with_alerts(run_id)
-    if alerted:
-        for record, alerts in alerted[:20]:
-            alert_str = ", ".join(f"{a.alert_type}:{a.severity}" for a in alerts)
-            lines.append(f"  {record.record_id[:16]}... [{alert_str}]")
-    else:
-        lines.append("  (no alerts)")
-
     return "\n".join(lines)
 
 
