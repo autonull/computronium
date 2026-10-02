@@ -14,6 +14,7 @@ from torch import Tensor
 
 from computronium.core.system_trainer.config import SystemTrainerConfig
 from computronium.core.system_trainer.trainer import SystemTrainer
+from computronium.experiment.execution.evaluate import history_metrics
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -237,7 +238,7 @@ def stability_probe(
     """One StabilityVerdict → StabilityCertificate (never raises)."""
     try:
         verdict = handle.check(state, step=step)
-    except Exception as exc:  # noqa: BLE001 - certificate, not a crash path
+    except Exception as exc:  # ruff: ignore[blind-except] - certificate, not a crash path
         return StabilityCertificate(
             checked=False, kill=False, note=f"guard unavailable: {exc}"
         )
@@ -467,10 +468,12 @@ def train_with_certificates(
     if theta_cm is not None and theta_cm.report is not None:
         audit = theta_outcome(system, theta_cm.report)
 
-    final = history[-1] if history else {}
+    # Measured keys come from the kernel's one history→metrics extraction
+    # (TODO47 T6); "loss"/"accuracy" are the lab's own aliases over them.
+    measured = history_metrics(history) if history else {}
     metrics = {
-        "loss": float(final.get("train_loss", final.get("loss", 0.0))),
-        "accuracy": float(final.get("train_acc", final.get("free_accuracy", 0.0))),
+        "loss": float(measured.get("train_loss", 0.0)),
+        "accuracy": float(measured.get("train_acc", 0.0)),
     }
     if val_data is not None:
         metrics.update(trainer.validate())

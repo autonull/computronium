@@ -6,7 +6,7 @@ the two facts that turn an objective name into a number:
 
 * :data:`HISTORY_METRICS` — the per-epoch observations the trainer reports, and
   :data:`MEASURED_METRICS`, those plus what the evaluator measures around them.
-  ``evaluate._history_metrics`` filters on this set, so a metric nobody
+  ``evaluate.history_metrics`` filters on this set, so a metric nobody
   declares does not reach a payload.
 * :data:`MEASURED_OBJECTIVES` — the objective names a payload key satisfies.
 

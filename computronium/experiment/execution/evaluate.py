@@ -33,7 +33,14 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.schema.record import Record
 
-__all__ = ["CellEvaluation", "TaskShape", "cell_record", "evaluate_cell", "task_shape"]
+__all__ = [
+    "CellEvaluation",
+    "TaskShape",
+    "cell_record",
+    "evaluate_cell",
+    "history_metrics",
+    "task_shape",
+]
 
 logger = get_logger(__name__)
 
@@ -121,8 +128,13 @@ def task_shape(task_id: str, device: str = "cpu") -> TaskShape:
     return _task_shape(_task(task_id, device))
 
 
-def _history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
-    """Final-epoch observations, flattened to the metric namespace."""
+def history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
+    """Final-epoch observations, flattened to the metric namespace.
+
+    The kernel-owned history→metrics extraction. The lab's certificates path
+    consumes this rather than re-implementing the filter (TODO47 T6): two
+    extractions is how the fallback chain hid dead keys from itself.
+    """
     if not history:
         msg = "training produced no epochs"
         raise EvaluationError("runtime_error", msg)
@@ -273,7 +285,7 @@ def evaluate_cell(
         raise EvaluationError("runtime_error", msg) from exc
     walltime_s = time.monotonic() - start
 
-    metrics = _history_metrics(history)
+    metrics = history_metrics(history)
     if not _finite(metrics):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)

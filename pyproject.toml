@@ -293,14 +293,13 @@ ignore = [
 ]
 "computronium/acceleration/pc_kernels.py" = [
     "PLR0915",
-    "PLW0717",
 ]
 "computronium/acceleration/{fa_kernels,ff_kernels,hebbian_kernels,kernels,snn_kernels,tile_kernels,triton_kernels,compile,kernel_backend}.py" = [
-    "PLW0717", # too-many-statements-in-try-clause — guarded Triton import ladder
+    # too-many-statements-in-try-clause — guarded Triton import ladder
     "RUF100",  # noqa-comments — the noqa is on a guarded import ladder
 ]
 "computronium/acceleration/triton_kernels.py" = [
-    "PLW0717", "RUF100",
+    "RUF100",
     "PLR0913", # too-many-arguments — kernel parameter surfaces are wide by design
     "PLR0914", # too-many-locals — ditto
     "PLR0911", # too-many-positional-arguments — ditto
@@ -322,52 +321,52 @@ ignore = [
     "S101",    # assert — internal invariant guard
 ]
 "computronium/experiment/evidence/store.py" = [
-    "PLW0717", "RUF100",
+    "RUF100",
     "S608",    # hardcoded-sql-expression — parameterized queries by design
 ]
 "computronium/experiment/execution/search_space.py" = [
-    "PLW0717", "RUF100", "E402", "TC001", "TC002", "TC003",
+    "RUF100", "E402", "TC001", "TC002", "TC003",
     "PLR0912", "PLR0915", "PLR0914", "PLR1702", "C401", "F841",
 ]
 "computronium/experiment/execution/stages_impl.py" = [
-    "PLW0717", "RUF100", "E402", "TC001", "TC003",
+    "RUF100", "E402", "TC001", "TC003",
     "PLR0912", "PLR0915", "PLR0914", "C901",
     "SIM105", "SIM110", "PLR1730", "F841",
 ]
-"computronium/experiment/execution/compose.py" = ["PLW0717", "RUF100"]
-"computronium/experiment/execution/policy.py" = ["PLW0717"]
-"computronium/experiment/execution/sysctx.py" = ["PLW0717"]
+"computronium/experiment/execution/compose.py" = ["RUF100"]
+"computronium/experiment/execution/policy.py" = []
+"computronium/experiment/execution/sysctx.py" = []
 "computronium/experiment/execution/optuna_adapter.py" = ["PLR0911", "PGH003"]
-"computronium/experiment/legality/engine.py" = ["PLW0717"]
+"computronium/experiment/legality/engine.py" = []
 "computronium/experiment/legality/dsl.py" = ["RUF100"]
 "computronium/experiment/schema/primitives.py" = ["E402"]
-"computronium/experiment/schema/harvest.py" = ["PLR0912", "PLW0717", "SIM105", "TRY300", "PLW2901"]
+"computronium/experiment/schema/harvest.py" = ["PLR0912", "SIM105", "TRY300", "PLW2901"]
 "computronium/experiment/surface/conformance.py" = ["S404", "S603", "S607", "SIM108", "F841"]
-"computronium/experiment/surface/operations.py" = ["PLW0717"]
+"computronium/experiment/surface/operations.py" = []
 "computronium/experiment/surface/report.py" = ["RUF100"]
-"computronium/cli/joint_validate.py" = ["PLW0717"]
+"computronium/cli/joint_validate.py" = []
 "computronium/core/continual/runner.py" = ["PLR0913", "PLR0911", "PLW2901", "E741"]
 "computronium/core/continual/training.py" = ["TC001", "PLR0914"]
 "computronium/core/local_learning/settling.py" = ["PLR0913", "RUF059"]
 "computronium/core/presets.py" = ["PLR0915"]
-"computronium/core/substrates/complex_substrate.py" = ["PLW0717", "RUF100"]
+"computronium/core/substrates/complex_substrate.py" = ["RUF100"]
 "computronium/core/system_trainer/factory.py" = ["C901"]
 "computronium/core/system_trainer/joint.py" = ["PLR0912"]
 "computronium/core/tile/topology.py" = ["PLR0912", "C901"]
-"computronium/data/lm.py" = ["PLW0717", "RUF100"]
-"computronium/deployment/serialization.py" = ["PLW0717", "RUF100", "SIM117"]
+"computronium/data/lm.py" = ["RUF100"]
+"computronium/deployment/serialization.py" = ["RUF100", "SIM117"]
 "computronium/models/deployments/config.py" = ["PLR0913"]
 "computronium/ontology/dynamics/_dynamics.py" = [
     "PLR6104",
-    "PLR0913", "PLW0717", "SIM105", "SIM108", "RUF100",
+    "PLR0913", "SIM105", "SIM108", "RUF100",
 ]
-"computronium/p2p/grpc_service.py" = ["PLW0717", "RUF100"]
+"computronium/p2p/grpc_service.py" = ["RUF100"]
 "computronium/utils.py" = ["S404", "SIM105"]
-"computronium/validation/notebook.py" = ["PLW0717", "RUF100"]
+"computronium/validation/notebook.py" = ["RUF100"]
 "computronium/validation/tracks/hardware_tracks.py" = ["PLR6104"]
-"computronium/validation/tracks/_signal_probe.py" = ["PLW0717", "RUF100"]
-"computronium/validation/tracks/signal_tracks.py" = ["PLW0717", "RUF100"]
-"computronium/validation/tracks/track_registry.py" = ["PLW0717"]
+"computronium/validation/tracks/_signal_probe.py" = ["RUF100"]
+"computronium/validation/tracks/signal_tracks.py" = ["RUF100"]
+"computronium/validation/tracks/track_registry.py" = []
 "computronium/validation/verifier.py" = ["PLR0914", "PLR0915", "C901", "SIM108", "PLR1730", "SIM118"]
 "computronium/ontology/_settle_kernel.py" = [
     "PLR6104", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics

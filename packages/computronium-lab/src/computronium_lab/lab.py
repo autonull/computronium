@@ -154,10 +154,16 @@ class Lab:
         return spec
 
     def synthesize(
-        self, spec: ProblemSpec, *, include_evolved: bool = False
+        self,
+        spec: ProblemSpec,
+        *,
+        model: object | None = None,
+        include_evolved: bool = False,
     ) -> SynthesisResult:
         """Spec → best valid mechanism coordinate with provenance (T23.1.5).
 
+        ``model`` overrides the shared fitted viability predictor — a test
+        or caller may pin predictions instead of inheriting the fit's drift.
         ``include_evolved`` (TODO24 T24.2.6) folds archived *measured*
         accuracies from the frontier archive into selection; off by
         default so TODO23 behavior is unchanged.
@@ -169,7 +175,9 @@ class Lab:
             from computronium_lab.research.evolution import FrontierArchive
 
             frontier = FrontierArchive(spec).measured_accuracy()
-        result = _synthesize(spec, campaigns_run=self._campaigns, frontier=frontier)
+        result = _synthesize(
+            spec, model=model, campaigns_run=self._campaigns, frontier=frontier
+        )
         if result.exploratory:
             self._record_exploratory(result, spec)
         return result
