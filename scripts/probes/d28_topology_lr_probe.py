@@ -54,7 +54,8 @@ def first_viable_cell(
     from computronium.ontology.system import SystemConfig
 
     geometry = build_geometry_config(
-        {"topology_type": topology, "depth": 2, "hidden_dim": 64},
+        {"depth": 2, "hidden_dim": 64},
+        topology=topology,
         input_dim=64,
         output_dim=10,
     )

@@ -29,10 +29,13 @@ from computronium.experiment.execution.policy import (
     SynthesisPolicy,
     UniformRandomPolicy,
 )
-from computronium.experiment.execution.search_space import SearchSpace
+from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
+
+if TYPE_CHECKING:
+    from computronium.experiment.execution.search_space import SearchSpace
 
 if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
@@ -41,6 +44,13 @@ if TYPE_CHECKING:
 # =============================================================================
 # Fixtures and Helpers
 # =============================================================================
+
+
+def _space() -> SearchSpace:
+    """The active space of the acceptance run spec — one builder, as the runner uses."""
+    from computronium.experiment.execution.search_space import search_space_from_spec
+
+    return search_space_from_spec(_make_run_spec())
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -86,9 +96,6 @@ def _make_pipeline_config(
     }
     policy = policy_map[policy_name]
 
-    # Build search space to get available stages
-    search_space = _build_search_space()
-
     return PipelineConfig(
         run_id=run_id,
         run_spec=run_spec,
@@ -101,33 +108,6 @@ def _make_pipeline_config(
         seed=run_spec.seed,
         max_rounds=max_rounds,
         min_rounds=1,
-    )
-
-
-def _build_search_space() -> SearchSpace:
-    """Build a canonical SearchSpace for testing."""
-    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
-    from computronium.experiment.schema.registries import (
-        CONSTRAINTS_REGISTRY,
-        OBJECTIVES_REGISTRY,
-    )
-
-    axes_snapshot = []
-    for axis_kind in StructuralAxis:
-        registry = AXES_REGISTRIES[axis_kind]
-        for spec in registry.values():
-            if spec.available:
-                axes_snapshot.append(spec)
-
-    constraints = list(CONSTRAINTS_REGISTRY.values())
-    objectives = list(OBJECTIVES_REGISTRY.values())
-    tasks = ("default",)
-
-    return SearchSpace(
-        axes_snapshot=tuple(axes_snapshot),
-        constraints=tuple(constraints),
-        objectives=tuple(objectives),
-        tasks=tasks,
     )
 
 
@@ -253,7 +233,12 @@ class TestU2_ModelBasedPolicyPipeline:
 class TestU3_MultiRoundPauseResume:
     """U3: Same RunSpec → SearchSpace → Random/TPE/Evolution → Allocator → multi-round pipeline → pause → resume → report"""
 
-    @pytest.mark.timeout(180)
+    # 180 s was calibrated while most generated cells failed to compose, so the
+    # rounds were cheap. The space now filters for legality (TODO46 §3.3), so
+    # these rounds train ~10 real cells each; 900 s is the measured cost of
+    # three rounds plus resume on digits. A parameter ceiling for geometry
+    # (`RunSpec.param_budget`) is the remaining fix and is queued in TODO46.
+    @pytest.mark.timeout(900)
     def test_u3_multi_round_with_allocator(self, tmp_path: Path) -> None:
         """Test multi-round pipeline with allocator promotion."""
         store_path = tmp_path / "u3_store.duckdb"
@@ -288,7 +273,7 @@ class TestU3_MultiRoundPauseResume:
 
             store.finish_run(run_id, "completed")
 
-    @pytest.mark.timeout(180)
+    @pytest.mark.timeout(900)
     def test_u3_pause_resume_via_run_id(self, tmp_path: Path) -> None:
         """Test that a run can be paused and resumed via run_id."""
         store_path = tmp_path / "u3_resume_store.duckdb"
@@ -402,11 +387,7 @@ class TestU4_PolicyInterchangeability:
         # (by checking they all produced valid coordinates)
         for policy_name, records in all_records_by_policy.items():
             for record in records:
-                assert record.substrate in [
-                    s.name
-                    for s in _build_search_space().axes_snapshot
-                    if s.axis_kind.value == "substrate"
-                ]
+                assert record.substrate in _space().primitives(StructuralAxis.SUBSTRATE)
 
 
 # =============================================================================
@@ -497,7 +478,7 @@ class TestU5_CrossPolicyEvidenceReuse:
         run_spec = _make_run_spec("digits")
 
         # Create a coordinate and schedule
-        search_space = _build_search_space()
+        search_space = _space()
         # Get first available coordinate from search space
         coord = Coordinate(
             substrate="digital",

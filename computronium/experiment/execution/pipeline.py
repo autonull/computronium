@@ -351,50 +351,13 @@ class PipelineRunner:
             await self._create_checkpoint()
 
     def _build_search_space(self) -> SearchSpace:
-        """Build canonical SearchSpace from RunSpec."""
-        from computronium.experiment.execution.search_space import SearchSpace
-        from computronium.experiment.schema.axis import (
-            AXES_REGISTRIES,
-            StructuralAxis,
-        )
-        from computronium.experiment.schema.registries import (
-            CONSTRAINTS_REGISTRY,
-            OBJECTIVES_REGISTRY,
+        """Build the run's active space from its spec (TODO46 §3.3)."""
+        from computronium.experiment.execution.search_space import (
+            search_space_from_spec,
         )
 
-        run_spec = self._config.run_spec
-
-        # Get all axis specs from registries
-        axes_snapshot = []
-        for axis_kind in StructuralAxis:
-            registry = AXES_REGISTRIES[axis_kind]
-            for spec in registry.values():
-                if spec.available:
-                    axes_snapshot.append(spec)
-
-        # Get constraints
-        constraints = list(CONSTRAINTS_REGISTRY.values())
-
-        # Get objectives from run_spec or all
-        objective_names = run_spec.objectives
-        if objective_names:
-            objectives = [
-                OBJECTIVES_REGISTRY[name]
-                for name in objective_names
-                if name in OBJECTIVES_REGISTRY
-            ]
-        else:
-            objectives = list(OBJECTIVES_REGISTRY.values())
-
-        # Get tasks: the spec names them, and the evaluator resolves each by
-        # name, so an unresolvable name fails every cell instead of measuring.
-        tasks = _resolve_tasks(self._config)
-
-        return SearchSpace(
-            axes_snapshot=tuple(axes_snapshot),
-            constraints=tuple(constraints),
-            objectives=tuple(objectives),
-            tasks=tasks,
+        return search_space_from_spec(
+            self._config.run_spec, tasks=_resolve_tasks(self._config)
         )
 
     async def _dispatch_stage(self, stage_id: StageId, stage_spec) -> Fragment:

@@ -5,7 +5,9 @@ asserted rather than merely tracked in a plan document. The rule is one line:
 the total may go down, never up. A suppression added to buy a green run shows
 up here as a net increase, which is the failure mode §2.3 is about.
 
-Measured with ruff 0.16.6 (441 — after the pre-commit ruff auto-fix sweep; the pre-re-baseline figure was 359, re-baselined 2026-10-01 after the TODO44
+Measured with ruff 0.16.6 (423 — re-derived after TODO46 §3.3 deleted the
+hand-rolled enumerator, its seven MNIST-shape sites and their 36 per-branch
+findings; 440 was the count it introduced in the §3.2 session. after the pre-commit ruff auto-fix sweep; the pre-re-baseline figure was 359, re-baselined 2026-10-01 after the TODO44
 cleanup: the pillar deletions removed code but retired per-file-ignores, the
 docs/generated conformance stubs were excluded from lint, and restored
 Library modules (profiling, param_estimator, probe, stability calibration)
@@ -28,7 +30,7 @@ import re
 import subprocess
 import sys
 
-BASELINE = 440
+BASELINE = 423
 RUFF_VERSION = "0.16.6"
 
 _TOTAL = re.compile(r"Found (\d+) errors?")

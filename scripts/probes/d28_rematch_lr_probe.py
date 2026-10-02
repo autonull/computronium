@@ -46,7 +46,8 @@ def viable_cells(topology: str = "feedforward") -> list[tuple[str, str, str]]:
 
     substrate = DigitalSubstrate().config
     geometry = build_geometry_config(
-        {"topology_type": topology, "depth": 2, "hidden_dim": 64},
+        {"depth": 2, "hidden_dim": 64},
+        topology=topology,
         input_dim=256,
         output_dim=10,
     )

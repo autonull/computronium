@@ -34,7 +34,7 @@ class FrameStage:
         """Resolve objectives and operating points from RunSpec."""
         from computronium.experiment.execution.search_space import (
             Fragment,
-            generate_initial_candidates,
+            generate_candidates,
         )
 
         logger.info("S1 Frame: Resolving objectives and operating points")
@@ -44,12 +44,17 @@ class FrameStage:
         objectives = run_spec.objectives
         operating_points = run_spec.operating_points
 
-        # Generate initial candidates from search space
-        candidates = generate_initial_candidates(
+        # Walk the spec's own space: primitives it permits, hyperparameters it
+        # sweeps, schedule it declares.
+        from computronium.experiment.execution.evaluate import task_shape
+
+        candidates = generate_candidates(
+            run_spec,
             search_space=ctx.search_space,
             budget=ctx.budget,
             cost_model=ctx.cost_model,
-            max_candidates=10,
+            shape=task_shape,
+            limit=10,
         )
 
         # Emit proposals for initial exploration

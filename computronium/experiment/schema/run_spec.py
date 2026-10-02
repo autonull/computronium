@@ -30,25 +30,25 @@ _POSITIVE = Annotated[int, Field(gt=0)]
 
 
 class AxisSelection(BaseModel):
-    """A run's restriction of one structural axis, and its searched domains.
+    """A run's restriction of one structural axis.
 
-    ``primitives=None`` means every available primitive on the axis.  ``domains``
-    narrows a hyperparameter's harvested domain for this run; an empty mapping
-    keeps the harvested one.  Names are validated against ``AXES_REGISTRIES``
-    and the harvested schema, so a typo fails the run rather than silently
-    narrowing the space to nothing.
+    ``primitives=None`` means every available primitive on the axis.  Names are
+    validated against ``AXES_REGISTRIES``, so a typo fails the run rather than
+    silently narrowing the space to nothing.
+
+    Hyperparameter domains are *not* declared here: a hyperparameter is read by
+    whichever primitive needs it, and ``step_size`` by both dynamics and update,
+    so its domain belongs to the run (``RunSpec.hyperparameters``), not to an
+    axis that would be an arbitrary choice of owner.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     axis: StructuralAxis
     primitives: tuple[str, ...] | None = None
-    domains: dict[str, Domain] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _known_names(self) -> Self:
-        from computronium.experiment.schema.harvest import harvest_schema
-
         registry = AXES_REGISTRIES[self.axis]
         if self.primitives is not None:
             unknown = [p for p in self.primitives if p not in registry]
@@ -58,14 +58,6 @@ class AxisSelection(BaseModel):
                     f"{unknown}; available: {sorted(registry.keys())}"
                 )
                 raise ValueError(msg)
-        available = harvest_schema().by_name()
-        unknown = [d for d in self.domains if d not in available]
-        if unknown:
-            msg = (
-                f"axes[{self.axis}].domains names unknown hyperparameter(s) "
-                f"{unknown}; harvested: {sorted(available)}"
-            )
-            raise ValueError(msg)
         return self
 
     def selected(self) -> tuple[str, ...]:
@@ -102,6 +94,7 @@ class RunSpec(BaseModel):
     budget_seconds: Annotated[float, Field(gt=0)] | None = None
     policy: str | None = None
     axes: tuple[AxisSelection, ...] = ()
+    hyperparameters: dict[str, Domain] = Field(default_factory=dict)
     operating_points: dict[str, Any] = Field(default_factory=dict)
     dataset: str = "unknown"
     dataset_version: str = "1.0"
@@ -136,6 +129,16 @@ class RunSpec(BaseModel):
                 raise ValueError(msg)
         if self.policy is not None and self.policy not in POLICY_CATALOG:
             msg = f"unknown policy {self.policy!r}; available: {sorted(POLICY_CATALOG)}"
+            raise ValueError(msg)
+        from computronium.experiment.schema.harvest import harvest_schema
+
+        harvested = harvest_schema().by_name()
+        unknown = [h for h in self.hyperparameters if h not in harvested]
+        if unknown:
+            msg = (
+                f"hyperparameters names unknown name(s) {unknown}; "
+                f"harvested: {sorted(harvested)}"
+            )
             raise ValueError(msg)
         duplicated = sorted({
             s.axis for s in self.axes if [x.axis for x in self.axes].count(s.axis) > 1

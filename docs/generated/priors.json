@@ -67,6 +67,32 @@
     "override_scope": "coordinate"
   },
   {
+    "name": "hidden_depth",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 1.0,
+      "high": 4.0,
+      "center": 2.0
+    },
+    "description": "Default geometry depth",
+    "confidence": 0.6,
+    "uncertainty": 0.0,
+    "override_scope": "coordinate"
+  },
+  {
+    "name": "hidden_width",
+    "distribution": "log_uniform",
+    "params": {
+      "low": 16.0,
+      "high": 256.0,
+      "center": 64.0
+    },
+    "description": "Default geometry width",
+    "confidence": 0.6,
+    "uncertainty": 0.0,
+    "override_scope": "coordinate"
+  },
+  {
     "name": "lr_ruler_arithmetic",
     "distribution": "log_uniform",
     "params": {

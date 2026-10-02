@@ -31,6 +31,7 @@ __all__ = [
     "ProposalComposeError",
     "build_geometry_config",
     "compose_cell_system",
+    "compose_configs",
 ]
 
 logger = get_logger(__name__)
@@ -70,7 +71,6 @@ GRID_UPDATES: tuple[str, ...] = (
 )
 
 _COMMON_GEOMETRY_KEYS: Final[frozenset[str]] = frozenset({
-    "topology_type",
     "hidden_dim",
     "depth",
     "init_scheme",
@@ -243,14 +243,25 @@ def _auto_size_geometry(  # ruff: ignore[complex-structure] - one branch per top
 def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals, too-many-statements]
     geometry: dict[str, object],
     *,
+    topology: str,
     input_dim: int,
     output_dim: int,
     param_budget: int = 0,
 ) -> GeometryConfig:
-    """Build a ``GeometryConfig`` from a proposal's geometry dict."""
-    topology = str(geometry.get("topology_type", "feedforward"))
+    """Build a ``GeometryConfig`` for one topology from a geometry mapping.
+
+    Args:
+        geometry: Topology parameters for ``topology``.
+        topology: The structural geometry axis' primitive. It is an argument,
+            not a key: reading it out of the mapping defaulted every topology
+            to ``feedforward``, so every non-feedforward cell was compiled as
+            an MLP and then rejected for carrying keys an MLP has no use for.
+        input_dim: Flattened input width, from the task.
+        output_dim: Class count, from the task.
+        param_budget: Parameter ceiling for derived sizing; 0 disables it.
+    """
     if topology not in _TOPOLOGY_KEYS:
-        msg = f"Unknown topology_type {topology!r}; allowed: {sorted(_TOPOLOGY_KEYS)}"
+        msg = f"Unknown topology {topology!r}; allowed: {sorted(_TOPOLOGY_KEYS)}"
         raise ProposalComposeError(msg)
 
     allowed = _allowed_keys(topology)
@@ -451,7 +462,7 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
                 seq_len=_as_int(geometry.get("seq_len"), 32),
             )
         case _:
-            msg = f"Unknown topology_type {topology!r}"
+            msg = f"Unknown topology {topology!r}"
             raise ProposalComposeError(msg)  # pragma: no cover - guarded above
 
 
@@ -480,9 +491,16 @@ def _build_substrate_config(substrate_name: str, dynamics: str):
 
 @dataclass(frozen=True, slots=True)
 class ComposedCell:
-    """A composed cell plus the hyperparameters it was actually given (R6)."""
+    """A composed cell: the system, the declaration it was built from, and the
+    hyperparameters it was actually given (R6).
+
+    The declaration is kept because the runtime module does not name its own
+    topology, so "which cell was this?" is otherwise unanswerable from a
+    composed system.
+    """
 
     system: System
+    config: Any
     params: Mapping[str, Any]
 
 
@@ -515,20 +533,22 @@ def _axis_factory(config_cls: Any, primitive: str) -> Any:
     return factory
 
 
-def compose_cell_system(
+def compose_configs(  # ruff: ignore[too-many-locals]
     *,
     coordinate: Coordinate,
     geometry: Mapping[str, object],
     input_dim: int,
     output_dim: int,
     param_budget: int = 0,
-) -> ComposedCell:
-    """Compose a full grid cell from a coordinate and the harvested schema.
+) -> Any:
+    """Compose and validate the configs of one cell, building no ``System``.
 
     What each primitive can accept is decided by availability predicates in
     ``AXES``, evaluated against ``coordinate`` — not by inspecting factories and
     not by branching on pairs of axis names. Adding a coupling between two axes
-    is a spec row.
+    is a spec row. Cross-axis legality is ``SystemConfig.validate``, so this is
+    also the cheap way to ask *whether a cell can exist* before spending a
+    training run on it.
 
     Args:
         coordinate: The six-axis selection and its hyperparameter overrides.
@@ -538,7 +558,12 @@ def compose_cell_system(
         param_budget: Parameter ceiling for derived sizing; 0 disables it.
 
     Returns:
-        ComposedCell carrying the system and the effective hyperparameter values.
+        The validated ``SystemConfig`` for the cell.
+
+    Raises:
+        ProposalComposeError: A primitive, or one of its parameters, has no
+            place in this cell.
+        ValueError: ``SystemConfig.validate`` rejected the combination.
     """
     from computronium.ontology import (
         CreditAssignmentConfig,
@@ -553,7 +578,8 @@ def compose_cell_system(
     dynamics_name = coordinate.dynamics
 
     gcfg = build_geometry_config(
-        _geometry_mapping(active, geometry, topology=str(coordinate.geometry)),
+        _geometry_mapping(active, geometry, topology=coordinate.geometry),
+        topology=coordinate.geometry,
         input_dim=input_dim,
         output_dim=output_dim,
         param_budget=param_budget,
@@ -584,23 +610,63 @@ def compose_cell_system(
         **active.for_axis(StructuralAxis.PLASTICITY, coordinate.plasticity)
     )
 
-    SystemConfig(
+    config = SystemConfig(
         substrate=substrate_config,
         geometry=gcfg,
         dynamics=dcfg,
         credit=ccfg,
         update=ucfg,
         plasticity=mcfg,
-    ).validate()
+    )
+    config.validate()
+    return config
+
+
+def compose_cell_system(
+    *,
+    coordinate: Coordinate,
+    geometry: Mapping[str, object],
+    input_dim: int,
+    output_dim: int,
+    param_budget: int = 0,
+) -> ComposedCell:
+    """Compose a full grid cell and build its ``System``.
+
+    Args:
+        coordinate: The six-axis selection and its hyperparameter overrides.
+        geometry: Topology parameters; harvested geometry values fill the gaps.
+        input_dim: Flattened input width, derived from the task.
+        output_dim: Class count, derived from the task.
+        param_budget: Parameter ceiling for derived sizing; 0 disables it.
+
+    Returns:
+        ComposedCell carrying the system, its validated declaration, and the
+        effective hyperparameter values.
+    """
+    config = compose_configs(
+        coordinate=coordinate,
+        geometry=geometry,
+        input_dim=input_dim,
+        output_dim=output_dim,
+        param_budget=param_budget,
+    )
+    active = harvest_schema().active(coordinate)
     return ComposedCell(
         system=compose_system_from_configs(
-            substrate_config,
-            gcfg,
-            dcfg,
-            ccfg,
-            ucfg,
+            config.substrate,
+            config.geometry,
+            config.dynamics,
+            config.credit,
+            config.update,
         ),
-        params=_effective_params(active, gcfg, dcfg, ccfg, ucfg),
+        config=config,
+        params=_effective_params(
+            active,
+            config.geometry,
+            config.dynamics,
+            config.credit,
+            config.update,
+        ),
     )
 
 

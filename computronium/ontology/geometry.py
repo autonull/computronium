@@ -527,8 +527,8 @@ class GeometryConfig:
             "output_dim": {
                 "domain": (1, 8192, "int")
             },  # Structural - dataset-determined
-            "hidden_dim": {"domain": (8, 4096, "log")},
-            "num_layers": {"domain": (1, 12, "int")},
+            "hidden_dim": {"domain": (8, 4096, "log"), "prior": "hidden_width"},
+            "num_layers": {"domain": (1, 12, "int"), "prior": "hidden_depth"},
             "init_scale": {"domain": (1e-3, 10.0, "log")},
             "init_scheme": {"domain": ["default", "mupc", "innocenti"]},
             "residual": {"domain": [True, False]},

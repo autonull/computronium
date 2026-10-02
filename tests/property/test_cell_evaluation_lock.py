@@ -97,9 +97,9 @@ def test_swapping_credit_changes_the_measurement() -> None:
 @pytest.mark.timeout(300)
 def test_digits_shape_reaches_the_geometry() -> None:
     """The task decides the geometry: 8x8 digits is 64 inputs, never 784."""
-    from computronium.experiment.execution.evaluate import _flat_input_dim, _task
+    from computronium.experiment.execution.evaluate import task_shape
 
-    assert _flat_input_dim(_task(_schedule(), "cpu")) == 64
+    assert task_shape(_schedule().task_id) == (64, 10)
 
 
 @pytest.mark.timeout(300)

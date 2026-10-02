@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     )
     from computronium.experiment.schema.record import Record
 
-__all__ = ["CellEvaluation", "cell_record", "evaluate_cell"]
+__all__ = ["CellEvaluation", "cell_record", "evaluate_cell", "task_shape"]
 
 logger = get_logger(__name__)
 
@@ -61,16 +61,16 @@ class CellEvaluation:
     task_id: str
 
 
-def _task(schedule: Schedule, device: str) -> Any:
-    """The set-up task for a schedule, cached per (task, device)."""
+def _task(task_id: str, device: str) -> Any:
+    """The set-up task, cached per (task, device)."""
     from computronium.domains.factory import create_task
 
-    key = (schedule.task_id, device)
+    key = (task_id, device)
     with _TASK_LOCK:
         cached = _TASK_CACHE.get(key)
     if cached is not None:
         return cached
-    task = create_task(schedule.task_id, device=device, quick_mode=True, num_workers=0)
+    task = create_task(task_id, device=device, quick_mode=True, num_workers=0)
     task.setup()
     with _TASK_LOCK:
         _TASK_CACHE.setdefault(key, task)
@@ -88,6 +88,17 @@ def _flat_input_dim(task: Any) -> int:
         if isinstance(shape, tuple | list)
         else int(shape)
     )
+
+
+def task_shape(task_id: str, device: str = "cpu") -> tuple[int, int]:
+    """The ``(input_dim, output_dim)`` a task will be trained at.
+
+    The search space asks the evaluator for this rather than composing against
+    a guessed shape: shape is a property of the task, and the space must
+    filter cells with the same shape the evaluator will use.
+    """
+    task = _task(task_id, device)
+    return _flat_input_dim(task), int(task.output_dim)
 
 
 def _history_metrics(history: list[dict[str, float]]) -> dict[str, float]:
@@ -133,7 +144,7 @@ def evaluate_cell(
     """
     import torch
 
-    task = _task(schedule, "cpu")
+    task = _task(schedule.task_id, "cpu")
     input_dim = _flat_input_dim(task)
     output_dim = int(task.output_dim)
 

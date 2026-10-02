@@ -48,8 +48,8 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D11–D13 are fixed; D1 is fixed in §8 session 3.** D7–D10 and D14
-remain.
+**D1–D6 and D11–D15 are fixed (D15 was found and fixed in §8 session 5).**
+D7–D10 remain, and D14's fix is consumed by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
@@ -295,6 +295,31 @@ validated against the registry** — a run that names no task should fail loudly
 rather than measure nothing. Fixed in §8 session 3; §3.3's spec-driven space
 consumes the same seam.
 
+### D15 — Composition silently ignored the topology
+
+Found in session 5, by reading the demo's failure log after §3.3 replaced the
+enumerator.
+
+`compose.py` `build_geometry_config` took the topology out of the geometry
+mapping:
+
+```python
+topology = str(geometry.get("topology_type", "feedforward"))
+```
+
+and `_geometry_mapping` — which merges the harvested geometry values under the
+composer's key names — never wrote `topology_type`, because the topology is an
+*axis value*, not a geometry knob. So every cell was compiled as an MLP and then
+rejected for carrying keys an MLP has no use for: `Unknown geometry keys
+['num_heads'] for topology 'feedforward'`. **10 of the 12 cells in the default
+space died there**, which is why the acceptance suite ran in 3:26 — most cells
+were free. Nothing tested the failure: it was logged and counted as a cell.
+
+This is §2.0's shape one level down: a *default* that silently answered a
+question it should have been asked. Fixed by making the topology an explicit
+argument with no default, so it cannot be lost, and by making the space filter
+for legality before proposing (§8 session 5).
+
 ---
 
 ## 2. False completion marks, and the audit that must precede fixing
@@ -491,7 +516,7 @@ Serializes to the `runs.spec` JSON column; versioned; diffable.
 **Gate:** a bad spec fails naming the offending field; two specs diff cleanly
 (TODO43 **R41**); a run reproduces from its spec alone.
 
-### 3.3 Spec-driven space
+### 3.3 Spec-driven space — LANDED, see §8 session 5
 
 Replace `search_space.py:174-206` with a generator that walks the harvested
 schema under the constraints in the spec, for the spec's task. Schedule comes
@@ -864,66 +889,169 @@ bad spec exits 1 naming `seeds`; a valid one trains.
 `CONSTRAINTS_REGISTRY` is global and unconditional today, so a spec field for
 it would be a fourth write-only key.
 
+### Session 5
+
+**Landed: §3.3.** The hand-rolled enumerator is gone. `search_space.py` no
+longer tabulates a space: `search_space_from_spec(spec)` snapshots exactly the
+primitives the spec permits, and `iter_candidates`/`generate_candidates` walk
+that snapshot. Candidate *k* takes the *k*-th primitive on **every** axis, so a
+short prefix varies all six rather than exhausting one (the old
+`substrate[:3] × geometry[:3] × ...` truncation is what D2 named). The stream
+is a lazy generator, deduplicated by `measurement_key`, and the schedule is
+built from the spec — fidelity, seed plan, epochs, batch limit and the task
+name — instead of `Schedule(fidelity="L0", seed=42, ..., task_id="default")`.
+
+**The seven `784` sites are zero**, and `test_active_space_lock`'s ratchet is
+now pinned at zero rather than seven: `test_mnist_shape_literals_do_not_return`
+asserts no task shape appears anywhere in `experiment/execution/`. The repo-wide
+lint ratchet moved 440 → 423 for the same reason.
+
+**Hyperparameters are searched, not asserted.** `RunSpec.hyperparameters`
+(names → `Domain`) is the sweep the plan's gate asked for; a spec over
+`step_size ∈ {1e-4…1e-1, log}` yields cells at five log-spaced values × every
+primitive combination, and `test_a_swept_hyperparameter_yields_more_than_one_value`
+(R2) locks it. The plan's wording was `learning_rate`; this ontology has no such
+name — `step_size` is the learning rate, which is what D5 already recorded.
+A swept value is carried **only** when the cell's own selection both activates it
+(availability predicate) and reads it (`AxisSpec.accepted_params`), so no dead
+config reaches composition. A spec domain is intersected with the harvested one
+and a domain outside it is rejected naming the hyperparameter.
+
+**`AxisSelection.domains` moved to `RunSpec.hyperparameters`.** Domain is a
+property of a *hyperparameter*, and `step_size` is declared by both dynamics and
+update, so putting it under an axis made the axis an arbitrary choice of owner —
+the model was wrong, not just awkward. `AxisSelection` is now primitives only.
+
+**D15 (new) — compose compiled every topology as `feedforward`.**
+`build_geometry_config` read the topology out of the geometry mapping and
+defaulted to `"feedforward"`. `_geometry_mapping` never wrote `topology_type`,
+so *every* non-MLP cell was built as an MLP and then rejected for carrying keys
+an MLP has no use for — 10 of 12 cells in the default space, found only by
+reading the demo's failure log. The topology is a structural axis value, so it is
+now an explicit `build_geometry_config(..., topology=...)` argument: no default,
+no way to lose it. `test_each_topology_composes_as_itself` covers all nine
+composable topologies and asserts `Unknown topology` for the rest.
+`ComposedCell` gained `config` — the runtime module does not name its own
+topology, so "which cell was this?" was unanswerable from a composed system.
+
+**Legality now filters the space instead of the run.** `compose_configs` composes
+and validates a cell's configs **without building a `System`**, and
+`iter_candidates(..., shape=task_shape)` skips any cell that does not compose for
+its task's shape. Cross-axis legality is asked of the one mechanism that owns it
+(`SystemConfig.validate`) rather than re-declared as availability predicates,
+which would be a second source of truth. `evaluate.task_shape(task_id)` is the
+shape seam, sharing the evaluator's task cache. Measured effect on the
+`demo_unified_pipeline` U1 demo: **2 records → 19**, because the cells that used
+to die at composition now train.
+
+**A latent measurement bug fell out of it.** With `params={}` the harvested
+`hidden_dim`/`num_layers` resolved to their *domain edges* — an 8-unit, 1-layer
+network that trains and measures nothing. Both now name priors
+(`hidden_width`, `hidden_depth`, registered in `learning/prior.py` next to the
+ruler-LR table they join), so an unswept cell is the measured regime
+(64 × 2) instead of the domain floor.
+
+**Cost, measured and now owned.** With most cells no longer dying at composition,
+the acceptance suite went 3:26 → **8:55**, and U3's 180 s timeout was exceeded.
+The old speed was an artifact of the defect. The fix is a geometry parameter
+ceiling (§below); the timeouts were re-baselined to the measured cost (900 s)
+rather than left as a red gate.
+
+**Verified:** `tests/property` + `tests/unit` + `tests/ceec` 2261 passed
+(1:44); `tests/acceptance` 8 passed (8:55); `demo_unified_pipeline.py` 19
+records, unique measurement keys; `ruff`/`pyright` clean on every changed
+module. `docs/generated/priors.json` re-pinned (72 → 74 priors).
+
+**Deleted rather than left unwired** (three more §2.0 instances found by
+`grep`): `search_space.Domain` (a duplicate of `schema.axis.Domain`),
+`SearchSpace.active_axes_for` + `_evaluate_predicate` (superseded by
+`harvest_schema().active`, which evaluates the same predicates against a real
+coordinate instead of a fabricated `Record`), and `_satisfies_constraints`
+(zero callers, and its per-constraint `except → False` was a second silent
+filter). Also `scripts/demos/_support.make_search_space` and the acceptance
+suite's private `_build_search_space` — a third and fourth copy of
+`pipeline._build_search_space`, now `search_space_from_spec` for everyone.
+
 ### Remaining work, in order
 
-1. **§3.3** kills the `search_space.py` enumerator and its seven `784` sites,
-   which the §3.0.1 ratchet is holding at exactly seven. The ratchet failing is
-   the signal that §3.3 landed; lower it to zero in the same commit.
-3. **§2.1's audit table and the new lock.** Still not written. The mechanism for
-   it now exists in spirit (`test_active_space_lock.py` is the shape), but
-   §2.1-3 asks for it over all 88 `CAPABILITIES` rows, and two of the seeded
-   `verifying_test` targets are themselves shape tests — so that lock will fail
-   on rows whose *metadata* is wrong, not just rows whose code is. Price it
-   before launching; it may be cheaper to fix the registry metadata first.
-4. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
+1. **Geometry sizing: a parameter ceiling, declared in the spec.** The default
+   space now offers *legal* cells, and some of them are expensive — the
+   acceptance suite costs 8:55 because a `spatial_lattice` or `nca` cell on
+   `digits` trains for tens of seconds at compose's derived-free defaults
+   (`param_budget=0`). `compose._auto_size_geometry` already derives sizing from
+   a ceiling; nothing passes one. **Design note for whoever lands it:**
+   `RunSpec.param_budget` → the space filter *and* `evaluate_cell` must both
+   receive it, or the space will screen a small cell and the evaluator will train
+   a large one. Carrying it on `Schedule` is the honest channel (it changes the
+   measurement, so it belongs in `measurement_key`, and a cell differing only by
+   ceiling must not share a `cell_key`). Rule to keep: *swept* geometry values
+   are honoured; *unswept* sizing is derived from the ceiling, which means
+   `_geometry_mapping` must stop injecting harvested `hidden_dim`/`num_layers`
+   when a ceiling is in force. Until this lands, §3.6's cell budget cannot be
+   fixed — measure it, do not assume it.
+2. **`tile` has no `GeometryConfig.tile` factory.** It is registered as a
+   geometry primitive (and has an ontology `TileGeometry` class), but
+   `_TOPOLOGY_KEYS` has no `tile` entry, so every `tile` cell fails composition
+   with `Unknown topology 'tile'`. Either add the factory and the compose branch,
+   or retire the row with a recorded reason (R78). Today it is a registered
+   claim the run silently makes and then cannot honour.
+3. **§3.4 samplers.** `study.ask(distributions)` cannot coexist with the
    candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
-   and §3.4 are one interface change, not two. **First job: the
-   objective→payload-key mapping**, which session 4 exposed by making objective
-   names real (see above); nothing yet turns `validation_accuracy` into
-   `val_acc`, so `study.tell(trial, value)` has no value to tell.
+   and §3.4 are one interface change. **First job: the
+   objective→payload-key mapping**, which session 4 exposed and session 5 left
+   exactly where it was — nothing turns `validation_accuracy` into `val_acc`, so
+   `study.tell(trial, value)` still has no value to tell. Also: the space now
+   carries real swept values in `Coordinate.params`, which is what
+   `_coord_to_params`/`_param_names` in `ModelBasedPolicy` were written to
+   consume, so the interface has a producer for the first time.
+4. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
+   be *re-priced* against what sessions 3–5 changed: `test_active_space_lock.py`
+   and `test_search_space_lock.py` are the shape it asks for, and
+   `tests/acceptance` now shares the runner's space builder. Two of the seeded
+   `verifying_test` targets are themselves shape tests, so the lock will fail on
+   rows whose *metadata* is wrong, not just rows whose code is.
 5. **§4 item 4's remaining half** — locking README's fenced bash blocks.
 
-**Three things to watch that the plan does not currently say:**
+**Carried notes from sessions 3–5 that are still open:**
 
-- `eval_batch`/`submit` in both backends passed a `params` dict that the stub
-  ignored; the evaluator now reads it as the geometry mapping, so a caller
-  passing hyperparameters there gets them applied to topology rather than
-  silently dropped. §3.3 should decide whether `params` is one channel or two.
+- `eval_batch`/`submit` in both backends passes a `params` dict that the
+  evaluator now reads as the **geometry mapping**, and `_composable` passes
+  `coordinate.params` as the same channel. So a hyperparameter named like a
+  geometry key reaches the composer as topology. `_TASK_SHAPED` and
+  `_GEOMETRY_ALIASES` paper over it. Decide the channel: geometry overrides and
+  hyperparameters are two things and should be two parameters.
 - `_TASK_CACHE` in `evaluate.py` keys on `(task_id, device)` and never evicts.
-  Fine for a campaign over a handful of tasks; it is a leak if a run sweeps
-  many tasks, and §3.6's multi-task spec will find it.
-- `build_geometry_config` (`compose.py`) is now the one remaining normalizer, and
-  it is inconsistent with the schema: geometry factories spell the same knob
-  `hidden_dims` / `hidden_dim` and `num_layers` / `depth` / `n_layers`, so
-  compose carries a `_GEOMETRY_ALIASES` translation table. That table is a §3.0
-  violation in miniature. It dies with a geometry-axis normalization pass; until
-  then the lock should hold it to one entry.
-- `harvest_schema()` used to swallow every exception per axis
-  (`except Exception: pass`), which also swallowed its own
-  `ConflictingHyperparameterError`. Narrowed to import failure only. The same
-  silent-skip shape is worth grepping for elsewhere before trusting any registry
-  count.
-- **Silent name filtering is this plan's most productive defect shape.** Two
-  instances found in one pass: unknown objectives dropped by
-  `pipeline._build_search_space`, and unknown *axis primitive* names that any
-  `AxisSelection` may now reject. A filter that drops an unrecognised name is a
-  claim the run silently did not make. Grep for `if .* in .*REGISTRY` filters
-  and for `logger.warning`-then-continue; each is a candidate.
-- **Three `create_run(spec=...)` callers had been passing `{"kind": "lock"}`-shaped
-  dicts that were never valid specs** (tests in `test_wp10_learning_integration_lock`,
-  `test_stage_model_lock`, `test_wp11_surface_lock`, `test_serialization_roundtrip_lock`).
-  Typing the parameter is what surfaced them. The pattern generalises: a
-  `dict[str, Any]` parameter is a place where nobody checked anything.
-- **`StageContext`, `Fragment`, `Stage`, `Decision` and `Proposal` are declared
-  twice** — in `execution/stage.py` and again in `execution/search_space.py`.
-  `pipeline.py` imports some from each. §3.3/§3.4 should delete the
-  `search_space.py` copies rather than update both.
-- **`scripts/demos/_support.py:make_search_space` is a third copy of
-  `pipeline._build_search_space`**, and it hardcoded `tasks=("default",)` —
-  D14's last holdout, now `"digits"`. Delete it once the runner can build the
-  space from the spec.
-- **The `--spec-version` flag is gone from the CLI** but `spec_version` remains
-  a column and a `RunInfo` field; it is now derived, and `report.py:408` prints
-  it. A run row whose `spec_version` disagrees with its `spec.version` is now
-  unrepresentable through the API but still constructible by direct SQL — the
-  fail-closed read is what catches it.
+  Fine for a handful of tasks; a leak if a run sweeps many — and §3.6's
+  multi-task spec will find it. `task_shape` now shares that cache.
+- `build_geometry_config` is the one remaining normalizer, and it still carries
+  `_GEOMETRY_ALIASES` (`num_layers` → `depth`) because geometry factories spell
+  the same knob three ways. That table is a §3.0 violation in miniature; it dies
+  with the geometry-axis normalization pass, and the lock should hold it to one
+  entry in the meantime.
+- **Silent name filtering is still this plan's most productive defect shape.**
+  Three instances so far: unknown objectives dropped by
+  `pipeline._build_search_space` (fixed), `AxisSelection` silently ignoring an
+  unknown primitive name (now rejected), and `_satisfies_constraints` swallowing
+  every predicate error as "violated" (deleted). Grep for
+  `if .* in .*REGISTRY` filters and `logger.warning`-then-continue; each is a
+  candidate.
+- **`_MAX_SCAN` bounds the candidate stream, not the space.** With legality
+  filtering, most `k` are skipped; 10 000 is a scan bound chosen so a budget or a
+  predicate that admits nothing terminates instead of spinning. If a future spec
+  needs more candidates than that, raise it deliberately.
+- **`SystemConfig.validate` emits `UserWarning` for soft mismatches** (beta
+  mismatch, substrate/credit pairings). The space filter now runs it for every
+  candidate, so a warning-heavy spec will be noisy. Soft violations are not
+  rejection — do not "fix" that by turning warnings into errors.
+- **`--spec-version` is gone from the CLI** but `spec_version` remains a column
+  and a `RunInfo` field; it is now derived, and `report.py:408` prints it. A run
+  row whose `spec_version` disagrees with its `spec.version` is unrepresentable
+  through the API but still constructible by direct SQL — the fail-closed read is
+  what catches it.
+- **`StageContext`, `Fragment`, `Stage`, `Decision` and `Proposal` are still
+  declared twice** — in `execution/stage.py` and again in
+  `execution/search_space.py`. §3.4 should delete the `search_space.py` copies
+  rather than update both.
+- **A `dict[str, Any]` parameter is a place where nobody checked anything.**
+  Typing one is what surfaced four tests passing `{"kind": "lock"}` as a spec
+  (session 4) and one `params` channel carrying two meanings (session 5).

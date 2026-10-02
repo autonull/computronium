@@ -9,15 +9,28 @@ with the wrapper applying legality and novelty uniformly.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Iterator
+import math
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from itertools import islice
+from typing import TYPE_CHECKING, Any, Final, Protocol, runtime_checkable
 
-from computronium.experiment.legality.dsl import Expr, evaluate
-from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.axis import (
+    AXES_REGISTRIES,
+    AxisKind,
+    Domain,
+    Scale,
+    StructuralAxis,
+)
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
+from computronium.experiment.schema.harvest import (
+    AXIS_KIND_ORDER,
+    HarvestedSchema,
+    harvest_schema,
+)
 
 if TYPE_CHECKING:
+
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.budget import Budget, CostModel
     from computronium.experiment.execution.policy import Policy
@@ -26,449 +39,295 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.registries import ConstraintSpec, ObjectiveSpec
     from computronium.experiment.schema.run_spec import RunSpec
 
+# Values a spec-narrowed hyperparameter is swept across. The space is a
+# continuum; a run proposes ``limit`` points on it.
+_SWEEP_STEPS: Final = 5
 
-@dataclass(frozen=True, slots=True)
-class Domain:
-    """Parameter domain specification."""
+type ShapeResolver = Callable[[str], tuple[int, int]]
 
-    lo: float | int
-    hi: float | int
-    scale: str = "LINEAR"  # LINEAR | LOG
-    members: tuple[str, ...] = field(default_factory=tuple)  # For CATEGORICAL
+# A scan bound, not a space bound: guards against a budget or a predicate that
+# admits nothing, which would otherwise make the candidate stream unbounded.
+_MAX_SCAN: Final = 10_000
 
 
 @dataclass(frozen=True, slots=True)
 class SearchSpace:
-    """Canonical search space derived from RunSpec."""
+    """The active space of one run: the primitives, objectives and tasks it may use.
+
+    Built by :func:`search_space_from_spec`, so the snapshot is what the spec
+    permits — not every registry row.
+    """
 
     axes_snapshot: tuple[AxisSpec, ...]
     constraints: tuple[ConstraintSpec, ...]
     objectives: tuple[ObjectiveSpec, ...]
     tasks: tuple[str, ...]
 
-    def active_axes_for(self, coord: Coordinate) -> frozenset[AxisSpec]:
-        """Get active axes for a given coordinate."""
-        active = []
-        for axis in self.axes_snapshot:
-            if axis.axis_kind.value == "structural":
-                continue
-            if axis.availability_predicate is None or _evaluate_predicate(
-                axis.availability_predicate, coord
-            ):
-                active.append(axis)
-        return frozenset(active)
+    def primitives(self, axis: StructuralAxis) -> tuple[str, ...]:
+        """The primitives this space offers on one structural axis."""
+        return tuple(s.name for s in self.axes_snapshot if s.axis_kind is axis)
 
 
-def _evaluate_predicate(predicate: Expr, coord: Coordinate) -> bool:
-    """Evaluate an availability predicate against a coordinate."""
-    from computronium.experiment.legality.dsl import EvaluationContext
-    from computronium.experiment.schema.coordinate import Provenance, Schedule
-    from computronium.experiment.schema.record import (
-        FailureCause,
-        GateVerdict,
-        Maturity,
-        Record,
-        ReproducibilityClass,
-        Severity,
-        Status,
-    )
-
-    # Create a minimal record for evaluation
-    schedule = Schedule(
-        fidelity="L0",
-        seed=42,
-        n_seeds=1,
-        epochs=1,
-        batch_limit=0,
-        budget_id="eval",
-        task_id="default",
-    )
-    record = Record.create(
-        run_id="eval",
-        coordinate=coord,
-        schedule=schedule,
-        provenance=Provenance(
-            env={},
-            dataset="test",
-            dataset_version="1.0",
-            code_sha="test",
-            policy="test",
-            links={},
-        ),
-        status=Status(
-            gate_verdict=GateVerdict.PENDING,
-            defect="",
-            cause=FailureCause.UNKNOWN,
-            severity=Severity.LOW,
-            quarantine=False,
-            maturity=Maturity.L0,
-            uncertainty={},
-            reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
-            ceec_link=None,
-        ),
-        payload={},
-    )
-    ctx = EvaluationContext(record)
-    try:
-        return evaluate(predicate, ctx)
-    except Exception:
-        return False
-
-
-def generate_initial_candidates(
-    search_space: SearchSpace,
-    budget: Budget | None = None,
-    cost_model: CostModel | None = None,
-    max_candidates: int = 100,
-) -> list[tuple[Coordinate, Schedule]]:
-    """Generate initial candidates from the SearchSpace.
-
-    Enumerates valid combinations of structural axis primitives,
-    applies constraints, and returns (Coordinate, Schedule) pairs.
+def search_space_from_spec(
+    spec: RunSpec, *, tasks: Sequence[str] | None = None
+) -> SearchSpace:
+    """The run's active space, read from its spec and the registries.
 
     Args:
-        search_space: The canonical search space
-        budget: Optional budget for cost filtering
-        cost_model: Optional cost model for cost estimation
-        max_candidates: Maximum number of candidates to return
+        spec: The validated run declaration.
+        tasks: Task override; defaults to the spec's own task names.
 
     Returns:
-        List of (Coordinate, Schedule) pairs for initial exploration.
+        SearchSpace whose axes snapshot holds exactly the primitives the spec
+        permits, and whose objectives are the ones it names (all, if it names
+        none).
     """
-    # Group axes by kind (all axes in snapshot are structural axes)
-    axes_by_kind: dict[StructuralAxis, list[AxisSpec]] = {}
-    for axis in search_space.axes_snapshot:
-        if axis.available:
-            kind = axis.axis_kind
-            if kind not in axes_by_kind:
-                axes_by_kind[kind] = []
-            axes_by_kind[kind].append(axis)
+    from computronium.experiment.schema.registries import (
+        CONSTRAINTS_REGISTRY,
+        OBJECTIVES_REGISTRY,
+    )
 
-    # Get available primitives for each structural axis
-    substrate_primitives = [
-        a.name for a in axes_by_kind.get(StructuralAxis.SUBSTRATE, [])
-    ]
-    geometry_primitives = [
-        a.name for a in axes_by_kind.get(StructuralAxis.GEOMETRY, [])
-    ]
-    dynamics_primitives = [
-        a.name for a in axes_by_kind.get(StructuralAxis.DYNAMICS, [])
-    ]
-    plasticity_primitives = [
-        a.name for a in axes_by_kind.get(StructuralAxis.PLASTICITY, [])
-    ]
-    credit_primitives = [a.name for a in axes_by_kind.get(StructuralAxis.CREDIT, [])]
-    update_primitives = [a.name for a in axes_by_kind.get(StructuralAxis.UPDATE, [])]
+    axes_snapshot: list[AxisSpec] = []
+    for axis in StructuralAxis:
+        for name in spec.selected_primitives(axis):
+            axis_spec = AXES_REGISTRIES[axis].get(name)
+            if axis_spec is not None and axis_spec.available:
+                axes_snapshot.append(axis_spec)
 
-    # Ensure we have at least one primitive per axis
-    if not all([
-        substrate_primitives,
-        geometry_primitives,
-        dynamics_primitives,
-        plasticity_primitives,
-        credit_primitives,
-        update_primitives,
-    ]):
-        return []
+    objectives = tuple(
+        OBJECTIVES_REGISTRY[name]
+        for name in spec.objectives
+        if name in OBJECTIVES_REGISTRY
+    ) or tuple(OBJECTIVES_REGISTRY.values())
 
-    # Generate combinations (limit to avoid explosion)
-    candidates = []
-    for substrate in substrate_primitives[:3]:  # Limit per axis
-        for geometry in geometry_primitives[:3]:
-            for dynamics in dynamics_primitives[:3]:
-                for plasticity in plasticity_primitives[:2]:
-                    for credit in credit_primitives[:2]:
-                        for update in update_primitives[:2]:
-                            # Build default params for this combination
-                            params = _build_default_params(
-                                substrate,
-                                geometry,
-                                dynamics,
-                                plasticity,
-                                credit,
-                                update,
-                                search_space,
-                            )
-
-                            coord = Coordinate(
-                                substrate=substrate,
-                                geometry=geometry,
-                                dynamics=dynamics,
-                                plasticity=plasticity,
-                                credit=credit,
-                                update=update,
-                                params=params,
-                            )
-
-                            # The schedule's task is the space's task: the
-                            # evaluator resolves a task by name, so "default"
-                            # would fail every cell (TODO46 §D2).
-                            schedule = Schedule(
-                                fidelity="L0",
-                                seed=42,
-                                n_seeds=1,
-                                epochs=1,
-                                batch_limit=0,
-                                budget_id="initial",
-                                task_id=search_space.tasks[0],
-                            )
-
-                            # Check budget
-                            if budget and cost_model:
-                                cost = cost_model.estimate_cost(
-                                    (
-                                        substrate,
-                                        geometry,
-                                        dynamics,
-                                        plasticity,
-                                        credit,
-                                        update,
-                                        params,
-                                    ),
-                                    schedule.to_dict(),
-                                )
-                                if budget.target_cost and cost > budget.target_cost:
-                                    continue
-
-                            candidates.append((coord, schedule))
-
-                            if len(candidates) >= max_candidates:
-                                return candidates
-
-    return candidates
-
-    return candidates
+    return SearchSpace(
+        axes_snapshot=tuple(axes_snapshot),
+        constraints=tuple(CONSTRAINTS_REGISTRY.values()),
+        objectives=objectives,
+        tasks=tuple(tasks or spec.task_names),
+    )
 
 
-def _build_default_params(
-    substrate: str,
-    geometry: str,
-    dynamics: str,
-    plasticity: str,
-    credit: str,
-    update: str,
-    search_space: SearchSpace,
-) -> dict[str, Any]:
-    """Build default topology params for a coordinate."""
-    params = {}
+def _lerp(lo: float, hi: float, t: float) -> float:
+    return lo + (hi - lo) * t
 
-    # Default values for common topology params
-    defaults = {
-        "input_dim": 784,
-        "output_dim": 10,
-        "hidden_dim": 64,
-        "num_layers": 2,
-        "num_heads": 4,
-        "seq_len": 128,
-        "neurons_per_tile": 16,
-        "tiles_per_layer": 2,
-        "conv_channels": 32,
-        "kernel_size": 3,
-        "lattice_dims": (4, 4, 4),
-        "grid_hw": (8, 8),
-        "mem_slots": 16,
-        "mem_width": 32,
-        "max_steps": 10,
-        "convergence_threshold": 1e-3,
-        "feedback_scale": 1.0,
-        "ema_beta": 0.99,
-        "contrast_threshold": 1.0,
-        "a_plus": 0.5,
-        "a_minus": 0.5,
-        "tau_pre": 1.0,
-        "tau_post": 1.0,
-        "beta2": 0.999,
-        "eps": 1e-8,
-        "ortho_lr": 0.01,
-        "ortho_steps": 5,
-        "spectral_norm": 1.0,
-        "ewc_lambda": 1000,
-        "fisher_damping": 1e-3,
-        "momentum": 0.9,
-        "gate_dim": 32,
-        "fast_weight_dim": 128,
-        "num_operators": 4,
-        "trace_decay": 0.9,
-        "conflict_threshold": 0.5,
+
+def _narrow(spec_domain: Domain, harvested: Domain, name: str) -> Domain:
+    """Intersect a spec's domain with the harvested one.
+
+    The harvested declaration is the primitive's truth; the spec may only
+    narrow it. A spec asking for values the primitive does not declare is a
+    typo, not a wider search.
+    """
+    if spec_domain.members is not None or harvested.members is not None:
+        members = tuple(spec_domain.members or harvested.members or ())
+        legal = set(harvested.members or members)
+        illegal = [m for m in members if m not in legal]
+        if illegal:
+            msg = (
+                f"hyperparameter {name!r} has no member(s) {illegal} in the "
+                f"harvested domain {list(harvested.members or members)}"
+            )
+            raise ValueError(msg)
+        return Domain(members=members)
+    lo = max(float(spec_domain.lo), float(harvested.lo))  # type: ignore[arg-type]
+    hi = min(float(spec_domain.hi), float(harvested.hi))  # type: ignore[arg-type]
+    if lo >= hi:
+        msg = (
+            f"hyperparameter {name!r} domain "
+            f"({spec_domain.lo}, {spec_domain.hi}) lies outside the harvested "
+            f"domain ({harvested.lo}, {harvested.hi})"
+        )
+        raise ValueError(msg)
+    return Domain(
+        lo=lo,
+        hi=hi,
+        scale=(
+            Scale.LOG
+            if {spec_domain.scale, harvested.scale} == {Scale.LOG}
+            else Scale.LINEAR
+        ),
+    )
+
+
+def _ladder(
+    domain: Domain, kind: AxisKind, steps: int = _SWEEP_STEPS
+) -> tuple[Any, ...]:
+    """Evenly spaced legal values across a domain, log-spaced when it declares LOG."""
+    if domain.members is not None:
+        return tuple(domain.members[:steps])
+    lo, hi = float(domain.lo), float(domain.hi)  # type: ignore[arg-type]
+    fractions = [i / (steps - 1) for i in range(steps)]
+    if domain.scale is Scale.LOG:
+        values = [10 ** _lerp(math.log10(lo), math.log10(hi), t) for t in fractions]
+    else:
+        values = [_lerp(lo, hi, t) for t in fractions]
+    if kind is AxisKind.INTEGER:
+        return tuple(dict.fromkeys(round(v) for v in values))
+    return tuple(values)
+
+
+def _swept(spec: RunSpec, schema: HarvestedSchema) -> dict[str, tuple[Any, ...]]:
+    """Every hyperparameter the spec narrowed, with its ladder of legal values.
+
+    Un-swept hyperparameters stay absent from the coordinate and are resolved
+    by ``harvest_schema().active()`` at composition time, from prior and domain.
+    """
+    specs_by_name = schema.by_name()
+    return {
+        name: _ladder(
+            _narrow(domain, specs_by_name[name].domain, name),
+            specs_by_name[name].axis_kind,
+        )
+        for name, domain in spec.hyperparameters.items()
     }
 
-    # Add params based on axis primitives
-    # Geometry params
-    if geometry in ("feedforward", "recurrent", "causal_transformer"):
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "hidden_dim": 64,
-            "num_layers": 2,
-        })
-        if geometry == "causal_transformer":
-            params["num_heads"] = 4
-            params["seq_len"] = 128
-    elif geometry in ("tile", "tile_mesh"):
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "neurons_per_tile": 16,
-            "tiles_per_layer": 2,
-        })
-    elif geometry == "conv":
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "conv_channels": 32,
-            "kernel_size": 3,
-        })
-    elif geometry == "spatial_lattice":
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "lattice_dims": (4, 4, 4),
-        })
-    elif geometry == "nca":
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "grid_hw": (8, 8),
-        })
-    elif geometry == "ntm":
-        params.update({
-            "input_dim": 784,
-            "output_dim": 10,
-            "mem_slots": 16,
-            "mem_width": 32,
-        })
 
-    # Dynamics params
-    if dynamics in (
-        "energy_minimization",
-        "predictive_settling",
-        "error_predictive_coding",
-        "diffusion",
-        "pc_alm",
-    ):
-        params.update({
-            "max_steps": 10,
-            "convergence_threshold": 1e-3,
-        })
+def _cell_params(
+    coordinate: Coordinate,
+    schema: HarvestedSchema,
+    ladders: dict[str, tuple[Any, ...]],
+    stride: int,
+) -> dict[str, Any]:
+    """The swept values this coordinate can actually use.
 
-    # Credit params
-    if credit == "random_projections":
-        params["feedback_scale"] = 1.0
-    elif credit == "local_contrastive":
-        params.update({
-            "ema_beta": 0.99,
-            "contrast_threshold": 1.0,
-            "contrast_objective": "goodness",
-        })
-    elif credit == "temporal_trace":
-        params.update({
-            "a_plus": 0.5,
-            "a_minus": 0.5,
-            "tau_pre": 1.0,
-            "tau_post": 1.0,
-        })
-    elif credit == "pepita":
-        params["feedback_scale"] = 1.0
-
-    # Update params
-    if update in ("adam", "local_adam"):
-        params.update({"beta2": 0.999, "eps": 1e-8})
-    elif update == "ortho_adam":
-        params.update({"beta2": 0.999, "eps": 1e-8, "ortho_lr": 0.01})
-    elif update in ("riemannian_orthogonal", "muon"):
-        params.update({"ortho_steps": 5, "momentum": 0.9})
-    elif update == "lion":
-        params.update({"beta2": 0.99, "eps": 1e-8})
-    elif update == "spectral_constrained":
-        params["spectral_norm"] = 1.0
-    elif update == "elastic_consolidation":
-        params.update({"ewc_lambda": 1000, "fisher_damping": 1e-3})
-    elif update == "natural_gradient":
-        params["fisher_damping"] = 1e-3
-
-    # Plasticity params
-    if plasticity == "routing":
-        params["gate_dim"] = 32
-    elif plasticity == "fast_weights":
-        params["fast_weight_dim"] = 128
-    elif plasticity == "rule_state":
-        params["num_operators"] = 4
-    elif plasticity in ("temporal_psi", "conflict_adaptive"):
-        params["trace_decay"] = 0.9
-        if plasticity == "conflict_adaptive":
-            params["conflict_threshold"] = 0.5
-
-    return params
+    A value is carried only when the coordinate's own selection both activates
+    the hyperparameter and reads it: carrying it otherwise is dead config,
+    which the harvest already refuses elsewhere.
+    """
+    active = schema.active(coordinate)
+    axis_of = {
+        spec.name: StructuralAxis(spec.axis_name) for spec in schema.hyperparameters
+    }
+    usable: dict[str, Any] = {}
+    for name, ladder in ladders.items():
+        axis = axis_of[name]
+        if name not in active.for_axis(axis, getattr(coordinate, axis.value)):
+            continue
+        usable[name] = ladder[stride % len(ladder)]
+    return usable
 
 
-def _satisfies_constraints(
-    coord: Coordinate,
-    constraints: tuple[ConstraintSpec, ...],
-    schedule: Schedule | None = None,
-) -> bool:
-    """Check if a coordinate satisfies all constraints."""
-    from computronium.experiment.legality.dsl import EvaluationContext
-    from computronium.experiment.schema.coordinate import Provenance
-    from computronium.experiment.schema.record import (
-        FailureCause,
-        GateVerdict,
-        Maturity,
-        Record,
-        ReproducibilityClass,
-        Severity,
-        Status,
-    )
+def _composable(coordinate: Coordinate, task: str, shape: ShapeResolver) -> bool:
+    """Whether the cell's configs compose and validate for this task's shape.
 
-    # Create a minimal record for constraint evaluation
-    if schedule is None:
-        schedule = Schedule(
-            fidelity="L0",
-            seed=42,
-            n_seeds=1,
-            epochs=1,
-            batch_limit=0,
-            budget_id="initial",
-            task_id="default",
+    Legality is asked of the one mechanism that owns it —
+    ``SystemConfig.validate``, reached through ``compose_configs`` — rather than
+    re-declared here as availability predicates, which would be a second source
+    of truth for the same rules. A cell that cannot compose is not a cheap
+    failure to discover after a training run.
+    """
+    from computronium.experiment.execution.compose import compose_configs
+
+    input_dim, output_dim = shape(task)
+    try:
+        compose_configs(
+            coordinate=coordinate,
+            geometry=dict(coordinate.params),
+            input_dim=input_dim,
+            output_dim=output_dim,
         )
+    except ValueError, TypeError, KeyError:
+        return False
+    return True
 
-    record = Record.create(
-        run_id="constraint_check",
-        coordinate=coord,
-        schedule=schedule,
-        provenance=Provenance(
-            env={},
-            dataset="test",
-            dataset_version="1.0",
-            code_sha="test",
-            policy="test",
-            links={},
-        ),
-        status=Status(
-            gate_verdict=GateVerdict.PENDING,
-            defect="",
-            cause=FailureCause.UNKNOWN,
-            severity=Severity.LOW,
-            quarantine=False,
-            maturity=Maturity.L0,
-            uncertainty={},
-            reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
-            ceec_link=None,
-        ),
-        payload={},
+
+def _schedule(spec: RunSpec, task: str) -> Schedule:
+    """The cell's schedule, from the spec rather than from a literal."""
+    return Schedule(
+        fidelity=spec.fidelity,
+        seed=spec.seed,
+        n_seeds=spec.n_seeds,
+        epochs=spec.epochs,
+        batch_limit=spec.batch_limit,
+        budget_id="initial",
+        task_id=task,
     )
 
-    ctx = EvaluationContext(record)
-    for constraint in constraints:
-        if constraint.predicate is not None:
-            try:
-                result = evaluate(constraint.predicate, ctx)
-                if not result:
-                    return False
-            except Exception:
-                return False
-    return True
+
+def iter_candidates(
+    spec: RunSpec,
+    search_space: SearchSpace,
+    *,
+    budget: Budget | None = None,
+    cost_model: CostModel | None = None,
+    shape: ShapeResolver | None = None,
+) -> Iterator[tuple[Coordinate, Schedule]]:
+    """Walk the harvested schema under the spec, yielding legal cells.
+
+    The active space is computed, never tabulated: each axis offers the
+    primitives the spec permits, the harvested availability predicates decide
+    which hyperparameters a selection can use, and the spec's own domains are
+    swept. Candidate ``k`` takes the ``k``-th primitive on every axis, so a
+    short prefix of the stream varies every axis rather than exhausting one.
+
+    Args:
+        spec: The run declaration; names the task, fidelity, seed plan and the
+            hyperparameters to sweep.
+        search_space: The run's active space.
+        budget: Optional ceiling; a cell estimated above it is skipped.
+        cost_model: Required with ``budget`` to estimate a cell's cost.
+        shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
+            cell whose configs cannot compose or validate for that shape is
+            skipped instead of proposed.
+
+    Yields:
+        ``(coordinate, schedule)`` pairs, in a deterministic order.
+    """
+    per_axis = {axis: search_space.primitives(axis) for axis in AXIS_KIND_ORDER}
+    if not search_space.tasks or not all(per_axis.values()):
+        return
+    schema = harvest_schema()
+    ladders = _swept(spec, schema)
+    tasks = search_space.tasks
+    seen: set[str] = set()
+
+    for k in range(_MAX_SCAN):
+        selection = {
+            axis.value: names[k % len(names)] for axis, names in per_axis.items()
+        }
+        coordinate = Coordinate(**selection, params={})
+        params = _cell_params(coordinate, schema, ladders, k // len(selection))
+        coordinate = Coordinate(**selection, params=params)
+        schedule = _schedule(spec, tasks[k % len(tasks)])
+        if coordinate.measurement_key(schedule) in seen:
+            continue
+        seen.add(coordinate.measurement_key(schedule))
+
+        if shape is not None and not _composable(coordinate, schedule.task_id, shape):
+            continue
+        if budget is not None and cost_model is not None:
+            cost = cost_model.estimate_cost(
+                (
+                    selection["substrate"],
+                    selection["geometry"],
+                    selection["dynamics"],
+                    selection["plasticity"],
+                    selection["credit"],
+                    selection["update"],
+                    params,
+                ),
+                schedule.to_dict(),
+            )
+            if budget.target_cost and cost > budget.target_cost:
+                continue
+        yield coordinate, schedule
+
+
+def generate_candidates(
+    spec: RunSpec,
+    search_space: SearchSpace,
+    *,
+    budget: Budget | None = None,
+    cost_model: CostModel | None = None,
+    shape: ShapeResolver | None = None,
+    limit: int = 10,
+) -> list[tuple[Coordinate, Schedule]]:
+    """The first ``limit`` cells of :func:`iter_candidates`."""
+    stream = iter_candidates(
+        spec, search_space, budget=budget, cost_model=cost_model, shape=shape
+    )
+    return list(islice(stream, limit))
 
 
 @dataclass(frozen=True, slots=True)
@@ -583,7 +442,6 @@ from computronium.experiment.execution.sysctx import SystemContext  # ruff: igno
 
 __all__ = [
     "Decision",
-    "Domain",
     "Fragment",
     "Proposal",
     "ProposalContext",
@@ -591,5 +449,7 @@ __all__ = [
     "SearchSpace",
     "Stage",
     "StageContext",
-    "generate_initial_candidates",
+    "generate_candidates",
+    "iter_candidates",
+    "search_space_from_spec",
 ]

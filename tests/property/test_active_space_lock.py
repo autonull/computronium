@@ -51,7 +51,6 @@ _EXECUTION = Path(__file__).resolve().parents[2] / "computronium/experiment/exec
 # The task shapes D2 hardcoded. None may appear as a literal in search or
 # evaluation code: dimension comes from the task descriptor.
 _TASK_SHAPES = frozenset({784, 768})
-_REMAINING_MNIST_SITES = 7
 
 _AXIS_CONFIG_CLASSES = {
     StructuralAxis.SUBSTRATE: SubstrateConfig,
@@ -161,11 +160,11 @@ def test_spec_axis_always_has_a_config_class() -> None:
 
 
 def test_mnist_shape_literals_do_not_return() -> None:
-    """D2 ratchet: the MNIST input width must not reappear in evaluation code.
+    """D2: no task shape may appear as a literal in search or evaluation code.
 
-    ``search_space``'s hand-rolled enumerator still carries the seven
-    ``input_dim: 784`` sites; it dies with §3.3's generator. The count is
-    pinned so it can only fall, in the manner of ``test_lint_count_ratchet``.
+    Shape comes from the task descriptor. The seven ``input_dim: 784`` sites
+    that held this at a ratchet of seven are gone with the enumerator
+    (§3.3); the ratchet is now zero.
     """
     offenders = [
         f"{path.name}:{node.lineno}"
@@ -176,11 +175,7 @@ def test_mnist_shape_literals_do_not_return() -> None:
         and not isinstance(node.value, bool)
         and node.value in _TASK_SHAPES
     ]
-    remaining = sum(1 for site in offenders if site.startswith("search_space.py:"))
-    assert remaining <= _REMAINING_MNIST_SITES, (
-        f"MNIST-shaped literals grew: {offenders} "
-        f"({remaining} in search_space.py, limit {_REMAINING_MNIST_SITES})"
-    )
+    assert not offenders, f"MNIST-shaped literals returned: {offenders}"
 
 
 def test_inactive_parameter_is_rejected() -> None:
@@ -216,7 +211,7 @@ def test_active_values_reach_the_composed_configs() -> None:
     )
     cell = compose_cell_system(
         coordinate=coordinate,
-        geometry={"topology_type": "feedforward"},
+        geometry={},
         input_dim=64,
         output_dim=10,
     )

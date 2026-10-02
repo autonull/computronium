@@ -74,16 +74,24 @@ def test_unknown_axis_primitive_is_named() -> None:
 
 
 def test_unknown_hyperparameter_domain_is_named() -> None:
-    with pytest.raises(ValidationError, match="unknown hyperparameter"):
+    with pytest.raises(ValidationError, match="unknown name"):
         RunSpec.model_validate({
             "task": "digits",
-            "axes": [
-                {
-                    "axis": "credit",
-                    "domains": {"not_a_hyperparameter": {"lo": 0.0, "hi": 1.0}},
-                }
-            ],
+            "hyperparameters": {"not_a_hyperparameter": {"lo": 0.0, "hi": 1.0}},
         })
+
+
+def test_hyperparameter_domains_belong_to_the_run_not_to_an_axis() -> None:
+    """``step_size`` is read by dynamics and update; its owner is not an axis."""
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        RunSpec.model_validate({
+            "task": "digits",
+            "axes": [{"axis": "credit", "domains": {"step_size": {"lo": 1e-4, "hi": 1e-1}}}],
+        })
+    RunSpec.model_validate({
+        "task": "digits",
+        "hyperparameters": {"step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
+    })
 
 
 def test_extra_field_is_rejected_rather_than_ignored() -> None:
@@ -195,18 +203,13 @@ def test_axis_selection_narrows_and_defaults_to_every_primitive() -> None:
         )
     )
     narrowed = _spec(
-        axes=[
-            {
-                "axis": "credit",
-                "primitives": ["gradient"],
-                "domains": {"step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
-            }
-        ]
+        axes=[{"axis": "credit", "primitives": ["gradient"]}],
+        hyperparameters={"step_size": {"lo": 1e-4, "hi": 1e-1, "scale": "log"}},
     )
     assert narrowed.selected_primitives(StructuralAxis.CREDIT) == ("gradient",)
     selection = narrowed.selection(StructuralAxis.CREDIT)
     assert selection is not None
     assert narrowed.selection(StructuralAxis.UPDATE) is None
-    domain = selection.domains["step_size"]
+    domain = narrowed.hyperparameters["step_size"]
     assert isinstance(domain, Domain)
     assert (domain.lo, domain.hi, domain.scale) == (1e-4, 1e-1, "log")

@@ -22,7 +22,6 @@ from computronium.experiment.execution.policy import (
     SynthesisPolicy,
     UniformRandomPolicy,
 )
-from computronium.experiment.execution.search_space import SearchSpace
 from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema.record import Record
 from computronium.experiment.schema.run_spec import RunSpec
@@ -41,27 +40,6 @@ def make_run_spec(task: str = "digits") -> RunSpec:
         n_seeds=1,
         epochs=1,
         budget_seconds=60.0,
-    )
-
-
-def make_search_space(task: str = "digits") -> SearchSpace:
-    from computronium.experiment.schema.axis import AXES_REGISTRIES, StructuralAxis
-    from computronium.experiment.schema.registries import (
-        CONSTRAINTS_REGISTRY,
-        OBJECTIVES_REGISTRY,
-    )
-
-    axes_snapshot = [
-        spec
-        for axis_kind in StructuralAxis
-        for spec in AXES_REGISTRIES[axis_kind].values()
-        if spec.available
-    ]
-    return SearchSpace(
-        axes_snapshot=tuple(axes_snapshot),
-        constraints=tuple(CONSTRAINTS_REGISTRY.values()),
-        objectives=tuple(OBJECTIVES_REGISTRY.values()),
-        tasks=(task,),
     )
 
 

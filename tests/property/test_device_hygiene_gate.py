@@ -48,7 +48,8 @@ _DYNAMICS = (
     "lazy",
 )
 
-_GEOMETRY = {"topology_type": "feedforward", "depth": 2, "hidden_dim": 16}
+_TOPOLOGY = "feedforward"
+_GEOMETRY: dict[str, object] = {"depth": 2, "hidden_dim": 16}
 
 
 def _viable_cells() -> list[tuple[str, str, str]]:
@@ -56,7 +57,7 @@ def _viable_cells() -> list[tuple[str, str, str]]:
     cells: list[tuple[str, str, str]] = []
     from computronium.experiment.execution.compose import build_geometry_config
 
-    geometry = build_geometry_config(_GEOMETRY, input_dim=64, output_dim=10)
+    geometry = build_geometry_config(_GEOMETRY, topology=_TOPOLOGY, input_dim=64, output_dim=10)
     for dynamics in _DYNAMICS:
         dcfg = getattr(StateDynamicsConfig, dynamics)()
         for credit in GRID_CREDITS:

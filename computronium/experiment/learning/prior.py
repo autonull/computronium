@@ -162,11 +162,37 @@ def _register_dynamics_step_size_priors() -> None:
         register_prior(prior)
 
 
+def _register_geometry_size_priors() -> None:
+    """Register the harvested geometry size priors.
+
+    Width and depth are harvested hyperparameters, so without a prior the
+    unswept value resolved to the *domain edge* — an 8-unit, 1-layer network
+    that trains but measures nothing. These name the width and depth the
+    measured regime uses.
+    """
+    for name, center, distribution, params in (
+        ("hidden_width", 64.0, "log_uniform", {"low": 16.0, "high": 256.0}),
+        ("hidden_depth", 2.0, "log_uniform", {"low": 1.0, "high": 4.0}),
+    ):
+        register_prior(
+            PriorSpec(
+                name=name,
+                distribution=distribution,
+                params={**params, "center": center},
+                description=f"Default geometry {name.replace('hidden_', '')}",
+                confidence=0.6,
+                uncertainty=0.0,
+                override_scope="coordinate",
+            )
+        )
+
+
 def register_all_priors() -> None:
     """Register all migrated priors. Call once at module import."""
     _register_ruler_lr_priors()
     _register_step_size_override_priors()
     _register_dynamics_step_size_priors()
+    _register_geometry_size_priors()
 
 
 # =============================================================================
