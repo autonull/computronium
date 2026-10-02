@@ -320,6 +320,19 @@ marks that bear on "does it work", and land one new lock.
 Each step has a gate that is a test. Nothing is marked done because a module
 exists.
 
+**Read this before starting §3, or you will misread a green gate.** Most of
+§3's dependencies are *currently unwired* — five of them are the §2.0 pattern
+(defined, exported, zero callers). So a §3 gate is often not merely
+"unverified" but **unmeasurable**: there is nothing behind it yet. Concretely,
+expect §3.1 to be small (it is one function with a bridge already written) and
+**§3.2–§3.4 to be where the actual work is**, because they are the steps whose
+gates depend on the unwired five. A passing §3.1 is not progress toward a
+working system; it is the precondition for measuring one.
+
+Two temptations this section is written to resist: reaching for the ~1,057
+deferred pyright errors (§5) while here, and making a §3 gate pass without the
+mechanism behind it. §2.0's call-site rule is the check for the second.
+
 ### 3.0 The doctrine: no magic numbers, one source of truth
 
 **Operator directive, binding.** Hardcoded assumptions and magic numbers must be
