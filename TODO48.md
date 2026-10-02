@@ -35,7 +35,21 @@ whole shard, and no lock's fixture may lack the case the lock exists for.
 `AGENTS.md`'s Testing section binds all of TODO47 §1's rules (select by
 symbol, `-rf --tb=line` to a log, killed runs yield no verdict, one shard per
 round close, a lock's fixture must contain its case). Nothing restated; the
-tickets below are executed under them.
+tickets below are executed under them. Two additions bind the *cost* of
+verification:
+
+- **A gate runs once, after its work lands, and never again.** Not per
+  commit during development, not "to confirm" a green gate (TODO47 §1.5's
+  rule, generalized from shards to every gate). A gate that ran and passed is
+  spent; the only reasons to run one again are (i) the ticket landed it for
+  the first time, or (ii) a *later* ticket changes a file it covers, in which
+  case the phase-close sweep (§4) pays for it once, not per ticket.
+- **Tickets that share a surface share a session and a gate run.** The pairs
+  below touch the same files or assert the same lock; running their gates
+  separately pays twice for one proof: Q3+Q4 (harvest/prior surface, one
+  campaign-lock green covers both), Q2+E4 (the promotion lock, extended by
+  E4 in the same session), D2+D3 (the status surface), F1+F2 (the surface
+  and README locks).
 
 ---
 
@@ -121,12 +135,15 @@ before, its measured price. No ticket's gate is a whole shard.
 - **Gate:** a lock that composes every legal cell of the campaign YAML under
   `warnings.error` and asserts none raised (tier 1; price with `--co` first).
 
-### Q7 — Lock fidelity audit
+### Q7 — Lock fidelity audit (pre-TODO48 locks only)
 - **Does:** for every test file under `tests/property/` and
-  `tests/acceptance/`, one mutation per lock's named mechanism (remove the
-  call, flip the flag, break the invariant) and record green/red in a
-  `LOCK_AUDIT.md`. A lock that stays green with its mechanism removed is
-  deleted or rewritten in the same commit (TODO47 §1.4).
+  `tests/acceptance/` that *predates this plan*, one mutation per lock's
+  named mechanism (remove the call, flip the flag, break the invariant) and
+  record green/red in a `LOCK_AUDIT.md`. A lock that stays green with its
+  mechanism removed is deleted or rewritten in the same commit (TODO47 §1.4).
+  Locks landed by this plan are **exempt**: their falsification is a landing
+  requirement, proven once when the ticket's gate first runs — auditing them
+  again would pay twice for a proof already made.
 - **Also:** split `test_wp11_surface_lock.py` (217 s, two runs of the same
   file failed differently — TODO47 §5) so no file exceeds ~60 s.
 - **Gate:** the audit table exists with no "stayed green" rows; wp11's
@@ -308,8 +325,11 @@ Five forks; defaults keep the queue unblocked:
 
 ## 4. Session ordering and the definitions on the way
 
-A–C first (TODO48's original order: Q1, Q2, Q3, Q4, Q5, Q7, Q6, Q8 — the
-queue shrinks as it lands). Then, in dependency order:
+A–C first (original order: Q1, Q2, Q3, Q4, Q5, Q7, Q6, Q8 — the queue shrinks
+as it lands), with the §1 pairs sharing a session: **Q3+Q4** (one session,
+one campaign-lock green), **Q2 then E4 in the same session** (the promotion
+lock is written once, already replay-gated), **D2+D3**, **F1+F2**. Then, in
+dependency order:
 
 1. **D1** (device) — cheap, unblocks scale.
 2. **E1** (uncertainty) — the report's credibility.
@@ -335,10 +355,27 @@ queue shrinks as it lands). Then, in dependency order:
 
 ## 6. How a session runs a ticket
 
-Unchanged from TODO47 §4: read this file and `AGENTS.md`; grep for the
-touched symbols in `tests/` and run the 2–4 files that name them; implement;
-`ruff format` + `ruff check` + `pyright` on changed files; run the ticket's
-gate; update this file's ticket with the measured seconds; commit; stop.
+1. **Start (three commands, no re-reading):** dev-env smoke
+   (`uv run python -c "import optuna, scipy, torchvision, pytest"`),
+   `git status --short` (clean checkout), read this file's next ticket. Not
+   TODO46, not TODO47, unless the ticket cites a section.
+2. **Scope the work cheaply:** grep the touched symbols in `tests/` — this
+   names the files the phase-close sweep will owe, and the ticket's gate.
+   Price any multi-file selection with `--co` before running it.
+3. **Implement.** `ruff format` + `ruff check` + `pyright` on changed files
+   (seconds; the only per-commit duties, per AGENTS.md).
+4. **Run the ticket's gate — once, after the work is done.** If it goes red,
+   fix the cause and re-run *that gate*; do not launch anything wider to
+   investigate (§1). A green gate is never re-run.
+5. **Update this file's ticket** with the measured seconds, commit, stop.
+6. **Phase close, not ticket close:** when a phase's tickets are all landed,
+   one backgrounded selection of the files the phase's tickets touched
+   (`nohup … -rf --tb=line > logs/<phase>.log 2>&1 &`, pre-registered kill
+   time, ≤2-min polling). This is the plan's only multi-file run; it replaces
+   TODO47 §1.5's per-round shard with a per-phase selection that is strictly
+   smaller. A landed ticket that a later ticket re-covers is verified there,
+   once.
+
 Landed tickets leave the queue — the file gets shorter.
 
 ## 7. Session log
