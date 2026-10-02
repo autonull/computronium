@@ -452,6 +452,35 @@ stop growing.
 
 ## 8. Session log
 
+- **Q1 started, campaign run aborted (session cut short by walltime).**
+  Dev-env smoke green; checkout clean; the campaign
+  (`examples/learning-rules-and-geometry-digits.yaml`) was launched via
+  `comp run` into `logs/q1_campaign.duckdb` (log `logs/q1_run.log`, kept) and
+  killed before completion — ~15 min elapsed against the spec's
+  `budget_seconds: 300`, with ~150 "Evaluation failed" lines, all of one
+  signature: `Recurrent geometry ... requires energy-based, PC-family,
+  diffusion, or instantaneous dynamics, got 'lazy'` (identity
+  `ab3f7a32…`). Two findings before the abort:
+  1. **The spec proposes cells its own validator rejects** — the
+     `lazy`×`recurrent` combination is declared but illegal, so the space
+     leaks failures instead of the search space filtering them
+     (`iter_candidates` should never yield them; gate 1's `measured == legal`
+     assertion could not have passed a full run). This is a Q1-adjacent seam
+     defect to resolve *in Q1 itself*: either the space filters on the
+     recurrence/credit compat predicate, or the spec drops `lazy`×recurrent.
+     Price with a `--co`-dry-run before any campaign relaunch.
+  2. **The campaign is slower than its published price.** T5 measured
+     ~0.2-0.5 s/cell, but the run had not finished a 90-cell space's
+     measurement in ~15 min. Re-price one cell (scripts/probes path) before
+     re-launching; if the lr fix changed the price, update the YAML's cost
+     comment and the campaign lock's docstring arithmetic in the same commit
+     as the relaunch.
+  - Remaining Q1 work, for the next session: relaunch after fixing (1),
+    print the per-credit train/val table, then strengthen gate 2
+    (gradient reference cell > 1.5× chance at the campaign's own
+    epochs/batch_limit) — Q1's gate as written. Partial store deleted; the
+    log is the only artifact.
+
 - **Plan verified and restructured.** E3's premise was corrected against the
   tree: `contrast_design` *is* wired (S1, `stages_impl.py:130`) — the
   unverified part is whether its split produces distinct records and whether
