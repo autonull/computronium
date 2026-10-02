@@ -33,7 +33,9 @@ __all__ = [
     "UnmeasuredObjectiveError",
     "measured_objectives",
     "objective_metric",
+    "objective_name",
     "objective_values",
+    "optimizes",
 ]
 
 # Per-epoch observations the trainer reports in its history.
@@ -76,6 +78,25 @@ class UnmeasuredObjectiveError(ObjectiveResolutionError):
 def measured_objectives() -> tuple[str, ...]:
     """The objective names a payload key can satisfy."""
     return tuple(sorted(MEASURED_OBJECTIVES))
+
+
+def objective_name(metric_key: str) -> str | None:
+    """The objective name a payload key satisfies, or ``None`` if none does.
+
+    The reverse of :func:`objective_metric`, so a consumer holding a payload key
+    can still ask which declared objective it is — and in which direction.
+    """
+    for name, key in MEASURED_OBJECTIVES.items():
+        if key == metric_key:
+            return name
+    return None
+
+
+def optimizes(name: str) -> bool:
+    """Whether an objective is maximized (True) or minimized (False)."""
+    from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+
+    return OBJECTIVES_REGISTRY[name].direction == "maximize"
 
 
 def objective_metric(name: str) -> str:

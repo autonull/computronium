@@ -192,11 +192,16 @@ class AxisImpact:
 def derive_claims(
     records: Sequence[Record],
     *,
-    metric: str,
+    metrics: Sequence[str],
     achieved: Mapping[str, int] | None = None,
     min_seeds: int = 5,
 ) -> tuple[Claim, ...]:
     """Group claim-eligible records by axis value and summarise each group.
+
+    Claims are per *metric*, not per run: a run declaring two objectives can say
+    which axis mattered for each of them, and which axis mattered for the first
+    one only is half an answer (TODO47 T4, session 11's note). A metric no
+    record carries contributes nothing rather than an empty group.
 
     Eligibility is a filter the run does not apply to itself: a record
     contributes only when it passed its gate, is not quarantined, and its
@@ -206,33 +211,34 @@ def derive_claims(
 
     Args:
         records: The run's records (or any slice of them).
-        metric: The payload key to claim about.
+        metrics: Payload keys to claim about, in the study's declared order.
         achieved: Achieved PASS seeds per replication key, as
             ``RecordStore.count_achieved_seeds`` reports them. Without it, a
             record's own gate verdict is the only filter.
         min_seeds: Seeds a cell must have reached to contribute.
 
     Returns:
-        One claim per axis value that reached ``min_seeds`` measurements,
-        ordered by axis then by descending mean.
+        One claim per (metric, axis value) that reached ``min_seeds``
+        measurements, ordered by metric, then axis, then descending mean.
     """
-    grouped: dict[tuple[str, str], list[Record]] = {}
+    grouped: dict[tuple[str, str, str], list[tuple[Record, float]]] = {}
     for record in records:
         if not _contributes(record, achieved=achieved, min_seeds=min_seeds):
             continue
-        value = record.payload.get(metric)
-        if isinstance(value, bool) or not isinstance(value, int | float):
-            continue
-        for axis in StructuralAxis:
-            grouped.setdefault((axis.value, getattr(record, axis.value)), []).append(
-                record
-            )
+        for metric in metrics:
+            value = record.payload.get(metric)
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                continue
+            for axis in StructuralAxis:
+                grouped.setdefault(
+                    (metric, axis.value, getattr(record, axis.value)), []
+                ).append((record, float(value)))
 
     claims: list[Claim] = []
-    for (axis, value), group in grouped.items():
+    for (metric, axis, axis_value), group in grouped.items():
         if len(group) < min_seeds:
             continue
-        values = [float(r.payload[metric]) for r in group]
+        values = [value for _, value in group]
         mean = sum(values) / len(values)
         variance = (
             sum((v - mean) ** 2 for v in values) / (len(values) - 1)
@@ -243,14 +249,14 @@ def derive_claims(
             Claim(
                 metric=metric,
                 axis=axis,
-                value=value,
+                value=axis_value,
                 n=len(values),
                 mean=mean,
                 variance=variance,
-                cells=len({replication_key(r) for r in group}),
+                cells=len({replication_key(r) for r, _ in group}),
             )
         )
-    return tuple(sorted(claims, key=lambda c: (c.axis, -c.mean, c.value)))
+    return tuple(sorted(claims, key=lambda c: (c.metric, c.axis, -c.mean, c.value)))
 
 
 def strongest_axis(claims: Sequence[Claim]) -> AxisImpact | None:

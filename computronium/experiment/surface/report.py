@@ -33,7 +33,11 @@ from computronium.experiment.evidence.limitations import (
     replication_keys_of,
 )
 from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.metrics import objective_metric
+from computronium.experiment.schema.metrics import (
+    objective_metric,
+    objective_name,
+    optimizes,
+)
 from computronium.experiment.schema.record import GateVerdict
 
 __all__ = [
@@ -79,7 +83,23 @@ class ExportBundle:
     metadata: dict[str, Any]
 
 
-class ReportGenerator:
+def _maximizes(metric_key: str) -> bool:
+    """Whether a payload key is maximized, per the objective that measures it.
+
+    An unclaimed key (a cost the study never declared) is minimized: a front
+    treats it as a cost rather than silently reading a bigger number as better.
+    """
+    name = objective_name(metric_key)
+    return optimizes(name) if name is not None else False
+
+
+def _directions(objectives: tuple[str, str]) -> tuple[bool, bool]:
+    """Whether each of a front's two payload keys is maximized."""
+    primary, secondary = objectives
+    return _maximizes(primary), _maximizes(secondary)
+
+
+class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read method per report section, by design
     """Generate reports directly from the record store.
 
     All queries run against DuckDB; no external files required.
@@ -156,85 +176,27 @@ class ReportGenerator:
         self,
         run_id: str,
         objectives: tuple[str, str] | None = None,
-        maximize: tuple[bool, bool] = (True, False),
+        maximize: tuple[bool, bool] | None = None,
     ) -> list[dict[str, Any]]:
         """Compute the Pareto frontier over a run's claim-eligible cells.
 
         Args:
             run_id: Run filter.
             objectives: Primary and secondary payload keys. Defaults to the
-                run's own declared objective against parameter count — a front
-                over a key no measurement emits is an empty section, not a
-                finding.
-            maximize: Tuple of (maximize_primary, maximize_secondary).
+                run's own first two measured objectives — a front over a key no
+                measurement emits is an empty section, not a finding.
+            maximize: Tuple of (maximize_primary, maximize_secondary). Read
+                from each objective's declared direction when omitted, because a
+                front that maximizes accuracy and walltime together is empty.
 
         Returns:
             List of dicts with record_id, coordinate, and objective values.
         """
         objectives = objectives or self.front_objectives(run_id)
-        eligible = self.claim_eligible_records(run_id)
-        if not eligible:
-            return []
-
-        # Extract objective values
-        points = []
-        for record in eligible:
-            try:
-                primary_val = record.payload.get(objectives[0])
-                secondary_val = record.payload.get(objectives[1])
-                if primary_val is None or secondary_val is None:
-                    continue
-                points.append({
-                    "record_id": record.record_id,
-                    "cell_key": record.cell_key,
-                    "primary": float(primary_val),
-                    "secondary": float(secondary_val),
-                    "coordinate": {
-                        "substrate": record.substrate,
-                        "geometry": record.geometry,
-                        "dynamics": record.dynamics,
-                        "plasticity": record.plasticity,
-                        "credit": record.credit,
-                        "update": record.update,
-                    },
-                })
-            except ValueError, TypeError:
-                continue
-
-        if not points:
-            return []
-
-        # Simple Pareto filtering
-        primary_key, secondary_key = "primary", "secondary"
-
-        def _is_dominated(p: dict[str, Any], q: dict[str, Any]) -> bool:
-            """Check if point p is dominated by point q."""
-            primary_better = (
-                q[primary_key] > p[primary_key]
-                if maximize[0]
-                else q[primary_key] < p[primary_key]
-            )
-            secondary_better = (
-                q[secondary_key] > p[secondary_key]
-                if maximize[1]
-                else q[secondary_key] < p[secondary_key]
-            )
-            primary_equal = q[primary_key] == p[primary_key]
-            secondary_equal = q[secondary_key] == p[secondary_key]
-
-            return (
-                (primary_better or primary_equal)
-                and (secondary_better or secondary_equal)
-                and (primary_better or secondary_better)
-            )
-
-        pareto = []
-        for i, p in enumerate(points):
-            dominated = any(_is_dominated(p, q) for j, q in enumerate(points) if i != j)
-            if not dominated:
-                pareto.append(p)
-
-        return pareto
+        maximize = maximize or _directions(objectives)
+        return self._pareto_subset(
+            self.claim_eligible_records(run_id), objectives, maximize
+        )
 
     def maturity_distribution(self, run_id: str | None = None) -> dict[str, int]:
         """Count records by maturity level."""
@@ -266,16 +228,20 @@ class ReportGenerator:
     def claims(self, run_id: str) -> tuple[Claim, ...]:
         """The claims a run makes, each with n and variance (R35/R64).
 
-        The metric is the run's first *measured* objective — declared, not
-        guessed. A run whose objectives nothing measures makes no claim.
+        One claim family per *measured* declared objective: a run that measured
+        two things can say which axis mattered for each, and reporting only the
+        first is half an answer. A run whose objectives nothing measures makes
+        no claim.
         """
-        metric = self._claim_metric(run_id)
-        if metric is None:
+        metrics = self.claim_metrics(run_id)
+        if not metrics:
             return ()
+        spec = self._spec(run_id)
         return derive_claims(
             self._store.query_records(run_id=run_id),
-            metric=metric,
+            metrics=metrics,
             achieved=self.achieved_seeds(run_id),
+            min_seeds=spec.n_seeds if spec else 5,
         )
 
     def limitations(self, run_id: str) -> tuple[Limitation, ...]:
@@ -296,20 +262,31 @@ class ReportGenerator:
         return info.spec if info is not None else None
 
     def front_objectives(self, run_id: str) -> tuple[str, str]:
-        """The axes a Pareto front defaults to: the claimed metric, then size."""
-        return self._claim_metric(run_id) or "param_count", "param_count"
+        """The two payload keys a Pareto front defaults to.
 
-    def _claim_metric(self, run_id: str) -> str | None:
-        """The payload key the run's first measured objective resolves to."""
+        The run's first two *measured* objectives. Parameter count is the
+        fallback for a run that measured only one thing, because a front needs
+        two axes; it is not the second axis by default, since comparing an
+        outcome against size when the run declared a second outcome discards the
+        outcome.
+        """
+        metrics = self.claim_metrics(run_id)
+        if len(metrics) >= 2:
+            return metrics[0], metrics[1]
+        return (metrics[0] if metrics else "param_count", "param_count")
+
+    def claim_metrics(self, run_id: str) -> tuple[str, ...]:
+        """The payload keys the run's measured objectives resolve to, in order."""
         spec = self._spec(run_id)
         if spec is None:
-            return None
+            return ()
+        metrics: list[str] = []
         for name in spec.objectives:
             try:
-                return objective_metric(name)
+                metrics.append(objective_metric(name))
             except LookupError:
                 continue
-        return None
+        return tuple(dict.fromkeys(metrics))
 
     def failures_by_cause(self, run_id: str | None = None) -> dict[str, int]:
         """Count failed records grouped by recorded failure cause."""
@@ -332,10 +309,11 @@ class ReportGenerator:
         self,
         run_id: str,
         objectives: tuple[str, str] | None = None,
-        maximize: tuple[bool, bool] = (True, False),
+        maximize: tuple[bool, bool] | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Pareto frontier per fidelity level (R86 fronts-by-fidelity)."""
         objectives = objectives or self.front_objectives(run_id)
+        maximize = maximize or _directions(objectives)
         records = self._store.query_records(run_id=run_id)
         by_fidelity: dict[str, list[Any]] = {}
         for record in records:
@@ -503,15 +481,16 @@ def _distribution_section(
 
 def _pareto_section(generator: ReportGenerator, run_id: str) -> list[str]:
     """The claim-eligible Pareto front, or why there is none."""
-    lines = _section("Pareto Frontier (declared objective vs param_count):")
+    primary, secondary = generator.front_objectives(run_id)
+    lines = _section(f"Pareto Frontier ({primary} vs {secondary}):")
     pareto = generator.pareto_frontier(run_id)
     if not pareto:
         return [*lines, "  (no claim-eligible records)"]
     return [
         *lines,
         *(
-            f"  {point['record_id'][:16]}... acc={point['primary']:.4f} "
-            f"params={point['secondary']:.0f} "
+            f"  {point['record_id'][:16]}... {primary}={point['primary']:.4f} "
+            f"{secondary}={point['secondary']:.4f} "
             f"[{point['coordinate']['dynamics']}/{point['coordinate']['credit']}/"
             f"{point['coordinate']['update']}]"
             for point in pareto[:10]

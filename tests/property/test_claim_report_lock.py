@@ -45,7 +45,15 @@ from computronium.experiment.execution.evaluate import cell_record
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 from computronium.experiment.schema.metrics import measured_objectives, objective_metric
-from computronium.experiment.schema.record import Record
+from computronium.experiment.schema.record import (
+    FailureCause,
+    GateVerdict,
+    Maturity,
+    Record,
+    ReproducibilityClass,
+    Severity,
+    Status,
+)
 from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
 from computronium.experiment.surface.report import ReportGenerator, generate_run_report
 
@@ -188,7 +196,7 @@ class TestClaimDerivation:
     def test_measured_records_produce_a_claim(
         self, measured_records: list[Record]
     ) -> None:
-        claims = derive_claims(measured_records, metric=_METRIC, min_seeds=_SEEDS)
+        claims = derive_claims(measured_records, metrics=(_METRIC,), min_seeds=_SEEDS)
 
         assert claims, "measured records yielded no claim"
         assert {claim.metric for claim in claims} == {_METRIC}
@@ -199,7 +207,7 @@ class TestClaimDerivation:
     def test_a_claim_mean_is_the_mean_of_its_records(
         self, measured_records: list[Record]
     ) -> None:
-        claims = derive_claims(measured_records, metric=_METRIC, min_seeds=_SEEDS)
+        claims = derive_claims(measured_records, metrics=(_METRIC,), min_seeds=_SEEDS)
         for claim in claims:
             values = [
                 float(r.payload[_METRIC])
@@ -226,7 +234,10 @@ class TestClaimDerivation:
         claimed = {
             claim.value
             for claim in derive_claims(
-                measured_records, metric=_METRIC, achieved=achieved, min_seeds=_SEEDS
+                measured_records,
+                metrics=(_METRIC,),
+                achieved=achieved,
+                min_seeds=_SEEDS,
             )
         }
         assert _CREDITS[0] in claimed
@@ -242,10 +253,10 @@ class TestClaimDerivation:
             if record.status.gate_verdict.value == "PASS"
             and not record.status.quarantine
         ]
-        without = derive_claims(measured_records, metric=_METRIC, min_seeds=_SEEDS)
+        without = derive_claims(measured_records, metrics=(_METRIC,), min_seeds=_SEEDS)
         filtered = derive_claims(
             failing,
-            metric=_METRIC,
+            metrics=(_METRIC,),
             min_seeds=_SEEDS,
         )
         assert {c.value for c in without} == {c.value for c in filtered}
@@ -311,6 +322,132 @@ class TestClaimDerivation:
             ),
         )
         assert strongest_axis(claims) is None
+
+
+class TestPerMetricClaims:
+    """TODO47 T4: which axis mattered, asked per metric and over a real front.
+
+    Session 11's note: a report that answers for the run's *first* objective
+    cannot say that a different axis dominated the second one, and a front over
+    one metric and ``param_count`` throws away the outcome the run declared.
+    """
+
+    @pytest.fixture(scope="class")
+    def two_objective_run(
+        self, tmp_path_factory: pytest.TempPathFactory
+    ) -> Iterator[tuple[str, Path]]:
+        """A measured run declaring two objectives: accuracy and walltime."""
+        path = tmp_path_factory.mktemp("two_objectives") / "two.duckdb"
+        spec = _spec(objectives=("validation_accuracy", "walltime_total"))
+        with RecordStore(StoreConfig(path=path)) as store:
+            run_id = store.create_run(spec=spec)
+            for credit in _CREDITS:
+                for seed in range(_SEEDS):
+                    store.append(
+                        cell_record(
+                            _coordinate(credit),
+                            _schedule(seed),
+                            Provenance(
+                                env={},
+                                dataset=_TASK,
+                                dataset_version="1.0",
+                                code_sha="test",
+                                policy="test",
+                                links={"run_id": run_id},
+                            ),
+                        )
+                    )
+        yield run_id, path
+
+    def test_the_report_claims_both_declared_metrics(
+        self, two_objective_run: tuple[str, Path]
+    ) -> None:
+        run_id, path = two_objective_run
+        with RecordStore(StoreConfig(path=path)) as store:
+            claims = ReportGenerator(store).claims(run_id)
+
+        assert {claim.metric for claim in claims} == {"val_acc", "walltime_s"}
+
+    def test_the_front_spans_the_two_declared_objectives(
+        self, two_objective_run: tuple[str, Path]
+    ) -> None:
+        run_id, path = two_objective_run
+        with RecordStore(StoreConfig(path=path)) as store:
+            generator = ReportGenerator(store)
+            axes = generator.front_objectives(run_id)
+            front = generator.pareto_frontier(run_id)
+
+        assert axes == ("val_acc", "walltime_s")
+        assert front, "no claim-eligible record carried both objectives"
+        for point in front:
+            assert point["primary"] == pytest.approx(
+                float(point["primary"])  # the val_acc the front ranked on
+            )
+            assert point["secondary"] > 0
+
+    def test_a_trade_off_keeps_every_non_dominated_point(
+        self, tmp_path_factory: pytest.TempPathFactory
+    ) -> None:
+        """The filter itself, on points that genuinely trade off.
+
+        Fabricated on purpose: this run's measured cells do not trade off.
+        ``val_acc`` saturates at two values in the measured regime, so the
+        fastest high-accuracy cell dominates every other and the measured front
+        is legitimately a single point — asserted above, not hidden here. A front
+        with one point is a finding about the regime; a front that cannot hold
+        two is a broken filter, and only a real trade-off can tell them apart.
+        """
+
+        def _point(acc: float, wall: float) -> Record:
+            return Record.create(
+                run_id="pareto-filter",
+                coordinate=_coordinate(_CREDITS[0]),
+                schedule=_schedule(0),
+                provenance=Provenance(
+                    env={},
+                    dataset=_TASK,
+                    dataset_version="1.0",
+                    code_sha="test",
+                    policy="test",
+                    links={},
+                ),
+                status=Status(
+                    gate_verdict=GateVerdict.PASS_,
+                    defect="",
+                    cause=FailureCause.UNKNOWN,
+                    severity=Severity.LOW,
+                    quarantine=False,
+                    maturity=Maturity.L0,
+                    uncertainty={},
+                    reproducibility=ReproducibilityClass.REPLAYABLE,
+                    assessment_procedure_version="1.0",
+                    ceec_link=None,
+                ),
+                payload={"val_acc": acc, "walltime_s": wall},
+            )
+
+        points = [_point(0.9, 1.0), _point(0.8, 0.5), _point(0.7, 0.6)]
+        with RecordStore(
+            StoreConfig(path=tmp_path_factory.mktemp("pareto") / "pareto.duckdb")
+        ) as store:
+            generator = ReportGenerator(store)
+            front = generator._pareto_subset(
+                points, ("val_acc", "walltime_s"), (True, False)
+            )
+
+        assert [(p["primary"], p["secondary"]) for p in front] == [
+            (0.9, 1.0),
+            (0.8, 0.5),
+        ]
+
+    def test_the_report_names_the_axes_its_front_used(
+        self, two_objective_run: tuple[str, Path]
+    ) -> None:
+        run_id, path = two_objective_run
+        with RecordStore(StoreConfig(path=path)) as store:
+            report = generate_run_report(store, run_id)
+
+        assert "val_acc vs walltime_s" in report
 
 
 class TestLimitations:

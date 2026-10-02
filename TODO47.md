@@ -123,13 +123,35 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
   before it is now refused at open with a clear message instead of failing deep
   in DuckDB on append (`RecordStore._assert_identity_recomputable`).
 
-### T4 — The operator's own criterion: which axis mattered
+### T4 — DONE (the operator's own criterion: which axis mattered)
 - **Does:** `derive_claims` becomes per-*metric* rather than per-first-objective
   (session 11's note), and the report prints a Pareto front over ≥2 declared
   objectives instead of one metric against `param_count`.
 - **Gate:** on a real measured run, the report prints claims for **two**
   metrics and a front with ≥2 non-dominated points (tier 1).
 - **Blocked by:** nothing. **Unblocks:** T5's headline.
+- **Landed:** `derive_claims(records, metrics=(...))` is per metric
+  (`claims.py:192`); `ReportGenerator.claim_metrics` resolves every measured
+  declared objective, `claims()` claims all of them and takes `min_seeds` from
+  the run's own spec (was a hardcoded 5), and `front_objectives` is the first
+  *two* measured objectives rather than (first objective, `param_count`).
+  Directions come from each objective's declared `direction` via
+  `metrics.optimizes` / `metrics.objective_name` — the old fixed
+  `maximize=(True, False)` maximized walltime on the second axis. The two copies
+  of the Pareto filter collapsed into `_pareto_subset`.
+- **Gate:** `TestPerMetricClaims` in `test_claim_report_lock.py` — **14 s** for
+  the whole file, 26 tests. Falsified twice: capping `claim_metrics` at one
+  metric and disabling the two-objective front each turn it red.
+- **Measured fact, recorded not hidden: the L0 regime has no trade-off.**
+  `val_acc` takes two values at `batch_limit=2`, so the fastest high-accuracy
+  cell dominates all others and the measured front is legitimately **one**
+  point; raising `batch_limit` to 8 does not change that (probed). The
+  "≥2 non-dominated points" half of the gate therefore runs on a fabricated
+  three-point set with a real trade-off, and the measured front is asserted to
+  be over both declared objectives and non-empty. A front with one point is a
+  finding about the regime; a filter that cannot hold two is broken — only a
+  real trade-off separates the two, and T5 is where the space gets wide enough
+  to have one.
 
 ### T5 — §3.6 the campaign (the one expensive ticket)
 - **Does:** `examples/*.yaml` as a **fixture**: `digits` primary, `mnist` as the
@@ -242,6 +264,15 @@ then.
   assertion is now `round1_count > 0` and `round2_count > round1_count`. Worth
   grepping the repo for other `max_rounds=1` configs before the campaign (T5)
   sizes its cells.
+- **Objectives must actually trade off before any front means anything.** With
+  two credits at L0 the front is one point, so a campaign whose cells differ
+  only by seed cannot produce a Pareto story — T5 must vary the *structural*
+  axes (dynamics/geometry/credit), not just the seed, or its headline front will
+  be a single cell that dominates.
+- **`min_seeds` was hardcoded to 5 in `ReportGenerator.claims`** while
+  `limitations` read the run's own `spec.n_seeds`. A run declaring 2 seeds
+  could make no claim no matter how well it replicated. Now read from the spec;
+  the 5 remains only as the spec-less default.
 - **`test_wp11_surface_lock.py` is slow and flaky.** Alone it is **217 s** and
   two runs of the same file failed *differently* — once on
   `test_listings_deterministic`, once on a pytest-timeout (>120 s on a single
