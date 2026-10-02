@@ -274,6 +274,30 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== GAP-INTERSECTION + LEGEND CHECKS (2026-10-02f) ===
+
+Closed the two open verification items from the 2026-10-02d list:
+
+- **`_gap_y` nearest-gap fallback now asserted** — extracted `_gap_at()`
+  (returns the gap itself; `_gap_y` is now a 2-line midpoint wrapper).
+  `_verify_edge` gains a rail-span check for every non-`h-gap` route: the
+  label's gap must intersect the edge's full y-span (`min..max` of all
+  `edge_points` y-values), else `RuntimeError`. A rail whose label gap is
+  never actually crossed now fails loudly instead of silently landing in
+  a neighbouring gap.
+- **Legend containment checked** — `_legend_layout()` (shared x0/col_w math)
+  and `_legend_block()` (whole-block bbox) extracted from
+  `render_legend`; `_verify_layout` asserts the legend block is inside the
+  canvas horizontally and intersects no panel.
+
+Gate: `ruff format`/`ruff check` clean · `pyright` 0/0 · `--check` green
+(SVG unchanged: 162 KiB, 2547×2511). No behavior change to the render —
+all edits are verification hardening plus the render/verify DRY refactor.
+
+**Remaining open item:** the "elbow lane vs destination panel" note from
+2026-10-02d (documentation-only; `band_gap` tuning caveat). The 2×
+artifact policy question is closed (no 2× artifact exists).
+
 === RENAME + 2x REMOVAL (2026-10-02e) ===
 
 User feedback: SVG is inherently scalable — the 2× variant was unwanted.

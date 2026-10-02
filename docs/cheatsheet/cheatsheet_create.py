@@ -1274,13 +1274,18 @@ def edge_points(e: Edge, ly: Layout) -> list[tuple[float, float]]:
             return [(s.cx, s.bottom), (s.cx, lane), (d.cx, lane), (d.cx, d.y)]
 
 
-def _gap_y(ly: Layout, y1: float, y2: float) -> float:
+def _gap_at(ly: Layout, y1: float, y2: float) -> tuple[float, float]:
+    """Band-gap containing the y1..y2 midpoint, else the nearest one."""
     mid = (min(y1, y2) + max(y1, y2)) / 2.0
     for top, bot in ly.band_gaps:
         if top <= mid <= bot:
-            return (top + bot) / 2.0
-    nearest = min(ly.band_gaps, key=lambda g: abs((g[0] + g[1]) / 2.0 - mid))
-    return (nearest[0] + nearest[1]) / 2.0
+            return (top, bot)
+    return min(ly.band_gaps, key=lambda g: abs((g[0] + g[1]) / 2.0 - mid))
+
+
+def _gap_y(ly: Layout, y1: float, y2: float) -> float:
+    top, bot = _gap_at(ly, y1, y2)
+    return (top + bot) / 2.0
 
 
 def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
@@ -1347,6 +1352,14 @@ def _verify_edge(e: Edge, ly: Layout) -> tuple[float, float, float, float]:
     for x, y in edge_points(e, ly):
         if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
             raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
+    if e.route != "h-gap":
+        pts = edge_points(e, ly)
+        ys = [y for _, y in pts]
+        top, bot = _gap_at(ly, pts[1][1], pts[2][1])
+        if top > max(ys) or bot < min(ys):
+            raise RuntimeError(
+                f"edge {e.src}->{e.dst} label gap does not intersect its rail span"
+            )
     return (rx, ry, ew, eh)
 
 
@@ -1357,6 +1370,12 @@ def _verify_layout(ly: Layout) -> None:
             raise RuntimeError(f"panel {key} out of canvas horizontally")
         if not (p.y > 0 and p.y + p.h < ly.canvas_h):
             raise RuntimeError(f"panel {key} out of canvas vertically")
+    lx, ly0, lw, lh = _legend_block(ly.canvas_w)
+    if lx < 0 or lx + lw > ly.canvas_w:
+        raise RuntimeError("legend out of canvas horizontally")
+    for key, p in ly.pos.items():
+        if _label_hits_panel(lx, ly0, lw, lh, p):
+            raise RuntimeError(f"legend overlaps panel {key}")
     rects = [(e, _verify_edge(e, ly)) for e in build_edges()]
     for i, (ea, ra) in enumerate(rects):
         for eb, rb in rects[i + 1 :]:
@@ -1780,7 +1799,8 @@ def _legend_metrics(kind: str) -> tuple[float, float]:
             return STYLE.legend_swatch, STYLE.legend_swatch + 4.0
 
 
-def render_legend(canvas_w: float) -> str:
+def _legend_layout(canvas_w: float) -> tuple[float, list[float]]:
+    """(x0, col_w) shared by render and verification."""
     totals = [
         _legend_metrics(kind)[1] + text_w(label, STYLE.legend_font)
         for kind, _, label in LEGEND
@@ -1791,10 +1811,23 @@ def render_legend(canvas_w: float) -> str:
         for i in range(n_cols)
     ]
     x0 = canvas_w - STYLE.margin - sum(col_w) - (n_cols - 1) * STYLE.legend_gap
+    return x0, col_w
+
+
+def _legend_block(canvas_w: float) -> tuple[float, float, float, float]:
+    """Bounding (x, y, w, h) of the whole legend block."""
+    x0, col_w = _legend_layout(canvas_w)
+    rows = (len(LEGEND) + 4) // 5
+    top = 66.0 - 11.0
+    return (x0, top, sum(col_w) + 4.0 * STYLE.legend_gap, rows * 15.0 + 2.0)
+
+
+def render_legend(canvas_w: float) -> str:
+    x0, col_w = _legend_layout(canvas_w)
     parts: list[str] = []
     for i, (kind, key, label) in enumerate(LEGEND):
-        col = i % n_cols
-        row_i = i // n_cols
+        col = i % 5
+        row_i = i // 5
         sx = x0 + sum(col_w[:col]) + col * STYLE.legend_gap
         sy = 66.0 + row_i * 15.0
         sw_w, text_dx = _legend_metrics(kind)
