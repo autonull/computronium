@@ -30,10 +30,15 @@ import dataclasses
 import datetime
 import inspect
 import re
-import subprocess
-import xml.etree.ElementTree as ET
+import shutil
+import subprocess  # ruff: ignore[suspicious-subprocess-import] — only `git rev-parse`, local read-only call
+import xml.etree.ElementTree as ET  # ruff: ignore[suspicious-xml-etree-import,suspicious-xml-element-tree-usage] — parses our own generated SVG, never untrusted input
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_SVG = ROOT / "docs" / "diagram.svg"
@@ -114,18 +119,21 @@ def _cli_commands() -> tuple[tuple[str, str], ...]:
             if (
                 len(node.targets) == 1
                 and isinstance(node.targets[0], ast.Name)
-                and node.targets[0].id in ("_SUBCOMMANDS", "_SUMMARIES")
+                and node.targets[0].id in {"_SUBCOMMANDS", "_SUMMARIES"}
             ):
                 name = node.targets[0].id
         elif isinstance(node, ast.AnnAssign) and node.value is not None:
             value = node.value
-            if isinstance(node.target, ast.Name) and node.target.id in ("_SUBCOMMANDS", "_SUMMARIES"):
+            if isinstance(node.target, ast.Name) and node.target.id in {
+                "_SUBCOMMANDS",
+                "_SUMMARIES",
+            }:
                 name = node.target.id
         if value is None or name is None or not isinstance(value, ast.Dict):
             continue
         pairs = [
             (k.value, v.value)
-            for k, v in zip(node.value.keys, node.value.values, strict=True)
+            for k, v in zip(value.keys, value.values, strict=True)
             if isinstance(k, ast.Constant)
             and isinstance(v, ast.Constant)
             and isinstance(k.value, str)
@@ -134,7 +142,7 @@ def _cli_commands() -> tuple[tuple[str, str], ...]:
         if name == "_SUBCOMMANDS":
             ordered = tuple(
                 k.value
-                for k in node.value.keys
+                for k in value.keys
                 if isinstance(k, ast.Constant) and isinstance(k.value, str)
             )
         else:
@@ -147,15 +155,19 @@ def _demos() -> tuple[tuple[str, str], ...]:
     for path in sorted((ROOT / "scripts" / "demos").glob("demo_*.py")):
         tree = ast.parse(path.read_text())
         doc = ast.get_docstring(tree) or ""
-        line = next((l for l in doc.splitlines() if l.strip().startswith("Expected:")), "")
+        line = next(
+            (raw for raw in doc.splitlines() if raw.strip().startswith("Expected:")), ""
+        )
         if not line:
-            line = next((l for l in doc.splitlines() if l.strip()), "")
+            line = next((raw for raw in doc.splitlines() if raw.strip()), "")
         out.append((path.stem, line.strip()[:68]))
     return tuple(out)
 
 
 def _gallery_keys() -> tuple[str, ...]:
-    tree = ast.parse((ROOT / "computronium" / "visualization" / "gallery.py").read_text())
+    tree = ast.parse(
+        (ROOT / "computronium" / "visualization" / "gallery.py").read_text()
+    )
     for node in ast.walk(tree):
         targets: list[ast.expr] = []
         value: ast.expr | None = None
@@ -163,8 +175,10 @@ def _gallery_keys() -> tuple[str, ...]:
             targets, value = node.targets, node.value
         elif isinstance(node, ast.AnnAssign) and node.value is not None:
             targets, value = [node.target], node.value
-        if value is not None and isinstance(value, ast.Dict) and any(
-            isinstance(t, ast.Name) and t.id == "DEMOS" for t in targets
+        if (
+            value is not None
+            and isinstance(value, ast.Dict)
+            and any(isinstance(t, ast.Name) and t.id == "DEMOS" for t in targets)
         ):
             return tuple(
                 k.value
@@ -233,7 +247,8 @@ def collect() -> Bundle:
 
     axes = {
         ax.value: tuple(
-            Primitive(s.name, s.description, s.available, s.unavailable_reason) for s in reg
+            Primitive(s.name, s.description, s.available, s.unavailable_reason)
+            for s in reg
         )
         for ax, reg in AXES_REGISTRIES.items()
     }
@@ -249,14 +264,18 @@ def collect() -> Bundle:
     configs = {name: _fields(cls) for name, cls in config_classes.items()}
     domains, task_groups = _tasks()
     try:
-        commit = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=ROOT,
-            timeout=5,
-        ).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
+        git = shutil.which("git")
+        commit = "n/a"
+        if git:
+            commit = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] — git path resolved via shutil.which
+                [git, "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                check=False,
+                text=True,
+                cwd=ROOT,
+                timeout=5,
+            ).stdout.strip()
+    except OSError, subprocess.SubprocessError:
         commit = "n/a"
     return Bundle(
         axes=axes,
@@ -284,7 +303,8 @@ def collect() -> Bundle:
             for key, cls in POLICY_CATALOG.items()
         ),
         objectives=tuple(
-            (o.name, o.name in kernel_metrics.MEASURED_OBJECTIVES) for o in seed_registries.OBJECTIVES
+            (o.name, o.name in kernel_metrics.MEASURED_OBJECTIVES)
+            for o in seed_registries.OBJECTIVES
         ),
         priors=tuple(p.name for p in seed_registries.PRIORS),
         capabilities=len(list(CAPABILITIES_REGISTRY)),
@@ -317,7 +337,9 @@ def collect() -> Bundle:
             if d.is_dir() and (d / "pyproject.toml").exists()
         ),
         history_metrics=tuple(sorted(kernel_metrics.HISTORY_METRICS)),
-        extra_metrics=tuple(sorted(kernel_metrics.MEASURED_METRICS - kernel_metrics.HISTORY_METRICS)),
+        extra_metrics=tuple(
+            sorted(kernel_metrics.MEASURED_METRICS - kernel_metrics.HISTORY_METRICS)
+        ),
         schema_version=current_schema_version(),
         commit=commit,
     )
@@ -478,7 +500,7 @@ def _wrap_text(text: str, size: float, max_w: float) -> list[str]:
 def _fit(text: str, size: float, max_w: float) -> str:
     if text_w(text, size) <= max_w:
         return text
-    while len(text) > 1 and text_w(text[: -1] + "…", size) > max_w:
+    while len(text) > 1 and text_w(text[:-1] + "…", size) > max_w:
         text = text[:-1]
     return text + "…"
 
@@ -521,31 +543,28 @@ CONFIG_FOR_AXIS: dict[str, str] = {
 }
 
 
-def build_panels(b: Bundle) -> tuple[Panel, ...]:
-    axis_boxes = tuple(
+def _axis_boxes(b: Bundle) -> tuple[AxisBox, ...]:
+    return tuple(
         AxisBox(
             axis=axis,
             primitives=tuple(
-                Chip(label=p.name, accent=AXIS_COLOR[axis], enabled=p.available) for p in prims
+                Chip(label=p.name, accent=AXIS_COLOR[axis], enabled=p.available)
+                for p in prims
             ),
             config_name=CONFIG_FOR_AXIS[axis],
             config_fields=b.configs[CONFIG_FOR_AXIS[axis]],
         )
-        for axis in b.axes
+        for axis, prims in b.axes.items()
     )
-    task_chips = tuple(
-        Chip(
-            label=f"{DOMAIN_EMOJI.get(d, '📌')} {d}",
-            sub=f"{len(b.tasks.get(DOMAIN_GROUP[d], ()))} tasks"
-            if b.tasks.get(DOMAIN_GROUP[d])
-            else "via create_task()",
-            accent=COLORS["tasks"],
-        )
-        for d in b.domains
+
+
+def _entry_rows(b: Bundle) -> tuple[Row, ...]:
+    cli_chips = tuple(
+        Chip(label=f"comp {c}", sub=s[:36], accent=COLORS["entry"]) for c, s in b.cli
     )
-    task_names = " · ".join(n for group in b.tasks.values() for n in group)
-    cli_chips = tuple(Chip(label=f"comp {c}", sub=s[:36], accent=COLORS["entry"]) for c, s in b.cli)
-    preset_count = sum(1 for s in b.api_symbols if s.startswith("create_") and s.endswith("_mlp"))
+    preset_count = sum(
+        1 for s in b.api_symbols if s.startswith("create_") and s.endswith("_mlp")
+    )
     native_count = sum(1 for s in b.api_symbols if s.startswith("native_"))
     api_chips = tuple(
         Chip(label=name, sub=sub, accent=COLORS["entry"])
@@ -559,10 +578,59 @@ def build_panels(b: Bundle) -> tuple[Panel, ...]:
         )
     )
     demo_chips = tuple(
-        Chip(label=d, sub=s.replace("Expected: ", ""), accent=COLORS["entry"]) for d, s in b.demos
+        Chip(label=d, sub=s.replace("Expected: ", ""), accent=COLORS["entry"])
+        for d, s in b.demos
     )
+    return (
+        ChipsRow(
+            "comp CLI — every subcommand works end-to-end or does not exist", cli_chips
+        ),
+        ChipsRow(
+            f"🐍 Python API — {len(b.api_symbols)} public symbols (lazy __all__)",
+            api_chips,
+        ),
+        ChipsRow(
+            f"🎬 Demos & figures — {len(b.demos)} scripts · {len(b.gallery)} gallery demos",
+            (
+                *demo_chips,
+                Chip(
+                    label=f"docs/figures gallery ({len(b.gallery)})",
+                    accent=COLORS["entry"],
+                ),
+            ),
+        ),
+    )
+
+
+def _tasks_rows(b: Bundle) -> tuple[Row, ...]:
+    task_chips = tuple(
+        Chip(
+            label=f"{DOMAIN_EMOJI.get(d, '📌')} {d}",
+            sub=f"{len(b.tasks.get(DOMAIN_GROUP[d], ()))} tasks"
+            if b.tasks.get(DOMAIN_GROUP[d])
+            else "via create_task()",
+            accent=COLORS["tasks"],
+        )
+        for d in b.domains
+    )
+    task_names = " · ".join(n for group in b.tasks.values() for n in group)
+    return (
+        TextRow(
+            "create_task(name, device='cpu', quick_mode) → task.setup() → task.get_dataloader('train')"
+        ),
+        ChipsRow("7 domains (domains registry)", task_chips),
+        FieldsRow(
+            f"SUPPORTED_TASKS ({sum(len(v) for v in b.tasks.values())}) — offline-resolvable subset",
+            task_names,
+        ),
+    )
+
+
+def _kernel_rows(b: Bundle) -> tuple[Row, ...]:
     stage_steps = tuple(
-        FlowStep(label=s.label, sub=STAGE_SHORT.get(s.key, s.summary), color=COLORS["kernel"])
+        FlowStep(
+            label=s.label, sub=STAGE_SHORT.get(s.key, s.summary), color=COLORS["kernel"]
+        )
         for s in b.stages
     )
     policy_chips = tuple(
@@ -572,18 +640,73 @@ def build_panels(b: Bundle) -> tuple[Panel, ...]:
     registry_chips = tuple(
         Chip(label=label, sub=sub, accent=COLORS["kernel"])
         for label, sub in (
-            ("OBJECTIVES", f"{len(b.objectives)} · {len(measured)} measured ✓ ({', '.join(measured)})"),
+            (
+                "OBJECTIVES",
+                f"{len(b.objectives)} · {len(measured)} measured ✓ ({', '.join(measured)})",
+            ),
             ("PRIORS", f"{len(b.priors)} seeded (lr_ruler_*, step_size_*)"),
-            ("CAPABILITIES", f"{b.capabilities} conformance rows (C1–C{b.capabilities})"),
+            (
+                "CAPABILITIES",
+                f"{b.capabilities} conformance rows (C1–C{b.capabilities})",
+            ),
             ("CONSTRAINTS", f"{b.constraints} legality constraints"),
             ("LEGALITY DSL", "expression engine — identical for every policy"),
             ("SearchSpace", "spec-derived, legality-filtered"),
             ("ContrastDesign", "OFAT / factorial DOE + DataOrigin"),
         )
     )
-    sys_trainer = " · ".join(b.configs["SystemTrainerConfig"])
-    record_fields = " · ".join(b.record_fields)
-    runspec_fields = " · ".join(b.run_spec_fields)
+    return (
+        FieldsRow(
+            "RunSpec — frozen · versioned · diffable", " · ".join(b.run_spec_fields)
+        ),
+        FlowRow(
+            "Pipeline S1–S11 — PipelineRunner, registry-locked stages", stage_steps
+        ),
+        ChipsRow(
+            "Policies — POLICY_CATALOG · interchangeable per round (U4)", policy_chips
+        ),
+        ChipsRow("Registries — single source of truth", registry_chips),
+    )
+
+
+def _system_rows(b: Bundle) -> tuple[Row, ...]:
+    return (
+        FlowRow(
+            "compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)",
+            (
+                FlowStep(label="compose", sub="6 axis args", color=COLORS["system"]),
+                FlowStep(
+                    label="SystemConfig.validate()",
+                    sub="whitelist → compatible region",
+                    color=COLORS["system"],
+                ),
+                FlowStep(
+                    label="System",
+                    sub="θ params + x state (settle contract)",
+                    color=COLORS["system"],
+                ),
+            ),
+        ),
+        ChipsRow(
+            "5-D & helpers (P = NullPlasticity subspace)",
+            tuple(
+                Chip(label=n, accent=COLORS["system"])
+                for n in (
+                    "compose_system (5-D)",
+                    "create_eqprop_mlp",
+                    "extract_config",
+                    "train_task / train_on_task",
+                )
+            ),
+        ),
+        FieldsRow("SystemTrainerConfig", " · ".join(b.configs["SystemTrainerConfig"])),
+        TextRow(
+            "NullPlasticity ⇒ 5-D delegation path · P ≠ null ⇒ 6-D joint, ψ written back to θ"
+        ),
+    )
+
+
+def _train_rows(b: Bundle) -> tuple[Row, ...]:
     loop_steps = tuple(
         FlowStep(label=label, sub=sub, color=color)
         for label, sub, color in (
@@ -594,11 +717,59 @@ def build_panels(b: Bundle) -> tuple[Panel, ...]:
             ("update · U", "consolidate Δθ", AXIS_COLOR["update"]),
         )
     )
-    history_chips = tuple(Chip(label=m, accent=COLORS["train"]) for m in b.history_metrics)
-    store_chips = tuple(Chip(label=m, accent=COLORS["evidence"]) for m in b.store_methods[:8])
+    history_chips = tuple(
+        Chip(label=m, accent=COLORS["train"]) for m in b.history_metrics
+    )
+    return (
+        FlowRow(
+            "one epoch: settle → forward → credit → update (repeat until convergence)",
+            loop_steps,
+            loop_back=True,
+        ),
+        ChipsRow("history (per epoch, HISTORY_METRICS)", history_chips),
+        TextRow(
+            "evaluator adds walltime_s · param_count (MEASURED_METRICS) · "
+            "settle mutates state in place, credit reads post-settle state"
+        ),
+    )
+
+
+def _evidence_rows(b: Bundle) -> tuple[Row, ...]:
+    store_chips = tuple(
+        Chip(label=m, accent=COLORS["evidence"]) for m in b.store_methods[:8]
+    )
+    return (
+        ChipsRow(
+            "RecordStore (threading lock · atomic record+artifact append)", store_chips
+        ),
+        FieldsRow(
+            f"Record (schema v{b.schema_version} — fail-closed)",
+            " · ".join(b.record_fields),
+        ),
+        ChipsRow(
+            "Claim tiers & schema discipline",
+            tuple(
+                Chip(label=tier, accent=COLORS["evidence"])
+                for tier in (
+                    "gate verdict · defect cause · maturity",
+                    "measurement_key (deterministic)",
+                    f"UnsupportedSchemaVersionError (v{b.schema_version} fail-closed)",
+                    "unknown column survives bumps verbatim",
+                )
+            ),
+        ),
+    )
+
+
+def _surface_rows(b: Bundle) -> tuple[Row, ...]:
+    surface_cli = tuple(
+        Chip(label=c, sub=s[:36], accent=COLORS["surface"])
+        for c, s in b.cli
+        if c in {"report", "export", "conformance", "status", "run"}
+    )
     claim_chips = tuple(
-        Chip(label=l, accent=COLORS["surface"])
-        for l in (
+        Chip(label=tier, accent=COLORS["surface"])
+        for tier in (
             "L1 analytical",
             "L2 machine-checked",
             "L3 certified-numerical",
@@ -607,148 +778,50 @@ def build_panels(b: Bundle) -> tuple[Panel, ...]:
         )
     )
     package_chips = tuple(Chip(label=p, accent=COLORS["surface"]) for p in b.packages)
-    surface_cli = tuple(
-        Chip(label=c, sub=s[:36], accent=COLORS["surface"])
-        for c, s in b.cli
-        if c in ("report", "export", "conformance", "status", "run")
-    )
     return (
-        Panel(
-            key="entry",
-            title="🚪 Entry Points",
-            rows=(
-                ChipsRow("comp CLI — every subcommand works end-to-end or does not exist", cli_chips),
-                ChipsRow(
-                    f"🐍 Python API — {len(b.api_symbols)} public symbols (lazy __all__)",
-                    api_chips,
-                ),
-                ChipsRow(
-                    f"🎬 Demos & figures — {len(b.demos)} scripts · {len(b.gallery)} gallery demos",
-                    demo_chips
-                    + (Chip(label=f"docs/figures gallery ({len(b.gallery)})", accent=COLORS["entry"]),),
+        ChipsRow("comp report surface", surface_cli),
+        ChipsRow("Verification levels — claim-strength discipline", claim_chips),
+        ChipsRow(
+            "CEEC + workspace packages",
+            (
+                *package_chips,
+                Chip(
+                    label="CEEC epistemic governance",
+                    sub="banned-overclaim audit · conformance C1–C88",
+                    accent=COLORS["surface"],
                 ),
             ),
         ),
-        Panel(
-            key="tasks",
-            title="🎯 Tasks & Data",
-            rows=(
-                TextRow(
-                    "create_task(name, device='cpu', quick_mode) → task.setup() → task.get_dataloader('train')"
-                ),
-                ChipsRow("7 domains (domains registry)", task_chips),
-                FieldsRow(
-                    f"SUPPORTED_TASKS ({sum(len(v) for v in b.tasks.values())}) — offline-resolvable subset",
-                    task_names,
-                ),
-            ),
-        ),
-        Panel(
-            key="kernel",
-            title="🧪 Experiment Kernel — question → governed evidence",
-            rows=(
-                FieldsRow("RunSpec — frozen · versioned · diffable", runspec_fields),
-                FlowRow("Pipeline S1–S11 — PipelineRunner, registry-locked stages", stage_steps),
-                ChipsRow("Policies — POLICY_CATALOG · interchangeable per round (U4)", policy_chips),
-                ChipsRow("Registries — single source of truth", registry_chips),
-            ),
-        ),
-        Panel(
-            key="ontology",
-            title="🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update",
-            rows=(AxesRow(axis_boxes),),
-        ),
-        Panel(
-            key="system",
-            title="🏗️ System & Composition",
-            rows=(
-                FlowRow(
-                    "compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)",
-                    (
-                        FlowStep(label="compose", sub="6 axis args", color=COLORS["system"]),
-                        FlowStep(
-                            label="SystemConfig.validate()",
-                            sub="whitelist → compatible region",
-                            color=COLORS["system"],
-                        ),
-                        FlowStep(
-                            label="System",
-                            sub="θ params + x state (settle contract)",
-                            color=COLORS["system"],
-                        ),
-                    ),
-                ),
-                ChipsRow(
-                    "5-D & helpers (P = NullPlasticity subspace)",
-                    tuple(
-                        Chip(label=n, accent=COLORS["system"])
-                        for n in (
-                            "compose_system (5-D)",
-                            "create_eqprop_mlp",
-                            "extract_config",
-                            "train_task / train_on_task",
-                        )
-                    ),
-                ),
-                FieldsRow("SystemTrainerConfig", sys_trainer),
-                TextRow("NullPlasticity ⇒ 5-D delegation path · P ≠ null ⇒ 6-D joint, ψ written back to θ"),
-            ),
-        ),
-        Panel(
-            key="train",
-            title="⚡ Training Loop — SystemTrainer.fit()",
-            rows=(
-                FlowRow(
-                    "one epoch: settle → forward → credit → update (repeat until convergence)",
-                    loop_steps,
-                    loop_back=True,
-                ),
-                ChipsRow("history (per epoch, HISTORY_METRICS)", history_chips),
-                TextRow(
-                    "evaluator adds walltime_s · param_count (MEASURED_METRICS) · "
-                    "settle mutates state in place, credit reads post-settle state"
-                ),
-            ),
-        ),
-        Panel(
-            key="evidence",
-            title="💾 Evidence Store — one DuckDB, single writer",
-            rows=(
-                ChipsRow("RecordStore (threading lock · atomic record+artifact append)", store_chips),
-                FieldsRow(f"Record (schema v{b.schema_version} — fail-closed)", record_fields),
-                ChipsRow(
-                    "Claim tiers & schema discipline",
-                    tuple(
-                        Chip(label=l, accent=COLORS["evidence"])
-                        for l in (
-                            "gate verdict · defect cause · maturity",
-                            "measurement_key (deterministic)",
-                            f"UnsupportedSchemaVersionError (v{b.schema_version} fail-closed)",
-                            "unknown column survives bumps verbatim",
-                        )
-                    ),
-                ),
-            ),
-        ),
-        Panel(
-            key="surface",
-            title="📊 Surface & Governance",
-            rows=(
-                ChipsRow("comp report surface", surface_cli),
-                ChipsRow("Verification levels — claim-strength discipline", claim_chips),
-                ChipsRow(
-                    "CEEC + workspace packages",
-                    package_chips
-                    + (
-                        Chip(
-                            label="CEEC epistemic governance",
-                            sub="banned-overclaim audit · conformance C1–C88",
-                            accent=COLORS["surface"],
-                        ),
-                    ),
-                ),
-            ),
-        ),
+    )
+
+
+_ROW_BUILDERS: dict[str, Callable[[Bundle], tuple[Row, ...]]] = {
+    "entry": _entry_rows,
+    "tasks": _tasks_rows,
+    "kernel": _kernel_rows,
+    "ontology": lambda b: (AxesRow(_axis_boxes(b)),),
+    "system": _system_rows,
+    "train": _train_rows,
+    "evidence": _evidence_rows,
+    "surface": _surface_rows,
+}
+
+_TITLES: dict[str, str] = {
+    "entry": "🚪 Entry Points",
+    "tasks": "🎯 Tasks & Data",
+    "kernel": "🧪 Experiment Kernel — question → governed evidence",
+    "ontology": "🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update",
+    "system": "🏗️ System & Composition",
+    "train": "⚡ Training Loop — SystemTrainer.fit()",
+    "evidence": "💾 Evidence Store — one DuckDB, single writer",
+    "surface": "📊 Surface & Governance",
+}
+
+
+def build_panels(b: Bundle) -> tuple[Panel, ...]:
+    return tuple(
+        Panel(key=key, title=_TITLES[key], rows=_ROW_BUILDERS[key](b))
+        for key in _TITLES
     )
 
 
@@ -830,13 +903,15 @@ class Layout:
 def step_metrics(step: FlowStep) -> tuple[float, float]:
     label_w = text_w(step.label, STYLE.step_label_font) * 1.04
     sub_lines = _wrap_text(step.sub, STYLE.step_sub_font, 400.0)[:2] if step.sub else []
-    sub_w = max((text_w(l, STYLE.step_sub_font) for l in sub_lines), default=0.0)
+    sub_w = max((text_w(line, STYLE.step_sub_font) for line in sub_lines), default=0.0)
     w = max(STYLE.step_min_w, 18.0 + max(label_w, sub_w))
     h = 30.0 + 10.0 * min(len(sub_lines), 2)
     return w, h
 
 
-def chip_positions(chips: tuple[Chip, ...], gap: float, w: float) -> tuple[list[tuple[float, float]], float]:
+def chip_positions(
+    chips: tuple[Chip, ...], gap: float, w: float
+) -> tuple[list[tuple[float, float]], float]:
     if not chips:
         return [], 0.0
     row_h = max(c.h for c in chips)
@@ -851,12 +926,16 @@ def chip_positions(chips: tuple[Chip, ...], gap: float, w: float) -> tuple[list[
     return positions, (rows - 1) * (row_h + STYLE.chip_v_gap) + row_h
 
 
-def flow_metrics(steps: tuple[FlowStep, ...], w: float) -> tuple[int, int, float, float]:
+def flow_metrics(
+    steps: tuple[FlowStep, ...], w: float
+) -> tuple[int, int, float, float]:
     m = [step_metrics(s) for s in steps]
     sw = max(mw for mw, _ in m)
     sh = max(mh for _, mh in m)
     stride = sw + STYLE.step_gap
-    cols = max(1, min(STYLE.flow_max_cols, len(steps), int((w + STYLE.step_gap) // stride)))
+    cols = max(
+        1, min(STYLE.flow_max_cols, len(steps), int((w + STYLE.step_gap) // stride))
+    )
     rows = -(-len(steps) // cols)
     return cols, rows, sw, sh
 
@@ -882,13 +961,19 @@ def row_preferred_w(row: Row) -> float:
             m = [step_metrics(s) for s in steps]
             sw = max(mw for mw, _ in m)
             cols = min(STYLE.flow_max_cols, len(steps))
-            return min(cols * (sw + STYLE.step_gap) - STYLE.step_gap, STYLE.max_content_w)
+            return min(
+                cols * (sw + STYLE.step_gap) - STYLE.step_gap, STYLE.max_content_w
+            )
         case FieldsRow(_, text, mono):
-            return min(text_w(text, STYLE.mono_font if mono else 10.0), STYLE.max_content_w)
+            return min(
+                text_w(text, STYLE.mono_font if mono else 10.0), STYLE.max_content_w
+            )
         case TextRow(text):
             return min(text_w(text, STYLE.note_font), STYLE.max_content_w)
         case AxesRow(boxes):
-            return sum(box_natural_w(b) for b in boxes) + STYLE.box_gap * (len(boxes) - 1)
+            return sum(box_natural_w(b) for b in boxes) + STYLE.box_gap * (
+                len(boxes) - 1
+            )
 
 
 def row_h(row: Row, w: float) -> float:
@@ -907,25 +992,19 @@ def row_h(row: Row, w: float) -> float:
         case TextRow(text):
             return len(_wrap_text(text, STYLE.note_font, w)) * 12.0 + 4.0
         case AxesRow(boxes):
-            return box_h(boxes, w)
+            return box_h(boxes)
 
 
-def box_h(boxes: tuple[AxisBox, ...], w: float) -> float:
-    n = len(boxes)
-    bw = min((box_natural_w(b) for b in boxes) and 0.0, 0.0)  # placeholder, replaced below
-    del bw
-    available = (w - STYLE.box_gap * (n - 1)) / n
+def box_h(boxes: tuple[AxisBox, ...]) -> float:
     chip_h = 23.0
-    heights = []
-    for b in boxes:
-        heights.append(30.0 + 6.0 + len(b.primitives) * (chip_h + 5.0) + 8.0 + 40.0 + 8.0)
-    return max(heights)
+    return max(
+        30.0 + 6.0 + len(b.primitives) * (chip_h + 5.0) + 8.0 + 40.0 + 8.0
+        for b in boxes
+    )
 
 
 def panel_metrics(panel: Panel) -> tuple[float, float]:
-    content_w = min(
-        STYLE.max_content_w, max(row_preferred_w(r) for r in panel.rows)
-    )
+    content_w = min(STYLE.max_content_w, max(row_preferred_w(r) for r in panel.rows))
     w = content_w + 2.0 * STYLE.panel_pad
     h = (
         STYLE.title_h
@@ -939,7 +1018,8 @@ def panel_metrics(panel: Panel) -> tuple[float, float]:
 def layout(panels: dict[str, Panel]) -> Layout:
     metrics = {k: panel_metrics(p) for k, p in panels.items()}
     band_ws = [
-        sum(metrics[k].w for k in band) + STYLE.band_gap * (len(band) - 1) for band in BANDS
+        sum(metrics[k][0] for k in band) + STYLE.band_gap * (len(band) - 1)
+        for band in BANDS
     ]
     canvas_w = 2.0 * STYLE.margin + max(band_ws)
     pos: dict[str, Pos] = {}
@@ -958,9 +1038,7 @@ def layout(panels: dict[str, Panel]) -> Layout:
         band_bottoms.append(y + band_h)
         y += band_h + STYLE.band_gap
     canvas_h = y - STYLE.band_gap + STYLE.footer_h
-    gaps = tuple(
-        (band_bottoms[i], band_tops[i + 1]) for i in range(len(band_tops) - 1)
-    )
+    gaps = tuple((band_bottoms[i], band_tops[i + 1]) for i in range(len(band_tops) - 1))
     return Layout(pos=pos, canvas_w=canvas_w, canvas_h=canvas_h, band_gaps=gaps)
 
 
@@ -978,14 +1056,25 @@ def build_edges() -> tuple[Edge, ...]:
         Edge("entry", "tasks", "create_task(name)"),
         Edge("entry", "kernel", "comp run profile · question_first()"),
         Edge("tasks", "kernel", "task → RunSpec.task", route="h-gap"),
-        Edge("entry", "system", "compose + fit — direct library path", route="margin-left"),
+        Edge(
+            "entry",
+            "system",
+            "compose + fit — direct library path",
+            route="margin-left",
+        ),
         Edge("kernel", "ontology", "S5 compose"),
         Edge("ontology", "system", "6 axes → System"),
         Edge("system", "train", "SystemTrainer(system, cfg)", route="h-gap"),
         Edge("train", "evidence", "history · walltime_s · param_count"),
         Edge("kernel", "evidence", "S8 atomic append", route="margin-right"),
         Edge("evidence", "surface", "claims · conformance · status", route="h-gap"),
-        Edge("surface", "entry", "🔁 evidence → next question", dashed=True, route="margin-left-up"),
+        Edge(
+            "surface",
+            "entry",
+            "🔁 evidence → next question",
+            dashed=True,
+            route="margin-left-up",
+        ),
     )
 
 
@@ -1048,9 +1137,17 @@ def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
     pts = edge_points(e, ly)
     match e.route:
         case "margin-left":
-            return (left_rail_x(ly, True) + 8.0, _gap_y(ly, pts[1][1], pts[2][1]), "start")
+            return (
+                left_rail_x(ly, True) + 8.0,
+                _gap_y(ly, pts[1][1], pts[2][1]),
+                "start",
+            )
         case "margin-left-up":
-            return (left_rail_x(ly, False) + 8.0, _gap_y(ly, pts[1][1], pts[2][1]), "start")
+            return (
+                left_rail_x(ly, False) + 8.0,
+                _gap_y(ly, pts[1][1], pts[2][1]),
+                "start",
+            )
         case "margin-right":
             return (right_rail_x(ly) - 8.0, _gap_y(ly, pts[1][1], pts[2][1]), "end")
         case "h-gap":
@@ -1065,7 +1162,13 @@ def edge_label(e: Edge, ly: Layout) -> tuple[float, float, str]:
 
 
 def esc(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    return (
+        s
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def svg_text(
@@ -1103,7 +1206,9 @@ def svg_rect(
     return s + "/>"
 
 
-def svg_poly(points: list[tuple[float, float]], color: str, sw: float, dashed: bool, marker: str) -> str:
+def svg_poly(
+    points: list[tuple[float, float]], color: str, sw: float, dashed: bool, marker: str
+) -> str:
     pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
     dash = ' stroke-dasharray="7 5"' if dashed else ""
     return f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="{sw}"{dash} marker-end="url(#{marker})"/>'
@@ -1117,7 +1222,9 @@ def draw_chip(chip: Chip, x: float, y: float, color: str) -> str:
             f'<rect x="{x + 2.0:.1f}" y="{y + 4.0:.1f}" width="3.5" height="{chip.h - 8.0:.1f}" rx="1.5" fill="{accent}"/>',
         ]
     else:
-        parts = [svg_rect(x, y, chip.w, chip.h, 7.0, "#f8fafc", accent, 1.0, opacity=0.5)]
+        parts = [
+            svg_rect(x, y, chip.w, chip.h, 7.0, "#f8fafc", accent, 1.0, opacity=0.5)
+        ]
     ty = y + 15.0 if not chip.sub else y + 13.0
     fam = MONO if chip.mono else SANS
     parts.append(
@@ -1132,18 +1239,41 @@ def draw_chip(chip: Chip, x: float, y: float, color: str) -> str:
         )
     )
     if chip.sub:
-        parts.append(svg_text(x + 10.0, y + 26.0, _fit(chip.sub, 8.5, chip.w - 14.0), 8.5, "#64748b"))
+        parts.append(
+            svg_text(
+                x + 10.0, y + 26.0, _fit(chip.sub, 8.5, chip.w - 14.0), 8.5, "#64748b"
+            )
+        )
     return "".join(parts)
 
 
-def draw_flow_step(step: FlowStep, x: float, y: float, w: float, h: float, arrow_right: bool) -> str:
+def draw_flow_step(
+    step: FlowStep, x: float, y: float, w: float, h: float, arrow_right: bool
+) -> str:
     parts = [
         svg_rect(x, y, w, h, 9.0, "white", step.color, 1.4),
-        svg_text(x + w / 2.0, y + 16.0, _fit(step.label, 10.5, w - 10.0), 10.5, "#1e293b", "700", anchor="middle"),
+        svg_text(
+            x + w / 2.0,
+            y + 16.0,
+            _fit(step.label, 10.5, w - 10.0),
+            10.5,
+            "#1e293b",
+            "700",
+            anchor="middle",
+        ),
     ]
     if step.sub:
         for i, line in enumerate(_wrap_text(step.sub, 8.0, w - 12.0)[:2]):
-            parts.append(svg_text(x + w / 2.0, y + 28.0 + i * 10.0, line, 8.0, "#64748b", anchor="middle"))
+            parts.append(
+                svg_text(
+                    x + w / 2.0,
+                    y + 28.0 + i * 10.0,
+                    line,
+                    8.0,
+                    "#64748b",
+                    anchor="middle",
+                )
+            )
     if arrow_right:
         parts.append(
             svg_poly(
@@ -1157,93 +1287,139 @@ def draw_flow_step(step: FlowStep, x: float, y: float, w: float, h: float, arrow
     return "".join(parts)
 
 
+_DRAW_ROW_HANDLERS: dict[type, Callable[..., tuple[str, float]]] = {}
+
+
+def _draw_chips_row(
+    row: ChipsRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    if not row.chips:
+        return "".join(parts), 18.0
+    positions, h = chip_positions(row.chips, row.gap, w)
+    for (px, py), chip in zip(positions, row.chips, strict=True):
+        parts.append(draw_chip(chip, x + px, y + 18 + py, color))
+    return "".join(parts), 18.0 + 6.0 + h
+
+
+def _draw_flow_row(
+    row: FlowRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    cols, rows, sw, sh = flow_metrics(row.steps, w)
+    stride = sw + STYLE.step_gap
+    sy = y + 24
+    for i, step in enumerate(row.steps):
+        sx = x + (i % cols) * stride
+        sy_i = sy + (i // cols) * (sh + 10.0)
+        arrow = i + 1 < len(row.steps) and i % cols < cols - 1
+        parts.append(draw_flow_step(step, sx, sy_i, sw, sh, arrow))
+        if i + 1 < len(row.steps) and i % cols == cols - 1:
+            cx = sx + sw / 2.0
+            parts.append(
+                svg_poly(
+                    [(cx, sy_i + sh + 2.0), (cx, sy_i + sh + 8.0)],
+                    "#475569",
+                    1.5,
+                    False,
+                    "arr",
+                )
+            )
+    if row.loop_back:
+        last_col = (len(row.steps) - 1) % cols
+        lx = x + last_col * stride + sw / 2.0
+        by = sy + sh + 4.0
+        parts.append(
+            svg_poly(
+                [(lx, sy + sh), (lx, by), (x + sw / 2.0, by), (x + sw / 2.0, sy + sh)],
+                "#94a3b8",
+                1.3,
+                True,
+                "arr",
+            )
+        )
+        parts.append(
+            svg_text(
+                x + sw / 2.0 + 6.0,
+                by + 11.0,
+                "next step / until convergence",
+                8.0,
+                "#94a3b8",
+            )
+        )
+    return "".join(parts), 18.0 + 6.0 + rows * (sh + 10.0) + (
+        16.0 if row.loop_back else 0.0
+    )
+
+
+def _draw_fields_row(
+    row: FieldsRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    fam = MONO if row.mono else SANS
+    size = 9.5 if row.mono else 10.0
+    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    ty = y + 24
+    for line in _wrap_text(row.text, size, w):
+        parts.append(svg_text(x, ty, line, size, "#334155", family=fam))
+        ty += 13
+    return "".join(parts), 18.0 + 4.0 + len(_wrap_text(row.text, size, w)) * 13.0
+
+
+def _draw_text_row(
+    row: TextRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    parts: list[str] = []
+    ty = y + 4
+    for line in _wrap_text(row.text, 9.5, w):
+        parts.append(svg_text(x, ty, line, 9.5, "#64748b"))
+        ty += 12
+    return "".join(parts), len(_wrap_text(row.text, 9.5, w)) * 12.0 + 4.0
+
+
+def _draw_axes_row(
+    row: AxesRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    n = len(row.boxes)
+    bw = min(box_natural_w(b) for b in row.boxes)
+    bw = min(bw, (w - STYLE.box_gap * (n - 1)) / n) if n > 0 else 0.0
+    parts: list[str] = []
+    bx = x
+    for box in row.boxes:
+        parts.append(draw_axis_box(box, bx, y, bw))
+        bx += bw + STYLE.box_gap
+    return "".join(parts), row_h(row, w)
+
+
+_DRAW_ROW_HANDLERS = {
+    ChipsRow: _draw_chips_row,
+    FlowRow: _draw_flow_row,
+    FieldsRow: _draw_fields_row,
+    TextRow: _draw_text_row,
+    AxesRow: _draw_axes_row,
+}
+
+
 def draw_row(row: Row, x: float, y: float, color: str, w: float) -> tuple[str, float]:
-    match row:
-        case ChipsRow(label, chips, gap):
-            parts = [svg_text(x, y + 12, label, 10.5, "#475569", "700")]
-            if chips:
-                positions, h = chip_positions(chips, gap, w)
-                for (px, py), chip in zip(positions, chips, strict=True):
-                    parts.append(draw_chip(chip, x + px, y + 18 + py, color))
-                return "".join(parts), 18.0 + 6.0 + h
-            return "".join(parts), 18.0
-        case FlowRow(label, steps, loop_back):
-            parts = [svg_text(x, y + 12, label, 10.5, "#475569", "700")]
-            cols, rows, sw, sh = flow_metrics(steps, w)
-            stride = sw + STYLE.step_gap
-            sy = y + 24
-            for i, step in enumerate(steps):
-                sx = x + (i % cols) * stride
-                sy_i = sy + (i // cols) * (sh + 10.0)
-                arrow = i + 1 < len(steps) and i % cols < cols - 1
-                parts.append(draw_flow_step(step, sx, sy_i, sw, sh, arrow))
-                if i + 1 < len(steps) and i % cols == cols - 1:
-                    cx = sx + sw / 2.0
-                    parts.append(
-                        svg_poly(
-                            [(cx, sy_i + sh + 2.0), (cx, sy_i + sh + 8.0)],
-                            "#475569",
-                            1.5,
-                            False,
-                            "arr",
-                        )
-                    )
-            if loop_back:
-                last_col = (len(steps) - 1) % cols
-                lx = x + last_col * stride + sw / 2.0
-                ly = sy + sh + 4.0
-                parts.append(
-                    svg_poly(
-                        [
-                            (lx, sy + sh),
-                            (lx, ly),
-                            (x + sw / 2.0, ly),
-                            (x + sw / 2.0, sy + sh),
-                        ],
-                        "#94a3b8",
-                        1.3,
-                        True,
-                        "arr",
-                    )
-                )
-                parts.append(
-                    svg_text(x + sw / 2.0 + 6.0, ly + 11.0, "next step / until convergence", 8.0, "#94a3b8")
-                )
-            return "".join(parts), 18.0 + 6.0 + rows * (sh + 10.0) + (16.0 if loop_back else 0.0)
-        case FieldsRow(label, text, mono):
-            fam = MONO if mono else SANS
-            size = 9.5 if mono else 10.0
-            parts = [svg_text(x, y + 12, label, 10.5, "#475569", "700")]
-            ty = y + 24
-            for line in _wrap_text(text, size, w):
-                parts.append(svg_text(x, ty, line, size, "#334155", family=fam))
-                ty += 13
-            return "".join(parts), 18.0 + 4.0 + len(_wrap_text(text, size, w)) * 13.0
-        case TextRow(text):
-            parts = []
-            ty = y + 4
-            for line in _wrap_text(text, 9.5, w):
-                parts.append(svg_text(x, ty, line, 9.5, "#64748b"))
-                ty += 12
-            return "".join(parts), len(_wrap_text(text, 9.5, w)) * 12.0 + 4.0
-        case AxesRow(boxes):
-            parts = []
-            n = len(boxes)
-            bw = min(box_natural_w(b) for b in boxes)
-            bw = min(bw, (w - STYLE.box_gap * (n - 1)) / n)
-            bx = x
-            for box in boxes:
-                parts.append(draw_axis_box(box, bx, y, bw))
-                bx += bw + STYLE.box_gap
-            return "".join(parts), row_h(row, w)
-    raise TypeError(f"unknown row {row!r}")
+    handler = _DRAW_ROW_HANDLERS.get(type(row))
+    if handler is None:
+        raise TypeError(f"unknown row {row!r}")
+    return handler(row, x, y, color, w)
 
 
 def draw_axis_box(box: AxisBox, x: float, y: float, bw: float) -> str:
     color = AXIS_COLOR[box.axis]
     h = 30.0 + 6.0 + len(box.primitives) * (23.0 + 5.0) + 8.0 + 40.0 + 8.0
     parts = [svg_rect(x, y, bw, h, 10.0, color + "14", color, 1.3)]
-    parts.append(svg_text(x + 8.0, y + 19.0, _fit(f"{AXIS_SYMBOL[box.axis]} · {box.axis}", 11.0, bw - 16.0), 11.0, color, "800"))
+    parts.append(
+        svg_text(
+            x + 8.0,
+            y + 19.0,
+            _fit(f"{AXIS_SYMBOL[box.axis]} · {box.axis}", 11.0, bw - 16.0),
+            11.0,
+            color,
+            "800",
+        )
+    )
     cy = y + 30
     for prim in box.primitives:
         parts.append(draw_chip(prim, x + 5.0, cy, color))
@@ -1253,8 +1429,29 @@ def draw_axis_box(box: AxisBox, x: float, y: float, bw: float) -> str:
     shown = " · ".join(box.config_fields[:4])
     if len(box.config_fields) > 4:
         shown += f" · +{len(box.config_fields) - 4}"
-    parts.append(svg_text(x + 11.0, cfg_y + 14.0, _fit(f"⚙ {box.config_name} · {len(box.config_fields)} fields", 9.0, bw - 22.0), 9.0, "#1e293b", "700", family=MONO))
-    parts.append(svg_text(x + 11.0, cfg_y + 28.0, _fit(shown, 8.0, bw - 22.0), 8.0, "#64748b", family=MONO))
+    parts.append(
+        svg_text(
+            x + 11.0,
+            cfg_y + 14.0,
+            _fit(
+                f"⚙ {box.config_name} · {len(box.config_fields)} fields", 9.0, bw - 22.0
+            ),
+            9.0,
+            "#1e293b",
+            "700",
+            family=MONO,
+        )
+    )
+    parts.append(
+        svg_text(
+            x + 11.0,
+            cfg_y + 28.0,
+            _fit(shown, 8.0, bw - 22.0),
+            8.0,
+            "#64748b",
+            family=MONO,
+        )
+    )
     return "".join(parts)
 
 
@@ -1268,7 +1465,14 @@ def draw_panel(panel: Panel, p: Pos) -> str:
             f"v {STYLE.title_h - 14.0:.1f} h {-p.w:.1f} v {-(STYLE.title_h - 14.0):.1f} a 14 14 0 0 1 14 -14 z"
             f'" fill="{color}18"/>'
         ),
-        svg_text(p.x + 16.0, p.y + 23.0, _fit(panel.title, 13.5, p.w - 40.0), 13.5, color, "800"),
+        svg_text(
+            p.x + 16.0,
+            p.y + 23.0,
+            _fit(panel.title, 13.5, p.w - 40.0),
+            13.5,
+            color,
+            "800",
+        ),
     ]
     ry = p.y + STYLE.title_h + STYLE.panel_pad
     for row in panel.rows:
@@ -1322,7 +1526,16 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
         "</defs>",
         svg_rect(0, 0, ly.canvas_w, ly.canvas_h, 0.0, "#ffffff"),
     ]
-    parts.append(svg_text(STYLE.margin, 34.0, "🌌 Computronium — Architecture Cheat Sheet", 21.0, "#0f172a", "800"))
+    parts.append(
+        svg_text(
+            STYLE.margin,
+            34.0,
+            "🌌 Computronium — Architecture Cheat Sheet",
+            21.0,
+            "#0f172a",
+            "800",
+        )
+    )
     parts.append(
         svg_text(
             STYLE.margin,
@@ -1340,15 +1553,29 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
     for e in build_edges():
         pts = edge_points(e, ly)
         color = "#9333ea" if e.dashed else "#475569"
-        parts.append(svg_poly(pts, color, 1.8 if not e.dashed else 1.5, e.dashed, "arrp" if e.dashed else "arr"))
+        parts.append(
+            svg_poly(
+                pts,
+                color,
+                1.8 if not e.dashed else 1.5,
+                e.dashed,
+                "arrp" if e.dashed else "arr",
+            )
+        )
     for key, p in ly.pos.items():
         parts.append(f'<g filter="url(#sh)">{draw_panel(pmap[key], p)}</g>')
     for e in build_edges():
         lx, ly_, anchor = edge_label(e, ly)
         w = text_w(e.label, STYLE.edge_font) + 12.0
         tx = lx - w + 4.0 if anchor == "end" else lx
-        parts.append(svg_rect(tx - 4.0, ly_ - 9.0, w, 15.0, 4.0, "white", "#e2e8f0", 0.8))
-        parts.append(svg_text(tx, ly_ + 2.0, e.label, STYLE.edge_font, "#334155", "600", anchor=anchor))
+        parts.append(
+            svg_rect(tx - 4.0, ly_ - 9.0, w, 15.0, 4.0, "white", "#e2e8f0", 0.8)
+        )
+        parts.append(
+            svg_text(
+                tx, ly_ + 2.0, e.label, STYLE.edge_font, "#334155", "600", anchor=anchor
+            )
+        )
     parts.append(
         svg_text(
             STYLE.margin,
@@ -1370,12 +1597,120 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
 # ---------------------------------------------------------------------------
 
 
+_TXT_RENDERERS: dict[str, Callable[[Bundle], list[str]]] = {}
+
+
+def _txt_entry(b: Bundle) -> list[str]:
+    out: list[str] = []
+    out.append(f"  comp CLI ({len(b.cli)} commands):")
+    for c, s in b.cli:
+        out.append(f"    comp {c:<14s} {s}")
+    out.append(
+        f"  Python API: {len(b.api_symbols)} public symbols (computronium.__all__)"
+    )
+    out.append(f"    examples: {', '.join(b.api_symbols[:12])}, ...")
+    out.append(
+        f"  Demos: {len(b.demos)} scripts under scripts/demos/; gallery: {len(b.gallery)} demos"
+    )
+    for d, s in b.demos:
+        out.append(f"    {d}: {s}")
+    return out
+
+
+def _txt_tasks(b: Bundle) -> list[str]:
+    out: list[str] = [f"  domains ({len(b.domains)}): {', '.join(b.domains)}"]
+    for domain in b.domains:
+        names = b.tasks.get(DOMAIN_GROUP[domain], ())
+        out.append(
+            f"    {domain:12s} ({len(names):2d}): {', '.join(names) if names else 'via create_task() only'}"
+        )
+    return out
+
+
+def _txt_kernel(b: Bundle) -> list[str]:
+    out: list[str] = [f"  RunSpec fields: {', '.join(b.run_spec_fields)}"]
+    out.append(f"  pipeline stages ({len(b.stages)}):")
+    for s in b.stages:
+        out.append(f"    {s.label:11s} {s.summary}")
+    out.append(
+        f"  policies ({len(b.policies)}): {', '.join(p.key for p in b.policies)}"
+    )
+    measured = [n for n, m in b.objectives if m]
+    unmeasured = [n for n, m in b.objectives if not m]
+    out.append(
+        f"  objectives ({len(b.objectives)}): measured {len(measured)} -> {', '.join(measured)}"
+    )
+    out.append(
+        f"                   research targets {len(unmeasured)} -> {', '.join(unmeasured)}"
+    )
+    out.append(f"  priors ({len(b.priors)}): {', '.join(b.priors[:8])}, ...")
+    out.append(
+        f"  registries: capabilities={b.capabilities} constraints={b.constraints} policies_registry={b.policies_registry}"
+    )
+    return out
+
+
+def _txt_ontology(b: Bundle) -> list[str]:
+    out: list[str] = []
+    for axis, prims in b.axes.items():
+        fields = b.configs[CONFIG_FOR_AXIS[axis]]
+        out.append(f"  {axis} ({len(prims)} primitives) · config {', '.join(fields)}")
+        for p in prims:
+            flag = "" if p.available else f"  UNAVAILABLE: {p.reason}"
+            out.append(f"    {p.name:26s} {p.description}{flag}")
+    return out
+
+
+def _txt_system(b: Bundle) -> list[str]:
+    return [
+        "  SystemConfig = SubstrateConfig × GeometryConfig × StateDynamicsConfig"
+        " × PlasticityConfig × CreditAssignmentConfig × ParameterUpdateConfig",
+        f"  SystemTrainerConfig: {', '.join(b.configs['SystemTrainerConfig'])}",
+    ]
+
+
+def _txt_train(b: Bundle) -> list[str]:
+    return [
+        f"  history per epoch: {', '.join(b.history_metrics)}",
+        f"  evaluator adds: {', '.join(b.extra_metrics)}",
+    ]
+
+
+def _txt_evidence(b: Bundle) -> list[str]:
+    return [
+        f"  RecordStore methods: {', '.join(b.store_methods)}",
+        f"  Record fields (schema v{b.schema_version}): {', '.join(b.record_fields)}",
+        "  claim tiers: gate verdict · defect cause · maturity",
+    ]
+
+
+def _txt_surface(b: Bundle) -> list[str]:
+    return [
+        f"  verification levels: {', '.join(b.verification)}",
+        f"  workspace packages: {', '.join(b.packages)}",
+    ]
+
+
+_TXT_RENDERERS = {
+    "entry": _txt_entry,
+    "tasks": _txt_tasks,
+    "kernel": _txt_kernel,
+    "ontology": _txt_ontology,
+    "system": _txt_system,
+    "train": _txt_train,
+    "evidence": _txt_evidence,
+    "surface": _txt_surface,
+}
+
+
 def render_txt(b: Bundle, panels: tuple[Panel, ...]) -> str:
     out: list[str] = []
     add = out.append
     add("=" * 78)
     add("COMPUTRONIUM ARCHITECTURE — INFOGRAPHIC DATAFILE")
-    add(f"generated {datetime.date.today().isoformat()} @ commit {b.commit} by docs/diagram_create.py")
+    add(
+        f"generated {datetime.date.today().isoformat()} @ commit {b.commit} by docs/diagram_create.py"
+    )
     add("artifacts: docs/diagram.svg (directed graph) · this file (data)")
     add("=" * 78)
     add("")
@@ -1389,58 +1724,9 @@ def render_txt(b: Bundle, panels: tuple[Panel, ...]) -> str:
         add("=" * 78)
         add(f"PANEL {panel.key.upper()} — {panel.title}")
         add("=" * 78)
-        match panel.key:
-            case "entry":
-                add(f"  comp CLI ({len(b.cli)} commands):")
-                for c, s in b.cli:
-                    add(f"    comp {c:<14s} {s}")
-                add(f"  Python API: {len(b.api_symbols)} public symbols (computronium.__all__)")
-                add(f"    examples: {', '.join(b.api_symbols[:12])}, ...")
-                add(f"  Demos: {len(b.demos)} scripts under scripts/demos/; gallery: {len(b.gallery)} demos")
-                for d, s in b.demos:
-                    add(f"    {d}: {s}")
-            case "tasks":
-                add(f"  domains ({len(b.domains)}): {', '.join(b.domains)}")
-                for domain in b.domains:
-                    names = b.tasks.get(DOMAIN_GROUP[domain], ())
-                    add(f"    {domain:12s} ({len(names):2d}): {', '.join(names) if names else 'via create_task() only'}")
-            case "kernel":
-                add(f"  RunSpec fields: {', '.join(b.run_spec_fields)}")
-                add(f"  pipeline stages ({len(b.stages)}):")
-                for s in b.stages:
-                    add(f"    {s.label:11s} {s.summary}")
-                add(f"  policies ({len(b.policies)}): {', '.join(p.key for p in b.policies)}")
-                measured = [n for n, m in b.objectives if m]
-                unmeasured = [n for n, m in b.objectives if not m]
-                add(f"  objectives ({len(b.objectives)}): measured {len(measured)} -> {', '.join(measured)}")
-                add(f"                   research targets {len(unmeasured)} -> {', '.join(unmeasured)}")
-                add(f"  priors ({len(b.priors)}): {', '.join(b.priors[:8])}, ...")
-                add(f"  registries: capabilities={b.capabilities} constraints={b.constraints} policies_registry={b.policies_registry}")
-            case "ontology":
-                for axis, prims in b.axes.items():
-                    fields = b.configs[CONFIG_FOR_AXIS[axis]]
-                    add(f"  {axis} ({len(prims)} primitives) · config {', '.join(fields)}")
-                    for p in prims:
-                        flag = "" if p.available else f"  UNAVAILABLE: {p.reason}"
-                        add(f"    {p.name:26s} {p.description}{flag}")
-            case "system":
-                add(
-                    "  SystemConfig = SubstrateConfig × GeometryConfig × StateDynamicsConfig"
-                    " × PlasticityConfig × CreditAssignmentConfig × ParameterUpdateConfig"
-                )
-                add(f"  SystemTrainerConfig: {', '.join(b.configs['SystemTrainerConfig'])}")
-            case "train":
-                add(f"  history per epoch: {', '.join(b.history_metrics)}")
-                add(f"  evaluator adds: {', '.join(b.extra_metrics)}")
-            case "evidence":
-                add(f"  RecordStore methods: {', '.join(b.store_methods)}")
-                add(f"  Record fields (schema v{b.schema_version}): {', '.join(b.record_fields)}")
-                add("  claim tiers: gate verdict · defect cause · maturity")
-            case "surface":
-                add(f"  verification levels: {', '.join(b.verification)}")
-                add(f"  workspace packages: {', '.join(b.packages)}")
-            case _:
-                pass
+        render = _TXT_RENDERERS.get(panel.key)
+        if render:
+            out.extend(render(b))
         add("")
     return "\n".join(out) + "\n"
 
@@ -1452,7 +1738,9 @@ def render_txt(b: Bundle, panels: tuple[Panel, ...]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="validate output geometry after writing")
+    parser.add_argument(
+        "--check", action="store_true", help="validate output geometry after writing"
+    )
     args = parser.parse_args(argv)
 
     b = collect()
@@ -1465,12 +1753,16 @@ def main(argv: list[str] | None = None) -> int:
     OUT_SVG.write_text(svg, encoding="utf-8")
     OUT_TXT.write_text(txt, encoding="utf-8")
     n_chips = sum(
-        len(getattr(r, "chips", ())) + len(getattr(r, "steps", ())) + len(getattr(r, "boxes", ()))
+        len(getattr(r, "chips", ()))
+        + len(getattr(r, "steps", ()))
+        + len(getattr(r, "boxes", ()))
         for p in panels
         for r in p.rows
     )
     n_prims = sum(len(v) for v in b.axes.values())
-    print(f"wrote {OUT_SVG.relative_to(ROOT)} ({len(svg) // 1024} KiB, {ly.canvas_h:.0f}px tall × {ly.canvas_w:.0f}px wide)")
+    print(
+        f"wrote {OUT_SVG.relative_to(ROOT)} ({len(svg) // 1024} KiB, {ly.canvas_h:.0f}px tall × {ly.canvas_w:.0f}px wide)"
+    )
     print(f"wrote {OUT_TXT.relative_to(ROOT)} ({len(txt) // 1024} KiB)")
     print(
         f"reflected: {n_prims} primitives · {len(b.cli)} cli · {len(b.stages)} stages · "
@@ -1478,15 +1770,16 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.check:
-        ET.fromstring(svg)
+        ET.fromstring(svg)  # ruff: ignore[suspicious-xml-element-tree-usage] — parses our own generated SVG
         for key, p in ly.pos.items():
-            assert 0 <= p.x and p.x + p.w <= ly.canvas_w, f"panel {key} out of canvas"
-            assert p.y > 0 and p.y + p.h < ly.canvas_h, f"panel {key} out of canvas vertically"
+            if not (p.x >= 0 and p.x + p.w <= ly.canvas_w):
+                raise RuntimeError(f"panel {key} out of canvas horizontally")
+            if not (p.y > 0 and p.y + p.h < ly.canvas_h):
+                raise RuntimeError(f"panel {key} out of canvas vertically")
         for e in build_edges():
             for x, y in edge_points(e, ly):
-                assert -5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5, (
-                    f"edge {e.src}->{e.dst} out of bounds"
-                )
+                if not (-5 <= x <= ly.canvas_w + 5 and -5 <= y <= ly.canvas_h + 5):
+                    raise RuntimeError(f"edge {e.src}->{e.dst} out of bounds")
         print("check: svg parses, all panels/edges within canvas")
     return 0
 

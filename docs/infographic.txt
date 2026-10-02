@@ -1,0 +1,170 @@
+==============================================================================
+COMPUTRONIUM ARCHITECTURE — INFOGRAPHIC DATAFILE
+generated 2026-10-02 @ commit 6b5b19c7 by docs/diagram_create.py
+artifacts: docs/diagram.svg (directed graph) · this file (data)
+==============================================================================
+
+OUTER GRAPH (directed edges between panels)
+------------------------------------------------------------------------------
+  entry     -> tasks       create_task(name)
+  entry     -> kernel      comp run profile · question_first()
+  tasks     -> kernel      task → RunSpec.task
+  entry     -> system      compose + fit — direct library path
+  kernel    -> ontology    S5 compose
+  ontology  -> system      6 axes → System
+  system    -> train       SystemTrainer(system, cfg)
+  train     -> evidence    history · walltime_s · param_count
+  kernel    -> evidence    S8 atomic append
+  evidence  -> surface     claims · conformance · status
+  surface   -dashed > entry       🔁 evidence → next question
+
+==============================================================================
+PANEL ENTRY — 🚪 Entry Points
+==============================================================================
+  comp CLI (10 commands):
+    comp run            Execute a run profile (dry-run with --dry-run)
+    comp report         Generate report from store
+    comp export         Export store data for round-trip
+    comp conformance    Check capability conformance
+    comp status         Show run/store status
+    comp parity         Check library-vs-kernel parity for an axis
+    comp repro          Replay a recorded run and diff it
+    comp validate       Validate a config or record against the schema
+    comp joint-validate Validate a composed multi-axis system
+    comp benchmark      Run kernel benchmarks and emit a verdict
+  Python API: 142 public symbols (computronium.__all__)
+    examples: AdamUpdate, AlgorithmIdentityCard, AnalogSubstrate, AttentionGeometry, BackpropCredit, ClosedFormRidgePlasticity, CompositeState, ComputroniumLinear, ConflictAdaptivePsiPlasticity, ConvGeometry, CorrectionRecord, CoupledTransition, ...
+  Demos: 6 scripts under scripts/demos/; gallery: 21 demos
+    demo_contrast_design: Expected: an OFAT design over hidden_dim/num_layers identifies the k
+    demo_cross_policy_reuse: Expected: Random -> TPE -> Evolution phases share one store; identic
+    demo_multi_objective: Expected: a non-dominated set printed over (param_count, walltime_s)
+    demo_pause_resume: Expected: no re-measurement after resume; store record count is mono
+    demo_policy_swap: Expected: identical record schema across policies; only search behav
+    demo_unified_pipeline: Expected: records persisted with unique measurement keys; run finish
+
+==============================================================================
+PANEL TASKS — 🎯 Tasks & Data
+==============================================================================
+  domains (7): vision, lm, rl, graph, tabular, timeseries, scientific
+    vision       (11): xor, spiral, circles, digits, mnist, fashion_mnist, kmnist, usps, cifar10, cifar100, svhn
+    lm           ( 4): tiny_shakespeare, char_ngram, wikitext2, penn_treebank
+    rl           ( 5): pendulum, acrobot, cartpole, mountain_car, lunar_lander
+    graph        ( 3): cora, citeseer, pubmed
+    tabular      ( 5): breast_cancer, iris, wine, diabetes, california_housing
+    timeseries   ( 0): via create_task() only
+    scientific   ( 0): via create_task() only
+
+==============================================================================
+PANEL KERNEL — 🧪 Experiment Kernel — question → governed evidence
+==============================================================================
+  RunSpec fields: version, profile, task, tasks, objectives, stages, fidelity, n_seeds, epochs, batch_limit, seed, budget_seconds, param_budget, policy, axes, hyperparameters, operating_points, dataset, dataset_version, code_sha
+  pipeline stages (11):
+    S1 frame    Objective/operating-point resolution; questi
+    S2 space    Axis snapshot + legality preview (dry-run = 
+    S3 schedule Fidelity/seed/epoch planning; per-task adapt
+    S4 gate     LegalityEngine enforcement; globally-suppres
+    S5 compose  compose_joint_system bridge; effective-value
+    S6 train    SystemTrainer settle bridge; guard/divergenc
+    S7 measure  Objectives resolved against OBJECTIVES; prob
+    S8 record   Atomic append + artifacts + embedding genera
+    S9 attribute Counterfactual axis attribution from records
+    S10 decide  Promotion predicates + allocation handoff (R
+    S11 report  Delegates to surface.report fragments (R85-R
+  policies (8): stratified_random, round_robin_grid, uniform_random, model_based, evolution, synthesis, strategy_progression, trainer_driven
+  objectives (36): measured 4 -> validation_accuracy, validation_loss, walltime_total, param_count
+                   research targets 32 -> test_accuracy, test_loss, f1_score, perplexity, bleu_score, training_time, memory_usage, flops, energy_per_step, latency_ms, spike_rate, ir_drop_variance, phase_noise, gate_fidelity, coherence_time, bp_deficit, ruler_walltime_ratio, ruler_energy_ratio, ruler_param_ratio, spectral_radius, max_singular_value, lyapunov_exponent, free_energy, settle_steps, psi_capacity, consolidation_cost, rewrite_rate, stability_plasticity_ratio, credit_efficiency, convergence_steps, energy_efficiency, generalization_gap
+  priors (28): lr_ruler_mnist, lr_ruler_cifar10, lr_ruler_cifar100, lr_ruler_imagenet, lr_ruler_sst2, lr_ruler_squad, lr_ruler_wikitext2, lr_ruler_ptb, ...
+  registries: capabilities=88 constraints=17 policies_registry=9
+
+==============================================================================
+PANEL ONTOLOGY — 🧬 6-Axis Ontology — System = Substrate × Geometry × StateDynamics × Plasticity × Credit × Update
+==============================================================================
+  substrate (9 primitives) · config precision, noise_level, weight_bounds, sparsity, device, substrate_type
+    digital                    Digital substrate: exact arithmetic, full precision
+    analog                     Analog substrate: continuous-valued physical state
+    memristive                 Memristive substrate: conductance, IR-drop, noise
+    neuromorphic               Neuromorphic substrate: asynchronous spike events
+    optical                    Photonic substrate: phase/amplitude modulation
+    quantum                    Quantum substrate: unitary gate simulation
+    complex                    Complex-valued substrate
+    sparse                     Sparse substrate: sparsity-masked state
+    ternary                    Ternary substrate: weights in {-alpha, 0, +alpha}
+  geometry (11 primitives) · config input_dim, output_dim, hidden_dims, num_layers, topology_type, connectivity, recurrent_weight, init_scale, init_scheme, residual, conv_channels, kernel_size, in_channels, input_hw, pool_hw, num_heads, head_dim, attention_dropout, seq_len, lattice_dims, connectivity_radius, grid_hw, delta_scale, mask_prob, label_channels, mem_slots, mem_width, beta_init, neurons_per_tile, tiles_per_layer
+    feedforward                Feedforward DAG (MLP/CNN)
+    recurrent                  Recurrent attractor (Hopfield/EqProp)
+    causal_transformer         Causal transformer with KV cache
+    tile                       TileNet modular tile mesh
+    tile_mesh                  TileNet mesh topology
+    conv                       Convolutional geometry
+    graph                      Arbitrary node-edge fabric (FabricPC)
+    attention                  Attention geometry
+    spatial_lattice            3-D spatial lattice (neural_cube)
+    nca                        Neural cellular automaton fabric  UNAVAILABLE: NcaGeometry.step requires a (B, C, H, W) state grid; the kernel's trainer supplies a flattened batch, so every nca cell fails at runtime. Retired 2026-10-02 pending a route-level reshape.
+    ntm                        Neural Turing Machine tape
+  dynamics (8 primitives) · config dynamics_type, max_steps, convergence_threshold, convergence_start, step_size, beta, momentum, track_free_energy_per_iter, threshold, gradient_checkpointing, compiled, gain_control, rho, prospective_leak, warm_start_duals, rho_schedule, rho_final, max_energy
+    energy_minimization        Equilibrium propagation energy minimization
+    predictive_settling        Predictive coding settling
+    error_predictive_coding    Error predictive coding
+    spike_integration          LIF/Izhikevich spike integration
+    instantaneous              Instantaneous pass (FF/Backprop)
+    diffusion                  Continuous-time diffusion settling
+    lazy                       Lazy/on-demand state dynamics
+    pc_alm                     Augmented Lagrangian predictive coding
+  plasticity (7 primitives) · config plasticity_type, plastic_state_dims, consolidation_config
+    null                       Null plasticity (5-D slice)
+    routing                    Routing plasticity: state-dependent gating
+    fast_weights               Fast-weight episode-local memory
+    substrate_coupled          Physical substrate-coupled plasticity
+    rule_state                 Rule-state plasticity (Z3)
+    temporal_psi               Trace-decayed supervised psi
+    conflict_adaptive          Conflict-adaptive psi
+  credit (10 primitives) · config credit_type, beta, feedback_matrix, local_objective, orthogonal_init, feedback_scale, readout_error, credit_norm, a_plus, a_minus, tau, tau_pre, tau_post, homeostatic_target, homeostatic_scaling, learned_feedback, feedback_lr, feedback_update_every, train_biases, label_dim, ema_beta, stream_norm, contrast_threshold, contrast_objective, readout_scale, sequential_lr, grad_clip
+    thermodynamic_contrast     EqProp free/nudged contrast (Scellier-Bengio)
+    random_projections         Fixed random feedback (FA/DFA)
+    local_goodness             Forward-Forward / PEPITA goodness
+    local_contrastive          Local contrastive credit
+    temporal_trace             Hebbian/STDP temporal trace
+    target_inversion           Target propagation inversion
+    homeostatic                Autonomous Lipschitz scaling
+    pepita                     PEPITA input-modulation credit
+    gradient                   Backprop gradient credit (ruler reference)
+    pc_alm                     PC-ALM primal-dual credit
+  update (12 primitives) · config update_type, step_size, momentum, ortho_steps, spectral_norm, fisher_damping, ewc_lambda, grad_clip, beta2, eps, ortho_lr, role_names, sub_rules
+    euclidean                  SGD/Adam Euclidean update
+    adam                       Adam adaptive moment
+    local_adam                 Local Adam
+    ortho_adam                 Orthogonal Adam
+    riemannian_orthogonal      Riemannian orthogonal update (Muon-family)
+    muon                       Muon update
+    lion                       Lion optimizer
+    spectral_constrained       Spectral-norm constrained update
+    mean_norm                  Mean-norm update
+    elastic_consolidation      EWC elastic consolidation
+    natural_gradient           Natural gradient (Fisher)
+    role_split                 Role-split update
+
+==============================================================================
+PANEL SYSTEM — 🏗️ System & Composition
+==============================================================================
+  SystemConfig = SubstrateConfig × GeometryConfig × StateDynamicsConfig × PlasticityConfig × CreditAssignmentConfig × ParameterUpdateConfig
+  SystemTrainerConfig: max_epochs, batch_size, val_batch_size, device, grad_clip, track_energy, track_flops, track_memory, log_every_n_steps, seed, deterministic, resumable, limit_train_batches, limit_val_batches, harvest_mode, harvest_decay, harvest_every_n, max_epoch_time
+
+==============================================================================
+PANEL TRAIN — ⚡ Training Loop — SystemTrainer.fit()
+==============================================================================
+  history per epoch: train_acc, train_energy, train_loss, val_acc, val_loss
+  evaluator adds: param_count, walltime_s
+
+==============================================================================
+PANEL EVIDENCE — 💾 Evidence Store — one DuckDB, single writer
+==============================================================================
+  RecordStore methods: create_run, finish_run, append, append_with_artifacts, get_record, get_record_by_measurement_key, query_records, query_runs, vector_search, count_records, count_achieved_seeds, latest_run_id
+  Record fields (schema v3): record_id, seq, run_id, schema_version, cell_key, measurement_key, substrate, geometry, dynamics, plasticity, credit, update, params, schedule, provenance, status, payload, unknown
+  claim tiers: gate verdict · defect cause · maturity
+
+==============================================================================
+PANEL SURFACE — 📊 Surface & Governance
+==============================================================================
+  verification levels: ANALYTICAL, MACHINE_CHECKED, CERTIFIED_NUMERICAL, SAMPLED_NUMERICAL, EMPIRICAL
+  workspace packages: ceec-core, computronium-lab, local-feedback, psi-peft, stability
+
