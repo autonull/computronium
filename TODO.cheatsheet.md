@@ -274,6 +274,53 @@ excluded from the diagram commit; stage paths explicitly when committing.
   catch it; no layout change needed, just a note for anyone tuning
   `band_gap`.
 
+=== READABILITY PASS (2026-10-02g) ===
+
+User feedback applied: (a) no zoom-hint footer — SVG is vector, readers zoom;
+(b) keep the current architectural banded/circular high-level layout (no
+single-spine reflow); (c) widen the font-size range so hierarchy reads at a
+glance; (d) Objectives/Priors as *tables*, not chip boxes; (e) more emoji
+mnemonics at the row-label level.
+
+- **TableRow** — new presentation row type (`label`, `headers`, `rows`,
+  `mono`): bold small-caps header row, mono 9pt cells, two side-by-side
+  grids when >12 rows (kernel is the only >12 case: 35 objectives → two
+  18-row halves ≈ halves the panel growth). Status cells auto-tint
+  (`✓` → green, `🔬` → amber). `row_preferred_w`/`row_h` refactored into
+  `_PREFERRED_W`/`_ROW_H` dispatch tables (ruff C901/PLR0911/PLR0913).
+- **Objectives/Priors → tables** — `🎯 OBJECTIVES (35) — 4 measured ✓, 31
+  research targets 🔬` and `⚖️ PRIORS (28 seeded)` are now `TableRow`s;
+  the 63 chip boxes + `Group` containers they replaced are gone
+  (inner chips 253 → 189). Per-row kernel chips for capabilities/constraints
+  remain (small sets).
+- **Verification levels → FlowRow** — surface panel's L1–L5 is now a
+  left-to-right flow (stronger discipline left→right) instead of chips.
+- **Font spread** — chip 10.5→11.0, row labels 10.5→**12.5**, step labels
+  10.5→11.5, panel titles 13.5→15, secondary text shrunk instead
+  (note 9.5→8.5, sub 8.5→7.5, mono 9.5→9.0, legend 8.5→8, group header
+  9.5→8.5, axis fields/cfgs down ~0.5). Bigger primary, smaller secondary
+  = larger usable range.
+- **Primary-spine edge emphasis** — `Edge.primary` flag; spine edges
+  (entry→tasks→kernel→ontology→system→train→evidence→surface) render
+  darker (`#1e293b`) and thicker (2.6), secondary edges lighter
+  (`#94a3b8`, 1.6). High-level layout unchanged; the main path now reads
+  as the spine vs the dashed purple "next question" loop.
+- **Row-label emoji + counts everywhere** — ⌨️/🗺/🧩/📋/▶/🧠/🧮/🧰/⚙/🔁/📈/🔗/🗃/🏷/🖥/📐/📦 prefix row labels; counts added
+  (CLI subcommands, domains, supported tasks, history metrics, policies,
+  RunSpec/Record/SystemTrainerConfig field counts, stages, store methods).
+
+Gate: ruff format/check clean · pyright 0/0 · `--check` green
+(SVG 157 KiB, 2771×2469 — taller from the objectives table but narrower;
+no label collisions, legend verified). `docs/cheatsheet/cheatsheet.txt`
+re-pinned.
+
+**Notes for remaining ideas:** the within-panel `Section` wrapper (row-level
+containment) is still unimplemented — `TableRow` plus zebra/section
+tints would be the vehicle; CLI subcommand chips are still one flat row
+(grouping by destination needs a curated command→panel map, not reflection);
+verified rail spans and gap fall-back are now asserted, so adding edges is
+safe.
+
 === GAP-INTERSECTION + LEGEND CHECKS (2026-10-02f) ===
 
 Closed the two open verification items from the 2026-10-02d list:

@@ -489,7 +489,15 @@ class AxesRow:
     boxes: tuple[AxisBox, ...]
 
 
-Row = ChipsRow | FlowRow | FieldsRow | TextRow | AxesRow | GroupedChipsRow
+@dataclass(frozen=True, slots=True)
+class TableRow:
+    label: str
+    headers: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...]
+    mono: bool = True
+
+
+Row = ChipsRow | FlowRow | FieldsRow | TextRow | AxesRow | GroupedChipsRow | TableRow
 
 
 @dataclass(frozen=True, slots=True)
@@ -611,7 +619,8 @@ def _entry_rows(b: Bundle) -> tuple[Row, ...]:
     )
     return (
         ChipsRow(
-            "comp CLI — every subcommand works end-to-end or does not exist", cli_chips
+            f"⌨️ comp CLI — {len(b.cli)} subcommands, every one works end-to-end or does not exist",
+            cli_chips,
         ),
         ChipsRow(
             f"🐍 Python API — {len(b.api_symbols)} public symbols (lazy __all__)",
@@ -662,11 +671,11 @@ def _tasks_rows(b: Bundle) -> tuple[Row, ...]:
     )
     return (
         TextRow(
-            "create_task(name, device='cpu', quick_mode) → task.setup() → task.get_dataloader('train')"
+            "🗺 create_task(name, device='cpu', quick_mode) → task.setup() → task.get_dataloader('train')"
         ),
-        ChipsRow("7 domains (domains registry)", task_chips),
+        ChipsRow(f"🧩 {len(b.domains)} domains (domains registry)", task_chips),
         GroupedChipsRow(
-            f"SUPPORTED_TASKS ({total_tasks}) — offline-resolvable subset",
+            f"📋 SUPPORTED_TASKS ({total_tasks}) — offline-resolvable subset",
             task_groups,
         ),
     )
@@ -692,19 +701,6 @@ def _kernel_rows(b: Bundle) -> tuple[Row, ...]:
         for p in b.policies
     )
     measured = [n for n, m in b.objectives if m]
-    objective_chips = tuple(
-        Chip(
-            label=o,
-            mono=True,
-            accent=COLORS["evidence"] if m else COLORS["surface"],
-            enabled=m,
-            tooltip=f"{o} · {'measured ✓' if m else 'research target'}",
-        )
-        for o, m in b.objectives
-    )
-    prior_chips = tuple(
-        Chip(label=p, mono=True, accent=COLORS["kernel"], tooltip=p) for p in b.priors
-    )
     registry_summary = tuple(
         Chip(label=label, sub=sub, accent=COLORS["kernel"], tooltip=sub)
         for label, sub in (
@@ -720,41 +716,38 @@ def _kernel_rows(b: Bundle) -> tuple[Row, ...]:
     )
     return (
         ChipsRow(
-            "RunSpec fields",
+            f"🧾 RunSpec fields ({len(b.run_spec_fields)})",
             tuple(
                 Chip(label=f, mono=True, accent=COLORS["kernel"], tooltip=f)
                 for f in b.run_spec_fields
             ),
         ),
         FlowRow(
-            "Pipeline S1–S11 — PipelineRunner, registry-locked stages", stage_steps
+            f"▶ Pipeline S1–S{len(b.stages)} — PipelineRunner, registry-locked stages",
+            stage_steps,
         ),
         ChipsRow(
-            "Policies — POLICY_CATALOG · interchangeable per round (U4)", policy_chips
+            f"🧠 Policies — POLICY_CATALOG · {len(b.policies)} · interchangeable per round (U4)",
+            policy_chips,
         ),
-        GroupedChipsRow(
-            "Registries — single source of truth",
-            (
-                Group(
-                    name=f"🎯 OBJECTIVES ({len(b.objectives)}, {len(measured)} measured)",
-                    chips=objective_chips,
-                    accent=COLORS["kernel"],
-                ),
-                Group(
-                    name=f"⚖️ PRIORS ({len(b.priors)} seeded)",
-                    chips=prior_chips,
-                    accent=COLORS["kernel"],
-                ),
-            ),
+        TableRow(
+            f"🎯 OBJECTIVES ({len(b.objectives)}) — {len(measured)} measured ✓, {len(b.objectives) - len(measured)} research targets 🔬",
+            ("objective", "status"),
+            tuple((o, "✓ measured" if m else "🔬 target") for o, m in b.objectives),
         ),
-        ChipsRow("Registry counts & DSLs", registry_summary),
+        TableRow(
+            f"⚖️ PRIORS ({len(b.priors)} seeded)",
+            ("prior",),
+            tuple((p,) for p in b.priors),
+        ),
+        ChipsRow("🧮 Registry counts & DSLs", registry_summary),
     )
 
 
 def _system_rows(b: Bundle) -> tuple[Row, ...]:
     return (
         FlowRow(
-            "compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)",
+            "🔗 compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)",
             (
                 FlowStep(
                     label="compose",
@@ -777,7 +770,7 @@ def _system_rows(b: Bundle) -> tuple[Row, ...]:
             ),
         ),
         ChipsRow(
-            "5-D & helpers (P = NullPlasticity subspace)",
+            "🧰 5-D & helpers (P = NullPlasticity subspace)",
             tuple(
                 Chip(label=n, accent=COLORS["system"], tooltip=n)
                 for n in (
@@ -789,7 +782,7 @@ def _system_rows(b: Bundle) -> tuple[Row, ...]:
             ),
         ),
         ChipsRow(
-            "SystemTrainerConfig",
+            f"⚙ SystemTrainerConfig ({len(b.configs['SystemTrainerConfig'])} fields)",
             tuple(
                 Chip(label=f, mono=True, accent=COLORS["train"], tooltip=f)
                 for f in b.configs["SystemTrainerConfig"]
@@ -822,11 +815,13 @@ def _train_rows(b: Bundle) -> tuple[Row, ...]:
     )
     return (
         FlowRow(
-            "one epoch: settle → forward → credit → update (repeat until convergence)",
+            "🔁 one epoch: settle → forward → credit → update (repeat until convergence)",
             loop_steps,
             loop_back=True,
         ),
-        ChipsRow("history (per epoch, HISTORY_METRICS)", history_chips),
+        ChipsRow(
+            f"📈 history (per epoch, {len(b.history_metrics)} METRICS)", history_chips
+        ),
         TextRow(
             "evaluator adds walltime_s · param_count (MEASURED_METRICS) · "
             "settle mutates state in place, credit reads post-settle state"
@@ -844,13 +839,15 @@ def _evidence_rows(b: Bundle) -> tuple[Row, ...]:
     )
     return (
         ChipsRow(
-            "RecordStore (threading lock · atomic record+artifact append)", store_chips
+            f"🗃 RecordStore methods ({len(b.store_methods)}) — threading lock · atomic append",
+            store_chips,
         ),
         ChipsRow(
-            f"Record fields (schema v{b.schema_version} — fail-closed)", record_chips
+            f"🧾 Record fields ({len(b.record_fields)}, schema v{b.schema_version} — fail-closed)",
+            record_chips,
         ),
         ChipsRow(
-            "Claim tiers & schema discipline",
+            "🏷 Claim tiers & schema discipline",
             tuple(
                 Chip(label=tier, accent=COLORS["evidence"], tooltip=tier)
                 for tier in (
@@ -870,28 +867,24 @@ def _surface_rows(b: Bundle) -> tuple[Row, ...]:
         for c, s in b.cli
         if c in {"report", "export", "conformance", "status", "run"}
     )
-    claim_chips = tuple(
-        Chip(
-            label=tier,
-            accent=COLORS["surface"],
-            tooltip=tier,
-        )
-        for tier in (
-            "L1 analytical",
-            "L2 machine-checked",
-            "L3 certified-numerical",
-            "L4 sampled-numerical",
-            "L5 empirical",
+    claim_steps = tuple(
+        FlowStep(label=lv, sub=tier, color=COLORS["surface"], tooltip=f"{lv} {tier}")
+        for lv, tier in (
+            ("L1", "analytical"),
+            ("L2", "machine-checked"),
+            ("L3", "certified-numerical"),
+            ("L4", "sampled-numerical"),
+            ("L5", "empirical"),
         )
     )
     package_chips = tuple(
         Chip(label=p, accent=COLORS["surface"], tooltip=p) for p in b.packages
     )
     return (
-        ChipsRow("comp report surface", surface_cli),
-        ChipsRow("Verification levels — claim-strength discipline", claim_chips),
+        ChipsRow("🖥 comp report surface", surface_cli),
+        FlowRow("📐 Verification levels — claim-strength discipline", claim_steps),
         ChipsRow(
-            "CEEC + workspace packages",
+            "📦 CEEC + workspace packages",
             (
                 *package_chips,
                 Chip(
@@ -957,19 +950,19 @@ class Style:
     step_gap: float = 14.0
     step_min_w: float = 104.0
     box_gap: float = 12.0
-    chip_font: float = 10.5
-    sub_font: float = 8.5
-    mono_font: float = 9.5
-    note_font: float = 9.5
-    label_font: float = 10.5
-    step_label_font: float = 10.5
-    step_sub_font: float = 8.0
-    edge_font: float = 9.5
-    legend_font: float = 8.5
-    group_header_font: float = 9.5
-    axis_header_font: float = 11.0
-    axis_cfg_font: float = 9.0
-    axis_field_font: float = 8.0
+    chip_font: float = 11.0
+    sub_font: float = 7.5
+    mono_font: float = 9.0
+    note_font: float = 8.5
+    label_font: float = 12.5
+    step_label_font: float = 12.5
+    step_sub_font: float = 7.5
+    edge_font: float = 9.0
+    legend_font: float = 8.0
+    group_header_font: float = 8.5
+    axis_header_font: float = 12.0
+    axis_cfg_font: float = 8.5
+    axis_field_font: float = 7.5
     group_inset: float = 6.0
     legend_gap: float = 14.0
     legend_swatch: float = 11.0
@@ -1086,51 +1079,120 @@ def _grouped_chips_preferred_w(row: GroupedChipsRow) -> float:
     return min(max_w, STYLE.max_content_w)
 
 
+def _table_col_w(
+    rows: tuple[tuple[str, ...], ...], headers: tuple[str, ...], ci: int
+) -> float:
+    cells = [headers[ci], *(r[ci] for r in rows)]
+    return max(text_w(c, STYLE.mono_font) for c in cells) + 14.0
+
+
+def _table_preferred_w(row: TableRow) -> float:
+    rows, headers = row.rows, row.headers
+    half = (len(rows) + 1) // 2 if len(rows) > 12 else len(rows)
+    lrows, rrows = rows[:half], rows[half:]
+
+    def gw(rs: tuple[tuple[str, ...], ...]) -> float:
+        if not rs and not headers:
+            return 0.0
+        src = rs if rs else (headers,)
+        return sum(_table_col_w(src, headers, ci) for ci in range(len(headers)))
+
+    gw_total = gw(lrows) + (gw(rrows) + 24.0 if rrows else 0.0)
+    return min(max(text_w(row.label, STYLE.label_font), gw_total), STYLE.max_content_w)
+
+
+def _pw_chips(row: ChipsRow) -> float:
+    one = (
+        sum(c.w for c in row.chips) + row.gap * (len(row.chips) - 1)
+        if row.chips
+        else 0.0
+    )
+    return min(max(text_w(row.label, STYLE.label_font), one), STYLE.max_content_w)
+
+
+def _pw_flow(row: FlowRow) -> float:
+    m = [step_metrics(st) for st in row.steps]
+    sw = max(mw for mw, _ in m)
+    cols = min(STYLE.flow_max_cols, len(row.steps))
+    return min(cols * (sw + STYLE.step_gap) - STYLE.step_gap, STYLE.max_content_w)
+
+
+def _pw_fields(row: FieldsRow) -> float:
+    return min(
+        text_w(row.text, STYLE.mono_font if row.mono else 10.0), STYLE.max_content_w
+    )
+
+
+def _pw_text(row: TextRow) -> float:
+    return min(text_w(row.text, STYLE.note_font), STYLE.max_content_w)
+
+
+def _pw_axes(row: AxesRow) -> float:
+    return sum(box_natural_w(b) for b in row.boxes) + STYLE.box_gap * (
+        len(row.boxes) - 1
+    )
+
+
+_PREFERRED_W: dict[type, Callable[..., float]] = {
+    ChipsRow: _pw_chips,
+    FlowRow: _pw_flow,
+    FieldsRow: _pw_fields,
+    TextRow: _pw_text,
+    AxesRow: _pw_axes,
+    GroupedChipsRow: _grouped_chips_preferred_w,
+    TableRow: _table_preferred_w,
+}
+
+
 def row_preferred_w(row: Row) -> float:
-    match row:
-        case ChipsRow(_, chips, gap):
-            one = sum(c.w for c in chips) + gap * (len(chips) - 1) if chips else 0.0
-            return min(
-                max(text_w(row.label, STYLE.label_font), one), STYLE.max_content_w
-            )
-        case FlowRow(_, steps, _):
-            m = [step_metrics(s) for s in steps]
-            sw = max(mw for mw, _ in m)
-            cols = min(STYLE.flow_max_cols, len(steps))
-            return min(
-                cols * (sw + STYLE.step_gap) - STYLE.step_gap, STYLE.max_content_w
-            )
-        case FieldsRow(_, text, mono):
-            return min(
-                text_w(text, STYLE.mono_font if mono else 10.0), STYLE.max_content_w
-            )
-        case TextRow(text):
-            return min(text_w(text, STYLE.note_font), STYLE.max_content_w)
-        case AxesRow(boxes):
-            return sum(box_natural_w(b) for b in boxes) + STYLE.box_gap * (
-                len(boxes) - 1
-            )
-        case GroupedChipsRow():
-            return _grouped_chips_preferred_w(row)
+    return _PREFERRED_W[type(row)](row)
+
+
+def _rh_chips(row: ChipsRow, w: float) -> float:
+    _, h = chip_positions(row.chips, row.gap, w)
+    return 18.0 + (6.0 if row.chips else 0.0) + h
+
+
+def _rh_flow(row: FlowRow, w: float) -> float:
+    _, rows, _, sh = flow_metrics(row.steps, w)
+    return 18.0 + 6.0 + rows * (sh + 10.0) + (16.0 if row.loop_back else 0.0)
+
+
+def _rh_fields(row: FieldsRow, w: float) -> float:
+    lines = _wrap_text(row.text, STYLE.mono_font if row.mono else 10.0, w)
+    return 18.0 + 4.0 + len(lines) * 13.0
+
+
+def _rh_text(row: TextRow, w: float) -> float:
+    return len(_wrap_text(row.text, STYLE.note_font, w)) * 12.0 + 4.0
+
+
+def _rh_axes(row: AxesRow, w: float) -> float:
+    return box_h(row.boxes)
+
+
+def _rh_grouped(row: GroupedChipsRow, w: float) -> float:
+    return grouped_chips_h(row.groups, w, row.gap)
+
+
+def _rh_table(row: TableRow, w: float) -> float:
+    half = (len(row.rows) + 1) // 2 if len(row.rows) > 12 else len(row.rows)
+    return 18.0 + 4.0 + 13.0 + half * 12.0
+
+
+_ROW_H: dict[type, Callable[..., float]] = {
+    ChipsRow: _rh_chips,
+    FlowRow: _rh_flow,
+    FieldsRow: _rh_fields,
+    TextRow: _rh_text,
+    AxesRow: _rh_axes,
+    GroupedChipsRow: _rh_grouped,
+    TableRow: _rh_table,
+}
 
 
 def row_h(row: Row, w: float) -> float:
-    match row:
-        case ChipsRow(_, chips, gap):
-            _, h = chip_positions(chips, gap, w)
-            return 18.0 + (6.0 if chips else 0.0) + h
-        case FlowRow(_, steps, loop_back):
-            _, rows, _, sh = flow_metrics(steps, w)
-            return 18.0 + 6.0 + rows * (sh + 10.0) + (16.0 if loop_back else 0.0)
-        case FieldsRow(_, text, mono):
-            lines = _wrap_text(text, STYLE.mono_font if mono else 10.0, w)
-            return 18.0 + 4.0 + len(lines) * 13.0
-        case TextRow(text):
-            return len(_wrap_text(text, STYLE.note_font, w)) * 12.0 + 4.0
-        case AxesRow(boxes):
-            return box_h(boxes)
-        case GroupedChipsRow(_, groups, gap):
-            return grouped_chips_h(groups, w, gap)
+    return _ROW_H[type(row)](row, w)
 
 
 def box_h(boxes: tuple[AxisBox, ...]) -> float:
@@ -1199,25 +1261,34 @@ class Edge:
     label: str
     dashed: bool = False
     route: str = "elbow"
+    primary: bool = False
 
 
 def build_edges() -> tuple[Edge, ...]:
     return (
-        Edge("entry", "tasks", "create_task(name)"),
+        Edge("entry", "tasks", "create_task(name)", primary=True),
         Edge("entry", "kernel", "comp run profile · question_first()"),
-        Edge("tasks", "kernel", "task → RunSpec.task", route="h-gap"),
+        Edge("tasks", "kernel", "task → RunSpec.task", route="h-gap", primary=True),
         Edge(
             "entry",
             "system",
             "compose + fit — direct library path",
             route="margin-left",
         ),
-        Edge("kernel", "ontology", "S5 compose"),
-        Edge("ontology", "system", "6 axes → System"),
-        Edge("system", "train", "SystemTrainer(system, cfg)", route="h-gap"),
-        Edge("train", "evidence", "history · walltime_s · param_count"),
+        Edge("kernel", "ontology", "S5 compose", primary=True),
+        Edge("ontology", "system", "6 axes → System", primary=True),
+        Edge(
+            "system", "train", "SystemTrainer(system, cfg)", route="h-gap", primary=True
+        ),
+        Edge("train", "evidence", "history · walltime_s · param_count", primary=True),
         Edge("kernel", "evidence", "S8 atomic append", route="margin-right"),
-        Edge("evidence", "surface", "claims · conformance · status", route="h-gap"),
+        Edge(
+            "evidence",
+            "surface",
+            "claims · conformance · status",
+            route="h-gap",
+            primary=True,
+        ),
         Edge(
             "surface",
             "entry",
@@ -1547,7 +1618,7 @@ def _draw_chips_row(
 def _draw_flow_row(
     row: FlowRow, x: float, y: float, color: str, w: float
 ) -> tuple[str, float]:
-    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
     cols, rows, sw, sh = flow_metrics(row.steps, w)
     stride = sw + STYLE.step_gap
     sy = y + 24
@@ -1599,7 +1670,7 @@ def _draw_fields_row(
 ) -> tuple[str, float]:
     fam = MONO if row.mono else SANS
     size = 9.5 if row.mono else 10.0
-    parts = [svg_text(x, y + 12, row.label, 10.5, "#475569", "700")]
+    parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
     ty = y + 24
     for line in _wrap_text(row.text, size, w):
         parts.append(svg_text(x, ty, line, size, "#334155", family=fam))
@@ -1612,8 +1683,8 @@ def _draw_text_row(
 ) -> tuple[str, float]:
     parts: list[str] = []
     ty = y + 4
-    for line in _wrap_text(row.text, 9.5, w):
-        parts.append(svg_text(x, ty, line, 9.5, "#64748b"))
+    for line in _wrap_text(row.text, STYLE.note_font, w):
+        parts.append(svg_text(x, ty, line, STYLE.note_font, "#64748b"))
         ty += 12
     return "".join(parts), len(_wrap_text(row.text, 9.5, w)) * 12.0 + 4.0
 
@@ -1674,8 +1745,57 @@ def _draw_grouped_chips_row(
     return "".join(parts), ty - y
 
 
+def _draw_table_row(
+    row: TableRow, x: float, y: float, color: str, w: float
+) -> tuple[str, float]:
+    parts = [svg_text(x, y + 12, row.label, STYLE.label_font, "#475569", "700")]
+    half = (len(row.rows) + 1) // 2 if len(row.rows) > 12 else len(row.rows)
+    grids = [row.rows[:half], row.rows[half:]]
+    gx = x
+    drawn = 0
+    for gi, grid in enumerate(grids):
+        if not grid:
+            continue
+        gy = y + 18.0
+        col_ws = [_table_col_w(grid, row.headers, ci) for ci in range(len(row.headers))]
+        for ci, h in enumerate(row.headers):
+            parts.append(
+                svg_text(
+                    gx + sum(col_ws[:ci]),
+                    gy + 9.0,
+                    h.upper(),
+                    STYLE.sub_font,
+                    color,
+                    "700",
+                )
+            )
+        gy += 13.0
+        for r in grid:
+            for ci, cell in enumerate(r):
+                fill = (
+                    "#15803d"
+                    if cell.startswith("✓")
+                    else ("#b45309" if cell.startswith("🔬") else "#334155")
+                )
+                parts.append(
+                    svg_text(
+                        gx + sum(col_ws[:ci]),
+                        gy + 9.0,
+                        cell,
+                        STYLE.mono_font,
+                        fill,
+                        family=MONO,
+                    )
+                )
+            gy += 12.0
+            drawn += 1
+        gx += sum(col_ws) + 24.0
+    return "".join(parts), 18.0 + 4.0 + 13.0 + half * 12.0
+
+
 _DRAW_ROW_HANDLERS = {
     ChipsRow: _draw_chips_row,
+    TableRow: _draw_table_row,
     FlowRow: _draw_flow_row,
     FieldsRow: _draw_fields_row,
     TextRow: _draw_text_row,
@@ -1759,7 +1879,7 @@ def draw_panel(panel: Panel, p: Pos) -> str:
         svg_text(
             p.x + 16.0,
             p.y + 23.0,
-            _fit(panel.title, 13.5, p.w - 40.0),
+            _fit(panel.title, 15.0, p.w - 40.0),
             13.5,
             color,
             "800",
@@ -1904,7 +2024,7 @@ def render_svg(panels: tuple[Panel, ...], ly: Layout, b: Bundle) -> str:
     parts.append(render_legend(ly.canvas_w))
     for e in build_edges():
         pts = edge_points(e, ly)
-        color = "#9333ea" if e.dashed else "#475569"
+        color = "#9333ea" if e.dashed else ("#1e293b" if e.primary else "#94a3b8")
         parts.append(
             svg_poly(
                 pts,
