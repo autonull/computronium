@@ -1,4 +1,4 @@
-## 10. Research program
+## Research program
 
 The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
 

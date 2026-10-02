@@ -15,32 +15,15 @@ substituted at build time. The lock holds three claims:
 
 from __future__ import annotations
 
-import importlib.util
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from types import ModuleType
+from tests.property._readme import SNIPPETS, load_readme_builder
 
 REPO = Path(__file__).resolve().parents[2]
 README = REPO / "README.md"
-SNIPPETS = REPO / "docs" / "readme"
 
-
-def _load_builder() -> ModuleType:
-    """Import the builder by path; ``docs/readme`` is not a package."""
-    path = SNIPPETS / "build_readme.py"
-    spec = importlib.util.spec_from_file_location("readme_builder", path)
-    if spec is None or spec.loader is None:  # pragma: no cover - import plumbing
-        msg = f"cannot import {path}"
-        raise ImportError(msg)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-build_readme = _load_builder()
+build_readme = load_readme_builder()
 
 
 def _data_rows(table: str) -> list[str]:
@@ -58,15 +41,20 @@ class TestReadmeBuildLock:
 
     def test_every_snippet_contributes(self) -> None:
         rendered = build_readme.build_readme()
-        for path in sorted(SNIPPETS.glob("[0-9][0-9]-*.md")):
-            if path.name == "00-header.md":
-                continue
+        for path in build_readme._section_files():
             text = path.read_text(encoding="utf-8").strip()
             assert text, f"{path.name} is empty"
             assert text.splitlines()[0] in rendered, path.name
 
+    def test_manifest_is_the_only_ordering(self) -> None:
+        """An unlisted snippet is invisible; a listed one that moved is a typo."""
+        listed = {path.name for path in build_readme._section_files()}
+        on_disk = {path.name for path in SNIPPETS.glob("*.md")}
+        assert on_disk - listed == set(), "snippet missing from the manifest"
+        assert len(listed) == len(build_readme._SECTIONS), "duplicate in the manifest"
+
     def test_generated_markers_all_resolve(self) -> None:
-        for path in sorted(SNIPPETS.glob("[0-9][0-9]-*.md")):
+        for path in build_readme._section_files():
             text = path.read_text(encoding="utf-8")
             for name in re.findall(build_readme._GENERATED_RE.pattern, text):
                 assert name in build_readme._GENERATORS, (

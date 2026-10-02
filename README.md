@@ -8,28 +8,22 @@ The name ([Wikipedia](https://en.wikipedia.org/wiki/Computronium)) refers to the
 
 ## Contents
 
-- [1. What is Computronium](#1-what-is-computronium)
-- [2. Install](#2-install)
-- [3. 60-second quickstart](#3-60-second-quickstart)
-- [4. The 6-axis ontology](#4-the-6-axis-ontology)
-- [5. The Experiment Kernel](#5-the-experiment-kernel)
-- [6. CLI reference](#6-cli-reference)
-- [7. Demonstrations](#7-demonstrations)
-- [8. Evidence & claims](#8-evidence--claims)
-- [9. For developers](#9-for-developers)
-- [10. Research program](#10-research-program)
-- [11. FAQ / Troubleshooting + Glossary](#11-faq--troubleshooting--glossary)
+- [What is Computronium](#what-is-computronium)
+- [Install](#install)
+- [60-second quickstart](#60-second-quickstart)
+- [The 6-axis ontology](#the-6-axis-ontology)
+- [The Experiment Kernel](#the-experiment-kernel)
+- [CLI reference](#cli-reference)
+- [Demonstrations](#demonstrations)
+- [Evidence & claims](#evidence--claims)
+- [For developers](#for-developers)
+- [Research program](#research-program)
+- [FAQ / Troubleshooting + Glossary](#faq--troubleshooting--glossary)
 - [License](#license)
 
 ---
 
-# 🌌 Computronium: A Composable Laboratory for Learning Mechanisms
-
-**Computronium** is a composable ML library and an experiment kernel for studying how learning mechanisms interact with dynamics, writable state, communication, precision, and resource constraints. Its six-axis interface makes controlled comparisons mechanical; the kernel turns questions into measured, governed evidence.
-
-The name ([Wikipedia](https://en.wikipedia.org/wiki/Computronium)) refers to the theoretical limit of physical computation — the framework bridges abstract learning algorithms and physical constraint models (optical, memristive, neuromorphic, biological, quantum).
-
-## 1. What is Computronium
+## What is Computronium
 
 Computronium ships three layers, each usable independently:
 
@@ -43,7 +37,7 @@ Computronium ships three layers, each usable independently:
 
 ---
 
-## 2. Install
+## Install
 
 ```bash
 git clone <repository-url> && cd computronium
@@ -60,7 +54,7 @@ uv run python -c "import optuna, scipy, torchvision, pytest"
 
 ---
 
-## 3. 60-second quickstart
+## 60-second quickstart
 
 Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test ([`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py)):
 
@@ -120,7 +114,7 @@ Expected result (Level 4 — sampled numerical): one CPU epoch reaches ≈ 0.9 t
 
 ---
 
-## 4. The 6-axis ontology
+## The 6-axis ontology
 
 ```text
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
@@ -231,7 +225,7 @@ Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`,
 
 ---
 
-## 5. The Experiment Kernel
+## The Experiment Kernel
 
 `computronium.experiment` turns a question into governed evidence:
 
@@ -292,7 +286,7 @@ told back. Four claims are worth stating rather than leaving to be discovered:
   here is evidence about which credit rule or topology is better on a
   scientific question. TODO46 §3.6/§3.7 is that work.
 
-The ML library above is unaffected: the §3 and §4 blocks compose and train real
+The ML library above is unaffected: the quickstart and ontology blocks compose and train real
 six-axis systems and assert real accuracies.
 
 **Kernel guarantees (locked in [`tests/acceptance/test_unified_kernel.py`](tests/acceptance/test_unified_kernel.py)):**
@@ -312,7 +306,7 @@ six-axis systems and assert real accuracies.
 
 ---
 
-## 6. CLI reference
+## CLI reference
 
 `comp <command>` — every subcommand either works end-to-end or does not exist in the dispatcher:
 
@@ -343,7 +337,7 @@ uv run comp report --run-id <id> --store experiment.duckdb
 
 ---
 
-## 7. Demonstrations
+## Demonstrations
 
 Programmatic demos built on the same kernel APIs as the acceptance suite live in `scripts/demos/`:
 
@@ -356,9 +350,9 @@ Programmatic demos built on the same kernel APIs as the acceptance suite live in
 | `demo_policy_swap.py` | U4 policy interchangeability — 4 policies, same RunSpec/Space/Store. |
 | `demo_unified_pipeline.py` | U1 end-to-end (question → RunSpec → Synthesis → pipeline → store → report). |
 
-## 8. Evidence & claims
+## Evidence & claims
 
-Claims are labeled by verification level (§1) and governed by CEEC ([`packages/ceec-core`](packages/ceec-core)).
+Claims are labeled by verification level (see *What is Computronium*) and governed by CEEC ([`packages/ceec-core`](packages/ceec-core)).
 
 | Claim | Level | Evidence |
 |---|---|---|
@@ -366,14 +360,14 @@ Claims are labeled by verification level (§1) and governed by CEEC ([`packages/
 | Transfer provenance (E4): provenance-tagged records support transfer, d ≈ −1.52 | 3 | `scripts/probes/e4_transfer_provenance.py` — same constructed surface, same caveat |
 | Effect-size protocol (E2) | 2 | conformance evidence audit (46 pass / 42 skip / 0 fail) |
 | Kernel orchestration guarantees U1–U5 | 4 | `tests/acceptance/test_unified_kernel.py` — guarantees *orchestration* (policy interchangeability, pause/resume, one store, one measurement identity). **The evaluator behind those tests is currently a placeholder** returning a walltime, so no measurement is actually made; see the kernel-status note below |
-| Locked demo blocks (§3, §4) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` — these *do* train and assert real accuracies |
+| Locked demo blocks (quickstart, ontology) | 4 | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py` — these *do* train and assert real accuracies |
 | Conformance audit C1–C88 | 2–3 | `comp conformance` |
 
 The effect-size protocol: seeded, paired comparisons with preregistered objectives from the PRIORS registry; only Level-4/5 measurements may enter Class E claims, and they are reported at measured strength.
 
 ---
 
-## 9. For developers
+## For developers
 
 **Layout** — see the tree at the top of [`AGENTS.md`](AGENTS.md): `computronium/` (library + `experiment/` kernel), `packages/` (standalone platforms), `scripts/` (quickstart, identity cards, probes, demos), `tests/` (property / acceptance / integration / unit / platform / ceec).
 
@@ -404,7 +398,7 @@ uv run python -m pytest tests/property/test_kernel_isolation_lock.py \
 
 ---
 
-## 10. Research program
+## Research program
 
 The motivating hypothesis: learning systems native to physical constraints — asynchronous operation, local interactions, adaptation, noise tolerance, energy/resource efficiency — offer measurable benefits over global-clock, backprop-centric training under those constraints.
 
@@ -412,7 +406,7 @@ Open questions: when does the plasticity axis (writable ψ on frozen θ) beat st
 
 ---
 
-## 11. FAQ / Troubleshooting + Glossary
+## FAQ / Troubleshooting + Glossary
 
 **FAQ**
 

@@ -1,4 +1,4 @@
-## 2. Install
+## Install
 
 ```bash
 git clone <repository-url> && cd computronium

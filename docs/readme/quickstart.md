@@ -1,4 +1,4 @@
-## 3. 60-second quickstart
+## 60-second quickstart
 
 Compose a 6-axis system and train it on MNIST. This block is locked verbatim against its source demo test ([`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py)):
 

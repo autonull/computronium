@@ -1,4 +1,4 @@
-## 4. The 6-axis ontology
+## The 6-axis ontology
 
 ```text
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate

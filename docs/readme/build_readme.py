@@ -6,6 +6,9 @@ in it can be a number that is stale by one release. So the prose lives in
 ``docs/readme/*.md`` — one file per section, curated — and the *facts* are
 substituted from the code at build time:
 
+Each snippet is one self-contained section, named for what it says. The build
+order lives in :data:`_SECTIONS`, the one place it is decided.
+
 * ``<!-- gen:cli_table -->`` — the ``comp`` dispatcher and its summaries.
 * ``<!-- gen:policy_table -->`` — ``POLICY_CATALOG`` and each policy's docstring.
 * ``<!-- gen:demo_table -->`` — the demo scripts on disk and their docstrings.
@@ -87,15 +90,29 @@ _GENERATORS = {
 }
 
 
-_PREAMBLE = Path("00-header.md")
+# The build order, declared here and nowhere else. Snippets are named for what
+# they say and carry no ordinal, so reordering the README is one list, and
+# moving a section between files does not rename anything.
+_SECTIONS: tuple[str, ...] = (
+    "title.md",
+    "what-is.md",
+    "install.md",
+    "quickstart.md",
+    "ontology.md",
+    "kernel.md",
+    "cli.md",
+    "demos.md",
+    "evidence.md",
+    "developers.md",
+    "research-program.md",
+    "faq.md",
+    "license.md",
+)
 
 
 def _section_files() -> list[Path]:
-    """Snippet files in order; the numeric prefix is the section order.
-
-    The preamble carries the title and is not a numbered section.
-    """
-    return [p for p in sorted(SNIPPET_DIR.glob("[0-9][0-9]-*.md")) if p != _PREAMBLE]
+    """The snippet files, in the order the manifest declares."""
+    return [SNIPPET_DIR / name for name in _SECTIONS]
 
 
 def _anchor(heading: str) -> str:
@@ -129,12 +146,14 @@ def _substitute(text: str) -> str:
 def build_readme() -> str:
     """Render the README from every snippet, in section order."""
     files = _section_files()
-    if not files:
-        msg = f"no snippets found in {SNIPPET_DIR}"
+    missing = [path.name for path in files if not path.exists()]
+    if missing:
+        msg = f"manifest names snippets that do not exist: {missing}"
         raise FileNotFoundError(msg)
-    preamble = (SNIPPET_DIR / _PREAMBLE.name).read_text(encoding="utf-8").rstrip()
-    parts = [path.read_text(encoding="utf-8").rstrip() for path in files]
-    sections = "\n\n".join(parts)
+    preamble = files[0].read_text(encoding="utf-8").rstrip()
+    sections = "\n\n".join(
+        path.read_text(encoding="utf-8").rstrip() for path in files[1:]
+    )
     return (
         "\n\n".join((BANNER, preamble, _contents(sections), _substitute(sections)))
         + "\n"

@@ -1,4 +1,4 @@
-## 11. FAQ / Troubleshooting + Glossary
+## FAQ / Troubleshooting + Glossary
 
 **FAQ**
 

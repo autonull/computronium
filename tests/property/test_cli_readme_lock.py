@@ -2,7 +2,7 @@
 
 Two claims are locked here, both of which a command *table* cannot establish:
 
-1. the README CLI reference table equals the `comp` dispatcher table;
+1. every `comp` command in the README is a real, dispatched command;
 2. **every documented invocation resolves** — the fenced `bash` blocks are
    parsed against the real parsers, so a documented command that does not
    exist is a test failure rather than a review question (TODO46 D20).
@@ -22,6 +22,7 @@ import pytest
 from computronium.cli.__main__ import _SUBCOMMANDS
 from computronium.cli.__main__ import main as dispatcher_main
 from computronium.experiment.surface import cli as surface_cli
+from tests.property._readme import load_readme_builder
 
 REPO = Path(__file__).resolve().parents[2]
 README = REPO / "README.md"
@@ -29,17 +30,6 @@ README = REPO / "README.md"
 
 def _readme() -> str:
     return README.read_text(encoding="utf-8")
-
-
-def _readme_cli_table() -> dict[str, str]:
-    """Parse the §6 CLI reference table: command -> purpose."""
-    section = _readme().split("## 6. CLI reference", 1)[1].split("## 7.", 1)[0]
-    table: dict[str, str] = {}
-    for line in section.splitlines():
-        m = re.match(r"\| `([\w-]+)` \| (.+) \|$", line.strip())
-        if m:
-            table[m.group(1)] = m.group(2).strip()
-    return table
 
 
 def _bash_blocks(text: str) -> list[list[str]]:
@@ -78,21 +68,18 @@ def _documented_comp_invocations() -> list[list[str]]:
 
 
 class TestCliReadmeLock:
-    def test_command_set_matches_dispatcher(self) -> None:
-        assert set(_readme_cli_table()) == set(_SUBCOMMANDS)
+    def test_every_dispatched_command_is_documented(self) -> None:
+        """The README's command table is built from the dispatcher, not typed."""
+        builder = load_readme_builder()
+        table = builder._cli_table()
+        documented = set(re.findall(r"\| `([\w-]+)` \|", table))
+        assert documented == set(_SUBCOMMANDS)
 
-    def test_every_command_has_purpose(self) -> None:
-        for command, purpose in _readme_cli_table().items():
-            assert purpose, f"{command} has no purpose line"
-            assert not purpose.startswith(":--"), f"{command} purpose is placeholder"
-
-    def test_dispatcher_summary_names_a_table_row(self) -> None:
-        """Every dispatcher's one-line summary reaches the README as a row."""
-        from computronium.cli.__main__ import _SUMMARIES
-
-        table = _readme_cli_table()
-        for command in _SUMMARIES:
-            assert table.get(command), f"{command} has a summary but no README row"
+    def test_every_command_has_a_purpose(self) -> None:
+        builder = load_readme_builder()
+        for row in builder._cli_table().splitlines()[2:]:
+            purpose = row.rsplit("|", 2)[1].strip()
+            assert purpose and not purpose.startswith(":--"), row
 
 
 class TestDocumentedInvocationsResolve:

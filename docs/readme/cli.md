@@ -1,4 +1,4 @@
-## 6. CLI reference
+## CLI reference
 
 `comp <command>` — every subcommand either works end-to-end or does not exist in the dispatcher:
 

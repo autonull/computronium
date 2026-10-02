@@ -1,4 +1,4 @@
-## 1. What is Computronium
+## What is Computronium
 
 Computronium ships three layers, each usable independently:
 

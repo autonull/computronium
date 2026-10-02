@@ -1,4 +1,4 @@
-## 5. The Experiment Kernel
+## The Experiment Kernel
 
 `computronium.experiment` turns a question into governed evidence:
 
@@ -50,7 +50,7 @@ told back. Four claims are worth stating rather than leaving to be discovered:
   here is evidence about which credit rule or topology is better on a
   scientific question. TODO46 §3.6/§3.7 is that work.
 
-The ML library above is unaffected: the §3 and §4 blocks compose and train real
+The ML library above is unaffected: the quickstart and ontology blocks compose and train real
 six-axis systems and assert real accuracies.
 
 **Kernel guarantees (locked in [`tests/acceptance/test_unified_kernel.py`](tests/acceptance/test_unified_kernel.py)):**
