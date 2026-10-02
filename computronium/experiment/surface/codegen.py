@@ -73,9 +73,13 @@ def _dataclass_to_dict(obj: Any) -> dict[str, Any]:
 
 def generate_capabilities_listing() -> list[dict[str, Any]]:
     """Generate capabilities listing for docs/generated/capabilities.md."""
+    from computronium.experiment.surface.evidence import evidence_for
+
     capabilities = []
     for cap_id, spec in sorted(CAPABILITIES_REGISTRY.items()):
+        evidence = evidence_for(spec.verifying_test)
         capabilities.append({
+            "evidence": evidence.level,
             "capability_id": spec.capability_id,
             "name": spec.name,
             "kind": spec.kind.value,
@@ -440,8 +444,8 @@ def _write_capabilities_md(path: Path) -> None:
         f"Generated: {datetime.now().isoformat()}",
         f"Total: {len(capabilities)} capabilities",
         "",
-        "| ID | Name | Kind | Required | Stage | Owner | Verifying Test | Flags | Status |",
-        "|----|------|------|----------|-------|-------|----------------|-------|--------|",
+        "| ID | Name | Kind | Required | Stage | Owner | Verifying Test | Evidence | Flags | Status |",
+        "|----|------|------|----------|-------|-------|----------------|----------|-------|--------|",
     ]
     for cap in capabilities:
         flags_str = ", ".join(cap["flags"])
@@ -449,7 +453,7 @@ def _write_capabilities_md(path: Path) -> None:
             f"| {cap['capability_id']} | {cap['display_name']} | {cap['kind']} | "
             f"{'✓' if cap['required'] else '✗'} | {cap['stage'] or '-'} | "
             f"{cap['owner'] or '-'} | {cap['verifying_test'] or '-'} | "
-            f"{flags_str} | {cap['status']} |"
+            f"{cap['evidence']} | {flags_str} | {cap['status']} |"
         )
     path.write_text("\n".join(lines), encoding="utf-8")
 

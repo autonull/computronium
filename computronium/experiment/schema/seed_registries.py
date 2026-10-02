@@ -37,6 +37,7 @@ from computronium.experiment.schema.registries import (
     STAGES_REGISTRY,
     CapabilityKind,
     CapabilitySpec,
+    CapabilityStatus,
     ConstraintKind,
     ConstraintSpec,
     ObjectiveSpec,
@@ -1199,7 +1200,7 @@ CAPABILITIES = [
         required=True,
         stage="S4_GATE",
         owner="legality",
-        verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_constraints_registry_seeded",
+        verifying_test="tests/property/test_legality_boundary_lock.py",
         flags=("legality", "void", "defect"),
     ),
     CapabilitySpec(
@@ -1211,7 +1212,7 @@ CAPABILITIES = [
         required=True,
         stage="S1_FRAME",
         owner="pipeline",
-        verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_stages_registry_seeded",
+        verifying_test="tests/acceptance/test_unified_kernel.py::TestU1_SynthesisPolicyPipeline::test_u1_synthesis_policy_end_to_end",
         flags=("pipeline", "stages"),
     ),
     CapabilitySpec(
@@ -1223,7 +1224,7 @@ CAPABILITIES = [
         required=True,
         stage="S3_SCHEDULE",
         owner="policy",
-        verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_policies_registry_seeded",
+        verifying_test="tests/property/test_sampler_lock.py::TestTheRunReachesThePolicy::test_the_spec_reaches_a_learning_policy",
         flags=("policy", "catalog"),
     ),
     CapabilitySpec(
@@ -1319,7 +1320,7 @@ CAPABILITIES = [
         required=True,
         stage="S1_FRAME",
         owner="priors",
-        verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_priors_registry_seeded",
+        verifying_test="tests/property/test_active_space_lock.py::test_every_declared_prior_resolves",
         flags=("priors", "ruler_lr"),
     ),
     CapabilitySpec(
@@ -1367,7 +1368,7 @@ CAPABILITIES = [
         required=False,
         stage="S6_TRAIN",
         owner="dynamics",
-        verifying_test="tests/property/test_settle_driver_lock.py::test_compiled_settle_bitwise_equal",
+        verifying_test="tests/integration/test_compiled_settle.py",
         flags=("compilation", "experimental"),
     ),
     CapabilitySpec(
@@ -1381,6 +1382,8 @@ CAPABILITIES = [
         owner="dynamics",
         verifying_test="tests/property/test_settle_driver_lock.py::test_gradient_checkpointing_memory",
         flags=("checkpointing", "memory"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="gradient checkpointing: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C23",
@@ -1393,6 +1396,8 @@ CAPABILITIES = [
         owner="dynamics",
         verifying_test="tests/property/test_settle_driver_lock.py::test_gain_control_unit_rms",
         flags=("gain_control", "homeostasis"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="gain control homeostasis: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C24",
@@ -1405,6 +1410,8 @@ CAPABILITIES = [
         owner="geometry",
         verifying_test="tests/property/test_geometry_wiring_lock.py::test_transformer_kv_cache",
         flags=("kv_cache", "transformer"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="transformer KV cache: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C25",
@@ -1417,6 +1424,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_async_backend_works",
         flags=("async", "taskgroup"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="async orchestration: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C26",
@@ -1429,6 +1438,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_multiprocess_backend",
         flags=("multiprocess", "parallel"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="multiprocess backend: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C27",
@@ -1441,6 +1452,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_ddp_fsdp_works",
         flags=("ddp", "fsdp", "gpu_only"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="multi-GPU DDP/FSDP: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C28",
@@ -1453,6 +1466,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_p2p_cluster_works",
         flags=("p2p", "kademlia"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="P2P gossip cluster: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C29",
@@ -1465,6 +1480,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_batch_vectorization",
         flags=("vectorization", "batch"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="batch vectorization: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C30",
@@ -1477,6 +1494,8 @@ CAPABILITIES = [
         owner="backends",
         verifying_test="tests/property/test_experiment_registries_wiring_lock.py::test_pipeline_parallelism",
         flags=("pipeline_parallel", "experimental"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="pipeline parallelism: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C31",
@@ -1501,6 +1520,8 @@ CAPABILITIES = [
         owner="benchmarks",
         verifying_test="tests/property/test_scientific_validity_protocol_lock.py::test_scientific_reproducibility",
         flags=("scientific", "independent_env"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="scientific reproducibility: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C33",
@@ -1657,6 +1678,8 @@ CAPABILITIES = [
         owner="operations",
         verifying_test="tests/property/test_public_surface_lock.py::test_service_manager_webhooks",
         flags=("service", "webhooks"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="service manager: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C46",
@@ -1705,6 +1728,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_surrogate_acquisition_ei",
         flags=("surrogate", "ei"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="surrogate-driven acquisition: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C50",
@@ -1717,6 +1742,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_cross_task_transfer",
         flags=("transfer", "cross_task"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="cross-task transfer: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C51",
@@ -1765,6 +1792,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_warm_start_prior_runs",
         flags=("warm_start", "transfer"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="warm-start from prior runs: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C55",
@@ -1777,6 +1806,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_coordinate_wide_surrogate",
         flags=("surrogate", "coordinate_wide"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="coordinate-wide surrogate: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C56",
@@ -1789,6 +1820,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_icu_feature_encoder",
         flags=("icu", "feature_encoder"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="I(C,U) feature encoder: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C57",
@@ -1813,6 +1846,8 @@ CAPABILITIES = [
         owner="learning",
         verifying_test="tests/property/test_wp10_learning_integration_lock.py::TestSurrogateStoreWiring::test_effect_size_guards",
         flags=("pareto", "multi_objective"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="multi-objective Pareto: report.pareto_frontier has no test in the tree; the row's verifying_test asserted an unrelated protocol minimum (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C59",
@@ -1825,6 +1860,8 @@ CAPABILITIES = [
         owner="substrate",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_substrate_aware_objectives",
         flags=("substrate", "objectives"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="substrate-aware objectives: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C60",
@@ -1837,6 +1874,8 @@ CAPABILITIES = [
         owner="update",
         verifying_test="tests/property/test_statistical_protocol_lock.py::test_frozen_theta_psi_adapt",
         flags=("frozen_theta", "psi"),
+        status=CapabilityStatus.UNVERIFIED,
+        unverified_reason="frozen-theta psi adaptation: no test in the tree exercises this capability — the row's verifying_test named a test that does not exist (TODO46 D23).",
     ),
     CapabilitySpec(
         capability_id="C61",
@@ -1847,7 +1886,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="geometry",
-        verifying_test="tests/integration/test_demo_ntm.py",
+        verifying_test="tests/unit/core/test_ntm_geometry.py",
         flags=("ntm", "gate1_accepted", "experimental"),
     ),
     CapabilitySpec(
@@ -1859,7 +1898,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="geometry",
-        verifying_test="tests/integration/test_demo_nca.py",
+        verifying_test="tests/unit/core/test_nca_geometry.py",
         flags=("nca", "gate1_accepted", "experimental"),
     ),
     CapabilitySpec(
@@ -1871,7 +1910,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="credit",
-        verifying_test="tests/integration/test_demo_swap_credit.py",
+        verifying_test="tests/property/generated/test_algorithm_pepita_invariants.py",
         flags=("pepita", "lemma", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1883,7 +1922,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_holomorphic_ep.py",
+        verifying_test="tests/property/generated/test_algorithm_holomorphic_ep_invariants.py",
         flags=("holomorphic", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1895,7 +1934,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_directed_ep.py",
+        verifying_test="tests/property/generated/test_algorithm_directed_ep_invariants.py",
         flags=("directed_ep", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1907,7 +1946,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_finite_nudge_ep.py",
+        verifying_test="tests/property/generated/test_algorithm_finite_nudge_ep_invariants.py",
         flags=("finite_nudge", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1919,7 +1958,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_ternary_eqprop.py",
+        verifying_test="tests/property/generated/test_algorithm_ternary_eqprop_invariants.py",
         flags=("ternary", "eqprop", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1931,7 +1970,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_momentum_eqprop.py",
+        verifying_test="tests/property/generated/test_algorithm_momentum_eqprop_invariants.py",
         flags=("momentum", "eqprop", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1943,7 +1982,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_sparse_eqprop.py",
+        verifying_test="tests/property/generated/test_algorithm_sparse_eqprop_invariants.py",
         flags=("sparse", "eqprop", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1955,7 +1994,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="models_native",
-        verifying_test="tests/integration/test_demo_diffusion_eqprop.py",
+        verifying_test="tests/property/generated/test_algorithm_diffusion_eqprop_invariants.py",
         flags=("diffusion", "eqprop", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1967,7 +2006,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_swap_plasticity.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_routing_invariants.py",
         flags=("routing", "plasticity", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1979,7 +2018,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_swap_plasticity.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_fast_weight_invariants.py",
         flags=("fast_weight", "plasticity", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -1991,7 +2030,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_memristive.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_substrate_coupled_invariants.py",
         flags=("substrate_coupled", "plasticity", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -2003,7 +2042,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_z3_frozen_theta.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_rule_state_invariants.py",
         flags=("z3", "rule_state", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -2015,7 +2054,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_closed_form_ridge.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_closed_form_ridge_invariants.py",
         flags=("closed_form", "ridge", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -2027,7 +2066,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="plasticity",
-        verifying_test="tests/integration/test_demo_temporal_psi.py",
+        verifying_test="tests/property/generated/test_primitive_plasticity_temporal_psi_invariants.py",
         flags=("temporal_psi", "plasticity", "gate1_accepted"),
     ),
     CapabilitySpec(
@@ -2039,7 +2078,7 @@ CAPABILITIES = [
         required=False,
         stage="S8_RECORD",
         owner="ceec_core",
-        verifying_test="packages/ceec-core/tests/test_ceec_ledger.py",
+        verifying_test="packages/ceec-core/tests/test_ceec_store.py",
         flags=("ceec", "ledger", "platform"),
     ),
     CapabilitySpec(
@@ -2051,7 +2090,7 @@ CAPABILITIES = [
         required=False,
         stage="S10_DECIDE",
         owner="psi_peft",
-        verifying_test="packages/psi-peft/tests/test_psi_peft.py",
+        verifying_test="packages/psi-peft/tests/test_psi_adaptive.py",
         flags=("psi_peft", "platform"),
     ),
     CapabilitySpec(
@@ -2063,7 +2102,7 @@ CAPABILITIES = [
         required=False,
         stage="S5_COMPOSE",
         owner="local_feedback",
-        verifying_test="packages/local-feedback/tests/test_local_feedback.py",
+        verifying_test="packages/local-feedback/tests/test_lf_adaptive.py",
         flags=("local_feedback", "platform"),
     ),
     CapabilitySpec(
@@ -2087,7 +2126,7 @@ CAPABILITIES = [
         required=False,
         stage="S1_FRAME",
         owner="lab",
-        verifying_test="packages/computronium-lab/tests/test_lab_synthesize.py",
+        verifying_test="packages/computronium-lab/tests/test_synthesis.py",
         flags=("lab", "synthesis", "platform"),
     ),
     CapabilitySpec(
@@ -2099,7 +2138,7 @@ CAPABILITIES = [
         required=False,
         stage="S10_DECIDE",
         owner="lab",
-        verifying_test="packages/computronium-lab/tests/test_lab_evolution.py",
+        verifying_test="packages/computronium-lab/tests/test_lab_integration_loop.py",
         flags=("lab", "evolution", "platform"),
     ),
     CapabilitySpec(
@@ -2111,7 +2150,7 @@ CAPABILITIES = [
         required=True,
         stage="S11_REPORT",
         owner="surface",
-        verifying_test="tests/property/test_wp11_surface_lock.py::TestDocumentedCommands::test_run_profiles_canonical_stages",
+        verifying_test="tests/property/test_cli_readme_lock.py::TestTierZeroIsReal::test_dry_run_prints_a_plan_and_writes_nothing",
         flags=("cli", "surface"),
     ),
     CapabilitySpec(
@@ -2135,7 +2174,7 @@ CAPABILITIES = [
         required=False,
         stage="S11_REPORT",
         owner="surface",
-        verifying_test="tests/property/test_public_surface_lock.py::test_codegen_drift_lock",
+        verifying_test="tests/property/test_codegen_drift_lock.py",
         flags=("codegen", "drift_lock"),
     ),
     CapabilitySpec(

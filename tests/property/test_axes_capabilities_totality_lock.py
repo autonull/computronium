@@ -174,17 +174,28 @@ class TestCapabilitiesRegistryTotality:
         for kind in CapabilityKind:
             assert kind in kind_counts, f"No capabilities for kind {kind}"
 
-    def test_required_capabilities_are_active(self) -> None:
-        """Required capabilities must be ACTIVE status."""
+    def test_required_capabilities_are_not_retired(self) -> None:
+        """A required capability may be ACTIVE or UNVERIFIED, never RETIRED.
+
+        ``UNVERIFIED`` (TODO46 D23) is the status for a registered capability no
+        test exercises; it must carry a reason, which
+        ``test_capability_evidence_lock.py`` holds. Before that status existed the
+        only options were ACTIVE — claiming a guarantee nothing verifies — or
+        RETIRED, which is a stronger statement than "untested".
+        """
         from computronium.experiment.schema.seed_registries import seed_all_registries
 
         seed_all_registries()
 
         for cap in CAPABILITIES_REGISTRY.values():
             if cap.required:
-                assert cap.status == CapabilityStatus.ACTIVE, (
-                    f"Required capability {cap.capability_id} is not ACTIVE"
+                assert cap.status != CapabilityStatus.RETIRED, (
+                    f"Required capability {cap.capability_id} is retired"
                 )
+                if cap.status is CapabilityStatus.UNVERIFIED:
+                    assert cap.unverified_reason, (
+                        f"Unverified capability {cap.capability_id} has no reason"
+                    )
 
     def test_retired_capabilities_have_retirement_record(self) -> None:
         """RETIRED capabilities must have retirement_record."""

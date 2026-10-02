@@ -48,9 +48,9 @@ connection.
 ## 1. Confirmed defects
 
 Every item below is verified in code, with evidence. `file:line` is the anchor.
-**D1–D6 and D10–D22 are fixed.** D15 was found and fixed in §8 session 5, D16
-and D17 in session 6, D18 and D19 in session 7, and D20–D22 in session 8.
-**D7–D9 remain**, and D14's fix is consumed by §3.3.
+**D1–D6 and D10–D23 are fixed.** D15 was found and fixed in §8 session 5, D16
+and D17 in session 6, D18 and D19 in session 7, D20–D22 in session 8, and D23 in
+session 9. **D7–D9 remain**, and D14's fix is consumed by §3.3.
 
 ### D1 — The evaluator is a placeholder (the critical path) — FIXED, §8 session 3
 
@@ -1383,6 +1383,98 @@ traceback. `tests/property/_readme.py` is the shared builder loader
 **Cost.** Everything here was tier 0–1: 20 tests, ~11 s, no training, no
 `experiment.duckdb` written.
 
+### D23 — 39 of 88 capability rows named a test that does not exist — FIXED, §8 session 9
+
+Found by §2.1's audit, which is the item that had been outstanding since
+session 1. `CAPABILITIES` is the registry the conformance report and the
+`comp conformance` command present as *evidence*, and every one of its 88 rows
+carries a `verifying_test`. **Twenty-one named a test file that had been deleted
+(`tests/integration/test_demo_*.py`, `packages/*/tests/test_*.py`) and
+eighteen more named a function that does not exist inside a file that does**
+(`test_multiprocess_backend`, `test_ddp_fsdp_works`, `test_surrogate_acquisition_ei`,
+…). `surface/conformance.py` runs those node ids through pytest, so a "verified"
+capability was a `pytest: no tests ran` masquerading as a pass — the same shape
+as §2.0 one level up, in a registry rather than a module.
+
+Fixed in two halves, because the two halves are different statements:
+
+- **Twenty-one re-pointed** at tests that exist and exercise the primitive —
+  mostly the generated `tests/property/generated/test_*_invariants.py` family,
+  which is exactly the mechanism evidence those rows needed and already existed.
+- **Nineteen marked `CapabilityStatus.UNVERIFIED` with a recorded reason.** A new
+  status is the honest third answer: before this, a row could be ACTIVE — which
+  claims a guarantee nothing verifies — or RETIRED, which is a *stronger*
+  statement than "untested". `C58` (multi-objective Pareto) is the clearest
+  case: it pointed at `test_effect_size_guards`, a real test of a different
+  claim, so it is unverified rather than quietly re-aimed. `CapabilitySpec`
+  now refuses `UNVERIFIED` without a reason and `RETIRED` without a retirement
+  record, so neither status can be a silent demotion.
+
+### Session 9
+
+**Landed: remaining-work item 3 (§2.1's audit and its lock), D23, and the
+measured regime for the acceptance gate.** Three tiers of cost: tier 0
+(AST, no training) for the audit and the lock, tier 1 for the gate re-pricing.
+
+**`computronium/experiment/surface/evidence.py` is the audit, as code.** It
+answers one question per capability row from the verifying test's AST: does the
+test *call* a kernel entry point and assert on it, and does that entry point
+have a call site outside its own module (§2.0)? One implementation, read by the
+capabilities listing (`Evidence` column in `docs/generated/capabilities.md`) and
+by `tests/property/test_capability_evidence_lock.py` (9 tests, ~70 s, no
+training). Judgement is structural rather than a hand-maintained table, which
+is the point: §2.1 asked for a table nobody would keep true.
+
+**Where the 88 rows stand, measured:** 69 active, 19 unverified. Of the active
+rows, **65 carry mechanism evidence and 4 are shape-only** (C31, C35, C44, C52
+— enum-membership and protocol-shape assertions). Every CORE row (48 of them)
+now reaches a kernel entry point with an outside call site: re-pointing C7
+(legality), C8 (pipeline), C9 (policies), C17 (priors), C83 (CLI), C85 (codegen)
+closed the last six, and fixing the 21 stale rows closed the rest.
+
+**Three things the analyzer had to learn before it was honest**, each of which
+was a false "shape" verdict on a real test: a test may reach the kernel through
+a **fixture** (`test_allocator_promotion`'s `allocator`), through a **helper in
+its own package** (`_support.py`), and it may assert with
+**`pytest.raises`/`pytest.warns`** rather than `assert`. A judge that only
+recognises `assert` and direct calls would have understated the evidence and
+sent the next session to re-point tests that were already fine.
+
+**The evidence label is now rendered, and the count is a ratchet.** Both the
+shape-only total (≤ 30) and the unverified total (≤ 19) are ratchets, so the
+honest totals cannot quietly rise; the audit table lives in
+`docs/generated/capabilities.md` instead of in this file.
+
+**The acceptance gate is back inside its tier.** `tests/acceptance` had grown
+12:11 with three timeouts red (U2 at 120 s against a measured 333 s), because
+session 7's validation split was never charged to the run's budget and the spec
+set no `batch_limit` at all. `MEASURED_BATCH_LIMIT` is now a declared constant
+next to `MEASURED_PARAM_BUDGET` — the operator's §7.1-1 decision, implemented —
+and the gate is `digits`, 1 epoch, 2 batches: **8 passed in 1:04**. The
+expensive-but-optional half is one demo-marked module,
+`tests/acceptance/test_demo_acceptance_full_regime.py` (`batch_limit=0`, full
+split, one round pair), which stamps `demo` by filename and therefore stays out
+of the gate: **37 s measured**, asserting that measured records exist and that
+some cell beats chance on a full epoch.
+
+**`test_required_capabilities_are_active` was the lock that made D23
+impossible to see.** It asserted "required ⇒ ACTIVE", which is the false
+completion mark restated as an invariant. It is now
+`test_required_capabilities_are_not_retired`: a required capability may be
+ACTIVE or UNVERIFIED-with-a-reason, never RETIRED. **A lock can enforce a lie as
+efficiently as a truth, and this one had been green for sessions.**
+
+**Verified:** `tests/property` + `tests/unit` 2210 passed, 16 skipped, 26
+xfailed, 1 xpassed (4:44); `tests/acceptance` 8 passed (1:04); the new evidence
+lock 9 passed (1:07); the seven neighbouring locks it touches (codegen drift,
+registry wiring, capability totality, public surface, schema forward tolerance,
+WP11 surface, CLI/README) green; `ruff` + `pyright` clean on every module this
+touched; `docs/generated/` re-pinned.
+
+**Not run here:** `tests/primitives`, `algorithms`, `acceleration`, `ceec`,
+`platform`, and `pytest -m demo`. The first four do not touch the schema or the
+surface this session changed; the demo tier is gallery work.
+
 ### Remaining work, in order
 
 0. ~~**D22, then D20/D21, then the tier-0 CLI lock**~~ **DONE, §8 session 8.**
@@ -1398,27 +1490,29 @@ traceback. `tests/property/_readme.py` is the shared builder loader
    topology — it can only tune the cell the space handed it. Deleting the
    candidate-list signature (and the `StageContext`/`Fragment`/`Stage`/
    `Decision`/`Proposal` duplicates in `search_space.py`) is the next interface
-   change, and it is where the WP14 lock belongs. `study.ask(distributions)` cannot coexist with the
-   candidate-list `propose()` signature that `policy.py` still has (D3), so §3.3
-   and §3.4 are one interface change. **First job: the
-   objective→payload-key mapping**, which session 4 exposed and sessions 5–6
-   left exactly where it was — nothing turns `validation_accuracy` into
-   `val_acc`, so `study.tell(trial, value)` still has no value to tell. The
+   change, and it is where the WP14 lock belongs. `study.ask(distributions)`
+   cannot coexist with the candidate-list `propose()` signature that `policy.py`
+   still has (D3), so §3.3 and §3.4 are one interface change. **The
+   objective→payload-key mapping is done** (`schema/metrics.py`, D19, session 7),
+   so the remaining work is the interface itself. The
    space now carries real swept values in `Coordinate.params`, which is what
    `_coord_to_params`/`_param_names` in `ModelBasedPolicy` were written to
    consume, so the interface has a producer for the first time. Session 6 also
    fixed half of a related seam: the geometry/hyperparameter double-meaning
    `params` channel is gone (`_composable` no longer passes
    `coordinate.params` as the geometry mapping), so `params` is one thing again.
-3. **§2.1's audit table and the new lock.** Still not written, and §2.1-3 must
-   be *re-priced* against what sessions 3–6 changed: `test_active_space_lock.py`,
-   `test_search_space_lock.py` and `test_param_budget_lock.py` are the shape it
-   asks for, and `tests/acceptance` now shares the runner's space builder. Two
-   of the seeded `verifying_test` targets are themselves shape tests, so the
-   lock will fail on rows whose *metadata* is wrong, not just rows whose code
-   is. **Note the retirement precedent** (session 6, D17): a capability row can
-   now be `available=False` with a recorded `unavailable_reason`, and the
-   registry-driven lock should require the reason, not accept a bare `False`.
+3. ~~**§2.1's audit table and the new lock**~~ **DONE, §8 session 9** — as code,
+   not as a table: `surface/evidence.py` judges each row from the verifying
+   test's AST, `capabilities.md` renders the verdict, and
+   `test_capability_evidence_lock.py` gates it. It found D23 (39 rows naming a
+   test that does not exist) and turned 6 more CORE rows onto real mechanism
+   tests. **Two follow-ons, both small:** (a) `surface/conformance.py` still
+   *runs* an `UNVERIFIED` row's node id instead of reporting the row's recorded
+   reason, so `comp conformance` prints a pytest failure for a capability it
+   already knows is unverified; (b) `codegen.generate_conformance_stubs` emits a
+   stub per row, including the unverified ones, which is 19 files that exist to
+   skip.
+
 4. ~~**§4 item 4's remaining half**~~ **DONE, §8 session 8** — and more than the
    bash-block lock: README is now *built* from `docs/readme/*.md`, with every
    table that can be read from the code substituted at build time.
@@ -1443,6 +1537,31 @@ traceback. `tests/property/_readme.py` is the shared builder loader
    registry-derived is better served by a `<!-- gen: -->` block than by prose.
    Recorded because the plan's own §1 is that defect class — content that
    existed, was correct, and left without a marker.
+
+**Improvement opportunities found in session 9:**
+
+- **`UNVERIFIED` is a status, and two consumers still ignore it.**
+  `conformance.py` reports unverified rows as failures rather than as the
+  recorded reason, and `codegen` emits conformance stubs for them. Both are
+  one-line judgements once the status is read; neither is worth doing before
+  the rows are re-verified.
+- **The audit is only as good as its reader of pytest.** It understands
+  fixtures, same-package helpers, `pytest.raises` and bare module paths; it does
+  not follow a fixture *defined in a conftest*, a `parametrize` over a factory,
+  or a test that asserts only through a helper's return value. Each of those is a
+  false "shape" verdict waiting to send a session after a test that was fine —
+  the same class as `test_codegen_drift_lock`'s byte comparison being the thing
+  that keeps the docs honest: **a cheap judge needs a known set of ways to be
+  wrong, and the honest thing is to write them down.**
+- **A lock can enforce a lie.** `test_required_capabilities_are_active` was green
+  for four sessions while 39 rows named tests that did not exist, because it
+  asserted the completion mark rather than the evidence. Worth a grep of the
+  property locks for assertions of the form "X must be ACTIVE/ENABLED/PRESENT"
+  — each one may be freezing a defect rather than a guarantee.
+- **Cost was in the spec, not in the test.** The acceptance gate cost 12 minutes
+  because `batch_limit` defaulted to unbounded and validation was only bounded
+  after session 7 found it. A gate whose cost is a *default* is a gate nobody
+  prices; the acceptance spec now names both numbers it spends.
 
 **Improvement opportunities found in session 8:**
 

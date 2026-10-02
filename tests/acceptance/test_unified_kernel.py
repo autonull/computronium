@@ -31,7 +31,11 @@ from computronium.experiment.execution.policy import (
 )
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
-from computronium.experiment.schema.run_spec import MEASURED_PARAM_BUDGET, RunSpec
+from computronium.experiment.schema.run_spec import (
+    MEASURED_BATCH_LIMIT,
+    MEASURED_PARAM_BUDGET,
+    RunSpec,
+)
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
 if TYPE_CHECKING:
@@ -59,8 +63,10 @@ def _seed_registries() -> None:
     seed_all_registries()
 
 
-def _make_run_spec(task: str = "digits") -> RunSpec:
-    """Create a minimal RunSpec for testing."""
+def _make_run_spec(
+    task: str = "digits", batch_limit: int = MEASURED_BATCH_LIMIT
+) -> RunSpec:
+    """A RunSpec in the measured regime: digits, one epoch, two batches."""
     return RunSpec(
         profile="acceptance",
         task=task,
@@ -70,6 +76,7 @@ def _make_run_spec(task: str = "digits") -> RunSpec:
         epochs=1,
         budget_seconds=60.0,
         param_budget=MEASURED_PARAM_BUDGET,
+        batch_limit=batch_limit,
     )
 
 

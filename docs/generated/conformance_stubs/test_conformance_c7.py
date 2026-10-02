@@ -10,7 +10,7 @@ from computronium.experiment.surface.conformance import run_verifying_test
 def test_conformance_c7() -> None:
     """Verify C7 capability via its verifying test."""
     passed, output, duration = run_verifying_test(
-        "tests/property/test_experiment_registries_wiring_lock.py::test_constraints_registry_seeded",
+        "tests/property/test_legality_boundary_lock.py",
         timeout_seconds=120,
     )
     assert passed, f"Verifying test failed: {output}"

@@ -1,5 +1,6 @@
 [
   {
+    "evidence": "mechanism",
     "capability_id": "C1",
     "name": "C1",
     "kind": "core",
@@ -18,6 +19,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C10",
     "name": "C10",
     "kind": "core",
@@ -36,6 +38,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C11",
     "name": "C11",
     "kind": "core",
@@ -54,6 +57,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C12",
     "name": "C12",
     "kind": "core",
@@ -72,6 +76,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C13",
     "name": "C13",
     "kind": "core",
@@ -90,6 +95,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C14",
     "name": "C14",
     "kind": "core",
@@ -108,6 +114,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C15",
     "name": "C15",
     "kind": "core",
@@ -126,6 +133,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C16",
     "name": "C16",
     "kind": "core",
@@ -144,6 +152,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C17",
     "name": "C17",
     "kind": "core",
@@ -153,7 +162,7 @@
     "gated_by": null,
     "stage": "S1_FRAME",
     "owner": "priors",
-    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_priors_registry_seeded",
+    "verifying_test": "tests/property/test_active_space_lock.py::test_every_declared_prior_resolves",
     "flags": [
       "priors",
       "ruler_lr"
@@ -162,6 +171,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C18",
     "name": "C18",
     "kind": "core",
@@ -180,6 +190,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C19",
     "name": "C19",
     "kind": "core",
@@ -198,6 +209,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C2",
     "name": "C2",
     "kind": "core",
@@ -216,6 +228,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C20",
     "name": "C20",
     "kind": "core",
@@ -234,6 +247,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C21",
     "name": "C21",
     "kind": "acceleration",
@@ -243,7 +257,7 @@
     "gated_by": null,
     "stage": "S6_TRAIN",
     "owner": "dynamics",
-    "verifying_test": "tests/property/test_settle_driver_lock.py::test_compiled_settle_bitwise_equal",
+    "verifying_test": "tests/integration/test_compiled_settle.py",
     "flags": [
       "compilation",
       "experimental"
@@ -252,6 +266,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C22",
     "name": "C22",
     "kind": "acceleration",
@@ -266,10 +281,11 @@
       "checkpointing",
       "memory"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C23",
     "name": "C23",
     "kind": "acceleration",
@@ -284,10 +300,11 @@
       "gain_control",
       "homeostasis"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C24",
     "name": "C24",
     "kind": "acceleration",
@@ -302,10 +319,11 @@
       "kv_cache",
       "transformer"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C25",
     "name": "C25",
     "kind": "acceleration",
@@ -320,10 +338,11 @@
       "async",
       "taskgroup"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C26",
     "name": "C26",
     "kind": "scaling",
@@ -338,10 +357,11 @@
       "multiprocess",
       "parallel"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C27",
     "name": "C27",
     "kind": "scaling",
@@ -357,10 +377,11 @@
       "fsdp",
       "gpu_only"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C28",
     "name": "C28",
     "kind": "scaling",
@@ -375,10 +396,11 @@
       "p2p",
       "kademlia"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C29",
     "name": "C29",
     "kind": "scaling",
@@ -393,10 +415,11 @@
       "vectorization",
       "batch"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C3",
     "name": "C3",
     "kind": "core",
@@ -415,6 +438,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C30",
     "name": "C30",
     "kind": "scaling",
@@ -429,10 +453,11 @@
       "pipeline_parallel",
       "experimental"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C31",
     "name": "C31",
     "kind": "reproducibility",
@@ -451,6 +476,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C32",
     "name": "C32",
     "kind": "reproducibility",
@@ -465,10 +491,11 @@
       "scientific",
       "independent_env"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C33",
     "name": "C33",
     "kind": "reproducibility",
@@ -487,6 +514,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C34",
     "name": "C34",
     "kind": "reproducibility",
@@ -505,6 +533,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C35",
     "name": "C35",
     "kind": "reproducibility",
@@ -523,6 +552,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C36",
     "name": "C36",
     "kind": "reproducibility",
@@ -541,6 +571,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C37",
     "name": "C37",
     "kind": "governance",
@@ -559,6 +590,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C38",
     "name": "C38",
     "kind": "governance",
@@ -577,6 +609,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C39",
     "name": "C39",
     "kind": "governance",
@@ -595,6 +628,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C4",
     "name": "C4",
     "kind": "core",
@@ -613,6 +647,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C40",
     "name": "C40",
     "kind": "governance",
@@ -631,6 +666,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C41",
     "name": "C41",
     "kind": "governance",
@@ -649,6 +685,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C42",
     "name": "C42",
     "kind": "governance",
@@ -667,6 +704,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C43",
     "name": "C43",
     "kind": "governance",
@@ -685,6 +723,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C44",
     "name": "C44",
     "kind": "governance",
@@ -703,6 +742,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C45",
     "name": "C45",
     "kind": "governance",
@@ -717,10 +757,11 @@
       "service",
       "webhooks"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C46",
     "name": "C46",
     "kind": "governance",
@@ -739,6 +780,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C47",
     "name": "C47",
     "kind": "governance",
@@ -757,6 +799,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C48",
     "name": "C48",
     "kind": "governance",
@@ -775,6 +818,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C49",
     "name": "C49",
     "kind": "learning",
@@ -789,10 +833,11 @@
       "surrogate",
       "ei"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C5",
     "name": "C5",
     "kind": "core",
@@ -811,6 +856,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C50",
     "name": "C50",
     "kind": "learning",
@@ -825,10 +871,11 @@
       "transfer",
       "cross_task"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C51",
     "name": "C51",
     "kind": "learning",
@@ -847,6 +894,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C52",
     "name": "C52",
     "kind": "learning",
@@ -865,6 +913,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C53",
     "name": "C53",
     "kind": "learning",
@@ -883,6 +932,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C54",
     "name": "C54",
     "kind": "learning",
@@ -897,10 +947,11 @@
       "warm_start",
       "transfer"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C55",
     "name": "C55",
     "kind": "learning",
@@ -915,10 +966,11 @@
       "surrogate",
       "coordinate_wide"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C56",
     "name": "C56",
     "kind": "learning",
@@ -933,10 +985,11 @@
       "icu",
       "feature_encoder"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C57",
     "name": "C57",
     "kind": "learning",
@@ -955,6 +1008,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C58",
     "name": "C58",
     "kind": "learning",
@@ -969,10 +1023,11 @@
       "pareto",
       "multi_objective"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C59",
     "name": "C59",
     "kind": "learning",
@@ -987,10 +1042,11 @@
       "substrate",
       "objectives"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C6",
     "name": "C6",
     "kind": "core",
@@ -1009,6 +1065,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "shape",
     "capability_id": "C60",
     "name": "C60",
     "kind": "learning",
@@ -1023,10 +1080,11 @@
       "frozen_theta",
       "psi"
     ],
-    "status": "active",
+    "status": "unverified",
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C61",
     "name": "C61",
     "kind": "core",
@@ -1036,7 +1094,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "geometry",
-    "verifying_test": "tests/integration/test_demo_ntm.py",
+    "verifying_test": "tests/unit/core/test_ntm_geometry.py",
     "flags": [
       "ntm",
       "gate1_accepted",
@@ -1046,6 +1104,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C62",
     "name": "C62",
     "kind": "core",
@@ -1055,7 +1114,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "geometry",
-    "verifying_test": "tests/integration/test_demo_nca.py",
+    "verifying_test": "tests/unit/core/test_nca_geometry.py",
     "flags": [
       "nca",
       "gate1_accepted",
@@ -1065,6 +1124,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C63",
     "name": "C63",
     "kind": "core",
@@ -1074,7 +1134,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "credit",
-    "verifying_test": "tests/integration/test_demo_swap_credit.py",
+    "verifying_test": "tests/property/generated/test_algorithm_pepita_invariants.py",
     "flags": [
       "pepita",
       "lemma",
@@ -1084,6 +1144,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C64",
     "name": "C64",
     "kind": "core",
@@ -1093,7 +1154,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_holomorphic_ep.py",
+    "verifying_test": "tests/property/generated/test_algorithm_holomorphic_ep_invariants.py",
     "flags": [
       "holomorphic",
       "gate1_accepted"
@@ -1102,6 +1163,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C65",
     "name": "C65",
     "kind": "core",
@@ -1111,7 +1173,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_directed_ep.py",
+    "verifying_test": "tests/property/generated/test_algorithm_directed_ep_invariants.py",
     "flags": [
       "directed_ep",
       "gate1_accepted"
@@ -1120,6 +1182,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C66",
     "name": "C66",
     "kind": "core",
@@ -1129,7 +1192,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_finite_nudge_ep.py",
+    "verifying_test": "tests/property/generated/test_algorithm_finite_nudge_ep_invariants.py",
     "flags": [
       "finite_nudge",
       "gate1_accepted"
@@ -1138,6 +1201,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C67",
     "name": "C67",
     "kind": "core",
@@ -1147,7 +1211,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_ternary_eqprop.py",
+    "verifying_test": "tests/property/generated/test_algorithm_ternary_eqprop_invariants.py",
     "flags": [
       "ternary",
       "eqprop",
@@ -1157,6 +1221,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C68",
     "name": "C68",
     "kind": "core",
@@ -1166,7 +1231,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_momentum_eqprop.py",
+    "verifying_test": "tests/property/generated/test_algorithm_momentum_eqprop_invariants.py",
     "flags": [
       "momentum",
       "eqprop",
@@ -1176,6 +1241,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C69",
     "name": "C69",
     "kind": "core",
@@ -1185,7 +1251,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_sparse_eqprop.py",
+    "verifying_test": "tests/property/generated/test_algorithm_sparse_eqprop_invariants.py",
     "flags": [
       "sparse",
       "eqprop",
@@ -1195,6 +1261,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C7",
     "name": "C7",
     "kind": "core",
@@ -1204,7 +1271,7 @@
     "gated_by": null,
     "stage": "S4_GATE",
     "owner": "legality",
-    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_constraints_registry_seeded",
+    "verifying_test": "tests/property/test_legality_boundary_lock.py",
     "flags": [
       "legality",
       "void",
@@ -1214,6 +1281,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C70",
     "name": "C70",
     "kind": "core",
@@ -1223,7 +1291,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "models_native",
-    "verifying_test": "tests/integration/test_demo_diffusion_eqprop.py",
+    "verifying_test": "tests/property/generated/test_algorithm_diffusion_eqprop_invariants.py",
     "flags": [
       "diffusion",
       "eqprop",
@@ -1233,6 +1301,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C71",
     "name": "C71",
     "kind": "core",
@@ -1242,7 +1311,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_swap_plasticity.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_routing_invariants.py",
     "flags": [
       "routing",
       "plasticity",
@@ -1252,6 +1321,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C72",
     "name": "C72",
     "kind": "core",
@@ -1261,7 +1331,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_swap_plasticity.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_fast_weight_invariants.py",
     "flags": [
       "fast_weight",
       "plasticity",
@@ -1271,6 +1341,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C73",
     "name": "C73",
     "kind": "core",
@@ -1280,7 +1351,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_memristive.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_substrate_coupled_invariants.py",
     "flags": [
       "substrate_coupled",
       "plasticity",
@@ -1290,6 +1361,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C74",
     "name": "C74",
     "kind": "core",
@@ -1299,7 +1371,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_z3_frozen_theta.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_rule_state_invariants.py",
     "flags": [
       "z3",
       "rule_state",
@@ -1309,6 +1381,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C75",
     "name": "C75",
     "kind": "core",
@@ -1318,7 +1391,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_closed_form_ridge.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_closed_form_ridge_invariants.py",
     "flags": [
       "closed_form",
       "ridge",
@@ -1328,6 +1401,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C76",
     "name": "C76",
     "kind": "core",
@@ -1337,7 +1411,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "plasticity",
-    "verifying_test": "tests/integration/test_demo_temporal_psi.py",
+    "verifying_test": "tests/property/generated/test_primitive_plasticity_temporal_psi_invariants.py",
     "flags": [
       "temporal_psi",
       "plasticity",
@@ -1347,6 +1421,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C77",
     "name": "C77",
     "kind": "core",
@@ -1356,7 +1431,7 @@
     "gated_by": null,
     "stage": "S8_RECORD",
     "owner": "ceec_core",
-    "verifying_test": "packages/ceec-core/tests/test_ceec_ledger.py",
+    "verifying_test": "packages/ceec-core/tests/test_ceec_store.py",
     "flags": [
       "ceec",
       "ledger",
@@ -1366,6 +1441,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C78",
     "name": "C78",
     "kind": "core",
@@ -1375,7 +1451,7 @@
     "gated_by": null,
     "stage": "S10_DECIDE",
     "owner": "psi_peft",
-    "verifying_test": "packages/psi-peft/tests/test_psi_peft.py",
+    "verifying_test": "packages/psi-peft/tests/test_psi_adaptive.py",
     "flags": [
       "psi_peft",
       "platform"
@@ -1384,6 +1460,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C79",
     "name": "C79",
     "kind": "core",
@@ -1393,7 +1470,7 @@
     "gated_by": null,
     "stage": "S5_COMPOSE",
     "owner": "local_feedback",
-    "verifying_test": "packages/local-feedback/tests/test_local_feedback.py",
+    "verifying_test": "packages/local-feedback/tests/test_lf_adaptive.py",
     "flags": [
       "local_feedback",
       "platform"
@@ -1402,6 +1479,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C8",
     "name": "C8",
     "kind": "core",
@@ -1411,7 +1489,7 @@
     "gated_by": null,
     "stage": "S1_FRAME",
     "owner": "pipeline",
-    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_stages_registry_seeded",
+    "verifying_test": "tests/acceptance/test_unified_kernel.py::TestU1_SynthesisPolicyPipeline::test_u1_synthesis_policy_end_to_end",
     "flags": [
       "pipeline",
       "stages"
@@ -1420,6 +1498,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C80",
     "name": "C80",
     "kind": "core",
@@ -1439,6 +1518,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C81",
     "name": "C81",
     "kind": "core",
@@ -1448,7 +1528,7 @@
     "gated_by": null,
     "stage": "S1_FRAME",
     "owner": "lab",
-    "verifying_test": "packages/computronium-lab/tests/test_lab_synthesize.py",
+    "verifying_test": "packages/computronium-lab/tests/test_synthesis.py",
     "flags": [
       "lab",
       "synthesis",
@@ -1458,6 +1538,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C82",
     "name": "C82",
     "kind": "core",
@@ -1467,7 +1548,7 @@
     "gated_by": null,
     "stage": "S10_DECIDE",
     "owner": "lab",
-    "verifying_test": "packages/computronium-lab/tests/test_lab_evolution.py",
+    "verifying_test": "packages/computronium-lab/tests/test_lab_integration_loop.py",
     "flags": [
       "lab",
       "evolution",
@@ -1477,6 +1558,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C83",
     "name": "C83",
     "kind": "core",
@@ -1486,7 +1568,7 @@
     "gated_by": null,
     "stage": "S11_REPORT",
     "owner": "surface",
-    "verifying_test": "tests/property/test_wp11_surface_lock.py::TestDocumentedCommands::test_run_profiles_canonical_stages",
+    "verifying_test": "tests/property/test_cli_readme_lock.py::TestTierZeroIsReal::test_dry_run_prints_a_plan_and_writes_nothing",
     "flags": [
       "cli",
       "surface"
@@ -1495,6 +1577,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C84",
     "name": "C84",
     "kind": "core",
@@ -1513,6 +1596,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C85",
     "name": "C85",
     "kind": "core",
@@ -1522,7 +1606,7 @@
     "gated_by": null,
     "stage": "S11_REPORT",
     "owner": "surface",
-    "verifying_test": "tests/property/test_public_surface_lock.py::test_codegen_drift_lock",
+    "verifying_test": "tests/property/test_codegen_drift_lock.py",
     "flags": [
       "codegen",
       "drift_lock"
@@ -1531,6 +1615,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C86",
     "name": "C86",
     "kind": "core",
@@ -1549,6 +1634,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C87",
     "name": "C87",
     "kind": "core",
@@ -1567,6 +1653,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C88",
     "name": "C88",
     "kind": "core",
@@ -1585,6 +1672,7 @@
     "retirement_record": null
   },
   {
+    "evidence": "mechanism",
     "capability_id": "C9",
     "name": "C9",
     "kind": "core",
@@ -1594,7 +1682,7 @@
     "gated_by": null,
     "stage": "S3_SCHEDULE",
     "owner": "policy",
-    "verifying_test": "tests/property/test_experiment_registries_wiring_lock.py::test_policies_registry_seeded",
+    "verifying_test": "tests/property/test_sampler_lock.py::TestTheRunReachesThePolicy::test_the_spec_reaches_a_learning_policy",
     "flags": [
       "policy",
       "catalog"

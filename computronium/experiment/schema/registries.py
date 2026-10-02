@@ -166,9 +166,16 @@ class CapabilityKind(StrEnum):
 
 
 class CapabilityStatus(StrEnum):
-    """Capability status for currency tracking (R78)."""
+    """Capability status for currency tracking (R78).
+
+    ``UNVERIFIED`` is TODO46 D23's rule made representable: the capability is
+    registered and may well be implemented, but the row names no test that
+    exercises it, so it is not evidence of anything. A row may only hold that
+    status with a recorded reason.
+    """
 
     ACTIVE = "active"
+    UNVERIFIED = "unverified"
     RETIRED = "retired"
 
 
@@ -193,11 +200,20 @@ class CapabilitySpec:
     flags: tuple[str, ...] = ()  # Appendix-A flags (e.g., "experimental", "gpu_only")
     status: CapabilityStatus = CapabilityStatus.ACTIVE
     retirement_record: str | None = None  # Reference to retirement record if RETIRED
+    unverified_reason: str | None = None  # Why no test exercises it if UNVERIFIED
 
     def __post_init__(self) -> None:
         if self.name != self.capability_id:
             raise ValueError(
                 f"CapabilitySpec.name ({self.name}) must equal capability_id ({self.capability_id})"
+            )
+        if self.status is CapabilityStatus.UNVERIFIED and not self.unverified_reason:
+            raise ValueError(
+                f"CapabilitySpec({self.capability_id}) is UNVERIFIED without a reason"
+            )
+        if self.status is CapabilityStatus.RETIRED and not self.retirement_record:
+            raise ValueError(
+                f"CapabilitySpec({self.capability_id}) is RETIRED without a retirement record"
             )
 
 
