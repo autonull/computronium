@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from computronium.experiment.evidence.store import RecordStore
@@ -55,6 +56,36 @@ def compute_replay_hash(
         "schedule": schedule.to_dict(),
         "provenance": provenance,
         "params": params,
+    }
+    return hashlib.sha256(_canonical_json(replay_data).encode()).hexdigest()
+
+
+def compute_run_replay_hash(
+    run_spec: RunSpec,
+    measurement_keys: Iterable[str],
+) -> str:
+    """Compute the run-level replay hash: what this run declared, and what it measured.
+
+    A per-cell :func:`compute_replay_hash` cannot detect a *diverged* run — it
+    says nothing about which cells the run actually visited. This one covers the
+    whole declaration plus the sorted set of ``measurement_key``\\ s the run
+    measured, so a run that measured a different set of cells hashes differently
+    from the run it claims to replay.
+
+    Measured *values* are deliberately excluded: walltime and float kernels are
+    not reproducible, so including them would make the hash a fingerprint of one
+    execution rather than of the run's identity.
+
+    Args:
+        run_spec: The run's declaration.
+        measurement_keys: Every ``measurement_key`` the run measured.
+
+    Returns:
+        SHA256 hash as hex string (64 chars).
+    """
+    replay_data = {
+        "spec": run_spec.to_dict(),
+        "measured": sorted(set(measurement_keys)),
     }
     return hashlib.sha256(_canonical_json(replay_data).encode()).hexdigest()
 
@@ -315,6 +346,7 @@ __all__ = [
     "Checkpoint",
     "ResumeResult",
     "compute_replay_hash",
+    "compute_run_replay_hash",
     "create_checkpoint",
     "find_existing_record",
     "periodic_checkpoint",

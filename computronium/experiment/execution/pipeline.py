@@ -208,6 +208,27 @@ class PipelineRunner:
             )
 
     @property
+    def replay_hash(self) -> str | None:
+        """The run-level replay hash, once the run has finished measuring."""
+        return self._state.replay_hash
+
+    def _record_replay_hash(self) -> None:
+        """Write the run's replay hash when it finishes, not on demand.
+
+        A hash computed on demand describes whatever the store happens to hold
+        later; only the one written at completion describes the run.
+        """
+        from computronium.experiment.execution.replay import compute_run_replay_hash
+
+        digest = compute_run_replay_hash(
+            self._config.run_spec, self._state.completed_measurement_keys
+        )
+        self._state.replay_hash = digest
+        if self._store.is_open:
+            self._store.set_replay_hash(self._config.run_id, digest)
+        logger.info("Run %s replay hash: %s", self._config.run_id, digest[:16])
+
+    @property
     def rejections(self) -> tuple[dict[str, Any], ...]:
         """Every rejected cell this run classified, in order."""
         return tuple(self._state.rejections)
@@ -246,6 +267,8 @@ class PipelineRunner:
                 StageId.S11_REPORT, get_stage_spec(StageId.S11_REPORT)
             )
             self._merge_coverage(fragment.coverage)
+
+        self._record_replay_hash()
 
         logger.info(
             "Pipeline run %s completed: %d records, %d rounds",

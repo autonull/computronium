@@ -79,13 +79,25 @@ commit and its own named gate; **no ticket's gate is a whole shard.**
   **83 s**. Falsified by removing the seeding: both tests go red on the
   `PERSISTENCE_ERROR` rejection list.
 
-### T2 — §3.7 gate 6: replay hash
+### T2 — DONE (§3.7 gate 6: replay hash)
 - **Does:** wire `compute_replay_hash` (`replay.py`, exported, **zero callers**
   — TODO46 §2.0). It must be written on run completion, not computed on demand,
   or the hash cannot detect a run that diverged.
 - **Gate:** the same spec run twice yields the same `replay_hash`; a spec with
   one changed field yields a different one (tier 1).
 - **Blocked by:** nothing. **Unblocks:** T5's reproducibility claim.
+- **Landed:** `compute_run_replay_hash(run_spec, measurement_keys)`
+  (`replay.py:63`) hashes the canonical spec plus the *sorted set of measured
+  `measurement_key`\ s*, and `PipelineRunner._record_replay_hash`
+  (`pipeline.py:222`) writes it to `runs.replay_hash` when `run()` returns, not
+  on demand. `RecordStore.set_replay_hash` is the writer; `finish_run` now
+  preserves a hash it was not given (`COALESCE`), which it previously erased.
+- **Gate:** the same lock file, 5 tests / **49 s**. Falsified twice: removing
+  the `_record_replay_hash()` call turns both replay tests red.
+- **Why not a spec hash:** measured *values* are excluded (walltime and float
+  kernels are not reproducible) but measured *identity* is included, which is
+  what detects a diverged run. `test_a_diverged_run_hashes_differently_though_its_spec_did_not`
+  pins that distinction — same spec, one extra round, different hash.
 
 ### T3 — §3.7 gate 7: two policies over one store
 - **Does:** `--policy stratified_random` then `--policy model_based` against
@@ -214,6 +226,11 @@ then.
   assertion is now `round1_count > 0` and `round2_count > round1_count`. Worth
   grepping the repo for other `max_rounds=1` configs before the campaign (T5)
   sizes its cells.
+- **`compute_replay_hash` (per-cell) and `compute_run_replay_hash` (per-run)
+  coexist and neither calls the other.** The per-cell one is still the one
+  `test_replay_hash_deterministic` covers and nothing in production calls it.
+  If the run-level hash is the gate, the per-cell one is a candidate for
+  retirement (T8's `nca`-style retirement record) rather than a second API.
 - **Resume is now per-run, not per-round, but the runner is still stateless
   across launches.** The policy object restarts from its seed, so a resumed run
   re-proposes round 1's cells, skips them all, and only starts adding coverage

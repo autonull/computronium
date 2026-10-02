@@ -299,6 +299,16 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             )
         return run_id
 
+    def set_replay_hash(self, run_id: str, replay_hash: str) -> None:
+        """Record the replay hash a run computed when it finished measuring."""
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        with self._write_lock:
+            self._conn.execute(
+                "UPDATE runs SET replay_hash = ? WHERE run_id = ?",
+                [replay_hash, run_id],
+            )
+
     def finish_run(
         self,
         run_id: str,
@@ -306,13 +316,19 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
         budget_consumed_s: float | None = None,
         replay_hash: str | None = None,
     ) -> None:
-        """Mark a run as finished."""
+        """Mark a run as finished.
+
+        A ``replay_hash`` already written is preserved: the hash is written when
+        the run completes, and a later status update that knows nothing about it
+        must not erase the only record of what the run measured.
+        """
         if self._conn is None:
             raise StoreError("Connection not initialized")
         with self._write_lock:
             self._conn.execute(
                 """
-                UPDATE runs SET status = ?, budget_consumed_s = ?, replay_hash = ?, finished_at = ?
+                UPDATE runs SET status = ?, budget_consumed_s = ?,
+                    replay_hash = COALESCE(?, replay_hash), finished_at = ?
                 WHERE run_id = ?
                 """,
                 [status, budget_consumed_s, replay_hash, datetime.now(), run_id],
