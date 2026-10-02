@@ -179,7 +179,11 @@ class ScheduleStage:
             "contrast_design_kind", ContrastDesignKind.OFAT.value
         )
 
-        # Convert to scheduled proposals with data_origin in metadata (not budget_id)
+        # Build contrast design if contrast runs requested. Bound before the
+        # scheduling block: a round with nothing to schedule must still build
+        # its fragment, and an unbound local there is a crash, not a design.
+        contrast_design: ContrastDesign | None = None
+        contrast_assignments: list[ContrastAssignment] = []
         scheduled_proposals: list[Proposal] = []
         total = len(proposals)
         if total > 0:
@@ -205,9 +209,6 @@ class ScheduleStage:
                     data_origins.extend(data_origins[: total - len(data_origins)])
             data_origins = data_origins[:total]
 
-            # Build contrast design if contrast runs requested
-            contrast_design: ContrastDesign | None = None
-            contrast_assignments: list[ContrastAssignment] = []
             if contrast_count > 0:
                 # Create factors from first proposal's params for contrast design
                 first_coord = proposals[0].coordinate

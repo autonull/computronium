@@ -94,15 +94,36 @@ before, its measured price. No ticket's gate is a whole shard.
   effective lr of 1.6e-6 at prior center, a cell that cannot learn by
   construction, in the table the campaign compares rules through.
 
-### Q2 — The promotion stage (TODO47 T7, D-a default (i))
-- **Does:** a promotion stage writing `status.maturity`: eligibility `L1`
-  when a cell achieves `spec.n_seeds` seeds at its declared fidelity with a
-  `PASS` gate; promotion `L2` when the eligible cell's claim survives E4's
-  replay gate. `promoted`, `filter_promoted` and the report's
-  promotion-history section become measurements.
-- **Gate:** a lock asserting a promoted cell reaches `L2` and appears in
-  `promotion_history`, on a *measured* store (the lr fix makes real runs
-  eligible); the report's `Promoted:` count non-zero on the same run (tier 1).
+### Q2 — LANDED (with E4) — The promotion stage (TODO47 T7, D-a default (i))
+- **Landed (this session, same session as E4 per §1):** the promotion stage
+  (`computronium/experiment/execution/promotion.py`) runs after a `comp run`
+  completes, on the run's own store: eligibility `L1` per cell that achieved
+  `spec.n_seeds` seeds at its declared fidelity with a `PASS` gate; `L2` only
+  where the cell's replay survives (`replay_survives`, E4). The replay
+  verdict is the reproducibility measurement: a passing replay writes
+  `maturity=L2` **and** `reproducibility=computational_reproducible` — the
+  class `promoted()` requires — so `promoted`, `filter_promoted`, the
+  report's promotion history and its `Promoted:` count are measurements now.
+  Two seam defects fixed on the way, both exposed by the lock, neither
+  visible to the campaign (L0, never promoted):
+  1. `claims.promoted()` composed the per-record `claim_eligible`, which
+     reads *planned* `schedule.n_seeds >= 5` — but the executor stamps one
+     record per seed with `n_seeds == 1`, so `promoted()` could never pass on
+     an executed multi-seed run. `promoted()` now asks only what a record
+     knows (gate, quarantine, fidelity, maturity, reproducibility);
+     replication-group size stays the caller's (per-cell) decision.
+  2. `RecordStore.set_cell_maturity` is the single write path (DuckDB needs
+     the whole status struct rebuilt on UPDATE; the earned fields change,
+     every other field carried through).
+  3. The replay gate compares the *task-axis* claimed metrics only
+     (`OBJECTIVES_REGISTRY`, `axis_tag == "task"`) — cost metrics
+     (`walltime_s`) are properties of the machine, not of the claim; gating
+     them made every promotion a false negative.
+  - **Gate:** `tests/acceptance/test_promotion_lock.py` — one tiny spec (one
+    cell, L2, 5 seeds, 1 epoch) through the command surface; **2 tests,
+    ~8 s** (priced with `--co` first: collection 12.7 s incl. imports). Run
+    once, green. Falsifiable: remove the `promote_run` call → all records
+    stay L0; remove the replay gate → reproducibility assertions red.
 - **Note:** the stage list reserves S10 for promotion predicates
   (`stage.py:13`); `Record`'s flag surface already names the claims that
   depend on it (`record.py:84`).
@@ -258,13 +279,20 @@ Rudimentary was acceptable; this phase makes the numbers *arguable*.
 - **Gate:** the campaign report names the control and the report lock asserts
   its presence; falsifiable by removing the split.
 
-### E4 — Promotion earns L2 by replay, not by assertion
-- **Does:** make Q2's L2 gate the *replay gate*: a promoted cell re-measured
-  through the store's replay path reproduces its claimed metrics within
-  registered tolerance (`PARAM_BUDGET_TOLERANCE` precedent). The maturity
-  ladder's first rung that means "independently reproducible".
-- **Gate:** the promotion lock extended: the L2 write triggers one replay and
-  the store records its verdict; falsifiable by removing the replay call.
+### E4 — LANDED (with Q2) — Promotion earns L2 by replay, not by assertion
+- **Landed (this session, same session as Q2 per §1):** the replay gate is
+  Q2's L2 write (`replay_survives` in `promotion.py`): the cell re-measured
+  through the evaluator itself, same coordinate and schedule, claimed
+  task-axis metrics within `REPLAY_METRIC_TOLERANCE = 0.25` (registered in
+  `registries.py` beside `PARAM_BUDGET_TOLERANCE`, the precedent's pattern).
+  A passing verdict writes the reproducibility class it measured —
+  `computational_reproducible` — so the ladder's rung means what it says.
+  Nondeterminism note: the evaluator is not seed-deterministic across
+  invocations, so a 1-epoch cell's replay can miss the tolerance; the lock
+  asserts the mechanism (some cell earns L2, none keeps L0), not a
+  particular cell's promotion.
+- **Gate:** the promotion lock (Q2's, one run): falsifiable by removing the
+  replay call — the reproducibility assertions go red.
 
 ## Phase F — Productization
 
@@ -463,6 +491,33 @@ that the locks already govern — additive by construction. The plan files
 stop growing.
 
 ## 8. Session log
+
+- **Q2 + E4 landed (third session of the plan).** What landed, in order:
+  1. **Promotion stage** (`promotion.py`): per-cell L1 eligibility from the
+     run's own records; L2 only where the replay survives; single write path
+     `RecordStore.set_cell_maturity` (whole-struct UPDATE; DuckDB refuses
+     qualified SET targets). Wired at the end of `_cmd_run`, before
+     `finish_run`, so the report and status read earned maturities.
+  2. **`promoted()` seam fix** — per-record planned-seed test could never
+     pass on an executed multi-seed run (executor stamps n_seeds=1 per seed
+     record); the predicate now asks only record-local facts, replication
+     grouping stays with the callers that own it.
+  3. **Replay gate metric scope** — task-axis claimed metrics only; cost
+     metrics (walltime) are machine properties, not claim properties.
+  4. **S3 `contrast_design` UnboundLocalError** (found by the lock's narrow
+     spec at round ≥2, invisible to the campaign): the Fragment metadata read
+     a local bound only inside `if total > 0:`. Bound before the block.
+  - Debugging cost note: the lock failed through five red runs before green.
+    Three were spec-authoring (degenerate domains rejected; `members` carry
+    strings that fail composition; missing `budget_seconds` → budget=None →
+    "Missing required pipeline components"), one was the pre-existing
+    `contrast_design` crash, one the walltime-in-replay false negative. The
+    lesson for the next lock: build the spec by dry-run (`comp run --spec …
+    --dry-run` prints the plan and refuses the illegal) before writing the
+    gate.
+  - Gates run: promotion lock + statistical protocol lock together,
+    **35 passed, 7.6 s**, once. `ruff check` on `store.py` reports 2
+    pre-existing PLR complexity findings on untouched lines (Register C).
 
 - **Q1 landed (second session of the plan).** The §8 notes below the line
   are the first session's archaeology, kept for the defect-class ledger.

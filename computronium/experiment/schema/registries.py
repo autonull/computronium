@@ -22,6 +22,10 @@ SpecT = TypeVar("SpecT")
 # the evaluator's gate read it.
 PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 
+# Replay gate (TODO48 E4): a promoted cell re-measured must reproduce its
+# claimed metrics within this relative tolerance to earn maturity L2.
+REPLAY_METRIC_TOLERANCE: Final[float] = 0.25
+
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveSpec:
@@ -385,6 +389,7 @@ __all__ = [
     "CONSTRAINTS_REGISTRY",
     "OBJECTIVES_REGISTRY",
     "PARAM_BUDGET_TOLERANCE",
+    "REPLAY_METRIC_TOLERANCE",
     "POLICIES_REGISTRY",
     "PRIORS_REGISTRY",
     "STAGES_REGISTRY",

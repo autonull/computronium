@@ -332,6 +332,45 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 [replay_hash, run_id],
             )
 
+    def set_cell_maturity(
+        self,
+        run_id: str,
+        cell_key: str,
+        maturity: Maturity,
+        reproducibility: ReproducibilityClass | None = None,
+    ) -> int:
+        """Write one status.maturity for every record of a cell.
+
+        The promotion stage is the only writer; a maturity the store did not
+        earn is a claim the store cannot back. A replay-verdict upgrade also
+        writes the reproducibility class the verdict measured.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        # DuckDB refuses a qualified SET target, so the struct is rebuilt: the
+        # earned fields change, every other field is carried through unchanged.
+        reproducibility_sql = "?" if reproducibility else "status.reproducibility"
+        with self._write_lock:
+            result = self._conn.execute(
+                "UPDATE records SET status = {"
+                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
+                "'cause': status.cause, 'severity': status.severity, "
+                "'quarantine': status.quarantine, 'maturity': ?, "
+                "'uncertainty': status.uncertainty, "
+                f"'reproducibility': {reproducibility_sql}, "
+                "'assessment_procedure_version': "
+                "status.assessment_procedure_version, "
+                "'ceec_link': status.ceec_link} "
+                "WHERE run_id = ? AND cell_key = ?",
+                [
+                    maturity.value,
+                    *([reproducibility.value] if reproducibility else []),
+                    run_id,
+                    cell_key,
+                ],
+            )
+        return len(result.fetchall())
+
     def finish_run(
         self,
         run_id: str,

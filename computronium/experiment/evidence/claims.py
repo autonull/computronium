@@ -68,7 +68,7 @@ def replication_key(record: Record) -> str:
 
 def claim_eligible_by_achieved_seeds(
     record: Record,
-    store: "RecordStore",  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
+    store: RecordStore,  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
     min_seeds: int = 5,
     run_id: str | None = None,
 ) -> bool:
@@ -318,12 +318,19 @@ def promoted(record: Record) -> bool:
     """Check if a record has been promoted (matured to claim-grade).
 
     Promotion requires:
-    - Claim eligible
-    - Maturity L2 (claim-grade)
+    - Gate passed and not quarantined, at L2 fidelity. The achieved-seed
+      count is deliberately *not* asked here: the executor stamps one record
+      per seed with ``schedule.n_seeds == 1``, so replication-group size is a
+      property of the cell, decided by the caller that groups records
+      (``claim_eligible_records``, or the promotion stage's own eligibility).
+      A per-record planned-seed test here can never pass on an executed run.
+    - Maturity L2 (claim-grade, earned by the replay gate)
     - Computationally reproducible or better
     """
     return (
-        claim_eligible(record)
+        record.status.gate_verdict.value == "PASS"
+        and not record.status.quarantine
+        and record.schedule.fidelity == "L2"
         and record.status.maturity.value == "l2"
         and record.status.reproducibility.value
         in {"computationally_reproducible", "scientifically_reproducible"}

@@ -458,6 +458,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
             store.finish_run(run_id, "failed")
             return 1
 
+        # The promotion stage runs after measuring, on the run's own store:
+        # maturity is earned from what landed, not declared up front.
+        from computronium.experiment.execution.promotion import promote_run
+        from computronium.experiment.schema.record import Maturity
+        from computronium.experiment.schema.registries import (
+            REPLAY_METRIC_TOLERANCE,
+        )
+
+        history = promote_run(store, run_id, spec, tolerance=REPLAY_METRIC_TOLERANCE)
+        logger.info(
+            "Promotion: %d cell(s) assessed, %d earned L2",
+            len(history),
+            sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
+        )
+
         store.finish_run(run_id, "completed")
         logger.info(f"Run {run_id} completed with {len(outcomes)} outcomes")
         return 0
