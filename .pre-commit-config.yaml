@@ -32,6 +32,12 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: readme-build
+        name: readme (build from docs/readme snippets)
+        entry: uv run python docs/readme/build_readme.py
+        language: system
+        pass_filenames: false
+        files: ^(README\.md|docs/readme/|computronium/experiment/execution/policy\.py|computronium/cli/__main__\.py|scripts/demos/)
       - id: pytest-fast
         name: pytest (property tests)
         entry: uv run python -m pytest tests/property/ -q

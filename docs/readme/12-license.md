@@ -1,0 +1,3 @@
+## License
+
+See [`LICENSE`](LICENSE).
