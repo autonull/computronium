@@ -6,7 +6,10 @@ These tests exercise the codegen surface and are slow (~100s each).
 from pathlib import Path
 import pytest
 
-from computronium.experiment.surface.codegen import generate_all, generate_capabilities_listing
+from computronium.experiment.surface.codegen import (
+    generate_all,
+    generate_capabilities_listing,
+)
 
 
 class TestCodegenDrift:

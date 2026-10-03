@@ -86,7 +86,9 @@ def test_hyperparameter_domains_belong_to_the_run_not_to_an_axis() -> None:
     with pytest.raises(ValidationError, match="Extra inputs"):
         RunSpec.model_validate({
             "task": "digits",
-            "axes": [{"axis": "credit", "domains": {"step_size": {"lo": 1e-4, "hi": 1e-1}}}],
+            "axes": [
+                {"axis": "credit", "domains": {"step_size": {"lo": 1e-4, "hi": 1e-1}}}
+            ],
         })
     RunSpec.model_validate({
         "task": "digits",

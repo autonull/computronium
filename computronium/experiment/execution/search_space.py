@@ -118,9 +118,14 @@ def _filter_axes_for_validity(
     Computes valid 6-tuples from all void constraints in CONSTRAINTS_REGISTRY,
     then derives per-axis valid primitives from the valid tuples.
     """
-    from computronium.experiment.legality.dsl import CoordinateContext, evaluate, Expr, Var
-    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    from computronium.experiment.legality.dsl import (
+        CoordinateContext,
+        Expr,
+        Var,
+        evaluate,
+    )
     from computronium.experiment.schema.axis import StructuralAxis
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
     def _references_params(expr: Expr) -> bool:
         """Check if expression references params.* variables."""
@@ -148,8 +153,10 @@ def _filter_axes_for_validity(
     # Get all void constraints that can be evaluated at search space time
     # (structural axes only, no hyperparameters needed)
     void_constraints = [
-        c for c in CONSTRAINTS_REGISTRY.values()
-        if c.kind.value == "void" and c.predicate is not None
+        c
+        for c in CONSTRAINTS_REGISTRY.values()
+        if c.kind.value == "void"
+        and c.predicate is not None
         and not _references_params(c.predicate)
     ]
 
@@ -161,28 +168,33 @@ def _filter_axes_for_validity(
     # This is the constraint satisfaction layer: find all valid 6-tuples
     axes_order = list(StructuralAxis)
     axis_primitives = [primitives_by_axis.get(axis, []) for axis in axes_order]
-    
+
     # Quick exit if any axis has no primitives
     if not all(axis_primitives):
         return axes_snapshot
 
     valid_tuples: set[tuple[str, ...]] = set()
-    
+
     # Iterate all combinations and check void constraints
     for values in product(*axis_primitives):
-        selection = {axis.value: name for axis, name in zip(axes_order, values, strict=True)}
+        selection = {
+            axis.value: name for axis, name in zip(axes_order, values, strict=True)
+        }
         coordinate = Coordinate(**selection, params={})
-        ctx = CoordinateContext(coordinate, task=spec.task_names[0] if spec.task_names else None)
-        
+        ctx = CoordinateContext(
+            coordinate, task=spec.task_names[0] if spec.task_names else None
+        )
+
         # Check all void constraints
         all_pass = True
         for constraint in void_constraints:
             pred = constraint.predicate
-            assert pred is not None  # filtered above
+            if pred is None:
+                continue  # Should not happen, filtered above
             if not evaluate(pred, ctx):
                 all_pass = False
                 break
-        
+
         if all_pass:
             valid_tuples.add(values)
 
@@ -195,13 +207,8 @@ def _filter_axes_for_validity(
     # Filter axes_snapshot to only primitives that appear in at least one valid tuple
     filtered_snapshot = []
     for axis_spec in axes_snapshot:
-        if axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set()):
+        if axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set()) or not valid_by_axis.get(axis_spec.axis_kind):
             filtered_snapshot.append(axis_spec)
-        else:
-            # Conservative: if we somehow have no valid tuples for this axis,
-            # keep the primitive (avoids filtering everything away due to a bug)
-            if not valid_by_axis.get(axis_spec.axis_kind):
-                filtered_snapshot.append(axis_spec)
 
     return filtered_snapshot
 
@@ -330,15 +337,27 @@ def _composable(
 
     Uses a module-level cache since the same (coordinate, task, param_budget)
     combinations are checked repeatedly during search space traversal.
+
+    The cache key includes hyperparameters that affect validity checks in
+    SystemConfig.validate(): hidden_dim, num_layers, max_steps, beta, residual.
     """
     from computronium.experiment.execution.compose import (
         compose_configs,
         geometry_param_count,
     )
 
-    # Create cache key from structural axes + task + param_budget
-    # Hyperparameters (coordinate.params) are swept separately and don't affect
-    # structural compatibility
+    # Create cache key from structural axes + task + param_budget + relevant hyperparameters
+    # Hyperparameters that affect validity (checked in void constraints):
+    # - hidden_dim (max_hidden_dim)
+    # - num_layers (max_layers)
+    # - max_steps (max_steps)
+    # - beta (gradient_credit_beta_clamp)
+    # - residual (residual_connections)
+    validity_params = frozenset(
+        (k, v)
+        for k, v in coordinate.params.items()
+        if k in {"hidden_dim", "num_layers", "max_steps", "beta", "residual"}
+    )
     cache_key = (
         coordinate.substrate,
         coordinate.geometry,
@@ -348,6 +367,7 @@ def _composable(
         coordinate.update,
         task,
         param_budget,
+        validity_params,
     )
 
     if cache_key in _composable_cache:
@@ -362,7 +382,7 @@ def _composable(
             output_dim=task_shape.output_dim,
             param_budget=param_budget,
         )
-    except (ValueError, TypeError, KeyError):
+    except ValueError, TypeError, KeyError:
         _composable_cache[cache_key] = False
         return False
     if param_budget <= 0:
@@ -475,7 +495,12 @@ def iter_candidates(
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
-    from computronium.experiment.legality.dsl import CoordinateContext, evaluate, Expr, Var
+    from computronium.experiment.legality.dsl import (
+        CoordinateContext,
+        Expr,
+        Var,
+        evaluate,
+    )
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
     def _references_params(expr: Expr) -> bool:
@@ -497,8 +522,10 @@ def iter_candidates(
 
     # Use ALL void constraints that don't require hyperparameters
     void_constraints = [
-        c for c in CONSTRAINTS_REGISTRY.values()
-        if c.kind.value == "void" and c.predicate is not None
+        c
+        for c in CONSTRAINTS_REGISTRY.values()
+        if c.kind.value == "void"
+        and c.predicate is not None
         and not _references_params(c.predicate)
     ]
 
@@ -519,7 +546,8 @@ def iter_candidates(
             failed = False
             for constraint in void_constraints:
                 pred = constraint.predicate
-                assert pred is not None  # filtered above
+                if pred is None:
+                    continue  # Should not happen, filtered above
                 if not evaluate(pred, ctx):
                     failed = True
                     break

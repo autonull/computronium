@@ -39,13 +39,28 @@ TESTS = pathlib.Path("tests")
 #: mechanism that found them; the rest were already declared and simply never
 #: recorded here.
 KNOWN_LONG: tuple[tuple[str, int], ...] = (
-    ("tests/acceptance/test_unified_kernel.py::test_legality_same_for_all_policies", 120),
-    ("tests/acceptance/test_unified_kernel.py::test_u1_synthesis_policy_end_to_end", 120),
-    ("tests/acceptance/test_unified_kernel.py::test_u2_model_based_policy_end_to_end", 120),
-    ("tests/acceptance/test_unified_kernel.py::test_u3_multi_round_with_allocator", 180),
+    (
+        "tests/acceptance/test_unified_kernel.py::test_legality_same_for_all_policies",
+        120,
+    ),
+    (
+        "tests/acceptance/test_unified_kernel.py::test_u1_synthesis_policy_end_to_end",
+        120,
+    ),
+    (
+        "tests/acceptance/test_unified_kernel.py::test_u2_model_based_policy_end_to_end",
+        120,
+    ),
+    (
+        "tests/acceptance/test_unified_kernel.py::test_u3_multi_round_with_allocator",
+        180,
+    ),
     ("tests/acceptance/test_unified_kernel.py::test_u3_pause_resume_via_run_id", 180),
     ("tests/acceptance/test_unified_kernel.py::test_u4_policy_interchangeability", 300),
-    ("tests/acceptance/test_unified_kernel.py::test_u5_cross_policy_evidence_reuse", 300),
+    (
+        "tests/acceptance/test_unified_kernel.py::test_u5_cross_policy_evidence_reuse",
+        300,
+    ),
     ("tests/acceptance/test_unified_kernel.py::test_u5_same_measurement_identity", 120),
     ("tests/integration/test_demo_compose_6axis.py::test_demo_compose_6axis", 300),
     (

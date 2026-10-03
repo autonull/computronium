@@ -25,14 +25,14 @@ SURVIVORS = {
 
 # Modules allowed to have no external importers (kernel-path reachability)
 KERNEL_PATH = {
-    "lab.py",           # Lab facade used by quickstart
-    "training.py",      # TrainingResult, StabilityCertificate, etc. used by kernel
-    "adaptation.py",    # ψ-adaptation evaluator (T6 locks)
+    "lab.py",  # Lab facade used by quickstart
+    "training.py",  # TrainingResult, StabilityCertificate, etc. used by kernel
+    "adaptation.py",  # ψ-adaptation evaluator (T6 locks)
     "synthesis.__init__.py",  # Internal synthesis package
     "synthesis.spec.py",
     "synthesis.catalog.py",
     "synthesis.predictor.py",  # Kernel-path: ViabilityModel
-    "synthesis.engine.py",     # Kernel-path: synthesis engine
+    "synthesis.engine.py",  # Kernel-path: synthesis engine
 }
 
 
@@ -45,7 +45,7 @@ def _collect_imports(root: Path) -> dict[str, set[str]]:
         try:
             text = py_file.read_text(encoding="utf-8")
             tree = ast.parse(text)
-        except (SyntaxError, UnicodeDecodeError):
+        except SyntaxError, UnicodeDecodeError:
             continue
         module = py_file.relative_to(root).with_suffix("").as_posix()
         imports[module] = set()
@@ -79,7 +79,7 @@ def _external_importers(lab_imports: dict[str, set[str]]) -> dict[str, set[str]]
             try:
                 text = py_file.read_text(encoding="utf-8")
                 tree = ast.parse(text)
-            except (SyntaxError, UnicodeDecodeError):
+            except SyntaxError, UnicodeDecodeError:
                 continue
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom) and node.module:
@@ -87,14 +87,18 @@ def _external_importers(lab_imports: dict[str, set[str]]) -> dict[str, set[str]]
                         parts = node.module.split(".")
                         if len(parts) >= 2:
                             lab_module = ".".join(parts[1:]) + ".py"
-                            external.setdefault(lab_module, set()).add(str(py_file.relative_to(repo_root)))
+                            external.setdefault(lab_module, set()).add(
+                                str(py_file.relative_to(repo_root))
+                            )
                 elif isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name.startswith("computronium_lab"):
                             parts = alias.name.split(".")
                             if len(parts) >= 2:
                                 lab_module = ".".join(parts[1:]) + ".py"
-                                external.setdefault(lab_module, set()).add(str(py_file.relative_to(repo_root)))
+                                external.setdefault(lab_module, set()).add(
+                                    str(py_file.relative_to(repo_root))
+                                )
     return external
 
 
@@ -159,9 +163,9 @@ def test_init_exports_only_survivors() -> None:
             lab_module = ".".join(parts[1:]) + ".py"
             if lab_module not in SURVIVORS:
                 # Allow adaptation and synthesis submodules
-                assert lab_module.startswith("adaptation") or lab_module.startswith("synthesis"), (
-                    f"__init__.py imports from retired module: {module}"
-                )
+                assert lab_module.startswith("adaptation") or lab_module.startswith(
+                    "synthesis"
+                ), f"__init__.py imports from retired module: {module}"
 
 
 if __name__ == "__main__":

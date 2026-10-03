@@ -143,9 +143,10 @@ class TestQuestionFirst:
         # data_origin_allocation and contrast_quota are S3 *stage* params;
         # a spec that carries them is dead config the stages never read.
         with pytest.raises(ValueError, match="data_origin_allocation"):
-            RunSpec.model_validate(
-                {"task": "digits", "data_origin_allocation": {"exploration": 0.6}}
-            )
+            RunSpec.model_validate({
+                "task": "digits",
+                "data_origin_allocation": {"exploration": 0.6},
+            })
 
 
 class TestDocumentedCommands:

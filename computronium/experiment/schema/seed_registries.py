@@ -708,10 +708,12 @@ CONSTRAINTS = [
         name="substrate_geometry_compatibility",
         kind=ConstraintKind.VOID,
         description="Digital substrate incompatible with analog-only geometries",
-        predicate=not_(and_(
-            eq(var("substrate"), const("digital")),
-            in_(var("geometry"), const(["analog", "photonic", "quantum"]))
-        )),
+        predicate=not_(
+            and_(
+                eq(var("substrate"), const("digital")),
+                in_(var("geometry"), const(["analog", "photonic", "quantum"])),
+            )
+        ),
         proof_kind=ProofKind.LOGICAL,
         origin="DECLARED",
     ),
@@ -719,10 +721,12 @@ CONSTRAINTS = [
         name="dynamics_plasticity_compatibility",
         kind=ConstraintKind.VOID,
         description="Instantaneous dynamics cannot use fast-weight plasticity",
-        predicate=not_(and_(
-            eq(var("dynamics"), const("instantaneous")),
-            eq(var("plasticity"), const("fast_weight"))
-        )),
+        predicate=not_(
+            and_(
+                eq(var("dynamics"), const("instantaneous")),
+                eq(var("plasticity"), const("fast_weight")),
+            )
+        ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
@@ -730,10 +734,20 @@ CONSTRAINTS = [
         name="credit_update_compatibility",
         kind=ConstraintKind.VOID,
         description="Backprop credit requires Euclidean or compatible update rule",
-        predicate=not_(and_(
-            eq(var("credit"), const("backprop")),
-            not_in(var("update"), const(["euclidean", "muon", "natural_gradient", "riemannian_orthogonal"]))
-        )),
+        predicate=not_(
+            and_(
+                eq(var("credit"), const("backprop")),
+                not_in(
+                    var("update"),
+                    const([
+                        "euclidean",
+                        "muon",
+                        "natural_gradient",
+                        "riemannian_orthogonal",
+                    ]),
+                ),
+            )
+        ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
@@ -744,7 +758,17 @@ CONSTRAINTS = [
         description="Recurrent geometry requires energy-based, PC-family, diffusion, or instantaneous dynamics",
         predicate=or_(
             not_(in_(var("geometry"), const(["recurrent", "recurrent_attractor"]))),
-            in_(var("dynamics"), const(["energy_minimization", "predictive_settling", "error_predictive_coding", "pc_alm", "diffusion", "instantaneous"]))
+            in_(
+                var("dynamics"),
+                const([
+                    "energy_minimization",
+                    "predictive_settling",
+                    "error_predictive_coding",
+                    "pc_alm",
+                    "diffusion",
+                    "instantaneous",
+                ]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -756,7 +780,20 @@ CONSTRAINTS = [
         description="Non-layered geometries (attention, spatial_lattice, graph, conv, nca, ntm, causal_transformer) require instantaneous dynamics",
         predicate=or_(
             eq(var("dynamics"), const("instantaneous")),
-            not_(in_(var("geometry"), const(["attention", "spatial_lattice", "graph", "conv", "nca", "ntm", "causal_transformer"])))
+            not_(
+                in_(
+                    var("geometry"),
+                    const([
+                        "attention",
+                        "spatial_lattice",
+                        "graph",
+                        "conv",
+                        "nca",
+                        "ntm",
+                        "causal_transformer",
+                    ]),
+                )
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -768,7 +805,10 @@ CONSTRAINTS = [
         description="Tile mesh geometry requires energy_minimization, pc_alm, or instantaneous dynamics",
         predicate=or_(
             not_(in_(var("geometry"), const(["tile_mesh", "tile"]))),
-            in_(var("dynamics"), const(["energy_minimization", "pc_alm", "instantaneous"]))
+            in_(
+                var("dynamics"),
+                const(["energy_minimization", "pc_alm", "instantaneous"]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -780,7 +820,7 @@ CONSTRAINTS = [
         description="NCA/NTM geometries require instantaneous dynamics",
         predicate=or_(
             eq(var("dynamics"), const("instantaneous")),
-            not_(in_(var("geometry"), const(["nca", "ntm"])))
+            not_(in_(var("geometry"), const(["nca", "ntm"]))),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -790,10 +830,12 @@ CONSTRAINTS = [
         name="diffusion_dynamics_credit",
         kind=ConstraintKind.VOID,
         description="Diffusion dynamics produce non-differentiable state; gradient/backprop credit unsupported",
-        predicate=not_(and_(
-            eq(var("dynamics"), const("diffusion")),
-            in_(var("credit"), const(["gradient", "backprop"]))
-        )),
+        predicate=not_(
+            and_(
+                eq(var("dynamics"), const("diffusion")),
+                in_(var("credit"), const(["gradient", "backprop"])),
+            )
+        ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
@@ -804,7 +846,7 @@ CONSTRAINTS = [
         description="Diffusion dynamics requires recurrent geometry",
         predicate=or_(
             not_(eq(var("dynamics"), const("diffusion"))),
-            in_(var("geometry"), const(["recurrent", "recurrent_attractor"]))
+            in_(var("geometry"), const(["recurrent", "recurrent_attractor"])),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -816,7 +858,10 @@ CONSTRAINTS = [
         description="Spike integration dynamics requires temporal trace or target inversion credit",
         predicate=or_(
             not_(eq(var("dynamics"), const("spike_integration"))),
-            in_(var("credit"), const(["temporal_trace", "spiking", "target_inversion", "target_prop"]))
+            in_(
+                var("credit"),
+                const(["temporal_trace", "spiking", "target_inversion", "target_prop"]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -827,8 +872,21 @@ CONSTRAINTS = [
         kind=ConstraintKind.VOID,
         description="Predictive settling/error predictive coding dynamics requires thermodynamic_contrast, local_goodness, or forward_only credit",
         predicate=or_(
-            not_(in_(var("dynamics"), const(["predictive_settling", "error_predictive_coding"]))),
-            in_(var("credit"), const(["thermodynamic_contrast", "equilibrium", "local_goodness", "forward_only"]))
+            not_(
+                in_(
+                    var("dynamics"),
+                    const(["predictive_settling", "error_predictive_coding"]),
+                )
+            ),
+            in_(
+                var("credit"),
+                const([
+                    "thermodynamic_contrast",
+                    "equilibrium",
+                    "local_goodness",
+                    "forward_only",
+                ]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -841,12 +899,12 @@ CONSTRAINTS = [
         predicate=and_(
             or_(
                 not_(eq(var("dynamics"), const("pc_alm"))),
-                in_(var("credit"), const(["pc_alm", "thermodynamic_contrast"]))
+                in_(var("credit"), const(["pc_alm", "thermodynamic_contrast"])),
             ),
             or_(
                 not_(eq(var("dynamics"), const("pc_alm"))),
-                in_(var("geometry"), const(["feedforward", "recurrent", "tile_mesh"]))
-            )
+                in_(var("geometry"), const(["feedforward", "recurrent", "tile_mesh"])),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -870,7 +928,16 @@ CONSTRAINTS = [
         description="Thermodynamic contrast/equilibrium credit requires energy-based or PC-family dynamics",
         predicate=or_(
             not_(in_(var("credit"), const(["thermodynamic_contrast", "equilibrium"]))),
-            in_(var("dynamics"), const(["energy_minimization", "predictive_settling", "error_predictive_coding", "lazy", "pc_alm"]))
+            in_(
+                var("dynamics"),
+                const([
+                    "energy_minimization",
+                    "predictive_settling",
+                    "error_predictive_coding",
+                    "lazy",
+                    "pc_alm",
+                ]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -882,7 +949,10 @@ CONSTRAINTS = [
         description="Neuromorphic substrate requires temporal dynamics (spike_integration, energy_minimization, or diffusion)",
         predicate=or_(
             not_(eq(var("substrate"), const("neuromorphic"))),
-            in_(var("dynamics"), const(["spike_integration", "energy_minimization", "diffusion"]))
+            in_(
+                var("dynamics"),
+                const(["spike_integration", "energy_minimization", "diffusion"]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -894,7 +964,10 @@ CONSTRAINTS = [
         description="Quantum substrate requires energy_minimization, instantaneous, or diffusion dynamics",
         predicate=or_(
             not_(eq(var("substrate"), const("quantum"))),
-            in_(var("dynamics"), const(["energy_minimization", "instantaneous", "diffusion"]))
+            in_(
+                var("dynamics"),
+                const(["energy_minimization", "instantaneous", "diffusion"]),
+            ),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -905,8 +978,18 @@ CONSTRAINTS = [
         kind=ConstraintKind.VOID,
         description="Local contrastive/goodness/forward_only/pepita credit requires feedforward geometry",
         predicate=or_(
-            not_(in_(var("credit"), const(["local_goodness", "forward_only", "pepita", "local_contrastive"]))),
-            in_(var("geometry"), const(["feedforward", "feedforward_dag"]))
+            not_(
+                in_(
+                    var("credit"),
+                    const([
+                        "local_goodness",
+                        "forward_only",
+                        "pepita",
+                        "local_contrastive",
+                    ]),
+                )
+            ),
+            in_(var("geometry"), const(["feedforward", "feedforward_dag"])),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
@@ -916,10 +999,20 @@ CONSTRAINTS = [
         name="attention_geometry_compatibility",
         kind=ConstraintKind.VOID,
         description="Attention geometry incompatible with pepita, local_goodness, local_contrastive, forward_only credit",
-        predicate=not_(and_(
-            eq(var("geometry"), const("attention")),
-            in_(var("credit"), const(["pepita", "local_goodness", "local_contrastive", "forward_only"]))
-        )),
+        predicate=not_(
+            and_(
+                eq(var("geometry"), const("attention")),
+                in_(
+                    var("credit"),
+                    const([
+                        "pepita",
+                        "local_goodness",
+                        "local_contrastive",
+                        "forward_only",
+                    ]),
+                ),
+            )
+        ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
@@ -928,10 +1021,12 @@ CONSTRAINTS = [
         name="gradient_credit_beta_clamp",
         kind=ConstraintKind.VOID,
         description="Gradient/backprop credit with beta >= 1.0 has zero pseudo-gradient",
-        predicate=not_(and_(
-            in_(var("credit"), const(["gradient", "backprop"])),
-            ge(var("params.beta"), const(1.0))
-        )),
+        predicate=not_(
+            and_(
+                in_(var("credit"), const(["gradient", "backprop"])),
+                ge(var("params.beta"), const(1.0)),
+            )
+        ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="DECLARED",
     ),
@@ -966,7 +1061,7 @@ CONSTRAINTS = [
         description="Classification tasks require output_dim matching num_classes",
         predicate=or_(
             not_(eq(var("task"), const("classification"))),
-            gt(var("output_dim"), const(1))
+            gt(var("output_dim"), const(1)),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="TASK_FENCE",
@@ -977,7 +1072,7 @@ CONSTRAINTS = [
         description="Language modeling requires causal attention or recurrent geometry",
         predicate=or_(
             not_(eq(var("task"), const("language_modeling"))),
-            in_(var("geometry"), const(["causal_transformer", "recurrent"]))
+            in_(var("geometry"), const(["causal_transformer", "recurrent"])),
         ),
         proof_kind=ProofKind.TYPE_MISMATCH,
         origin="TASK_FENCE",

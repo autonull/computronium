@@ -31,9 +31,7 @@ try:
     from ceec.session import ledger
     from ceec.profile import LedgerRole
 
-    def _frozen_theta_audit(
-        store, experiment, _profile
-    ) -> ConstraintResult:
+    def _frozen_theta_audit(store, experiment, _profile) -> ConstraintResult:
         design = experiment.design
         ok = not design.get("psi_only") or "frozen_theta_audit" in experiment.hard_gates
         return ConstraintResult(
@@ -43,9 +41,7 @@ try:
             f"frozen_theta_audit gate={'frozen_theta_audit' in experiment.hard_gates}",
         )
 
-    def _identity_card(
-        store, experiment, _profile
-    ) -> ConstraintResult:
+    def _identity_card(store, experiment, _profile) -> ConstraintResult:
         design = experiment.design
         ok = not design.get("new_primitive") or bool(design.get("identity_card_ref"))
         return ConstraintResult(

@@ -5,6 +5,7 @@ pipeline's backend calls (``cell_record``). Measures per-cell seconds for the
 primary task (digits) and the transfer task (mnist) across two batch limits, so
 the campaign's cell count is derived from a number rather than a hope.
 """
+
 from __future__ import annotations
 
 import time

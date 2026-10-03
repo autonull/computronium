@@ -52,6 +52,7 @@ class ConstraintEnforcement(StrEnum):
     S2_VALIDATION = "s2_validation"  # Verification
     S3_CALIBRATION = "s3_calibration"  # Calibration
     S4_EXPANSION = "s4_expansion"  # Expansion (R38 - globally suppressive)
+    S5_COMPOSE = "s5_compose"  # Composition (resource constraints with params)
     S5_MATURATION = "s5_maturation"  # Maturation
     S6_CLAIM = "s6_claim"  # Claim-grade (R38 - globally suppressive)
     S7_REPRODUCTION = "s7_reproduction"
@@ -65,6 +66,7 @@ class ConstraintEnforcement(StrEnum):
 # Stages at which global suppression applies (R38)
 _SUPPRESS_STAGES = frozenset({
     ConstraintEnforcement.S4_EXPANSION,
+    ConstraintEnforcement.S5_COMPOSE,
     ConstraintEnforcement.S6_CLAIM,
 })
 

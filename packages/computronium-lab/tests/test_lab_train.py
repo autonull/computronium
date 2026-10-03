@@ -24,9 +24,13 @@ def _make_backprop_mlp(input_dim: int = 32, output_dim: int = 4) -> object:
     return compose_joint_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
         geometry=RecurrentGeometry(
-            GeometryConfig.recurrent(input_dim=input_dim, output_dim=output_dim, hidden_dims=(64,))
+            GeometryConfig.recurrent(
+                input_dim=input_dim, output_dim=output_dim, hidden_dims=(64,)
+            )
         ),
-        dynamics=EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(max_steps=5)),
+        dynamics=EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=5)
+        ),
         plasticity=NullPlasticity(),
         credit=ThermodynamicContrast(),
         update=EuclideanUpdate(),

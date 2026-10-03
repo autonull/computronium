@@ -24,9 +24,7 @@ from computronium.experiment.execution.contrast_design import (
     ContrastAssignment,
     Factor,
 )
-from computronium.experiment.execution.stage import (
-    StageId,  # noqa: E402
-)
+from computronium.experiment.execution.stage import StageId  # ruff: ignore: E402
 from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
 
 # How many cells S1 opens a run with. A round's own allocation is the stage
@@ -448,6 +446,7 @@ class GateStage:
     async def run(self, ctx: StageContext) -> Fragment:
         """Enforce legality constraints on proposals."""
         from computronium.experiment.execution.stage import Fragment
+        from computronium.experiment.legality.dsl import Expr, Var
         from computronium.experiment.legality.engine import (
             ConstraintEnforcement,
             ConstraintKind,
@@ -457,7 +456,6 @@ class GateStage:
             create_constraint,
         )
         from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
-        from computronium.experiment.legality.dsl import Expr, Var
 
         logger.info("S4 Gate: Enforcing legality constraints")
 
@@ -602,30 +600,165 @@ class GateStage:
 
 
 class ComposeStage:
-    """S5 Compose — coverage of what the evaluator will compose.
+    """S5 Compose — Resource constraint enforcement with hyperparameters.
 
-    Composition happens once, in ``evaluate.cell_record``; a second compose path
-    here is how the pipeline and the kernel drifted apart (TODO46 §D6). This
-    stage therefore composes nothing and says what it was given.
+    Evaluates constraints that reference ``params.*`` (hyperparameters) which
+    are only available at compose time. This includes resource limits
+    (max_hidden_dim, max_layers, max_steps) and beta/credit constraints
+    that depend on hyperparameter values.
     """
 
     stage_id = StageId.S5_COMPOSE
 
     async def run(self, ctx: StageContext) -> Fragment:
-        """Report the cells awaiting composition; do not compose them."""
+        """Enforce resource constraints on proposals with resolved hyperparameters."""
         from computronium.experiment.execution.stage import Fragment
+        from computronium.experiment.legality.dsl import Expr, Var
+        from computronium.experiment.legality.engine import (
+            ConstraintEnforcement,
+            ConstraintKind,
+            ConstraintOrigin,
+            ConstraintScope,
+            LegalityEngine,
+            create_constraint,
+        )
+        from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
 
-        logger.info("S5 Compose: Handing cells to the evaluator")
+        logger.info("S5 Compose: Enforcing resource constraints with hyperparameters")
 
-        pending = list(ctx.pending_proposals)
+        def _references_params(expr: Expr) -> bool:
+            """Check if expression references params.* variables."""
+            if isinstance(expr, Var) and expr.name.startswith("params."):
+                return True
+            for field_name in ("expr", "left", "right", "obj", "key"):
+                child = getattr(expr, field_name, None)
+                if isinstance(child, Expr) and _references_params(child):
+                    return True
+            if hasattr(expr, "args"):
+                args = getattr(expr, "args", None)
+                if args is not None:
+                    for arg in args:
+                        if isinstance(arg, Expr) and _references_params(arg):
+                            return True
+            return False
+
+        # Create and seed legality engine with params.* constraints
+        engine = LegalityEngine()
+        for spec in CONSTRAINTS_REGISTRY.values():
+            if spec.predicate is None:
+                continue
+            # Only evaluate constraints that reference params (hyperparameters)
+            # These are the resource constraints deferred from S4 Gate
+            if not _references_params(spec.predicate):
+                continue
+
+            # Map registry constraint to engine constraint
+            origin_map = {
+                "DECLARED": ConstraintOrigin.SYSTEM_CONFIG,
+                "TASK_FENCE": ConstraintOrigin.TASK_FENCE,
+                "APPLY_CONSTRAINTS": ConstraintOrigin.APPLY_CONSTRAINTS,
+            }
+            scope_map = {
+                "void": ConstraintScope.CELL,
+                "hard": ConstraintScope.MEASUREMENT,
+                "fairness": ConstraintScope.MEASUREMENT,
+                "operating_point": ConstraintScope.MEASUREMENT,
+            }
+            kind_map = {
+                "void": ConstraintKind.HARD,
+                "hard": ConstraintKind.HARD,
+                "fairness": ConstraintKind.HARD,
+                "operating_point": ConstraintKind.HARD,
+            }
+            # Resource constraints with params enforced at S5 compose
+            enforcement_map = {
+                "void": ConstraintEnforcement.S5_COMPOSE,
+                "hard": ConstraintEnforcement.S5_COMPOSE,
+                "fairness": ConstraintEnforcement.S5_COMPOSE,
+                "operating_point": ConstraintEnforcement.S5_COMPOSE,
+            }
+
+            create_constraint(
+                expr=spec.predicate,
+                origin=origin_map.get(spec.origin, ConstraintOrigin.SYSTEM_CONFIG),
+                scope=scope_map.get(spec.kind.value, ConstraintScope.CELL),
+                enforcement=enforcement_map.get(
+                    spec.kind.value, ConstraintEnforcement.S5_COMPOSE
+                ),
+                kind=kind_map.get(spec.kind.value, ConstraintKind.HARD),
+                description=spec.description,
+                engine=engine,
+            )
+
+        # Evaluate each proposal against resource constraints
+        filtered = []
+        rejections = []
+
+        for proposal in ctx.pending_proposals:
+            coord = proposal.coordinate
+            sched = proposal.schedule
+
+            # Create a minimal record for constraint evaluation
+            from computronium.experiment.schema.record import (
+                FailureCause,
+                GateVerdict,
+                Maturity,
+                Record,
+                ReproducibilityClass,
+                Severity,
+                Status,
+            )
+            from computronium.experiment.schema.registries import (
+                ASSESSMENT_PROCEDURE_VERSION,
+            )
+
+            record = Record.create(
+                run_id=ctx.run_id,
+                coordinate=coord,
+                schedule=sched,
+                provenance=ctx.provenance,
+                status=Status(
+                    gate_verdict=GateVerdict.PENDING,
+                    defect="",
+                    cause=FailureCause.UNKNOWN,
+                    severity=Severity.LOW,
+                    quarantine=False,
+                    maturity=Maturity.L0,
+                    uncertainty={},
+                    reproducibility=ReproducibilityClass.REPLAYABLE,
+                    assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
+                    ceec_link=None,
+                ),
+                payload={},
+            )
+
+            # Check legality using the legality engine at S5_COMPOSE
+            hard_violations, _soft_violations = engine.evaluate_record(
+                record, ConstraintEnforcement.S5_COMPOSE
+            )
+            is_legal = len(hard_violations) == 0
+
+            if is_legal:
+                filtered.append(proposal)
+            else:
+                rejections.append(coord.cell_key())
+
         return Fragment(
             stage_id=self.stage_id,
-            proposals=pending,
+            proposals=filtered,
             metadata={
+                "input_count": len(ctx.pending_proposals),
+                "passed_count": len(filtered),
+                "rejected_count": len(rejections),
+                "rejections": rejections,
                 "composed_by": "experiment.execution.evaluate.cell_record",
-                "axes": sorted({p.coordinate.dynamics for p in pending}),
             },
-            coverage={"stage": "compose", "cells_queued": len(pending)},
+            coverage={
+                "stage": "compose",
+                "passed": len(filtered),
+                "rejected": len(rejections),
+            },
+            classification={"rejected": rejections} if rejections else {},
         )
 
 
