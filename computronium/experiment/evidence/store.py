@@ -371,6 +371,44 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
             )
         return len(result.fetchall())
 
+    def set_cell_uncertainty(
+        self,
+        run_id: str,
+        cell_key: str,
+        uncertainty: dict[str, Any],
+    ) -> int:
+        """Write uncertainty for every record of a cell.
+
+        The uncertainty is computed from across-seed measurements and stored
+        in the status struct. This is the E1 implementation: uncertainty is
+        a measurement, not {}.
+        """
+        if self._conn is None:
+            raise StoreError("Connection not initialized")
+        # DuckDB refuses a qualified SET target, so the struct is rebuilt.
+        import json
+
+        uncertainty_json = json.dumps(uncertainty)
+        with self._write_lock:
+            result = self._conn.execute(
+                "UPDATE records SET status = {"
+                "'gate_verdict': status.gate_verdict, 'defect': status.defect, "
+                "'cause': status.cause, 'severity': status.severity, "
+                "'quarantine': status.quarantine, 'maturity': status.maturity, "
+                "'uncertainty': ?, "
+                "'reproducibility': status.reproducibility, "
+                "'assessment_procedure_version': "
+                "status.assessment_procedure_version, "
+                "'ceec_link': status.ceec_link} "
+                "WHERE run_id = ? AND cell_key = ?",
+                [
+                    uncertainty_json,
+                    run_id,
+                    cell_key,
+                ],
+            )
+        return len(result.fetchall())
+
     def finish_run(
         self,
         run_id: str,
@@ -1084,8 +1122,8 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
         if run_id is not None:
             conditions.append("run_id = ?")
             params.append(run_id)
-        where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""  # noqa: S608 - static fragment, parameterized values
-        limit_clause = f" LIMIT {int(limit)}" if limit else ""  # noqa: S608 - int-coerced
+        where_clause = f" WHERE {' AND '.join(conditions)}" if conditions else ""  # ruff: ignore[hardcoded-sql-expression] - static fragment, parameterized values
+        limit_clause = f" LIMIT {int(limit)}" if limit else ""  # ruff: ignore[hardcoded-sql-expression] - int-coerced
         rows = self._conn.execute(
             f"SELECT run_id, spec, spec_version, status, budget_consumed_s, "  # ruff: ignore[hardcoded-sql-expression] - static column list
             f"replay_hash, started_at, finished_at FROM runs{where_clause} "
@@ -1123,7 +1161,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
         where_clause = " WHERE " + " AND ".join(conditions)
         result = self._conn.execute(
             f"SELECT COUNT(*) FROM records{where_clause}",
-            params,  # noqa: S608 - parameterized, static conditions
+            params,  # ruff: ignore[hardcoded-sql-expression] - parameterized, static conditions
         ).fetchone()
         return result[0] if result is not None else 0
 

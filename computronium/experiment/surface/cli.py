@@ -473,6 +473,20 @@ def _cmd_run(args: argparse.Namespace) -> int:
             sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
         )
 
+        # E1: Compute and store uncertainty from across-seed measurements
+        from computronium.experiment.evidence.claims import (
+            compute_and_store_uncertainty,
+        )
+
+        uncertainty = compute_and_store_uncertainty(
+            store, run_id, min_seeds=spec.n_seeds
+        )
+        logger.info(
+            "Uncertainty: computed for %d cell(s) with >=%d seeds",
+            len(uncertainty),
+            spec.n_seeds,
+        )
+
         store.finish_run(run_id, "completed")
         logger.info(f"Run {run_id} completed with {len(outcomes)} outcomes")
         return 0

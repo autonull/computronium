@@ -208,11 +208,23 @@ class TestClaimDerivation:
         self, measured_records: list[Record]
     ) -> None:
         claims = derive_claims(measured_records, metrics=(_METRIC,), min_seeds=_SEEDS)
+        # Compute qualified replication keys (cells with >= min_seeds PASS seeds)
+        achieved = {
+            key: sum(
+                1
+                for r in measured_records
+                if replication_key(r) == key and r.status.gate_verdict.value == "PASS"
+            )
+            for key in replication_keys_of(measured_records)
+        }
+        qualified_keys = {k for k, v in achieved.items() if v >= _SEEDS}
         for claim in claims:
+            # Only include records from qualified cells
             values = [
                 float(r.payload[_METRIC])
                 for r in measured_records
                 if getattr(r, claim.axis) == claim.value
+                and replication_key(r) in qualified_keys
             ]
             assert claim.n == len(values)
             assert claim.mean == pytest.approx(sum(values) / len(values))

@@ -6,6 +6,7 @@ Implements WP5 deliverable: evidence/claims.py — full predicate suite:
 - Alerts as record-stream predicates (R83/Q14)
 - Matched-cost comparison guard (R65)
 - Stratification guards (R8/R22/R67)
+- Uncertainty computation and storage (E1)
 """
 
 from __future__ import annotations
@@ -23,6 +24,118 @@ if TYPE_CHECKING:
 
     from computronium.experiment.evidence.protocol import ComparisonGuard, CostBudget
     from computronium.experiment.evidence.store import RecordStore
+
+
+# =============================================================================
+# Uncertainty Computation and Storage (E1)
+# =============================================================================
+
+
+def _compute_replication_uncertainty(
+    records: Sequence[Record],
+) -> dict[str, dict[str, float | str | int]]:
+    """Compute per-metric uncertainty for a replication key group.
+
+    Args:
+        records: Records sharing the same replication key (same cell, different seeds).
+
+    Returns:
+        Dict mapping metric_name -> {"mean": float, "std": float, "n": int, "variance": float}
+        For single-seed groups, returns {"reason": "single_seed", "n": 1} for each metric.
+    """
+    if not records:
+        return {}
+
+    # Group metric values by metric name across seeds
+    metric_values: dict[str, list[float]] = {}
+    for record in records:
+        for key, value in record.payload.items():
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                continue
+            # Only exclude metadata fields, not legitimate metrics like walltime_s
+            if key in {
+                "epochs_completed",
+                "epochs_requested",
+                "seed",
+                "fidelity",
+                "param_count",
+                "param_budget",
+            }:
+                continue
+            metric_values.setdefault(key, []).append(float(value))
+
+    uncertainty: dict[str, dict[str, float | str | int]] = {}
+    n_seeds = len(records)
+
+    for metric, values in metric_values.items():
+        if n_seeds == 1:
+            uncertainty[metric] = {"reason": "single_seed", "n": 1}
+        else:
+            mean = sum(values) / len(values)
+            variance = (
+                sum((v - mean) ** 2 for v in values) / (len(values) - 1)
+                if len(values) > 1
+                else 0.0
+            )
+            std = math.sqrt(variance) if variance > 0 else 0.0
+            uncertainty[metric] = {
+                "mean": mean,
+                "std": std,
+                "n": len(values),
+                "variance": variance,
+            }
+    return uncertainty
+
+
+def compute_and_store_uncertainty(
+    store: RecordStore,
+    run_id: str,
+    *,
+    min_seeds: int = 1,
+) -> dict[str, dict[str, dict[str, float | str | int]]]:
+    """Compute and store uncertainty for all replication keys in a run.
+
+    This is the E1 implementation: uncertainty is a measurement, not {}.
+    For cells measured over n_seeds, carries the across-seed std of each metric.
+    Single-seed cells record "single_seed" as the reason.
+
+    Args:
+        store: The record store to read from and write to.
+        run_id: The run to process.
+        min_seeds: Only compute for replication keys with at least this many PASS seeds.
+
+    Returns:
+        Dict mapping replication_key -> metric -> uncertainty dict.
+    """
+    from computronium.experiment.evidence.claims import replication_key
+
+    # Get all records for the run
+    records = store.query_records(run_id=run_id)
+
+    # Group by replication key
+    groups: dict[str, list[Record]] = {}
+    for record in records:
+        if record.status.gate_verdict.value != "PASS" or record.status.quarantine:
+            continue
+        key = replication_key(record)
+        groups.setdefault(key, []).append(record)
+
+    # Filter to groups meeting min_seeds
+    qualified_groups = {
+        key: group for key, group in groups.items() if len(group) >= min_seeds
+    }
+
+    # Compute uncertainty for each qualified group and persist
+    all_uncertainty: dict[str, dict[str, dict[str, float | str | int]]] = {}
+    for key, group in qualified_groups.items():
+        uncertainty = _compute_replication_uncertainty(group)
+        if uncertainty:
+            all_uncertainty[key] = uncertainty
+            # Persist uncertainty to all records in this cell
+            cell_key = group[0].cell_key
+            store.set_cell_uncertainty(run_id, cell_key, uncertainty)
+
+    return all_uncertainty
 
 
 # =============================================================================
@@ -189,6 +302,88 @@ class AxisImpact:
         )
 
 
+def _group_by_replication_key(
+    records: Sequence[Record],
+    achieved: Mapping[str, int] | None,
+    min_seeds: int,
+) -> dict[str, list[Record]]:
+    """Group contributing records by replication key."""
+    cell_groups: dict[str, list[Record]] = {}
+    for record in records:
+        if not _contributes(record, achieved=achieved, min_seeds=min_seeds):
+            continue
+        key = replication_key(record)
+        cell_groups.setdefault(key, []).append(record)
+    return cell_groups
+
+
+def _compute_cell_metrics(
+    cell_groups: dict[str, list[Record]],
+    min_seeds: int,
+) -> dict[str, dict[str, dict[str, float | str | int]]]:
+    """Compute per-cell uncertainty metrics for qualified groups."""
+    cell_metrics: dict[str, dict[str, dict[str, float | str | int]]] = {}
+    for key, group in cell_groups.items():
+        if len(group) < min_seeds:
+            continue
+        representative = group[0]
+        uncertainty = representative.status.uncertainty
+        if not uncertainty:
+            uncertainty = _compute_replication_uncertainty(group)
+        cell_metrics[key] = uncertainty
+    return cell_metrics
+
+
+def _aggregate_across_cells(
+    cell_groups: dict[str, list[Record]],
+    cell_metrics: dict[str, dict[str, dict[str, float | str | int]]],
+    metrics: Sequence[str],
+) -> dict[tuple[str, str, str], list[dict[str, float]]]:
+    """Aggregate cell metrics by (metric, axis, axis_value)."""
+    grouped: dict[tuple[str, str, str], list[dict[str, float]]] = {}
+    for key, cell_records in cell_groups.items():
+        if key not in cell_metrics:
+            continue
+        representative = cell_records[0]
+        for metric in metrics:
+            cell_unc = cell_metrics[key].get(metric)
+            if not cell_unc:
+                continue
+            # Only include cells with numeric uncertainty (not single_seed)
+            if "mean" not in cell_unc:
+                continue
+            # Type narrowing: we know mean, std, n, variance are present and numeric
+            numeric_unc: dict[str, float] = {
+                "mean": float(cell_unc["mean"]),
+                "std": float(cell_unc["std"]),
+                "n": float(cell_unc["n"]),
+                "variance": float(cell_unc["variance"]),
+            }
+            for axis in StructuralAxis:
+                grouped.setdefault(
+                    (metric, axis.value, getattr(representative, axis.value)), []
+                ).append(numeric_unc)
+    return grouped
+
+
+def _compute_pooled_variance(
+    cell_means: Sequence[float],
+    cell_vars: Sequence[float],
+    cell_ns: Sequence[int],
+) -> float:
+    """Compute pooled variance from cell statistics."""
+    if cell_vars and cell_ns:
+        total_n = sum(cell_ns)
+        return sum(v * (n - 1) for v, n in zip(cell_vars, cell_ns, strict=False)) / max(
+            total_n - len(cell_vars), 1
+        )
+    # Fallback: variance of cell means (across-cell variation)
+    if len(cell_means) > 1:
+        mean = sum(cell_means) / len(cell_means)
+        return sum((m - mean) ** 2 for m in cell_means) / (len(cell_means) - 1)
+    return 0.0
+
+
 def derive_claims(
     records: Sequence[Record],
     *,
@@ -209,6 +404,11 @@ def derive_claims(
     count is the honest one — ``claim_eligible`` reads the *planned*
     ``schedule.n_seeds``, which the per-seed executor stamps as 1.
 
+    Uncertainty (E1): uses the per-replication-key uncertainty stored in
+    record.status.uncertainty when available. A claim's uncertainty reflects
+    the typical within-cell (across-seed) variation, not the across-cell
+    variation. Single-seed cells contribute "single_seed" as the reason.
+
     Args:
         records: The run's records (or any slice of them).
         metrics: Payload keys to claim about, in the study's declared order.
@@ -221,39 +421,35 @@ def derive_claims(
         One claim per (metric, axis value) that reached ``min_seeds``
         measurements, ordered by metric, then axis, then descending mean.
     """
-    grouped: dict[tuple[str, str, str], list[tuple[Record, float]]] = {}
-    for record in records:
-        if not _contributes(record, achieved=achieved, min_seeds=min_seeds):
-            continue
-        for metric in metrics:
-            value = record.payload.get(metric)
-            if isinstance(value, bool) or not isinstance(value, int | float):
-                continue
-            for axis in StructuralAxis:
-                grouped.setdefault(
-                    (metric, axis.value, getattr(record, axis.value)), []
-                ).append((record, float(value)))
+    cell_groups = _group_by_replication_key(records, achieved, min_seeds)
+    cell_metrics = _compute_cell_metrics(cell_groups, min_seeds)
+    grouped = _aggregate_across_cells(cell_groups, cell_metrics, metrics)
 
     claims: list[Claim] = []
     for (metric, axis, axis_value), group in grouped.items():
-        if len(group) < min_seeds:
+        cell_means = [c["mean"] for c in group if "mean" in c]
+        cell_vars = [c["variance"] for c in group if "variance" in c]
+        cell_ns = [int(c["n"]) for c in group if "n" in c]
+
+        if not cell_means:
             continue
-        values = [value for _, value in group]
-        mean = sum(values) / len(values)
-        variance = (
-            sum((v - mean) ** 2 for v in values) / (len(values) - 1)
-            if len(values) > 1
-            else 0.0
-        )
+
+        total_seeds = sum(cell_ns) if cell_ns else 0
+        if total_seeds < min_seeds:
+            continue
+
+        mean = sum(cell_means) / len(cell_means)
+        pooled_variance = _compute_pooled_variance(cell_means, cell_vars, cell_ns)
+
         claims.append(
             Claim(
                 metric=metric,
                 axis=axis,
                 value=axis_value,
-                n=len(values),
+                n=total_seeds,
                 mean=mean,
-                variance=variance,
-                cells=len({replication_key(r) for r, _ in group}),
+                variance=pooled_variance,
+                cells=len(group),
             )
         )
     return tuple(sorted(claims, key=lambda c: (c.metric, c.axis, -c.mean, c.value)))

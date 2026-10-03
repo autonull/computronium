@@ -255,15 +255,16 @@ device is chosen.
 
 Rudimentary was acceptable; this phase makes the numbers *arguable*.
 
-### E1 — Uncertainty is a measurement, not `{}`
-- **Does:** `cell_record` writes `uncertainty={}` forever; claims derive
-  nothing from it. A cell measured over n_seeds carries the across-seed std
-  of each claimed metric; single-seed cells record "single_seed" as the
-  reason (a 1/√n bootstrap would be a lie). `derive_claims` consumes it: a
-  claim states "0.49 ± 0.03 (3 seeds)".
-- **Gate:** a lock asserting claims on a multi-seed measured run carry
-  non-empty uncertainty sourced from the store's own records, and that
-  `ReportGenerator` renders it; falsifiable by zeroing the spread.
+### E1 — LANDED — Uncertainty is a measurement, not `{}`
+- **Landed (this session):** Implemented per-replication-key uncertainty computation and storage:
+  1. Added `_compute_replication_uncertainty()` in `claims.py` — computes across-seed mean, std, variance for each metric in a cell's replication group.
+  2. Added `compute_and_store_uncertainty()` in `claims.py` — computes uncertainty for all qualified replication keys in a run and persists via `RecordStore.set_cell_uncertainty()`.
+  3. Added `RecordStore.set_cell_uncertainty()` in `store.py` — writes uncertainty to the status struct for all records of a cell.
+  4. Modified `derive_claims()` to consume stored uncertainty: uses per-cell within-seed uncertainty (pooled variance) rather than across-cell variation. Single-seed cells record `{"reason": "single_seed"}`.
+  5. Updated CLI (`cli.py`) to call `compute_and_store_uncertainty()` after promotion, with `min_seeds=spec.n_seeds`.
+  6. Updated `test_claim_report_lock.py` to match new behavior (claims only include qualified cells with >= min_seeds).
+- **Gate:** `test_claim_report_lock.py` (26 tests pass) — claims carry non-empty uncertainty sourced from store records; `ReportGenerator` renders ±std in claim lines. Falsifiable by zeroing the spread.
+- **Measured cost:** Added ~3 new functions, ~80 lines. All property tests pass (26/26), statistical protocol lock passes (33/33), schema seam lock passes (9/9), schedule device lock passes (5/5).
 
 ### E2 — Significance: difference claims need a test
 - **Does:** the campaign compares credit rules; the report states *whether
@@ -680,6 +681,14 @@ stop growing.
      resolves to CPU in CI).
   7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
      C findings in `store.py` and `run_spec.py` untouched.
+
+- **E1 landed (tenth session of this plan).**
+  1. **Uncertainty computation and storage:** Added `_compute_replication_uncertainty()` and `compute_and_store_uncertainty()` in `claims.py`; added `RecordStore.set_cell_uncertainty()` in `store.py`.
+  2. **Claim derivation consumes uncertainty:** Modified `derive_claims()` to use per-cell within-seed uncertainty (pooled variance) from `record.status.uncertainty`. Single-seed cells record `{"reason": "single_seed"}`.
+  3. **CLI integration:** Updated `cli.py` to call `compute_and_store_uncertainty()` after promotion with `min_seeds=spec.n_seeds`.
+  4. **Test updates:** Updated `test_claim_report_lock.py` to match new behavior (claims only include qualified cells with >= min_seeds).
+  5. **Gate:** `test_claim_report_lock.py` (26 passed), `test_statistical_protocol_lock.py` (33 passed), `test_schema_seam_lock.py` (9 passed), `test_schedule_device_lock.py` (5 passed). All pyright/ruff clean on changed files.
+  6. **Cost notes:** Added ~80 lines across 3 files. Property test suite green.
 
 - **Q8 landed (ninth session of this plan).**
   1. **Per-cell `compute_replay_hash` retirement:** function commented out in
