@@ -91,6 +91,10 @@ def search_space_from_spec(
             if axis_spec is not None and axis_spec.available:
                 axes_snapshot.append(axis_spec)
 
+    # Pre-filter structural axes to only include primitives that participate
+    # in at least one valid combination (avoids iterating 100k+ invalid combos)
+    axes_snapshot = _filter_axes_for_validity(axes_snapshot, spec)
+
     objectives = tuple(
         OBJECTIVES_REGISTRY[name]
         for name in spec.objectives
@@ -103,6 +107,103 @@ def search_space_from_spec(
         objectives=objectives,
         tasks=tuple(tasks or spec.task_names),
     )
+
+
+def _filter_axes_for_validity(
+    axes_snapshot: list[AxisSpec],
+    spec: RunSpec,
+) -> list[AxisSpec]:
+    """Filter axis primitives to only those with at least one valid combination.
+
+    Computes valid 6-tuples from all void constraints in CONSTRAINTS_REGISTRY,
+    then derives per-axis valid primitives from the valid tuples.
+    """
+    from computronium.experiment.legality.dsl import CoordinateContext, evaluate, Expr, Var
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+    from computronium.experiment.schema.axis import StructuralAxis
+
+    def _references_params(expr: Expr) -> bool:
+        """Check if expression references params.* variables."""
+        if isinstance(expr, Var) and expr.name.startswith("params."):
+            return True
+        # Recursively check nested expressions
+        for field_name in ("expr", "left", "right", "obj", "key"):
+            child = getattr(expr, field_name, None)
+            if isinstance(child, Expr) and _references_params(child):
+                return True
+        # Check for Call.args (Call has args attribute)
+        if hasattr(expr, "args"):
+            args = getattr(expr, "args", None)
+            if args is not None:
+                for arg in args:
+                    if isinstance(arg, Expr) and _references_params(arg):
+                        return True
+        return False
+
+    # Group primitives by axis
+    primitives_by_axis: dict[StructuralAxis, list[str]] = {}
+    for axis_spec in axes_snapshot:
+        primitives_by_axis.setdefault(axis_spec.axis_kind, []).append(axis_spec.name)
+
+    # Get all void constraints that can be evaluated at search space time
+    # (structural axes only, no hyperparameters needed)
+    void_constraints = [
+        c for c in CONSTRAINTS_REGISTRY.values()
+        if c.kind.value == "void" and c.predicate is not None
+        and not _references_params(c.predicate)
+    ]
+
+    # If no void constraints, keep all primitives
+    if not void_constraints:
+        return axes_snapshot
+
+    # Build all combinations and evaluate void constraints
+    # This is the constraint satisfaction layer: find all valid 6-tuples
+    axes_order = list(StructuralAxis)
+    axis_primitives = [primitives_by_axis.get(axis, []) for axis in axes_order]
+    
+    # Quick exit if any axis has no primitives
+    if not all(axis_primitives):
+        return axes_snapshot
+
+    valid_tuples: set[tuple[str, ...]] = set()
+    
+    # Iterate all combinations and check void constraints
+    for values in product(*axis_primitives):
+        selection = {axis.value: name for axis, name in zip(axes_order, values, strict=True)}
+        coordinate = Coordinate(**selection, params={})
+        ctx = CoordinateContext(coordinate, task=spec.task_names[0] if spec.task_names else None)
+        
+        # Check all void constraints
+        all_pass = True
+        for constraint in void_constraints:
+            pred = constraint.predicate
+            assert pred is not None  # filtered above
+            if not evaluate(pred, ctx):
+                all_pass = False
+                break
+        
+        if all_pass:
+            valid_tuples.add(values)
+
+    # Derive per-axis valid primitives from valid tuples
+    valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
+    for tup in valid_tuples:
+        for axis, name in zip(axes_order, tup, strict=True):
+            valid_by_axis[axis].add(name)
+
+    # Filter axes_snapshot to only primitives that appear in at least one valid tuple
+    filtered_snapshot = []
+    for axis_spec in axes_snapshot:
+        if axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set()):
+            filtered_snapshot.append(axis_spec)
+        else:
+            # Conservative: if we somehow have no valid tuples for this axis,
+            # keep the primitive (avoids filtering everything away due to a bug)
+            if not valid_by_axis.get(axis_spec.axis_kind):
+                filtered_snapshot.append(axis_spec)
+
+    return filtered_snapshot
 
 
 def _lerp(lo: float, hi: float, t: float) -> float:
@@ -208,6 +309,10 @@ def _cell_params(
     return usable
 
 
+# Module-level cache for _composable results
+_composable_cache: dict[tuple, bool] = {}
+
+
 def _composable(
     coordinate: Coordinate, task: str, shape: ShapeResolver, param_budget: int
 ) -> bool:
@@ -222,11 +327,31 @@ def _composable(
     ``param_budget`` is the schedule's ceiling, so the space screens a cell at
     the size the evaluator will train it; a space that screens a small cell and
     a large one is the two-channel defect D5 named.
+
+    Uses a module-level cache since the same (coordinate, task, param_budget)
+    combinations are checked repeatedly during search space traversal.
     """
     from computronium.experiment.execution.compose import (
         compose_configs,
         geometry_param_count,
     )
+
+    # Create cache key from structural axes + task + param_budget
+    # Hyperparameters (coordinate.params) are swept separately and don't affect
+    # structural compatibility
+    cache_key = (
+        coordinate.substrate,
+        coordinate.geometry,
+        coordinate.dynamics,
+        coordinate.plasticity,
+        coordinate.credit,
+        coordinate.update,
+        task,
+        param_budget,
+    )
+
+    if cache_key in _composable_cache:
+        return _composable_cache[cache_key]
 
     task_shape = shape(task)
     try:
@@ -237,16 +362,20 @@ def _composable(
             output_dim=task_shape.output_dim,
             param_budget=param_budget,
         )
-    except ValueError, TypeError, KeyError:
+    except (ValueError, TypeError, KeyError):
+        _composable_cache[cache_key] = False
         return False
     if param_budget <= 0:
+        _composable_cache[cache_key] = True
         return True
     # The same R25 fairness rule the evaluator's gate applies, asked here so a
     # cell that cannot honour its ceiling is never proposed: a cell that cannot
     # fit is discovered by training, which is the expensive way to find out.
-    return geometry_param_count(config.geometry) <= param_budget * (
+    result = geometry_param_count(config.geometry) <= param_budget * (
         1 + PARAM_BUDGET_TOLERANCE
     )
+    _composable_cache[cache_key] = result
+    return result
 
 
 def _schedule(spec: RunSpec, task: str) -> Schedule:
@@ -346,6 +475,33 @@ def iter_candidates(
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
     """
+    from computronium.experiment.legality.dsl import CoordinateContext, evaluate, Expr, Var
+    from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
+    def _references_params(expr: Expr) -> bool:
+        """Check if expression references params.* variables."""
+        if isinstance(expr, Var) and expr.name.startswith("params."):
+            return True
+        for field_name in ("expr", "left", "right", "obj", "key"):
+            child = getattr(expr, field_name, None)
+            if isinstance(child, Expr) and _references_params(child):
+                return True
+        # Check for Call.args (Call has args attribute)
+        if hasattr(expr, "args"):
+            args = getattr(expr, "args", None)
+            if args is not None:
+                for arg in args:
+                    if isinstance(arg, Expr) and _references_params(arg):
+                        return True
+        return False
+
+    # Use ALL void constraints that don't require hyperparameters
+    void_constraints = [
+        c for c in CONSTRAINTS_REGISTRY.values()
+        if c.kind.value == "void" and c.predicate is not None
+        and not _references_params(c.predicate)
+    ]
+
     seen: set[str] = set()
     scanned = 0
     for coordinate, task in _walk(spec, search_space):
@@ -356,6 +512,19 @@ def iter_candidates(
         if coordinate.measurement_key(schedule) in seen:
             continue
         seen.add(coordinate.measurement_key(schedule))
+
+        # Fast void constraint check (DSL evaluation, no composition)
+        if void_constraints:
+            ctx = CoordinateContext(coordinate, task=task)
+            failed = False
+            for constraint in void_constraints:
+                pred = constraint.predicate
+                assert pred is not None  # filtered above
+                if not evaluate(pred, ctx):
+                    failed = True
+                    break
+            if failed:
+                continue
 
         if shape is not None and not _composable(
             coordinate, schedule.task_id, shape, schedule.param_budget

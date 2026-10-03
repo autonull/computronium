@@ -32,7 +32,9 @@ from computronium.experiment.schema.registries import (
 # Past the bound the
 # totals are the sample mean extrapolated over the declared count, and the plan
 # says *that* rather than quoting a total it did not count.
-_PRICE_SCAN: Final = 24
+# Increased from 24 to 5000 to handle full space where invalid combos dominate
+# early iteration order (TODO49 Phase 2).
+_PRICE_SCAN: Final = 5000
 _PRICE_SAMPLE: Final = 24
 
 if TYPE_CHECKING:

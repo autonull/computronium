@@ -311,8 +311,9 @@ class CoordinateContext:
     anything has been measured).
     """
 
-    def __init__(self, coordinate: Coordinate) -> None:
+    def __init__(self, coordinate: Coordinate, task: str | None = None) -> None:
         self.coordinate = coordinate
+        self.task = task
 
     def resolve_var(self, name: str) -> Any:  # ruff: ignore[too-many-return-statements] - expected for resolver
         """Resolve a coordinate axis or hyperparameter name."""
@@ -324,6 +325,9 @@ class CoordinateContext:
 
         if name in self.coordinate.params:
             return self.coordinate.params[name]
+
+        if name == "task" and self.task is not None:
+            return self.task
 
         return None
 
