@@ -40,6 +40,7 @@ from computronium.experiment.schema.run_spec import (
 )
 from computronium.experiment.surface.report import (
     ReportGenerator,
+    RunSummary,
     export_to_json,
     export_to_parquet,
     generate_run_report,
@@ -239,6 +240,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_status.add_argument(
         "--run-id", default=None, help="Run ID to check (all if omitted)"
+    )
+    p_status.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Show campaign economics: cost per record, projected completion",
     )
 
     return parser
@@ -452,10 +458,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
             outcomes = asyncio.run(runner.run())
         except KeyboardInterrupt:
             logger.info("Interrupted; run can be resumed with --run-id %s", run_id)
+            if runner._state.budget is not None:
+                budget_consumed = runner._state.budget.elapsed_seconds()
+                store.finish_run(
+                    run_id, "interrupted", budget_consumed_s=budget_consumed
+                )
             return 130
         except Exception as e:
             logger.error("Pipeline failed: %s", e, exc_info=True)
-            store.finish_run(run_id, "failed")
+            if runner._state.budget is not None:
+                budget_consumed = runner._state.budget.elapsed_seconds()
+                store.finish_run(run_id, "failed", budget_consumed_s=budget_consumed)
+            else:
+                store.finish_run(run_id, "failed")
             return 1
 
         # The promotion stage runs after measuring, on the run's own store:
@@ -487,8 +502,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
             spec.n_seeds,
         )
 
-        store.finish_run(run_id, "completed")
-        logger.info(f"Run {run_id} completed with {len(outcomes)} outcomes")
+        budget_consumed = (
+            runner._state.budget.elapsed_seconds() if runner._state.budget else None
+        )
+        store.finish_run(run_id, "completed", budget_consumed_s=budget_consumed)
+        logger.info(
+            f"Run {run_id} completed with {len(outcomes)} outcomes in {budget_consumed:.1f}s"
+        )
         return 0
 
 
@@ -605,9 +625,12 @@ def _cmd_status(args: argparse.Namespace) -> int:
             if summary is None:
                 logger.error(f"Run {args.run_id} not found")
                 return 1
-            # A slots dataclass has no __dict__: reading one is the crash
-            # §3.7 gate 4 exists to catch, in the branch that reports a run.
-            print(json.dumps(asdict(summary), default=str, indent=2))
+            if args.detailed:
+                _print_detailed_status(summary)
+            else:
+                # A slots dataclass has no __dict__: reading one is the crash
+                # §3.7 gate 4 exists to catch, in the branch that reports a run.
+                print(json.dumps(asdict(summary), default=str, indent=2))
         else:
             runs = ReportGenerator(store).list_runs()
             if not runs:
@@ -620,6 +643,50 @@ def _cmd_status(args: argparse.Namespace) -> int:
                     f"promo={run.promoted_count:3} | {run.started_at}"
                 )
     return 0
+
+
+def _print_detailed_status(summary: RunSummary) -> None:
+    """Print detailed status with campaign economics."""
+    print(f"Run: {summary.run_id}")
+    print(f"Status: {summary.status}")
+    print(f"Started: {summary.started_at}")
+    print(f"Finished: {summary.finished_at or 'N/A'}")
+    print(f"Budget Consumed: {summary.budget_consumed_s or 0:.1f}s")
+    print(f"Replay Hash: {summary.replay_hash or 'N/A'}")
+    print(f"Spec Version: {summary.spec_version}")
+    print()
+    print("Record Statistics:")
+    print(f"  Total Records: {summary.record_count}")
+    print(f"  Claim Eligible: {summary.claim_eligible_count}")
+    print(f"  Promoted: {summary.promoted_count}")
+    print(f"  Declared Cells: {summary.declared_cells}")
+    print()
+
+    # Campaign Economics
+    if summary.record_count > 0 and summary.budget_consumed_s is not None:
+        cost_per_record = summary.budget_consumed_s / summary.record_count
+        print("Campaign Economics:")
+        print(f"  Cost per Record: {cost_per_record:.3f}s")
+
+        if summary.declared_cells > 0:
+            projected_total = cost_per_record * summary.declared_cells
+            remaining_cells = summary.declared_cells - summary.record_count
+            projected_remaining = cost_per_record * remaining_cells
+            print(
+                f"  Projected Total: {projected_total:.1f}s ({projected_total / 60:.1f}m)"
+            )
+            print(
+                f"  Remaining: {projected_remaining:.1f}s ({projected_remaining / 60:.1f}m)"
+            )
+            progress = (summary.record_count / summary.declared_cells) * 100
+            print(
+                f"  Progress: {progress:.1f}% ({summary.record_count}/{summary.declared_cells})"
+            )
+    elif summary.declared_cells > 0:
+        print("Campaign Economics:")
+        print(f"  Declared Cells: {summary.declared_cells}")
+        print(f"  Records Measured: {summary.record_count}")
+        print("  Cost per Record: N/A (no budget consumed yet)")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

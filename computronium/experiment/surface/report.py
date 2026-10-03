@@ -32,6 +32,10 @@ from computronium.experiment.evidence.limitations import (
     derive_limitations,
     replication_keys_of,
 )
+from computronium.experiment.execution.search_space import (
+    declared_cell_count,
+    search_space_from_spec,
+)
 from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.metrics import (
     objective_metric,
@@ -70,6 +74,7 @@ class RunSummary:
     record_count: int
     claim_eligible_count: int
     promoted_count: int
+    declared_cells: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +124,12 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         claim_eligible_count = len(eligible)
         promoted_count = len(filter_promoted(eligible))
 
+        # Calculate declared cells from the spec
+        declared_cells = 0
+        if info.spec is not None:
+            space = search_space_from_spec(info.spec)
+            declared_cells = declared_cell_count(info.spec, space)
+
         return RunSummary(
             run_id=info.run_id,
             spec=info.spec,
@@ -131,6 +142,7 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             record_count=record_count,
             claim_eligible_count=claim_eligible_count,
             promoted_count=promoted_count,
+            declared_cells=declared_cells,
         )
 
     def list_runs(self) -> list[RunSummary]:
@@ -528,6 +540,40 @@ def _coverage_section(generator: ReportGenerator, run_id: str) -> list[str]:
     ]
 
 
+def _economics_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """Campaign economics: cost per record, projected completion."""
+    summary = generator.run_summary(run_id)
+    if summary is None:
+        return []
+
+    lines = _section("Campaign Economics:")
+    if summary.record_count > 0 and summary.budget_consumed_s is not None:
+        cost_per_record = summary.budget_consumed_s / summary.record_count
+        lines.append(f"  Cost per Record: {cost_per_record:.3f}s")
+
+        if summary.declared_cells > 0:
+            projected_total = cost_per_record * summary.declared_cells
+            remaining_cells = summary.declared_cells - summary.record_count
+            projected_remaining = cost_per_record * remaining_cells
+            lines.append(
+                f"  Projected Total: {projected_total:.1f}s ({projected_total / 60:.1f}m)"
+            )
+            lines.append(
+                f"  Remaining: {projected_remaining:.1f}s ({projected_remaining / 60:.1f}m)"
+            )
+            progress = (summary.record_count / summary.declared_cells) * 100
+            lines.append(
+                f"  Progress: {progress:.1f}% ({summary.record_count}/{summary.declared_cells})"
+            )
+    elif summary.declared_cells > 0:
+        lines.append(f"  Declared Cells: {summary.declared_cells}")
+        lines.append(f"  Records Measured: {summary.record_count}")
+        lines.append("  Cost per Record: N/A (no budget consumed yet)")
+    else:
+        lines.append("  No declared cells or records measured")
+    return lines
+
+
 def generate_run_report(store: RecordStore, run_id: str) -> str:
     """Generate a human-readable report for a single run."""
     generator = ReportGenerator(store)
@@ -549,6 +595,8 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         f"  Total Records: {summary.record_count}",
         f"  Claim Eligible: {summary.claim_eligible_count}",
         f"  Promoted: {summary.promoted_count}",
+        f"  Declared Cells: {summary.declared_cells}",
+        *_economics_section(generator, run_id),
         *_distribution_section(
             "Maturity Distribution:", generator.maturity_distribution(run_id)
         ),
@@ -626,7 +674,7 @@ def export_to_parquet(
     return output_path
 
 
-def export_to_json(  # noqa: PLR0914
+def export_to_json(  # ruff: ignore[too-many-locals]
     store: RecordStore,
     output_path: str | Path,
     run_id: str | None = None,

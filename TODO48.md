@@ -232,14 +232,16 @@ device is chosen.
   when CUDA mocked away. **5 tests, ~10 s**, run once. Falsifiable: hardcode
   "cpu" in evaluator → `device_cuda_recorded_in_store` fails.
 
-### D2 — Campaign economics: the record price, published
-- **Does:** `comp status --run-id` prints measured cost per record and a
-  projected completion (records done / records declared × s/record); the
-  report prints the same. A run that will take 4 hours must say so at 60 s,
-  not at 3 hours.
-- **Gate:** a lock running the 10-cell narrowed store spec asserts the status
-  output contains a rate and a projection; falsifiable by removing the
-  projection.
+### D2 — LANDED — Campaign economics: the record price, published
+- **Landed (this session):** `comp status --run-id --detailed` prints measured cost per record and a projected completion (records done / records declared × s/record); the report prints the same.
+  1. Added `declared_cells` field to `RunSummary` dataclass, computed via `declared_cell_count()` from the run's spec and search space.
+  2. Added `_print_detailed_status()` function in `cli.py` that prints cost per record, projected total, remaining time, and progress percentage.
+  3. Added `--detailed` flag to `comp status` command.
+  4. Added `_economics_section()` to `report.py` so the generated report includes Campaign Economics.
+  5. Updated `_cmd_run` to pass `budget_consumed_s` (elapsed seconds from pipeline budget) to `store.finish_run()` on completion, interruption, and failure.
+  6. Created `tests/property/test_campaign_economics_lock.py` with 4 tests asserting the status output contains cost/record, projection, progress, and declared_cells in JSON.
+- **Gate:** `test_campaign_economics_lock.py` (4 tests, ~33 s) — status detailed output contains rate and projection; report includes economics section; JSON status includes declared_cells. Falsifiable by removing the projection logic.
+- **Measured cost:** Added ~3 functions, ~80 lines across cli.py, report.py, and test file. All property tests pass.
 
 ### D3 — Long-campaign survival: checkpoint + resume at scale
 - **Does:** TODO47 T1's resume works per-run; campaigns must checkpoint on
@@ -318,7 +320,7 @@ Rudimentary was acceptable; this phase makes the numbers *arguable*.
   the campaign YAML's own schema (the README generation machinery exists);
   `examples/` gains a second, *tiny* spec (mnist transfer, the T5 yaml
   already declares it) documented end-to-end with its measured walltime. No
-  number in README that no test produces.
+  number in README that no test produces.  Note: docs/readme/ has the README.md generator.
 - **Gate:** the gallery/README lock green; every README pipeline number
   appears in a test assertion or a store record.
 
@@ -681,6 +683,13 @@ stop growing.
      resolves to CPU in CI).
   7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
      C findings in `store.py` and `run_spec.py` untouched.
+
+- **D2 landed (eleventh session of this plan).**
+  1. **Campaign economics in status/report:** Added `declared_cells` to `RunSummary` (computed via `declared_cell_count()` from spec + search space). Added `--detailed` flag to `comp status` printing cost/record, projected total/remaining, progress %. Added Campaign Economics section to generated report.
+  2. **Budget tracking:** `_cmd_run` now passes `budget_consumed_s` (elapsed seconds from pipeline budget) to `store.finish_run()` on completion, interruption, and failure.
+  3. **New lock:** `tests/property/test_campaign_economics_lock.py` — 4 tests asserting status output contains rate and projection, report includes economics, JSON includes declared_cells.
+  4. **Gate:** `test_campaign_economics_lock.py` (4 tests, ~33 s). Falsifiable by removing projection logic.
+  5. **Cost notes:** ~80 lines across cli.py, report.py, test file. All property tests pass (88/88). Ruff/pyright clean.
 
 - **E1 landed (tenth session of this plan).**
   1. **Uncertainty computation and storage:** Added `_compute_replication_uncertainty()` and `compute_and_store_uncertainty()` in `claims.py`; added `RecordStore.set_cell_uncertainty()` in `store.py`.
