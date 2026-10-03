@@ -198,17 +198,20 @@ before, its measured price. No ticket's gate is a whole shard.
      pass (test_lab_boundary.py, test_lab_train.py).
 - **Gate:** lab boundary lock green; ruff/pyright clean.
 
-### Q8 — The small ones (any order)
+### Q8 — LANDED — The small ones (any order)
 - **conformance.py reports** an `UNVERIFIED` row's recorded reason instead of
   running it; `codegen.generate_conformance_stubs` stops emitting stubs for
-  the 19 unverified rows (TODO47 T8, unchanged).
+  the 19 unverified rows (TODO47 T8, unchanged). **Already implemented.**
 - **Per-cell `compute_replay_hash` retirement** (TODO47 §5): the run-level
   hash is the gate; the per-cell API has zero production callers (re-verified
-  this session); retire it with a record.
+  this session); retire it with a record. **Landed:** function commented out
+  in `replay.py:30-39`, removed from `__all__`.
 - **Effective lr visible in records:** promote the §6.1 probe's finding into
   `ComposedCell.params` reporting — "what lr did this cell train at" is
   answerable from a record without a probe (`update.step_size` as composed).
-- **README archaeology** (low, TODO47 T8).
+  **Landed:** `Record.create` accepts `effective_params` (record.py:165),
+  `cell_record` passes `evaluation.params` (evaluate.py:391).
+- **README archaeology** (low, TODO47 T8). **Deferred.**
 
 ## Phase D — Scale to real use
 
@@ -677,3 +680,31 @@ stop growing.
      resolves to CPU in CI).
   7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
      C findings in `store.py` and `run_spec.py` untouched.
+
+- **Q8 landed (ninth session of this plan).**
+  1. **Per-cell `compute_replay_hash` retirement:** function commented out in
+     `replay.py:30-39` with explanatory note, removed from `__all__`; test
+     `test_replay_hash_deterministic` removed from `test_stage_model_lock.py`.
+  2. **Conformance UNVERIFIED handling:** already implemented —
+     `codegen.generate_conformance_stubs` skips UNVERIFIED capabilities
+     (codegen.py:302-303), `ConformanceHarness._check_capability` reports
+     `unverified_reason` instead of running test (conformance.py:223-232).
+  3. **Effective LR visible in records:** `Record.create` accepts optional
+     `effective_params` (record.py:165), `cell_record` passes
+     `evaluation.params` (effective params from `ComposedCell.params`) as
+     `effective_params` (evaluate.py:391). Records now store per-axis
+     effective hyperparameters (e.g., `dynamics.settle_step`,
+     `update.update_lr`, `credit.credit_beta`).
+  4. **Search space fixes:** `_cell_params` now maps hyperparameter names to
+     config field names via `config_field_name` (search_space.py:202);
+     `ActiveSpace.for_axis` maps hyperparameter names to config field names
+     when checking `accepted_params` (harvest.py:135). Tests updated to use
+     new hyperparameter names (`settle_step`, `settle_beta`).
+  5. **Store fix:** `_parse_schedule` handles `device=None` from DuckDB
+     (store.py:990).
+  6. **Gate:** search space lock green (**25 passed, ~27 s**), active space
+     lock green (**19 passed, ~10 s**), schema seam lock green (**9 passed,
+     ~11 s**), conformance harness green (**12 passed, ~22 s**), atomic
+     append lock green (**5 passed, ~30 s**).
+  7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
+     C findings in `store.py` and `harvest.py` untouched.

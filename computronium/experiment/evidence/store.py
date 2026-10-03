@@ -984,6 +984,9 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
 
     def _parse_schedule(self, schedule_struct: dict[str, Any]) -> Schedule:
         """Parse schedule from database struct."""
+        device = schedule_struct.get("device", "auto")
+        if device is None:
+            device = "auto"
         return Schedule(
             fidelity=schedule_struct["fidelity"],
             seed=schedule_struct["seed"],
@@ -994,7 +997,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
             task_id=schedule_struct["task_id"],
             # Rows written before the ceiling existed declare none.
             param_budget=schedule_struct.get("param_budget", 0),
-            device=schedule_struct.get("device", "auto"),
+            device=device,
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:

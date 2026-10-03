@@ -163,6 +163,7 @@ class Record:
         payload: dict[str, Any],
         unknown: dict[str, Any] | None = None,
         schema_version: int | None = None,
+        effective_params: dict[str, Any] | None = None,
     ) -> Record:
         from computronium.experiment.schema.versioning import current_schema_version
 
@@ -180,6 +181,8 @@ class Record:
             }).encode()
         ).hexdigest()
 
+        params = effective_params if effective_params is not None else coordinate.params
+
         return cls(
             record_id=record_id,
             seq=0,  # Assigned by store on append
@@ -193,7 +196,7 @@ class Record:
             plasticity=coordinate.plasticity,
             credit=coordinate.credit,
             update=coordinate.update,
-            params=coordinate.params,
+            params=params,
             schedule=schedule,
             provenance=provenance,
             status=status,

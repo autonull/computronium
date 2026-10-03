@@ -389,4 +389,5 @@ def cell_record(
             ceec_link=None,
         ),
         payload=payload,
+        effective_params=dict(evaluation.params),
     )

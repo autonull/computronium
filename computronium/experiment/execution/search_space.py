@@ -192,6 +192,8 @@ def _cell_params(
     the hyperparameter and reads it: carrying it otherwise is dead config,
     which the harvest already refuses elsewhere.
     """
+    from computronium.experiment.schema.harvest import config_field_name
+
     active = schema.active(coordinate)
     axis_of = {
         spec.name: StructuralAxis(spec.axis_name) for spec in schema.hyperparameters
@@ -199,7 +201,8 @@ def _cell_params(
     usable: dict[str, Any] = {}
     for name, ladder in ladders.items():
         axis = axis_of[name]
-        if name not in active.for_axis(axis, getattr(coordinate, axis.value)):
+        config_name = config_field_name(name)
+        if config_name not in active.for_axis(axis, getattr(coordinate, axis.value)):
             continue
         usable[name] = ladder[stride % len(ladder)]
     return usable

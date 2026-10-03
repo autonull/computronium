@@ -242,45 +242,6 @@ class TestReplayResumeIntegration:
         store_config = StoreConfig(path=tmp_path / "test.duckdb")
         return RecordStore(store_config)
 
-    def test_replay_hash_deterministic(self) -> None:
-        """Replay hash is deterministic for same inputs (R26/R27)."""
-        from computronium.experiment.execution.replay import compute_replay_hash
-        from computronium.experiment.schema.coordinate import (
-            Coordinate,
-            Schedule,
-        )
-
-        coord = Coordinate(
-            substrate="digital",
-            geometry="feedforward",
-            dynamics="energy_minimization",
-            plasticity="null",
-            credit="backprop",
-            update="euclidean",
-            params={"lr": 0.01, "batch_size": 32},
-        )
-        sched = Schedule(
-            fidelity="L1",
-            seed=42,
-            n_seeds=1,
-            epochs=10,
-            batch_limit=100,
-            budget_id="test_budget",
-        )
-        prov = {
-            "env": {"python": "3.14"},
-            "dataset": "mnist",
-            "dataset_version": "1.0",
-            "code_sha": "abc123",
-            "policy": "random",
-            "links": {"run_id": "test_run"},
-        }
-        params = {"lr": 0.01, "batch_size": 32}
-
-        hash1 = compute_replay_hash(coord, sched, prov, params)
-        hash2 = compute_replay_hash(coord, sched, prov, params)
-        assert hash1 == hash2, "Replay hash not deterministic"
-
     def test_resume_via_measurement_key_dedup(self, tmp_path: Path) -> None:
         """Resume correctly skips already-completed measurement_keys."""
         from computronium.experiment.evidence.store import RecordStore, StoreConfig

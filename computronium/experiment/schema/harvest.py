@@ -132,7 +132,13 @@ class ActiveSpace:
         if axis_spec is None:
             return {}
         values = self.by_axis(axis)
-        return {k: v for k, v in values.items() if k in axis_spec.accepted_params}
+        # Map hyperparameter names to config field names for accepted_params check
+        accepted_config_names = axis_spec.accepted_params
+        return {
+            k: v
+            for k, v in values.items()
+            if config_field_name(k) in accepted_config_names
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,7 +294,9 @@ def _config_default(spec: HyperparameterSpec, coordinate: Coordinate) -> Any:
     return _config_default_inner(axis, field_name, coordinate)
 
 
-def _config_default_inner(axis: StructuralAxis, field_name: str, coordinate: Coordinate) -> Any:
+def _config_default_inner(
+    axis: StructuralAxis, field_name: str, coordinate: Coordinate
+) -> Any:
     """Inner resolution using config_cls and factories."""
     config_cls = load_axis_config(axis)
     if config_cls is None:
