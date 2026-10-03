@@ -26,6 +26,40 @@ PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 # claimed metrics within this relative tolerance to earn maturity L2.
 REPLAY_METRIC_TOLERANCE: Final[float] = 0.25
 
+# TODO48b R2: measured seconds per cell, per dynamics primitive, at the regime
+# `scripts/probes/dynamics_cost.py` prices (digits, feedforward x fast_weights x
+# gradient x euclidean, L0, 1 epoch, batch_limit 2, hidden_dim 64). The economy
+# of a campaign is decided by which dynamics it sweeps, so the price belongs in a
+# registry where the oracle, the report and the next session all read it.
+MEASURED_CELL_SECONDS: Final[dict[str, float]] = {
+    "energy_minimization": 0.710,
+    "lazy": 0.396,
+    "instantaneous": 0.084,
+}
+
+MEASURED_CELL_SECONDS_REGIME: Final[str] = (
+    "digits, feedforward x fast_weights x gradient x euclidean, L0, 1 epoch, "
+    "batch_limit 2, hidden_dim 64 (scripts/probes/dynamics_cost.py)"
+)
+
+# An unmeasured primitive is priced as the cheapest measured one: a number
+# invented for it would be a guess wearing a decimal point's clothes.
+DEFAULT_CELL_SECONDS: Final[float] = min(MEASURED_CELL_SECONDS.values())
+
+
+def cell_price_seconds(dynamics: str, *, epochs: int = 1) -> float:
+    """Seconds one cell of ``dynamics`` costs, scaled by its epochs.
+
+    Args:
+        dynamics: The cell's dynamics primitive.
+        epochs: Epochs the cell trains; the measured regime is one.
+
+    Returns:
+        The cell's projected seconds.
+    """
+    base = MEASURED_CELL_SECONDS.get(dynamics, DEFAULT_CELL_SECONDS)
+    return base * max(1, epochs)
+
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveSpec:
@@ -387,6 +421,9 @@ __all__ = [
     "CAPABILITIES_REGISTRY",
     "CARD_FACTORS",
     "CONSTRAINTS_REGISTRY",
+    "DEFAULT_CELL_SECONDS",
+    "MEASURED_CELL_SECONDS",
+    "MEASURED_CELL_SECONDS_REGIME",
     "OBJECTIVES_REGISTRY",
     "PARAM_BUDGET_TOLERANCE",
     "POLICIES_REGISTRY",
@@ -405,6 +442,7 @@ __all__ = [
     "ProofKind",
     "StageId",
     "StageSpec",
+    "cell_price_seconds",
     "get_card_factor",
     "prior_value",
     "register_capability",

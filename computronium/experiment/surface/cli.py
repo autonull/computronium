@@ -363,6 +363,14 @@ def _dry_run_report(spec: RunSpec, *, policy_name: str, limit: int = 5) -> str:
             break
     lines.append(f"first {len(cells)} legal cell(s):")
     lines.extend(cells)
+
+    # The price, the stop point, and the primitives no legal cell reaches
+    # (TODO48b R2): every fixture-sizing guess a session makes by trial is a
+    # print here instead.
+    from computronium.experiment.execution.pricing import price_plan
+
+    lines.append("")
+    lines.extend(f"  {line}" for line in price_plan(spec, space).render().splitlines())
     return "\n".join(lines)
 
 

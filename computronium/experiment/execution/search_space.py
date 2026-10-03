@@ -319,6 +319,7 @@ def iter_candidates(
     budget: Budget | None = None,
     cost_model: CostModel | None = None,
     shape: ShapeResolver | None = None,
+    max_scan: int | None = None,
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
@@ -336,6 +337,11 @@ def iter_candidates(
         shape: Resolves a task's ``(input_dim, output_dim)``. When given, a
             cell whose configs cannot compose or validate for that shape is
             skipped instead of proposed.
+        max_scan: Stop after this many candidates *examined*, not yielded. A
+            caller that prices or samples a factorial — where the illegal
+            candidates are the expensive majority — bounds the examination; a
+            caller that walks the space for what it can measure leaves it
+            ``None`` and takes the module's own scan bound.
 
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
@@ -344,7 +350,7 @@ def iter_candidates(
     scanned = 0
     for coordinate, task in _walk(spec, search_space):
         scanned += 1
-        if scanned > _MAX_SCAN:
+        if scanned > (max_scan if max_scan is not None else _MAX_SCAN):
             return
         schedule = _schedule(spec, task)
         if coordinate.measurement_key(schedule) in seen:
