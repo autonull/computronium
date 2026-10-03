@@ -232,6 +232,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                                        ceec_link TEXT) NOT NULL,
                 payload         JSON NOT NULL,
                 unknown         JSON,
+                effective_params JSON NOT NULL DEFAULT '{}',
                 UNIQUE(run_id, measurement_key)
             )
         """)
@@ -450,8 +451,9 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                     INSERT INTO records (
                         record_id, run_id, schema_version, cell_key, measurement_key,
                         substrate, geometry, dynamics, plasticity, credit, update,
-                        params, schedule, provenance, status, payload, unknown
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        params, schedule, provenance, status, payload, unknown,
+                        effective_params
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         record.record_id,
@@ -482,6 +484,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                         }),
                         json.dumps(record.payload),
                         json.dumps(record.unknown) if record.unknown else None,
+                        json.dumps(record.effective_params),
                     ],
                 )
             except duckdb.ConstraintException as e:
@@ -512,6 +515,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                 credit=record.credit,
                 update=record.update,
                 params=record.params,
+                effective_params=record.effective_params,
                 schedule=record.schedule,
                 provenance=record.provenance,
                 status=record.status,
@@ -549,8 +553,9 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                     INSERT INTO records (
                         record_id, run_id, schema_version, cell_key, measurement_key,
                         substrate, geometry, dynamics, plasticity, credit, update,
-                        params, schedule, provenance, status, payload, unknown
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        params, schedule, provenance, status, payload, unknown,
+                        effective_params
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
                         record.record_id,
@@ -590,6 +595,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                         },
                         json.dumps(record.payload),
                         json.dumps(record.unknown) if record.unknown else None,
+                        json.dumps(record.effective_params),
                     ],
                 )
 
@@ -630,6 +636,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                 credit=record.credit,
                 update=record.update,
                 params=record.params,
+                effective_params=record.effective_params,
                 schedule=record.schedule,
                 provenance=record.provenance,
                 status=record.status,
@@ -995,6 +1002,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
                 f"Unsupported schema_version {row[3]} for record {row[0]}; "
                 f"supported: {sorted(self.SUPPORTED_SCHEMA_VERSIONS)}"
             )
+        params = json.loads(row[12])
         schedule = self._parse_schedule(row[13])
         provenance = self._parse_provenance(row[14])
         status = self._parse_status(row[15])
@@ -1012,12 +1020,15 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
             plasticity=row[9],
             credit=row[10],
             update=row[11],
-            params=json.loads(row[12]),
+            params=params,
             schedule=schedule,
             provenance=provenance,
             status=status,
             payload=json.loads(row[16]),
             unknown=json.loads(row[17]) if row[17] else None,
+            effective_params=json.loads(row[18])
+            if len(row) > 18 and row[18]
+            else params,
         )
 
     def _parse_schedule(self, schedule_struct: dict[str, Any]) -> Schedule:

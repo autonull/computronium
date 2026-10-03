@@ -243,15 +243,78 @@ device is chosen.
 - **Gate:** `test_campaign_economics_lock.py` (4 tests, ~33 s) — status detailed output contains rate and projection; report includes economics section; JSON status includes declared_cells. Falsifiable by removing the projection logic.
 - **Measured cost:** Added ~3 functions, ~80 lines across cli.py, report.py, and test file. All property tests pass.
 
-### D3 — Long-campaign survival: checkpoint + resume at scale
-- **Does:** TODO47 T1's resume works per-run; campaigns must checkpoint on
-  budget exhaustion (TODO47 §5 warns per-cell resumes waste rounds) and
-  `comp run --resume <run_id>` must be the documented recovery path for an
-  interrupted campaign. Verify the `Policy.resume()` paths for all policies,
-  not just the two the lock covers.
-- **Gate:** the resume lock extended: interrupt a 3-round campaign twice, the
-  third launch completes the declared space with no duplicate key and no gap
-  (the §3.7 gate-5 statement at campaign scale).
+### D3 — LANDED — Long-campaign survival: the store is the checkpoint
+- **Landed (this session):** resume is now **one** mechanism and it is the
+  store's, so it works for every policy rather than the two that remembered a
+  cursor:
+  1. **The resume seam is singular** (`ProposalContext.cells`): the stream a
+     policy walks skips every cell whose seeds the run already measured
+     (`measured_keys()` reads the store, unbounded; `fresh()` is seed-level, so
+     a cell with 4 of 5 seeds left is still proposed). `StratifiedRandomPolicy.
+     resume` and `RoundRobinGridPolicy.resume` and the pipeline's
+     `getattr(policy, "resume", ...)` hook are **deleted** — the six policies
+     that never had a `resume()` were re-proposing their first round into
+     measured cells, the round stored nothing, and the run concluded the space
+     was exhausted while most of it was untouched.
+  2. **The budget is charged** (`_charge_budget`, `pipeline.py`). It never was:
+     `advance_by`/`add_cost` had zero callers, so `target_cells` and
+     `target_cost` were unreachable, `cost_consumed` was always 0, and S10's
+     "budget exhausted" could only ever be read off the wall clock. A declared
+     budget was a comment.
+  3. **S10's decision is read** (`_get_decision_from_fragments` returned a
+     hardcoded `continue_round`; the plan file even recorded this as design).
+     Every termination reason a stage states was discarded, so a run's only
+     stopping conditions were the round limit and the exhaustion heuristic.
+  4. **The JSON checkpoint subsystem is retired** (Q8 precedent, with record):
+     `Checkpoint`, `create_checkpoint`, `periodic_checkpoint`,
+     `resume_from_store`, `resume_run`, `ResumeResult`, `find_existing_record`,
+     `PipelineConfig.checkpoint_dir`, the per-round writer and the CLI's
+     `checkpoints/<run_id>` wiring. `comp run` wrote one file per round that
+     **nothing ever read** — a duplicate of evidence the store already held,
+     growing per round on exactly the long campaigns that need their disk, and
+     a cell-level restart path of the kind TODO47 §5 warns against. The store
+     *is* the checkpoint; `--run-id` is the documented recovery path (help text
+     now says so).
+  5. **Two seam defects found by walking all eight policies** (D3's second
+     clause — only 2 of 8 were ever exercised):
+     - `ModelBasedPolicy._create_study` passed **both** `direction=` and
+       `directions=` to `optuna.create_study`, which raises
+       `ValueError: Specify only one` — the model-based policy could not
+       propose at all on the installed Optuna.
+     - `SynthesisPolicy` and `StrategyProgressionPolicy` had **required**
+       positional args that `policy_context` cannot supply, so two of the eight
+       catalog entries were unconstructible from a spec alone: a policy a run
+       may not choose, declared in the registry as choosable. Both now default
+       (synthesis → uniform; progression → uniform then model-based).
+     - `EvolutionPolicy` returned nothing when its operators drew no legal
+       child (mutation rate below the draw), and a silent policy ends the run;
+       it now falls back to the cells the run has left, as its unseeded
+       population branch already did. Evolution/model-based children are also
+       screened by `ctx.fresh()` — a mutation that lands back on its parent is a
+       measurement the store already holds.
+  6. **Identity defect fixed (pre-existing, D1/Q8 fallout):** `Record.create`
+     overwrote `params` with the *composed* effective params, so
+     `Coordinate.from_record(record).measurement_key(record.schedule)` did not
+     reproduce the record's own key — `test_measurement_identity_is_the_
+     coordinate_alone` was **red at HEAD**. `Record` now carries
+     `effective_params` beside `params` (own DuckDB column, trailing so
+     positional row indices are unchanged); `params` is the declared
+     coordinate again, and identity recomputes from the record itself.
+- **Gate:** `tests/property/test_run_ledger_lock.py` — **9 passed, 54 s**,
+  once. Two new tests: `test_three_launches_complete_the_declared_space_with_
+  no_duplicate_and_no_gap` (budget exhaustion interrupts at 3 measurements, so
+  where a launch stops is arithmetic rather than a race with the clock:
+  launches of 10/20/30 records against 30 declared, exact set equality at the
+  end) and `test_every_policy_resumes_within_the_runs_own_store` (all eight
+  catalog entries over one real store; none re-proposes a measured seed).
+  Falsifiable: restore `resume_from_store`/`getattr` and the six unresumed
+  policies fail; drop `_charge_budget` and the budgeted launches never stop.
+- **Cost note on the fixture:** `_run_spec` (15 cells) cannot exercise three
+  launches — one round proposes ~8 of 15, so two launches always finish it.
+  `_campaign_spec()` widens the substrate axis to 30 cells (measured 13 s for
+  three launches). Also `budget_seconds` 60 → 600: with the budget now honoured,
+  a fixture whose hash lock depended on a wall-clock limit truncated at a
+  different cell on a loaded machine than on an idle one.
 
 ## Phase E — Scientific rigor in the report
 
@@ -372,6 +435,45 @@ Five forks; defaults keep the queue unblocked:
   versioning flags them, the report marks them "pre-fix"; (ii) the store is
   cleared. *Session default:* (i) — a record is evidence; versioning makes
   its meaning explicit without destroying it.
+
+### New improvement opportunities (raised by D3, in value order)
+
+**Not** tickets yet — measurements that fit no existing ticket, recorded so the
+next session inherits them instead of re-deriving them.
+
+1. **The settle loop is the campaign's cost model (Phase D, kernel).**
+   Measured per cell on the campaign's own regime (`digits`, L0, 1 epoch,
+   `batch_limit 2`, hidden_dim 64, 5 cells each; re-derivable via
+   `scripts/probes/dynamics_cost.py`): `energy_minimization` **0.710 s**,
+   `lazy` 0.396 s, `instantaneous` **0.084 s**. EqProp is **8.8x** the cheapest
+   primitive for the same forward/backward, and cProfile puts ~80% of a cell in
+   `_dynamics.py:3066(_sweep)` / `:1370(_observe)` / `:1108(settle)`. The
+   convergence early-exit (`convergence_start=5`, `threshold=1e-4`) **never
+   fires** at this fidelity, so all 30 steps run. AGENTS.md's "be skeptical of
+   low-performing experiments" applies squarely: either the exit test becomes
+   relative (`delta / delta_prev`) or the sweep batches across cells differing
+   only in a swept hyperparameter. Until this is fixed, swapping the campaign's
+   control axis is paying to hide it.
+2. **Store cost is not worth tuning.** Measured: open 29 ms, **2.9 ms/record**
+   append, 30 ms to query 450 rows. A 450-record campaign spends ~1.3 s in
+   DuckDB out of ~140 s (~1%). Do not spend a session here. Torch thread count
+   is irrelevant too (1/2/4 threads: 0.636/0.645/0.625 s per cell — tensors
+   too small to parallelize); the cost is op-dispatch latency.
+3. **Five dynamics primitives are unavailable on the campaign's coordinate.**
+   `predictive_settling`, `error_predictive_coding`, `pc_alm`, `diffusion`,
+   `spike_integration` yield **0 cells and 0 rejections** at (digital,
+   feedforward, fast_weights, gradient, euclidean) — the harvest's availability
+   predicates filter them at proposal time, silently. Same seam class as Q1's
+   `lazy x recurrent`, but *invisible*: no rejection, no log line, and a run
+   cannot distinguish "my axis has one member" from "my axis has three and two
+   are unreachable". **A lock should assert a declared axis offers what the
+   campaign claims to compare.**
+4. **A required constructor argument is a silent API hole.** `SynthesisPolicy`
+   and `StrategyProgressionPolicy` sat in `POLICY_CATALOG` but could not be
+   built by `create_policy(name, **policy_context(spec, name))` — the only path
+   the command surface has. **F1's surface lock should cover catalog
+   construction, not just `--help` text.**
+
 
 ## 4. Session ordering and the definitions on the way
 
@@ -683,6 +785,30 @@ stop growing.
      resolves to CPU in CI).
   7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
      C findings in `store.py` and `run_spec.py` untouched.
+
+- **D3 landed (twelfth session of this plan).** What landed is in the D3 ticket
+  above; three things a future session should not have to rediscover:
+  1. **The store is the checkpoint.** The JSON checkpoint subsystem is retired,
+     not deferred: it had no readers. `comp run --run-id <id>` is the recovery
+     path, and it is now filter-driven (`ProposalContext.cells`), so it works for
+     every policy.
+  2. **A mechanism nobody called is not a mechanism.** Three of this session's
+     four defects were exactly that — `Budget.advance_by`/`add_cost` (0
+     callers, so a declared budget could not bind), S10's `Decision` (read back
+     as a constant), `optuna.create_study(direction=…, directions=…)` (raised on
+     every call). The audit question that finds them: *who calls this?* — and
+     the answer "nothing" is the defect.
+  3. **Verification state, stated honestly:** D3's gate (run-ledger lock, 9
+     passed / 54 s) and a 9-file phase selection (146 passed, 5 failed) are
+     green apart from pre-existing failures. The 5 failures are
+     `test_sampler_lock.py::TestDistributionsComeFromTheHarvest` (2) and
+     `::TestTheStudyLearns` (3), and they fail **identically at HEAD**
+     (verified by stash) — Register C, not this session. The campaign lock
+     (~150 s) was **launched and lost**: its background job died with the
+     shell that launched it, so it did not run and is **owed** — this session
+     changed the round loop, the budget, the record schema and every policy,
+     which is the campaign lock's blast radius exactly. Re-run it before the
+     next ticket claims Phase D is closed.
 
 - **D2 landed (eleventh session of this plan).**
   1. **Campaign economics in status/report:** Added `declared_cells` to `RunSummary` (computed via `declared_cell_count()` from spec + search space). Added `--detailed` flag to `comp status` printing cost/record, projected total/remaining, progress %. Added Campaign Economics section to generated report.

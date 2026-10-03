@@ -129,7 +129,6 @@ class TestWrapperObligations:
             cost_model=SimpleCostModel(),
             policy=RoundRobinGridPolicy(),
             backend=LocalBackend(),
-            checkpoint_dir=None,
         )
 
         runner = PipelineRunner(config, temp_store)
@@ -218,7 +217,6 @@ class TestWrapperObligations:
             cost_model=SimpleCostModel(),
             policy=RoundRobinGridPolicy(),
             backend=FailingBackend(),
-            checkpoint_dir=None,
             max_rounds=2,
             min_rounds=1,
         )
@@ -242,10 +240,9 @@ class TestReplayResumeIntegration:
         store_config = StoreConfig(path=tmp_path / "test.duckdb")
         return RecordStore(store_config)
 
-    def test_resume_via_measurement_key_dedup(self, tmp_path: Path) -> None:
-        """Resume correctly skips already-completed measurement_keys."""
+    def test_resume_reads_the_stores_own_measurement_key(self, tmp_path: Path) -> None:
+        """A stored measurement is found by its identity, which is what resume reads."""
         from computronium.experiment.evidence.store import RecordStore, StoreConfig
-        from computronium.experiment.execution.replay import resume_from_store
         from computronium.experiment.schema.coordinate import Coordinate, Schedule
         from computronium.experiment.schema.record import (
             FailureCause,
@@ -335,13 +332,13 @@ class TestReplayResumeIntegration:
 
             temp_store.append(record)
 
-            # Now try to resume - should detect as completed
-            candidates = [(coord, sched)]
-            completed, remaining = resume_from_store(temp_store, run_id, candidates)
+            # The store is the resume index (D3): one query names the work left.
+            stored = temp_store.get_record_by_measurement_key(
+                coord.measurement_key(sched)
+            )
 
-            assert len(completed) == 1
-            assert len(remaining) == 0
-            assert completed[0][1].seed == 42
+            assert stored is not None
+            assert stored.schedule.seed == 42
 
 
 class TestCostModelLearning:

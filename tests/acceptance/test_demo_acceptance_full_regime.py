@@ -63,7 +63,6 @@ def test_u1_full_regime_produces_real_measurements(tmp_path: Path) -> None:
             cost_model=SimpleCostModel(),
             policy=StratifiedRandomPolicy(seed=42),
             backend=LocalBackend(),
-            checkpoint_dir=tmp_path / "checkpoints" / run_id,
             seed=spec.seed,
             max_rounds=2,
             min_rounds=1,

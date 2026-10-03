@@ -23,7 +23,6 @@ Architecture:
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -37,8 +36,6 @@ from computronium.experiment.execution.sysctx import (
 from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.execution.allocator import EvidenceDrivenAllocator
     from computronium.experiment.execution.backends import (
@@ -62,6 +59,20 @@ logger = logging.getLogger(__name__)
 # run concludes they cannot measure anything.
 _MAX_FRUITLESS_ROUNDS: Final = 3
 
+# The stages one round walks, in order. The order is the pipeline's meaning —
+# schedule, gate, compose, train, measure, record, attribute, decide — and a
+# stage the run does not declare is skipped rather than reordered.
+_ROUND_STAGE_ORDER: Final = (
+    StageId.S3_SCHEDULE,
+    StageId.S4_GATE,
+    StageId.S5_COMPOSE,
+    StageId.S6_TRAIN,
+    StageId.S7_MEASURE,
+    StageId.S8_RECORD,
+    StageId.S9_ATTRIBUTE,
+    StageId.S10_DECIDE,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PipelineConfig:
@@ -75,8 +86,6 @@ class PipelineConfig:
     policy: Policy | None = None
     allocator: EvidenceDrivenAllocator | None = None
     backend: ExecutionBackend | None = None
-    checkpoint_dir: Path | None = None
-    checkpoint_interval_seconds: float = 60.0
     max_concurrent_evaluations: int = 10
     seed: int | None = None
     # Task IDs for multi-task runs (L17)
@@ -121,7 +130,7 @@ class PipelineState:
     in_progress: list[tuple[Coordinate, Schedule]] = field(default_factory=list)
     budget: Budget | None = None
     allocator_state: dict[str, Any] | None = None
-    last_checkpoint_time: float = 0.0
+    last_decision: Decision | None = None
     # Coverage tracking (R18)
     coverage: dict[str, Any] = field(default_factory=dict)
     # Rejection classification (R19)
@@ -210,11 +219,9 @@ class PipelineRunner:
         }
         if keys:
             self._state.completed_measurement_keys.update(keys)
-            # A policy that can tell where it was, continues from the store
-            # rather than replaying its first round into cells already measured.
-            resume = getattr(self._config.policy, "resume", None)
-            if resume is not None:
-                resume(len(keys))
+            # The policy's stream is filtered by this same history
+            # (`ProposalContext.cells`), so a relaunched run continues for every
+            # policy rather than for the ones that kept a cursor.
             logger.info(
                 "Resuming run %s: %d measurement(s) already stored",
                 self._config.run_id,
@@ -363,94 +370,70 @@ class PipelineRunner:
                 )
                 break
 
-    async def _execute_round(self, all_records: list[Record]) -> None:  # ruff: ignore[complex-structure]
+    async def _execute_round(self, all_records: list[Record]) -> None:
         """Execute a single round of S3-S10 stages."""
         self._state.current_round += 1
         logger.info("Starting round %d", self._state.current_round)
 
-        # S3 Schedule
-        if StageId.S3_SCHEDULE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S3_SCHEDULE, get_stage_spec(StageId.S3_SCHEDULE)
-            )
-            self._state.pending_proposals.extend(fragment.proposals)
+        for stage_id in _ROUND_STAGE_ORDER:
+            if stage_id not in self._stages:
+                continue
+            fragment = await self._dispatch_stage(stage_id, get_stage_spec(stage_id))
             self._merge_coverage(fragment.coverage)
+            await self._apply_round_stage(stage_id, fragment, all_records)
 
-        # S4 Gate
-        if StageId.S4_GATE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S4_GATE, get_stage_spec(StageId.S4_GATE)
-            )
-            self._state.pending_proposals = fragment.proposals  # Filtered
-            self._merge_coverage(fragment.coverage)
-            self._merge_classification(fragment.classification)
+    async def _apply_round_stage(
+        self, stage_id: StageId, fragment: Fragment, all_records: list[Record]
+    ) -> None:
+        """Fold one round stage's fragment into the run: proposals, records, side work.
 
-        # S5 Compose
-        if StageId.S5_COMPOSE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S5_COMPOSE, get_stage_spec(StageId.S5_COMPOSE)
-            )
-            self._state.pending_proposals = fragment.proposals
-            self._merge_coverage(fragment.coverage)
+        Every round stage dispatches and merges coverage identically; what differs
+        is what the stage's fragment *means* downstream, so that is the only
+        thing this names.
+        """
+        match stage_id:
+            case StageId.S3_SCHEDULE:
+                self._state.pending_proposals.extend(fragment.proposals)
+            case StageId.S10_DECIDE:
+                self._state.pending_proposals.extend(fragment.proposals)
+                if fragment.decisions:
+                    self._state.last_decision = fragment.decisions[-1]
+            case StageId.S4_GATE:
+                # The gate filters: its proposals replace the queued ones.
+                self._state.pending_proposals = fragment.proposals
+                self._merge_classification(fragment.classification)
+            case StageId.S5_COMPOSE:
+                self._state.pending_proposals = fragment.proposals
+            case StageId.S6_TRAIN:
+                await self._train_pending(fragment, all_records)
+            case StageId.S7_MEASURE | StageId.S8_RECORD:
+                all_records.extend(fragment.records)
+                if stage_id is StageId.S7_MEASURE:
+                    await self._attribute_allocation(fragment.records)
+            case _:
+                # S9 attributes axes and names nothing downstream.
+                ...
 
-        # S6 Train
-        if StageId.S6_TRAIN in self._stages:
-            # First dispatch the stage to get any stage-specific proposals
-            fragment = await self._dispatch_stage(
-                StageId.S6_TRAIN, get_stage_spec(StageId.S6_TRAIN)
-            )
-            self._merge_coverage(fragment.coverage)
+    async def _train_pending(
+        self, fragment: Fragment, all_records: list[Record]
+    ) -> None:
+        """Execute the round's queued cells, with failure isolation (WP19)."""
+        if not self._state.pending_proposals:
+            return
+        successful = await self._execute_batch_with_isolation(
+            self._state.pending_proposals
+        )
+        all_records.extend(successful)
+        fragment.records.extend(successful)
+        # Executed is not pending: leaving them queued makes S3 skip the policy
+        # next round, so a run re-proposes the same cells and stops after one
+        # round of a space it never entered.
+        self._state.pending_proposals.clear()
 
-            # Execute pending proposals with failure isolation (WP19)
-            if self._state.pending_proposals:
-                successful_records = await self._execute_batch_with_isolation(
-                    self._state.pending_proposals
-                )
-                all_records.extend(successful_records)
-                fragment.records.extend(successful_records)
-                # Executed is not pending: leaving them queued makes S3 skip
-                # the policy next round, so a run re-proposes the same cells
-                # and stops after one round of a space it never entered.
-                self._state.pending_proposals.clear()
-
-        # S7 Measure
-        if StageId.S7_MEASURE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S7_MEASURE, get_stage_spec(StageId.S7_MEASURE)
-            )
-            all_records.extend(fragment.records)
-            self._merge_coverage(fragment.coverage)
-
-            # Run allocator between rounds (after S7_MEASURE, before S10_DECIDE)
-            if self._config.allocator and self._config.budget:
-                await self._run_allocator(fragment.records)
-
-        # S8 Record
-        if StageId.S8_RECORD in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S8_RECORD, get_stage_spec(StageId.S8_RECORD)
-            )
-            all_records.extend(fragment.records)
-            self._merge_coverage(fragment.coverage)
-
-        # S9 Attribute
-        if StageId.S9_ATTRIBUTE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S9_ATTRIBUTE, get_stage_spec(StageId.S9_ATTRIBUTE)
-            )
-            self._merge_coverage(fragment.coverage)
-
-        # S10 Decide
-        if StageId.S10_DECIDE in self._stages:
-            fragment = await self._dispatch_stage(
-                StageId.S10_DECIDE, get_stage_spec(StageId.S10_DECIDE)
-            )
-            self._state.pending_proposals.extend(fragment.proposals)
-            self._merge_coverage(fragment.coverage)
-
-        # Checkpoint after each round
-        if self._config.checkpoint_dir:
-            await self._create_checkpoint()
+    async def _attribute_allocation(self, records: list[Record]) -> None:
+        """Re-allocate after measuring, before S10 decides (R19 allocator)."""
+        if self._config.allocator and self._config.budget:
+            await self._run_allocator(records)
 
     def _build_search_space(self) -> SearchSpace:
         """Build the run's active space from its spec (TODO46 §3.3)."""
@@ -561,6 +544,28 @@ class PipelineRunner:
         """Merge classification from fragment into state."""
         self._state.rejections.append(classification)
 
+    def _charge_budget(self, records: list[Record]) -> None:
+        """Charge the run's budget for what it actually stored.
+
+        A budget nobody charges cannot expire: ``target_cells`` and
+        ``target_cost`` were unreachable, every cell looked affordable, and
+        S10's "budget exhausted" could only ever be read off the clock. A
+        campaign declares a budget as its stopping condition, so the charge is
+        the difference between a declared limit and a comment — and because the
+        store keeps what it stored, an exhausted budget is also the resume
+        point (``comp run --run-id``).
+        """
+        budget = self._state.budget
+        cost_model = self._config.cost_model
+        if budget is None or not records:
+            return
+        cost = (
+            sum(cost_model.actual_cost(record) for record in records)
+            if cost_model is not None
+            else 0.0
+        )
+        self._state.budget = budget.advance_by(len(records)).add_cost(cost)
+
     def _classify_rejection(
         self,
         coordinate: Coordinate,
@@ -588,12 +593,21 @@ class PipelineRunner:
         self._state.rejections.append(classification)
 
     def _get_decision_from_fragments(self) -> Decision:
-        """Extract Decision from the last S10 fragment."""
-        # For now, create a default continue decision
-        # In practice, this would come from the S10 Decide stage fragment
+        """The decision S10 last reached, or continue while it has said nothing.
+
+        S10 states a real termination ("budget exhausted", a promotion gate that
+        closed) and this read it back as a constant CONTINUE, so the run's only
+        stopping condition was the round limit and the exhaustion heuristic —
+        every reason a stage gave for stopping was a comment in a fragment.
+        """
         from computronium.experiment.execution.decision import continue_round
 
-        return continue_round(rationale="Default continue")
+        decision = self._state.last_decision
+        return (
+            decision
+            if decision is not None
+            else continue_round(rationale="No stage has decided yet")
+        )
 
     async def _run_allocator(self, records: list[Record]) -> None:
         """Run EvidenceDrivenAllocator between rounds (R46-R51)."""
@@ -722,6 +736,7 @@ class PipelineRunner:
                         self._state.completed_measurement_keys.add(
                             record.measurement_key
                         )
+                    self._charge_budget(stored_here)
                     successful.extend(stored_here)
                 case Failure(failure_event=event):
                     logger.warning(
@@ -786,33 +801,6 @@ class PipelineRunner:
         from computronium.experiment.evidence.claims import claim_eligible
 
         return claim_eligible(record)
-
-    async def _create_checkpoint(self) -> None:
-        """Create a periodic checkpoint."""
-        if not self._config.checkpoint_dir:
-            return
-
-        from computronium.experiment.execution.replay import create_checkpoint
-
-        self._config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = int(time.time() * 1000)
-        checkpoint_path = (
-            self._config.checkpoint_dir
-            / f"checkpoint_{self._config.run_id}_{timestamp}.json"
-        )
-
-        checkpoint = create_checkpoint(
-            run_id=self._config.run_id,
-            run_spec=self._config.run_spec,
-            completed_keys=frozenset(self._state.completed_measurement_keys),
-            pending=[(p.coordinate, p.schedule) for p in self._state.pending_proposals],
-            in_progress=self._state.in_progress,
-            budget=self._state.budget,
-            allocator_state=self._state.allocator_state,
-        )
-        checkpoint.to_file(checkpoint_path)
-        self._state.last_checkpoint_time = time.time()
-        logger.debug("Created checkpoint: %s", checkpoint_path)
 
     def shutdown(self) -> None:
         """Shutdown the pipeline runner."""

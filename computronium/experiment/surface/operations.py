@@ -344,10 +344,16 @@ class RunController:
         await self._emit_alert("candidate_injected", payload)
 
     async def _snapshot(self) -> None:
-        """Create a checkpoint snapshot."""
+        """Report the run's measured state; the store is the checkpoint (D3).
+
+        There is no snapshot file to write: a resume reads the store's own
+        measured keys, so a snapshot is a number, not an artifact.
+        """
         if self._pipeline_runner:
-            await self._pipeline_runner._create_checkpoint()
-            await self._emit_alert("snapshot_created", {"run_id": self._run_id})
+            measured = len(self._pipeline_runner._state.completed_measurement_keys)
+            await self._emit_alert(
+                "snapshot_created", {"run_id": self._run_id, "measured": measured}
+            )
 
     def submit_intent(self, intent: OperatorIntent) -> None:
         """Submit an operator intent (thread-safe)."""

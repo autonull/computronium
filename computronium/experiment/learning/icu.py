@@ -432,6 +432,7 @@ class ICUModel:
                 credit=coord.credit,
                 update=coord.update,
                 params=coord.params,
+                effective_params=coord.params,
                 schedule=schedule,
                 provenance=provenance,
                 status=status,

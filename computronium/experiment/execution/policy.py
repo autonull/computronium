@@ -169,8 +169,53 @@ class ProposalContext:
             return []
         return self.evidence.query_records(run_id=self.run_id, limit=limit)
 
+    def measured_keys(self) -> frozenset[str]:
+        """Every measurement identity this run already holds, unbounded.
+
+        Resume is the store's history read back, not a counter a policy keeps:
+        an identity a resumed run re-proposes is a measurement the round spends
+        to learn nothing, and the run ends declaring the space exhausted while
+        most of it is unmeasured. The query is deliberately unbounded — a
+        truncated history under-reports what is done and hides the gap it was
+        asked to close.
+        """
+        if self.evidence is None:
+            return frozenset()
+        return frozenset(
+            record.measurement_key
+            for record in self.evidence.query_records(run_id=self.run_id)
+        )
+
+    def fresh(
+        self,
+        coordinate: Coordinate,
+        schedule: Schedule,
+        measured: frozenset[str] | None = None,
+    ) -> bool:
+        """Whether a cell still owes this run a measurement.
+
+        Seed-level, because a record is keyed by its own single seed: a cell
+        measured for one of five seeds has four left, and skipping it whole is
+        the gap. A policy that *builds* a cell rather than walking the stream
+        asks this too: an evolved child whose mutation lands back on its parent
+        is a measurement the store already holds, and proposing it spends a
+        round to learn nothing.
+        """
+        if measured is None:
+            measured = self.measured_keys()
+        return any(
+            coordinate.measurement_key(seed) not in measured
+            for seed in schedule.seed_plan
+        )
+
     def cells(self, limit: int | None = None) -> Iterator[tuple[Coordinate, Schedule]]:
         """Legal cells from the run's own space, in a deterministic order.
+
+        Cells this run has already measured are skipped, so the stream a policy
+        walks is the work that is left: this is the resume seam, singular and
+        in the one place every policy reaches the space through, which is what
+        lets a relaunched run continue for every policy rather than for the
+        two that remembered a cursor.
 
         Args:
             limit: Stop after this many cells; unbounded when ``None``.
@@ -178,12 +223,17 @@ class ProposalContext:
         Yields:
             ``(coordinate, schedule)`` pairs the run may execute.
         """
-        stream = iter_candidates(
-            self.spec,
-            self._scoped_space,
-            budget=self.budget,
-            cost_model=self.cost_model,
-            shape=self.shape,
+        measured = self.measured_keys()
+        stream = (
+            (coordinate, schedule)
+            for coordinate, schedule in iter_candidates(
+                self.spec,
+                self._scoped_space,
+                budget=self.budget,
+                cost_model=self.cost_model,
+                shape=self.shape,
+            )
+            if self.fresh(coordinate, schedule, measured)
         )
         yield from islice(stream, limit)
 
@@ -266,16 +316,6 @@ class StratifiedRandomPolicy:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "stratified_random"
 
-    def resume(self, completed: int) -> None:
-        """Continue from where the store left off, rather than replay round one.
-
-        A relaunched run is handed a policy built from the run's own seed, so
-        without this it re-proposes its first round exactly; every cell is then
-        already measured, the loop correctly concludes the space it can reach is
-        exhausted, and a resume adds no coverage at all.
-        """
-        self._rng.seed((self._seed or 0) + completed)
-
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Propose cells by sampling uniformly within each structural stratum."""
         strata: dict[str, list[tuple[Coordinate, Schedule]]] = {}
@@ -317,10 +357,6 @@ class RoundRobinGridPolicy:
         self._rng = random.Random(seed)  # ruff: ignore[suspicious-non-cryptographic-random-usage] - not cryptographic
         self._name = "round_robin_grid"
         self._cursor = 0
-
-    def resume(self, completed: int) -> None:
-        """Skip past the cells the store already holds."""
-        self._cursor += completed
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Propose the next ``ctx.n_propose`` cells of the stream, in order."""
@@ -469,8 +505,10 @@ class ModelBasedPolicy:
         return optuna.create_study(
             sampler=self._create_sampler(),
             pruner=self._create_pruner(),
-            direction=directions[0],
-            directions=directions if len(directions) > 1 else None,
+            # `directions` alone: Optuna refuses a call that carries both, and
+            # a one-objective study is the multi-objective spelling of a single
+            # direction, not a different declaration.
+            directions=directions,
             study_name=f"exp_{run_id}",
         )
 
@@ -575,7 +613,7 @@ class ModelBasedPolicy:
                 continue
             trial = study.ask(distributions)
             proposed = self._with_params(coord, trial.params)
-            if not ctx.legal(proposed, sched):
+            if not ctx.legal(proposed, sched) or not ctx.fresh(proposed, sched):
                 # A value the harvest refuses for this selection is a cell
                 # nobody may train; asking again is cheaper than proposing it.
                 study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
@@ -656,11 +694,15 @@ class EvolutionPolicy:
             self._add_to_population(record)
 
         proposals = list(self._evolve(ctx))
-        if not self._population:
-            proposals.extend(
+        if not proposals:
+            # Operators that mutate nothing this round (a mutation rate below the
+            # draw, a crossover that failed legality) must not read as an
+            # exhausted space: a policy with nothing to say falls back to the
+            # cells the run has left, exactly as an unseeded population does.
+            proposals = [
                 Proposal(coord, sched, self._name)
                 for coord, sched in islice(ctx.pool(), self._population_size)
-            )
+            ]
         return iter(proposals[: ctx.n_propose])
 
     def observe(self, record: Record) -> None:
@@ -685,7 +727,7 @@ class EvolutionPolicy:
             child = self._with_params(
                 parent_coord, self._mutate_params(parent_coord.params)
             )
-            if ctx.legal(child, parent_sched):
+            if ctx.legal(child, parent_sched) and ctx.fresh(child, parent_sched):
                 yield Proposal(child, parent_sched, self._name)
 
         if len(parents) >= 2 and self._rng.random() < self._crossover_rate:
@@ -693,7 +735,7 @@ class EvolutionPolicy:
             child = self._with_params(
                 first[0], self._crossover_params(first[0].params, second[0].params)
             )
-            if ctx.legal(child, first[1]):
+            if ctx.legal(child, first[1]) and ctx.fresh(child, first[1]):
                 yield Proposal(child, first[1], self._name)
 
     def _with_params(self, coord: Coordinate, params: dict[str, Any]) -> Coordinate:
@@ -752,12 +794,14 @@ class SynthesisPolicy:
 
     def __init__(
         self,
-        policies: list[Policy],
+        policies: list[Policy] | None = None,
         *,
         weights: list[float] | None = None,
     ) -> None:
-        self._policies = policies
-        self._weights = weights or [1.0] * len(policies)
+        # A catalog entry the command surface cannot build from a spec alone is
+        # a policy a run may not choose; the default is the simplest member.
+        self._policies = policies or [UniformRandomPolicy()]
+        self._weights = weights or [1.0] * len(self._policies)
         self._name = "synthesis"
 
     def propose(self, ctx: ProposalContext) -> Iterator[Proposal]:
@@ -786,11 +830,16 @@ class StrategyProgressionPolicy:
 
     def __init__(
         self,
-        stages: list[tuple[Policy, float]],  # (policy, budget_fraction)
+        stages: list[tuple[Policy, float]] | None = None,  # (policy, budget_fraction)
         *,
         current_stage: int = 0,
     ) -> None:
-        self._stages = stages
+        # Constructible from a spec alone, like every other catalog entry: the
+        # progression a run means by default is explore, then exploit.
+        self._stages = stages or [
+            (UniformRandomPolicy(), 0.5),
+            (ModelBasedPolicy(), 0.5),
+        ]
         self._current_stage = current_stage
         self._name = "strategy_progression"
         self._budget_consumed: float = 0.0

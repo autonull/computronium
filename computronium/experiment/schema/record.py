@@ -130,6 +130,11 @@ class Record:
     credit: str
     update: str
     params: dict[str, Any]
+    # The values the cell actually trained at, when composition resolved more
+    # than the declaration carried. Kept beside `params`, never merged into it:
+    # `params` is the record's identity, and a record whose identity cannot be
+    # recomputed from itself is not identified.
+    effective_params: dict[str, Any]
     schedule: Schedule
     provenance: Provenance
     status: Status
@@ -140,7 +145,7 @@ class Record:
         for field in fields(self):
             value = getattr(self, field.name)
             if (
-                field.name in {"params", "payload", "unknown"}
+                field.name in {"params", "effective_params", "payload", "unknown"}
                 and value is not None
                 and not isinstance(value, dict)
             ):
@@ -181,8 +186,6 @@ class Record:
             }).encode()
         ).hexdigest()
 
-        params = effective_params if effective_params is not None else coordinate.params
-
         return cls(
             record_id=record_id,
             seq=0,  # Assigned by store on append
@@ -196,7 +199,12 @@ class Record:
             plasticity=coordinate.plasticity,
             credit=coordinate.credit,
             update=coordinate.update,
-            params=params,
+            params=dict(coordinate.params),
+            effective_params=(
+                dict(effective_params)
+                if effective_params is not None
+                else dict(coordinate.params)
+            ),
             schedule=schedule,
             provenance=provenance,
             status=status,
@@ -220,6 +228,7 @@ class Record:
             "credit": self.credit,
             "update": self.update,
             "params": self.params,
+            "effective_params": self.effective_params,
             "schedule": self.schedule.to_dict(),
             "provenance": self.provenance.to_dict(),
             "status": {
@@ -255,6 +264,7 @@ class Record:
             credit=data["credit"],
             update=data["update"],
             params=data["params"],
+            effective_params=data.get("effective_params", data["params"]),
             schedule=Schedule.from_dict(data["schedule"]),
             provenance=Provenance.from_dict(data["provenance"]),
             status=Status(

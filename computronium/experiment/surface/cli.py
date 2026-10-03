@@ -182,7 +182,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run profile to execute (omit when --spec names the run)",
     )
     p_run.add_argument("--store", default="experiment.duckdb", help="DuckDB store path")
-    p_run.add_argument("--run-id", default=None, help="Existing run ID to resume")
+    p_run.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "Resume this run: the store is the checkpoint, so a relaunch "
+            "measures only what the run has not"
+        ),
+    )
     p_run.add_argument("--spec", default=None, help="RunSpec JSON file")
     p_run.add_argument(
         "--task", default=None, help="Override the profile's task (ignored with --spec)"
@@ -445,10 +452,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
             cost_model=SimpleCostModel(),
             policy=policy,
             backend=LocalBackend(),
-            # Checkpoints live beside the store, not in whatever directory the
-            # command happened to be run from: a store path is the run's only
-            # declaration of where its evidence is.
-            checkpoint_dir=Path(args.store).parent / "checkpoints" / run_id,
             seed=spec.seed,
         )
 

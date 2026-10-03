@@ -112,7 +112,6 @@ def _make_pipeline_config(
         policy=policy,
         allocator=EvidenceDrivenAllocator(promotion_threshold=0.05),
         backend=LocalBackend(),
-        checkpoint_dir=store_path / "checkpoints" / run_id if store_path else None,
         seed=run_spec.seed,
         max_rounds=max_rounds,
         min_rounds=1,
@@ -339,7 +338,6 @@ class TestU4_PolicyInterchangeability:
     def test_u4_policy_interchangeability(self, tmp_path: Path) -> None:
         """Test four different policies on same RunSpec/Space/Store."""
         store_path = tmp_path / "u4_store.duckdb"
-        checkpoint_root = tmp_path / "checkpoints"
         store_config = StoreConfig(path=store_path)
 
         run_spec = _make_run_spec("digits")
@@ -376,7 +374,6 @@ class TestU4_PolicyInterchangeability:
                     policy=policy,
                     allocator=EvidenceDrivenAllocator(promotion_threshold=0.05),
                     backend=LocalBackend(),
-                    checkpoint_dir=checkpoint_root / run_id,
                     seed=42,
                     max_rounds=2,
                     min_rounds=1,
