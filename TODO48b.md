@@ -191,14 +191,34 @@ measurement).
   argument for writing one).
 - **Cost:** ~120 s of probing *(estimate)*, once.
 
-### R5 — E2: significance, on a constructed store (no training at all)
-- **Does:** a paired permutation test over shared cells; the report names the
-  test and prints the p-value beside the claim; fewer than 2 cells per rule
-  yields "insufficient coverage", a finding rather than a failure.
-- **Gate:** a constructed store where rule A beats B by 3σ of its spread asserts
-  the p-value is printed; a flat store asserts the honest null. No pipeline, no
-  cells, no campaign — which is the whole point of building the store by hand.
-- **Cost:** <5 s *(estimate, tier 1)*.
+### R5 — LANDED — E2: significance, on a constructed store (no training at all)
+- **Landed (this session):** `computronium/experiment/evidence/significance.py`
+  (`Significance`, `Resampling`, `paired_significance`, `MIN_SHARED_CELLS = 2`)
+  over the existing statistics primitives — bootstrap CI, sign-flip
+  permutation p, Cohen's dz. The report prints one line naming the test
+  (`ReportGenerator.significance`, `_claims_section`). Gate:
+  `tests/property/test_significance_lock.py` (7 tests, **11.6 s**, no cells).
+- **The pairing is the mechanism.** `claims.pairing_key(record, axis)` is the
+  cell's identity *minus the axis under test*, so two arms can only be paired
+  on cells that differ in nothing else — including swept hyperparameters,
+  because a cell trained at a different lr is not the same cell measured twice.
+  `claims.cell_metrics_by_axis_value` groups qualified cells by that key;
+  `claims._qualified_cells` is now the single definition of "a cell that may
+  back a claim", shared by the claim table, the pairing and the report.
+- **Three states, all expressible, none a failure:** a real difference prints
+  `p=… — significant`; a flat one prints `p≈1.0 — not significant`; fewer than
+  two shared cells prints `insufficient coverage (n shared cell(s), 2 required)
+  — no test run` with `p_value is None`. The floor is enforced in
+  `Significance.__post_init__`, so no caller can attach a p-value to coverage
+  that cannot support one.
+- **Silent nulls are a defect, so the null is printed.** `strongest_axis`
+  returns `None` at zero spread, which would have left a tied run with *no*
+  line at all — indistinguishable from a test never run. `_pair_under_test`
+  falls back to the first axis carrying two values, so a tie is tested and
+  reported as a tie.
+- **Cost, measured:** the seven fast tests are **11.6 s**, of which ~10 s is
+  three module-scoped store fixtures (5 seeds × 5 pairs × 2 arms each) and the
+  10,000-draw resampling. The arithmetic itself is milliseconds.
 
 ### R6 — LANDED — F1 + F4 in one selection: the surface is locked, and versioned
 - **Landed (this session):** `tests/property/test_cli_surface_lock.py` (18 tests,
@@ -319,12 +339,41 @@ Three measured facts the next session should not re-derive:
    protocol no store satisfies for as long as the two existed. A structural
    protocol lock (this file's) belongs next to every `Protocol` in the execution
    seam, not just this one.
-4. **E2 (R5) can now be written against the fake tier.** The significance lock
-   R5 asks for ("a constructed store where A beats B by 3 sigma") needs no
-   trained cell at all, and `synthetic_record` now produces records with a
-   deterministic, key-derived spread — the fixture is written. Paired with R1's
-   dedup test it also gives significance claims a *store* to be tested against
-   without a campaign.
+4. **CLOSED by R5 — E2 is written against the fake tier.** `synthetic_record`
+   gained one keyword, `metric=`, which overrides its key-derived spread: a
+   lock that needs a *known* delta declares the number instead of hoping the
+   hash produces one. The fixture that §2.2 described is now
+   `tests/property/test_significance_lock.py`.
+
+## 2.3 New improvement opportunities (raised by R5)
+
+1. **A tie is now a first-class report state; a *thin* run is not.** A run with
+   <2 shared cells prints "insufficient coverage", but nothing counts
+   *unpaired* cells: an arm measured 5 times against an arm measured once
+   reports a coverage number (1) without saying the other 4 cells went
+   unmatched. `Significance` could carry `unpaired` and the report could name
+   it — the difference between "we tested little" and "we had data and could
+   not pair it".
+2. **One axis is tested per report.** `_pair_under_test` picks the widest (or
+   first two-valued) axis and stops. A factorial declares several, and each
+   one's verdict is a separate question a reader will ask; the machinery is
+   per-axis already, so the report section is what limits it to one.
+3. **`preregistration.paired_comparison` and `significance.paired_significance`
+   are the same test with two floors.** The former raises below 5 *seeds*; the
+   latter refuses below 2 *cells*. One function taking the floor as a parameter
+   would remove the duplication — with the caveat that they pair on different
+   identities (index-matched seeds vs. matched cells), which is the reason they
+   have not already converged.
+4. **R2's oracle prices one representative cell; a campaign is a *mix*.** §8.1
+   measures the consequence: the published regime said the budget could not
+   bind and it bound at 91% of the space. `price_plan` should aggregate a
+   per-cell cost over the dynamics × credit the plan actually declares (it
+   already prints per-dynamics totals — the credit axis is what's missing), so
+   "budget: never binds" stops being a claim about a single cell.
+5. **Pre-existing, found by pyright while R5 ran:** `RecordSource` is still
+   unsatisfied by `RecordStore` at `execution/stages_impl.py:60,157` — the same
+   protocol-vs-store mismatch R6's structural lock was meant to close, in a
+   *different* file. The lock asserted one seam; the seam class is wider.
 
 ---
 
@@ -395,6 +444,13 @@ which is exactly why R1 carries a synchronization lock.
 - **D-l — is CI trusted for breadth?** R7's whole value is moving CP-3's shards
   off the local path. If CI is not wired to run on pushes here, R7 buys
   documentation rather than time and should leave the critical path.
+- **D-n — gate 1's coverage assertion races its own budget.** The campaign
+  spec caps walltime (`budget_seconds: 300`), so "every legal cell was
+  measured" is only true on a fast enough box (§8.1: 70 of 74 measured, 354 s
+  consumed). *Recommendation:* assert coverage of the cells the budget allowed
+  and read the shortfall as a priced fact (D2 already computes s/record), or
+  drop the cap from the gate's spec. Until then gate 1 is a coin flip on load —
+  which is worse than a lock, because it looks like one.
 - **D-m — is the mechanism tier (R1) allowed to assert on a fake backend?**
   Without the sync lock it would be a fast tier that can drift; with it, it is
   two locks instead of one slow one. *Recommendation:* yes, and never ship R1
@@ -405,9 +461,10 @@ which is exactly why R1 carries a synchronization lock.
 ## 6. Session ordering and the exit
 
 **Session A (minutes, no cells):** R1 (fake backend + sync lock) → R2 (price
-oracle) → R5 (E2) → R6 (F1+F4).
-**Status: R1, R2 and R6 landed. R5 is written-ready** — §2.2 item 4 says exactly
-how, and `synthetic_record`'s key-derived spread is its fixture. **R5 is next.**
+oracle) → R6 (F1+F4) → R5 (E2).
+**Status: R1, R2, R5 and R6 all landed — Session A is complete.** No cells
+were trained to land any of them. **Session B (R3 settle early exit → R4 Q1b
+probe) is next**, and its price is now the largest single item left.
 **Session B (one kernel change, re-priced):** R3 (settle early exit) → R4 (Q1b
 probe).
 **Session C (the one campaign):** R8 — one run, four consumers — then R7 (CI).
@@ -438,6 +495,61 @@ measured.
 
 ## 8. Session log
 
+- **R5 landed; Session A is done (fourth session of the plan).** The
+  mechanism tier did exactly what §2.2 item 4 predicted: E2 needed a *store*,
+  not a cell, and the whole ticket — model, report line, three-state verdict,
+  seven tests — cost ~150 lines and no training. The pairing key was the part
+  worth naming: an axis comparison over a factorial is only honest if the two
+  arms are matched on everything *else*, and that had to be an identity, not an
+  assumption.
+  - **Falsifiability held:** removing the axis from `pairing_key` makes every
+    arm unmatchable and the lock reads "insufficient coverage"; pairing on the
+    whole `cell_key` does the same. `Significance.__post_init__` refuses a
+    p-value under the coverage floor, so a future caller cannot skip the check.
+  - **Cost notes:** ruff + pyright clean on all four changed files; the
+    significance lock is 7 tests / 11.6 s, `test_claim_report_lock.py` +
+    `test_campaign_economics_lock.py` 30 passed / 59 s, the R1 and R6 locks 25
+    passed / 29 s. One behavioural change rode along and was deliberate: a run
+    whose arms *tie* now prints a tested null instead of nothing (§2.3 item 2's
+    sibling claim, on `strongest_axis`'s zero-spread `None`).
+  - **Do not repeat:** `synthetic_record(metric=…)` is the override; do not
+    rebuild the spread by hand-writing payloads, which would bypass the record
+    schema the store enforces.
+### 8.1 A defect class found by R5's regression run (CP-4 material, not R5's)
+
+`tests/acceptance/test_campaign_lock.py` gate 1 failed in R5's regression
+selection: **"4 legal cell(s) went unmeasured"** (1 failed, 6 passed, 368 s).
+It is not an R5 regression — nothing in R5's diff touches the runner, the
+space, or the store — and the cause is quantitative, not a mystery:
+
+| fact | measured | source |
+|---|---|---|
+| the spec declares a **walltime** cap | `budget_seconds: 300` | `examples/learning-rules-and-geometry-digits.yaml` |
+| the run consumed | **354.4 s**, 350 outcomes, **70 cells**, 7 rounds | the run log |
+| the space yields | **74** legal cells | gate 1's own `iter_candidates` |
+| R2's oracle projects | **81.7 s** (≈3.4 s/cell), "budget: never binds" | `comp run --dry-run` |
+| measured per cell | **≈5.06 s** | 354.4 s / 70 |
+
+So gate 1 asserts *space coverage* against a run that is **budget-capped**:
+whether `measured == legal` holds is a race between the budget and the space,
+decided by how fast this box was that day. That is a lock whose fixture does
+not contain the case it exists for, in AGENTS.md's terms — and it is a
+**flaky gate**, not a stable one, so it must not be read as either a
+regression or a green.
+
+Two things follow, and both are open:
+
+1. **R2's price regime understates this mix by ~1.5×.** The published regime is
+   `gradient` credit on `feedforward`; the campaign's cells are dominated by
+   `energy_minimization`, whose settle loop never early-exits (R3). The oracle
+   says the budget cannot bind; the budget binds at cell 70 of 74. Either the
+   price regime needs a per-cell-cost *mix* rather than one representative
+   cell, or the budget charge is not the oracle's cost — **unresolved**, and
+   cheap to settle with the oracle's own inputs (no run needed).
+2. **Gate 1 needs a decision from the operator (see §5, D-n).** Either the
+   gate's spec drops `budget_seconds` so coverage is a property of the space,
+   or the gate asserts coverage *of what the budget allowed* and the budget
+   becomes part of the fixture. Both are honest; the current one is neither.
 - **R1 + R2 landed (third session of the plan; the one before described both and
   built neither).** The queue's own costing was right: the four Session-A
   tickets are minutes, and the two that needed new machinery are ~90 lines and

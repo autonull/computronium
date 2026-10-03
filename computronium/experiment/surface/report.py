@@ -18,9 +18,11 @@ if TYPE_CHECKING:
     from computronium.experiment.schema.run_spec import RunSpec
 
 from computronium.experiment.evidence.claims import (
+    DEFAULT_MIN_SEEDS,
     Alert,
     AxisImpact,
     Claim,
+    cell_metrics_by_axis_value,
     check_all_alerts,
     derive_claims,
     filter_promoted,
@@ -31,6 +33,10 @@ from computronium.experiment.evidence.limitations import (
     Limitation,
     derive_limitations,
     replication_keys_of,
+)
+from computronium.experiment.evidence.significance import (
+    Significance,
+    paired_significance,
 )
 from computronium.experiment.execution.search_space import (
     declared_cell_count,
@@ -51,6 +57,7 @@ __all__ = [
     "Limitation",
     "ReportGenerator",
     "RunSummary",
+    "Significance",
     "export_to_json",
     "export_to_parquet",
     "generate_run_report",
@@ -248,13 +255,68 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         metrics = self.claim_metrics(run_id)
         if not metrics:
             return ()
-        spec = self._spec(run_id)
         return derive_claims(
             self._store.query_records(run_id=run_id),
             metrics=metrics,
             achieved=self.achieved_seeds(run_id),
-            min_seeds=spec.n_seeds if spec else 5,
+            min_seeds=self._min_seeds(run_id),
         )
+
+    def significance(self, run_id: str) -> Significance | None:
+        """Whether the axis that mattered most mattered *significantly* (E2).
+
+        Tested on the widest axis' best and worst values, paired over the cells
+        those two values share. ``None`` when there is no spread to test (a
+        single-valued axis); too little shared coverage is an
+        :class:`Significance` of its own, not a missing one.
+        """
+        claims = self.claims(run_id)
+        pair = self._pair_under_test(claims)
+        if pair is None:
+            return None
+        axis_name, metric, best_value, worst_value = pair
+        by_value = cell_metrics_by_axis_value(
+            self._store.query_records(run_id=run_id),
+            axis=StructuralAxis(axis_name),
+            metric=metric,
+            achieved=self.achieved_seeds(run_id),
+            min_seeds=self._min_seeds(run_id),
+        )
+        return paired_significance(
+            by_value.get(best_value, {}),
+            by_value.get(worst_value, {}),
+            axis=axis_name,
+            metric=metric,
+            best_value=best_value,
+            worst_value=worst_value,
+        )
+
+    @staticmethod
+    def _pair_under_test(claims: tuple[Claim, ...]) -> tuple[str, str, str, str] | None:
+        """The (axis, metric, best, worst) the significance test compares.
+
+        The widest axis when one spread — that is where a reader looks first.
+        Failing that, the first axis with two values at all: a run whose arms
+        tie still gets its null tested, because silence is indistinguishable
+        from a test that was never run.
+        """
+        by_axis: dict[tuple[str, str], dict[str, Claim]] = {}
+        for claim in claims:
+            by_axis.setdefault((claim.metric, claim.axis), {})[claim.value] = claim
+        impact = strongest_axis(claims)
+        if impact is not None:
+            return (
+                impact.axis,
+                impact.metric,
+                impact.best_value,
+                impact.worst_value,
+            )
+        for (metric, axis), values in sorted(by_axis.items()):
+            if len(values) < 2:
+                continue
+            ordered = sorted(values.values(), key=lambda c: (c.mean, c.value))
+            return axis, metric, ordered[-1].value, ordered[0].value
+        return None
 
     def limitations(self, run_id: str) -> tuple[Limitation, ...]:
         """Every limitation derivable from the run's records, none asserted."""
@@ -272,6 +334,11 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         """The run's persisted spec, or None when the run is unknown."""
         info = self._store.query_run(run_id)
         return info.spec if info is not None else None
+
+    def _min_seeds(self, run_id: str) -> int:
+        """The seed floor every claim-side derivation agrees on."""
+        spec = self._spec(run_id)
+        return spec.n_seeds if spec else DEFAULT_MIN_SEEDS
 
     def front_objectives(self, run_id: str) -> tuple[str, str]:
         """The two payload keys a Pareto front defaults to.
@@ -467,6 +534,9 @@ def _claims_section(generator: ReportGenerator, run_id: str) -> list[str]:
     if impact is not None:
         lines.append(f"  {impact.render()}")
     lines.extend(f"  {claim.render()}" for claim in claims)
+    significance = generator.significance(run_id)
+    if significance is not None:
+        lines.append(f"  {significance.render()}")
     return lines
 
 

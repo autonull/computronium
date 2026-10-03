@@ -86,6 +86,7 @@ def synthetic_record(
     run_id: str | None = None,
     walltime_s: float = SYNTHETIC_WALLTIME_S,
     procedure_version: str = ASSESSMENT_PROCEDURE_VERSION,
+    metric: float | None = None,
 ) -> Record:
     """A record for one measured seed, carrying the metrics a claim reads.
 
@@ -97,12 +98,15 @@ def synthetic_record(
         walltime_s: The synthetic cost the budget charge consumes.
         procedure_version: The assessment procedure this record was measured
             under (TODO48 F4), so a lock can write a pre-change record.
+        metric: Overrides the key-derived spread. A lock that needs a *known*
+            difference (a significance fixture, a delta that must land at 3
+            sigma) declares the number instead of hoping the hash gives one.
 
     Returns:
         A pass-eligible record whose payload carries every measured metric.
     """
     measurement_key = coordinate.measurement_key(schedule)
-    metric = _pseudo_metric(measurement_key)
+    metric = _pseudo_metric(measurement_key) if metric is None else metric
     return Record.create(
         run_id=run_id or str(provenance.links.get("run_id", "")),
         coordinate=coordinate,

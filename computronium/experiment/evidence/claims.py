@@ -11,6 +11,7 @@ Implements WP5 deliverable: evidence/claims.py — full predicate suite:
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -24,6 +25,16 @@ if TYPE_CHECKING:
 
     from computronium.experiment.evidence.protocol import ComparisonGuard, CostBudget
     from computronium.experiment.evidence.store import RecordStore
+
+#: One cell's stored uncertainty: payload metric -> its mean/std/n/variance,
+#: with a non-numeric entry (e.g. ``{"reason": "single_seed"}``) for a cell
+#: that carries no spread.
+type Uncertainty = dict[str, dict[str, float | str | int]]
+
+#: Seeds a cell must have reached before it may back a claim or be tested for
+#: significance. One constant, so the claim table, the axis pairing, the
+#: report and the limitations cannot disagree about the floor.
+DEFAULT_MIN_SEEDS = 5
 
 
 # =============================================================================
@@ -92,7 +103,7 @@ def compute_and_store_uncertainty(
     run_id: str,
     *,
     min_seeds: int = 1,
-) -> dict[str, dict[str, dict[str, float | str | int]]]:
+) -> dict[str, Uncertainty]:
     """Compute and store uncertainty for all replication keys in a run.
 
     This is the E1 implementation: uncertainty is a measurement, not {}.
@@ -126,7 +137,7 @@ def compute_and_store_uncertainty(
     }
 
     # Compute uncertainty for each qualified group and persist
-    all_uncertainty: dict[str, dict[str, dict[str, float | str | int]]] = {}
+    all_uncertainty: dict[str, Uncertainty] = {}
     for key, group in qualified_groups.items():
         uncertainty = _compute_replication_uncertainty(group)
         if uncertainty:
@@ -159,7 +170,7 @@ def claim_eligible(record: Record) -> bool:
         record.status.gate_verdict.value == "PASS"
         and not record.status.quarantine
         and record.schedule.fidelity == "L2"
-        and record.schedule.n_seeds >= 5
+        and record.schedule.n_seeds >= DEFAULT_MIN_SEEDS
     )
 
 
@@ -182,7 +193,7 @@ def replication_key(record: Record) -> str:
 def claim_eligible_by_achieved_seeds(
     record: Record,
     store: RecordStore,  # ruff: ignore[quoted-annotation] - forward reference for type-checking import
-    min_seeds: int = 5,
+    min_seeds: int = DEFAULT_MIN_SEEDS,
     run_id: str | None = None,
 ) -> bool:
     """Check if a record is eligible for claim based on *achieved* seeds.
@@ -195,7 +206,7 @@ def claim_eligible_by_achieved_seeds(
     Args:
         record: The record to check.
         store: The RecordStore to query for achieved seeds.
-        min_seeds: Minimum required achieved seeds (default 5 per protocol).
+        min_seeds: Minimum required achieved seeds (``DEFAULT_MIN_SEEDS``).
         run_id: Optional run ID to scope the query.
 
     Returns:
@@ -217,7 +228,7 @@ def claim_eligible_by_achieved_seeds(
     return achieved >= min_seeds
 
 
-def claim_eligible_strict(record: Record, min_seeds: int = 5) -> bool:
+def claim_eligible_strict(record: Record, min_seeds: int = DEFAULT_MIN_SEEDS) -> bool:
     """Strict claim eligibility with configurable minimum seeds."""
     return (
         record.status.gate_verdict.value == "PASS"
@@ -320,9 +331,9 @@ def _group_by_replication_key(
 def _compute_cell_metrics(
     cell_groups: dict[str, list[Record]],
     min_seeds: int,
-) -> dict[str, dict[str, dict[str, float | str | int]]]:
+) -> dict[str, Uncertainty]:
     """Compute per-cell uncertainty metrics for qualified groups."""
-    cell_metrics: dict[str, dict[str, dict[str, float | str | int]]] = {}
+    cell_metrics: dict[str, Uncertainty] = {}
     for key, group in cell_groups.items():
         if len(group) < min_seeds:
             continue
@@ -334,36 +345,124 @@ def _compute_cell_metrics(
     return cell_metrics
 
 
+@dataclass(frozen=True, slots=True)
+class CellMetrics:
+    """One cell's measured uncertainty on one metric.
+
+    The unit claims aggregate over and significance pairs on: a cell, not a
+    seed, because seeds inside a cell share everything but the draw.
+
+    Attributes:
+        mean: Mean of the metric over the cell's seeds.
+        variance: Sample variance over those seeds.
+        n: Seeds behind the cell.
+    """
+
+    mean: float
+    variance: float
+    n: int
+
+
+def _qualified_cells(
+    records: Sequence[Record],
+    achieved: Mapping[str, int] | None,
+    min_seeds: int,
+) -> dict[str, tuple[Record, Uncertainty]]:
+    """Cells that reached ``min_seeds``, as (representative, uncertainty).
+
+    One pass, one definition of "qualified", for every consumer: the claim
+    table, the axis pairing, and anything derived from them.
+    """
+    cell_groups = _group_by_replication_key(records, achieved, min_seeds)
+    return {
+        key: (cell_groups[key][0], uncertainty)
+        for key, uncertainty in _compute_cell_metrics(cell_groups, min_seeds).items()
+    }
+
+
+def _cell_metrics(uncertainty: Uncertainty, metric: str) -> CellMetrics | None:
+    """One cell's numbers for one metric, or ``None`` when it carries none."""
+    entry = uncertainty.get(metric)
+    if not entry or "mean" not in entry:
+        return None
+    return CellMetrics(
+        mean=float(entry["mean"]),
+        variance=float(entry["variance"]),
+        n=int(entry["n"]),
+    )
+
+
 def _aggregate_across_cells(
-    cell_groups: dict[str, list[Record]],
-    cell_metrics: dict[str, dict[str, dict[str, float | str | int]]],
+    cells: dict[str, tuple[Record, Uncertainty]],
     metrics: Sequence[str],
-) -> dict[tuple[str, str, str], list[dict[str, float]]]:
+) -> dict[tuple[str, str, str], list[CellMetrics]]:
     """Aggregate cell metrics by (metric, axis, axis_value)."""
-    grouped: dict[tuple[str, str, str], list[dict[str, float]]] = {}
-    for key, cell_records in cell_groups.items():
-        if key not in cell_metrics:
-            continue
-        representative = cell_records[0]
+    grouped: dict[tuple[str, str, str], list[CellMetrics]] = {}
+    for representative, uncertainty in cells.values():
         for metric in metrics:
-            cell_unc = cell_metrics[key].get(metric)
-            if not cell_unc:
+            cell = _cell_metrics(uncertainty, metric)
+            if cell is None:
                 continue
-            # Only include cells with numeric uncertainty (not single_seed)
-            if "mean" not in cell_unc:
-                continue
-            # Type narrowing: we know mean, std, n, variance are present and numeric
-            numeric_unc: dict[str, float] = {
-                "mean": float(cell_unc["mean"]),
-                "std": float(cell_unc["std"]),
-                "n": float(cell_unc["n"]),
-                "variance": float(cell_unc["variance"]),
-            }
             for axis in StructuralAxis:
                 grouped.setdefault(
                     (metric, axis.value, getattr(representative, axis.value)), []
-                ).append(numeric_unc)
+                ).append(cell)
     return grouped
+
+
+def pairing_key(record: Record, axis: StructuralAxis) -> str:
+    """Cell identity with one structural axis removed — the matched-pair key.
+
+    Two cells differing *only* in ``axis`` share this key, which is what makes
+    them a pair: everything else about the measurement is held fixed, so the
+    per-cell variance a difference would otherwise inherit is common to both
+    arms and cancels. Swept hyperparameters stay in the key, because a cell
+    trained at a different learning rate is not the same cell measured twice.
+    """
+    structural = {
+        other.value: getattr(record, other.value)
+        for other in StructuralAxis
+        if other is not axis
+    }
+    schedule = record.schedule.to_dict() | {"seed": None}
+    return json.dumps(
+        [structural, record.params, schedule], sort_keys=True, default=str
+    )
+
+
+def cell_metrics_by_axis_value(
+    records: Sequence[Record],
+    *,
+    axis: StructuralAxis,
+    metric: str,
+    achieved: Mapping[str, int] | None = None,
+    min_seeds: int = DEFAULT_MIN_SEEDS,
+) -> dict[str, dict[str, CellMetrics]]:
+    """Per axis value, the cell means keyed by the pair they can be matched on.
+
+    Args:
+        records: The run's records (or any slice of them).
+        axis: The axis under test — the one the two arms differ on.
+        metric: The payload key to read on every cell.
+        achieved: Achieved PASS seeds per replication key.
+        min_seeds: Seeds a cell must have reached to contribute.
+
+    Returns:
+        ``{axis_value: {pairing_key: cell metrics}}``; an arm measured only at
+        its own cells yields no key the other arm shares, which is exactly the
+        coverage a paired test needs to find.
+    """
+    by_value: dict[str, dict[str, CellMetrics]] = {}
+    for representative, uncertainty in _qualified_cells(
+        records, achieved, min_seeds
+    ).values():
+        cell = _cell_metrics(uncertainty, metric)
+        if cell is None:
+            continue
+        by_value.setdefault(getattr(representative, axis.value), {})[
+            pairing_key(representative, axis)
+        ] = cell
+    return by_value
 
 
 def _compute_pooled_variance(
@@ -389,7 +488,7 @@ def derive_claims(
     *,
     metrics: Sequence[str],
     achieved: Mapping[str, int] | None = None,
-    min_seeds: int = 5,
+    min_seeds: int = DEFAULT_MIN_SEEDS,
 ) -> tuple[Claim, ...]:
     """Group claim-eligible records by axis value and summarise each group.
 
@@ -421,15 +520,15 @@ def derive_claims(
         One claim per (metric, axis value) that reached ``min_seeds``
         measurements, ordered by metric, then axis, then descending mean.
     """
-    cell_groups = _group_by_replication_key(records, achieved, min_seeds)
-    cell_metrics = _compute_cell_metrics(cell_groups, min_seeds)
-    grouped = _aggregate_across_cells(cell_groups, cell_metrics, metrics)
+    grouped = _aggregate_across_cells(
+        _qualified_cells(records, achieved, min_seeds), metrics
+    )
 
     claims: list[Claim] = []
     for (metric, axis, axis_value), group in grouped.items():
-        cell_means = [c["mean"] for c in group if "mean" in c]
-        cell_vars = [c["variance"] for c in group if "variance" in c]
-        cell_ns = [int(c["n"]) for c in group if "n" in c]
+        cell_means = [c.mean for c in group]
+        cell_vars = [c.variance for c in group]
+        cell_ns = [c.n for c in group]
 
         if not cell_means:
             continue
@@ -562,7 +661,9 @@ def beats_baseline(
     return value >= baseline_accuracy + margin
 
 
-def robust(record: Record, min_seeds: int = 5, cv_threshold: float = 0.1) -> bool:
+def robust(
+    record: Record, min_seeds: int = DEFAULT_MIN_SEEDS, cv_threshold: float = 0.1
+) -> bool:
     """Check if record shows robust performance across seeds.
 
     Robustness: coefficient of variation across seeds < threshold.
@@ -957,14 +1058,17 @@ def group_by_replication_key(records: list[Record]) -> dict[str, list[Record]]:
 
 
 __all__ = [
+    "DEFAULT_MIN_SEEDS",
     "Alert",
     "AxisImpact",
+    "CellMetrics",
     "Claim",
     "alert_on_constraint_violation",
     "alert_on_divergence",
     "alert_on_resource_exhaustion",
     "alert_on_stagnation",
     "beats_baseline",
+    "cell_metrics_by_axis_value",
     "check_all_alerts",
     "check_leakage",
     "claim_eligible",
@@ -984,6 +1088,7 @@ __all__ = [
     "is_exploration_data",
     "is_policy_selected_data",
     "is_test_data",
+    "pairing_key",
     "promotable",
     "promoted",
     "replication_key",
