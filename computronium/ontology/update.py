@@ -515,7 +515,7 @@ class ParameterUpdateConfig:
         )
 
     @classmethod
-    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+    def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the parameter_update axis.
 
         These are the knobs the update config reads. The sweep unions the
@@ -527,7 +527,7 @@ class ParameterUpdateConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         return {
-            "step_size": {"domain": (1e-5, 1.0, "log")},
+            "update_lr": {"domain": (1e-5, 1.0, "log")},
             "momentum": {"domain": (0.0, 0.99, "linear")},
             "ortho_steps": {
                 "domain": (0, 10, "int"),
@@ -566,7 +566,6 @@ class ParameterUpdateConfig:
                 "domain": (1e-5, 1.0, "log"),
                 "availability": expr_from_string('update == "ortho_adam"'),
             },
-            "batch_size": {"domain": [16, 32, 64, 128, 256, 512]},
         }
 
 

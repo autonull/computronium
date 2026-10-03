@@ -539,7 +539,7 @@ class GeometryConfig:
         )
 
     @classmethod
-    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+    def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the geometry axis.
 
         These are the knobs the geometry config reads. The sweep unions the
@@ -553,8 +553,16 @@ class GeometryConfig:
         return {
             # Structural: the task decides both. A run that swept them would be
             # searching for the shape of its data (TODO46 §3.0).
-            "input_dim": {"domain": (1, 8192, "int"), "kind": "structural"},
-            "output_dim": {"domain": (1, 8192, "int"), "kind": "structural"},
+            "input_dim": {
+                "domain": (1, 8192, "int"),
+                "kind": "structural",
+                "default": 1,
+            },
+            "output_dim": {
+                "domain": (1, 8192, "int"),
+                "kind": "structural",
+                "default": 1,
+            },
             "hidden_dim": {"domain": (8, 4096, "log"), "prior": "hidden_width"},
             "num_layers": {"domain": (1, 12, "int"), "prior": "hidden_depth"},
             "init_scale": {"domain": (1e-3, 10.0, "log")},

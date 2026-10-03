@@ -584,13 +584,13 @@ class StateDynamicsConfig:
                 "prior": None,
                 "override_scope": "coordinate",
             },
-            "step_size": {
+            "settle_step": {
                 "domain": (1e-5, 1.0, "log"),
                 "availability": None,
                 "prior": "step_size_energy_minimization_backprop",
                 "override_scope": "coordinate",
             },
-            "beta": {
+            "settle_beta": {
                 "domain": (1e-3, 1.0, "log"),
                 "availability": expr_from_string(
                     'dynamics in ["energy_minimization", "predictive_settling", "error_predictive_coding", "spike_integration", "pc_alm"]'
@@ -598,7 +598,7 @@ class StateDynamicsConfig:
                 "prior": None,
                 "override_scope": "coordinate",
             },
-            "momentum": {
+            "settle_momentum": {
                 "domain": (0.0, 0.99, "linear"),
                 "availability": expr_from_string('dynamics == "energy_minimization"'),
                 "prior": None,

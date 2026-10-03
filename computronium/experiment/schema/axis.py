@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from computronium.experiment.legality.dsl import Expr
@@ -69,6 +69,11 @@ class Domain:
                 raise ValueError(f"Domain lo ({self.lo}) must be < hi ({self.hi})")
 
 
+# Sentinel: the spec declares no config default of its own. A distinct object
+# (not dataclasses.MISSING, which dataclasses read as "no default").
+NO_DEFAULT = object()
+
+
 @dataclass(frozen=True, slots=True)
 class HyperparameterSpec:
     """Specification for a hyperparameter (hyperparameter)."""
@@ -80,6 +85,10 @@ class HyperparameterSpec:
     availability: Expr | None = None  # Conditional availability predicate
     prior: str | None = None  # PriorSpec name
     override_scope: str = "coordinate"  # "coordinate" | "run" | "global"
+    # The declared config default for an unswept, unprior'd value. NO_DEFAULT
+    # means "no source" — the harvest audit rejects the row (TODO48 Q4: the
+    # Domain.lo fallback is deleted).
+    default: Any = NO_DEFAULT
 
 
 @dataclass(frozen=True, slots=True)

@@ -856,69 +856,64 @@ CONSTRAINTS = [
 # =============================================================================
 
 PRIORS = [
-    # Ruler learning rate priors (from 11 tasks)
+    # Ruler learning rate priors (from 11 tasks). The MNIST row lives below
+    # with the migrated learning.prior table (explicit measured center).
     PriorSpec(
-        name="lr_ruler_mnist",
-        distribution="log_uniform",
-        params={"low": 1e-4, "high": 1e-1},
-        description="Ruler LR prior for MNIST",
-    ),
-    PriorSpec(
-        name="lr_ruler_cifar10",
+        name="ruler_lr_cifar10",
         distribution="log_uniform",
         params={"low": 1e-4, "high": 1e-1},
         description="Ruler LR prior for CIFAR-10",
     ),
     PriorSpec(
-        name="lr_ruler_cifar100",
+        name="ruler_lr_cifar100",
         distribution="log_uniform",
         params={"low": 1e-4, "high": 1e-1},
         description="Ruler LR prior for CIFAR-100",
     ),
     PriorSpec(
-        name="lr_ruler_imagenet",
+        name="ruler_lr_imagenet",
         distribution="log_uniform",
         params={"low": 1e-5, "high": 1e-2},
         description="Ruler LR prior for ImageNet",
     ),
     PriorSpec(
-        name="lr_ruler_sst2",
+        name="ruler_lr_sst2",
         distribution="log_uniform",
         params={"low": 1e-5, "high": 1e-2},
         description="Ruler LR prior for SST-2",
     ),
     PriorSpec(
-        name="lr_ruler_squad",
+        name="ruler_lr_squad",
         distribution="log_uniform",
         params={"low": 1e-5, "high": 1e-2},
         description="Ruler LR prior for SQuAD",
     ),
     PriorSpec(
-        name="lr_ruler_wikitext2",
+        name="ruler_lr_wikitext2",
         distribution="log_uniform",
         params={"low": 1e-5, "high": 1e-2},
         description="Ruler LR prior for WikiText-2",
     ),
     PriorSpec(
-        name="lr_ruler_ptb",
+        name="ruler_lr_ptb",
         distribution="log_uniform",
         params={"low": 1e-5, "high": 1e-2},
         description="Ruler LR prior for PTB",
     ),
     PriorSpec(
-        name="lr_ruler_copyshake",
+        name="ruler_lr_copyshake",
         distribution="log_uniform",
         params={"low": 1e-4, "high": 1e-1},
         description="Ruler LR prior for CopyShake",
     ),
     PriorSpec(
-        name="lr_ruler_arithmetic",
+        name="ruler_lr_arithmetic",
         distribution="log_uniform",
         params={"low": 1e-4, "high": 1e-1},
         description="Ruler LR prior for Arithmetic",
     ),
     PriorSpec(
-        name="lr_ruler_listops",
+        name="ruler_lr_listops",
         distribution="log_uniform",
         params={"low": 1e-4, "high": 1e-1},
         description="Ruler LR prior for ListOps",
@@ -1003,13 +998,7 @@ PRIORS = [
         params={"low": 1e-2, "high": 0.5},
         description="Dynamics-level step size prior for PredictiveSettling",
     ),
-    # Gate 2 additions: batch_size, optimizer betas, apply_constraints
-    PriorSpec(
-        name="batch_size",
-        distribution="categorical",
-        params={"choices": [32, 64, 128, 256, 512]},
-        description="Batch size prior (Gate 2 addition)",
-    ),
+    # Gate 2 additions: optimizer betas, apply_constraints
     PriorSpec(
         name="adam_beta1",
         distribution="uniform",
@@ -1027,6 +1016,334 @@ PRIORS = [
         distribution="uniform",
         params={"low": 0.8, "high": 0.99},
         description="Muon momentum prior (Gate 2 addition)",
+    ),
+    # Migrated from learning.prior (Q4, TODO48): one PRIORS table, one
+    # registration path. Ruler LRs carry explicit measured centers.
+    PriorSpec(
+        name="ruler_lr_digits",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'digits' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_mnist",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'mnist' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_fashion_mnist",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'fashion_mnist' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_kmnist",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'kmnist' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_usps",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'usps' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_xor",
+        distribution="log_uniform",
+        params={"low": 0.0001, "high": 0.01, "center": 0.001},
+        description="Ruler-calibrated learning rate for task 'xor' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_spiral",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'spiral' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_circles",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'circles' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_iris",
+        distribution="log_uniform",
+        params={"low": 0.0001, "high": 0.01, "center": 0.001},
+        description="Ruler-calibrated learning rate for task 'iris' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_wine",
+        distribution="log_uniform",
+        params={"low": 0.0001, "high": 0.01, "center": 0.001},
+        description="Ruler-calibrated learning rate for task 'wine' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_breast_cancer",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Ruler-calibrated learning rate for task 'breast_cancer' (feedforward topology)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_catchall",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Catch-all ruler-calibrated learning rate for unknown tasks (feedforward)",
+        confidence=0.9,
+    ),
+    PriorSpec(
+        name="ruler_lr_non_feedforward",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Default learning rate for non-feedforward topologies (from topology LR probe)",
+        confidence=0.8,
+    ),
+    # Step-size override priors (dynamics x credit multipliers)
+    PriorSpec(
+        name="step_size_override_energy_minimization_random_projections",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=random_projections",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_gradient",
+        distribution="log_normal",
+        params={"mean": 0.5, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=gradient",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_thermodynamic_contrast",
+        distribution="log_normal",
+        params={"mean": 0.00005, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=thermodynamic_contrast (Q1b suspect: effective lr 1.6e-6 at prior center)",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_pepita",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=pepita",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_local_goodness",
+        distribution="log_normal",
+        params={"mean": 0.0005, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=local_goodness",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_temporal_trace",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=temporal_trace",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_energy_minimization_target_inversion",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=energy_minimization, credit=target_inversion",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_diffusion_random_projections",
+        distribution="log_normal",
+        params={"mean": 0.05, "sigma": 0.5},
+        description="Step size multiplier for dynamics=diffusion, credit=random_projections",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_diffusion_spectral_constrained",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=diffusion, credit=spectral_constrained",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_diffusion_homeostatic",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=diffusion, credit=homeostatic",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_diffusion_temporal_trace",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=diffusion, credit=temporal_trace",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_diffusion_target_inversion",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=diffusion, credit=target_inversion",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_temporal_trace",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=temporal_trace",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_thermodynamic_contrast",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=thermodynamic_contrast",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_random_projections",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=random_projections",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_local_contrastive",
+        distribution="log_normal",
+        params={"mean": 0.0005, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=local_contrastive",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_local_goodness",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=local_goodness",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_pepita",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=pepita",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_lazy_gradient",
+        distribution="log_normal",
+        params={"mean": 0.01, "sigma": 0.5},
+        description="Step size multiplier for dynamics=lazy, credit=gradient",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_instantaneous_temporal_trace",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=instantaneous, credit=temporal_trace",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_instantaneous_pepita",
+        distribution="log_normal",
+        params={"mean": 0.01, "sigma": 0.5},
+        description="Step size multiplier for dynamics=instantaneous, credit=pepita",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_pc_alm_thermodynamic_contrast",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=pc_alm, credit=thermodynamic_contrast",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_pc_alm_pc_alm",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=pc_alm, credit=pc_alm",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_instantaneous_homeostatic",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=instantaneous, credit=homeostatic",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_spike_integration_temporal_trace",
+        distribution="log_normal",
+        params={"mean": 0.0001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=spike_integration, credit=temporal_trace",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_predictive_settling_thermodynamic_contrast",
+        distribution="log_normal",
+        params={"mean": 0.5, "sigma": 0.5},
+        description="Step size multiplier for dynamics=predictive_settling, credit=thermodynamic_contrast",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_predictive_settling_local_goodness",
+        distribution="log_normal",
+        params={"mean": 0.001, "sigma": 0.5},
+        description="Step size multiplier for dynamics=predictive_settling, credit=local_goodness",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_error_predictive_coding_thermodynamic_contrast",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=error_predictive_coding, credit=thermodynamic_contrast",
+        confidence=0.8,
+    ),
+    PriorSpec(
+        name="step_size_override_error_predictive_coding_local_goodness",
+        distribution="log_normal",
+        params={"mean": 0.1, "sigma": 0.5},
+        description="Step size multiplier for dynamics=error_predictive_coding, credit=local_goodness",
+        confidence=0.8,
+    ),
+    # Dynamics settling step size priors
+    PriorSpec(
+        name="dynamics_step_size_diffusion",
+        distribution="log_uniform",
+        params={"low": 0.0001, "high": 0.01, "center": 0.001},
+        description="Dynamics settling step size for diffusion",
+        confidence=0.85,
+    ),
+    PriorSpec(
+        name="dynamics_step_size_predictive_settling",
+        distribution="log_uniform",
+        params={"low": 0.001, "high": 0.1, "center": 0.01},
+        description="Dynamics settling step size for predictive_settling",
+        confidence=0.85,
+    ),
+    # Harvested geometry size priors: without a prior the unswept value
+    # resolved to the domain edge (an 8-unit, 1-layer network).
+    PriorSpec(
+        name="hidden_width",
+        distribution="log_uniform",
+        params={"low": 16.0, "high": 256.0, "center": 64.0},
+        description="Default geometry width",
+        confidence=0.6,
+    ),
+    PriorSpec(
+        name="hidden_depth",
+        distribution="log_uniform",
+        params={"low": 1.0, "high": 4.0, "center": 2.0},
+        description="Default geometry depth",
+        confidence=0.6,
     ),
 ]
 
@@ -2247,16 +2564,10 @@ def seed_all_registries() -> None:
     for constraint in CONSTRAINTS:
         register_constraint(constraint)
 
-    # Priors. learning.prior registers on import (ruler-LR + step-size
-    # overrides), so the single clear goes after that import and both sources
-    # are registered. Clearing between them silently discarded this list, and
-    # the names here are disjoint from learning.prior's.
-    from computronium.experiment.learning.prior import register_all_priors
-
-    PRIORS_REGISTRY.clear()
+    # Priors: the single PRIORS table above is the only registration path
+    # (learning.prior's tables migrated here; its accessors read the registry).
     for prior in PRIORS:
         register_prior(prior)
-    register_all_priors()
 
     # Policies
     for policy in POLICIES:

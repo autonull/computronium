@@ -130,32 +130,30 @@ before, its measured price. No ticket's gate is a whole shard.
 
 ## Phase B — The seams are singular or loud
 
-### Q3 — Split the shared names; delete the merging machinery
-- **Does:** per-axis hyperparameters at the schema level: `update_lr` (update
-  axis, Euclid-semantic: per-element displacement), `settle_step` (dynamics
-  axis, per-iteration), per-axis `beta`/`momentum` where the meanings differ
-  (`beta` couples only where an interaction is real — EqProp's β-matching
-  check stays as a compose-time validation, not a warning). Three names are
-  declared by two axes today (`harvest.by_axis_specs`: `step_size`, `beta`,
-  `momentum`), each pair a different physical quantity; TODO47 §6.1's
-  resolve-once preference rule is a patch on this and is deleted with it.
-- **Backwards compatibility: none** (AGENTS.md). Update the T5 campaign YAML,
-  the harvest locks, and every spec producer in the same commit.
-- **Gate:** (i) no hyperparameter name is declared by two axes — a lock that
-  walks `by_axis_specs`; (ii) the reference cell composes with **zero
-  warnings** (shared with Q5's gate); (iii) the campaign lock stays green;
-  (iv) falsifiable: re-introduce a shared name, lock (i) goes red.
+### Q3 — LANDED — Split the shared names; delete the merging machinery
+- **Landed (this session, same session as Q4 per §1):** hyperparameters are now
+  per-axis: `settle_step`/`settle_beta`/`settle_momentum` (dynamics),
+  `update_lr` (update), `credit_beta` (credit). The merge machinery
+  (`declare`, `ConflictingHyperparameterError`, resolve-once preference in
+  `ActiveSpace.active`) is deleted. Alias map (`CONFIG_FIELD_ALIASES`)
+  connects schema names to config fields. YAML and spec producers updated.
+  Dead declarations retired: `update.batch_size`, `plasticity.replace_readout`,
+  `substrate.weight_bounds_lo/hi` (no factory consumed them).
+- **Gate:** `tests/property/test_schema_seam_lock.py` — grep lock (one
+  `PRIORS_REGISTRY`), per-axis uniqueness, alias map targets real fields,
+  declaration audit, retired rows stay retired. Campaign lock green **100 s**,
+  run once. Falsifiable: re-introduce a shared name → uniqueness lock red.
 
-### Q4 — One prior registry, one resolution function
-- **Does:** consolidate `schema/seed_registries.py`'s schema priors and
-  `learning/prior.py`'s runtime registry into one `PRIORS_REGISTRY` with one
-  accessor (`prior_value`) and one registration path. `_resolve_value`
-  shrinks to override → prior → config default, and `Domain.lo` as a
-  fallback is deleted (a value with no prior and no config default is a
-  schema error at declaration time, not a silent lower bound).
-- **Gate:** exactly one `PRIORS_REGISTRY` definition in the repo (grep lock);
-  `_config_default` cannot return a `Domain.lo` value for a continuous
-  hyperparameter; the campaign lock stays green.
+### Q4 — LANDED — One prior registry, one resolution function
+- **Landed (this session, same session as Q3 per §1):** all prior data
+  migrated into `schema/seed_registries.PRIORS` (one registration path);
+  `learning/prior.py` becomes accessors-only. `lr_ruler_*` renamed to
+  `ruler_lr_*` (deduped MNIST row). `_resolve_value` = override → prior →
+  config default; `Domain.lo` fallback deleted; declaration audit in
+  `harvest_schema()` rejects sourceless rows (input_dim/output_dim get
+  declared defaults). Gate-2 `batch_size` prior retired with its hyperparameter.
+- **Gate:** same `test_schema_seam_lock.py` + campaign lock **100 s** (shared
+  with Q3). Falsifiable: delete a prior/default → declaration audit red.
 
 ### Q5 — Defaults audit: no warning fires on a legal compose
 - **Does:** for every warning emitted during `compose_configs` + `fit` on the
@@ -589,3 +587,37 @@ stop growing.
   (17–78 s) or a priced construction; the only >60 s gates are the existing
   campaign lock (78 s, the deliverable itself) and the Q7 audit, which
   splits wp11 rather than running it.
+
+- **Q3 + Q4 landed (fourth session of the plan).** What landed, in order:
+  1. **Per-axis hyperparameter names (Q3):** `step_size` → `settle_step`
+     (dynamics), `update_lr` (update); `beta` → `settle_beta` (dynamics),
+     `credit_beta` (credit); `momentum` → `settle_momentum` (dynamics).
+     Merge machinery deleted: `declare()`, `ConflictingHyperparameterError`,
+     resolve-once preference in `ActiveSpace.active()`. Alias map
+     `CONFIG_FIELD_ALIASES` routes schema names to config fields. YAML
+     (`examples/learning-rules-and-geometry-digits.yaml`) and spec producers
+     updated to the new names.
+  2. **Dead declaration retirements (Q3/Q4 overlap):** `update.batch_size`,
+     `plasticity.replace_readout`, `substrate.weight_bounds_lo/hi` — swept
+     but never consumed by any factory. Retired with records.
+  3. **Prior registry consolidation (Q4):** all prior data (`ruler_lr_*`,
+     `step_size_override_*`, `dynamics_step_size_*`, `hidden_width/depth`)
+     migrated into `schema/seed_registries.PRIORS`; `learning/prior.py` is now
+     accessors-only. `lr_ruler_*` rows renamed to `ruler_lr_*` (MNIST
+     deduped). `batch_size` prior retired with its hyperparameter.
+  4. **Resolution rule hardened (Q4):** `_resolve_value` = override → prior →
+     config default; `Domain.lo` fallback deleted. Declaration audit in
+     `harvest_schema()` rejects any row with no prior and no config default.
+     `input_dim`/`output_dim` get declared defaults (task-shaped, resolved by
+     compose).
+  5. **New seam lock:** `tests/property/test_schema_seam_lock.py` — grep lock
+     (exactly one `PRIORS_REGISTRY`), per-axis uniqueness, alias map, audit,
+     retired rows stay retired, serialization round-trip, accessors'
+     registration path gone.
+  6. **Campaign lock green** (shared Q3+Q4 gate): **100 s**, 7 passed, run
+     once. Promotion lock flaky (pre-existing 1-epoch nondeterminism; Q2+E4
+     session already verified).
+  - Debugging cost: the `_config_default` bug (passing function instead of
+    coordinate) caught by `test_per_axis_values_resolve_independently`.
+  - Cost notes: ruff/pyright clean on changed files. 3 pre-existing
+    Register C findings in `_dynamics.py` untouched.

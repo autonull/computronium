@@ -15,7 +15,11 @@ from computronium.core.system_trainer import compose_system_from_configs
 from computronium.core.system_trainer.factory import param_count
 from computronium.experiment.learning.prior import apply_dynamics_step_size
 from computronium.experiment.schema.axis import StructuralAxis
-from computronium.experiment.schema.harvest import ActiveSpace, harvest_schema
+from computronium.experiment.schema.harvest import (
+    ActiveSpace,
+    config_field_name,
+    harvest_schema,
+)
 from computronium.ontology import GeometryConfig
 from computronium.ontology.dynamics import StateDynamicsConfig
 
@@ -716,7 +720,7 @@ def compose_configs(  # ruff: ignore[too-many-locals]
     dcfg = d_factory(**{
         **active.for_axis(StructuralAxis.DYNAMICS, dynamics_name),
         "step_size": apply_dynamics_step_size(
-            active.values.get("step_size", _config_default_step_size(d_factory)),
+            active.values.get("settle_step", _config_default_step_size(d_factory)),
             dynamics_name,
         ),
     })
@@ -804,9 +808,8 @@ def _effective_params(
 ) -> dict[str, Any]:
     """Record what each composed config actually holds, keyed ``axis.name``.
 
-    ``step_size`` is read by both dynamics and update, and the update factory
-    scales it by the registered (dynamics, credit) prior, so a single flat name
-    would record one axis' value under both.
+    Names are per-axis (``dynamics.settle_step`` vs ``update.update_lr``), so
+    each axis records the value its own config actually holds.
     """
     by_axis = {
         StructuralAxis.GEOMETRY: gcfg,
@@ -818,7 +821,7 @@ def _effective_params(
     for axis, config in by_axis.items():
         for spec in active.by_axis_specs_for(axis):
             effective[f"{axis.value}.{spec.name}"] = getattr(
-                config, spec.name, active.values[spec.name]
+                config, config_field_name(spec.name), active.values[spec.name]
             )
     return effective
 

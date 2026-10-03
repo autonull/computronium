@@ -32,9 +32,9 @@ from computronium.experiment.schema.axis import (
 )
 from computronium.experiment.schema.coordinate import Coordinate
 from computronium.experiment.schema.harvest import (
-    ConflictingHyperparameterError,
     InactiveHyperparameterError,
-    declare,
+    UnresolvedHyperparameterError,
+    config_field_name,
     harvest_schema,
     load_axis_config,
 )
@@ -208,7 +208,7 @@ def test_active_values_reach_the_composed_configs() -> None:
         plasticity="null",
         credit="gradient",
         update="adam",
-        params={"step_size": 0.03125, "hidden_dim": 48, "num_layers": 3},
+        params={"update_lr": 0.03125, "hidden_dim": 48, "num_layers": 3},
     )
     cell = compose_cell_system(
         coordinate=coordinate,
@@ -217,9 +217,9 @@ def test_active_values_reach_the_composed_configs() -> None:
         output_dim=10,
     )
     assert cell.params["geometry.hidden_dim"] == 48
-    assert cell.params["dynamics.step_size"] == pytest.approx(0.03125)
+    assert cell.params["update.update_lr"] == pytest.approx(0.03125)
     # Effective values are recorded, so a prior or an override that wins is visible.
-    assert "update.step_size" in cell.params
+    assert "dynamics.settle_step" in cell.params
 
 
 def test_coupling_needs_no_axis_name_branch() -> None:
@@ -235,37 +235,67 @@ def test_coupling_needs_no_axis_name_branch() -> None:
     energy = harvest_schema().active(
         _coordinate(dynamics="energy_minimization", credit="thermodynamic_contrast")
     )
-    assert energy.values["beta"] > 0, "beta must be active for the EM×TC pairing"
-
-
-def test_conflicting_domains_are_a_registry_failure() -> None:
-    """Two axes declaring one name with different domains must raise, not merge."""
-    schema = harvest_schema()
-    conflict = next(
-        (
-            spec
-            for spec in schema.hyperparameters
-            if len({s.domain for s in schema.hyperparameters if s.name == spec.name})
-            > 1
-        ),
-        None,
+    assert energy.values["settle_beta"] > 0, (
+        "settle_beta must be active for the EM×TC pairing"
     )
-    assert conflict is None, f"merged conflicting domains for {conflict}"
+    assert energy.values["credit_beta"] > 0, (
+        "credit_beta must be active for the EM×TC pairing"
+    )
 
-    merged = HyperparameterSpec(
-        name="probe",
-        domain=Domain(lo=1.0, hi=2.0, scale=Scale.LOG),
+
+def test_no_name_is_declared_by_two_axes() -> None:
+    """Q3 (TODO48): names are per-axis; a second claim is a seam defect.
+
+    ``step_size`` was declared by dynamics and update — each pair a different
+    physical quantity — and the resolve-once preference rule existed to paper
+    over it. The names are split (``settle_step``, ``update_lr``, ...); a
+    re-introduced shared name fails here and in the schema seam lock.
+    """
+    schema = harvest_schema()
+    seen: dict[str, str] = {}
+    shared = []
+    for spec in schema.hyperparameters:
+        if spec.name in seen and seen[spec.name] != spec.axis_name:
+            shared.append(f"{spec.name}: {seen[spec.name]} + {spec.axis_name}")
+        seen[spec.name] = spec.axis_name
+    assert not shared, f"names declared by two axes: {shared}"
+
+
+def test_unswept_values_have_a_declared_source() -> None:
+    """Q4 (TODO48): override → prior → config default, and nothing else.
+
+    The declaration audit inside ``harvest_schema()`` already rejected any row
+    with no prior and no config default — reaching this line is the first
+    half of the proof. The second half: the per-axis rename keeps its field
+    alias map total, so a schema name reaches the config field the factory
+    reads.
+    """
+    renamed = [
+        name
+        for name in (
+            "settle_step",
+            "settle_beta",
+            "settle_momentum",
+            "update_lr",
+            "credit_beta",
+        )
+        if config_field_name(name) == name
+    ]
+    assert not renamed, f"renamed schema names lost their field alias: {renamed}"
+
+
+def test_a_continuous_value_with_no_source_raises() -> None:
+    """The resolve path raises instead of returning a domain edge."""
+    from computronium.experiment.schema.harvest import _config_default
+
+    spec = HyperparameterSpec(
+        name="probe_lr",
+        domain=Domain(lo=1e-5, hi=1.0, scale=Scale.LOG),
         axis_kind=AxisKind.CONTINUOUS,
         axis_name="dynamics",
     )
-    other = HyperparameterSpec(
-        name="probe",
-        domain=Domain(lo=1.0, hi=100.0, scale=Scale.LINEAR),
-        axis_kind=AxisKind.CONTINUOUS,
-        axis_name="update",
-    )
-    with pytest.raises(ConflictingHyperparameterError, match="probe"):
-        declare({"probe": merged}, other)
+    with pytest.raises(UnresolvedHyperparameterError, match="probe_lr"):
+        _config_default(spec, _coordinate())
 
 
 def test_axis_kinds_are_honoured_by_the_schema() -> None:
@@ -279,20 +309,18 @@ def test_axis_kinds_are_honoured_by_the_schema() -> None:
     }
 
 
-def test_a_name_declared_by_two_axes_resolves_once_through_its_prior() -> None:
-    """``step_size`` is declared by dynamics (with a prior) and update (without).
+def test_per_axis_values_resolve_independently() -> None:
+    """``settle_step`` (dynamics, prior-backed) and ``update_lr`` (update,
+    factory-default) are different quantities and resolve separately.
 
-    Last-writer-wins over the per-axis specs would let the prior-less update
-    spec overwrite the dynamics prior's center with ``Domain.lo`` (1e-5) —
-    the defect that trained every unswept cell at a learning rate two orders
-    of magnitude below chance-relevant scale (TODO47 §6.1: digits never
-    learned; the fix measured val_acc 0.49 at the prior center vs 0.117 at
-    the bound). The resolved value must be the prior's center, once, for
-    every axis that declared the name.
+    Before the split, one ``step_size`` name was declared by both axes and a
+    resolve-once preference rule decided who owned it; last-writer-wins once
+    trained every unswept cell at 1e-5 (TODO47 §6.1). Each axis now carries
+    its own name, its own source, its own value.
     """
     schema = harvest_schema()
     coordinate = Coordinate(
-        substrate="real",
+        substrate="digital",
         geometry="feedforward",
         dynamics="energy_minimization",
         credit="gradient",
@@ -301,10 +329,20 @@ def test_a_name_declared_by_two_axes_resolves_once_through_its_prior() -> None:
         params={},
     )
     space = schema.active(coordinate)
-    spec = next(s for s in space.specs if s.name == "step_size")
-    center, _, _ = prior_value(spec.prior)  # type: ignore[arg-type]
-    assert space.values["step_size"] == center
-    # Both declaring axes see the same resolved value.
-    dynamics_step = space.by_axis(StructuralAxis.DYNAMICS)["step_size"]
-    update_step = space.by_axis(StructuralAxis.UPDATE)["step_size"]
-    assert dynamics_step == update_step == center
+    settle_spec = next(s for s in space.specs if s.name == "settle_step")
+    center, _, _ = prior_value(settle_spec.prior)  # type: ignore[arg-type]
+    assert space.values["settle_step"] == center
+    # The update axis resolves from its own factory default, not the dynamics prior.
+    update_spec = next(s for s in space.specs if s.name == "update_lr")
+    assert update_spec.prior is None
+    assert space.values["update_lr"] == pytest.approx(
+        inspect
+        .signature(ParameterUpdateConfig.euclidean)
+        .parameters["step_size"]
+        .default
+    )
+    # And the values reach each axis under the field name the factory reads.
+    assert space.by_axis(StructuralAxis.DYNAMICS)["step_size"] == center
+    assert space.for_axis(StructuralAxis.UPDATE, "euclidean")[
+        "step_size"
+    ] == pytest.approx(0.01)

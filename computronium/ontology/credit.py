@@ -482,7 +482,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+    def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the credit_assignment axis.
 
         These are the knobs the credit config reads. The sweep unions the
@@ -494,7 +494,7 @@ class CreditAssignmentConfig:
         from computronium.experiment.legality.dsl import expr_from_string
 
         return {
-            "beta": {
+            "credit_beta": {
                 "domain": (1e-3, 1.0, "log"),
                 "availability": expr_from_string(
                     'credit in ["thermodynamic_contrast", "pc_alm"]'

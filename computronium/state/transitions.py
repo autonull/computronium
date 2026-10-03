@@ -117,7 +117,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+    def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the plasticity axis.
 
         These are the knobs the plasticity config reads. The sweep unions the
@@ -150,12 +150,6 @@ class PlasticityConfig:
             "conflict_threshold": {
                 "domain": (0.1, 0.9, "linear"),
                 "availability": expr_from_string('plasticity == "conflict_adaptive"'),
-            },
-            "replace_readout": {
-                "domain": [True, False],
-                "availability": expr_from_string(
-                    'plasticity in ["temporal_psi", "conflict_adaptive"]'
-                ),
             },
         }
 

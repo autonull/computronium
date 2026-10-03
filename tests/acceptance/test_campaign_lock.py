@@ -180,7 +180,7 @@ def test_gate_2b_the_reference_cell_learns() -> None:
 
     The campaign's own fidelity (L0, 1 epoch, batch_limit 2) prices coverage,
     not learning; the reference cell's property is measured at the regime
-    where learning is real — the sweep point nearest the step_size prior
+    where learning is real — the sweep point nearest the settle_step prior
     center, 10 epochs, unlimited batches (TODO47 §6.1's table). The cell is
     the campaign's own axes composition, not a fabricated one: reverting the
     ``active()`` resolve-once fix returns this gate to a frozen loss at
@@ -204,7 +204,7 @@ def test_gate_2b_the_reference_cell_learns() -> None:
             plasticity="fast_weights",
             credit="gradient",
             update="euclidean",
-            params={"depth": 2, "hidden_dim": 64, "step_size": 0.03162},
+            params={"depth": 2, "hidden_dim": 64, "settle_step": 0.03162},
         ),
         Schedule(
             fidelity="L0",

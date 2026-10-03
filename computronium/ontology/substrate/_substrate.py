@@ -227,14 +227,12 @@ class SubstrateConfig:
         )
 
     @classmethod
-    def hyperparameters(cls, primitive_name: str = "") -> dict[str, object]:
+    def hyperparameters(cls, _primitive_name: str = "") -> dict[str, object]:
         """Hyperparameter ranges owned by the substrate axis.
 
         Args:
             primitive_name: The specific substrate primitive name for availability predicates.
         """
-        from computronium.experiment.legality.dsl import expr_from_string
-
         return {
             "noise_level": {"domain": (0.0, 1.0, "log")},
             "sparsity": {"domain": (0.0, 0.99, "linear")},
@@ -243,18 +241,6 @@ class SubstrateConfig:
             },
             # Structural: the run chooses its device, not the search.
             "device": {"domain": ["cpu", "cuda", "mps", "fpga"], "kind": "structural"},
-            "weight_bounds_lo": {
-                "domain": (-10.0, 0.0, "linear"),
-                "availability": expr_from_string(
-                    'substrate in ["analog", "memristive", "quantum"]'
-                ),
-            },
-            "weight_bounds_hi": {
-                "domain": (0.0, 10.0, "linear"),
-                "availability": expr_from_string(
-                    'substrate in ["analog", "memristive", "quantum"]'
-                ),
-            },
         }
 
 

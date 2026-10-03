@@ -7,8 +7,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from computronium.experiment.execution.allocator import Abandonment, Promotion
-    from computronium.experiment.execution.stage import Proposal
-    from computronium.experiment.execution.stage import StageTransition
+    from computronium.experiment.execution.stage import Proposal, StageTransition
     from computronium.experiment.schema.coordinate import Coordinate, Schedule
 
 

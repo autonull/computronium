@@ -8,7 +8,7 @@ NOTE: The harvest now includes more than the Gate 2 union — it includes
 all ontology-specific parameters with availability predicates. The Gate 2
 union is a FROZEN reference of unique names from six implementations,
 including legacy names that are now superseded by the ontology structure
-(e.g., `learning_rate` → `step_size` in update; `cube_size` was experiment-specific).
+(e.g., `learning_rate` → `update_lr` in update; `cube_size` was experiment-specific).
 
 Harvest pulls directly from ontology config classes (via hyperparameters())
 not from the experiment registries, so no seeding is required.
@@ -24,7 +24,7 @@ from computronium.experiment.schema.harvest import harvest_schema
 # The ontology now uses canonical names with availability predicates.
 GATE_2_UNION = frozenset({
     # Learning rate variants (legacy names, map to step_size/ortho_lr)
-    "learning_rate",  # → step_size
+    "learning_rate",  # → update_lr
     "layer_lr",  # per-layer override
     "classifier_lr",  # classifier-specific LR
     "target_lr",  # target-prop LR
@@ -82,16 +82,16 @@ GATE_2_UNION = frozenset({
 
 # Map legacy names to canonical ontology names
 LEGACY_TO_CANONICAL = {
-    "learning_rate": "step_size",
-    "layer_lr": "step_size",  # per-layer would be an override
-    "classifier_lr": "step_size",
-    "target_lr": "step_size",
+    "learning_rate": "update_lr",
+    "layer_lr": "update_lr",  # per-layer would be an override
+    "classifier_lr": "update_lr",
+    "target_lr": "update_lr",
     "weight_decay": "ewc_lambda",  # EWC-style regularization
     "cube_size": "lattice_dims",
-    "damping": "momentum",
+    "damping": "settle_momentum",
     "tol": "convergence_threshold",
-    "update_scale": "step_size",
-    "update_scale_by_depth": "step_size",
+    "update_scale": "update_lr",
+    "update_scale_by_depth": "update_lr",
     "w_rec_init": "init_scale",
     "w_rec_gain": "init_scale",
     "feedback_gain": "feedback_scale",
@@ -148,9 +148,11 @@ def test_harvest_schema_covers_gate_2_legacy_names() -> None:
     # Check that we have canonical names for the key hyperparameters
     # Core params that must be present (availability predicates don't matter for presence)
     core_params = {
-        "step_size",
+        "settle_step",
+        "update_lr",
         "momentum",
-        "beta",
+        "settle_beta",
+        "credit_beta",
         "max_steps",
         "convergence_threshold",
         "hidden_dim",
@@ -159,8 +161,6 @@ def test_harvest_schema_covers_gate_2_legacy_names() -> None:
         "rho",
         "prospective_leak",
         "threshold",
-        "batch_size",
-        "momentum",
         "beta2",
     }
 
@@ -237,12 +237,9 @@ def test_harvest_schema_rich_coverage() -> None:
         "num_operators",
         "trace_decay",
         "conflict_threshold",
-        "replace_readout",
         # Substrate axis params
         "noise_level",
         "precision",
-        "weight_bounds_lo",
-        "weight_bounds_hi",
     }
 
     present = ontology_expansions & harvested_names
@@ -262,7 +259,8 @@ def test_harvest_schema_availability_predicates() -> None:
         "a_minus",
         "tau_pre",
         "tau_post",  # temporal_trace only
-        "beta",  # thermodynamic_contrast, pc_alm
+        "settle_beta",  # settling dynamics
+        "credit_beta",  # thermodynamic_contrast, pc_alm
         "ema_beta",
         "stream_norm",  # local_contrastive only
         "train_biases",  # gradient only
@@ -281,11 +279,7 @@ def test_harvest_schema_availability_predicates() -> None:
         "mem_width",  # ntm
         # Plasticity availability
         "trace_decay",
-        "conflict_threshold",
-        "replace_readout",  # temporal_psi/conflict_adaptive
-        # Substrate availability
-        "weight_bounds_lo",
-        "weight_bounds_hi",  # analog/memristive/quantum
+        "conflict_threshold",  # conflict_adaptive
     }
 
     with_availability = sum(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from dataclasses import MISSING, dataclass, field, fields
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +12,7 @@ from computronium.experiment.legality.dsl import (
     expr_from_string,
 )
 from computronium.experiment.schema.axis import (
+    NO_DEFAULT,
     AxisKind,
     Domain,
     HyperparameterSpec,
@@ -24,17 +26,6 @@ if TYPE_CHECKING:
 
     from computronium.experiment.legality.dsl import Expr
     from computronium.experiment.schema.coordinate import Coordinate
-
-
-class ConflictingHyperparameterError(ValueError):
-    """Raised when two axis primitives define the same hyperparameter name with different semantics."""
-
-    def __init__(self, name: str, sources: list[str]) -> None:
-        self.name = name
-        self.sources = sources
-        super().__init__(
-            f"Conflicting hyperparameter '{name}' defined by: {', '.join(sources)}"
-        )
 
 
 class InactiveHyperparameterError(ValueError):
@@ -73,6 +64,23 @@ AXIS_KIND_ORDER: tuple[StructuralAxis, ...] = (
     StructuralAxis.UPDATE,
 )
 
+# Schema hyperparameter name -> the config dataclass field that consumes it.
+# Names are per-axis (no name is declared by two axes — the schema seam lock
+# enforces this), so a schema name may spell a config field differently where
+# that field predates the schema name.
+CONFIG_FIELD_ALIASES: dict[str, str] = {
+    "settle_step": "step_size",
+    "settle_beta": "beta",
+    "settle_momentum": "momentum",
+    "update_lr": "step_size",
+    "credit_beta": "beta",
+}
+
+
+def config_field_name(name: str) -> str:
+    """The config dataclass field a schema hyperparameter feeds."""
+    return CONFIG_FIELD_ALIASES.get(name, name)
+
 
 def load_axis_config(axis: StructuralAxis) -> Any | None:
     """Import an axis's config class, or None when the axis has none."""
@@ -96,14 +104,18 @@ class ActiveSpace:
     specs: tuple[HyperparameterSpec, ...]
     inactive: frozenset[str]
 
-    def by_axis(self, axis: StructuralAxis) -> dict[str, Any]:
-        """Effective values belonging to one structural axis.
-
-        A name several axes declare (``step_size`` is read by both dynamics and
-        update) resolves once and reaches each axis that declared it.
-        """
+    def values_for_axis(self, axis: StructuralAxis) -> dict[str, Any]:
+        """Effective values belonging to one structural axis."""
         return {
             s.name: self.values[s.name] for s in self.specs if s.axis_name == axis.value
+        }
+
+    def by_axis(self, axis: StructuralAxis) -> dict[str, Any]:
+        """Effective values for one axis, keyed by the config field each feeds."""
+        return {
+            config_field_name(s.name): self.values[s.name]
+            for s in self.specs
+            if s.axis_name == axis.value
         }
 
     def by_axis_specs_for(self, axis: StructuralAxis) -> tuple[HyperparameterSpec, ...]:
@@ -170,20 +182,11 @@ class HarvestedSchema:
         if dead:
             raise InactiveHyperparameterError(dead, coordinate)
 
-        # A name several axes declare (``step_size``) resolves ONCE. Two specs
-        # for one name with different priors are a registry disagreement, and
-        # last-writer-wins here would let the prior-less update-axis spec
-        # overwrite the dynamics prior's center with Domain.lo — the defect
-        # that trained every unswept cell at 1e-5 (TODO47 §6.1). Prefer the
-        # spec that carries a prior; the axes share the resolved value.
-        declared: dict[str, HyperparameterSpec] = {}
-        for spec in active:
-            chosen = declared.get(spec.name)
-            if chosen is None or (spec.prior and not chosen.prior):
-                declared[spec.name] = spec
+        # Names are per-axis (the declaration audit rejects a second axis
+        # claiming one), so each active spec resolves independently.
         values = {
-            name: _resolve_value(spec, coordinate.params)
-            for name, spec in declared.items()
+            spec.name: _resolve_value(spec, coordinate.params, coordinate)
+            for spec in active
         }
         return ActiveSpace(
             values=values,
@@ -210,6 +213,7 @@ class HarvestedSchema:
                     "availability": str(t.availability) if t.availability else None,
                     "prior": t.prior,
                     "override_scope": t.override_scope,
+                    "default": None if t.default is NO_DEFAULT else t.default,
                 }
                 for t in self.hyperparameters
             ],
@@ -237,6 +241,7 @@ class HarvestedSchema:
                     availability=None,  # String representation only for serialization
                     prior=t.get("prior"),
                     override_scope=t.get("override_scope", "coordinate"),
+                    default=(NO_DEFAULT if t.get("default") is None else t["default"]),
                 )
                 for t in data["hyperparameters"]
             ),
@@ -264,24 +269,68 @@ def _available(
     return all(evaluate(p, ctx) for p in predicates)
 
 
-def _config_default(spec: HyperparameterSpec) -> Any:
-    """The config dataclass's own default for a hyperparameter — the last resort."""
-    config_cls = load_axis_config(StructuralAxis(spec.axis_name))
+class UnresolvedHyperparameterError(ValueError):
+    """A hyperparameter with no override, no prior, and no config default.
+
+    The Domain.lo fallback (an unswept continuous value resolving to the lower
+    bound — 1e-5, the defect that trained every unswept cell at a dead lr,
+    TODO47 §6.1) is deleted: a value no source names is a schema error at
+    declaration time, not a silent lower bound.
+    """
+
+
+def _config_default(spec: HyperparameterSpec, coordinate: Coordinate) -> Any:
+    """The default a hyperparameter resolves to when unswept and unprior'd."""
+    axis = StructuralAxis(spec.axis_name)
+    field_name = config_field_name(spec.name)
+    if spec.default is not NO_DEFAULT:
+        return spec.default
+    return _config_default_inner(axis, field_name, coordinate)
+
+
+def _config_default_inner(axis: StructuralAxis, field_name: str, coordinate: Coordinate) -> Any:
+    """Inner resolution using config_cls and factories."""
+    config_cls = load_axis_config(axis)
     if config_cls is None:
-        return spec.domain.members[0] if spec.domain.members else spec.domain.lo
+        raise UnresolvedHyperparameterError(
+            f"hyperparameter '{field_name}' ({axis.value}) has no config class"
+        )
     match = {f.name: f for f in fields(config_cls)}
-    if spec.name not in match:
-        return spec.domain.members[0] if spec.domain.members else spec.domain.lo
-    field = match[spec.name]
-    if field.default is not MISSING:
-        return field.default
-    if field.default_factory is not MISSING:
-        return field.default_factory()
-    return spec.domain.members[0] if spec.domain.members else spec.domain.lo
+    field = match.get(field_name)
+    if field is not None:
+        if field.default is not MISSING:
+            return field.default
+        if field.default_factory is not MISSING:
+            return field.default_factory()
+    primitive = getattr(coordinate, axis.value, "")
+    factory = getattr(config_cls, primitive, None) if primitive else None
+    if callable(factory):
+        default = _factory_default(factory, field_name)
+        if default is not NO_DEFAULT:
+            return default
+    return _any_factory_default_value(config_cls, field_name)
 
 
-def _resolve_value(spec: HyperparameterSpec, overrides: Mapping[str, Any]) -> Any:
-    """Resolve a hyperparameter's effective value: override, then prior, then default."""
+def _any_factory_default_value(config_cls: Any, field_name: str) -> Any:
+    """Any factory default on the axis for ``field_name``, else raise."""
+    for attr in dir(config_cls):
+        if attr.startswith("_"):
+            continue
+        other = getattr(config_cls, attr, None)
+        if callable(other):
+            default = _factory_default(other, field_name)
+            if default is not NO_DEFAULT:
+                return default
+    raise UnresolvedHyperparameterError(
+        f"hyperparameter '{field_name}' has no prior and no "
+        f"config default; declare one or register a prior"
+    )
+
+
+def _resolve_value(
+    spec: HyperparameterSpec, overrides: Mapping[str, Any], coordinate: Coordinate
+) -> Any:
+    """Resolve a hyperparameter's effective value: override, then prior, then config default."""
     if spec.name in overrides:
         return overrides[spec.name]
     if spec.prior:
@@ -290,7 +339,7 @@ def _resolve_value(spec: HyperparameterSpec, overrides: Mapping[str, Any]) -> An
         resolved = prior_value(spec.prior)
         if resolved is not None:
             return resolved[0]
-    return _config_default(spec)
+    return _config_default(spec, coordinate)
 
 
 def _domain_from_range(lo: float, hi: float, scale: str) -> Domain:
@@ -303,25 +352,67 @@ def _domain_from_enum(choices: list[str]) -> Domain:
     return Domain(members=tuple(choices))
 
 
-def declare(declared: dict[str, HyperparameterSpec], hp: HyperparameterSpec) -> None:
-    """Record one hyperparameter declaration.
+def _audit_declared(
+    hp: HyperparameterSpec,
+    axis_kind: StructuralAxis,
+    config_cls: Any,
+    declared: dict[str, HyperparameterSpec],
+) -> None:
+    """Declaration-time seam audit for one hyperparameter row.
 
-    Two axes may legitimately declare the same name — ``step_size`` is read by
-    both dynamics and update — but they must mean the same thing by it. A
-    disagreement is a registry failure, not a silent merge.
+    Two rules, both loud at harvest instead of silent at resolve:
+
+    - a name is declared by exactly one axis (a second claim raises);
+    - a value has a source: a registered prior, a config field default, or a
+      factory signature default. The Domain.lo fallback is deleted — an
+      unswept value with no source trained every unswept cell at 1e-5
+      (TODO47 §6.1).
     """
-    existing = declared.get(hp.name)
-    if existing is None:
-        declared[hp.name] = hp
-        return
-    if existing.domain != hp.domain or existing.axis_kind != hp.axis_kind:
-        raise ConflictingHyperparameterError(
-            hp.name,
-            [
-                f"{existing.axis_kind.value}.{existing.axis_name}",
-                f"{hp.axis_kind.value}.{hp.axis_name}",
-            ],
+    if hp.name in declared and declared[hp.name].axis_name != axis_kind.value:
+        msg = (
+            f"hyperparameter '{hp.name}' declared by two axes: "
+            f"{declared[hp.name].axis_name} and {axis_kind.value}"
         )
+        raise UnresolvedHyperparameterError(msg)
+    if hp.prior or hp.default is not NO_DEFAULT:
+        return
+    field_name = config_field_name(hp.name)
+    for f in fields(config_cls):
+        if f.name == field_name and (
+            f.default is not MISSING or f.default_factory is not MISSING
+        ):
+            return
+    if _any_factory_default(config_cls, field_name):
+        return
+    raise UnresolvedHyperparameterError(
+        f"hyperparameter '{hp.name}' ({axis_kind.value}) has no prior and no "
+        f"config default; declare one or register a prior"
+    )
+
+
+def _factory_default(factory: Any, field_name: str) -> Any:
+    """The signature default ``factory`` carries for ``field_name``, or NO_DEFAULT."""
+    try:
+        sig = inspect.signature(factory)
+    except TypeError, ValueError:
+        return NO_DEFAULT
+    param = sig.parameters.get(field_name)
+    if param is not None and param.default is not inspect.Parameter.empty:
+        return param.default
+    return NO_DEFAULT
+
+
+def _any_factory_default(config_cls: Any, name: str) -> bool:
+    """Whether any factory on the axis accepts ``name`` with a signature default."""
+    for attr_name in dir(config_cls):
+        if attr_name.startswith("_"):
+            continue
+        factory = getattr(config_cls, attr_name, None)
+        if not callable(factory):
+            continue
+        if _factory_default(factory, name) is not NO_DEFAULT:
+            return True
+    return False
 
 
 def _from_dict(name: str, spec: dict[str, Any], axis_name: str) -> HyperparameterSpec:
@@ -343,6 +434,7 @@ def _from_dict(name: str, spec: dict[str, Any], axis_name: str) -> Hyperparamete
         availability=availability,
         prior=spec.get("prior"),
         override_scope=spec.get("override_scope", "coordinate"),
+        default=spec.get("default", NO_DEFAULT),
     )
 
 
@@ -425,7 +517,8 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
         HarvestedSchema with all hyperparameters, ordered by structural axis.
 
     Raises:
-        ConflictingHyperparameterError: If a hyperparameter name has conflicting definitions.
+        UnresolvedHyperparameterError: A hyperparameter has no prior and no
+            config default — declaration-time, not a silent domain-edge value.
     """
     per_axis: dict[StructuralAxis, tuple[HyperparameterSpec, ...]] = {}
     declared: dict[str, HyperparameterSpec] = {}
@@ -436,7 +529,8 @@ def harvest_schema(version: int = 1) -> HarvestedSchema:
             continue
         specs = _parse_hyperparameters(config_cls.hyperparameters(), axis_kind.value)
         for hp in specs:
-            declare(declared, hp)
+            _audit_declared(hp, axis_kind, config_cls, declared)
+            declared[hp.name] = hp
         per_axis[axis_kind] = tuple(specs)
 
     return HarvestedSchema(
@@ -464,11 +558,12 @@ def get_hyperparameter_spec(name: str) -> HyperparameterSpec | None:
 
 __all__ = [
     "AXIS_KIND_ORDER",
+    "CONFIG_FIELD_ALIASES",
     "ActiveSpace",
-    "ConflictingHyperparameterError",
     "HarvestedSchema",
     "InactiveHyperparameterError",
-    "declare",
+    "UnresolvedHyperparameterError",
+    "config_field_name",
     "get_hyperparameter_names",
     "get_hyperparameter_spec",
     "harvest_schema",

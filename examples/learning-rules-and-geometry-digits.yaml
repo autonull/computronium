@@ -49,8 +49,9 @@ axes:
   - axis: geometry
     primitives: [feedforward, recurrent]
 
-# Width and settle step are the hyperparameters that matter at L0; both are
-# narrowed from their harvested domains, so a typo here fails the run.
+# Width and the two per-axis steps are the hyperparameters that matter at L0;
+# all are narrowed from their harvested domains, so a typo here fails the run.
 hyperparameters:
   hidden_dim: {lo: 32, hi: 256, scale: log}
-  step_size: {lo: 0.001, hi: 0.1, scale: log}
+  settle_step: {lo: 0.001, hi: 0.1, scale: log}
+  update_lr: {lo: 0.001, hi: 0.1, scale: log}

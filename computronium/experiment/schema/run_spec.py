@@ -54,9 +54,10 @@ class AxisSelection(BaseModel):
     silently narrowing the space to nothing.
 
     Hyperparameter domains are *not* declared here: a hyperparameter is read by
-    whichever primitive needs it, and ``step_size`` by both dynamics and update,
-    so its domain belongs to the run (``RunSpec.hyperparameters``), not to an
-    axis that would be an arbitrary choice of owner.
+    whichever primitive needs it, so its domain belongs to the run
+    (``RunSpec.hyperparameters``), not to an axis that would be an arbitrary
+    choice of owner. Names are per-axis (``settle_step``, ``update_lr``); the
+    schema seam lock rejects any name claimed by two axes.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")

@@ -58,7 +58,7 @@ _SPEC = {
     ],
     "hyperparameters": {
         "hidden_dim": {"lo": 64, "hi": 64.9},
-        "step_size": {"lo": 0.0316, "hi": 0.0317, "scale": "log"},
+        "update_lr": {"lo": 0.0316, "hi": 0.0317, "scale": "log"},
     },
 }
 
