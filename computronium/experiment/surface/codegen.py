@@ -293,10 +293,14 @@ def generate_json_schema_validators() -> dict[str, dict[str, Any]]:
 
 def generate_conformance_stubs() -> dict[str, str]:
     """Generate conformance test stubs per CapabilitySpec."""
+    from computronium.experiment.schema.registries import CapabilityStatus
+
     stubs = {}
     for cap_id, spec in sorted(CAPABILITIES_REGISTRY.items()):
         if not spec.required:
             continue
+        if spec.status == CapabilityStatus.UNVERIFIED:
+            continue  # Skip UNVERIFIED - they have no actionable test
 
         if spec.verifying_test:
             # Generate a test that runs the verifying test

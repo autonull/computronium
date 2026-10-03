@@ -219,6 +219,18 @@ class ConformanceHarness:
                 checked_at=datetime.now(),
             )
 
+        # Check for unverified status - report reason instead of running test
+        if spec.status == CapabilityStatus.UNVERIFIED:
+            return ConformanceResult(
+                capability_id=spec.capability_id,
+                capability_name=spec.name,
+                kind=spec.kind,
+                status=ConformanceStatus.NO_EVIDENCE,
+                evidence_count=0,
+                message=f"UNVERIFIED: {spec.unverified_reason or 'no reason recorded'}",
+                checked_at=datetime.now(),
+            )
+
         # Run verifying test if available
         if execute_verifying_tests and spec.verifying_test:
             passed, output, duration = run_verifying_test(spec.verifying_test)

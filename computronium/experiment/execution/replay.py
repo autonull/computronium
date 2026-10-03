@@ -27,37 +27,16 @@ def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def compute_replay_hash(
-    coordinate: Coordinate,
-    schedule: Schedule,
-    provenance: dict[str, Any],
-    params: dict[str, Any],
-) -> str:
-    """Compute a deterministic replay hash for an experiment cell.
-
-    The replay hash uniquely identifies an experiment configuration and
-    enables exact reproduction. It includes:
-    - Structural coordinate (6 axes + params)
-    - Schedule (fidelity, seed, n_seeds, epochs, batch_limit, budget_id)
-    - Provenance (env, dataset, code_sha, policy, links)
-    - Parameters
-
-    Args:
-        coordinate: The 6-axis experiment coordinate
-        schedule: Execution schedule
-        provenance: Provenance metadata
-        params: Experiment parameters
-
-    Returns:
-        SHA256 hash as hex string (64 chars).
-    """
-    replay_data = {
-        "coordinate": coordinate.to_dict(),
-        "schedule": schedule.to_dict(),
-        "provenance": provenance,
-        "params": params,
-    }
-    return hashlib.sha256(_canonical_json(replay_data).encode()).hexdigest()
+# RETIRED (Q8, TODO48): Per-cell replay hash is not used in production.
+# The run-level compute_run_replay_hash is the gate. This function had
+# zero production callers. Kept for reference only.
+# def compute_replay_hash(
+#     coordinate: Coordinate,
+#     schedule: Schedule,
+#     provenance: dict[str, Any],
+#     params: dict[str, Any],
+# ) -> str:
+#     ...
 
 
 def compute_run_replay_hash(
@@ -345,7 +324,6 @@ def periodic_checkpoint(
 __all__ = [
     "Checkpoint",
     "ResumeResult",
-    "compute_replay_hash",
     "compute_run_replay_hash",
     "create_checkpoint",
     "find_existing_record",
