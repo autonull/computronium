@@ -30,6 +30,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.registries import ASSESSMENT_PROCEDURE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,7 +62,7 @@ def _pseudo_metric(measurement_key: str) -> float:
     return 0.05 + (int.from_bytes(digest[:4], "big") % 90_000) / 100_000.0
 
 
-def _status() -> Status:
+def _status(procedure_version: str) -> Status:
     """The verdict a fake measurement passes with: it is a claim-free L0 record."""
     return Status(
         gate_verdict=GateVerdict.PASS_,
@@ -72,7 +73,7 @@ def _status() -> Status:
         maturity=Maturity.L0,
         uncertainty={},
         reproducibility=ReproducibilityClass.REPLAYABLE,
-        assessment_procedure_version="1.0",
+        assessment_procedure_version=procedure_version,
         ceec_link=None,
     )
 
@@ -84,6 +85,7 @@ def synthetic_record(
     *,
     run_id: str | None = None,
     walltime_s: float = SYNTHETIC_WALLTIME_S,
+    procedure_version: str = ASSESSMENT_PROCEDURE_VERSION,
 ) -> Record:
     """A record for one measured seed, carrying the metrics a claim reads.
 
@@ -93,6 +95,8 @@ def synthetic_record(
         provenance: The run's provenance.
         run_id: Overrides the run id the provenance links to.
         walltime_s: The synthetic cost the budget charge consumes.
+        procedure_version: The assessment procedure this record was measured
+            under (TODO48 F4), so a lock can write a pre-change record.
 
     Returns:
         A pass-eligible record whose payload carries every measured metric.
@@ -104,7 +108,7 @@ def synthetic_record(
         coordinate=coordinate,
         schedule=schedule,
         provenance=provenance,
-        status=_status(),
+        status=_status(procedure_version),
         payload={
             "status": "evaluated",
             "train_acc": metric,

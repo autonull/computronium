@@ -131,9 +131,13 @@ class RecordSource(Protocol):
     """
 
     def query_records(
-        self, run_id: str | None = None, limit: int | None = None
+        self, run_id: str | None = None, *, limit: int | None = None
     ) -> list[Record]:
-        """This run's completed measurements."""
+        """This run's completed measurements.
+
+        The signature is the store's own: a protocol no real store satisfies is
+        a comment, and every caller here passes a ``RecordStore``.
+        """
         ...
 
 

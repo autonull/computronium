@@ -29,6 +29,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.registries import ASSESSMENT_PROCEDURE_VERSION
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
@@ -594,7 +595,7 @@ class ReasoningStore:
             maturity=Maturity.L0,
             uncertainty={},
             reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
+            assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
             ceec_link=None,
         )
 
@@ -687,7 +688,7 @@ class ReasoningStore:
             maturity=Maturity.L0,
             uncertainty={},
             reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
+            assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
             ceec_link=None,
         )
 

@@ -35,6 +35,7 @@ from computronium.experiment.schema.record import (
     Severity,
     Status,
 )
+from computronium.experiment.schema.registries import procedure_version_key
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.versioning import current_schema_version
 
@@ -95,6 +96,23 @@ class StoreConfig:
     read_only: bool = False
     artifact_inline_threshold_mb: float = 10.0
     artifact_external_path: Path | None = None
+
+
+def _assessed_at_least(records: list[Record], version: str | None) -> list[Record]:
+    """The records assessed by ``version`` or a later procedure; all, if ``None``.
+
+    A record's procedure version is what a record *means*, so a campaign that
+    changed the meaning keeps the old measurements visible through this filter
+    instead of averaging them with the new ones (TODO48 F4).
+    """
+    if version is None:
+        return records
+    floor = procedure_version_key(version)
+    return [
+        record
+        for record in records
+        if procedure_version_key(record.status.assessment_procedure_version) >= floor
+    ]
 
 
 class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topology concentrates the read/write API here by design (§1.1)
@@ -677,6 +695,7 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
         min_n_seeds: int | None = None,
         data_origin: str | None = None,
         payload_kind: str | None = None,
+        min_assessment_procedure_version: str | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> list[Record]:
@@ -691,6 +710,10 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
             min_n_seeds: Filter to schedules that *plan* at least this many seeds.
             data_origin: Filter by provenance.data_origin (exploration/policy_selected/calibration/test).
             payload_kind: Filter by payload.kind (e.g., "icu", "hypothesis", "literature").
+            min_assessment_procedure_version: Keep only records assessed by this
+                procedure version or later. Versions are compared numerically, so
+                ``1.10`` is newer than ``1.9`` — which a string comparison gets
+                backwards — and the filter runs in Python for that reason (TODO48 F4).
             limit: Maximum number of records to return.
             offset: Number of records to skip.
         """
@@ -732,7 +755,8 @@ schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
         # ruff: file-ignore[S608] - query is parameterized, not interpolated
         query = f"SELECT * FROM records{where_clause} ORDER BY seq{limit_clause}{offset_clause}"
         rows = self._conn.execute(query, params).fetchall()
-        return [self._row_to_record(row) for row in rows]
+        records = [self._row_to_record(row) for row in rows]
+        return _assessed_at_least(records, min_assessment_procedure_version)
 
     def query_records_by_payload_kind(
         self,

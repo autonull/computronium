@@ -97,7 +97,18 @@ session; *(estimate)* is derived from measured components and must be re-priced
 with `--co` before it is trusted (TODO48 §5: no number is trusted without its own
 measurement).
 
-### R1 — A mechanism tier: plumbing locks without training (NEW)
+### R1 — LANDED — A mechanism tier: plumbing locks without training (NEW)
+- **Landed (this session):** `tests/property/_fake_backend.py` (`FakeBackend`,
+  `synthetic_record`) and `tests/property/test_round_loop_mechanism_lock.py`
+  (6 fast tests + the sync test). Six mechanisms are asserted: relaunch adds no
+  key and loses none; an all-fresh-less batch measures nothing *and raises the
+  exhaustion signal*; the budget is charged for exactly what was stored; S10's
+  COMPLETE reaches the loop (not the round limit); a rejected cell is classified
+  and its siblings survive; and the fake/real key sets are identical.
+  **11 tests, 31 s, one selection** — the six fast ones ~1 s total, the sync
+  test ~3.2 s (the shared spec's projected price).
+- **Cost, re-priced:** the fast tier is **~1 s per assertion**, not the
+  17–26 s the campaign cells cost. The sync lock costs the oracle's projection.
 - **Does:** a ~20-line fake `ExecutionBackend` in `tests/` that returns
   `Success(records=[Record.create(…)])` or `Failure(…)`. Everything the round
   loop decides is downstream of that: `_fresh_batch_items` (dedup/resume),
@@ -116,7 +127,28 @@ measurement).
 - **Cost:** the fake ~0 s to run; the sync lock costs one real cell batch
   (~5–10 s *(estimate)*).
 
-### R2 — A price oracle: ask the fixture's questions without running it (NEW)
+### R2 — LANDED — A price oracle: ask the fixture's questions without running it (NEW)
+- **Landed (this session):** `computronium/experiment/execution/pricing.py`
+  (`price_plan`, `PricePlan`) + the measured price table in
+  `schema/registries.py` (`MEASURED_CELL_SECONDS`, `cell_price_seconds`), read by
+  `_dry_run_report`. The oracle prints declared vs **legal** cells, the
+  per-dynamics totals, the projected seconds, the cell a declared budget stops
+  on, and **the primitives the axes name that no legal cell reaches**.
+  Gate: `tests/property/test_price_oracle_lock.py` (4 tests) — declared cells ==
+  stored keys on a real backend, the per-cell timed cost inside the published
+  band (0.2x-4x), the stop index consistent with the ledger, and the
+  unreachable line present.
+- **It paid for itself on the first draft.** The shared fixture's first
+  declaration paired `thermodynamic_contrast` with `instantaneous` dynamics and
+  had **one legal cell out of two declared axes**, silently — TODO48 opportunity
+  3, now a report line. The oracle also prices the shipped campaign:
+  **declared 120 / legal 90 / 54.5 s** (`comp run --spec
+  examples/learning-rules-and-geometry-digits.yaml --dry-run`).
+- **Cost, measured:** the walk is bounded at **24 scanned candidates**
+  (`iter_candidates` gained `max_scan`) because *composing a candidate costs
+  ~60 ms* — see §0.2. Past the bound the totals are the sample mean
+  extrapolated over the declared count and are printed as such. On the small
+  specs the locks use, the bound is never reached.
 - **Does:** `_dry_run_report` (`cli.py:315`) already builds the space through the
   runner's own builders and prints the first cells. Extend it to print **declared
   cell count, per-cell cost, projected total walltime, and where a declared
@@ -168,7 +200,25 @@ measurement).
   cells, no campaign — which is the whole point of building the store by hand.
 - **Cost:** <5 s *(estimate, tier 1)*.
 
-### R6 — F1 + F4 in one selection: the surface is locked, and versioned
+### R6 — LANDED — F1 + F4 in one selection: the surface is locked, and versioned
+- **Landed (this session):** `tests/property/test_cli_surface_lock.py` (18 tests,
+  **4.6 s**, no cells). F1: every `_SUBCOMMANDS` entry appears in `comp --help`
+  and vice versa (the two dicts are asserted equal), every command answers
+  `--help` **through the dispatcher**, an unknown command exits 2 with no
+  traceback, and every `POLICY_CATALOG` entry is constructible from a spec alone
+  (opportunity 4). F4: `ASSESSMENT_PROCEDURE_VERSION` is now one registered
+  constant instead of the literal `"1.0"` at six call sites,
+  `RecordStore.query_records(min_assessment_procedure_version=…)` exists, and
+  `procedure_version_key` orders versions numerically (`1.10 > 1.9`).
+- **Two seams closed on the way:**
+  1. **`RecordSource` was a protocol no real store satisfies** — it declared
+     `query_records(run_id, limit)` positionally while the store's `limit` is
+     keyword-only. Fixed, and locked *structurally* (parameter-kind
+     compatibility), because `runtime_checkable` only checks the name exists.
+  2. **Four of ten commands had no test reaching them** (`parity`, `repro`,
+     `validate`, `joint-validate`): F1's "each has a test through the command
+     surface" was stated but unexecuted. The parameterized dispatch test is that
+     coverage.
 - **F1:** every listed command appears in `--help`, every command in `--help` is
   listed, each has a test through the command surface — **plus** every
   `POLICY_CATALOG` entry is constructible from a spec alone via
@@ -223,6 +273,58 @@ measurement).
   selection; **its shard run (~10 min *(measured)*) moves to CI** under rule 7.
 - **CP-4** (the defect-class ledger) and **CP-5** (fresh eyes through README) are
   **document work and a manual walk**: no gates, no runs.
+
+---
+
+## 2.1 What R1/R2/R6 changed about the plan's own premises
+
+Three measured facts the next session should not re-derive:
+
+1. **The legality preview, not the cell, is the expensive thing.** Composing one
+   candidate costs **~60 ms** (`geometry_param_count` builds real modules, 13
+   calls per compose). A price oracle over a factorial is therefore a
+   *bounded-sample* tool, and so is any lock that wants the whole space. Measured:
+   the quick-verify profile's dry run spends **~88 s finding its first five legal
+   cells** — pre-existing, not caused by R2, and the reason R2 adds a scan bound.
+2. **A wall clock is not a projection.** The first version of R2's gate compared
+   the run's *elapsed* time with the per-cell projection and failed at 4.12x: a
+   run pays ~10 s of fixed cost (stage dispatch, legality preview, torch's first
+   touch) that no per-cell price can include. The gate now compares the cells'
+   own timed cost and asserts elapsed < projection + a published fixed-cost
+   constant.
+3. **An exhausted space can end two different ways, and only one is a signal.**
+   A policy whose stream is *empty* proposes nothing, so the all-seen batch never
+   forms and `last_batch_was_all_seen` stays false; the run is ended by
+   `_MAX_FRUITLESS_ROUNDS` instead. Both terminate, but only one names its
+   reason in the log. Locked as two separate claims rather than one.
+
+## 2.2 New improvement opportunities (raised by R1/R2/R6)
+
+1. **The pre-existing 88 s dry run is the next tier-1 cost.** `comp run
+   quick-verify --dry-run` spends its time in `_composable`, i.e. building
+   geometries to answer "would this cell compose". Legality is asked of
+   `SystemConfig.validate` on purpose (no second source of truth), but a
+   *counting* question ("how many cells are legal") does not need the geometry's
+   parameter count — the compose itself would do. A cheap legality predicate for
+   counting, with the full compose kept for the cells that survive, would make
+   every oracle and every pool query orders of magnitude cheaper.
+2. **Two declarations, two declared counts.** For the shipped campaign the
+   oracle reports *declared 120, legal 90*: `declared_cell_count` multiplies by
+   the longest sweep ladder while `iter_candidates` de-duplicates identical
+   measurement keys, so the status line's "Declared Cells" overstates the work by
+   a third. Both numbers are correct about different things; a reader comparing
+   them has no way to know which to believe. One name each, or one line that
+   prints both, would settle it.
+3. **The `RecordSource` mismatch was a symptom.** `runtime_checkable` passed a
+   protocol no store satisfies for as long as the two existed. A structural
+   protocol lock (this file's) belongs next to every `Protocol` in the execution
+   seam, not just this one.
+4. **E2 (R5) can now be written against the fake tier.** The significance lock
+   R5 asks for ("a constructed store where A beats B by 3 sigma") needs no
+   trained cell at all, and `synthetic_record` now produces records with a
+   deterministic, key-derived spread — the fixture is written. Paired with R1's
+   dedup test it also gives significance claims a *store* to be tested against
+   without a campaign.
 
 ---
 
@@ -304,6 +406,8 @@ which is exactly why R1 carries a synchronization lock.
 
 **Session A (minutes, no cells):** R1 (fake backend + sync lock) → R2 (price
 oracle) → R5 (E2) → R6 (F1+F4).
+**Status: R1, R2 and R6 landed. R5 is written-ready** — §2.2 item 4 says exactly
+how, and `synthetic_record`'s key-derived spread is its fixture. **R5 is next.**
 **Session B (one kernel change, re-priced):** R3 (settle early exit) → R4 (Q1b
 probe).
 **Session C (the one campaign):** R8 — one run, four consumers — then R7 (CI).
@@ -329,3 +433,25 @@ done — one command, minutes not hours, every number derivable from the store,
 every claim carrying its uncertainty, every seam locked — is not renegotiated
 here. Only the order of arrival, and the number of times the same 450 cells get
 measured.
+
+---
+
+## 8. Session log
+
+- **R1 + R2 landed (third session of the plan; the one before described both and
+  built neither).** The queue's own costing was right: the four Session-A
+  tickets are minutes, and the two that needed new machinery are ~90 lines and
+  two lock files. Details are on each ticket; the three facts a future session
+  should not re-derive are in §2.1 and the four new opportunities in §2.2.
+  - **Ordering note:** R6 (F1+F4) went before R5 (E2) because F1's own premise
+    turned out to be false — four commands had no test reaching them — and a
+    surface lock is cheap while a significance feature is not. R5 remains
+    Session A's last item and is now the cheapest ticket left in the plan.
+  - **Cost notes:** ruff and pyright clean on every changed file. Pre-existing
+    findings left alone (Register C): one `noqa`-wording row in
+    `stages_impl.py`, one `try`-clause finding in `store.py`, four files in
+    `tests/property/` that a whole-directory `ruff --fix` would have touched.
+    A regression selection (claims, stage model, scientific-validity protocol,
+    schema seam, registry completeness, run ledger) is **103 passed, 55 s**.
+  - **Do not repeat:** `ruff check --fix tests/property/` rewrites the whole
+    directory's legacy findings. Lint the files you changed, by name.

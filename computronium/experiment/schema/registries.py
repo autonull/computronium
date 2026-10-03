@@ -26,6 +26,13 @@ PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 # claimed metrics within this relative tolerance to earn maturity L2.
 REPLAY_METRIC_TOLERANCE: Final[float] = 0.25
 
+# TODO48 F4: the version stamped on every record's assessment. A record says
+# what was measured and under which procedure; a change that changes what that
+# means (the Q1 learning-rate fix measured a dead lr) must bump this number, so
+# pre-change measurements stay visible instead of mixing silently. It is one
+# constant because it was previously the literal "1.0" at six call sites.
+ASSESSMENT_PROCEDURE_VERSION: Final[str] = "1.0"
+
 # TODO48b R2: measured seconds per cell, per dynamics primitive, at the regime
 # `scripts/probes/dynamics_cost.py` prices (digits, feedforward x fast_weights x
 # gradient x euclidean, L0, 1 epoch, batch_limit 2, hidden_dim 64). The economy
@@ -45,6 +52,25 @@ MEASURED_CELL_SECONDS_REGIME: Final[str] = (
 # An unmeasured primitive is priced as the cheapest measured one: a number
 # invented for it would be a guess wearing a decimal point's clothes.
 DEFAULT_CELL_SECONDS: Final[float] = min(MEASURED_CELL_SECONDS.values())
+
+
+def procedure_version_key(version: str) -> tuple[int, ...]:
+    """A dotted version as the tuple that orders it.
+
+    ``"1.10"`` is newer than ``"1.9"``; a string comparison says otherwise, and
+    a store that mixed the two would call the older procedure the newer one.
+
+    Args:
+        version: A dotted procedure version, e.g. ``"1.0"``.
+
+    Returns:
+        The numeric components, padded by comparison as a tuple.
+    """
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except ValueError:
+        msg = f"unparseable assessment procedure version: {version!r}"
+        raise ValueError(msg) from None
 
 
 def cell_price_seconds(dynamics: str, *, epochs: int = 1) -> float:
@@ -418,6 +444,7 @@ def register_capability(spec: CapabilitySpec) -> None:
 
 __all__ = [
     "ALL_REGISTRIES",
+    "ASSESSMENT_PROCEDURE_VERSION",
     "CAPABILITIES_REGISTRY",
     "CARD_FACTORS",
     "CONSTRAINTS_REGISTRY",
@@ -445,6 +472,7 @@ __all__ = [
     "cell_price_seconds",
     "get_card_factor",
     "prior_value",
+    "procedure_version_key",
     "register_capability",
     "register_card_factor",
     "register_constraint",

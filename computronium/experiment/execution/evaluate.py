@@ -24,6 +24,10 @@ from computronium.core.logging import get_logger
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.metrics import HISTORY_METRICS
+from computronium.experiment.schema.registries import (
+    ASSESSMENT_PROCEDURE_VERSION,
+    PARAM_BUDGET_TOLERANCE,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -163,8 +167,6 @@ def _within_ceiling(param_count: int, param_budget: int) -> bool:
     the ``param_budget_fairness`` predicate, so a cell the constraint accepts is
     a cell the gate passes.
     """
-    from computronium.experiment.schema.registries import PARAM_BUDGET_TOLERANCE
-
     if param_budget <= 0:
         return True
     return param_count <= param_budget * (1 + PARAM_BUDGET_TOLERANCE)
@@ -347,7 +349,7 @@ def cell_record(
                 maturity=Maturity.L0,
                 uncertainty={},
                 reproducibility=ReproducibilityClass.REPLAYABLE,
-                assessment_procedure_version="1.0",
+                assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
                 ceec_link=None,
             ),
             payload={"status": "failed", "cause": exc.cause, "error": str(exc)},
@@ -385,7 +387,7 @@ def cell_record(
             maturity=Maturity.L0,
             uncertainty={},
             reproducibility=ReproducibilityClass.REPLAYABLE,
-            assessment_procedure_version="1.0",
+            assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
             ceec_link=None,
         ),
         payload=payload,

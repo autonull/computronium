@@ -371,6 +371,9 @@ class GateStage:
                 Severity,
                 Status,
             )
+            from computronium.experiment.schema.registries import (
+                ASSESSMENT_PROCEDURE_VERSION,
+            )
 
             record = Record.create(
                 run_id=ctx.run_id,
@@ -386,7 +389,7 @@ class GateStage:
                     maturity=Maturity.L0,
                     uncertainty={},
                     reproducibility=ReproducibilityClass.REPLAYABLE,
-                    assessment_procedure_version="1.0",
+                    assessment_procedure_version=ASSESSMENT_PROCEDURE_VERSION,
                     ceec_link=None,
                 ),
                 payload={},
