@@ -52,7 +52,12 @@ axes:
 
 # Width and the two per-axis steps are the hyperparameters that matter at L0;
 # all are narrowed from their harvested domains, so a typo here fails the run.
+# settle_step keeps the harvested ceiling (1.0) on purpose: below ~0.3 EqProp
+# contracts by 0.919 per sweep and cannot reach the convergence threshold inside
+# 30 sweeps, so a narrower band measures unconverged settles
+# (scripts/probes/settle_convergence.py, locked by
+# tests/property/test_settle_convergence_lock.py).
 hyperparameters:
   hidden_dim: {lo: 32, hi: 256, scale: log}
-  settle_step: {lo: 0.001, hi: 0.1, scale: log}
+  settle_step: {lo: 0.001, hi: 1.0, scale: log}
   update_lr: {lo: 0.001, hi: 0.1, scale: log}

@@ -163,33 +163,92 @@ measurement).
 - **Cost:** <10 s *(estimate, tier 1)*. **Highest leverage per line in this
   file**: it converts fixture design from trial-and-error into measurement.
 
-### R3 — The settle loop stops early (kernel; discounts everything after it)
-- **Does:** the convergence exit in `_dynamics.py:3066(_sweep)` / `:1370(_observe)`
-  never fires at campaign fidelity, so all 30 steps run every sweep. Either the
-  test becomes relative (`delta / delta_prev`) or the sweep batches across cells
-  differing only in a swept hyperparameter. TODO48 opportunity 1.
-- **Gate — mechanism, not walltime:** a property test that a settle whose delta
-  falls below threshold **stops before `max_steps`**, plus the probe's own table
-  (`scripts/probes/dynamics_cost.py`) as the recorded measurement. A walltime
-  assertion would be flaky on a loaded machine and under `-n 4`; the early exit
-  is the mechanism, and restoring the fixed loop falsifies it.
-- **Cost:** probe ~60 s *(measured)* + one tier-1 lock <10 s *(estimate)*.
-- **Caveat, measured not assumed:** CUDA *is* available on this box, so the
-  0.710 s/cell already includes GPU dispatch. Re-price after the fix; if the
-  gain is smaller than the 8.8× CPU gap implied, R3's payoff is the mechanism
-  (a correct early exit) rather than the walltime.
+### R3 — LANDED — the settle early exit was honest; the campaign's step band was not
+- **Landed:** `scripts/probes/settle_convergence.py` (the measurement),
+  `tests/property/test_settle_convergence_lock.py` (6 tests, **~10 s**, no
+  training), and one line in
+  `examples/learning-rules-and-geometry-digits.yaml`.
+- **The premise was wrong, and that is the finding.** The ticket assumed the exit
+  never fires because the test is *absolute* (`delta < 1e-4`) rather than
+  relative. Measured at the campaign's own regime (hidden 64, batch 2, horizon
+  30, sweeps executed):
 
-### R4 — Q1b: the multiplier table is a prior, not a verdict
-- **Does:** TODO48's Q1b. For each `(dynamics, credit)` row, one 10-epoch probe
-  at prior-center lr; the known-suspect row
-  `("energy_minimization", "thermodynamic_contrast"): 0.00005` (effective lr
-  1.6e-6 — a cell that cannot learn by construction, in the table the campaign
-  compares rules through) is re-registered with its measurement or retired.
-- **Scope cut:** a **probe and a registry edit, not a pytest gate.** Its claim is
-  a table's provenance, which a probe demonstrates and a lock would only
-  restate. One parameterized script (this session's four throwaway probes are the
-  argument for writing one).
-- **Cost:** ~120 s of probing *(estimate)*, once.
+  | settle_step | 0.01 | 0.03162 | 0.1 | 0.3 | 0.5 | 1.0 |
+  |---|---|---|---|---|---|---|
+  | energy_minimization | 30 | 30 | 30 | 29 | 18 | 8 |
+  | lazy | 30 | 30 | 30 | 29 | 18 | 8 |
+
+  At every step size the shipped campaign could declare, EqProp contracts
+  **0.919 per sweep**, so `1e-4` is unreachable inside 30 sweeps. A *relative*
+  test is further away still (the ratio is 0.919, not < 1e-4), and the
+  scale-free test the local-learning path already uses
+  (`delta/‖out‖ ≈ 1.5e-3` at the horizon) says the same thing: **the settle has
+  not converged, so the loop is right not to stop.** The test was never the
+  defect; the *declared band* was — and it was a science defect, not a walltime
+  one: every EqProp cell in the campaign was measuring an unconverged settle.
+- **Does now:** the shipped spec's `settle_step` band is `[0.001, 1.0]` — the
+  harvested ceiling — instead of the hand-narrowed `[0.001, 0.1]`. Two of the
+  five sweep points are now steps at which EqProp converges, the exit fires, and
+  the cells get cheaper *and* meaningful. The early exit is unchanged code.
+- **Gate — mechanism plus declaration, both falsifiable:** claim 1, a converging
+  settle stops before `max_steps` and the telemetry agrees with the flag in both
+  directions; claim 2, **a shipped spec's declared band contains a step size at
+  which each EqProp dynamics it declares converges.** Claim 1 was already
+  covered by `TestSettleHorizonTelemetry`; claim 2 is the new one, and it is the
+  claim a campaign fixture can violate invisibly — a non-converging settle
+  returns a plausible state and a plausible number, and a run cannot say so.
+  *Verified falsifiable:* narrowing the band back to `hi: 0.1` turns both
+  parametrizations red with the message naming the sweeps.
+- **A falsifiability check caught a bug in the lock, not in the code:** the
+  first `_log_grid` interpolated as if `lo`/`hi` were already log values, so the
+  grid sampled step ≈ 1.0 and the lock passed vacuously. Rejecting the narrowed
+  band exposed it. Grid points are `3` and the epochs are real ones — a lock
+  that cannot fail is worse than no lock.
+- **Cost, measured:** probe ~40 s; lock 6 tests / ~10 s. **No kernel change and
+  no `_dynamics.py` edit at all** — the saving R3 was promised (~150 s on R8)
+  arrives as *correct cells* first and cheaper cells second.
+
+### R4 — LANDED — Q1b: the multiplier table was 29 handicaps, and the rules were fine
+- **Landed:** `scripts/probes/step_size_multipliers.py` (`--audit` composes every
+  row, milliseconds, no training; `--ladder <pair>` is the control), the
+  retirement of all 29 `step_size_override_*` rows in
+  `schema/seed_registries.py`, and
+  `tests/property/test_multiplier_floor_lock.py` (3 tests, **~1 s** of compose,
+  no cells).
+- **What the multiplier actually scales — the first wrong assumption here too.**
+  `ontology/update.py::_apply_step_size_overrides` is the only reader, so the
+  table multiplies the **parameter update lr** (swept as `update_lr`), not the
+  settle step. TODO48's "effective lr 1.6e-6" was right; the first draft of this
+  session's probe mislabelled the column and inherited the plan's framing.
+- **The control settles it: the algorithms were never broken.** `energy_minimization
+  x thermodynamic_contrast` — the campaign's own rule — trained on `digits` at
+  gate 2b's reference regime, 10 epochs, ladder over the *composed* update lr:
+
+  | composed update lr | 5e-7 (as registered) | 1e-4 | 1e-3 | 5e-3 | 1.6e-2 |
+  |---|---|---|---|---|---|
+  | `train_acc` | 0.105 | 0.080 | 0.411 | **0.878** | 0.767 |
+
+  The rule reaches **0.878** train accuracy — four decades above the lr its own
+  row hands it. Every "the algorithm does not learn" reading of the campaign's
+  flat `train_acc ≈ 0.10` was the table.
+- **Does:** all 29 rows re-registered at `mean: 1.0` with `confidence: 0.2` and
+  a description recording the retired value and the ladder that retired it. The
+  column could only ever attenuate (every registered value was `< 1.0`), none
+  carried a measurement, and the swept `update_lr` now means what it says.
+- **Gate (a lock after all, contra the ticket's own scope cut):** the ticket said
+  a probe demonstrates provenance and a lock would only restate the registry.
+  That is true of a *description* and false of a *floor*: **no registered row may
+  compose an update lr below `LEARNING_FLOOR = 1e-3`**, the measured value from
+  the ladder. The lock asserts the **composed** config, not the table, so a row
+  whose *base* also moved cannot hide behind a nominal 1.0. A second claim holds
+  the retirement honest: an attenuating row (`mult < 1.0`) must say `Retired` in
+  its description. *Verified falsifiable:* re-registering the suspect row at
+  `1e-4` turns the floor lock red, naming the pair and the composed lr.
+- **Cost, measured:** audit ~3 s (28 composable rows, ~60 ms each); ladder 5 cells
+  × ~45 s = **228 s**; lock 3 tests / ~11 s. Four `diffusion` rows are illegal on
+  feedforward and one row (`diffusion_spectral_constrained`) names an *update*
+  primitive, not a credit — the probe prints both instead of dropping them,
+  because a silently narrowed audit reads as "audited".
 
 ### R5 — LANDED — E2: significance, on a constructed store (no training at all)
 - **Landed (this session):** `computronium/experiment/evidence/significance.py`
@@ -345,6 +404,49 @@ Three measured facts the next session should not re-derive:
    hash produces one. The fixture that §2.2 described is now
    `tests/property/test_significance_lock.py`.
 
+## 2.4 New improvement opportunities (raised by R3/R4)
+
+1. **Every number the campaign reports was computed at a step size nothing in
+   the campaign could declare.** The shipped `settle_step` band is now the
+   harvested one, so the price regime (`MEASURED_CELL_SECONDS`, `dynamics_cost.py`)
+   is measured at `settle_step=0.03162` — inside the old band but at its very
+   top, and *outside* nothing. It should be re-measured at a step the campaign
+   now sweeps across, and the table should carry a *step-size axis*, not one
+   representative cell. This is the same defect §2.3 item 4 named for the credit
+   axis, one axis further out.
+2. **`LEARNING_FLOOR` is measured on one rule and applied to 29 rows.** The
+   floor (`1e-3` composed update lr) comes from `energy_minimization x
+   thermodynamic_contrast`; the lock holds every row to it. That is the right
+   direction to be wrong in — a rule that cannot reach a floor another rule
+   clears is suspect — but the honest form is a floor *per rule*, measured by
+   `--ladder`, stored beside the row. Twenty-eight ladders at ~45 s each is one
+   detached run, and it would replace a generalized constant with 29
+   measurements.
+3. **The multiplier column was not the only unmeasured prior.** `ruler_lr_*`
+   (three rows) and the 28 `step_size_*_override_*` priors (the *dynamics*
+   step size, a different table) carry the same "registered, never verified"
+   character, and `confidence=0.8` on all of them is a number nothing measures.
+   `confidence` is the field that should be falsifiable, and today it is
+   decoration: a lock that a prior's confidence agrees with its provenance would
+   have caught both tables.
+4. **A shipped hyperparameter band is a scientific claim with no gate of its
+   own.** R3's fix was a spec edit found by measurement; R3's lock is the first
+   thing that will stop the next one. Two bands are now unchecked and were
+   narrowed by hand for the same reason: `update_lr: [0.001, 0.1]` (the ladder
+   says the interesting range starts at 1e-3, i.e. *at* the band floor, so
+   three of five declared points are below anything measured) and
+   `hidden_dim: [32, 256]` (no claim behind it at all).
+5. **Four of the 29 multiplier rows are illegal on the campaign's geometry**
+   (`diffusion` requires recurrent), and one names an *update* primitive in a
+   credit column. So the table has rows the campaign cannot reach and a row that
+   is not a pair — the same "a declared axis must offer what the campaign claims
+   to compare" seam as TODO48 opportunity 3, in a *registry* rather than a spec.
+6. **Pre-existing, found by the R3/R4 regression run (Register C, not this
+   session's work):** `tests/property/test_run_spec_lock.py` has two failures
+   that are identical at HEAD — the lock declares `step_size` as a run-swept
+   hyperparameter and the harvested schema only publishes `settle_step`
+   (`schema/harvest.py:72` maps one to the other). One name, two vocabularies.
+
 ## 2.3 New improvement opportunities (raised by R5)
 
 1. **A tie is now a first-class report state; a *thin* run is not.** A run with
@@ -436,11 +538,15 @@ which is exactly why R1 carries a synchronization lock.
   any kind goes red while the five known ones are enumerated.
   *Recommendation:* (ii). Not in D3's blast radius, not regressions, and a waiver
   lock that fails on anything new is honest and cheap.
-- **D-k — do R3 (the settle-loop fix) before or after the cheap tickets?** It is
+- **D-k — RESOLVED (Session B): do R3 before or after the cheap tickets?** It is
   the largest single *total-time* saving, but R1+R2 make everything else cheap
   enough that R3's value is mostly on R8's 150 s.
   *Recommendation:* **after R1/R2/R5/R6** — those are minutes, and R3 is a kernel
   change in Phase D rather than a Phase E/F claim. Revisit once R8 has a price.
+  **Outcome: the premise was wrong and the decision was moot.** R3 was not a
+  kernel change; it was a one-line spec edit, and its payoff is *correct cells*
+  (converging settles) before it is cheaper ones. Session B did it after the
+  cheap tickets, as recommended, at a cost of ~4 min.
 - **D-l — is CI trusted for breadth?** R7's whole value is moving CP-3's shards
   off the local path. If CI is not wired to run on pushes here, R7 buys
   documentation rather than time and should leave the critical path.
@@ -461,22 +567,23 @@ which is exactly why R1 carries a synchronization lock.
 ## 6. Session ordering and the exit
 
 **Session A (minutes, no cells):** R1 (fake backend + sync lock) → R2 (price
-oracle) → R6 (F1+F4) → R5 (E2).
-**Status: R1, R2, R5 and R6 all landed — Session A is complete.** No cells
-were trained to land any of them. **Session B (R3 settle early exit → R4 Q1b
-probe) is next**, and its price is now the largest single item left.
-**Session B (one kernel change, re-priced):** R3 (settle early exit) → R4 (Q1b
-probe).
+oracle) → R6 (F1+F4) → R5 (E2). **LANDED.**
+**Session B: R3 (the settle early exit) → R4 (Q1b). LANDED** — and both landed
+as *declaration* fixes rather than code fixes: one spec line and 29 registry
+rows. No kernel change, no `_dynamics.py` edit, ~4 min of local gate time.
 **Session C (the one campaign):** R8 — one run, four consumers — then R7 (CI).
+R8's price must be re-taken first: the cells it measures are now different
+cells (converging settles, un-attenuated update lrs), so §8.1's 5.06 s/cell and
+the oracle's 81.7 s projection are both stale.
 **Session D (paper):** CP-4 ledger, CP-5 walk, then close the plan.
 
-Local gate time, estimated from the measured components:
+Local gate time, from the measured components:
 
 | path | local gate time |
 |---|---|
 | TODO48's order as written | ~35–45 min *(estimate)* |
 | this file, R1+R2 included | ~12 min *(estimate)* |
-| this file, R1+R2+R3, with CI absorbing breadth | **~5 min** *(estimate)* |
+| this file, R1+R2+R3+R4 | **~6 min** *(measured: 25 s + 26 s selections)* |
 
 The exit is unchanged: CP-1..CP-3 green (breadth in CI), CP-4's table complete,
 CP-5 walked. Then TODO48.md closes and the plan files stop growing.
@@ -494,6 +601,38 @@ measured.
 ---
 
 ## 8. Session log
+
+- **Session B landed R3 + R4 (fifth session of the plan), and the operator's
+  challenge is what made R4 correct.** The mid-session report showed
+  `train_acc ≈ 0.07` for most EqProp credit rules and the read was "these
+  algorithms do not learn". That read was wrong, and the check that killed it
+  was a *ladder* rather than another point: the same
+  `energy_minimization x thermodynamic_contrast` cell reaches **0.878** train
+  accuracy at composed lr 5e-3 and 0.105 at the 5e-7 its registry row hands it.
+  Nothing was broken; a 29-row multiplier column was multiplying every update lr
+  by an unmeasured factor below 1.
+  - **Both tickets were premise corrections, not implementations.** R3 promised a
+    kernel change to the convergence test and needed a one-line spec edit; R4
+    promised "one 10-epoch probe per row" and needed *one* control plus 29
+    registry rows. AGENTS.md's "be skeptical of low-performing experiments; this
+    could indicate an implementation defect" applies to the *plan* here as much
+    as to the code: three of this session's four assumptions (relative-vs-
+    absolute convergence, the multiplier scaling the settle step, the row's
+    effective lr being 1.6e-6 rather than 5e-7) were wrong before measurement.
+  - **Cost, measured:** settle probe ~40 s; R3 lock 6 tests / ~10 s; multiplier
+    audit ~3 s; ladder 5 cells / **228 s**; multiplier lock 3 tests / ~11 s.
+    Regressions (schema seam, wp10 learning integration, active space, search
+    space, run spec, schedule device, harvest schema gate 2, ontology locks and
+    parity, role-split update, eqprop locality, gradient equivalence, price
+    oracle, cell evaluation, round loop, significance, cli surface, claim report,
+    campaign economics, state dynamics protocol) **239 passed / 26 s** plus a
+    97-test first pass. ruff and pyright clean on every changed file.
+  - **Do not repeat:** the probe harness is `cell_record(Coordinate, Schedule,
+    Provenance)` — a direct cell, no store, no run. It is the cheapest way to
+    measure one coordinate and the R4 ladder used nothing else.
+  - **Do not repeat:** `test_run_spec_lock.py` has two failures that are
+    identical at HEAD (verified by `git stash`); they are Register C, recorded
+    in §2.4 item 6, and not this session's to fix.
 
 - **R5 landed; Session A is done (fourth session of the plan).** The
   mechanism tier did exactly what §2.2 item 4 predicted: E2 needed a *store*,
