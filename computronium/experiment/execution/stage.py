@@ -210,7 +210,19 @@ S3_SCHEDULE = StageSpec(
         "fidelity_planning": True,
         "seed_planning": True,
         "per_task_adaptation": True,
-        "data_origin_allocation": {"exploration": 0.5, "calibration": 0.3, "test": 0.2},
+        # The design's two groups need a quota of their own: `contrast_quota`
+        # says *how much of the design* to run, not which cells are its
+        # members, and with no allocation for them the quota had nothing to
+        # allocate — measured, a 450-record campaign carried 250 exploration /
+        # 120 calibration / 80 test and zero control or contrast, so S3's
+        # contrast design had never once produced a record.
+        "data_origin_allocation": {
+            "exploration": 0.45,
+            "calibration": 0.25,
+            "test": 0.20,
+            "control": 0.05,
+            "contrast": 0.05,
+        },
         "contrast_quota": 0.1,  # Fractional-factorial or OFAT within exploration budget
     },
 )

@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from computronium.experiment.schema.coordinate import DataOrigin
+
 
 class ContrastDesignKind(StrEnum):
     """Contrast design types."""
@@ -38,17 +40,26 @@ class Factor:
 
 @dataclass(frozen=True, slots=True)
 class ContrastAssignment:
-    """A single contrast assignment mapping factors to levels."""
+    """A single contrast assignment mapping factors to levels.
+
+    ``data_origin`` is the schema's own field for what the assignment *is*: the
+    base condition is a control, a varied factor is a contrast. It rides on the
+    assignment rather than being inferred from ``matched_group`` so that a
+    record stamped from a design states its origin instead of having it
+    reconstructed by a reader that happens to know the convention.
+    """
 
     contrast_id: str
-    factor_assignments: dict[str, Any]  # factor_name -> level_value
+    factor_assignments: dict[str, Any]
     matched_group: str  # Group identifier for matched pairs/blocks
+    data_origin: DataOrigin = DataOrigin.CONTRAST
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "contrast_id": self.contrast_id,
             "factor_assignments": self.factor_assignments,
             "matched_group": self.matched_group,
+            "data_origin": self.data_origin.value,
         }
 
     @classmethod
@@ -57,6 +68,7 @@ class ContrastAssignment:
             contrast_id=data["contrast_id"],
             factor_assignments=data["factor_assignments"],
             matched_group=data["matched_group"],
+            data_origin=DataOrigin(data.get("data_origin", DataOrigin.CONTRAST)),
         )
 
 
@@ -179,7 +191,12 @@ def create_ofat_design(
         )
     )
 
-    # OFAT: vary each factor
+    # OFAT: vary each factor. The varied assignments carry the group their
+    # design names — ``ofat_<factor>`` — and the base condition above carries
+    # ``control``, so a record stamped from one assignment is distinguishable
+    # from a record stamped from the other. Before this, every assignment
+    # reported ``matched_group == "contrast"`` and the control existed only as
+    # an attribute of the assignment that no measurement ever received.
     idx = 1
     for factor in factors:
         for level in factor.levels[1:]:  # Skip base level
@@ -190,9 +207,18 @@ def create_ofat_design(
                     contrast_id=_make_contrast_id(ContrastDesignKind.OFAT, idx, seed),
                     factor_assignments=assignment,
                     matched_group=f"ofat_{factor.name}",
+                    data_origin=DataOrigin.CONTRAST,
                 )
             )
             idx += 1
+
+    control = assignments[0]
+    assignments[0] = ContrastAssignment(
+        contrast_id=control.contrast_id,
+        factor_assignments=control.factor_assignments,
+        matched_group=control.matched_group,
+        data_origin=DataOrigin.CONTROL,
+    )
 
     return ContrastDesign(
         design_kind=ContrastDesignKind.OFAT,

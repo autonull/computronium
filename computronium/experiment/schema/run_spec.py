@@ -20,6 +20,7 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from computronium.experiment.schema.axis import AXES_REGISTRIES, Domain, StructuralAxis
+from computronium.experiment.schema.registries import validate_rate_value
 
 RUN_SPEC_VERSION = 2
 
@@ -85,6 +86,41 @@ class AxisSelection(BaseModel):
         return tuple(
             sorted(n for n, s in AXES_REGISTRIES[self.axis].items() if s.available)
         )
+
+
+def _check_axes_distinct(axes: tuple[AxisSelection, ...]) -> None:
+    """No axis may be declared twice: its selection would be ambiguous.
+
+    Args:
+        axes: The spec's axis selections.
+
+    Raises:
+        ValueError: If any axis appears more than once.
+    """
+    names = [a.axis for a in axes]
+    duplicated = sorted({n for n in names if names.count(n) > 1})
+    if duplicated:
+        msg = f"axes names the same axis more than once: {duplicated}"
+        raise ValueError(msg)
+
+
+def _check_declared_rates(hyperparameters: dict[str, Domain]) -> None:
+    """Every declared bound of a rate parameter must be positive.
+
+    ``update_lr: {lo: 0}`` is not a small sweep, it is a sweep that trains
+    nothing and reports a plausible number. Rejected at the declaration,
+    beside the other declaration errors, rather than diagnosed after training.
+
+    Args:
+        hyperparameters: The spec's swept hyperparameters, by name.
+
+    Raises:
+        ValueError: If a rate parameter declares a non-positive bound.
+    """
+    for name, domain in hyperparameters.items():
+        for bound in (domain.lo, domain.hi):
+            if bound is not None:
+                validate_rate_value(name, bound)
 
 
 class RunSpec(BaseModel):
@@ -166,6 +202,7 @@ class RunSpec(BaseModel):
                 f"harvested: {sorted(harvested)}"
             )
             raise ValueError(msg)
+        _check_declared_rates(self.hyperparameters)
         structural = sorted(
             h
             for h, spec in harvested.items()
@@ -178,12 +215,7 @@ class RunSpec(BaseModel):
                 "task or chosen by the run — and cannot be swept"
             )
             raise ValueError(msg)
-        duplicated = sorted({
-            s.axis for s in self.axes if [x.axis for x in self.axes].count(s.axis) > 1
-        })
-        if duplicated:
-            msg = f"axes names the same axis more than once: {duplicated}"
-            raise ValueError(msg)
+        _check_axes_distinct(self.axes)
         return self
 
     @property

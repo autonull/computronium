@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from computronium.experiment.schema.record import Record
 
+from computronium.experiment.schema.registries import validate_rate_value
+
 
 def _canonical_json(obj: Any) -> str:
     """Serialize to canonical JSON for hashing."""
@@ -41,6 +43,9 @@ class Coordinate:
                 )
             if field.name == "params" and not isinstance(value, dict):
                 raise TypeError("Coordinate.params must be dict")
+        if isinstance(self.params, dict):
+            for name, value in self.params.items():
+                validate_rate_value(name, value)
 
     def cell_key(self) -> str:
         """Compute the cell key: SHA256 of structural axes only (no schedule)."""

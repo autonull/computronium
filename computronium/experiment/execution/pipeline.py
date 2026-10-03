@@ -33,7 +33,12 @@ from computronium.experiment.execution.sysctx import (
     SystemContext,
     capture_environment_snapshot,
 )
-from computronium.experiment.schema.coordinate import Coordinate, Provenance, Schedule
+from computronium.experiment.schema.coordinate import (
+    Coordinate,
+    DataOrigin,
+    Provenance,
+    Schedule,
+)
 
 if TYPE_CHECKING:
     from computronium.experiment.evidence.store import RecordStore
@@ -116,6 +121,35 @@ def _resolve_tasks(config: PipelineConfig) -> tuple[str, ...]:
         msg = f"unknown task(s) {unknown}; available: {sorted(SUPPORTED_TASKS)}"
         raise ValueError(msg)
     return names
+
+
+_CONTRAST_LINK_KEYS: Final = ("contrast_id", "matched_group", "factor_assignments")
+
+
+def _provenance_for(provenance: Provenance, proposal: Proposal) -> Provenance:
+    """The run's provenance as this proposal's own record will carry it.
+
+    ``data_origin`` is the schema's own field for the S1 allocation and the
+    contrast design's group; the design's identifiers ride in ``links`` beside
+    ``run_id``. Identity is untouched — the schedule is unchanged, so the same
+    cell under two origins is still the same measurement key.
+    """
+    from dataclasses import replace
+
+    metadata = proposal.metadata
+    links = dict(provenance.links)
+    for key in _CONTRAST_LINK_KEYS:
+        if key in metadata:
+            links[key] = str(metadata[key])
+    if not links.keys() - {"run_id"} and provenance.data_origin == metadata.get(
+        "data_origin", provenance.data_origin
+    ):
+        return provenance
+    return replace(
+        provenance,
+        data_origin=DataOrigin(metadata.get("data_origin", provenance.data_origin)),
+        links=links,
+    )
 
 
 @dataclass(slots=True)
@@ -655,18 +689,25 @@ class PipelineRunner:
         rather than as a whole cell. Skipping the whole cell would drop the
         seeds it has never run; re-measuring all of them spends the store's
         patience, not the run's.
+
+        Each item carries the proposal's *own* provenance, so the data origin
+        and contrast assignment S1 stamped on it reach the record. The run's
+        provenance carries neither: a design that vanishes before persistence
+        is a design the store cannot re-derive, and the contrast split was
+        exactly that.
         """
         seen: set[str] = set(self._state.completed_measurement_keys)
         skipped = 0
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]] = []
         for proposal in proposals:
+            item_provenance = _provenance_for(provenance, proposal)
             for schedule in proposal.schedule.seed_plan:
                 key = proposal.coordinate.measurement_key(schedule)
                 if key in seen:
                     skipped += 1
                     continue
                 seen.add(key)
-                items.append((proposal.coordinate, schedule, provenance, {}))
+                items.append((proposal.coordinate, schedule, item_provenance, {}))
         self._state.last_batch_was_all_seen = not items
         if skipped:
             logger.info("Skipped %d already-measured seed(s)", skipped)

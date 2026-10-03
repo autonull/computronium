@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, Final
 
 from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
 from computronium.experiment.schema.registries import (
+    FIXED_RUN_COST_SECONDS,
     MEASURED_CELL_SECONDS_REGIME,
+    MEASURED_PARALLEL_SPEEDUP,
     cell_price_seconds,
 )
 
@@ -82,6 +84,9 @@ class PricePlan:
             f"projected total: {self.projected_seconds:.1f}s "
             f"({self.projected_seconds / 60:.1f}m)",
             f"price regime: {MEASURED_CELL_SECONDS_REGIME}",
+            f"per cell: n_seeds records at "
+            f"{MEASURED_PARALLEL_SPEEDUP:.2f}x measured concurrency; "
+            f"{FIXED_RUN_COST_SECONDS:.0f}s fixed run cost (not in the total)",
         ]
         if self.per_dynamics_seconds:
             priced = ", ".join(
@@ -133,6 +138,14 @@ def price_plan(
 
     resolve = shape if shape is not None else default_shape
 
+    # A cell is measured once per seed, and its seeds are measured
+    # concurrently. The registry's price is a *serial* per-cell cost, so a
+    # projection that omits either factor is wrong by it: §8.1 measured a 1.5x
+    # understatement, and this session's own gate found 3.6x (233 s against a
+    # 112 s bound) — the seeds multiply the work and the workers divide it, and
+    # a plan that counts cells counts neither.
+    per_record = max(1, spec.n_seeds) / MEASURED_PARALLEL_SPEEDUP
+
     per_dynamics: dict[str, float] = {}
     reached: dict[str, set[str]] = {axis.value: set() for axis in AXIS_KIND_ORDER}
     cells: list[float] = []
@@ -148,7 +161,9 @@ def price_plan(
         if legal >= _PRICE_SAMPLE:
             truncated = True
             break
-        seconds = cell_price_seconds(coordinate.dynamics, epochs=spec.epochs)
+        seconds = (
+            cell_price_seconds(coordinate.dynamics, epochs=spec.epochs) * per_record
+        )
         cells.append(seconds)
         per_dynamics[coordinate.dynamics] = (
             per_dynamics.get(coordinate.dynamics, 0.0) + seconds

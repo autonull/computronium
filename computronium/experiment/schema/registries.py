@@ -53,6 +53,70 @@ MEASURED_CELL_SECONDS_REGIME: Final[str] = (
 # invented for it would be a guess wearing a decimal point's clothes.
 DEFAULT_CELL_SECONDS: Final[float] = min(MEASURED_CELL_SECONDS.values())
 
+# What a run pays that no per-cell price can include: stage dispatch, the
+# legality preview, torch's first touch. Published because two consumers need
+# it and one number must not be typed twice — a per-cell projection compared
+# against a wall clock without it fails by whatever the fixed cost happens to
+# be on the day, which is how the first version of the gate failed at 4.12x.
+FIXED_RUN_COST_SECONDS: Final[float] = 30.0
+
+# A rate is a multiplier applied every step. Zero is not a small rate, it is a
+# *disabled* one: `update_lr=0` trains nothing and returns
+# `status=evaluated` with a plausible `train_acc`, which is a record the store
+# cannot distinguish from a measurement (verified, TODO48b R8). So the value is
+# rejected where it enters — the declaration and the coordinate — rather than
+# diagnosed after training.
+#
+# Membership is a claim about *each* param, not about its name: `momentum` is a
+# multiplier and 0 is a legitimate momentum (no smoothing), while `hidden_dim`
+# is a count where 0 is invalid for a different reason. A param absent from
+# this set is not thereby valid — it is simply not a rate this registry claims
+# to know about.
+RATE_PARAMETERS: Final[frozenset[str]] = frozenset({
+    "credit_beta",
+    "feedback_scale",
+    "init_scale",
+    "settle_beta",
+    "settle_step",
+    "update_lr",
+})
+
+
+def validate_rate_value(name: str, value: object) -> None:
+    """Reject a non-positive value for a known rate parameter.
+
+    Args:
+        name: The hyperparameter's name.
+        value: The value a coordinate or a domain proposes.
+
+    Raises:
+        ValueError: If ``name`` is a rate and ``value`` is not positive.
+    """
+    if name not in RATE_PARAMETERS or not isinstance(value, (int, float)):
+        return
+    if isinstance(value, bool) or value <= 0:
+        msg = (
+            f"{name}={value!r} is not a rate: a rate applied every step must be "
+            "positive, and zero disables the mechanism it scales"
+        )
+        raise ValueError(msg)
+
+
+# TODO48b R8: the price table is *serial* (one cell at a time), and a run
+# measures its batch concurrently, so a projection built from the table alone
+# overstates the walltime by this factor. Measured with
+# ``scripts/probes/campaign_throughput.py`` at the backend's 4 workers: 3.86x
+# on 8 records (0.867 s/record at 1 worker, 0.488 s/record at 4). Published at
+# the *measured* value rather than the worker count, because a worker count is
+# an upper bound a saturated box does not reach — the two coincide here (3.86
+# vs 4.0) and only measurement says which is the honest one.
+#
+# The three constants above are one projection: ``cells x n_seeds x price /
+# speedup + fixed``. Omitting the seed factor or the speedup is what made §8.1
+# read "the oracle understates by 1.5x" when the real gap was 3.6x in the
+# *other* direction — the two factors are of opposite sign and both large.
+MEASURED_PARALLEL_SPEEDUP: Final[float] = 3.86
+
 
 def procedure_version_key(version: str) -> tuple[int, ...]:
     """A dotted version as the tuple that orders it.
@@ -449,12 +513,15 @@ __all__ = [
     "CARD_FACTORS",
     "CONSTRAINTS_REGISTRY",
     "DEFAULT_CELL_SECONDS",
+    "FIXED_RUN_COST_SECONDS",
     "MEASURED_CELL_SECONDS",
     "MEASURED_CELL_SECONDS_REGIME",
+    "MEASURED_PARALLEL_SPEEDUP",
     "OBJECTIVES_REGISTRY",
     "PARAM_BUDGET_TOLERANCE",
     "POLICIES_REGISTRY",
     "PRIORS_REGISTRY",
+    "RATE_PARAMETERS",
     "REPLAY_METRIC_TOLERANCE",
     "STAGES_REGISTRY",
     "CapabilityKind",
@@ -480,4 +547,5 @@ __all__ = [
     "register_policy",
     "register_prior",
     "register_stage",
+    "validate_rate_value",
 ]

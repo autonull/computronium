@@ -6,9 +6,10 @@ Each stage implements the Stage protocol with `run(ctx) -> Fragment`.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from computronium.experiment.execution.search_space import SearchSpace
     from computronium.experiment.execution.stage import (
         Fragment,
         Proposal,
@@ -19,13 +20,191 @@ logger = logging.getLogger(__name__)
 
 
 # Import at runtime to avoid circular imports
+from computronium.experiment.execution.contrast_design import (
+    ContrastAssignment,
+    Factor,
+)
 from computronium.experiment.execution.stage import (
     StageId,  # noqa: E402
 )
+from computronium.experiment.schema.coordinate import Coordinate, DataOrigin
 
 # How many cells S1 opens a run with. A round's own allocation is the stage
 # params' business; this is the exploration batch before any round exists.
 _FRAME_PROPOSALS = 10
+
+# The two origins a contrast design has an assignment for. The rest are the
+# design's *absence*: an exploration cell is not a control for anything.
+_DESIGNED_ORIGINS = frozenset({DataOrigin.CONTROL, DataOrigin.CONTRAST})
+
+
+def _design_factors(space: SearchSpace) -> list[Factor]:
+    """The space's varying structural axes, as design factors with real levels.
+
+    A factor's levels are the *primitives the run actually sweeps* on that
+    axis, so an assignment names a cell that exists. The previous construction
+    took the first coordinate's ``params`` keys and gave every one the levels
+    ``(0.0, 1.0)`` — normalized labels on names like ``update_lr``, so an
+    assignment read ``update_lr=0.0`` while the measured cell carried a real
+    value, and ``matched_group='ofat_update_lr'`` could label a cell that moved
+    two hyperparameters at once. A factor with one level is not a factor, so
+    single-primitive axes are excluded and the control is the first level of
+    each of the rest.
+
+    Args:
+        space: The run's active space.
+
+    Returns:
+        One factor per axis the run varies, in registry order.
+    """
+    from computronium.experiment.schema.harvest import AXIS_KIND_ORDER
+
+    factors: list[Factor] = []
+    for axis in AXIS_KIND_ORDER:
+        levels = space.primitives(axis)
+        if len(levels) > 1:
+            factors.append(Factor(name=axis.value, levels=levels))
+    return factors
+
+
+def _origins_for_design(
+    proposals: list[Proposal],
+    assignments: list[ContrastAssignment],
+    allocated: list[DataOrigin],
+) -> list[DataOrigin]:
+    """Re-originate the cells the design placed, keeping the rest's allocation.
+
+    The design's cells take their origin from their group; every other proposal
+    keeps whatever ``_allocate_origins`` gave it. Doing this in one pass is what
+    makes a control a control: allocating first and labelling afterwards let a
+    control-origin proposal be matched to a contrast cell.
+
+    Args:
+        proposals: The round's proposals, in proposal order.
+        assignments: The design's assignments.
+        allocated: The allocation the round started from.
+
+    Returns:
+        Origins per proposal, with the designed cells' own.
+    """
+    matched = _match_design(proposals, assignments)
+    # A quota origin with no assignment behind it is not a design placement, so
+    # it reverts to exploration: "control"/"contrast" must mean *the design put
+    # this cell there*, not "this round's rounding landed here". Without that,
+    # a record claims a group the design never assigned it.
+    revised = [
+        o if i in matched or o not in _DESIGNED_ORIGINS else DataOrigin.EXPLORATION
+        for i, o in enumerate(allocated)
+    ]
+    for index, assignment in matched.items():
+        revised[index] = assignment.data_origin
+    return revised
+
+
+def _match_design(
+    proposals: list[Proposal], assignments: list[ContrastAssignment]
+) -> dict[int, ContrastAssignment]:
+    """Pair this round's proposals with the design assignments they *are*.
+
+    A group is a claim about a cell, so it is only stamped when the cell's
+    axis values equal the assignment's — and an assignment is only eligible for
+    an origin of its own kind, so a control can never land on a contrast cell.
+    Proposals matching nothing are left undesigned rather than given a
+    neighbour's label.
+
+    Args:
+        proposals: The round's proposals, in proposal order.
+        assignments: The design's assignments, control first.
+
+    Returns:
+        Proposal index to the assignment that cell satisfies.
+    """
+    matched: dict[int, ContrastAssignment] = {}
+    if not assignments:
+        return matched
+    claimed: set[str] = set()
+    for index, proposal in enumerate(proposals):
+        for assignment in assignments:
+            if assignment.contrast_id in claimed:
+                continue
+            if _is_assignment(proposal.coordinate, assignment):
+                matched[index] = assignment
+                claimed.add(assignment.contrast_id)
+                break
+    return matched
+
+
+def _is_assignment(coordinate: Coordinate, assignment: ContrastAssignment) -> bool:
+    """Whether a coordinate *is* a design assignment.
+
+    Compared on the structural axes the design varies and nothing else: the
+    swept hyperparameters are the same cell's replication, so two coordinates
+    differing only there are one point in the design, not two.
+    """
+    return all(
+        getattr(coordinate, name, None) == level
+        for name, level in assignment.factor_assignments.items()
+    )
+
+
+def _allocate_origins(total: int, allocation: dict[str, float]) -> list[DataOrigin]:
+    """Split a round's proposals across data origins, exactly ``total`` long.
+
+    Shares are filled largest-remainder, so the sum is the round size by
+    construction rather than by truncation, and a share that rounds to zero is
+    only granted a slot when the round is long enough to spare one. Exploration
+    is the only origin that gives: the protocol's groups are what the round is
+    *for*, and exploration is what is *about* the sweep.
+
+    Before this, five per-origin ``max(1, ...)`` counts summed past ``total`` and
+    ``data_origins[:total]`` truncated from the tail, so the two 5%-quota
+    origins were the two that always disappeared — measured, a 450-record
+    campaign carried 250 exploration / 120 calibration / 80 test and **zero**
+    control or contrast. A design whose only two groups are the ones truncation
+    eats is a design that never runs.
+
+    Args:
+        total: Proposals this round will schedule.
+        allocation: Each origin's share of the round.
+
+    Returns:
+        One origin per proposal, always exactly ``total`` long.
+    """
+    shares = {
+        origin: allocation.get(origin.value, 0.0)
+        for origin in DataOrigin
+        if allocation.get(origin.value, 0.0) > 0
+    }
+    if not shares or total <= 0:
+        return [DataOrigin.EXPLORATION] * max(0, total)
+
+    counts = {origin: int(total * share) for origin, share in shares.items()}
+    # Largest-remainder: hand the leftover slots to the largest fractional parts.
+    remainder = total - sum(counts.values())
+    for origin in sorted(shares, key=lambda o: -(total * shares[o] - counts[o])):
+        if remainder <= 0:
+            break
+        counts[origin] += 1
+        remainder -= 1
+
+    if remainder > 0:
+        # The round is too short for every declared origin: keep the protocol's
+        # own groups (the design) and let exploration absorb what is left.
+        spare = total - sum(min(counts[o], 1) for o in _DESIGNED_ORIGINS if o in counts)
+        for origin in sorted(counts, key=lambda o: (o not in _DESIGNED_ORIGINS, o)):
+            if remainder <= 0 or spare <= 0:
+                break
+            if counts[origin] < 1:
+                counts[origin] += 1
+                remainder -= 1
+                spare -= 1
+
+    origins: list[DataOrigin] = []
+    for origin, count in counts.items():
+        origins.extend([origin] * count)
+    while len(origins) < total:
+        origins.append(DataOrigin.EXPLORATION)
+    return origins[:total]
 
 
 class FrameStage:
@@ -128,14 +307,11 @@ class ScheduleStage:
         measurement identity (measurement_key does not change with data origin).
         """
         from computronium.experiment.execution.contrast_design import (
-            ContrastAssignment,
             ContrastDesign,
             ContrastDesignKind,
-            Factor,
             create_contrast_design,
         )
         from computronium.experiment.execution.stage import Fragment, Proposal
-        from computronium.experiment.schema.coordinate import DataOrigin
 
         logger.info(
             "S3 Schedule: Planning fidelity/seed/epoch with data-origin allocation"
@@ -187,65 +363,46 @@ class ScheduleStage:
         scheduled_proposals: list[Proposal] = []
         total = len(proposals)
         if total > 0:
-            # Calculate counts for each data origin
-            exploration_count = max(1, int(total * allocation.get("exploration", 0.5)))
-            calibration_count = max(1, int(total * allocation.get("calibration", 0.2)))
-            test_count = max(1, int(total * allocation.get("test", 0.2)))
-            control_count = max(1, int(total * allocation.get("control", 0.05)))
-            contrast_count = max(1, int(total * allocation.get("contrast", 0.05)))
-
-            # Assign data origins sequentially
-            data_origins = []
-            data_origins.extend([DataOrigin.EXPLORATION] * exploration_count)
-            data_origins.extend([DataOrigin.CALIBRATION] * calibration_count)
-            data_origins.extend([DataOrigin.TEST] * test_count)
-            data_origins.extend([DataOrigin.CONTROL] * control_count)
-            data_origins.extend([DataOrigin.CONTRAST] * contrast_count)
-
-            # Truncate or cycle to match total
-            if len(data_origins) < total:
-                # Cycle through origins
-                while len(data_origins) < total:
-                    data_origins.extend(data_origins[: total - len(data_origins)])
-            data_origins = data_origins[:total]
-
-            if contrast_count > 0:
-                # Create factors from first proposal's params for contrast design
-                first_coord = proposals[0].coordinate
-                factor_names = list(first_coord.params.keys())
-                if factor_names:
-                    factors = [
-                        Factor(name=name, levels=(0.0, 1.0), unit="normalized")
-                        for name in factor_names
-                    ]
-                    contrast_design = create_contrast_design(
-                        ContrastDesignKind(contrast_design_kind),
-                        factors,
-                        seed=hash(ctx.run_id) % 2**32,
-                    )
-                    contrast_assignments = list(contrast_design.assignments)
+            data_origins = _allocate_origins(total, allocation)
+            design = _design_factors(ctx.search_space)
+            if design:
+                contrast_design = create_contrast_design(
+                    ContrastDesignKind(contrast_design_kind),
+                    design,
+                    seed=hash(ctx.run_id) % 2**32,
+                )
+                contrast_assignments = list(contrast_design.assignments)
+            # The design decides which proposals carry a group, so it also
+            # decides their origin: a cell the design placed is an origin of the
+            # design's kind. Allocating origins first and matching afterwards
+            # would let the two disagree — a control cell measured as
+            # exploration, or a contrast cell claiming the control's group.
+            data_origins = _origins_for_design(
+                proposals, contrast_assignments, data_origins
+            )
 
             # Stamp each proposal's data origin into metadata; the schedule
             # itself is untouched, so identity is the cell's own.
-            contrast_idx = 0
+            assigned = _match_design(proposals, contrast_assignments)
             for i, proposal in enumerate(proposals):
                 coord, sched = proposal.coordinate, proposal.schedule
                 data_origin = data_origins[i]
 
                 # Build metadata with data_origin and contrast info
-                metadata = {"data_origin": data_origin.value}
+                metadata: dict[str, Any] = {"data_origin": data_origin.value}
 
-                # Add contrast assignment if this is a contrast run
-                if data_origin == DataOrigin.CONTRAST and contrast_assignments:
-                    contrast_assignment = contrast_assignments[
-                        contrast_idx % len(contrast_assignments)
-                    ]
-                    metadata["contrast_id"] = contrast_assignment.contrast_id
-                    metadata["factor_assignments"] = (
-                        contrast_assignment.factor_assignments
-                    )
-                    metadata["matched_group"] = contrast_assignment.matched_group
-                    contrast_idx += 1
+                # A designed origin carries its assignment only when the cell
+                # *is* that assignment. Stamping a group onto whatever the round
+                # happened to propose is a label with no referent: measured,
+                # `matched_group='ofat_settle_step'` on a cell that also moved
+                # `update_lr` and the credit axis. A proposal that matches no
+                # assignment therefore keeps its origin and takes no group, and
+                # the report counts what the design actually placed.
+                assignment = assigned.get(i)
+                if assignment is not None:
+                    metadata["contrast_id"] = assignment.contrast_id
+                    metadata["factor_assignments"] = assignment.factor_assignments
+                    metadata["matched_group"] = assignment.matched_group
 
                 # The schedule is carried through unchanged: a data origin is
                 # metadata, so the same cell scheduled under a second origin is

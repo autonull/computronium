@@ -328,32 +328,62 @@ measurement).
   `logs/` retention rule so a 370 MB log cannot recur. Two lines, and one of them
   removes a real grep hazard.
 
-### R8 — ONE campaign run, four consumers (the owed D3 verification rides here)
-- **Does:** a module-scoped `campaign` fixture in `tests/acceptance/conftest.py`,
-  executed **once through the command surface** (`comp run` → `status` →
-  `report`), serving:
-  1. **the owed D3 verification** (round loop, budget, record schema, policies),
-  2. **E3** — the report names the control; the lock asserts its presence,
-  3. **F2** — every README pipeline number traces to a store record or a test
-     assertion, plus the second tiny example with its measured walltime,
-  4. **CP-1** — declared records == stored records, walltime within D2's
-     projection, claims carry uncertainty and significance, non-empty promotion
-     history.
-- **The saving, stated plainly:** four consumers × ~150 s *(measured)* ≈ 600 s of
-  duplicated measurement becomes one ~150 s run (less after R3). **The single
-  largest saving in the refactor.**
-- **Falsifiable:** break the budget charge or the round loop and CP-1/gate-1 go
-  red exactly as they would have.
-- **Cost:** ~150 s *(measured, pre-R3)* + seconds of report assertions.
+### R8 — LANDED (unverified gate) — ONE campaign run, four consumers
 
-### R9 — §7 Completion Proof, with CP-3's breadth handed to CI
-- **CP-1** rides R8 — free. **CP-2** rides R8's store plus the promotion lock
-  (~8 s *(measured)*). **CP-3**'s structural locks are cheap and run as one
-  selection; **its shard run (~10 min *(measured)*) moves to CI** under rule 7.
-- **CP-4** (the defect-class ledger) and **CP-5** (fresh eyes through README) are
-  **document work and a manual walk**: no gates, no runs.
+**Landed this session.** `tests/acceptance/conftest.py` (session-scoped,
+cross-worker) + `tests/acceptance/_campaign.py` + `tests/acceptance/
+test_campaign_evidence_lock.py` (11 tests). Four gates read one store: the owed
+D3 verification, E3, F2, CP-1.
 
----
+- **The cross-worker part is load-bearing, not decoration.** `addopts` carries
+  `-n 4`, so a *module*-scoped fixture runs once per **worker** — the first
+  draft paid the campaign twice for two modules and timed out at 300 s each
+  (measured: 7 passed, 11 setup timeouts, 698 s). The store now lives at a path
+  keyed by the declaration's content and a `FileLock`, so exactly one process
+  builds it. **Measured: 18 tests across both modules in ~357 s.**
+- **The cache key was wrong twice, and the second wrongness was mine.** Keyed
+  on git HEAD + a dirty flag — which does *not* change when an already-dirty
+  file is edited, so a store built before the E3 fix survived it and three
+  gates read a store from the code they were meant to be testing. Keyed on the
+  package's newest source mtime instead, which cannot lie. This cost ~20 min of
+  gate runs; recorded because a gate's cache key must change on every edit.
+
+**Three defects found, all real:**
+
+1. **The contrast design had never once produced a record.** Two causes, both
+   fixed: the per-origin `max(1, …)` counts summed past the round size and
+   `data_origins[:total]` truncated away the two 5%-quota groups; and the
+   registered stage spec allocated **nothing** for them. A 450-record campaign
+   carried 250 exploration / 120 calibration / 80 test and **zero** control or
+   contrast. Now 40/40. The allocator is largest-remainder, exact at every
+   round size, and gives exploration away before it gives up a protocol group.
+2. **Design metadata died in the scheduler.** `_fresh_batch_items` passed `{}`
+   as every item's params, so S1's `data_origin` never reached a record.
+3. **`lr=0` trains silently** — see §2.5.
+
+**§8.1 item 1 is CLOSED.** The oracle's gap was two factors of *opposite sign*,
+both large, neither visible from the other: it priced **cells** while a run
+measures **records** (× `n_seeds`), and the price table is **serial** while a
+run executes **4-way concurrent** (÷ 3.86). `scripts/probes/campaign_throughput.py`
+measured the second (8 records, 1→4 workers: 0.867 → 0.488 s/record, 3.86×);
+`MEASURED_PARALLEL_SPEEDUP` is now registered beside the price table, and
+`FIXED_RUN_COST_SECONDS` moved out of a test literal into the registry.
+
+**NOT VERIFIED: the acceptance gate never went green.** The session ended with
+the campaign run in flight. `test_campaign_evidence_lock.py` and the rewritten
+`test_campaign_lock.py` have never run together against a fresh store. Their
+assertions are written and their fixtures work; their *verdicts* are unknown.
+Cheap lock that *is* green: `tests/property/test_design_and_rate_lock.py`, 9
+tests / 14 s, verified falsifiable both ways.
+
+### R9 — NOT STARTED — §7 Completion Proof, with CP-3's breadth handed to CI
+
+Unchanged from its original text; **R7's CI claim is already satisfied** —
+`.github/workflows/ci.yml` runs ruff format → ruff check → pyright → pytest →
+pip-audit, which is F3 exactly. Only the disk hygiene remains (§0.1: a
+`logs/` retention rule; `build/` no longer exists on this tree). CP-1/CP-2 ride
+R8's store once its gate is verified; CP-3 is one selection plus CI; **CP-4 and
+CP-5 are documents and neither is worth more than TODO49** — see §6.
 
 ## 2.1 What R1/R2/R6 changed about the plan's own premises
 
@@ -563,6 +593,39 @@ which is exactly why R1 carries a synchronization lock.
   without the sync lock in the same commit.
 
 ---
+
+## 5.5 What this session cost, and where the plan itself is wrong
+
+**Three of this session's six changes touch nothing a user can reach.** The
+fixture reorganization, the metadata threading, and the cache key are all
+test-infrastructure. The price oracle and the `lr=0` fix reach a user; the
+contrast design reached nothing because it had never run. That ratio is the
+honest one, and it is a fact about *this plan's* subject matter, not about the
+session: TODO46–48b is a plan about measurement honesty, and measurement honesty
+is not usability.
+
+**The plan's own ordering is the defect.** It schedules CP-5 — *a person who has
+never read this repo follows the README* — last, as "document work, no gates, no
+runs". CP-5 is the **only** usability signal in the entire file, and it is the
+one item that would have caught `lr=0` by inspection rather than by a probe.
+Everything before it verifies systems that already exist.
+
+**Recommendation, recorded so the next session does not re-derive it:** TODO49
+is the better use of the next hours, and it supersedes R9's remaining scope
+except where R9 asserts something TODO49 does not. CP-4 (the defect-class ledger)
+is an argument in a document and should be dropped or deferred indefinitely; it
+produces no capability and gates nothing.
+
+### 5.6 Two things a future session must not re-derive
+
+1. **A gate's cache key must change on every code edit.** Keyed on git HEAD plus
+   a dirty flag, it does not — the flag is already set. This cost ~20 minutes of
+   gate runs reading a store built before the fix. Key on a content digest of the
+   declaration *and* the package's newest source mtime.
+2. **`-n 4` means a module-scoped fixture runs once per worker.** "One fixture,
+   many consumers" is false across processes unless the store path is derived
+   from the input and guarded by a file lock. Measured: 698 s and eleven setup
+   timeouts for the naive version, ~357 s for the fixed one.
 
 ## 6. Session ordering and the exit
 

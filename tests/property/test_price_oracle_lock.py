@@ -30,7 +30,10 @@ from computronium.experiment.execution.pipeline import PipelineConfig, PipelineR
 from computronium.experiment.execution.policy import StratifiedRandomPolicy
 from computronium.experiment.execution.pricing import price_plan
 from computronium.experiment.execution.search_space import search_space_from_spec
-from computronium.experiment.schema.registries import MEASURED_CELL_SECONDS
+from computronium.experiment.schema.registries import (
+    FIXED_RUN_COST_SECONDS,
+    MEASURED_CELL_SECONDS,
+)
 from computronium.experiment.schema.seed_registries import seed_all_registries
 
 from ._specs import mechanism_spec, unreachable_spec
@@ -48,12 +51,6 @@ pytestmark = pytest.mark.timeout(300)
 # published so a projection that is *structurally* wrong — the wrong cell count,
 # an order of magnitude off — goes red without a slow machine going red.
 _PROJECTION_BAND = (0.2, 4.0)
-
-# What the run costs that a per-cell price cannot include: stage dispatch, the
-# legality preview, torch's first touch. Measured at ~10 s for eight cells, so a
-# whole-run comparison against a per-cell projection is meaningless; the cells'
-# own timed cost is the comparable number.
-_FIXED_RUN_COST_S = 30.0
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -157,7 +154,7 @@ def test_the_projected_space_is_exactly_the_space_the_run_measures(
         f"the oracle promised {plan.legal_cells} cell(s); the run stored {len(stored)}"
     )
     assert len({record.measurement_key for record in stored}) == len(stored)
-    assert measured < plan.projected_seconds + _FIXED_RUN_COST_S, (
+    assert measured < plan.projected_seconds + FIXED_RUN_COST_SECONDS, (
         f"the run took {measured:.1f}s, more than its cells' "
         f"{plan.projected_seconds:.1f}s projection plus fixed cost"
     )

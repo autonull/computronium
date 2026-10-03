@@ -28,59 +28,19 @@ asserting noise.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import pytest
+from _campaign import CAMPAIGN, Campaign
 
 from computronium.experiment.evidence.store import RecordStore, StoreConfig
-from computronium.experiment.schema.run_spec import RunSpec
-from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface import cli
 from computronium.experiment.surface.report import ReportGenerator
 
 if TYPE_CHECKING:
-    from computronium.experiment.schema.record import Record
-
-EXAMPLE = Path(__file__).resolve().parents[2] / "examples"
-CAMPAIGN = EXAMPLE / "learning-rules-and-geometry-digits.yaml"
+    from pathlib import Path
 
 pytestmark = pytest.mark.timeout(900)
-
-
-@dataclass(frozen=True, slots=True)
-class Campaign:
-    """One executed campaign: its declaration, its store, and its report."""
-
-    spec: RunSpec
-    store_path: Path
-    run_id: str
-    status: str
-    replay_hash: str
-    records: tuple[Record, ...]
-
-    def train_acc(self) -> list[float]:
-        return [float(r.payload["train_acc"]) for r in self.records]  # type: ignore[attr-defined]
-
-
-@pytest.fixture(scope="module")
-def campaign(tmp_path_factory: pytest.TempPathFactory) -> Campaign:
-    """Run the campaign once through the CLI; hand every gate the same store."""
-    seed_all_registries()
-    store_path = tmp_path_factory.mktemp("campaign") / "campaign.duckdb"
-    assert cli.main(["run", "--spec", str(CAMPAIGN), "--store", str(store_path)]) == 0
-
-    with RecordStore(StoreConfig(path=store_path, read_only=True)) as store:
-        run = store.query_runs()[0]
-        return Campaign(
-            spec=RunSpec.load(CAMPAIGN),
-            store_path=store_path,
-            run_id=run.run_id,
-            status=run.status,
-            replay_hash=run.replay_hash or "",
-            records=tuple(store.query_records(run_id=run.run_id)),
-        )
 
 
 def test_the_example_is_a_valid_declaration_the_store_accepted(

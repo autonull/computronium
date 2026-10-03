@@ -158,6 +158,10 @@ comp = "computronium.cli.__main__:main"
 [dependency-groups]
 dev = [
     "fastapi>=0.141.1",
+    # The acceptance campaign fixture is shared across xdist workers, so exactly
+    # one process may build the store (TODO48b R8). It was already installed
+    # transitively; a test that imports a package must declare it.
+    "filelock>=3.16",
     "grpcio-tools>=1.83.0",
     "httpx2>=2.12.0",
     "hypothesis>=6.161.2",

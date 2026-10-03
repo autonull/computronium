@@ -43,6 +43,7 @@ from computronium.experiment.execution.search_space import (
     search_space_from_spec,
 )
 from computronium.experiment.schema.axis import StructuralAxis
+from computronium.experiment.schema.coordinate import DataOrigin
 from computronium.experiment.schema.metrics import (
     objective_metric,
     objective_name,
@@ -318,6 +319,28 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
             return axis, metric, ordered[-1].value, ordered[0].value
         return None
 
+    def data_origin_distribution(self, run_id: str) -> dict[str, int]:
+        """Records per provenance data origin — the design's own allocation."""
+        counts: dict[str, int] = {}
+        for record in self._store.query_records(run_id=run_id):
+            origin = record.provenance.data_origin.value
+            counts[origin] = counts.get(origin, 0) + 1
+        return counts
+
+    def control_records(self, run_id: str) -> tuple[Record, ...]:
+        """The records S1 stamped as the design's control.
+
+        Derived from the store alone: a control is a record whose provenance
+        says so, so the report names one without asking the scheduler. A run
+        whose design stamped nothing returns none, and the report says so
+        rather than substituting an exploration cell for a control it is not.
+        """
+        return tuple(
+            r
+            for r in self._store.query_records(run_id=run_id)
+            if r.provenance.data_origin == DataOrigin.CONTROL
+        )
+
     def limitations(self, run_id: str) -> tuple[Limitation, ...]:
         """Every limitation derivable from the run's records, none asserted."""
         spec = self._spec(run_id)
@@ -540,6 +563,36 @@ def _claims_section(generator: ReportGenerator, run_id: str) -> list[str]:
     return lines
 
 
+def _contrast_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """The contrast design's allocation, and the control cell by name (E3).
+
+    The control is what every contrast is measured against, so a report that
+    compares cells without naming it has no reference point. It is read from
+    the records' own provenance: a design that stamped nothing is reported as
+    absent, never as an unnamed control.
+    """
+    lines = _section("Contrast Design (data-origin allocation):")
+    distribution = generator.data_origin_distribution(run_id)
+    if not distribution:
+        return [*lines, "  (no records — no design to report)"]
+    lines.extend(
+        f"  {origin}: {count} record(s)"
+        for origin, count in sorted(distribution.items())
+    )
+
+    controls = generator.control_records(run_id)
+    if not controls:
+        lines.append("  Control: none — this run's design stamped no control record")
+        return lines
+    cell_keys = sorted({r.cell_key for r in controls})
+    lines.append(f"  Control ({len(controls)} record(s), {len(cell_keys)} cell(s)):")
+    for key in cell_keys:
+        seeds = sorted(r.schedule.seed for r in controls if r.cell_key == key)
+        lines.append(f"    cell_key: {key}")
+        lines.append(f"    seeds: {seeds}")
+    return lines
+
+
 def _limitations_section(generator: ReportGenerator, run_id: str) -> list[str]:
     """Limitations, each naming the filter that re-derives it."""
     lines = _section("Limitations (every line re-derivable from a record):")
@@ -674,6 +727,7 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
             "Gate Verdict Distribution:", generator.gate_verdict_distribution(run_id)
         ),
         *_coverage_section(generator, run_id),
+        *_contrast_section(generator, run_id),
         *_claims_section(generator, run_id),
         *_limitations_section(generator, run_id),
         *_pareto_section(generator, run_id),
