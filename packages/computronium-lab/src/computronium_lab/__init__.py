@@ -3,6 +3,10 @@
 High-level API over the Computronium 6-axis ontology. Wraps existing
 validated factories only; CEEC evidence recording is optional and off by
 default.
+
+Retired modules (2026-10-02, R78): presets, recipes, campaign, deployment,
+ecosystem, sequential, state_prediction, research/, ceec_profile.
+See USAGE.md for census and retirement records.
 """
 
 from __future__ import annotations
@@ -20,58 +24,7 @@ from computronium_lab.adaptation import (
     probe_campaign,
     select_z3_operator,
 )
-from computronium_lab.campaign import (
-    CampaignReport,
-    MechanismBelief,
-    ledger_audit,
-    promote_mechanism,
-    run_campaign,
-)
-from computronium_lab.deployment import (
-    EnergyEstimate,
-    ExportResult,
-    SubstrateReport,
-    compile_substrate,
-    estimate_energy,
-    export_system,
-    serve_system,
-    substrate_report,
-)
-from computronium_lab.ecosystem import (
-    BenchmarkReport,
-    BenchmarkRow,
-    HuggingFaceCallback,
-    LightningStabilityCallback,
-    report_json,
-    run_benchmark,
-)
 from computronium_lab.lab import ComparisonResult, Lab
-from computronium_lab.presets import PRESETS
-from computronium_lab.recipes import RECIPES, build_recipe
-from computronium_lab.research.autopoiesis import objective_names
-from computronium_lab.research.continual import CurriculumSpec, register_curriculum
-from computronium_lab.research.corpus import register_problem_class
-from computronium_lab.research.evolution import (
-    EvolutionBudget,
-    EvolutionReport,
-    EvolutionSpec,
-    FrontierArchive,
-)
-from computronium_lab.sequential import (
-    SEQUENCE_TASKS,
-    SequenceCampaignReport,
-    SequenceTrainingResult,
-    sequence_campaign,
-    sequence_task,
-    train_sequence,
-)
-from computronium_lab.state_prediction import (
-    StatePredictionCampaignReport,
-    StatePredictionResult,
-    grid_transition_task,
-    state_prediction_campaign,
-    train_state_prediction,
-)
 from computronium_lab.synthesis import (
     Constraints,
     ExplorationBudgetExhausted,
@@ -91,39 +44,18 @@ from computronium_lab.training import (
 )
 
 __all__ = [
-    "PRESETS",
-    "RECIPES",
-    "SEQUENCE_TASKS",
     "AdaptationMode",
     "AdaptationResult",
-    "BenchmarkReport",
-    "BenchmarkRow",
-    "CampaignReport",
     "ComparisonResult",
     "Constraints",
-    "CurriculumSpec",
     "DeterminismSeal",
-    "EnergyEstimate",
-    "EvolutionBudget",
-    "EvolutionReport",
-    "EvolutionSpec",
     "ExplorationBudgetExhausted",
-    "ExportResult",
-    "FrontierArchive",
-    "HuggingFaceCallback",
     "Lab",
-    "LightningStabilityCallback",
-    "MechanismBelief",
     "ProblemSpec",
     "PsiProgram",
     "PsiStep",
-    "SequenceCampaignReport",
-    "SequenceTrainingResult",
     "StabilityCertificate",
     "StabilityGuardKill",
-    "StatePredictionCampaignReport",
-    "StatePredictionResult",
-    "SubstrateReport",
     "SynthesisResult",
     "TaskBoundary",
     "TaskBoundaryDetector",
@@ -133,29 +65,9 @@ __all__ = [
     "ViabilityModel",
     "Z3Selection",
     "adapt",
-    "build_recipe",
-    "compile_substrate",
-    "estimate_energy",
     "explore",
-    "export_system",
-    "grid_transition_task",
-    "ledger_audit",
-    "objective_names",
     "probe_campaign",
-    "promote_mechanism",
-    "register_curriculum",
     "register_objective",
-    "register_problem_class",
-    "report_json",
-    "run_benchmark",
-    "run_campaign",
     "select_z3_operator",
-    "sequence_campaign",
-    "sequence_task",
-    "serve_system",
-    "state_prediction_campaign",
-    "substrate_report",
     "synthesize",
-    "train_sequence",
-    "train_state_prediction",
 ]

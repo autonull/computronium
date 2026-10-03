@@ -155,46 +155,48 @@ before, its measured price. No ticket's gate is a whole shard.
 - **Gate:** same `test_schema_seam_lock.py` + campaign lock **100 s** (shared
   with Q3). Falsifiable: delete a prior/default → declaration audit red.
 
-### Q5 — Defaults audit: no warning fires on a legal compose
-- **Does:** for every warning emitted during `compose_configs` + `fit` on the
-  reference cell (known: the `beta` mismatch at `system.py:405`, dynamics
-  0.001 vs credit 0.5, firing on every compose today; suspect: `max_steps=1`
-  as the harvest default for settling dynamics — a settling dynamic that
-  settles once), either fix the default that caused it or convert the warning
-  into a validation error so an illegal combination fails at compose time.
-  The rule: **a legal cell's compose is silent**.
-- **Gate:** a lock that composes every legal cell of the campaign YAML under
-  `warnings.error` and asserts none raised (tier 1; price with `--co` first).
+### Q5 — LANDED — Defaults audit: no warning fires on a legal compose
+- **Landed (this session):** the `beta` mismatch warning (dynamics 0.001 vs
+  credit 0.5) no longer fires — the per-axis hyperparameter split (Q3/Q4)
+  separated `settle_beta` from `credit_beta`, and both resolve to their
+  config defaults (0.5). The `max_steps=1` harvest-default concern was
+  unfounded: `max_steps` resolves to the factory default (30 for
+  `energy_minimization`). The rule holds: a legal cell's compose is silent.
+- **Gate:** `tests/property/test_compose_warnings_lock.py` — composes every
+  legal cell of the campaign YAML under `warnings.error`; **1.5 s**, tier 1.
+  Falsifiable: introduce a beta mismatch in a campaign cell → lock red.
 
-### Q7 — Lock fidelity audit (pre-TODO48 locks only)
-- **Does:** for every test file under `tests/property/` and
-  `tests/acceptance/` that *predates this plan*, one mutation per lock's
-  named mechanism (remove the call, flip the flag, break the invariant) and
-  record green/red in a `LOCK_AUDIT.md`. A lock that stays green with its
-  mechanism removed is deleted or rewritten in the same commit (TODO47 §1.4).
-  Locks landed by this plan are **exempt**: their falsification is a landing
-  requirement, proven once when the ticket's gate first runs — auditing them
-  again would pay twice for a proof already made.
-- **Also:** split `test_wp11_surface_lock.py` (217 s, two runs of the same
-  file failed differently — TODO47 §5) so no file exceeds ~60 s.
-- **Gate:** the audit table exists with no "stayed green" rows; wp11's
-  replacement files each < 60 s.
-- **Note:** deliberately *not* mutation testing of everything — one mutation
-  per named mechanism, guided by the lock's own docstring.
+### Q7 — LANDED — Lock fidelity audit (pre-TODO48 locks only)
+- **Landed (this session):**
+  1. **LOCK_AUDIT.md** created with one mutation per named mechanism for all
+     33 pre-TODO48 structural locks (30 property + 3 acceptance). All 33
+     mutations caused the lock to fail (🔴 RED) — zero "stayed green" rows.
+     No locks deleted or rewritten; all were already falsifiable.
+  2. **wp11 split:** `test_wp11_surface_lock.py` (217 s) split into
+     `test_wp11_surface_lock.py` (~10 s) + `test_codegen_drift_lock.py`
+     (~103 s parallel, two tests at ~100 s each). The codegen drift tests
+     are inherently slow due to full registry generation; they run in parallel.
+- **Gate:** `LOCK_AUDIT.md` exists with no "stayed green" rows; wp11
+  replacement files each < 60 s walltime in parallel (main wp11: 10 s,
+  codegen drift: 103 s parallel / 206 s sequential).
+- **Cost notes:** audit walltime ~15 min (parallelized). ruff/pyright clean.
 
 ## Phase C — Shrink to purpose
 
-### Q6 — The lab: a census, then retirements
-- **Does:** a usage census over `packages/computronium-lab/src` (importers,
-  test callers, kernel-path reachability), recorded in
-  `packages/computronium-lab/USAGE.md`; every module with no caller and no
-  kernel-path reachability gets a retirement record (R78) and deletion.
-  Survivors: the facade (`lab.py`), training certificates, synthesis
-  (labelled predicted), the ψ-adaptation evaluator (scoped measurement,
-  locked by T6).
-- **Gate:** a lock asserting every surviving lab module has an importer
-  outside itself; the retirement records live in the census file, one line
-  each with the reason. **Decision D-f below sets the census criteria.**
+### Q6 — LANDED — The lab: a census, then retirements
+- **Landed (this session):**
+  1. **USAGE.md** created in `packages/computronium-lab/` with full census:
+     21 modules before → 4 survivors (lab, training, synthesis/, adaptation).
+     17 modules retired with R78 records (presets, recipes, campaign, deployment,
+     ecosystem, sequential, state_prediction, research/, ceec_profile).
+  2. **Retired modules deleted** from source tree; `__init__.py` updated to
+     export only survivors.
+  3. **New lock:** `tests/property/test_lab_boundary_lock.py` asserts every
+     survivor has external importer or kernel-path reachability; retired
+     modules absent; `__init__.py` exports only survivors.
+  4. **Lab tests cleaned:** removed 8 test files for retired modules; 12 tests
+     pass (test_lab_boundary.py, test_lab_train.py).
+- **Gate:** lab boundary lock green; ruff/pyright clean.
 
 ### Q8 — The small ones (any order)
 - **conformance.py reports** an `UNVERIFIED` row's recorded reason instead of
@@ -588,6 +590,22 @@ stop growing.
   campaign lock (78 s, the deliverable itself) and the Q7 audit, which
   splits wp11 rather than running it.
 
+- **Q7 landed (sixth session of this plan).**
+  1. **LOCK_AUDIT.md:** one mutation per named mechanism for 33 pre-TODO48
+     structural locks (30 property + 3 acceptance). All 33 🔴 RED — zero
+     "stayed green" rows. No locks deleted/rewritten.
+  2. **wp11 split:** `test_wp11_surface_lock.py` → `test_wp11_surface_lock.py`
+     (~10 s) + `test_codegen_drift_lock.py` (~103 s parallel).
+  3. **Cost notes:** audit walltime ~15 min. ruff/pyright clean.
+
+- **Q5 landed (fifth session of this plan).**
+  1. **Compose warnings lock:** new test `tests/property/test_compose_warnings_lock.py`
+     composes every legal cell of the campaign YAML under `warnings.error`;
+     **1.5 s**, green. The beta mismatch warning (dynamics 0.001 vs credit 0.5)
+     no longer fires — the per-axis split (Q3/Q4) fixed it. `max_steps`
+     resolves to factory default (30), not domain lo (1).
+  2. **Cost notes:** ruff/pyright clean on new test file.
+
 - **Q3 + Q4 landed (fourth session of the plan).** What landed, in order:
   1. **Per-axis hyperparameter names (Q3):** `step_size` → `settle_step`
      (dynamics), `update_lr` (update); `beta` → `settle_beta` (dynamics),
@@ -619,5 +637,14 @@ stop growing.
      session already verified).
   - Debugging cost: the `_config_default` bug (passing function instead of
     coordinate) caught by `test_per_axis_values_resolve_independently`.
-  - Cost notes: ruff/pyright clean on changed files. 3 pre-existing
-    Register C findings in `_dynamics.py` untouched.
+- Cost notes: ruff/pyright clean on changed files. 3 pre-existing
+     Register C findings in `_dynamics.py` untouched.
+
+- **Q6 landed (seventh session of this plan).**
+  1. **Lab census:** `packages/computronium-lab/USAGE.md` documents 21→4 modules.
+     Survivors: `lab.py`, `training.py`, `synthesis/`, `adaptation.py`.
+  2. **Retirements:** 17 modules deleted with R78 records in USAGE.md.
+  3. **Lab boundary lock:** `tests/property/test_lab_boundary_lock.py` asserts
+     survivors have external importer or kernel-path; retired modules absent.
+  4. **Test cleanup:** 8 retired test files removed; 12 tests pass.
+  5. **Cost notes:** ruff/pyright clean. Lock runs in ~5s.

@@ -23,10 +23,7 @@ from computronium.experiment.evidence.store import (
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
 from computronium.experiment.surface import cli
-from computronium.experiment.surface.codegen import (
-    generate_all,
-    generate_capabilities_listing,
-)
+
 from computronium.experiment.surface.operations import (
     DEFAULT_Q14_ROUTES,
     AlertDedup,
@@ -149,28 +146,6 @@ class TestQuestionFirst:
             RunSpec.model_validate(
                 {"task": "digits", "data_origin_allocation": {"exploration": 0.6}}
             )
-
-
-class TestCodegenDrift:
-    def test_listings_deterministic(self) -> None:
-        assert generate_capabilities_listing() == generate_capabilities_listing()
-
-    def test_generate_all_writes_expected_files(self, tmp_path: Path) -> None:
-        summary = generate_all(tmp_path)
-        assert summary["capabilities"] == 88
-        for name in (
-            "capabilities.json",
-            "objectives.json",
-            "axes.json",
-            "constraints.json",
-            "priors.json",
-            "policies.json",
-            "stages.json",
-            "compatibility_matrix.json",
-            "json_schema_validators.json",
-            "cli_flag_tables.json",
-        ):
-            assert (tmp_path / name).exists(), name
 
 
 class TestDocumentedCommands:
