@@ -76,6 +76,7 @@ class Coordinate:
                 "budget_id": schedule.budget_id,
                 "task_id": schedule.task_id,
                 "param_budget": schedule.param_budget,
+                "device": schedule.device,
             },
         }
         return hashlib.sha256(_canonical_json(combined).encode()).hexdigest()
@@ -146,6 +147,8 @@ class Schedule:
     # measurement: two cells differing only by ceiling must not share a
     # measurement_key. 0 means unconstrained.
     param_budget: int = 0
+    # Device for training: "cpu", "cuda", or "auto". "auto" prefers CUDA when available.
+    device: str = "auto"
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -160,6 +163,10 @@ class Schedule:
             raise ValueError("batch_limit must be non-negative")
         if self.param_budget < 0:
             raise ValueError("param_budget must be non-negative")
+        if self.device not in {"cpu", "cuda", "auto"}:
+            raise ValueError(
+                f"Invalid device: {self.device}; expected 'cpu', 'cuda', or 'auto'"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -171,6 +178,7 @@ class Schedule:
             "budget_id": self.budget_id,
             "task_id": self.task_id,
             "param_budget": self.param_budget,
+            "device": self.device,
         }
 
     @property
@@ -198,6 +206,7 @@ class Schedule:
             budget_id=data["budget_id"],
             task_id=data.get("task_id", ""),
             param_budget=data.get("param_budget", 0),
+            device=data.get("device", "auto"),
         )
 
 

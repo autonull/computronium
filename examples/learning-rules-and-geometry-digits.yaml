@@ -34,6 +34,7 @@ seed: 0
 param_budget: 10000
 budget_seconds: 300
 policy: round_robin_grid
+device: auto
 
 axes:
   - axis: substrate

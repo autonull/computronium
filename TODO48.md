@@ -215,15 +215,19 @@ before, its measured price. No ticket's gate is a whole shard.
 A campaign is a research instrument only if its walltime is bounded and its
 device is chosen.
 
-### D1 — Device as a first-class schedule field
-- **Does:** `Schedule` gains `device` ("cpu" | "cuda" | "auto", default
-  "auto"); the evaluator threads it to `SystemTrainer` and the task; the YAML
-  spec declares it; `comp run` reports it. Today `evaluate.py`'s `evaluate_cell`
-  signature says "auto" but pins `_task(schedule.task_id, "cpu")` — the
-  campaign is CPU-bound by construction.
-- **Gate:** the campaign lock runs one cheap cell on "cuda" when available
-  (skip-marked otherwise) and asserts provenance records the device used;
-  falsifiable by hardcoding "cpu" in the evaluator.
+### D1 — LANDED — Device as a first-class schedule field
+- **Landed (this session):** `Schedule` gains `device` ("cpu" | "cuda" | "auto",
+  default "auto"); the evaluator threads it to `SystemTrainer` and the task;
+  the YAML spec declares it; `comp run` reports it. The `_resolve_device`
+  helper resolves "auto" → "cuda" when available, otherwise "cpu".
+  `measurement_key` includes device so cells differing only by device are
+  distinct measurements. DuckDB schema extended with `device` field in
+  schedule STRUCT; `_parse_schedule` reads it back.
+- **Gate:** `tests/property/test_schedule_device_lock.py` — roundtrip,
+  validation, campaign YAML declares device, `device="cuda"` recorded in
+  store (skip-marked when CUDA unavailable), `device="auto"` resolves to CPU
+  when CUDA mocked away. **5 tests, ~10 s**, run once. Falsifiable: hardcode
+  "cpu" in evaluator → `device_cuda_recorded_in_store` fails.
 
 ### D2 — Campaign economics: the record price, published
 - **Does:** `comp status --run-id` prints measured cost per record and a
@@ -648,3 +652,28 @@ stop growing.
      survivors have external importer or kernel-path; retired modules absent.
   4. **Test cleanup:** 8 retired test files removed; 12 tests pass.
   5. **Cost notes:** ruff/pyright clean. Lock runs in ~5s.
+
+- **D1 landed (eighth session of this plan).**
+  1. **Schedule.device field:** added `device` ("cpu" | "cuda" | "auto", default
+     "auto") to `Schedule` dataclass with validation; `to_dict`/`from_dict`
+     roundtrip; `measurement_key` includes device so cells differing only by
+     device are distinct measurements.
+  2. **RunSpec.device field:** added `device` field with validation ("cpu",
+     "cuda", "auto") to `RunSpec`; campaign YAML updated to declare
+     `device: auto`.
+  3. **Evaluator integration:** `_resolve_device` helper resolves "auto" →
+     "cuda" when available else "cpu"; `_task` and `task_shape` use it;
+     `evaluate_cell` threads `schedule.device` to `SystemTrainerConfig` and
+     task creation (removed hardcoded "cpu").
+  4. **Store persistence:** DuckDB `records` table `schedule` STRUCT extended
+     with `device TEXT`; `append` uses `schedule.to_dict()`; `_parse_schedule`
+     reads `device` back with default "auto".
+  5. **Gate:** new `tests/property/test_schedule_device_lock.py` — 5 tests:
+     roundtrip, RunSpec validation, campaign YAML declares device, CUDA
+     device recorded in store (skip when unavailable), "auto" resolves to CPU
+     when CUDA mocked away. **~10 s**, tier 1. Falsifiable: hardcode "cpu" in
+     evaluator → `device_cuda_recorded_in_store` fails.
+  6. **Campaign lock green:** all 7 gates pass, **~97 s** (device="auto"
+     resolves to CPU in CI).
+  7. **Cost notes:** ruff/pyright clean on changed files. Pre-existing Register
+     C findings in `store.py` and `run_spec.py` untouched.

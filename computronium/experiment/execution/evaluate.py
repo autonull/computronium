@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import TYPE_CHECKING, Any, Final
 
+import torch
+
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.experiment.execution.compose import compose_cell_system
@@ -51,6 +53,13 @@ _TASK_CACHE: dict[tuple[str, str], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
 
 
+def _resolve_device(device: str) -> str:
+    """Resolve 'auto' to 'cuda' if available, otherwise 'cpu'."""
+    if device == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    return device
+
+
 class EvaluationError(RuntimeError):
     """A cell could not be evaluated. Carries the taxonomy code."""
 
@@ -75,12 +84,13 @@ def _task(task_id: str, device: str) -> Any:
     """The set-up task, cached per (task, device)."""
     from computronium.domains.factory import create_task
 
-    key = (task_id, device)
+    resolved_device = _resolve_device(device)
+    key = (task_id, resolved_device)
     with _TASK_LOCK:
         cached = _TASK_CACHE.get(key)
     if cached is not None:
         return cached
-    task = create_task(task_id, device=device, quick_mode=True, num_workers=0)
+    task = create_task(task_id, device=resolved_device, quick_mode=True, num_workers=0)
     task.setup()
     with _TASK_LOCK:
         _TASK_CACHE.setdefault(key, task)
@@ -118,7 +128,7 @@ def _task_shape(task: Any) -> TaskShape:
     return TaskShape(input_shape=shape, output_dim=int(task.output_dim))
 
 
-def task_shape(task_id: str, device: str = "cpu") -> TaskShape:
+def task_shape(task_id: str, device: str = "auto") -> TaskShape:
     """The shape a task will be trained at.
 
     The search space asks the evaluator for this rather than composing against
@@ -226,16 +236,13 @@ def evaluate_cell(
     coordinate: Coordinate,
     schedule: Schedule,
     geometry: Mapping[str, Any] | None = None,
-    *,
-    device: str = "auto",
 ) -> CellEvaluation:
     """Train one coordinate on the schedule's task and measure it.
 
     Args:
         coordinate: The six-axis selection and its hyperparameters.
-        schedule: Epochs, seed, batch limit and task identity.
+        schedule: Epochs, seed, batch limit, task identity, and device.
         geometry: Topology overrides for the geometry axis.
-        device: ``"auto"`` prefers CUDA when present.
 
     Returns:
         CellEvaluation carrying the measured metrics and the effective
@@ -246,7 +253,7 @@ def evaluate_cell(
     """
     import torch
 
-    task = _task(schedule.task_id, "cpu")
+    task = _task(schedule.task_id, schedule.device)
     shape = _task_shape(task)
 
     cell = compose_cell_system(
@@ -260,7 +267,7 @@ def evaluate_cell(
     limit = schedule.batch_limit or None
     config = SystemTrainerConfig(
         max_epochs=schedule.epochs,
-        device=device,
+        device=schedule.device,
         seed=schedule.seed,
         limit_train_batches=limit,
         limit_val_batches=limit,
@@ -305,8 +312,6 @@ def cell_record(
     schedule: Schedule,
     provenance: Provenance,
     geometry: Mapping[str, Any] | None = None,
-    *,
-    device: str = "auto",
 ) -> Record:
     """Evaluate one cell and wrap the measurement in a Record.
 
@@ -325,7 +330,7 @@ def cell_record(
     )
 
     try:
-        evaluation = evaluate_cell(coordinate, schedule, geometry, device=device)
+        evaluation = evaluate_cell(coordinate, schedule, geometry)
     except EvaluationError as exc:
         cause = FailureCause(exc.cause)
         return Record.create(

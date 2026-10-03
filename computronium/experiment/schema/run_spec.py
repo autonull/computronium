@@ -121,6 +121,7 @@ class RunSpec(BaseModel):
     dataset: str = "unknown"
     dataset_version: str = "1.0"
     code_sha: str = "unknown"
+    device: str = "auto"
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -151,6 +152,9 @@ class RunSpec(BaseModel):
                 raise ValueError(msg)
         if self.policy is not None and self.policy not in POLICY_CATALOG:
             msg = f"unknown policy {self.policy!r}; available: {sorted(POLICY_CATALOG)}"
+            raise ValueError(msg)
+        if self.device not in {"cpu", "cuda", "auto"}:
+            msg = f"invalid device {self.device!r}; expected 'cpu', 'cuda', or 'auto'"
             raise ValueError(msg)
         from computronium.experiment.schema.harvest import harvest_schema
 

@@ -222,9 +222,9 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                 credit          TEXT NOT NULL,
                 update          TEXT NOT NULL,
                 params          JSON NOT NULL,
-                schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
-                                       epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
-                                       task_id TEXT, param_budget INTEGER) NOT NULL,
+schedule        STRUCT(fidelity TEXT, seed INTEGER, n_seeds INTEGER,
+                                        epochs INTEGER, batch_limit INTEGER, budget_id TEXT,
+                                        task_id TEXT, param_budget INTEGER, device TEXT) NOT NULL,
                 provenance      JSON NOT NULL,
                 status          STRUCT(gate_verdict TEXT, defect TEXT, cause TEXT, severity TEXT,
                                        quarantine BOOLEAN, maturity TEXT, uncertainty JSON,
@@ -428,29 +428,20 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
                         record.credit,
                         record.update,
                         json.dumps(record.params),
-                        {
-                            "fidelity": record.schedule.fidelity,
-                            "seed": record.schedule.seed,
-                            "n_seeds": record.schedule.n_seeds,
-                            "epochs": record.schedule.epochs,
-                            "batch_limit": record.schedule.batch_limit,
-                            "budget_id": record.schedule.budget_id,
-                            "task_id": record.schedule.task_id,
-                            "param_budget": record.schedule.param_budget,
-                        },
+                        json.dumps(record.schedule.to_dict()),
                         json.dumps(record.provenance.to_dict()),
-                        {
+                        json.dumps({
                             "gate_verdict": record.status.gate_verdict.value,
                             "defect": record.status.defect,
                             "cause": record.status.cause.value,
                             "severity": record.status.severity.value,
                             "quarantine": record.status.quarantine,
                             "maturity": record.status.maturity.value,
-                            "uncertainty": json.dumps(record.status.uncertainty),
+                            "uncertainty": record.status.uncertainty,
                             "reproducibility": record.status.reproducibility.value,
                             "assessment_procedure_version": record.status.assessment_procedure_version,
                             "ceec_link": record.status.ceec_link,
-                        },
+                        }),
                         json.dumps(record.payload),
                         json.dumps(record.unknown) if record.unknown else None,
                     ],
@@ -1003,6 +994,7 @@ class RecordStore:  # ruff: ignore[too-many-public-methods] - single-writer topo
             task_id=schedule_struct["task_id"],
             # Rows written before the ceiling existed declare none.
             param_budget=schedule_struct.get("param_budget", 0),
+            device=schedule_struct.get("device", "auto"),
         )
 
     def _parse_provenance(self, provenance_json: str) -> Provenance:
@@ -1386,6 +1378,9 @@ try:
         epochs: Annotated[int, Field(gt=0)]
         batch_limit: Annotated[int, Field(ge=0)]
         budget_id: str
+        task_id: str = ""
+        param_budget: Annotated[int, Field(ge=0)] = 0
+        device: Annotated[str, Field(pattern="^(cpu|cuda|auto)$")] = "auto"
 
     class ProvenanceModel(BaseModel):
         """Pydantic model for Provenance validation at I/O boundaries."""
