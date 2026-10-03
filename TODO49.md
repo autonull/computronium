@@ -1,62 +1,59 @@
-# TODO49: Minimal High-Signal End-to-End Validation Procedure
+# TODO49: End-to-End Validation — the smoke tests are the precondition, the learning claim is the point
+
+> **Read this first.** Iterations 0–8 are the *precondition*: they establish that
+> the wires connect. **Iteration 9 is the point** — it is the only iteration that
+> says whether the system learns at a regime worth running.
+>
+> This file previously excluded full convergence and treated "9/9 green" as
+> success. That structure could not answer the question it appeared to ask: nine
+> green smoke tests on 4 synthetic samples prove wiring, not capability, and no
+> combination of them ever produces a number that can come back negative.
+>
+> **If you read nothing else:** run Iteration 9. ~9 min. Everything else is
+> optional context.
 
 ## Purpose
 Expose failures that **only emerge from interaction, wiring, state, lifecycle, configuration, or real execution across subsystem boundaries** — not local correctness (covered by unit tests).
 
 Each iteration tests the **smallest meaningful end-to-end slice**, produces a concrete pass/fail signal, and enables immediate correction. No redundant tests, no unnecessary scale, no repeated setup.
 
+**A note on what this plan is for.** Iterations 0–8 are cheap and worth having —
+they found real wiring bugs in the systems that already existed, and the device
+policy below is right. But they are a *precondition*, and a plan whose success
+criterion is "all tests green" has a structural blind spot: every artifact it
+produces is evidence **about** the system, never evidence **of** it. Iteration 9
+is the one that produces evidence of it. Do not let the green iterations be
+mistaken for the destination.
+
 ---
 
 ## Device Policy: GPU is the default, not a variant
 
-**Runs on CUDA by default. CPU is the reference, not the target.**
-
-`Schedule.device` and `RunSpec.device` already exist (`cpu` / `cuda` / `auto`) and this plan mentioned `device` exactly once, in a failure hint. That is the wrong shape: a device is a *seam*, and device-dependent divergence is exactly the class this document exists to find.
-
-Three reasons this is not optional:
-
-1. **The expensive hardware is where the untested code lives.** `acceleration/backends.py`
-   and `eqprop_kernel_backend.py` both branch on `torch.cuda.is_available()`, and
-   `availability.py` gates Triton behind it. A plan that runs CPU-only never
-   executes those branches — so a green CPU plan says nothing about them.
-2. **Determinism claims differ by device, and only one of them is exact.**
-   Iteration 4.3 asserts *bitwise* identical replay. On GPU with TF32 enabled that
-   is **false by construction** — reduced-precision matmul reassociates sums. So
-   the plan must assert bitwise on CPU and *within tolerance* on GPU, and say so,
-   or Iteration 4 becomes a coin flip dressed as a lock. (E4 already recorded the
-   same shape of problem: "the evaluator is not seed-deterministic across
-   invocations.")
-3. **Silent CPU fallback is the failure mode worth catching.** `device="cuda"` on a
-   box without CUDA should **fail loudly**, not quietly run on CPU. A test that
-   "passes on GPU" while executing on CPU is worse than no test, because it
-   retires the question.
-
-**Fixture** (`tests/integration/conftest.py`):
+Runs on **CUDA by default**; CPU is the reference, not the target. Three reasons,
+briefly: `acceleration/backends.py` and `eqprop_kernel_backend.py` branch on
+`torch.cuda.is_available()` and `availability.py` gates Triton behind it, so a
+CPU-only plan never executes those branches; bitwise determinism (4.3) is **true
+on CPU and false on GPU** because TF32 reassociates reductions, so the two
+devices need different assertions; and `device="cuda"` on a box without CUDA must
+**raise**, because a "GPU pass" silently running on CPU retires the question.
 
 ```python
 @pytest.fixture(scope="session")
 def device() -> str:
-    """`cuda` when this box has it, else `cpu` — asserted, never assumed."""
-    if not torch.cuda.is_available():
-        return "cpu"
-    return "cuda"
+    """`cuda` when present, else `cpu` — asserted, never assumed."""
+    return "cuda" if torch.cuda.is_available() else "cpu"
 
 @pytest.fixture(scope="session")
 def gpu_required() -> None:
-    """Skip loudly when CUDA is absent; never let a GPU slice run on CPU."""
+    """Skip loudly rather than let a GPU claim run on CPU."""
     if not torch.cuda.is_available():
         pytest.skip("CUDA unavailable: this slice is a GPU claim")
 ```
 
-**Rules:**
-- Every iteration runs on `device`. Slices that assert *bitwise* determinism
-  (4.3, 4.4) run on **both** and assert per-device semantics.
-- No slice silently accepts a CPU fallback. A GPU claim on a CPU-only box is
-  **skipped with a reason**, never passed.
-- Iteration 0 gains a CUDA probe (0.4) so "we are on GPU" is a measured fact
-  before any slice depends on it.
-- `--device cpu` remains a supported full pass for CI, which has no GPU. It is
-  reported as a *different, weaker* pass, never as equivalent.
+Every iteration runs on `device`. No slice accepts a silent CPU fallback — a GPU
+claim on a CPU-only box is **skipped with a reason**. CI runs CPU-only and that
+pass is reported as *weaker*, never as equivalent. 0.4 makes GPU presence a
+measured fact before anything depends on it.
 
 ## Critical Path First, Breadth Second
 
@@ -69,29 +66,6 @@ def gpu_required() -> None:
 | **Breadth** | Domain presets (vision/LM/graph/RL) | Only after critical path + sanity pass |
 
 **All iterations below use the synthetic task unless explicitly noted.** This keeps each iteration ≤30s.
-
----
-
-## What's ALREADY COVERED (Do Not Duplicate)
-
-| Existing Test | Covers | Status |
-|---------------|--------|--------|
-
-**These "✅ Complete" statuses are the plan author's assertions, not verified
-facts** — this file has never been executed. Each row is cheap to confirm
-(`pytest <file> -q`) and doing so in Iteration 0 is worth it: a row that is
-actually red invalidates the *premise* of the iteration meant to fix it, and
-that is worth knowing before writing any new test.
-| `test_validation_all.py` | All native models (backprop, eqprop, fa, lemma, tile_ep/fa/tp/hebbian) train 5 epochs on synthetic (20 samples), loss decreases | ✅ Complete |
-| `test_trainer_resume.py` | Bitwise-identical resume for JointSystem (recurrent, energy_minimization, backprop) | ✅ Complete |
-| `test_lazy_dynamics.py` | LazyStateDynamics registry round-trip, settle monotonicity, end-to-end MNIST | ✅ Complete |
-| `test_pt2_export_roundtrip.py` | PT2 export/load for FeedforwardGeometry & RecurrentGeometry | ✅ Complete |
-| `test_ceec_store.py` (ceec-core) | Artifact hash stability, append-only, duplicate rejection | ✅ Complete (but different store) |
-| `test_smoke_all_tasks.py` | Domain task creation + 1 epoch training (vision/LM/RL) | ✅ Complete |
-| `test_quickstart.py` | Backprop vs EqProp on MNIST (slow, gpu) | ✅ Complete |
-| `test_gallery_lock.py` | Figure lock: data checksums match manifest | ✅ Complete |
-| `test_wheel_acceptance.py` | Wheel install + smoke in clean venv | ✅ Complete |
-| `test_demo_*.py` | Demo runs producing gallery records | ✅ Complete |
 
 ---
 
@@ -123,7 +97,7 @@ than a gap in the plan.
 
 ---
 
-## Synthetic Task Fixture (Shared by Iterations 1–5, 7, 9–10)
+## Synthetic Task Fixture (Shared by Iterations 1–8)
 
 **This fixture does not exist yet, and the plan previously said it did.**
 `tests/integration/conftest.py` exists but carries **none** of the three fixtures
@@ -236,7 +210,7 @@ uv run python -m pytest tests/integration/test_config_composed_single_step.py -q
 | Stage | Test | Success Signal |
 |-------|------|----------------|
 | 3.1 Synthetic (critical path) | `config = ExperimentConfig(model=ModelConfig(input_dim=2, output_dim=2, hidden_dims=(4,), model_type="mlp", ...), system=SystemConfig(...), ...); trainer = SystemTrainer.from_configs(config)` | `trainer.fit()` 2 epochs on synthetic; loss → 0 |
-| 3.2 Digits (sanity) | Same config but `input_dim=64, output_dim=10, hidden_dims=(32,)` on `load_digits()` | `trainer.fit()` 2 epochs; `train_loss` decreases |
+| 3.2 Digits (**gate**) | Same config, `input_dim=64, output_dim=10, hidden_dims=(32,)`, `load_digits()`, **10 epochs, 3 seeds** | `train_acc` clears **1.5x chance** on every seed. The previous "2 epochs, `train_loss` decreases" is near-unfalsible — loss falls by noise over 2 epochs, so it passes whether or not anything learns, and a check that cannot fail is what TODO48b spent a whole plan dismantling. This is the same shape as gate 2b's reference cell, which is the one learning assertion this repo currently makes |
 | 3.3 Vision preset | `make_vision_preset(hidden_dims=(32,), epochs=2)` → override to synthetic data | Runs 2 epochs on synthetic |
 | 3.4 LM preset | `make_lm_preset(hidden_dims=(32,), epochs=2)` → override to synthetic data | Runs 2 epochs on synthetic |
 | 3.5 Graph preset | `make_graph_preset(hidden_dims=(32,), epochs=2)` → override to synthetic data | Runs 2 epochs on synthetic |
@@ -339,6 +313,12 @@ uv run comp validate --config tests/fixtures/minimal_synthetic.yaml
 uv run python -m pytest tests/integration/test_cross_axis_matrix.py -q --tb=line
 ```
 
+**7 MUST bound itself.** `valid_combinations()` × train is the only uncapped
+slice in this plan, and it is the one most likely to eat an hour. Cap it
+(`MAX_COMBOS`, default ~50), **print what it skipped**, and report coverage as
+`n/N` rather than implying the whole matrix. An uncapped matrix that gets killed
+yields no verdict at all — the exact failure TODO45 §12.1 recorded.
+
 **On failure**: Add missing validation rule or fix factory for that coordinate.
 
 ---
@@ -366,6 +346,49 @@ assert all(r.status == 'pass' for r in results.values())
 
 ---
 
+## Iteration 9: The Learning Claim (THE HEADLINE) (~4 min)
+
+**This is the iteration the other eight exist to make possible.** Everything in
+0–8 asserts that the wires connect. Nothing in 0–8 asserts that current flows.
+
+**Hypothesis:** at a regime where learning is real — not 4 synthetic points, not
+2 epochs at L0 — the learning rules **separate from each other**. That is a
+stronger and more useful claim than "beats chance": a system where every rule
+scores at chance fails it, and so does one where every rule scores identically.
+
+| Slice | Test | Success Signal |
+|-------|------|----------------|
+| 9.1 | 4 rules (`energy_minimization`, `lazy`, `instantaneous`, `gradient`-credit) × `load_digits()` × **10 epochs**, full batches, `settle_step=0.03162` | Every rule clears **1.5x chance** on the reference regime |
+| 9.2 | Same 4 cells, **3 seeds** | Seed spread reported; a rule whose seeds disagree by more than its advantage **fails** |
+| 9.3 | Pairwise separation | Best rule beats worst by **more than the pooled seed spread** — the claim E2's machinery already exists to make (`paired_significance`) |
+| 9.4 | Report the **composed update lr** each rule received | 29 multiplier rows once attenuated every lr below its own floor; a rule cannot be compared until the number that trained it is known (R4's finding) |
+| 9.5 | GPU and CPU agree | 9.1–9.3 on both devices within the registered tolerance |
+
+**The number that answers the question** is 9.3: *which rule wins, by how much,
+and is that bigger than the noise.* Quote it, with seeds.
+
+**Cost, measured:** R4's ladder ran 5 cells at this exact regime in **228 s**, so
+12 cells (4 rules x 3 seeds) is on the order of **9 min**, and less after R3's
+converging-settle band. Far cheaper than it looks — this is the cheapest
+high-value measurement in the repository, and it was available the whole time.
+
+**Harness (proven, reuse it — do not rebuild):** `cell_record(Coordinate,
+Schedule, Provenance)`, the same one R4 used. Direct cell, no store, no run.
+`test_gate_2b_the_reference_cell_learns` in
+`tests/acceptance/test_campaign_lock.py` is the working example.
+
+**On failure:** this is the *expected* place for a real defect, so treat it as
+information rather than an obstacle. A rule that does not learn is either a
+broken rule, a dead lr, or a miscomposed coordinate — and **9.4 exists to
+distinguish those three**, which is how R4 found that 29 registry rows were
+attenuating every update lr by an unmeasured factor.
+
+**Do not weaken the claim to make it pass.** If no rule clears 1.5x chance at
+this regime, that is the most valuable fact anyone has learned in this repo in
+five plans. Write it down and stop.
+
+---
+
 ## Execution Protocol
 
 ```bash
@@ -373,10 +396,16 @@ assert all(r.status == 'pass' for r in results.values())
 DEVICE=$(uv run python -c "import torch;print('cuda' if torch.cuda.is_available() else 'cpu')")
 echo "device: $DEVICE"
 
-for i in {0..8}; do
+# ITERATION 9 FIRST. It is the headline and it needs no prior iteration to
+# run — `cell_record` takes a coordinate directly. Do not spend an hour on
+# 0-8 before finding out whether the thing learns.
+echo "=== ITERATION 9 (THE HEADLINE) ==="
+uv run python -m pytest tests/property/test_learning_claim_lock.py -q --tb=line
+
+# Then the wiring precondition, in order.
+for i in 0 1 2 3 4 5 6 7 8; do
   echo "=== ITERATION $i (device=$DEVICE) ==="
-  # Run the iteration's command(s)
-  # If any command fails: debug, fix, re-run ONLY that iteration
+  # Run the iteration's command(s); stop on failure, re-run only this one
 done
 
 # Cross-device agreement (4.6, 7.4) needs both, on a GPU box.
@@ -405,6 +434,7 @@ was a run that never returned a verdict.
 | 6 | **Synthetic** | 4 | 2 | 2 | CLI validate |
 | 7 | **Synthetic** | 4 | 2 | 2 | Cross-axis matrix (7.4 = CPU↔GPU agreement) |
 | 8 | **Synthetic** | 4 | 2 | 2 | Verification suite |
+| **9** | **Digits** | 1797 | 64 | 10 | **THE HEADLINE — does it learn, and which rule wins** |
 
 ### Failure Handling
 1. **Stop immediately** on any failure in the current iteration.
@@ -457,7 +487,7 @@ session discovers it is 10x over.
 
 ---
 
-## Coverage Map (Critical Path — Only New Coverage)
+## Coverage Map (Boundaries Each Iteration Claims)
 
 | Subsystem Boundary | Iteration(s) |
 |--------------------|--------------|
@@ -469,6 +499,7 @@ session discovers it is 10x over.
 | CLI validate ↔ Config schema | 6 |
 | Cross-axis matrix ↔ Valid combinations | 7 |
 | Verification tracks ↔ Notebook | 8 |
+| **Rule ↔ Real learning regime** | **9 — the only iteration asserting a capability** |
 
 ---
 
@@ -484,7 +515,8 @@ session discovers it is 10x over.
 - **MNIST full training** (`test_quickstart.py`)
 - **Gallery figure lock** (`test_gallery_lock.py`)
 - **Wheel acceptance** (`test_wheel_acceptance.py`)
-- **Full training convergence** (expensive; smoke-scale only)
+- ~~**Full training convergence**~~ — **promoted to Iteration 9.**
+  Cheap enough to be the headline rather than an exclusion.
 - ~~**GPU/CUDA paths**~~ — **no longer excluded.** Promoted into the plan: the device policy above threads `device` through every iteration, Iteration 0.4 makes GPU presence a measured fact, 2.4/2.5 catch CPU-resident staging, and 4.4/4.6/7.4 assert cross-device agreement. CI still runs CPU-only (no GPU) and that pass is reported separately as weaker, never as equivalent.
 - **Distributed training** (separate validation)
 - **Performance benchmarks** (separate `benchmark` marker)
@@ -494,14 +526,23 @@ session discovers it is 10x over.
 
 ## Success Criteria for TODO49 Completion
 
-1. All 9 iterations (0–8) pass consecutively without manual intervention.
-2. The final `Verifier(quick_mode=True).run_tracks()` produces a notebook with all tracks `status == "pass"`.
-3. **The pass names its device.** A result is `(iterations green, device=cuda)` or `(iterations green, device=cpu, weaker)`. A green run that does not say which device it exercised is not a pass — it is an unstated assumption, and the next reader cannot tell CPU coverage from GPU coverage.
-4. **Cross-device agreement is measured, not assumed** (4.6, 7.4), against a registered tolerance.
+**The headline is a measurement, not a greenness count.**
 
-**What this still does not claim.** All 9 green on synthetic data with 2–3 epochs proves the *wires connect*, not that the system works. It excludes full convergence, distributed training, and real-data scale by design. A learning claim at a real regime remains separate work — see TODO48b §6.
+> **Required:** Iteration 9's result — which rules learned, how far above
+> chance, and whether they separate from *each other* — stated as numbers with
+> seeds. A pass whose headline is "9/9 iterations green" has not answered
+> whether the system works.
 
----
+1. **Iteration 9 green**, with its numbers quoted.
+2. Iterations 0–8 green — these are the **precondition**, not the result. They
+   establish that the wires connect; 9 establishes that current flows.
+3. The pass names its **device** (`cuda`, or `cpu, weaker`).
+4. Cross-device agreement measured against a **registered** tolerance (4.6, 7.4).
+
+**What a full green still does not claim.** Iterations 0–8 prove the plumbing is
+connected. Distributed training, real-scale datasets, and performance remain out
+of scope — but *learning at a real regime* no longer is. That was the exclusion
+that made this plan answer the wrong question, and it is gone.
 
 ## New Test Files Needed (One per Iteration)
 
@@ -512,17 +553,15 @@ on its hypothesis** — a confusing signal that costs a debugging cycle. Create 
 file (even with one placeholder assertion) in the same commit that writes the
 slice, so a failure means the hypothesis is wrong rather than the file is absent.
 
-## New Test Files Needed (One per Iteration)
-
 | Iteration | Test File | Purpose |
 |-----------|-----------|---------|
 | 1 | `tests/integration/test_system_config_validation.py` | Cross-axis validation + config round-trip |
-| 2 | `tests/integration/test_config_composed_single_step.py` | Config-composed systems execute train_step |
-| 3 | `tests/integration/test_experiment_config_presets.py` | ExperimentConfig presets → trainer on synthetic/digits |
-| 4 | `tests/integration/test_spec_roundtrip.py` | to_spec/from_spec bitwise identical |
-| 4 | `tests/integration/test_deterministic_replay.py` | Deterministic replay — bitwise on CPU, tolerance on GPU |
-| 4 | `tests/integration/test_cpu_gpu_agreement.py` | Same config, both devices, within registered tolerance; and no silent CPU fallback |
+| 2 | `tests/integration/test_config_composed_single_step.py` | Config-composed systems execute `train_step`; 2.4/2.5 device residency |
+| 3 | `tests/integration/test_experiment_config_presets.py` | ExperimentConfig presets → trainer (3.2 is now a real gate) |
+| 4 | `tests/integration/test_spec_roundtrip.py` | `to_spec`/`from_spec` bitwise identical |
+| 4 | `tests/integration/test_deterministic_replay.py` | Bitwise on CPU, tolerance on GPU |
+| 4 | `tests/integration/test_cpu_gpu_agreement.py` | Both devices within registered tolerance; no silent CPU fallback |
 | 5 | `tests/integration/test_record_store.py` | RecordStore atomic append, artifacts, queries, vector search |
-| 6 | `tests/integration/test_cli_validate.py` | CLI validate command |
-| 7 | `tests/integration/test_cross_axis_matrix.py` | Full valid_combinations() enumeration + train |
-| 8 | (uses existing `Verifier` class) | Verification suite quick mode |
+| 6 | `tests/integration/test_cli_validate.py` | CLI `validate` command |
+| 7 | `tests/integration/test_cross_axis_matrix.py` | `valid_combinations()` enumeration + train (capped); 7.4 cross-device |
+| **9** | **`tests/property/test_learning_claim_lock.py`** | **THE HEADLINE. 4 rules × digits × 10 epochs × 3 seeds; beats 1.5x chance; best beats worst by more than the pooled spread. Reuses `cell_record` (R4's harness) — no new machinery.** |
