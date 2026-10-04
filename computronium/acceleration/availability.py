@@ -72,6 +72,7 @@ _CANARY = "fa_kernels._fa_batched_outer_kernel"
 #: Modules searched for module-level ``@triton.jit`` functions. The complex
 #: substrate keeps its kernels outside ``acceleration/``, so it is named here.
 _KERNEL_MODULES: tuple[str, ...] = (
+    "computronium.acceleration.dfa_kernels",
     "computronium.acceleration.fa_kernels",
     "computronium.acceleration.ff_kernels",
     "computronium.acceleration.hebbian_kernels",

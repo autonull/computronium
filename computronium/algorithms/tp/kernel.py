@@ -19,7 +19,6 @@ from computronium.acceleration.kernel_backend import (
 from computronium.acceleration.tp_kernels import (
     TPKernelBackend,
     TRITON_IMPORTED_TP,
-    _transposed_inverse,
 )
 from computronium.algorithms.tp.cases import Case
 from computronium.algorithms.tp.reference import _make_tp_system, _SystemConfig
@@ -69,10 +68,10 @@ def step(case: Case) -> dict[str, float]:
             device=device_str,
         )
         system = _make_tp_system(system_config)
-        
+
         # Now use the kernel backend with this system's geometry
         hardware = HardwareTarget.TRITON if device_str == "cuda" else HardwareTarget.CPU
-        
+
         backend = TPKernelBackend()
         num_layers = len(system.geometry.params) // 2
         config = KernelConfig(
@@ -82,24 +81,22 @@ def step(case: Case) -> dict[str, float]:
             extra={
                 "num_layers": num_layers,
                 "lr": case.config.get("lr", 1e-3),
-                "target_lr": 0.1,
-                "inverse_net_lr": 0.01,
+                "beta": case.config.get("beta", 0.1),
                 "activation": "tanh",
-                "hidden_dim": 4,
-                "input_dim": case.state.shape[1],
-                "output_dim": case.config.get("output_dim", 4),
+                "max_steps": case.config.get("settle_steps", 10),
+                "step_size": 0.1,
+                "convergence_threshold": 1e-4,
+                "convergence_start": 5,
             },
         )
         backend.initialize(config)
-        
+
         # Convert LinearViews to nn.Linear for TPKernelBackend compatibility
         views = list(linear_views(system.geometry))
         forward_layers = [_linear_view_to_linear(v) for v in views]
-        inverse_layers = _transposed_inverse(views)
-        
+
         backend.set_model_ref(
             forward_layers,
-            inverse_layers,
             activation=torch.nn.Tanh(),
         )
 

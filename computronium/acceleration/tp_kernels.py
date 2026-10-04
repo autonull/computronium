@@ -43,27 +43,36 @@ def _transposed_inverse(layers: list[LinearView]) -> list[torch.nn.Linear]:
 
 
 class TPKernelBackend:
-    """Target Propagation kernel backend.
+    """Target Propagation kernel backend with transpose feedback.
 
-    Implements Difference Target Propagation (DTP) with inverse networks.
+    Implements Target Propagation with transpose feedback (TargetInversionCredit):
+    - Predictive settling dynamics for free/nudged phases
+    - Transpose feedback target propagation: t_l = t_{l+1} @ W_l
+    - Pseudo-gradients: (post - target).T @ pre / batch
+    - Euclidean (SGD) weight updates
+
+    Matches the reference pipeline: PredictiveSettlingDynamics + TargetInversionCredit + EuclideanUpdate
     """
 
     name = AlgorithmFamily.TP
     supported_dtypes = (torch.float32, torch.float16, torch.bfloat16)
     supports_autograd = False
-    requires_settle = False
+    requires_settle = True
     memory_complexity = "O(1)"
     locality_level = LocalityLevel.LAYERWISE
 
     def __init__(self) -> None:
         self._config: KernelConfig | None = None
         self._forward_layers: list[torch.nn.Linear] = []
-        self._inverse_layers: list[torch.nn.Linear] = []
-        self._target_lr: float = 0.1
-        self._inverse_lr: float = 0.01
+        self._lr: float = 1e-3
         self._device: torch.device = torch.device("cpu")
         self._dtype: torch.dtype = torch.float32
         self._activation: torch.nn.Module = torch.nn.Tanh()
+        self._beta: float = 0.1
+        self._max_steps: int = 10
+        self._step_size: float = 0.1
+        self._convergence_threshold: float = 1e-4
+        self._convergence_start: int = 5
 
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
@@ -76,212 +85,289 @@ class TPKernelBackend:
         self._dtype = config.dtype
 
         extra = config.extra
-        self._target_lr = extra.get("target_lr", 0.1)
-        self._inverse_lr = extra.get("inverse_net_lr", 0.01)
+        self._lr = extra.get("lr", 1e-3)
         self._activation = _get_activation(extra.get("activation", "tanh"))
+        self._beta = extra.get("beta", 0.1)
+        self._max_steps = extra.get("max_steps", 10)
+        self._step_size = extra.get("step_size", 0.1)
+        self._convergence_threshold = extra.get("convergence_threshold", 1e-4)
+        self._convergence_start = extra.get("convergence_start", 5)
 
     def set_model_ref(
         self,
         forward_layers: list[torch.nn.Linear],
-        inverse_layers: list[torch.nn.Linear],
         activation: torch.nn.Module | None = None,
     ) -> None:
-        """Set reference to forward and inverse network layers."""
+        """Set reference to forward network layers."""
         self._forward_layers = forward_layers
-        self._inverse_layers = inverse_layers
         if activation is not None:
             self._activation = activation
 
     def bind_system(self, system: System) -> None:
         """Bind the kernel to a System's geometry."""
-        # For TP, the geometry should have forward and inverse layers
-        if hasattr(system.geometry, "forward_layers") and hasattr(
-            system.geometry, "inverse_layers"
-        ):
-            self.set_model_ref(
-                system.geometry.forward_layers, system.geometry.inverse_layers
-            )
-        else:
-            layers = self._extract_layers(system.geometry)
-            if layers:
-                self.set_model_ref(layers, _transposed_inverse(layers))
+        layers = self._extract_layers(system.geometry)
+        if layers:
+            self.set_model_ref(layers)
 
     def _extract_layers(self, geometry) -> list[LinearView]:
         return linear_views(geometry)
 
-    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        """Execute one training step using Target Propagation."""
-        # Forward pass
-        output, fwd_acts = self.forward_forward(x)
-        # Compute targets: output_target is one-hot labels
-        if y.dim() == 1:
-            output_target = (
-                torch.nn.functional.one_hot(y, num_classes=output.shape[1])
-                .float()
-                .to(device=output.device, dtype=output.dtype)
-            )
-        else:
-            output_target = y.to(device=output.device, dtype=output.dtype)
-        targets = self.compute_targets(fwd_acts, output_target)
-        # Compute weight updates
-        gradients = self.backward(fwd_acts, targets)
-        # Apply updates (lr already baked in)
-        self.update_weights(gradients)
-        # Return metrics
-        with torch.no_grad():
-            loss = torch.nn.functional.cross_entropy(output, y).item()
-            acc = (output.argmax(-1) == y).float().mean().item()
-        return {"loss": loss, "accuracy": acc}
+    def _settle_layered(
+        self,
+        x: Tensor,
+        target: Tensor | None = None,
+        beta: float = 0.5,
+        max_steps: int = 10,
+        step_size: float = 0.1,
+        convergence_threshold: float = 1e-4,
+        convergence_start: int = 5,
+    ) -> list[Tensor]:
+        """Layer-wise predictive coding settle over the forward network layers.
 
-    def forward_forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
-        """Forward pass through forward network."""
-        x = x.to(device=self._device, dtype=self._dtype)
-        if x.dim() > 2:
-            x = x.view(x.size(0), -1)
+        Each layer minimizes its prediction error against the layer below.
+        The input layer is clamped to x; each subsequent layer predicts the
+        previous layer's activity. Returns activations for all layers.
 
-        activations: list[Tensor] = [x]
+        This matches PredictiveSettlingDynamics._eager_layered_steps exactly:
+        - Initial activations from feedforward pass (post-activation)
+        - Settling loop: top-down prediction (no bias), bottom-up error correction (no bias)
+        - No activation during settling (operates in post-activation space)
+        - Runs ALL max_steps iterations (no early stopping, matching reference)
+        - Nudge applied after settling loop
+
+        Args:
+            x: Input tensor [B, D_in]
+            target: Optional target for nudged phase (one-hot labels)
+            beta: Nudge strength for output layer
+            max_steps: Maximum settling iterations (all steps executed)
+            step_size: Learning rate for state updates
+            convergence_threshold: Unused (kept for API compatibility)
+            convergence_start: Unused (kept for API compatibility)
+
+        Returns:
+            List of activations [x, h1, h2, ..., output] after settling
+        """
+        # Initialize layer states from a feedforward pass (post-activation)
+        acts: list[Tensor] = [x]
         h = x
-
         for i, layer in enumerate(self._forward_layers):
             h = layer(h)
             if i < len(self._forward_layers) - 1:
                 h = self._activation(h)
-            activations.append(h)
+            acts.append(h)
 
-        return activations[-1], activations
+        # Run ALL max_steps iterations (matching PredictiveSettlingDynamics._eager_layered_steps)
+        for step in range(max_steps):
+            new_acts = [acts[0]]  # Input layer is clamped
 
-    def forward_inverse(
-        self, target: Tensor, layer_idx: int
-    ) -> tuple[Tensor, list[Tensor]]:
-        """Backward pass through inverse network from target.
+            for i, layer in enumerate(self._forward_layers):
+                weight = layer.weight
 
-        Args:
-            target: Target at layer layer_idx+1
-            layer_idx: Index of inverse layer to start from
+                # acts[i] is the lower layer activity (input to this layer)
+                # weight maps from acts[i] to acts[i+1]: post = pre @ weight.T
+                # Top-down prediction: h_upper @ weight (since forward op is x @ w.T)
+                # h_upper [batch, out] @ weight [out, in] = [batch, in] -> predicts lower layer
+                h_upper = acts[i + 1]
+                prediction = h_upper @ weight
+                error = acts[i] - prediction
+                # Bottom-up correction: error @ weight.T
+                # error [batch, in] @ weight.T [in, out] = [batch, out] -> corrects upper layer
+                h_upper_new = h_upper + step_size * (error @ weight.T)
 
-        Returns:
-            (computed_target, activations) where computed_target is target for layer_idx
+                new_acts.append(h_upper_new)
+
+            acts = new_acts
+
+        # Apply nudge to output layer if target provided (after settling)
+        if target is not None:
+            if target.dim() == 1:
+                target_one_hot = (
+                    torch.nn.functional.one_hot(target, num_classes=acts[-1].shape[1])
+                    .float()
+                    .to(device=acts[-1].device, dtype=acts[-1].dtype)
+                )
+            else:
+                target_one_hot = target.to(device=acts[-1].device, dtype=acts[-1].dtype)
+            acts[-1] = acts[-1] + beta * (target_one_hot - acts[-1])
+
+        return acts
+
+    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+        """Execute one training step using Target Propagation with transpose feedback.
+
+        Matches the reference pipeline: PredictiveSettlingDynamics + TargetInversionCredit + EuclideanUpdate
         """
-        target = target.to(device=self._device, dtype=self._dtype)
-        if target.dim() > 2:
-            target = target.view(target.size(0), -1)
+        # Move inputs to device
+        x = x.to(device=self._device, dtype=self._dtype)
+        if x.dim() > 2:
+            x = x.view(x.size(0), -1)
+        y = y.to(device=self._device)
 
-        activations: list[Tensor] = [target]
-        h = target
+        # Get config values
+        beta = self._beta
+        max_steps = self._max_steps
+        step_size = self._step_size
+        convergence_threshold = self._convergence_threshold
+        convergence_start = self._convergence_start
+        lr = self._lr
 
-        # Inverse layers are ordered output->input: apply them forward from the
-        # given layer index to the start.
-        for i in range(layer_idx, len(self._inverse_layers)):
-            h = self._inverse_layers[i](h)
-            if i > 0:
-                h = self._activation(h)
-            activations.append(h)
+        # Phase 1: FREE phase (no target) - settling
+        free_activations = self._settle_layered(
+            x,
+            target=None,
+            beta=beta,
+            max_steps=max_steps,
+            step_size=step_size,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+        )
+        free_output = free_activations[-1]
 
-        return activations[-1], list(reversed(activations))
+        # Phase 2: NUDGED phase (with target) - settling with beta nudge
+        nudged_activations = self._settle_layered(
+            x,
+            target=y,
+            beta=beta,
+            max_steps=max_steps,
+            step_size=step_size,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+        )
+        nudged_output = nudged_activations[-1]
 
-    def compute_targets(
-        self,
-        forward_activations: list[Tensor],
-        output_target: Tensor,
-    ) -> list[Tensor]:
-        """Compute layer-wise targets via inverse network.
+        # Compute transpose feedback targets from nudged activations
+        targets = self._propagate_targets_transpose(nudged_activations, y)
 
-        Args:
-            forward_activations: [x, h1, h2, ..., output] from forward pass
-            output_target: Target at output layer (e.g., one-hot labels)
+        # Compute pseudo-gradients (transpose feedback TP)
+        pseudo_grads = self._compute_pseudo_gradients(nudged_activations, targets)
 
-        Returns:
-            List of targets, one per forward layer, where ``targets[-1]`` is the
-            output target and ``targets[i]`` is the target for the post-activation
-            of forward layer ``i``.
-        """
-        L = len(self._forward_layers)
-        targets: list[Tensor] = [None] * L  # type: ignore  # ruff: ignore[blanket-type-ignore]
-        targets[-1] = output_target
+        # Apply Euclidean (SGD) updates
+        self._apply_updates(pseudo_grads, lr)
 
-        # Propagate target backward through inverse layers (ordered output->input).
-        # inverse_layers[k] maps a target at layer k+1 to a target at layer k.
-        current_target = output_target
-        for k in range(L - 1):
-            inverse_layer = self._inverse_layers[k]
-            with torch.no_grad():
-                current_target = inverse_layer(current_target)
-                if k > 0:
-                    current_target = self._activation(current_target)
-            targets[L - 2 - k] = current_target
+        # Post-update: FREE phase for honest metrics
+        post_activations = self._settle_layered(
+            x,
+            target=None,
+            beta=beta,
+            max_steps=max_steps,
+            step_size=step_size,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+        )
+        post_output = post_activations[-1]
 
-        return targets  # type: ignore  # ruff: ignore[blanket-type-ignore]
-
-    def backward(
-        self,
-        forward_activations: list[Tensor],
-        targets: list[Tensor],
-    ) -> dict[str, Tensor]:
-        """Compute weight updates for forward and inverse networks.
-
-        Forward: Delta W_f = lr * (target - activation) @ prev_activation.T
-        Inverse: Delta W_g = lr * (activation - target) @ next_target.T
-
-        Returns:
-            Dict with forward and inverse weight updates
-        """
-        updates: dict[str, Tensor] = {}
-
-        # Forward network updates
-        for i in range(len(self._forward_layers)):
-            pre = forward_activations[i]
-            post = forward_activations[i + 1]
-            target = targets[i]
-
-            # Difference target: target - post
-            diff = target - post
-            delta = self._target_lr * batched_outer_product(pre, diff)
-            updates[f"forward.{i}.weight"] = delta
-
-            if self._forward_layers[i].bias is not None:
-                updates[f"forward.{i}.bias"] = self._target_lr * diff.mean(dim=0)
-
-        # Inverse network updates
-        # inverse_layers[i] reconstructs forward activation i+1 from the target
-        # at layer i+1.
-        for i in range(len(self._inverse_layers)):
-            # Inverse input is target at layer i+1
-            inv_input = targets[i + 1] if i + 1 < len(targets) else targets[-1]
-            # Inverse target is the forward activation at layer i+1
-            inv_target = forward_activations[i + 1]
-
-            with torch.no_grad():
-                inv_output = self._inverse_layers[i](inv_input)
-                if i < len(self._inverse_layers) - 1:
-                    inv_output = self._activation(inv_output)
-
-            diff = inv_target - inv_output
-            delta = self._inverse_lr * batched_outer_product(inv_input, diff)
-            updates[f"inverse.{i}.weight"] = delta
-
-            if self._inverse_layers[i].bias is not None:
-                updates[f"inverse.{i}.bias"] = self._inverse_lr * diff.mean(dim=0)
-
-        return updates
-
-    def update_weights(self, gradients: dict[str, Tensor], lr: float = 1.0) -> None:
-        """Apply weight updates (lr already baked in)."""
         with torch.no_grad():
-            for name, grad in gradients.items():
-                parts = name.split(".")
-                net_type = parts[0]  # "forward" or "inverse"
-                layer_idx = int(parts[1])
-                param_type = parts[2]  # "weight" or "bias"
+            # Nudged phase metrics (target-conditioned)
+            nudged_loss = torch.nn.functional.cross_entropy(nudged_output, y).item()
+            nudged_acc = (nudged_output.argmax(-1) == y).float().mean().item()
 
-                if net_type == "forward":
-                    layer = self._forward_layers[layer_idx]
-                else:
-                    layer = self._inverse_layers[layer_idx]
+            # Post-update free phase metrics
+            free_loss = torch.nn.functional.cross_entropy(post_output, y).item()
+            free_acc = (post_output.argmax(-1) == y).float().mean().item()
 
-                if param_type == "weight":
-                    layer.weight.add_(grad)
-                elif param_type == "bias" and layer.bias is not None:
-                    layer.bias.add_(grad)
+            # Energy computation: sum of squared output activations (matching PredictiveSettlingDynamics.compute_energy)
+            energy = nudged_output.pow(2).sum().item()
+            free_energy = post_output.pow(2).sum().item()
+
+        return {
+            "loss": nudged_loss,
+            "energy": energy,
+            "nudged_fit_accuracy": nudged_acc,
+            "free_loss": free_loss,
+            "free_energy": free_energy,
+            "free_accuracy": free_acc,
+        }
+
+    def _propagate_targets_transpose(
+        self,
+        activations: list[Tensor],
+        y: Tensor,
+    ) -> list[Tensor]:
+        """Transpose-feedback target propagation: t_L = one-hot(y), t_l = t_{l+1} @ W_l.
+
+        Matches TargetInversionCredit._propagate_targets exactly.
+
+        Args:
+            activations: [x, h1, h2, ..., output] from nudged phase
+            y: Target labels [batch]
+
+        Returns:
+            List of targets [t_0, t_1, ..., t_L] where t_L = one-hot(y)
+            and t_l is target for activation l (same shape as activations[l])
+        """
+        out_dim = activations[-1].shape[-1]
+        targets: list[Tensor | None] = [None] * len(activations)
+        targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float().to(
+            device=activations[-1].device, dtype=activations[-1].dtype
+        )
+
+        # Get weight names in order (layer_0_weight, layer_1_weight, ...)
+        # The forward_layers list is already in order
+        for l in range(len(self._forward_layers) - 1, -1, -1):
+            nxt = targets[l + 1]
+            if nxt is None:
+                break
+            w = self._forward_layers[l].weight  # shape [out, in]
+            if nxt.shape[-1] != w.shape[0]:
+                # Shape mismatch - stop propagating
+                break
+            # t_l = t_{l+1} @ W_l (W_l has shape [out, in], so this gives [batch, in])
+            targets[l] = nxt @ w
+
+        # Filter out None values (shouldn't happen for well-formed networks)
+        return [t for t in targets if t is not None]  # type: ignore[return-value]
+
+    def _compute_pseudo_gradients(
+        self,
+        activations: list[Tensor],
+        targets: list[Tensor],
+    ) -> list[Tensor]:
+        """Compute pseudo-gradients: (post - target).T @ pre / batch.
+
+        Matches TargetInversionCredit pseudo-gradient computation.
+
+        Args:
+            activations: [x, h1, h2, ..., output] from nudged phase
+            targets: [t_0, t_1, ..., t_L] from _propagate_targets_transpose
+
+        Returns:
+            List of pseudo-gradients [grad_0, grad_1, ..., grad_{L-1}] for each weight
+        """
+        n_trans = len(activations) - 1  # number of weight matrices
+        pseudo_grads: list[Tensor] = []
+
+        for i in range(n_trans):
+            pre = activations[i]      # [batch, in]
+            post = activations[i + 1]  # [batch, out]
+            tgt = targets[i + 1]       # [batch, out] - target for this layer's output
+
+            if tgt is None:
+                # No target for this layer - zero gradient
+                pseudo_grads.append(
+                    torch.zeros_like(self._forward_layers[i].weight)
+                )
+                continue
+
+            # delta = post - tgt [batch, out]
+            delta = post - tgt
+            # pseudo_grad = delta.T @ pre / batch [out, in]
+            batch_size = pre.shape[0]
+            grad = (delta.T @ pre) / batch_size
+            pseudo_grads.append(grad)
+
+        return pseudo_grads
+
+    def _apply_updates(self, pseudo_grads: list[Tensor], lr: float) -> None:
+        """Apply Euclidean (SGD) updates: W -= lr * pseudo_grad.
+
+        Note: TargetInversionCredit doesn't provide bias gradients, so biases
+        are not updated (matching reference behavior).
+        """
+        with torch.no_grad():
+            for i, grad in enumerate(pseudo_grads):
+                layer = self._forward_layers[i]
+                layer.weight.sub_(lr * grad)
+                # Biases are not updated (reference doesn't provide bias_grads)
 
     def _prepare_inputs(self, x: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
         """Prepare and move inputs to device."""
@@ -431,17 +517,17 @@ class TPKernelBackend:
         fwd_params = sum(
             p.numel() for layer in self._forward_layers for p in layer.parameters()
         )
-        inv_params = sum(
-            p.numel() for layer in self._inverse_layers for p in layer.parameters()
-        )
         return {
             "forward_params_mb": fwd_params * 4 / 1e6,
-            "inverse_params_mb": inv_params * 4 / 1e6,
             "activations_mb": 0.0,
         }
 
     def get_settle_telemetry(self) -> dict[str, object] | None:
-        return None
+        return {
+            "max_steps": self._max_steps,
+            "step_size": self._step_size,
+            "convergence_threshold": self._convergence_threshold,
+        }
 
 
 def _get_activation(name: str) -> torch.nn.Module:
@@ -645,5 +731,4 @@ __all__ += [
     "TRITON_IMPORTED_TP",
     "tp_transpose_feedback_triton",
     "tp_batched_outer_triton",
-    "_transposed_inverse",
 ]

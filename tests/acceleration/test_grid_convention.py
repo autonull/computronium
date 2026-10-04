@@ -88,7 +88,7 @@ TILED_KERNELS = [
 
 def test_the_census_is_not_empty() -> None:
     """A census that finds nothing would pass every assertion below."""
-    assert len(TILED_KERNELS) == 12, [n.name for _, n in TILED_KERNELS]
+    assert len(TILED_KERNELS) == 14, [n.name for _, n in TILED_KERNELS]
 
 
 def test_grid_2d_is_row_major_over_the_output() -> None:

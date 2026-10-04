@@ -51,6 +51,10 @@ GPU_TESTED = frozenset({
     "tile_kernels._tile_prediction_kernel",
     "tile_kernels._tile_random_routing_kernel",
     "tile_kernels._tile_topk_routing_kernel",
+    "dfa_kernels._dfa_feedback_projection_kernel",
+    "dfa_kernels._dfa_batched_outer_kernel",
+    "tp_kernels._tp_transpose_feedback_kernel",
+    "tp_kernels._tp_batched_outer_kernel",
 })
 
 

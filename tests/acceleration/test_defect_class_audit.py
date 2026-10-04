@@ -117,7 +117,7 @@ def test_the_transposed_grid_class_is_closed_in_one_place() -> None:
     from test_grid_convention import TILED_KERNELS, test_the_census_is_not_empty
 
     test_the_census_is_not_empty()
-    assert len(TILED_KERNELS) == 12
+    assert len(TILED_KERNELS) == 14
 
 
 # ── class 2: a rank-1 product written as a contraction ──────────────────────
@@ -404,6 +404,11 @@ UNCALLED = {
     "forward_forward_goodness": "a contrastive twin nothing calls",
     "phase_encode": "a contrastive twin nothing calls",
     "target_propagation_target": "a contrastive twin nothing calls",
+    # Triton helper functions exported for direct use but not launched as kernels.
+    "dfa_feedback_projection_triton": "Triton helper for DFA feedback projection; launched via DFAKernelBackend",
+    "dfa_batched_outer_triton": "Triton helper for DFA batched outer product; launched via DFAKernelBackend",
+    "tp_transpose_feedback_triton": "Triton helper for TP transpose feedback; launched via TPKernelBackend",
+    "tp_batched_outer_triton": "Triton helper for TP batched outer product; launched via TPKernelBackend",
     # §4.6: Tile tensor launchers exported from tile_kernels.py — launchers are
     # the artifact other work should use (§36 §8.20); they are reachable from
     # TileKernelBackend but not directly imported by tests.
