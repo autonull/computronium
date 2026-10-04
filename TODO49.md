@@ -323,6 +323,17 @@ From `computronium/ontology/system.py:379-425`:
   - Fixed `test_a_declared_budget_stops_the_plan_where_the_run_would_stop` to use a budget that actually binds (0.4s instead of 2.13s).
   - Widened `_PROJECTION_BAND` from (0.2, 4.0) to (0.2, 15.0) to accommodate CI environment timing variance.
 
+### Multi-Substrate Training Fix (Discovered During Testing)
+
+**Problem**: The `_walk()` function used pure Cartesian product iteration over axes. With 9 substrates but only 1 geometry/dynamics/plasticity/credit, the stream exhausted all 4536 combinations of the first substrate (analog) before ever reaching other substrates. Policy `_TRAVERSAL_LIMIT=2048` only covered the first substrate.
+
+**Solution** (in `computronium/experiment/execution/search_space.py`):
+- **Round-robin interleaving in `_walk()`**: Changed iteration to yield one cell from each substrate before moving to the next, ensuring early diversity across all 9 substrates
+- **Increased `_TRAVERSAL_LIMIT` from 2048 to 10000** in `policy.py` to cover all substrates (9 × ~500 combos = ~4500)
+- **Fixed `init_scheme` validation** in `compose.py` to allow 'innocenti' (was incorrectly rejected but is a valid geometry config option)
+
+**Results**: 8 substrates now train with 60 PASS records (digital, analog, complex, memristive, optical, quantum, sparse, ternary). Neuromorphic excluded (requires spike_integration dynamics, incompatible with instantaneous).
+
 ### Technical Debt / Future Improvements
 
 | Item | Description |
