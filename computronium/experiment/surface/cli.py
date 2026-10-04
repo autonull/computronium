@@ -36,6 +36,7 @@ from computronium.experiment.schema.registries import (
     CapabilitySpec,
 )
 from computronium.experiment.schema.run_spec import (
+    BROAD_PARAM_BUDGET,
     MEASURED_PARAM_BUDGET,
     AxisSelection,
     Fidelity,
@@ -147,7 +148,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=3600.0,
         task="digits",
         policy="model_based",
-        param_budget=MEASURED_PARAM_BUDGET,
+        param_budget=BROAD_PARAM_BUDGET,
         objectives=(
             "validation_accuracy",
             "walltime_total",
@@ -175,7 +176,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=7200.0,
         task="digits",
         policy="evolution",
-        param_budget=MEASURED_PARAM_BUDGET,
+        param_budget=BROAD_PARAM_BUDGET,
         objectives=("validation_accuracy", "walltime_total", "param_count"),
         promotion_threshold=0.8,
         maturation=False,
@@ -191,7 +192,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         budget_seconds=None,
         task="digits",
         policy="evolution",
-        param_budget=MEASURED_PARAM_BUDGET,
+        param_budget=BROAD_PARAM_BUDGET,
         objectives=(
             "validation_accuracy",
             "walltime_total",

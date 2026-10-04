@@ -41,6 +41,12 @@ RUN_SPEC_VERSION = 2
 # four batches in under 0.5 s; ``test_param_budget_lock.py`` holds both claims.
 MEASURED_PARAM_BUDGET: Final[int] = 10_000
 
+# Broader parameter budget for multi-substrate profiles (production-map,
+# maturation, claim). The 9-substrate space with hidden_dim sweep (8-526)
+# exceeds 10k for most non-digital substrates. 50k allows all substrates to
+# participate while still providing a meaningful constraint.
+BROAD_PARAM_BUDGET: Final[int] = 50_000
+
 # The rest of the measured regime (TODO46 §6.1): what a cell actually costs. Two
 # batches on digits is a real forward/backward pass and a real gradient step, so
 # the acceptance gate locks orchestration and measurement identity without paying
@@ -362,6 +368,7 @@ class RunSpec(BaseModel):
 
 
 __all__ = [
+    "BROAD_PARAM_BUDGET",
     "MEASURED_BATCH_LIMIT",
     "MEASURED_PARAM_BUDGET",
     "RUN_SPEC_VERSION",
