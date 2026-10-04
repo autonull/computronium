@@ -30,12 +30,14 @@ from computronium.experiment.execution.policy import (
     policy_context,
 )
 from computronium.experiment.execution.stage import StageId
+from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
 )
 from computronium.experiment.schema.run_spec import (
     MEASURED_PARAM_BUDGET,
+    AxisSelection,
     Fidelity,
     RunSpec,
 )
@@ -68,6 +70,7 @@ class RunProfile:
     promotion_threshold: float  # Pareto frontier promotion threshold
     maturation: bool  # Whether to run maturation after
     deep_tier: bool  # Whether to run deep-tier claim-grade
+    axes: tuple[AxisSelection, ...] = ()
 
 
 # Run profiles as data — single source of truth for CLI behavior
@@ -96,6 +99,30 @@ RUN_PROFILES: dict[str, RunProfile] = {
         promotion_threshold=0.5,
         maturation=False,
         deep_tier=False,
+        axes=(
+            AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
+            AxisSelection(
+                axis=StructuralAxis.GEOMETRY, primitives=("feedforward", "recurrent")
+            ),
+            AxisSelection(
+                axis=StructuralAxis.DYNAMICS,
+                primitives=("energy_minimization", "instantaneous", "lazy"),
+            ),
+            AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=("null",)),
+            AxisSelection(
+                axis=StructuralAxis.CREDIT,
+                primitives=(
+                    "gradient",
+                    "thermodynamic_contrast",
+                    "random_projections",
+                    "pepita",
+                    "local_goodness",
+                ),
+            ),
+            AxisSelection(
+                axis=StructuralAxis.UPDATE, primitives=("euclidean", "adam", "muon")
+            ),
+        ),
     ),
     "production-map": RunProfile(
         name="production-map",
@@ -305,6 +332,7 @@ def _apply_overrides(profile: RunProfile, overrides: dict[str, Any]) -> RunProfi
         ),
         maturation=overrides.get("maturation", profile.maturation),
         deep_tier=overrides.get("deep_tier", profile.deep_tier),
+        axes=overrides.get("axes", profile.axes),
     )
 
 
@@ -430,6 +458,7 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
         budget_seconds=profile.budget_seconds,
         param_budget=profile.param_budget,
         policy=profile.policy,
+        axes=profile.axes,
     )
 
 

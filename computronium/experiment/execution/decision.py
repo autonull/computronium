@@ -75,7 +75,9 @@ class RoundController:
             case StageTransition.CONTINUE:
                 self._current_round += 1
                 return True
-            case StageTransition.COMPLETE | StageTransition.PAUSE | StageTransition.STOP:
+            case (
+                StageTransition.COMPLETE | StageTransition.PAUSE | StageTransition.STOP
+            ):
                 return False
             case _:
                 return False

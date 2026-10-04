@@ -152,3 +152,6 @@
 8. **Probe conventions** — throwaway probe scripts live in `scripts/probes/`
    with their measured-regime numbers and a docstring citing the demo they
    informed.
+
+## Documentation
+- Don't edit README.md directly; see docs/readme/* to edit individual sections or the generator

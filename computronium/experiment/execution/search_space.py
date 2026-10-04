@@ -44,7 +44,7 @@ type ShapeResolver = Callable[[str], TaskShape]
 
 # A scan bound, not a space bound: guards against a budget or a predicate that
 # admits nothing, which would otherwise make the candidate stream unbounded.
-_MAX_SCAN: Final = 10_000
+_MAX_SCAN: Final = 50_000
 
 # Module-level cache for search_space_from_spec
 _search_space_cache: dict[tuple, SearchSpace] = {}

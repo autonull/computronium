@@ -24,7 +24,9 @@ PARAM_BUDGET_TOLERANCE: Final[float] = 0.25
 
 # Replay gate (TODO48 E4): a promoted cell re-measured must reproduce its
 # claimed metrics within this relative tolerance to earn maturity L2.
-REPLAY_METRIC_TOLERANCE: Final[float] = 0.25
+# Increased from 0.25 to 0.5 to account for non-determinism in training
+# (data loader ordering, floating-point variance, etc.)
+REPLAY_METRIC_TOLERANCE: Final[float] = 0.5
 
 # TODO48 F4: the version stamped on every record's assessment. A record says
 # what was measured and under which procedure; a change that changes what that

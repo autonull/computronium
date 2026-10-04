@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import warnings
+import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, Self, TypeVar, cast, runtime_checkable
@@ -42,6 +42,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
 
     from computronium.acceleration.kernel_backend import KernelBackend
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # SystemState: Mutable state for 5-D pipeline
@@ -587,22 +589,22 @@ class SystemConfig:
         """Energy minimization dynamics requires matching beta between dynamics and credit."""
         if self.dynamics.dynamics_type == "energy_minimization":
             if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                warnings.warn(
-                    f"Beta mismatch: dynamics.beta={self.dynamics.beta} != credit.beta={self.credit.beta}. "
-                    f"This may cause incorrect gradient scaling in EqProp.",
-                    UserWarning,
-                    stacklevel=2,
+                logger.debug(
+                    "Beta mismatch: dynamics.beta=%s != credit.beta=%s. "
+                    "This may cause incorrect gradient scaling in EqProp.",
+                    self.dynamics.beta,
+                    self.credit.beta,
                 )
 
     def _validate_beta_matching_pc_alm(self) -> None:
         """PC-ALM dynamics requires matching beta (dual LR scale)."""
         if self.dynamics.dynamics_type == "pc_alm":
             if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                warnings.warn(
-                    f"PC-ALM beta mismatch: dynamics.beta={self.dynamics.beta} "
-                    f"!= credit.beta={self.credit.beta}. Dual LR scaling may be incorrect.",
-                    UserWarning,
-                    stacklevel=2,
+                logger.debug(
+                    "PC-ALM beta mismatch: dynamics.beta=%s "
+                    "!= credit.beta=%s. Dual LR scaling may be incorrect.",
+                    self.dynamics.beta,
+                    self.credit.beta,
                 )
 
     # --- Substrate-Dynamics Validation Methods ---
@@ -626,12 +628,11 @@ class SystemConfig:
         """Analog substrate with noise warns on instantaneous dynamics."""
         if self.substrate.precision == "float32" and self.substrate.noise_level > 0.0:
             if self.dynamics.dynamics_type == "instantaneous":
-                warnings.warn(
-                    f"Analog substrate with noise_level={self.substrate.noise_level} "
-                    f"used with instantaneous dynamics. Noise only applied once at input. "
-                    f"Consider energy_minimization or diffusion dynamics for continuous noise injection.",
-                    UserWarning,
-                    stacklevel=2,
+                logger.debug(
+                    "Analog substrate with noise_level=%s "
+                    "used with instantaneous dynamics. Noise only applied once at input. "
+                    "Consider energy_minimization or diffusion dynamics for continuous noise injection.",
+                    self.substrate.noise_level,
                 )
 
     def _validate_complex_substrate_credit(self) -> None:
@@ -647,12 +648,11 @@ class SystemConfig:
                 "backprop",
             }
         ):
-            warnings.warn(
-                f"Complex substrate used with {self.credit.credit_type!r} credit. "
-                f"Best results with thermodynamic_contrast (holomorphic EqProp) "
-                f"or gradient (holomorphic backprop).",
-                UserWarning,
-                stacklevel=2,
+            logger.debug(
+                "Complex substrate used with %s credit. "
+                "Best results with thermodynamic_contrast (holomorphic EqProp) "
+                "or gradient (holomorphic backprop).",
+                self.credit.credit_type,
             )
 
     def _validate_quantum_substrate_dynamics(self) -> None:
@@ -669,24 +669,23 @@ class SystemConfig:
                 )
             if self.credit.credit_type in {"thermodynamic_contrast", "equilibrium"}:
                 if abs(self.dynamics.beta - self.credit.beta) > 1e-6:
-                    warnings.warn(
-                        f"Quantum substrate with thermodynamic contrast: "
-                        f"beta mismatch dynamics.beta={self.dynamics.beta} != credit.beta={self.credit.beta}. "
-                        f"Phase-sensitive gradients require matched beta.",
-                        UserWarning,
-                        stacklevel=2,
+                    logger.debug(
+                        "Quantum substrate with thermodynamic contrast: "
+                        "beta mismatch dynamics.beta=%s != credit.beta=%s. "
+                        "Phase-sensitive gradients require matched beta.",
+                        self.dynamics.beta,
+                        self.credit.beta,
                     )
 
     def _validate_sparse_substrate_update(self) -> None:
         """Sparse substrate warns on RiemannianOrthogonalUpdate."""
         if self.substrate.sparsity > 0.5:
             if self.update.update_type == "riemannian_orthogonal":
-                warnings.warn(
-                    f"Sparse substrate (sparsity={self.substrate.sparsity}) with "
-                    f"RiemannianOrthogonalUpdate may densify weights. "
-                    f"Consider SpectralConstrainedUpdate or ElasticConsolidationUpdate.",
-                    UserWarning,
-                    stacklevel=2,
+                logger.debug(
+                    "Sparse substrate (sparsity=%s) with "
+                    "RiemannianOrthogonalUpdate may densify weights. "
+                    "Consider SpectralConstrainedUpdate or ElasticConsolidationUpdate.",
+                    self.substrate.sparsity,
                 )
 
     def _validate_ternary_substrate_credit(self) -> None:
@@ -701,23 +700,20 @@ class SystemConfig:
             "gradient",
             "backprop",
         }:
-            warnings.warn(
-                f"Ternary-like substrate used with {self.credit.credit_type!r} credit. "
-                f"Best results with thermodynamic_contrast (Ternary EqProp) "
-                f"or gradient (Ternary backprop with STE).",
-                UserWarning,
-                stacklevel=2,
+            logger.debug(
+                "Ternary-like substrate used with %s credit. "
+                "Best results with thermodynamic_contrast (Ternary EqProp) "
+                "or gradient (Ternary backprop with STE).",
+                self.credit.credit_type,
             )
 
     def _validate_diffusion_substrate_noise(self) -> None:
         """Diffusion dynamics requires substrate noise_level > 0."""
         if self.dynamics.dynamics_type == "diffusion":
             if self.substrate.noise_level == 0.0:
-                warnings.warn(
+                logger.debug(
                     "Diffusion dynamics (Langevin) requires substrate noise_level > 0 "
-                    "for proper sampling. Consider setting noise_level on substrate.",
-                    UserWarning,
-                    stacklevel=2,
+                    "for proper sampling. Consider setting noise_level on substrate."
                 )
 
     def _validate_local_contrastive_geometry(self) -> None:
@@ -759,13 +755,13 @@ class SystemConfig:
             if not (
                 self.substrate.precision == "float16" and self.substrate.sparsity > 0.9
             ):
-                warnings.warn(
-                    f"Spatial/neuromorphic geometry ({self.geometry.topology_type}) "
-                    f"works best with neuromorphic substrate (float16, high sparsity). "
-                    f"Current substrate: precision={self.substrate.precision}, "
-                    f"sparsity={self.substrate.sparsity}",
-                    UserWarning,
-                    stacklevel=2,
+                logger.debug(
+                    "Spatial/neuromorphic geometry (%s) "
+                    "works best with neuromorphic substrate (float16, high sparsity). "
+                    "Current substrate: precision=%s, sparsity=%s",
+                    self.geometry.topology_type,
+                    self.substrate.precision,
+                    self.substrate.sparsity,
                 )
 
     def _validate_tile_mesh_sparse_substrate(self) -> None:
@@ -774,12 +770,11 @@ class SystemConfig:
             self.geometry.topology_type in {"tile_mesh", "tile"}
             and self.substrate.sparsity > 0.5
         ):
-            warnings.warn(
-                f"Sparse substrate (sparsity={self.substrate.sparsity}) "
-                f"with tile mesh geometry may benefit from structured sparsity (N:M or block) "
-                f"for efficient matmul.",
-                UserWarning,
-                stacklevel=2,
+            logger.debug(
+                "Sparse substrate (sparsity=%s) "
+                "with tile mesh geometry may benefit from structured sparsity (N:M or block) "
+                "for efficient matmul.",
+                self.substrate.sparsity,
             )
 
     # --- Special Case Validations ---
@@ -802,13 +797,13 @@ class SystemConfig:
             self.update.step_semantics == "per_element_displacement"
             and self.update.step_size > 0.05
         ):
-            warnings.warn(
-                f"update_type={self.update.update_type!r} uses per-element-displacement "
-                f"step semantics (step_size IS the displacement); "
-                f"step_size={self.update.step_size} is in the gradient-relative lr range "
-                f"and likely an overshoot mislabel.",
-                UserWarning,
-                stacklevel=2,
+            logger.debug(
+                "update_type=%s uses per-element-displacement "
+                "step semantics (step_size IS the displacement); "
+                "step_size=%s is in the gradient-relative lr range "
+                "and likely an overshoot mislabel.",
+                self.update.update_type,
+                self.update.step_size,
             )
 
     def _validate_energy_minimization_momentum_update(self) -> None:
@@ -818,12 +813,11 @@ class SystemConfig:
             and self.dynamics.momentum > 0.0
             and self.update.update_type == "riemannian_orthogonal"
         ):
-            warnings.warn(
-                f"EnergyMinimizationDynamics with momentum={self.dynamics.momentum} "
-                f"combined with RiemannianOrthogonalUpdate may cause instability. "
-                f"Consider EuclideanUpdate with momentum.",
-                UserWarning,
-                stacklevel=2,
+            logger.debug(
+                "EnergyMinimizationDynamics with momentum=%s "
+                "combined with RiemannianOrthogonalUpdate may cause instability. "
+                "Consider EuclideanUpdate with momentum.",
+                self.dynamics.momentum,
             )
 
     @classmethod

@@ -14,6 +14,7 @@ one now fails validation naming the field rather than being silently ignored.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Annotated, Any, Final, Literal, Self
 
@@ -27,6 +28,8 @@ from computronium.experiment.schema.axis import (
 )
 from computronium.experiment.schema.harvest import harvest_schema
 from computronium.experiment.schema.registries import validate_rate_value
+
+logger = logging.getLogger(__name__)
 
 RUN_SPEC_VERSION = 2
 
@@ -244,7 +247,7 @@ class RunSpec(BaseModel):
                 object.__setattr__(self, "hyperparameters", narrowed_hyperparameters)
             except Exception:  # pragma: no cover - task shape may not be resolvable at validation time
                 # If task shape resolution fails, skip auto-narrowing
-                pass
+                logger.debug("Auto-narrowing hidden_dim failed, skipping", exc_info=True)
 
         _check_axes_distinct(self.axes)
         return self
