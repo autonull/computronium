@@ -179,6 +179,12 @@ comp run claim --store pm.duckdb
 
 **Out of Scope** (use proper tools): statistical tests, regression/fitting, causal discovery, symbolic algebra
 
+**Scope Lock**: Stop at Phase 3 (trajectory ops). Further extensions dilute DSL's comparative advantage:
+- Cost ratios, subgroup gaps → already expressible via Phase 1-3 primitives
+- Experiment design constraints → better in Policy/allocator (S2)
+- Optimization/counterfactuals/causal queries → better downstream (PySR, PyMC, DoWhy on exported parquet)
+- Schema validation → Pydantic at I/O boundaries (already done)
+
 **Deliverable**: `comp run hypothesis-campaign --templates <file> --store <db>`
 
 ---
