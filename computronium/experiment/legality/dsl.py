@@ -517,7 +517,7 @@ _QUANTIFIERS = frozenset({ForAll, Exists})
 _AGGREGATIONS = frozenset({Mean, Max, Min, Std})
 _COMPARATIVE = frozenset({Diff, Ratio})
 _TEMPLATES = frozenset({Template, Bind})
-_TRAJECTORY_OPS = frozenset({Eventually, Always, Monotonic})
+_TRAJECTORY_OPS = frozenset({Eventually, Always})
 
 
 def _canonical_json(obj: Any) -> str:
@@ -612,7 +612,7 @@ def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-retur
             {k: expr_from_json(v) for k, v in data["bindings"].items()},
         )
     if cls is Monotonic:
-        return Monotonic(expr_from_json(data["expr"]), data["direction"])
+        return Monotonic(expr_from_json(data["expr"]), str(data["direction"]))
     if cls in _TRAJECTORY_OPS:
         return cls(expr_from_json(data["predicate"]), data.get("within"))
 
@@ -790,18 +790,18 @@ class CampaignContext:
             return variance**0.5
         raise ValueError(f"Unknown aggregation type: {agg_type}")
 
-    def eval_diff(self, left: Expr, right: Expr) -> float | dict[tuple, float]:
+    def eval_diff(self, left: Expr, right: Expr) -> list[float]:
         """Evaluate difference between two expressions."""
         left_vals = [_eval_value(left, EvaluationContext(r)) for r in self.records]
         right_vals = [_eval_value(right, EvaluationContext(r)) for r in self.records]
-        return [lv - rv for lv, rv in zip(left_vals, right_vals)]
+        return [float(lv - rv) for lv, rv in zip(left_vals, right_vals)]
 
-    def eval_ratio(self, left: Expr, right: Expr) -> float | dict[tuple, float]:
+    def eval_ratio(self, left: Expr, right: Expr) -> list[float]:
         """Evaluate ratio between two expressions."""
         left_vals = [_eval_value(left, EvaluationContext(r)) for r in self.records]
         right_vals = [_eval_value(right, EvaluationContext(r)) for r in self.records]
         return [
-            lv / rv if rv != 0 else float("inf") for lv, rv in zip(left_vals, right_vals)
+            float(lv / rv) if rv != 0 else float("inf") for lv, rv in zip(left_vals, right_vals)
         ]
 
     def eval_template_bind(
@@ -942,8 +942,14 @@ def _eval_value(  # ruff: ignore[complex-structure, too-many-return-statements, 
             case Template(_name, _params, _body):
                 # Template definition - return the template object
                 return expr
+            case _:
+                # CampaignContext doesn't handle CoordinateContext expressions (Var, etc.)
+                raise TypeError(
+                    f"CampaignContext cannot evaluate {type(expr).__name__}; "
+                    f"use EvaluationContext for record-level expressions"
+                )
 
-    # CoordinateContext expressions
+    # CoordinateContext expressions (ctx is CoordinateContext here)
     match expr:
         case Var(name):
             return ctx.resolve_var(name)

@@ -4,10 +4,12 @@ Uses Triton-accelerated TPKernelBackend when available.
 Provides uniform `step(case)` interface.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from computronium.acceleration.backends import kernel_available
 from computronium.acceleration.kernel_backend import (
@@ -17,12 +19,13 @@ from computronium.acceleration.kernel_backend import (
     linear_views,
 )
 from computronium.acceleration.tp_kernels import (
-    TPKernelBackend,
     TRITON_IMPORTED_TP,
+    TPKernelBackend,
 )
-from computronium.algorithms.tp.cases import Case
 from computronium.algorithms.tp.reference import _make_tp_system, _SystemConfig
 
+if TYPE_CHECKING:
+    from computronium.algorithms.tp.cases import Case
 KERNEL_TECHNOLOGY = "triton"
 
 

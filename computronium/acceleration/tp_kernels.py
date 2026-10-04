@@ -3,6 +3,7 @@
 Inverse network forward + target propagation kernels.
 """
 
+# ruff: file-ignore: PLR0915
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,9 +11,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.acceleration.contrastive_primitives import (
-    batched_outer_product,
-)
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,
     HardwareTarget,
@@ -189,9 +187,43 @@ class TPKernelBackend:
                 )
             else:
                 target_one_hot = target.to(device=acts[-1].device, dtype=acts[-1].dtype)
-            acts[-1] = acts[-1] + beta * (target_one_hot - acts[-1])
+            acts[-1] += beta * (target_one_hot - acts[-1])
 
         return acts
+
+    def _settle_cfg(self) -> dict:
+        """Settling configuration as a dict for reuse."""
+        return {
+            "beta": self._beta,
+            "max_steps": self._max_steps,
+            "step_size": self._step_size,
+            "convergence_threshold": self._convergence_threshold,
+            "convergence_start": self._convergence_start,
+        }
+
+    def _settle(self, x: Tensor, target: Tensor | None = None) -> list[Tensor]:
+        """Settle with stored config."""
+        return self._settle_layered(x, target=target, **self._settle_cfg())
+
+    def _metrics(
+        self, nudged_output: Tensor, post_output: Tensor, y: Tensor
+    ) -> dict[str, float]:
+        """Compute metrics from outputs."""
+        with torch.no_grad():
+            nudged_loss = torch.nn.functional.cross_entropy(nudged_output, y).item()
+            nudged_acc = (nudged_output.argmax(-1) == y).float().mean().item()
+            free_loss = torch.nn.functional.cross_entropy(post_output, y).item()
+            free_acc = (post_output.argmax(-1) == y).float().mean().item()
+            energy = nudged_output.pow(2).sum().item()
+            free_energy = post_output.pow(2).sum().item()
+        return {
+            "loss": nudged_loss,
+            "energy": energy,
+            "nudged_fit_accuracy": nudged_acc,
+            "free_loss": free_loss,
+            "free_energy": free_energy,
+            "free_accuracy": free_acc,
+        }
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         """Execute one training step using Target Propagation with transpose feedback.
@@ -204,36 +236,11 @@ class TPKernelBackend:
             x = x.view(x.size(0), -1)
         y = y.to(device=self._device)
 
-        # Get config values
-        beta = self._beta
-        max_steps = self._max_steps
-        step_size = self._step_size
-        convergence_threshold = self._convergence_threshold
-        convergence_start = self._convergence_start
-        lr = self._lr
-
         # Phase 1: FREE phase (no target) - settling
-        free_activations = self._settle_layered(
-            x,
-            target=None,
-            beta=beta,
-            max_steps=max_steps,
-            step_size=step_size,
-            convergence_threshold=convergence_threshold,
-            convergence_start=convergence_start,
-        )
-        free_output = free_activations[-1]
+        self._settle(x, target=None)
 
         # Phase 2: NUDGED phase (with target) - settling with beta nudge
-        nudged_activations = self._settle_layered(
-            x,
-            target=y,
-            beta=beta,
-            max_steps=max_steps,
-            step_size=step_size,
-            convergence_threshold=convergence_threshold,
-            convergence_start=convergence_start,
-        )
+        nudged_activations = self._settle(x, target=y)
         nudged_output = nudged_activations[-1]
 
         # Compute transpose feedback targets from nudged activations
@@ -243,41 +250,13 @@ class TPKernelBackend:
         pseudo_grads = self._compute_pseudo_gradients(nudged_activations, targets)
 
         # Apply Euclidean (SGD) updates
-        self._apply_updates(pseudo_grads, lr)
+        self._apply_updates(pseudo_grads, self._lr)
 
         # Post-update: FREE phase for honest metrics
-        post_activations = self._settle_layered(
-            x,
-            target=None,
-            beta=beta,
-            max_steps=max_steps,
-            step_size=step_size,
-            convergence_threshold=convergence_threshold,
-            convergence_start=convergence_start,
-        )
+        post_activations = self._settle(x, target=None)
         post_output = post_activations[-1]
 
-        with torch.no_grad():
-            # Nudged phase metrics (target-conditioned)
-            nudged_loss = torch.nn.functional.cross_entropy(nudged_output, y).item()
-            nudged_acc = (nudged_output.argmax(-1) == y).float().mean().item()
-
-            # Post-update free phase metrics
-            free_loss = torch.nn.functional.cross_entropy(post_output, y).item()
-            free_acc = (post_output.argmax(-1) == y).float().mean().item()
-
-            # Energy computation: sum of squared output activations (matching PredictiveSettlingDynamics.compute_energy)
-            energy = nudged_output.pow(2).sum().item()
-            free_energy = post_output.pow(2).sum().item()
-
-        return {
-            "loss": nudged_loss,
-            "energy": energy,
-            "nudged_fit_accuracy": nudged_acc,
-            "free_loss": free_loss,
-            "free_energy": free_energy,
-            "free_accuracy": free_acc,
-        }
+        return self._metrics(nudged_output, post_output, y)
 
     def _propagate_targets_transpose(
         self,
@@ -307,16 +286,16 @@ class TPKernelBackend:
 
         # Get weight names in order (layer_0_weight, layer_1_weight, ...)
         # The forward_layers list is already in order
-        for l in range(len(self._forward_layers) - 1, -1, -1):
-            nxt = targets[l + 1]
+        for layer_idx in range(len(self._forward_layers) - 1, -1, -1):
+            nxt = targets[layer_idx + 1]
             if nxt is None:
                 break
-            w = self._forward_layers[l].weight  # shape [out, in]
+            w = self._forward_layers[layer_idx].weight  # shape [out, in]
             if nxt.shape[-1] != w.shape[0]:
                 # Shape mismatch - stop propagating
                 break
             # t_l = t_{l+1} @ W_l (W_l has shape [out, in], so this gives [batch, in])
-            targets[l] = nxt @ w
+            targets[layer_idx] = nxt @ w
 
         # Filter out None values (shouldn't happen for well-formed networks)
         return [t for t in targets if t is not None]  # type: ignore[return-value]
@@ -549,8 +528,9 @@ __all__ = ["TPKernelBackend"]
 
 
 # Triton kernels for fused TP operations
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements]
     import math
+
     import triton
     import triton.language as tl
 
@@ -731,6 +711,6 @@ def tp_batched_outer_triton(
 
 __all__ += [
     "TRITON_IMPORTED_TP",
-    "tp_transpose_feedback_triton",
     "tp_batched_outer_triton",
+    "tp_transpose_feedback_triton",
 ]

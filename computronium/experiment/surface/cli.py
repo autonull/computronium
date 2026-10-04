@@ -844,7 +844,14 @@ def _cmd_hypothesis_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[c
             if not all_records:
                 logger.error("No records found in store")
                 return 1
-            run_ids = {r.provenance.links.get("run_id") for r in all_records}
+            run_ids: set[str] = set()
+            for r in all_records:
+                rid = r.provenance.links.get("run_id")
+                if rid is not None:
+                    run_ids.add(rid)
+            if not run_ids:
+                logger.error("No valid run_id found in records")
+                return 1
             run_id = max(run_ids)  # Use latest by string comparison
             logger.info(f"Auto-selected run_id: {run_id}")
         else:

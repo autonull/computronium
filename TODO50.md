@@ -32,18 +32,23 @@ TODO49 completed Phases 1-5: end-to-end pipeline works across all 604,800 declar
 ### 1. Full-Budget Profile Validation
 | Profile | Current Status | Needed |
 |---------|----------------|--------|
-| **maturation** | Runs S4-S10, untested at scale | Run with `budget_seconds=7200`, `n_seeds=5`, `epochs=10`, `fidelity=L2` |
-| **claim** | Runs S8-S11 only, needs front cells | Run with `budget_seconds=None`, `n_seeds=10`, `epochs=20`, `fidelity=L2` |
+| **maturation** | Runs S4-S10, **blocked by param_budget constraint** | Run with `budget_seconds=7200`, `n_seeds=5`, `epochs=10`, `fidelity=L2`, **increased param_budget** |
+| **claim** | Runs S8-S11 only, needs front cells | Run with `budget_seconds=None`, `n_seeds=10`, `epochs=20`, `fidelity=L2`, **increased param_budget** |
+| **production-map** | **Partially complete** — 25 PASS / 909 total records in pm.duckdb | Run to completion with `budget_seconds=3600`, **increased param_budget** |
 
 **Action**: 
 ```bash
-# Maturation (2hr)
-comp run maturation --store mat.duckdb --overrides '{"budget_seconds": 7200}'
+# Production-map (1hr) — needs higher param_budget for 9-substrate space
+comp run production-map --store pm.duckdb --overrides '{"budget_seconds": 3600, "param_budget": 50000}'
 
-# Claim (needs front cells from production-map first)
-comp run production-map --store pm.duckdb --overrides '{"budget_seconds": 3600}'
-comp run claim --store pm.duckdb
+# Maturation (2hr) — resume from production-map front cells
+comp run maturation --store pm.duckdb --overrides '{"budget_seconds": 7200, "param_budget": 50000}'
+
+# Claim (needs front cells from maturation) — no budget limit
+comp run claim --store pm.duckdb --overrides '{"param_budget": 50000}'
 ```
+
+**Blocker**: The default `param_budget=10000` (MEASURED_PARAM_BUDGET) is too restrictive for the 9-substrate production-map space. Most combinations exceed this with the hidden_dim sweep range (8-526). The quick-verify profile works because it only uses digital substrate. **Fix**: Increase param_budget for broad-substrate profiles, or narrow the hyperparameter search space per substrate.
 
 ### 2. Reproducibility Investigation ✅ FIXED
 **Problem**: Some cells fail replay validation even with `torch.manual_seed()`. Observed variance: val_acc 0.66 vs 0.51.
@@ -224,8 +229,8 @@ comp run claim --store pm.duckdb
 - [x] Protobuf version conflict resolved; P2P tests collect and pass
 - [x] Triton DFA kernel implemented (parity with reference)
 - [x] Triton TP kernel implemented (parity with reference) - settling loop implemented, relaxed rel_diff=2e-3
-- [ ] maturation profile completes with ≥50 L2 cells
-- [ ] claim profile produces claim-grade evidence (N≥10 seeds)
+- [ ] maturation profile completes with ≥50 L2 cells **(blocked: param_budget too restrictive)**
+- [ ] claim profile produces claim-grade evidence (N≥10 seeds) **(blocked: needs front cells from maturation)**
 - [x] Replay variance < 0.25 tolerance (bit-exact with deterministic=True)
 - [ ] At least one multi-objective Pareto campaign published
 - [ ] Stability-plasticity frontier mapped at campaign scale
@@ -297,6 +302,32 @@ Fixed the root cause of non-deterministic replay validation failures. The issue 
   - Outputs results as JSON
 - **Verification**: All property lock tests pass; manual test against existing campaign store successful
 
+### Profile Validation Attempts (This Session)
+**Production-map** (pm.duckdb):
+- Ran with default `param_budget=10000`, `budget_seconds=3600`
+- Completed 909 records before failing (budget consumed: 114s)
+- **25 PASS records** across 7 unique (substrate, plasticity, credit, update) combinations:
+  - digital/conflict_adaptive/gradient/adam (val_acc=0.758)
+  - sparse/conflict_adaptive/gradient/adam (val_acc=0.683, 0.536, 0.131, 0.097)
+  - ternary/conflict_adaptive/gradient/adam (val_acc=0.622, 0.106, 0.078)
+  - optical/conflict_adaptive/gradient/adam (val_acc=0.556, 0.111, 0.094, 0.094)
+  - complex/conflict_adaptive/gradient/elastic_consolidation (val_acc=0.197-0.092)
+  - quantum/conflict_adaptive/gradient/adam (val_acc=0.125, 0.092)
+  - analog/conflict_adaptive/gradient/elastic_consolidation (val_acc=0.122-0.075)
+- **Failure mode**: ModelBasedPolicy (TPE) proposes hidden_dim values exceeding param_budget=10000. Only conflict_adaptive+gradient+adam/elastic_consolidation combinations pass.
+- **Fix needed**: Increase param_budget to 50000 for broad-substrate profiles, or add per-substrate hyperparameter bounds.
+
+**Maturation** (attempted on pm.duckdb):
+- Ran with `budget_seconds=300`, `param_budget=10000`, L2 fidelity (5 seeds, 10 epochs)
+- EvolutionPolicy seeded from production-map PASS records
+- **0 records produced** — 3 rounds measured nothing despite fresh cells; stopping
+- **Failure mode**: EvolutionPolicy mutates PASS record hyperparameters (hidden_dim ±20%), pushing them over param_budget=10000 at L2 fidelity.
+- **Fix needed**: Same param_budget increase required.
+
+**Hypothesis-campaign CLI**: Tested and working on pm.duckdb store. Quantifiers, aggregations (Mean, Max, Min, Std with group_by), and comparative operations (Diff, Ratio) all functional.
+
+---
+
 ### Test Commands
 ```bash
 # DFA parity (passing)
@@ -325,4 +356,8 @@ uv run comp run quick-verify --dry-run
 uv run comp gallery --help
 uv run comp report --help
 uv run comp hypothesis-campaign --help
+
+# Profile validation (requires param_budget fix)
+uv run comp run production-map --store pm.duckdb --overrides '{"budget_seconds": 3600, "param_budget": 50000}' --dry-run
+uv run comp run maturation --store pm.duckdb --overrides '{"budget_seconds": 7200, "param_budget": 50000}' --dry-run
 ```
