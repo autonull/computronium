@@ -137,6 +137,50 @@ comp run claim --store pm.duckdb
 **Status**: Protobuf conflict resolved; P2P tests pass
 **Untested at scale**: Multi-node campaigns, fault tolerance, P2P gossip cluster
 
+### G. DSL Extensions for Population-Level Hypothesis Testing (Planned)
+**Why**: Current DSL evaluates single-record predicates. Campaign gates (S9/S10) and scientific claims need population-level assertions with audit trail.
+
+**Extensions** (estimated ~200 LOC total):
+1. **Quantifiers**: `ForAll`, `Exists` over filtered cell populations
+   ```python
+   forall(in_(var("credit"), const(["thermodynamic_contrast", "random_projections"])),
+          gt(var("payload.validation_accuracy"), const(0.7)))
+   ```
+
+2. **Aggregations**: `Mean`, `Max`, `Min`, `Std` with `group_by`
+   ```python
+   gt(mean(var("payload.validation_accuracy"), group_by=["seed"]), const(0.85))
+   lt(max(var("payload.spectral_radius"), group_by=["contraction"]), const(1.0))
+   ```
+
+3. **Comparative/Paired**: `Diff`, `Ratio` vs baseline or ruler
+   ```python
+   gt(sub(var("payload.ruler_validation_accuracy"), var("payload.validation_accuracy")), const(0.0))
+   gt(div(sub(var("baseline.energy"), var("payload.energy")), var("baseline.energy")), const(0.2))
+   ```
+
+4. **Hypothesis Templates**: Parameterized, serializable, instantiable
+   ```python
+   template = Template("convergence_bound", params=["credit", "geometry", "max_steps"],
+       expr=lambda c, g, n: implies(and_(eq(var("credit"), c), eq(var("geometry"), g)),
+                                     le(var("payload.settle_steps"), n)))
+   ```
+
+5. **Trajectory Operators** (joint dynamics): `Eventually`, `Always`, `Monotonic`
+   ```python
+   monotonic_decrease(var("trajectory.free_energy"))
+   eventually(le(var("trajectory.energy_delta"), const(1e-4)), within=50)
+   ```
+
+**Integration Points**:
+- `CampaignContext` evaluates over `list[Record]` (DuckDB/Parquet)
+- Feeds promotion gates (S9/S10), claim eligibility (C57), stability-plasticity claims
+- JSON-serializable for papers/reports; versionable for reproducibility
+
+**Out of Scope** (use proper tools): statistical tests, regression/fitting, causal discovery, symbolic algebra
+
+**Deliverable**: `comp run hypothesis-campaign --templates <file> --store <db>`
+
 ---
 
 ## Quick Wins (Low Effort, High Signal)
@@ -161,6 +205,10 @@ comp run claim --store pm.duckdb
 3. **Week 2**: Multi-objective Pareto campaign design + first runs
 4. **Week 3**: Stability-plasticity campaign (uses existing probe infrastructure)
 5. **Week 4**: Frozen-θ ψ benchmark scaling + I(C,U) model refinement
+6. **Week 5**: DSL extensions for population-level hypothesis testing
+   - Phase 1: Quantifiers + Aggregations (~100 LOC)
+   - Phase 2: Templates + Binding (~60 LOC)
+   - Phase 3: Trajectory operators (~40 LOC, if joint dynamics campaigns need it)
 5. **Ongoing**: Hardware-aware campaigns as substrate models mature
 
 ---
@@ -182,6 +230,10 @@ comp run claim --store pm.duckdb
 - [x] Gallery export via `comp gallery` command
 - [x] `--axis-coverage` CLI flag for report
 - [x] `expr_from_string` → AST Builders for non-void constraints in seed_registries.py
+- [ ] DSL Quantifiers (ForAll, Exists) + Aggregations (Mean, Max, Min) over campaign records
+- [ ] DSL Hypothesis Templates with parameter binding + JSON serialization
+- [ ] `CampaignContext` evaluation over DuckDB/Parquet records
+- [ ] `comp run hypothesis-campaign` CLI command for template instantiation
 
 ---
 
