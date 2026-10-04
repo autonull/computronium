@@ -49,10 +49,10 @@ logger = logging.getLogger(__name__)
 # list the caller enumerated.
 _POOL: Final = 50
 
-# A traversing policy sees the whole space rather than a sampling window: a
-# cursor over a truncated pool silently measures the first N cells of a
-# campaign and reports a completed run.
-_TRAVERSAL_LIMIT: Final = 2048
+# How many cells a policy may examine in one proposal call. Large enough to
+# reach all substrates under round-robin interleaving (9 substrates * ~500 combos
+# each = ~4500). Was 2048 which only covered the first substrate.
+_TRAVERSAL_LIMIT: Final = 10000
 
 
 def resolve_objectives(

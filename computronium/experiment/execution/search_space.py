@@ -567,17 +567,19 @@ def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
 def _walk(spec: RunSpec, space: SearchSpace) -> Iterator[tuple[Coordinate, str]]:
     """Every cell the spec declares, as ``(coordinate, task)``.
 
-    The axes are walked as a Cartesian product, so two axes of equal length are
-    *not* locked to each other: taking the k-th primitive on every axis makes
-    ``geometry`` and ``dynamics`` advance together, which silently measures one
-    diagonal of the space and reports it as the whole of it — a campaign whose
-    axes are confounded can name no axis effect. Sweep steps vary inside the
-    product, one per step of the run's longest ladder, so a run that sweeps
-    nothing emits one cell per combination rather than five identical ones.
+    The axes are walked with round-robin interleaving on the first axis
+    (substrate) to ensure early diversity across substrates. Within each
+    substrate, the remaining axes follow Cartesian product order.
+
+    This avoids the pathological case where the first axis has many values
+    and the rest have few, causing the stream to exhaust all combinations
+    of the first value before ever reaching the second value.
 
     Yields:
         ``(coordinate, task)`` for every cell the spec declares.
     """
+    from itertools import cycle
+
     per_axis = [space.primitives(axis) for axis in AXIS_KIND_ORDER]
     if not space.tasks or not all(per_axis):
         return
@@ -585,16 +587,71 @@ def _walk(spec: RunSpec, space: SearchSpace) -> Iterator[tuple[Coordinate, str]]
     ladders = _swept(spec, schema)
     tasks = space.tasks
     steps = max((len(ladder) for ladder in ladders.values()), default=1)
-    for values in product(*per_axis):
-        selection = {
-            axis.value: name for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
-        }
-        for task in tasks:
-            for step in range(steps):
-                params = _cell_params(
-                    Coordinate(**selection, params={}), schema, ladders, step
-                )
-                yield Coordinate(**selection, params=params), task
+
+    # Round-robin interleaving on the first axis (substrate)
+    first_axis_values = per_axis[0]
+    other_axes_values = per_axis[1:]
+
+    # If only one value on first axis, fall back to simple product
+    if len(first_axis_values) == 1:
+        for values in product(*per_axis):
+            selection = {
+                axis.value: name for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
+            }
+            for task in tasks:
+                for step in range(steps):
+                    params = _cell_params(
+                        Coordinate(**selection, params={}), schema, ladders, step
+                    )
+                    yield Coordinate(**selection, params=params), task
+        return
+
+    # Build iterators for each first-axis value
+    iterators = []
+    for first_val in first_axis_values:
+        # Create product of remaining axes
+        other_products = product(*other_axes_values)
+        def make_iter(fv, op):
+            for other_vals in op:
+                selection = {AXIS_KIND_ORDER[0].value: fv}
+                for axis, val in zip(AXIS_KIND_ORDER[1:], other_vals, strict=True):
+                    selection[axis.value] = val
+                for task in tasks:
+                    for step in range(steps):
+                        params = _cell_params(
+                            Coordinate(**selection, params={}), schema, ladders, step
+                        )
+                        yield Coordinate(**selection, params=params), task
+            # Note: we don't re-create other_products here; it's a one-shot iterator
+        # We need to create the iterator fresh each cycle, so wrap in a function
+        iterators.append((first_val, other_axes_values))
+
+    # Round-robin: yield one from each substrate's iterator before moving to next
+    # Use cycle to loop until all are exhausted
+    active = len(iterators)
+    indices = [0] * len(iterators)
+    # Pre-compute all combinations for each substrate (they're small: 1*1*7*6*12 = 504 per substrate)
+    substrate_combos = []
+    for first_val, other_vals in iterators:
+        combos = []
+        for other_vals_tuple in product(*other_vals):
+            selection = {AXIS_KIND_ORDER[0].value: first_val}
+            for axis, val in zip(AXIS_KIND_ORDER[1:], other_vals_tuple, strict=True):
+                selection[axis.value] = val
+            for task in tasks:
+                for step in range(steps):
+                    params = _cell_params(
+                        Coordinate(**selection, params={}), schema, ladders, step
+                    )
+                    combos.append((Coordinate(**selection, params=params), task))
+        substrate_combos.append(combos)
+
+    # Round-robin yield
+    max_len = max(len(c) for c in substrate_combos)
+    for i in range(max_len):
+        for combos in substrate_combos:
+            if i < len(combos):
+                yield combos[i]
 
 
 def iter_candidates(

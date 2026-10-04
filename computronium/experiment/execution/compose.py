@@ -397,8 +397,8 @@ def build_geometry_config(  # ruff: ignore[complex-structure, too-many-return-st
         hidden_dims = (hidden,) * depth
 
     init_scheme = str(geometry.get("init_scheme", "default"))
-    if init_scheme not in {"default", "mupc"}:
-        msg = f"init_scheme must be 'default' or 'mupc', got {init_scheme!r}"
+    if init_scheme not in {"default", "mupc", "innocenti"}:
+        msg = f"init_scheme must be 'default', 'mupc', or 'innocenti', got {init_scheme!r}"
         raise ProposalComposeError(msg)
     init_scale = _as_float(geometry.get("init_scale"), 0.1)
 
