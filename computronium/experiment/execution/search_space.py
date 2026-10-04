@@ -408,19 +408,74 @@ def _ladder(
     return tuple(values)
 
 
-def _swept(spec: RunSpec, schema: HarvestedSchema) -> dict[str, tuple[Any, ...]]:
+def _max_hidden_dim(param_budget: int, input_dim: int, output_dim: int, num_layers: int = 1) -> int:
+    """Estimate maximum hidden_dim that fits within param_budget.
+    
+    For recurrent/feedforward geometry:
+    - Parameters ≈ input_dim * hidden_dim + hidden_dim^2 * (num_layers - 1) + hidden_dim * output_dim + hidden_dim (bias)
+    - Simplified: hidden_dim * (input_dim + hidden_dim * (num_layers - 1) + output_dim + 1) <= param_budget
+    
+    Args:
+        param_budget: Maximum parameter count
+        input_dim: Input dimension
+        output_dim: Output dimension
+        num_layers: Number of layers (default 1)
+    
+    Returns:
+        Maximum hidden_dim that fits within budget
+    """
+    if param_budget <= 0:
+        return 4096  # Unconstrained, use harvested domain max
+    
+    # Solve quadratic: hidden_dim^2 * (num_layers - 1) + hidden_dim * (input_dim + output_dim + 1) - param_budget <= 0
+    if num_layers <= 1:
+        # Linear: hidden_dim * (input_dim + output_dim + 1) <= param_budget
+        denom = input_dim + output_dim + 1
+        return max(8, min(4096, param_budget // max(1, denom)))
+    else:
+        # Quadratic: a * x^2 + b * x - c <= 0
+        a = num_layers - 1
+        b = input_dim + output_dim + 1
+        c = param_budget
+        # Positive root: (-b + sqrt(b^2 + 4ac)) / (2a)
+        import math
+        disc = b * b + 4 * a * c
+        if disc < 0:
+            return 8
+        root = (-b + math.sqrt(disc)) / (2 * a)
+        return max(8, min(4096, int(root)))
+
+
+def _swept(spec: RunSpec, schema: HarvestedSchema, shape: ShapeResolver | None = None) -> dict[str, tuple[Any, ...]]:
     """Every hyperparameter the spec narrowed, with its ladder of legal values.
 
     Un-swept hyperparameters stay absent from the coordinate and are resolved
     by ``harvest_schema().active()`` at composition time, from prior and domain.
     """
     specs_by_name = schema.by_name()
+    
+    # Compute task shape for param_budget-aware domain narrowing
+    task_shape = None
+    if shape is not None and spec.task_names:
+        task_shape = shape(spec.task_names[0])
+    
+    # Build effective domains, narrowing hidden_dim by param_budget if possible
+    effective_domains: dict[str, Domain] = {}
+    for name, domain in spec.hyperparameters.items():
+        effective_domains[name] = domain
+    
+    # If hidden_dim is not explicitly swept but param_budget is set, add a constraint
+    if "hidden_dim" not in effective_domains and spec.param_budget > 0 and task_shape is not None:
+        max_h = _max_hidden_dim(spec.param_budget, task_shape.input_shape[-1], task_shape.output_dim)
+        from computronium.experiment.schema.axis import Domain, Scale
+        effective_domains["hidden_dim"] = Domain(lo=8, hi=max_h, scale=Scale.LOG)
+    
     return {
         name: _ladder(
             narrow_domain(domain, specs_by_name[name].domain, name),
             specs_by_name[name].axis_kind,
         )
-        for name, domain in spec.hyperparameters.items()
+        for name, domain in effective_domains.items()
     }
 
 
@@ -559,12 +614,12 @@ def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
     per_axis = [len(space.primitives(axis)) for axis in AXIS_KIND_ORDER]
     if not space.tasks or not all(per_axis):
         return 0
-    ladders = _swept(spec, harvest_schema())
+    ladders = _swept(spec, harvest_schema(), None)
     steps = max((len(ladder) for ladder in ladders.values()), default=1)
     return math.prod(per_axis) * len(space.tasks) * steps
 
 
-def _walk(spec: RunSpec, space: SearchSpace) -> Iterator[tuple[Coordinate, str]]:
+def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None) -> Iterator[tuple[Coordinate, str]]:
     """Every cell the spec declares, as ``(coordinate, task)``.
 
     The axes are walked with round-robin interleaving on the first axis
@@ -584,7 +639,7 @@ def _walk(spec: RunSpec, space: SearchSpace) -> Iterator[tuple[Coordinate, str]]
     if not space.tasks or not all(per_axis):
         return
     schema = harvest_schema()
-    ladders = _swept(spec, schema)
+    ladders = _swept(spec, schema, shape)
     tasks = space.tasks
     steps = max((len(ladder) for ladder in ladders.values()), default=1)
 
@@ -728,7 +783,7 @@ def iter_candidates(
 
     seen: set[str] = set()
     scanned = 0
-    for coordinate, task in _walk(spec, search_space):
+    for coordinate, task in _walk(spec, search_space, shape):
         scanned += 1
         if scanned > (max_scan if max_scan is not None else _MAX_SCAN):
             return

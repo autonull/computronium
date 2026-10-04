@@ -84,19 +84,21 @@ def test_a_declaration_that_names_an_unreachable_primitive_is_filtered() -> None
 
     The search space builder now filters unreachable primitives (opportunity 3
     addressed at S2 Space). The price oracle receives a pre-filtered space
-    and correctly reports no unreachable primitives.
+    and correctly reports no unreachable structural primitives.
     """
     spec = unreachable_spec()
     plan = _plan(spec)
 
-    # With axis filtering, the search space only contains legal combinations.
-    # The price oracle sees the filtered space, so no unreachable primitives.
-    assert plan.declared_cells == plan.legal_cells
+    # With axis filtering, the search space only contains legal structural combinations.
+    # The price oracle sees the filtered space, so no unreachable structural primitives.
+    # declared_cells may exceed legal_cells due to hyperparameter sweeping (steps).
     assert plan.unreachable == ()
     # The declared dynamics in the filtered space should only be energy_minimization
     # (instantaneous is filtered out as incompatible with thermodynamic_contrast)
     space = search_space_from_spec(spec, tasks=spec.task_names)
     assert space.primitives(StructuralAxis.DYNAMICS) == ("energy_minimization",)
+    # Both substrates should be reachable
+    assert set(space.primitives(StructuralAxis.SUBSTRATE)) == {"digital", "sparse"}
 
 
 def test_a_declared_budget_stops_the_plan_where_the_run_would_stop() -> None:

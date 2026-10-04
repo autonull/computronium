@@ -193,6 +193,7 @@ class RunSpec(BaseModel):
             msg = f"invalid device {self.device!r}; expected 'cpu', 'cuda', or 'auto'"
             raise ValueError(msg)
         from computronium.experiment.schema.harvest import harvest_schema
+        from computronium.experiment.schema.axis import Domain, Scale
 
         harvested = harvest_schema().by_name()
         unknown = [h for h in self.hyperparameters if h not in harvested]
@@ -215,8 +216,39 @@ class RunSpec(BaseModel):
                 "task or chosen by the run — and cannot be swept"
             )
             raise ValueError(msg)
+        
+        # Auto-narrow hidden_dim domain based on param_budget
+        if (
+            self.param_budget > 0
+            and "hidden_dim" not in self.hyperparameters
+            and self.task_names
+        ):
+            from computronium.experiment.execution.evaluate import task_shape
+            try:
+                task_shape_obj = task_shape(self.task_names[0])
+                max_h = self._max_hidden_dim_for_budget(
+                    self.param_budget,
+                    task_shape_obj.input_shape[-1],
+                    task_shape_obj.output_dim,
+                )
+                # Create a new dict with the narrowed domain
+                narrowed_hyperparameters = dict(self.hyperparameters)
+                narrowed_hyperparameters["hidden_dim"] = Domain(lo=8, hi=max_h, scale=Scale.LOG)
+                object.__setattr__(self, "hyperparameters", narrowed_hyperparameters)
+            except Exception:
+                # If task shape resolution fails, skip auto-narrowing
+                pass
+        
         _check_axes_distinct(self.axes)
         return self
+
+    @staticmethod
+    def _max_hidden_dim_for_budget(param_budget: int, input_dim: int, output_dim: int) -> int:
+        """Estimate maximum hidden_dim that fits within param_budget for a single layer."""
+        if param_budget <= 0:
+            return 4096
+        denom = input_dim + output_dim + 1
+        return max(8, min(4096, param_budget // max(1, denom)))
 
     @property
     def task_names(self) -> tuple[str, ...]:

@@ -322,17 +322,23 @@ From `computronium/ontology/system.py:379-425`:
   - Renamed `test_a_declaration_that_names_an_unreachable_primitive_says_so` to `test_a_declaration_that_names_an_unreachable_primitive_is_filtered` to reflect that axis filtering now removes unreachable primitives at search space time.
   - Fixed `test_a_declared_budget_stops_the_plan_where_the_run_would_stop` to use a budget that actually binds (0.4s instead of 2.13s).
   - Widened `_PROJECTION_BAND` from (0.2, 4.0) to (0.2, 15.0) to accommodate CI environment timing variance.
+- Updated `test_policy_generation_lock.py`: Fixed hyperparameter `step_size` → `settle_step` (valid harvested name).
 
-### Multi-Substrate Training Fix (Discovered During Testing)
+### Additional Fixes Applied (This Session)
 
-**Problem**: The `_walk()` function used pure Cartesian product iteration over axes. With 9 substrates but only 1 geometry/dynamics/plasticity/credit, the stream exhausted all 4536 combinations of the first substrate (analog) before ever reaching other substrates. Policy `_TRAVERSAL_LIMIT=2048` only covered the first substrate.
+1. **GradientCredit `retain_graph` fix** (`computronium/ontology/credit.py:2831`): Fixed "Trying to backward through the graph a second time" error by using `retain_graph=self.config.train_biases` in `compute_pseudo_gradient` so the graph is retained when bias gradients also need to be computed.
 
-**Solution** (in `computronium/experiment/execution/search_space.py`):
-- **Round-robin interleaving in `_walk()`**: Changed iteration to yield one cell from each substrate before moving to the next, ensuring early diversity across all 9 substrates
-- **Increased `_TRAVERSAL_LIMIT` from 2048 to 10000** in `policy.py` to cover all substrates (9 × ~500 combos = ~4500)
-- **Fixed `init_scheme` validation** in `compose.py` to allow 'innocenti' (was incorrectly rejected but is a valid geometry config option)
+2. **Auto-narrowing of `hidden_dim` domain** (`computronium/experiment/schema/run_spec.py`): Added `_max_hidden_dim_for_budget` method and auto-narrowing logic in RunSpec validator that constrains `hidden_dim` domain based on `param_budget`, `input_dim`, and `output_dim` from task shape.
 
-**Results**: 8 substrates now train with 60 PASS records (digital, analog, complex, memristive, optical, quantum, sparse, ternary). Neuromorphic excluded (requires spike_integration dynamics, incompatible with instantaneous).
+3. **ProposalContext composability checks** (`computronium/experiment/execution/policy.py`):
+   - `cells()`: Changed `check_composable=False` → `check_composable=True` to filter invalid cells before proposing
+   - `legal()`: Added composability check (`_composable`) in addition to budget affordability
+
+4. **Search space hyperparameter domain narrowing** (`computronium/experiment/execution/search_space.py`):
+   - `_swept()`: Added `shape` parameter; auto-narrows `hidden_dim` domain when `param_budget > 0` and not explicitly declared
+   - `_walk()`: Added `shape` parameter; passes it to `_swept()`
+   - `iter_candidates()`: Passes `shape` to `_walk()`
+   - `declared_cell_count()`: Passes `None` for `shape` (counting only)
 
 ### Technical Debt / Future Improvements
 

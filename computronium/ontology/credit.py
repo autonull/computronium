@@ -2828,8 +2828,10 @@ class GradientCredit:
 
         weight_names = _learnable_weight_names(geometry.params)
         params = [geometry.params[n] for n in weight_names]
+        # Retain graph if bias gradients will also be computed
+        retain = self.config.train_biases
         grads = torch.autograd.grad(
-            loss, params, retain_graph=False, create_graph=False, allow_unused=True
+            loss, params, retain_graph=retain, create_graph=False, allow_unused=True
         )
         detached = [n for n, g in zip(weight_names, grads, strict=True) if g is None]
         if detached:
