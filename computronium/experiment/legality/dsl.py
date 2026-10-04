@@ -801,7 +801,8 @@ class CampaignContext:
         left_vals = [_eval_value(left, EvaluationContext(r)) for r in self.records]
         right_vals = [_eval_value(right, EvaluationContext(r)) for r in self.records]
         return [
-            float(lv / rv) if rv != 0 else float("inf") for lv, rv in zip(left_vals, right_vals)
+            float(lv / rv) if rv != 0 else float("inf")
+            for lv, rv in zip(left_vals, right_vals)
         ]
 
     def eval_template_bind(
