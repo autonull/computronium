@@ -117,8 +117,8 @@ class DFAKernelBackend:
         Matches the pipeline output format with free/nudged phases.
         """
         # Get beta from config (default 0.5 for FA/DFA)
-        beta = getattr(self, '_beta', 0.5)
-        
+        beta = getattr(self, "_beta", 0.5)
+
         # Phase 1: FREE phase (no target) - forward pass
         _, free_activations = self.forward(x)
         free_output = free_activations[-1]
@@ -126,23 +126,24 @@ class DFAKernelBackend:
         # Phase 2: NUDGED phase (with target) - forward + beta nudge
         _, nudged_activations = self.forward(x)
         nudged_output = nudged_activations[-1]
-        
+
         # Apply beta nudge to output (matching InstantaneousDynamics)
         if y.dim() == 1:
             target_vec = (
-                torch.nn.functional.one_hot(y, num_classes=nudged_output.shape[1])
+                torch.nn.functional
+                .one_hot(y, num_classes=nudged_output.shape[1])
                 .float()
                 .to(device=nudged_output.device, dtype=nudged_output.dtype)
             )
         else:
             target_vec = y.to(device=nudged_output.device, dtype=nudged_output.dtype)
-        
+
         # Nudge: output + beta * (target - output)
         nudged_output_nudged = nudged_output + beta * (target_vec - nudged_output)
-        
+
         # Replace the last activation with the nudged output for backward pass
         nudged_activations_nudged = nudged_activations[:-1] + [nudged_output_nudged]
-        
+
         # Cross-entropy gradient: (softmax - one_hot) / batch
         batch_size = nudged_output_nudged.shape[0]
         probs = torch.softmax(nudged_output_nudged, dim=-1)
@@ -162,7 +163,9 @@ class DFAKernelBackend:
 
         with torch.no_grad():
             # Nudged phase metrics (target-conditioned, using nudged output)
-            nudged_loss = torch.nn.functional.cross_entropy(nudged_output_nudged, y).item()
+            nudged_loss = torch.nn.functional.cross_entropy(
+                nudged_output_nudged, y
+            ).item()
             nudged_acc = (nudged_output_nudged.argmax(-1) == y).float().mean().item()
 
             # Post-update free phase metrics

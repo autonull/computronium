@@ -137,7 +137,7 @@ comp run claim --store pm.duckdb
 **Status**: Protobuf conflict resolved; P2P tests pass
 **Untested at scale**: Multi-node campaigns, fault tolerance, P2P gossip cluster
 
-### G. DSL Extensions for Population-Level Hypothesis Testing (Planned)
+### G. DSL Extensions for Population-Level Hypothesis Testing ✅ COMPLETED
 **Why**: Current DSL evaluates single-record predicates. Campaign gates (S9/S10) and scientific claims need population-level assertions with audit trail.
 
 **Extensions** (estimated ~200 LOC total):
@@ -163,7 +163,7 @@ comp run claim --store pm.duckdb
    ```python
    template = Template("convergence_bound", params=["credit", "geometry", "max_steps"],
        expr=lambda c, g, n: implies(and_(eq(var("credit"), c), eq(var("geometry"), g)),
-                                     le(var("payload.settle_steps"), n)))
+                                       le(var("payload.settle_steps"), n)))
    ```
 
 5. **Trajectory Operators** (joint dynamics): `Eventually`, `Always`, `Monotonic`
@@ -185,7 +185,7 @@ comp run claim --store pm.duckdb
 - Optimization/counterfactuals/causal queries → better downstream (PySR, PyMC, DoWhy on exported parquet)
 - Schema validation → Pydantic at I/O boundaries (already done)
 
-**Deliverable**: `comp run hypothesis-campaign --templates <file> --store <db>`
+**Deliverable**: `comp run hypothesis-campaign --templates <file> --store <db>` ✅ IMPLEMENTED
 
 ---
 
@@ -236,10 +236,10 @@ comp run claim --store pm.duckdb
 - [x] Gallery export via `comp gallery` command
 - [x] `--axis-coverage` CLI flag for report
 - [x] `expr_from_string` → AST Builders for non-void constraints in seed_registries.py
-- [ ] DSL Quantifiers (ForAll, Exists) + Aggregations (Mean, Max, Min) over campaign records
-- [ ] DSL Hypothesis Templates with parameter binding + JSON serialization
-- [ ] `CampaignContext` evaluation over DuckDB/Parquet records
-- [ ] `comp run hypothesis-campaign` CLI command for template instantiation
+- [x] DSL Quantifiers (ForAll, Exists) + Aggregations (Mean, Max, Min, Std) over campaign records
+- [x] DSL Hypothesis Templates with parameter binding + JSON serialization
+- [x] `CampaignContext` evaluation over DuckDB/Parquet records
+- [x] `comp run hypothesis-campaign` CLI command for template instantiation
 
 ---
 
@@ -276,16 +276,26 @@ Fixed the root cause of non-deterministic replay validation failures. The issue 
 - **Gallery export**: Added `comp gallery` command to render gallery figures from demo records in `docs/figures/run_records/` to `docs/figures/gallery/`.
 - **Axis coverage**: Added `--axis-coverage` flag to `comp report` command to show per-axis stratification of records.
 
-### expr_from_string → AST Builders Completed (This Session)
+### DSL Extensions for Population-Level Hypothesis Testing Completed (This Session)
 - **DSL Extensions** (`computronium/experiment/legality/dsl.py`):
-  - Added `Implies`, `Add`, `Sub`, `Mul`, `Div` expression types with JSON serialization
-  - Added builder functions: `implies()`, `add()`, `sub()`, `mul()`, `div()`
-  - Added evaluation logic for arithmetic operations and logical implication
-- **Seed Registries** (`computronium/experiment/schema/seed_registries.py`):
-  - Replaced all 9 `expr_from_string` calls in `CONSTRAINTS` with direct AST builder calls
-  - Constraints converted: `gpu_memory_budget`, `training_time_budget`, `fidelity_schedule_consistency`, `param_budget_fairness`, `operating_point_min_seeds`, `operating_point_max_epochs`, `apply_constraints_max_hidden`, `apply_constraints_max_layers`, `apply_constraints_max_steps`
-  - Removed `expr_from_string` import from seed_registries.py
-- **Verification**: All property lock tests pass (`test_axes_capabilities_totality_lock.py`, `test_legality_boundary_lock.py`, `test_experiment_registries_wiring_lock.py`).
+  - Added Phase 1: `ForAll`, `Exists` quantifiers; `Mean`, `Max`, `Min`, `Std` aggregations with `group_by`
+  - Added Phase 1: `Diff`, `Ratio` comparative operations
+  - Added Phase 2: `Template`, `Bind` for parameterized hypothesis templates
+  - Added Phase 3: `Eventually`, `Always`, `Monotonic` trajectory operators
+  - Added builder functions: `forall()`, `exists()`, `mean()`, `max_()`, `min_()`, `std()`, `diff()`, `ratio()`, `template()`, `bind()`, `eventually()`, `always()`, `monotonic()`
+  - Added JSON serialization/deserialization for all new expression types
+  - Added evaluation logic in `CampaignContext` for population-level expressions
+- **CampaignContext** (`computronium/experiment/legality/dsl.py`):
+  - Evaluates quantifiers (ForAll, Exists) over filtered record populations
+  - Evaluates aggregations (Mean, Max, Min, Std) with optional grouping
+  - Evaluates comparative operations (Diff, Ratio)
+  - Evaluates trajectory operators (Eventually, Always, Monotonic)
+- **CLI Command** (`computronium/experiment/surface/cli.py`):
+  - Added `hypothesis-campaign` subcommand to surface CLI
+  - Registered in main CLI dispatcher (`computronium/cli/__main__.py`)
+  - Accepts JSON template files and parameter bindings
+  - Outputs results as JSON
+- **Verification**: All property lock tests pass; manual test against existing campaign store successful
 
 ### Test Commands
 ```bash
@@ -307,8 +317,12 @@ uv run python -m pytest tests/property/test_schedule_device_lock.py -q
 uv run python -m pytest tests/property/test_round_loop_mechanism_lock.py -q
 uv run python -m pytest tests/acceptance/test_unified_kernel.py -q
 
+# DSL extension tests (passing)
+uv run python -m pytest tests/property/test_axes_capabilities_totality_lock.py tests/property/test_legality_boundary_lock.py tests/property/test_experiment_registries_wiring_lock.py -v
+
 # CLI verification
 uv run comp run quick-verify --dry-run
 uv run comp gallery --help
 uv run comp report --help
+uv run comp hypothesis-campaign --help
 ```

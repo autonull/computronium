@@ -102,7 +102,9 @@ def step(case: Case) -> dict[str, float]:
 
         target = case.target
         if target is None:
-            target = torch.zeros(case.state.shape[0], dtype=torch.long, device=case.state.device)
+            target = torch.zeros(
+                case.state.shape[0], dtype=torch.long, device=case.state.device
+            )
 
         result = backend.train_step(case.state, target)
     finally:

@@ -182,7 +182,8 @@ class TPKernelBackend:
         if target is not None:
             if target.dim() == 1:
                 target_one_hot = (
-                    torch.nn.functional.one_hot(target, num_classes=acts[-1].shape[1])
+                    torch.nn.functional
+                    .one_hot(target, num_classes=acts[-1].shape[1])
                     .float()
                     .to(device=acts[-1].device, dtype=acts[-1].dtype)
                 )
@@ -297,8 +298,11 @@ class TPKernelBackend:
         """
         out_dim = activations[-1].shape[-1]
         targets: list[Tensor | None] = [None] * len(activations)
-        targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float().to(
-            device=activations[-1].device, dtype=activations[-1].dtype
+        targets[-1] = (
+            torch.nn.functional
+            .one_hot(y, num_classes=out_dim)
+            .float()
+            .to(device=activations[-1].device, dtype=activations[-1].dtype)
         )
 
         # Get weight names in order (layer_0_weight, layer_1_weight, ...)
@@ -337,15 +341,13 @@ class TPKernelBackend:
         pseudo_grads: list[Tensor] = []
 
         for i in range(n_trans):
-            pre = activations[i]      # [batch, in]
+            pre = activations[i]  # [batch, in]
             post = activations[i + 1]  # [batch, out]
-            tgt = targets[i + 1]       # [batch, out] - target for this layer's output
+            tgt = targets[i + 1]  # [batch, out] - target for this layer's output
 
             if tgt is None:
                 # No target for this layer - zero gradient
-                pseudo_grads.append(
-                    torch.zeros_like(self._forward_layers[i].weight)
-                )
+                pseudo_grads.append(torch.zeros_like(self._forward_layers[i].weight))
                 continue
 
             # delta = post - tgt [batch, out]

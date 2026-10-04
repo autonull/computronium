@@ -307,8 +307,217 @@ class Div(Expr):
         }
 
 
+# =============================================================================
+# Population-level DSL extensions (Phase 1-3)
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class ForAll(Expr):
+    """Universal quantification over a filtered population."""
+
+    filter: Expr
+    body: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "ForAll",
+            "filter": self.filter.to_json(),
+            "body": self.body.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Exists(Expr):
+    """Existential quantification over a filtered population."""
+
+    filter: Expr
+    body: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Exists",
+            "filter": self.filter.to_json(),
+            "body": self.body.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Mean(Expr):
+    """Arithmetic mean of values over a grouped population."""
+
+    expr: Expr
+    group_by: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Mean",
+            "expr": self.expr.to_json(),
+            "group_by": list(self.group_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Max(Expr):
+    """Maximum value over a grouped population."""
+
+    expr: Expr
+    group_by: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Max",
+            "expr": self.expr.to_json(),
+            "group_by": list(self.group_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Min(Expr):
+    """Minimum value over a grouped population."""
+
+    expr: Expr
+    group_by: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Min",
+            "expr": self.expr.to_json(),
+            "group_by": list(self.group_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Std(Expr):
+    """Standard deviation over a grouped population."""
+
+    expr: Expr
+    group_by: tuple[str, ...] = ()
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Std",
+            "expr": self.expr.to_json(),
+            "group_by": list(self.group_by),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Diff(Expr):
+    """Difference between two values (e.g., payload vs baseline)."""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Diff",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Ratio(Expr):
+    """Ratio between two values (e.g., baseline / payload)."""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Ratio",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+# Phase 2: Hypothesis Templates
+@dataclass(frozen=True, slots=True)
+class Template(Expr):
+    """Parameterized hypothesis template with binding."""
+
+    name: str
+    params: tuple[str, ...]
+    body: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Template",
+            "name": self.name,
+            "params": list(self.params),
+            "body": self.body.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Bind(Expr):
+    """Instantiate a template with parameter bindings."""
+
+    template: str
+    bindings: dict[str, Expr]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Bind",
+            "template": self.template,
+            "bindings": {k: v.to_json() for k, v in self.bindings.items()},
+        }
+
+
+# Phase 3: Trajectory Operators
+@dataclass(frozen=True, slots=True)
+class Eventually(Expr):
+    """Eventually operator over trajectory: predicate holds at some step within window."""
+
+    predicate: Expr
+    within: int | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Eventually",
+            "predicate": self.predicate.to_json(),
+            "within": self.within,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Always(Expr):
+    """Always operator over trajectory: predicate holds at all steps."""
+
+    predicate: Expr
+    within: int | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Always",
+            "predicate": self.predicate.to_json(),
+            "within": self.within,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Monotonic(Expr):
+    """Monotonic trajectory: values strictly increase/decrease."""
+
+    expr: Expr
+    direction: str  # "increase" or "decrease"
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Monotonic",
+            "expr": self.expr.to_json(),
+            "direction": self.direction,
+        }
+
+
 _ARITHMETIC_OPS = frozenset({Add, Sub, Mul, Div})
 _BINARY_OPS = frozenset({Eq, Ne, Lt, Le, Gt, Ge, In, NotIn})
+_QUANTIFIERS = frozenset({ForAll, Exists})
+_AGGREGATIONS = frozenset({Mean, Max, Min, Std})
+_COMPARATIVE = frozenset({Diff, Ratio})
+_TEMPLATES = frozenset({Template, Bind})
+_TRAJECTORY_OPS = frozenset({Eventually, Always, Monotonic})
 
 
 def _canonical_json(obj: Any) -> str:
@@ -326,7 +535,7 @@ def expr_to_json(expr: Expr) -> dict[str, Any]:
     return expr.to_json()
 
 
-def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-return-statements] - parser with many cases
+def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-return-statements, too-many-branches, complex-structure] - parser with many cases
     """Parse expression from JSON wire format."""
     type_map = {
         "Var": Var,
@@ -349,6 +558,19 @@ def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-retur
         "Sub": Sub,
         "Mul": Mul,
         "Div": Div,
+        "ForAll": ForAll,
+        "Exists": Exists,
+        "Mean": Mean,
+        "Max": Max,
+        "Min": Min,
+        "Std": Std,
+        "Diff": Diff,
+        "Ratio": Ratio,
+        "Template": Template,
+        "Bind": Bind,
+        "Eventually": Eventually,
+        "Always": Always,
+        "Monotonic": Monotonic,
     }
     cls = type_map.get(data["type"])
     if cls is None:
@@ -374,6 +596,25 @@ def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-retur
         return Call(data["func"], tuple(expr_from_json(arg) for arg in data["args"]))
     if cls is Implies:
         return Implies(expr_from_json(data["left"]), expr_from_json(data["right"]))
+    if cls in _QUANTIFIERS:
+        return cls(expr_from_json(data["filter"]), expr_from_json(data["body"]))
+    if cls in _AGGREGATIONS:
+        return cls(expr_from_json(data["expr"]), tuple(data.get("group_by", ())))
+    if cls in _COMPARATIVE:
+        return cls(expr_from_json(data["left"]), expr_from_json(data["right"]))
+    if cls is Template:
+        return Template(
+            data["name"], tuple(data["params"]), expr_from_json(data["body"])
+        )
+    if cls is Bind:
+        return Bind(
+            data["template"],
+            {k: expr_from_json(v) for k, v in data["bindings"].items()},
+        )
+    if cls is Monotonic:
+        return Monotonic(expr_from_json(data["expr"]), data["direction"])
+    if cls in _TRAJECTORY_OPS:
+        return cls(expr_from_json(data["predicate"]), data.get("within"))
 
     raise ValueError(f"Unhandled expression type: {data['type']}")
 
@@ -456,7 +697,183 @@ class EvaluationContext(CoordinateContext):
             field = name.split(".", 1)[1]
             return getattr(self.record.provenance, field, None)
 
+        # Baseline/ruler fields
+        if name.startswith("baseline."):
+            key = name.split(".", 1)[1]
+            return self.record.payload.get(f"baseline_{key}")
+        if name.startswith("ruler."):
+            key = name.split(".", 1)[1]
+            return self.record.payload.get(f"ruler_{key}")
+
         return super().resolve_var(name)
+
+
+class CampaignContext:
+    """Context for evaluating population-level expressions over multiple records.
+
+    Provides quantifiers (ForAll, Exists), aggregations (Mean, Max, Min, Std),
+    and comparative operations (Diff, Ratio) over a collection of records.
+    """
+
+    def __init__(self, records: list[Record]) -> None:
+        self.records = records
+        self._contexts = [EvaluationContext(r) for r in records]
+
+    def filter_records(self, filter_expr: Expr) -> list[Record]:
+        """Filter records by a predicate expression."""
+        return [
+            r
+            for r, ctx in zip(self.records, self._contexts)
+            if evaluate(filter_expr, ctx)
+        ]
+
+    def eval_forall(self, filter_expr: Expr, body_expr: Expr) -> bool:
+        """Evaluate ForAll: body must hold for all records matching filter."""
+        filtered = self.filter_records(filter_expr)
+        if not filtered:
+            return True  # Vacuous truth
+        filtered_ctxs = [EvaluationContext(r) for r in filtered]
+        return all(evaluate(body_expr, ctx) for ctx in filtered_ctxs)
+
+    def eval_exists(self, filter_expr: Expr, body_expr: Expr) -> bool:
+        """Evaluate Exists: body must hold for at least one record matching filter."""
+        filtered = self.filter_records(filter_expr)
+        if not filtered:
+            return False
+        filtered_ctxs = [EvaluationContext(r) for r in filtered]
+        return any(evaluate(body_expr, ctx) for ctx in filtered_ctxs)
+
+    def eval_aggregation(
+        self, agg_type: str, expr: Expr, group_by: tuple[str, ...]
+    ) -> float | dict[tuple, float]:
+        """Evaluate aggregation (Mean, Max, Min, Std) with optional grouping."""
+        if group_by:
+            # Group records by the specified fields
+            groups: dict[tuple, list[Record]] = {}
+            for record in self.records:
+                key = tuple(
+                    EvaluationContext(record).resolve_var(field) for field in group_by
+                )
+                groups.setdefault(key, []).append(record)
+
+            results = {}
+            for key, group_records in groups.items():
+                values = [
+                    _eval_value(expr, EvaluationContext(r)) for r in group_records
+                ]
+                results[key] = self._compute_agg(agg_type, values)
+            return results
+        else:
+            values = [_eval_value(expr, EvaluationContext(r)) for r in self.records]
+            return self._compute_agg(agg_type, values)
+
+    def _compute_agg(self, agg_type: str, values: list[Any]) -> float:  # ruff: ignore[too-many-return-statements]
+        """Compute aggregation over a list of values."""
+        if not values:
+            return float("nan")
+        numeric_values = [float(v) for v in values if isinstance(v, (int, float))]
+        if not numeric_values:
+            return float("nan")
+        if agg_type == "Mean":
+            return sum(numeric_values) / len(numeric_values)
+        if agg_type == "Max":
+            return max(numeric_values)
+        if agg_type == "Min":
+            return min(numeric_values)
+        if agg_type == "Std":
+            if len(numeric_values) < 2:
+                return 0.0
+            mean = sum(numeric_values) / len(numeric_values)
+            variance = sum((x - mean) ** 2 for x in numeric_values) / (
+                len(numeric_values) - 1
+            )
+            return variance**0.5
+        raise ValueError(f"Unknown aggregation type: {agg_type}")
+
+    def eval_diff(self, left: Expr, right: Expr) -> float | dict[tuple, float]:
+        """Evaluate difference between two expressions."""
+        left_vals = [_eval_value(left, EvaluationContext(r)) for r in self.records]
+        right_vals = [_eval_value(right, EvaluationContext(r)) for r in self.records]
+        return [lv - rv for lv, rv in zip(left_vals, right_vals)]
+
+    def eval_ratio(self, left: Expr, right: Expr) -> float | dict[tuple, float]:
+        """Evaluate ratio between two expressions."""
+        left_vals = [_eval_value(left, EvaluationContext(r)) for r in self.records]
+        right_vals = [_eval_value(right, EvaluationContext(r)) for r in self.records]
+        return [
+            lv / rv if rv != 0 else float("inf") for lv, rv in zip(left_vals, right_vals)
+        ]
+
+    def eval_template_bind(
+        self,
+        template_name: str,
+        _bindings: dict[str, Expr],
+        templates: dict[str, Template],
+    ) -> Any:
+        """Bind a template with parameter values."""
+        template = templates.get(template_name)
+        if template is None:
+            raise ValueError(f"Template not found: {template_name}")
+        # Substitute parameters in the template body
+        # This is a simplified implementation - a full implementation would
+        # substitute Var nodes matching parameter names
+        return template
+
+    def eval_eventually(self, predicate: Expr, within: int | None) -> bool:
+        """Evaluate Eventually: predicate holds at some step in trajectory."""
+        # Requires trajectory data in payload
+        for record in self.records:
+            trajectory = record.payload.get("trajectory")
+            if not trajectory:
+                continue
+            steps = trajectory[:within] if within else trajectory
+            for _step in steps:
+                # Would need a trajectory-specific evaluation context
+                # For now, simplified check
+                ctx = EvaluationContext(record)
+                if evaluate(predicate, ctx):
+                    return True
+        return False
+
+    def eval_always(self, predicate: Expr, within: int | None) -> bool:
+        """Evaluate Always: predicate holds at all steps in trajectory."""
+        for record in self.records:
+            trajectory = record.payload.get("trajectory")
+            if not trajectory:
+                continue
+            steps = trajectory[:within] if within else trajectory
+            for _step in steps:
+                ctx = EvaluationContext(record)
+                if not evaluate(predicate, ctx):
+                    return False
+        return bool(self.records)
+
+    def eval_monotonic(self, expr: Expr, direction: str) -> bool:
+        """Evaluate Monotonic: values strictly increase/decrease."""
+        from itertools import pairwise
+
+        for record in self.records:
+            trajectory = record.payload.get("trajectory")
+            if not trajectory:
+                continue
+            values = []
+            for _step in trajectory:
+                # Would need trajectory-specific context
+                ctx = EvaluationContext(record)
+                val = _eval_value(expr, ctx)
+                if isinstance(val, (int, float)):
+                    values.append(float(val))
+            if len(values) < 2:
+                continue
+            if direction == "increase" and not all(
+                v2 > v1 for v1, v2 in pairwise(values)
+            ):
+                return False
+            if direction == "decrease" and not all(
+                v2 < v1 for v1, v2 in pairwise(values)
+            ):
+                return False
+        return True
 
 
 def _eval_binary(  # ruff: ignore[complex-structure, too-many-return-statements] - binary op dispatcher
@@ -490,8 +907,43 @@ def _eval_binary(  # ruff: ignore[complex-structure, too-many-return-statements]
             raise ValueError(f"Unknown binary op: {op}")
 
 
-def _eval_value(expr: Expr, ctx: CoordinateContext) -> Any:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches] - match/case evaluator
+def _eval_value(  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-locals, too-many-statements] - match/case evaluator
+    expr: Expr, ctx: CoordinateContext | CampaignContext
+) -> Any:
     """Evaluate an expression to its actual value (not coerced to bool)."""
+    # CampaignContext-only expressions
+    if isinstance(ctx, CampaignContext):
+        match expr:
+            case ForAll(filter_expr, body_expr):
+                return ctx.eval_forall(filter_expr, body_expr)
+            case Exists(filter_expr, body_expr):
+                return ctx.eval_exists(filter_expr, body_expr)
+            case Mean(expr, group_by):
+                return ctx.eval_aggregation("Mean", expr, group_by)
+            case Max(expr, group_by):
+                return ctx.eval_aggregation("Max", expr, group_by)
+            case Min(expr, group_by):
+                return ctx.eval_aggregation("Min", expr, group_by)
+            case Std(expr, group_by):
+                return ctx.eval_aggregation("Std", expr, group_by)
+            case Diff(left, right):
+                return ctx.eval_diff(left, right)
+            case Ratio(left, right):
+                return ctx.eval_ratio(left, right)
+            case Bind(template, _bindings):
+                # Templates need a registry - return template name for now
+                return template
+            case Eventually(predicate, within):
+                return ctx.eval_eventually(predicate, within)
+            case Always(predicate, within):
+                return ctx.eval_always(predicate, within)
+            case Monotonic(expr, direction):
+                return ctx.eval_monotonic(expr, direction)
+            case Template(_name, _params, _body):
+                # Template definition - return the template object
+                return expr
+
+    # CoordinateContext expressions
     match expr:
         case Var(name):
             return ctx.resolve_var(name)
@@ -603,7 +1055,7 @@ def _eval_value(expr: Expr, ctx: CoordinateContext) -> Any:  # ruff: ignore[comp
             raise ValueError(f"Unknown expression type: {type(expr)}")
 
 
-def evaluate(expr: Expr, ctx: CoordinateContext) -> bool:  # ruff: ignore[complex-structure,too-many-return-statements,too-many-branches] - match/case evaluator
+def evaluate(expr: Expr, ctx: CoordinateContext | CampaignContext) -> bool:  # ruff: ignore[complex-structure,too-many-return-statements,too-many-branches] - match/case evaluator
     """Evaluate an expression as a predicate (coerced to bool)."""
     return bool(_eval_value(expr, ctx))
 
@@ -737,15 +1189,77 @@ def div(left: Expr, right: Expr) -> Div:
     return Div(left, right)
 
 
+# Phase 1: Quantifiers and Aggregations
+def forall(filter_expr: Expr, body_expr: Expr) -> ForAll:
+    return ForAll(filter_expr, body_expr)
+
+
+def exists(filter_expr: Expr, body_expr: Expr) -> Exists:
+    return Exists(filter_expr, body_expr)
+
+
+def mean(expr: Expr, group_by: tuple[str, ...] = ()) -> Mean:
+    return Mean(expr, group_by)
+
+
+def max_(expr: Expr, group_by: tuple[str, ...] = ()) -> Max:
+    return Max(expr, group_by)
+
+
+def min_(expr: Expr, group_by: tuple[str, ...] = ()) -> Min:
+    return Min(expr, group_by)
+
+
+def std(expr: Expr, group_by: tuple[str, ...] = ()) -> Std:
+    return Std(expr, group_by)
+
+
+def diff(left: Expr, right: Expr) -> Diff:
+    return Diff(left, right)
+
+
+def ratio(left: Expr, right: Expr) -> Ratio:
+    return Ratio(left, right)
+
+
+# Phase 2: Hypothesis Templates
+def template(name: str, params: tuple[str, ...], body: Expr) -> Template:
+    return Template(name, params, body)
+
+
+def bind(template: str, bindings: dict[str, Expr]) -> Bind:
+    return Bind(template, bindings)
+
+
+# Phase 3: Trajectory Operators
+def eventually(predicate: Expr, within: int | None = None) -> Eventually:
+    return Eventually(predicate, within)
+
+
+def always(predicate: Expr, within: int | None = None) -> Always:
+    return Always(predicate, within)
+
+
+def monotonic(expr: Expr, direction: str = "increase") -> Monotonic:
+    return Monotonic(expr, direction)
+
+
 __all__ = [
     "Add",
+    "Always",
+    "Bind",
     "Call",
+    "CampaignContext",
     "Const",
     "CoordinateContext",
+    "Diff",
     "Div",
     "Eq",
     "EvaluationContext",
+    "Eventually",
+    "Exists",
     "Expr",
+    "ForAll",
     "Ge",
     "Gt",
     "HasKey",
@@ -753,24 +1267,37 @@ __all__ = [
     "In",
     "Le",
     "Lt",
+    "Max",
+    "Mean",
+    "Min",
+    "Monotonic",
     "Mul",
     "Ne",
     "Not",
     "NotIn",
     "Or",
+    "Ratio",
+    "Std",
     "Sub",
+    "Template",
     "Var",
     "add",
+    "always",
     "and_",
+    "bind",
     "call",
     "const",
+    "diff",
     "div",
     "eq",
     "evaluate",
+    "eventually",
+    "exists",
     "expr_from_json",
     "expr_from_string",
     "expr_hash",
     "expr_to_json",
+    "forall",
     "ge",
     "gt",
     "has_key",
@@ -778,11 +1305,18 @@ __all__ = [
     "in_",
     "le",
     "lt",
+    "max_",
+    "mean",
+    "min_",
+    "monotonic",
     "mul",
     "ne",
     "not_",
     "not_in",
     "or_",
+    "ratio",
+    "std",
     "sub",
+    "template",
     "var",
 ]

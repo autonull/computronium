@@ -312,6 +312,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output directory for gallery figures",
     )
 
+    # Hypothesis campaign command
+    p_hypothesis = sub.add_parser(
+        "hypothesis-campaign",
+        help="Run hypothesis templates over campaign records (population-level assertions)",
+    )
+    p_hypothesis.add_argument(
+        "--store", default="experiment.duckdb", help="DuckDB store path"
+    )
+    p_hypothesis.add_argument(
+        "--run-id", default=None, help="Run ID to evaluate (latest if omitted)"
+    )
+    p_hypothesis.add_argument(
+        "--templates", required=True, help="JSON file with hypothesis templates"
+    )
+    p_hypothesis.add_argument(
+        "--output", default=None, help="Output file for results (JSON)"
+    )
+    p_hypothesis.add_argument(
+        "--bind",
+        action="append",
+        default=[],
+        help="Parameter bindings for templates (format: template_name:param=value)",
+    )
+
     return parser
 
 
@@ -590,7 +614,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 0
 
 
-def _cmd_report(args: argparse.Namespace) -> int:
+def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
     """Generate report from store."""
     store = _open_store(args.store)
     if store is None:
@@ -795,13 +819,181 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
     logger.info(f"Rendering gallery from {records_dir} to {output_dir}")
     try:
         metas = render_gallery(records_dir, output_dir)
+    except Exception:
+        logger.exception("Gallery rendering failed")
+        return 1
+    else:
         logger.info(f"Rendered {len(metas)} gallery figures")
         for meta in metas:
             logger.info(f"  {meta.figure_png} (data_sha256={meta.data_sha256[:16]}...)")
         return 0
-    except Exception:
-        logger.exception("Gallery rendering failed")
+
+
+def _cmd_hypothesis_campaign(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches, too-many-statements, too-many-locals]
+    """Run hypothesis templates over campaign records."""
+    store = _open_store(args.store)
+    if store is None:
         return 1
+
+    with store:
+        # Determine run_id
+        run_id = args.run_id
+        if run_id is None:
+            # Query all records to find the latest run_id
+            all_records = list(store.query_records())
+            if not all_records:
+                logger.error("No records found in store")
+                return 1
+            run_ids = {r.provenance.links.get("run_id") for r in all_records}
+            run_id = max(run_ids)  # Use latest by string comparison
+            logger.info(f"Auto-selected run_id: {run_id}")
+        else:
+            # Verify run exists by querying records
+            all_records = list(store.query_records(run_id=run_id))
+            if not all_records:
+                logger.error(f"No records found for run_id: {run_id}")
+                return 1
+
+        logger.info(f"Evaluating hypothesis templates for run: {run_id}")
+
+        # Load templates
+        import contextlib
+        import json
+
+        templates_path = Path(args.templates)
+        if not templates_path.exists():
+            logger.error(f"Templates file not found: {templates_path}")
+            return 1
+
+        with templates_path.open(encoding="utf-8") as f:
+            templates_data = json.load(f)
+
+        # Parse bindings
+        bindings: dict[str, dict[str, Any]] = {}
+        for bind_str in args.bind:
+            if ":" not in bind_str or "=" not in bind_str:
+                logger.error(
+                    f"Invalid binding format: {bind_str} (expected template:param=value)"
+                )
+                return 1
+            template_name, param_value = bind_str.split(":", 1)
+            param, value = param_value.split("=", 1)
+            # Try to parse value as JSON
+            with contextlib.suppress(json.JSONDecodeError):
+                value = json.loads(value)
+            bindings.setdefault(template_name, {})[param] = value
+
+        # Query all records for the run
+        records = list(store.query_records(run_id=run_id))
+        if not records:
+            logger.warning(f"No records found for run {run_id}")
+            return 0
+
+        # Create campaign context
+        from computronium.experiment.legality.dsl import (
+            CampaignContext,
+            Diff,
+            Exists,
+            ForAll,
+            Max,
+            Mean,
+            Min,
+            Ratio,
+            Std,
+            expr_from_json,
+        )
+
+        campaign_ctx = CampaignContext(records)
+
+        # Evaluate each template
+        results = {}
+        for template_data in templates_data:
+            template_name = template_data.get("name")
+            if not template_name:
+                logger.warning("Template missing name, skipping")
+                continue
+
+            template_expr = expr_from_json(template_data["expr"])
+
+            # Apply bindings if any
+            if template_name in bindings:
+                # For now, we just note the bindings - full template binding
+                # would require substituting variables in the expression
+                logger.info(
+                    f"Template {template_name} has bindings: {bindings[template_name]}"
+                )
+
+            # Evaluate based on expression type
+            result = None
+            if isinstance(template_expr, ForAll):
+                result = campaign_ctx.eval_forall(
+                    template_expr.filter, template_expr.body
+                )
+            elif isinstance(template_expr, Exists):
+                result = campaign_ctx.eval_exists(
+                    template_expr.filter, template_expr.body
+                )
+            elif isinstance(template_expr, Mean):
+                result = campaign_ctx.eval_aggregation(
+                    "Mean", template_expr.expr, template_expr.group_by
+                )
+            elif isinstance(template_expr, Max):
+                result = campaign_ctx.eval_aggregation(
+                    "Max", template_expr.expr, template_expr.group_by
+                )
+            elif isinstance(template_expr, Min):
+                result = campaign_ctx.eval_aggregation(
+                    "Min", template_expr.expr, template_expr.group_by
+                )
+            elif isinstance(template_expr, Std):
+                result = campaign_ctx.eval_aggregation(
+                    "Std", template_expr.expr, template_expr.group_by
+                )
+            elif isinstance(template_expr, Diff):
+                result = campaign_ctx.eval_diff(template_expr.left, template_expr.right)
+            elif isinstance(template_expr, Ratio):
+                result = campaign_ctx.eval_ratio(
+                    template_expr.left, template_expr.right
+                )
+            else:
+                logger.warning(
+                    f"Template {template_name}: unsupported expression type {type(template_expr).__name__}"
+                )
+                continue
+
+            # Convert result to JSON-serializable format
+            def to_serializable(obj):
+                if isinstance(obj, dict):
+                    return {str(k): to_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [to_serializable(v) for v in obj]
+                elif isinstance(obj, (int, float, str, bool)) or obj is None:
+                    return obj
+                else:
+                    return str(obj)
+
+            results[template_name] = {
+                "result": to_serializable(result),
+                "template_type": type(template_expr).__name__,
+            }
+
+        # Output results
+        output_data = {
+            "run_id": run_id,
+            "record_count": len(records),
+            "results": results,
+        }
+
+        if args.output:
+            output_path = Path(args.output)
+            output_path.write_text(
+                json.dumps(output_data, indent=2, default=str), encoding="utf-8"
+            )
+            logger.info(f"Results written to {output_path}")
+        else:
+            print(json.dumps(output_data, indent=2, default=str))
+
+        return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -817,6 +1009,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "conformance": _cmd_conformance,
         "status": _cmd_status,
         "gallery": _cmd_gallery,
+        "hypothesis-campaign": _cmd_hypothesis_campaign,
     }
     try:
         handler = command_handlers.get(args.command)

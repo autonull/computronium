@@ -57,11 +57,11 @@ def step(case: Case) -> dict[str, float]:
             device=case.state.device,
         )
         system = _make_dfa_system(system_config)
-        
+
         # Now use the kernel backend with this system's geometry
         device_str = str(case.state.device)
         hardware = HardwareTarget.TRITON if device_str == "cuda" else HardwareTarget.CPU
-        
+
         backend = DFAKernelBackend()
         num_layers = len(system.geometry.params) // 2
         config = KernelConfig(
@@ -88,7 +88,9 @@ def step(case: Case) -> dict[str, float]:
 
         target = case.target
         if target is None:
-            target = torch.zeros(case.state.shape[0], dtype=torch.long, device=case.state.device)
+            target = torch.zeros(
+                case.state.shape[0], dtype=torch.long, device=case.state.device
+            )
 
         result = backend.train_step(case.state, target)
     finally:
