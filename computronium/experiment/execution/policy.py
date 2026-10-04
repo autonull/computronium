@@ -715,16 +715,37 @@ class EvolutionPolicy:
         self._add_to_population(record)
 
     def _add_to_population(self, record: Record) -> None:
+        # Only add PASS records to the population; FAIL records (even with high
+        # scores) violate constraints and should not be used as parents.
+        if record.status.gate_verdict.value != "PASS":
+            return
         coord = Coordinate.from_record(record)
         self._population.append((coord, record.schedule, self._extract_score(record)))
         self._population.sort(key=lambda member: member[2], reverse=True)
         self._population = self._population[: self._population_size]
+
+    def _target_schedule(self, ctx: ProposalContext) -> Schedule:
+        """Create the target schedule from the run spec for maturation/promotion."""
+        return Schedule(
+            fidelity=ctx.spec.fidelity,
+            seed=ctx.spec.seed,
+            n_seeds=ctx.spec.n_seeds,
+            epochs=ctx.spec.epochs,
+            batch_limit=ctx.spec.batch_limit,
+            budget_id="initial",
+            task_id=ctx.spec.task_names[0] if ctx.spec.task_names else "",
+            param_budget=ctx.spec.param_budget,
+            device=ctx.spec.device,
+            deterministic=ctx.spec.deterministic,
+            num_workers=ctx.spec.num_workers,
+        )
 
     def _evolve(self, ctx: ProposalContext) -> Iterator[Proposal]:
         """Apply evolutionary operators, keeping only cells the run may execute."""
         if not self._population:
             return
 
+        target_sched = self._target_schedule(ctx)
         parents = self._population[: max(2, self._population_size // 4)]
         for parent_coord, parent_sched, _ in parents:
             if self._rng.random() >= self._mutation_rate:
@@ -732,16 +753,16 @@ class EvolutionPolicy:
             child = self._with_params(
                 parent_coord, self._mutate_params(parent_coord.params)
             )
-            if ctx.legal(child, parent_sched) and ctx.fresh(child, parent_sched):
-                yield Proposal(child, parent_sched, self._name)
+            if ctx.legal(child, target_sched) and ctx.fresh(child, target_sched):
+                yield Proposal(child, target_sched, self._name)
 
         if len(parents) >= 2 and self._rng.random() < self._crossover_rate:
             first, second = self._rng.sample(parents, 2)
             child = self._with_params(
                 first[0], self._crossover_params(first[0].params, second[0].params)
             )
-            if ctx.legal(child, first[1]) and ctx.fresh(child, first[1]):
-                yield Proposal(child, first[1], self._name)
+            if ctx.legal(child, target_sched) and ctx.fresh(child, target_sched):
+                yield Proposal(child, target_sched, self._name)
 
     def _with_params(self, coord: Coordinate, params: dict[str, Any]) -> Coordinate:
         """A coordinate carrying evolved hyperparameters."""

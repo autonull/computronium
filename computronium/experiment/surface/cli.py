@@ -162,6 +162,7 @@ RUN_PROFILES: dict[str, RunProfile] = {
         name="maturation",
         description="Re-run front cells at higher fidelity (L1→L2)",
         stages=[
+            "s3_schedule",
             "s4_gate",
             "s5_compose",
             "s6_train",
@@ -185,11 +186,21 @@ RUN_PROFILES: dict[str, RunProfile] = {
     "claim": RunProfile(
         name="claim",
         description="Claim-grade L2 re-runs with CEEC governance (N≥10 seeds)",
-        stages=["s8_record", "s9_attribute", "s10_decide", "s11_report"],
+        stages=[
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+            "s9_attribute",
+            "s10_decide",
+            "s11_report",
+        ],
         fidelity="L2",
         n_seeds=10,
         epochs=20,
-        budget_seconds=None,
+        budget_seconds=86400.0,  # 24 hours
         task="digits",
         policy="evolution",
         param_budget=BROAD_PARAM_BUDGET,
