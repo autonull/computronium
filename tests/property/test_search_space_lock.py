@@ -219,7 +219,9 @@ def test_every_declared_primitive_reaches_the_stream() -> None:
         geometry=("feedforward", "recurrent"),
     )
     space = search_space_from_spec(spec)
-    cells = generate_candidates(spec, space, limit=2 * 2 * 3 * 2)  # 2 dyn x 2 credit x 3 update x 2 geom
+    cells = generate_candidates(
+        spec, space, limit=2 * 2 * 3 * 2
+    )  # 2 dyn x 2 credit x 3 update x 2 geom
     for axis, expected in (
         ("dynamics", {"energy_minimization", "instantaneous"}),
         ("credit", {"gradient", "pepita"}),

@@ -60,24 +60,25 @@ class RoundController:
         from computronium.experiment.execution.stage import StageTransition
 
         self._decision = decision
-        self._current_round += 1
 
-        if decision.transition == StageTransition.COMPLETE:
-            return False
-        if decision.transition == StageTransition.PAUSE:
-            return False
-        if decision.transition == StageTransition.STOP:
-            return False
-
-        # Check min rounds
+        # Check if we've already completed the minimum required rounds
         if self._current_round < self._min_rounds:
+            self._current_round += 1
             return True
 
         # Check max rounds
         if self._max_rounds is not None and self._current_round >= self._max_rounds:
             return False
 
-        return decision.transition == StageTransition.CONTINUE
+        # Check decision transition
+        match decision.transition:
+            case StageTransition.CONTINUE:
+                self._current_round += 1
+                return True
+            case StageTransition.COMPLETE | StageTransition.PAUSE | StageTransition.STOP:
+                return False
+            case _:
+                return False
 
 
 def create_decision(

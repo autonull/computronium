@@ -236,7 +236,7 @@ class ProposalContext:
                 budget=self.budget,
                 cost_model=self.cost_model,
                 shape=self.shape,
-                check_composable=True,  # Filter invalid cells before proposing
+                check_composable=False,  # Defer validation to GateStage/ComposeStage
             )
             if self.fresh(coordinate, schedule, measured)
         )
@@ -247,14 +247,18 @@ class ProposalContext:
 
         The space is a factorial, so its head is one setting of its outer axes:
         a prefix is a corner, not a sample, and a policy choosing among one
-        corner cannot compare axes. The stride spreads the window across the
-        whole declared space and stays deterministic.
+        corner cannot compare axes. The round-robin interleaving in the cell
+        stream already spreads the window across substrates, so taking the
+        first _POOL cells gives representative coverage without striding through
+        the entire declared space.
         """
         from computronium.experiment.execution.search_space import declared_cell_count
 
         total = declared_cell_count(self.spec, self._scoped_space)
-        stride = max(1, total // _POOL)
-        return list(islice(self.cells(limit=total), 0, None, stride))
+        # Take first _POOL cells for efficiency; round-robin interleaving
+        # in the cell stream ensures substrate diversity.
+        limit = min(total, _POOL)
+        return list(islice(self.cells(limit=limit), limit))
 
     def legal(self, coordinate: Coordinate, schedule: Schedule) -> bool:
         """Whether a cell this policy *constructed* is one the run may execute.
@@ -262,14 +266,9 @@ class ProposalContext:
         The generator screens the cells it walks, so this exists for the
         policies that build their own — a mutated cell is a cell nobody has
         composed yet, and an uncomposable cell is discovered by training.
-        
-        Checks both budget affordability and composability (param_budget, etc.).
+
+        Checks budget affordability only; composability is validated at GateStage/ComposeStage.
         """
-        from computronium.experiment.execution.search_space import _composable
-        if self.shape is not None and not _composable(
-            coordinate, schedule.task_id, self.shape, schedule.param_budget
-        ):
-            return False
         return bool(_affordable([(coordinate, schedule)], self.budget, self.cost_model))
 
 

@@ -75,7 +75,16 @@ RUN_PROFILES: dict[str, RunProfile] = {
     "quick-verify": RunProfile(
         name="quick-verify",
         description="Fast sanity check: L0 smoke + L1 evidence on few seeds",
-        stages=["s1_frame", "s2_space", "s3_schedule", "s4_gate", "s5_compose"],
+        stages=[
+            "s1_frame",
+            "s2_space",
+            "s3_schedule",
+            "s4_gate",
+            "s5_compose",
+            "s6_train",
+            "s7_measure",
+            "s8_record",
+        ],
         fidelity="L1",
         n_seeds=1,
         epochs=3,

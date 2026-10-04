@@ -175,10 +175,12 @@ def _filter_axes_for_validity(
         valid_names_by_axis: dict[StructuralAxis, set[str]] = {}
         for axis in StructuralAxis:
             valid_names_by_axis[axis] = set(_filter_axes_cache[cache_key][axis.value])
-        
+
         filtered_snapshot = []
         for axis_spec in axes_snapshot:
-            if axis_spec.name in valid_names_by_axis.get(axis_spec.axis_kind, set()) or not valid_names_by_axis.get(axis_spec.axis_kind):
+            if axis_spec.name in valid_names_by_axis.get(
+                axis_spec.axis_kind, set()
+            ) or not valid_names_by_axis.get(axis_spec.axis_kind):
                 filtered_snapshot.append(axis_spec)
         return filtered_snapshot
 
@@ -254,37 +256,41 @@ def _filter_axes_for_validity(
             if all_pass:
                 valid_tuples.add(values)
 
-        valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
+        valid_by_axis: dict[StructuralAxis, set[str]] = {
+            axis: set() for axis in axes_order
+        }
         for tup in valid_tuples:
             for axis, name in zip(axes_order, tup, strict=True):
                 valid_by_axis[axis].add(name)
     else:
         # Approximate: for each primitive, check if it can be part of ANY valid combination
         # by searching combinations with that primitive fixed
-        valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
-        
+        valid_by_axis: dict[StructuralAxis, set[str]] = {
+            axis: set() for axis in axes_order
+        }
+
         # Pre-compute default values for other axes (first primitive each)
         default_selection = {}
         for axis in axes_order:
             primitives = primitives_by_axis.get(axis, [])
             default_selection[axis.value] = primitives[0] if primitives else ""
-        
+
         # Max combinations to check per primitive
         max_checks_per_primitive = 500
-        
+
         for axis in axes_order:
             for primitive in primitives_by_axis.get(axis, []):
                 # Try to find a valid combination with this primitive fixed
                 found = False
-                
+
                 # Build list of other axes' primitives
                 other_axes = [a for a in axes_order if a != axis]
                 other_primitives = [primitives_by_axis.get(a, []) for a in other_axes]
-                
+
                 if not all(other_primitives):
                     # Some axis has no primitives - skip
                     continue
-                
+
                 # Quick check: try default combination first
                 test_selection = default_selection.copy()
                 test_selection[axis.value] = primitive
@@ -292,7 +298,7 @@ def _filter_axes_for_validity(
                 ctx = CoordinateContext(
                     coordinate, task=spec.task_names[0] if spec.task_names else None
                 )
-                
+
                 all_pass = True
                 for constraint in void_constraints:
                     pred = constraint.predicate
@@ -301,11 +307,11 @@ def _filter_axes_for_validity(
                     if not evaluate(pred, ctx):
                         all_pass = False
                         break
-                
+
                 if all_pass:
                     valid_by_axis[axis].add(primitive)
                     continue
-                
+
                 # If default failed, search other combinations (limited)
                 checks = 0
                 for values in product(*other_primitives):
@@ -319,7 +325,7 @@ def _filter_axes_for_validity(
                     ctx = CoordinateContext(
                         coordinate, task=spec.task_names[0] if spec.task_names else None
                     )
-                    
+
                     all_pass = True
                     for constraint in void_constraints:
                         pred = constraint.predicate
@@ -328,7 +334,7 @@ def _filter_axes_for_validity(
                         if not evaluate(pred, ctx):
                             all_pass = False
                             break
-                    
+
                     if all_pass:
                         valid_by_axis[axis].add(primitive)
                         found = True
@@ -343,7 +349,9 @@ def _filter_axes_for_validity(
     # Filter axes_snapshot to only primitives that appear in at least one valid tuple
     filtered_snapshot = []
     for axis_spec in axes_snapshot:
-        if axis_spec.name in valid_by_axis.get(axis_spec.axis_kind, set()) or not valid_by_axis.get(axis_spec.axis_kind):
+        if axis_spec.name in valid_by_axis.get(
+            axis_spec.axis_kind, set()
+        ) or not valid_by_axis.get(axis_spec.axis_kind):
             filtered_snapshot.append(axis_spec)
 
     return filtered_snapshot
@@ -408,25 +416,27 @@ def _ladder(
     return tuple(values)
 
 
-def _max_hidden_dim(param_budget: int, input_dim: int, output_dim: int, num_layers: int = 1) -> int:
+def _max_hidden_dim(
+    param_budget: int, input_dim: int, output_dim: int, num_layers: int = 1
+) -> int:
     """Estimate maximum hidden_dim that fits within param_budget.
-    
+
     For recurrent/feedforward geometry:
     - Parameters ≈ input_dim * hidden_dim + hidden_dim^2 * (num_layers - 1) + hidden_dim * output_dim + hidden_dim (bias)
     - Simplified: hidden_dim * (input_dim + hidden_dim * (num_layers - 1) + output_dim + 1) <= param_budget
-    
+
     Args:
         param_budget: Maximum parameter count
         input_dim: Input dimension
         output_dim: Output dimension
         num_layers: Number of layers (default 1)
-    
+
     Returns:
         Maximum hidden_dim that fits within budget
     """
     if param_budget <= 0:
         return 4096  # Unconstrained, use harvested domain max
-    
+
     # Solve quadratic: hidden_dim^2 * (num_layers - 1) + hidden_dim * (input_dim + output_dim + 1) - param_budget <= 0
     if num_layers <= 1:
         # Linear: hidden_dim * (input_dim + output_dim + 1) <= param_budget
@@ -439,6 +449,7 @@ def _max_hidden_dim(param_budget: int, input_dim: int, output_dim: int, num_laye
         c = param_budget
         # Positive root: (-b + sqrt(b^2 + 4ac)) / (2a)
         import math
+
         disc = b * b + 4 * a * c
         if disc < 0:
             return 8
@@ -446,30 +457,39 @@ def _max_hidden_dim(param_budget: int, input_dim: int, output_dim: int, num_laye
         return max(8, min(4096, int(root)))
 
 
-def _swept(spec: RunSpec, schema: HarvestedSchema, shape: ShapeResolver | None = None) -> dict[str, tuple[Any, ...]]:
+def _swept(
+    spec: RunSpec, schema: HarvestedSchema, shape: ShapeResolver | None = None
+) -> dict[str, tuple[Any, ...]]:
     """Every hyperparameter the spec narrowed, with its ladder of legal values.
 
     Un-swept hyperparameters stay absent from the coordinate and are resolved
     by ``harvest_schema().active()`` at composition time, from prior and domain.
     """
     specs_by_name = schema.by_name()
-    
+
     # Compute task shape for param_budget-aware domain narrowing
     task_shape = None
     if shape is not None and spec.task_names:
         task_shape = shape(spec.task_names[0])
-    
+
     # Build effective domains, narrowing hidden_dim by param_budget if possible
     effective_domains: dict[str, Domain] = {}
     for name, domain in spec.hyperparameters.items():
         effective_domains[name] = domain
-    
+
     # If hidden_dim is not explicitly swept but param_budget is set, add a constraint
-    if "hidden_dim" not in effective_domains and spec.param_budget > 0 and task_shape is not None:
-        max_h = _max_hidden_dim(spec.param_budget, task_shape.input_shape[-1], task_shape.output_dim)
+    if (
+        "hidden_dim" not in effective_domains
+        and spec.param_budget > 0
+        and task_shape is not None
+    ):
+        max_h = _max_hidden_dim(
+            spec.param_budget, task_shape.input_shape[-1], task_shape.output_dim
+        )
         from computronium.experiment.schema.axis import Domain, Scale
+
         effective_domains["hidden_dim"] = Domain(lo=8, hi=max_h, scale=Scale.LOG)
-    
+
     return {
         name: _ladder(
             narrow_domain(domain, specs_by_name[name].domain, name),
@@ -619,7 +639,9 @@ def declared_cell_count(spec: RunSpec, space: SearchSpace) -> int:
     return math.prod(per_axis) * len(space.tasks) * steps
 
 
-def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None) -> Iterator[tuple[Coordinate, str]]:
+def _walk(
+    spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None
+) -> Iterator[tuple[Coordinate, str]]:
     """Every cell the spec declares, as ``(coordinate, task)``.
 
     The axes are walked with round-robin interleaving on the first axis
@@ -633,8 +655,6 @@ def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None)
     Yields:
         ``(coordinate, task)`` for every cell the spec declares.
     """
-    from itertools import cycle
-
     per_axis = [space.primitives(axis) for axis in AXIS_KIND_ORDER]
     if not space.tasks or not all(per_axis):
         return
@@ -651,7 +671,8 @@ def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None)
     if len(first_axis_values) == 1:
         for values in product(*per_axis):
             selection = {
-                axis.value: name for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
+                axis.value: name
+                for axis, name in zip(AXIS_KIND_ORDER, values, strict=True)
             }
             for task in tasks:
                 for step in range(steps):
@@ -661,35 +682,10 @@ def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None)
                     yield Coordinate(**selection, params=params), task
         return
 
-    # Build iterators for each first-axis value
-    iterators = []
-    for first_val in first_axis_values:
-        # Create product of remaining axes
-        other_products = product(*other_axes_values)
-        def make_iter(fv, op):
-            for other_vals in op:
-                selection = {AXIS_KIND_ORDER[0].value: fv}
-                for axis, val in zip(AXIS_KIND_ORDER[1:], other_vals, strict=True):
-                    selection[axis.value] = val
-                for task in tasks:
-                    for step in range(steps):
-                        params = _cell_params(
-                            Coordinate(**selection, params={}), schema, ladders, step
-                        )
-                        yield Coordinate(**selection, params=params), task
-            # Note: we don't re-create other_products here; it's a one-shot iterator
-        # We need to create the iterator fresh each cycle, so wrap in a function
-        iterators.append((first_val, other_axes_values))
-
-    # Round-robin: yield one from each substrate's iterator before moving to next
-    # Use cycle to loop until all are exhausted
-    active = len(iterators)
-    indices = [0] * len(iterators)
-    # Pre-compute all combinations for each substrate (they're small: 1*1*7*6*12 = 504 per substrate)
-    substrate_combos = []
-    for first_val, other_vals in iterators:
-        combos = []
-        for other_vals_tuple in product(*other_vals):
+    # Build lazy iterators for each first-axis value
+    def _substrate_iterator(first_val: str):
+        """Lazy iterator for all combinations with a fixed first-axis value."""
+        for other_vals_tuple in product(*other_axes_values):
             selection = {AXIS_KIND_ORDER[0].value: first_val}
             for axis, val in zip(AXIS_KIND_ORDER[1:], other_vals_tuple, strict=True):
                 selection[axis.value] = val
@@ -698,15 +694,23 @@ def _walk(spec: RunSpec, space: SearchSpace, shape: ShapeResolver | None = None)
                     params = _cell_params(
                         Coordinate(**selection, params={}), schema, ladders, step
                     )
-                    combos.append((Coordinate(**selection, params=params), task))
-        substrate_combos.append(combos)
+                    yield Coordinate(**selection, params=params), task
 
-    # Round-robin yield
-    max_len = max(len(c) for c in substrate_combos)
-    for i in range(max_len):
-        for combos in substrate_combos:
-            if i < len(combos):
-                yield combos[i]
+    # Create iterator for each substrate
+    substrate_iterators = [_substrate_iterator(fv) for fv in first_axis_values]
+    exhausted = [False] * len(substrate_iterators)
+    active_count = len(substrate_iterators)
+
+    # Round-robin yield: take one from each substrate iterator in turn
+    while active_count > 0:
+        for i, it in enumerate(substrate_iterators):
+            if exhausted[i]:
+                continue
+            try:
+                yield next(it)
+            except StopIteration:
+                exhausted[i] = True
+                active_count -= 1
 
 
 def iter_candidates(
@@ -806,8 +810,12 @@ def iter_candidates(
             if failed:
                 continue
 
-        if check_composable and shape is not None and not _composable(
-            coordinate, schedule.task_id, shape, schedule.param_budget
+        if (
+            check_composable
+            and shape is not None
+            and not _composable(
+                coordinate, schedule.task_id, shape, schedule.param_budget
+            )
         ):
             continue
         if budget is not None and cost_model is not None:
