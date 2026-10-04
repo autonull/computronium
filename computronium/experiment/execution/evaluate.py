@@ -84,17 +84,19 @@ class CellEvaluation:
     task_id: str
 
 
-def _task(task_id: str, device: str) -> Any:
-    """The set-up task, cached per (task, device)."""
+def _task(task_id: str, device: str, num_workers: int = 0) -> Any:
+    """The set-up task, cached per (task, device, num_workers)."""
     from computronium.domains.factory import create_task
 
     resolved_device = _resolve_device(device)
-    key = (task_id, resolved_device)
+    key = (task_id, resolved_device, num_workers)
     with _TASK_LOCK:
         cached = _TASK_CACHE.get(key)
     if cached is not None:
         return cached
-    task = create_task(task_id, device=resolved_device, quick_mode=True, num_workers=0)
+    task = create_task(
+        task_id, device=resolved_device, quick_mode=True, num_workers=num_workers
+    )
     task.setup()
     with _TASK_LOCK:
         _TASK_CACHE.setdefault(key, task)
@@ -255,7 +257,7 @@ def evaluate_cell(
     """
     import torch
 
-    task = _task(schedule.task_id, schedule.device)
+    task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
 
     cell = compose_cell_system(
@@ -275,6 +277,7 @@ def evaluate_cell(
         limit_val_batches=limit,
         track_flops=False,
         track_memory=False,
+        deterministic=schedule.deterministic,
     )
     torch.manual_seed(schedule.seed)
 

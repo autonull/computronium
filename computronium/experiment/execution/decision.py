@@ -52,6 +52,14 @@ class RoundController:
         return self._current_round
 
     @property
+    def max_rounds(self) -> int | None:
+        return self._max_rounds
+
+    @property
+    def min_rounds(self) -> int:
+        return self._min_rounds
+
+    @property
     def decision(self) -> Decision | None:
         return self._decision
 

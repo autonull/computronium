@@ -48,6 +48,7 @@ from computronium.experiment.surface.report import (
     export_to_parquet,
     generate_run_report,
 )
+from computronium.visualization.gallery import render_gallery
 
 logger = get_logger()
 
@@ -253,6 +254,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output format",
     )
     p_report.add_argument("--output", default=None, help="Output file path")
+    p_report.add_argument(
+        "--axis-coverage",
+        action="store_true",
+        help="Show per-axis stratification of records (R18 axis-coverage section)",
+    )
 
     # Export command
     p_export = sub.add_parser("export", help="Export store data for round-trip")
@@ -289,6 +295,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--detailed",
         action="store_true",
         help="Show campaign economics: cost per record, projected completion",
+    )
+
+    # Gallery command
+    p_gallery = sub.add_parser(
+        "gallery", help="Render gallery figures from demo records"
+    )
+    p_gallery.add_argument(
+        "--records-dir",
+        default="docs/figures/run_records",
+        help="Directory containing demo run records",
+    )
+    p_gallery.add_argument(
+        "--output-dir",
+        default="docs/figures/gallery",
+        help="Output directory for gallery figures",
     )
 
     return parser
@@ -585,6 +606,22 @@ def _cmd_report(args: argparse.Namespace) -> int:
 
         logger.info(f"Generating report for run: {run_id}")
 
+        if args.axis_coverage:
+            generator = ReportGenerator(store)
+            coverage = generator.axis_coverage(run_id)
+            lines = ["Axis Coverage (per-axis stratification):"]
+            for axis, counts in sorted(coverage.items()):
+                lines.append(f"  {axis}:")
+                for value, count in sorted(counts.items()):
+                    lines.append(f"    {value}: {count}")
+            report_text = "\n".join(lines)
+            if args.output:
+                Path(args.output).write_text(report_text, encoding="utf-8")
+                logger.info(f"Report written to {args.output}")
+            else:
+                print(report_text)
+            return 0
+
         if args.format == "text":
             report_text = generate_run_report(store, run_id)
             if args.output:
@@ -746,6 +783,27 @@ def _print_detailed_status(summary: RunSummary) -> None:
         print("  Cost per Record: N/A (no budget consumed yet)")
 
 
+def _cmd_gallery(args: argparse.Namespace) -> int:
+    """Render gallery figures from demo records."""
+    records_dir = Path(args.records_dir)
+    output_dir = Path(args.output_dir)
+
+    if not records_dir.exists():
+        logger.error(f"Records directory not found: {records_dir}")
+        return 1
+
+    logger.info(f"Rendering gallery from {records_dir} to {output_dir}")
+    try:
+        metas = render_gallery(records_dir, output_dir)
+        logger.info(f"Rendered {len(metas)} gallery figures")
+        for meta in metas:
+            logger.info(f"  {meta.figure_png} (data_sha256={meta.data_sha256[:16]}...)")
+        return 0
+    except Exception:
+        logger.exception("Gallery rendering failed")
+        return 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for surface CLI."""
     import logging
@@ -758,6 +816,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "export": _cmd_export,
         "conformance": _cmd_conformance,
         "status": _cmd_status,
+        "gallery": _cmd_gallery,
     }
     try:
         handler = command_handlers.get(args.command)

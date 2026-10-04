@@ -132,11 +132,11 @@ comp run claim --store pm.duckdb
 | Fix protobuf version conflict | 30min | Regenerate proto | ✅ Done |
 | Implement Triton DFA kernel | 2-4hr | `computronium/algorithms/dfa/kernel.py` | ✅ Done |
 | Implement Triton TP kernel | 2-4hr | `computronium/algorithms/tp/kernel.py` | ✅ Done |
-| Add tqdm progress bar to pipeline | 1hr | `computronium/experiment/execution/pipeline.py` | ⏳ Pending |
-| Single-worker DataLoader for determinism | 30min | `computronium/domains/registry.py` task loaders | ⏳ Pending |
-| `torch.use_deterministic_algorithms()` flag | 15min | `RunSpec` or `SystemTrainerConfig` | ⏳ Pending |
-| Export gallery figures from last run | 30min | `comp report --store X --format json` → `scripts/fidelity_gate_report.py` | ⏳ Pending |
-| Add `--axis-coverage` CLI flag to report | 1hr | `computronium/experiment/surface/report.py` | ⏳ Pending |
+| Add tqdm progress bar to pipeline | 1hr | `computronium/experiment/execution/pipeline.py` | ✅ Done |
+| Single-worker DataLoader for determinism | 30min | `computronium/domains/registry.py` task loaders | ✅ Done |
+| `torch.use_deterministic_algorithms()` flag | 15min | `RunSpec` or `SystemTrainerConfig` | ✅ Done |
+| Export gallery figures from last run | 30min | `comp report --store X --format json` → `scripts/fidelity_gate_report.py` | ✅ Done (as `comp gallery`) |
+| Add `--axis-coverage` CLI flag to report | 1hr | `computronium/experiment/surface/report.py` | ✅ Done |
 
 ---
 
@@ -162,7 +162,11 @@ comp run claim --store pm.duckdb
 - [ ] At least one multi-objective Pareto campaign published
 - [ ] Stability-plasticity frontier mapped at campaign scale
 - [ ] Frozen-θ ψ benchmarks at L2 with 3+ seeds
-- [ ] Progress indicator in pipeline output
+- [x] Progress indicator in pipeline output
+- [x] Single-worker DataLoader for determinism
+- [x] `torch.use_deterministic_algorithms()` flag in RunSpec/Schedule
+- [x] Gallery export via `comp gallery` command
+- [x] `--axis-coverage` CLI flag for report
 
 ---
 
@@ -180,6 +184,12 @@ TP kernel now implements full PredictiveSettlingDynamics settling loop with tran
 - `tests/acceleration/test_triton_availability.py` - Added TP/DFA kernels to GPU_TESTED
 - `tests/acceleration/test_grid_convention.py` - Updated census count to 14
 
+### Quick Wins Completed (This Session)
+- **Progress bar**: Added tqdm progress bars to pipeline round loop (`_run_round_loop`) and cell training (`_train_pending`) in `computronium/experiment/execution/pipeline.py`
+- **Determinism**: Added `deterministic` and `num_workers` fields to `Schedule` (coordinate.py), `RunSpec` (run_spec.py), and `DataConfig` (unified.py). Updated `_task()` cache key and `evaluate_cell()` to use these fields. Updated `SystemTrainerConfig` to receive `deterministic` flag. DuckDB schema updated to store new schedule fields.
+- **Gallery export**: Added `comp gallery` command to render gallery figures from demo records in `docs/figures/run_records/` to `docs/figures/gallery/`.
+- **Axis coverage**: Added `--axis-coverage` flag to `comp report` command to show per-axis stratification of records.
+
 ### Test Commands
 ```bash
 # DFA parity (passing)
@@ -193,4 +203,15 @@ uv run python -m pytest tests/integration/test_grpc_seam.py tests/integration/te
 
 # Acceleration audit tests (passing)
 uv run python -m pytest tests/acceleration/test_defect_class_audit.py::test_the_transposed_grid_class_is_closed_in_one_place tests/acceleration/test_defect_class_audit.py::test_the_twin_census_is_a_fixed_list tests/acceleration/test_grid_convention.py::test_the_census_is_not_empty tests/acceleration/test_triton_availability.py::test_census_is_closed -v
+
+# New quick win tests
+uv run python -m pytest tests/property/test_run_spec_lock.py -q
+uv run python -m pytest tests/property/test_schedule_device_lock.py -q
+uv run python -m pytest tests/property/test_round_loop_mechanism_lock.py -q
+uv run python -m pytest tests/acceptance/test_unified_kernel.py -q
+
+# CLI verification
+uv run comp run quick-verify --dry-run
+uv run comp gallery --help
+uv run comp report --help
 ```

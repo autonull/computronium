@@ -167,6 +167,10 @@ class RunSpec(BaseModel):
     dataset_version: str = "1.0"
     code_sha: str = "unknown"
     device: str = "auto"
+    # Use deterministic algorithms (sets torch.use_deterministic_algorithms)
+    deterministic: bool = False
+    # DataLoader num_workers (0 for single-threaded determinism)
+    num_workers: int = 0
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -200,6 +204,9 @@ class RunSpec(BaseModel):
             raise ValueError(msg)
         if self.device not in {"cpu", "cuda", "auto"}:
             msg = f"invalid device {self.device!r}; expected 'cpu', 'cuda', or 'auto'"
+            raise ValueError(msg)
+        if self.num_workers < 0:
+            msg = f"num_workers must be non-negative, got {self.num_workers}"
             raise ValueError(msg)
 
         harvested = harvest_schema().by_name()
@@ -245,9 +252,13 @@ class RunSpec(BaseModel):
                     lo=8, hi=max_h, scale=Scale.LOG
                 )
                 object.__setattr__(self, "hyperparameters", narrowed_hyperparameters)
-            except Exception:  # pragma: no cover - task shape may not be resolvable at validation time
+            except (
+                Exception
+            ):  # pragma: no cover - task shape may not be resolvable at validation time
                 # If task shape resolution fails, skip auto-narrowing
-                logger.debug("Auto-narrowing hidden_dim failed, skipping", exc_info=True)
+                logger.debug(
+                    "Auto-narrowing hidden_dim failed, skipping", exc_info=True
+                )
 
         _check_axes_distinct(self.axes)
         return self

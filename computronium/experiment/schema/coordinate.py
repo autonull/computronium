@@ -154,6 +154,10 @@ class Schedule:
     param_budget: int = 0
     # Device for training: "cpu", "cuda", or "auto". "auto" prefers CUDA when available.
     device: str = "auto"
+    # Use deterministic algorithms (sets torch.use_deterministic_algorithms)
+    deterministic: bool = False
+    # DataLoader num_workers (0 for single-threaded determinism)
+    num_workers: int = 0
 
     def __post_init__(self) -> None:
         if self.fidelity not in {"L0", "L1", "L2"}:
@@ -172,6 +176,8 @@ class Schedule:
             raise ValueError(
                 f"Invalid device: {self.device}; expected 'cpu', 'cuda', or 'auto'"
             )
+        if self.num_workers < 0:
+            raise ValueError("num_workers must be non-negative")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -184,6 +190,8 @@ class Schedule:
             "task_id": self.task_id,
             "param_budget": self.param_budget,
             "device": self.device,
+            "deterministic": self.deterministic,
+            "num_workers": self.num_workers,
         }
 
     @property
@@ -212,6 +220,8 @@ class Schedule:
             task_id=data.get("task_id", ""),
             param_budget=data.get("param_budget", 0),
             device=data.get("device", "auto"),
+            deterministic=data.get("deterministic", False),
+            num_workers=data.get("num_workers", 0),
         )
 
 

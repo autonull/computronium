@@ -60,6 +60,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None  # type: ignore[assignment]
+
 # Rounds that may measure nothing while still proposing fresh cells before the
 # run concludes they cannot measure anything.
 _MAX_FRUITLESS_ROUNDS: Final = 3
@@ -376,11 +381,25 @@ class PipelineRunner:
             )
             self._state.round_controller = round_controller
 
+        # Progress bar for rounds
+        pbar_rounds = (
+            tqdm(
+                total=round_controller.max_rounds or 0,
+                desc="Rounds",
+                unit="round",
+                disable=tqdm is None,
+            )
+            if tqdm
+            else None
+        )
+
         while round_controller.should_continue(self._get_decision_from_fragments()):
             if self._shutdown:
                 break
             before = len(all_records)
             await self._execute_round(all_records)
+            if pbar_rounds:
+                pbar_rounds.update(1)
             if len(all_records) > before:
                 self._state.fruitless_rounds = 0
                 continue
@@ -403,6 +422,9 @@ class PipelineRunner:
                     self._state.fruitless_rounds,
                 )
                 break
+
+        if pbar_rounds:
+            pbar_rounds.close()
 
     async def _execute_round(self, all_records: list[Record]) -> None:
         """Execute a single round of S3-S10 stages."""
@@ -454,8 +476,23 @@ class PipelineRunner:
         """Execute the round's queued cells, with failure isolation (WP19)."""
         if not self._state.pending_proposals:
             return
+
+        # Progress bar for proposals in this round
+        pbar_proposals = (
+            tqdm(
+                total=len(self._state.pending_proposals),
+                desc=f"Round {self._state.current_round} cells",
+                unit="cell",
+                leave=False,
+                disable=tqdm is None,
+            )
+            if tqdm
+            else None
+        )
+
         successful = await self._execute_batch_with_isolation(
-            self._state.pending_proposals
+            self._state.pending_proposals,
+            progress_bar=pbar_proposals,
         )
         all_records.extend(successful)
         fragment.records.extend(successful)
@@ -463,6 +500,9 @@ class PipelineRunner:
         # next round, so a run re-proposes the same cells and stops after one
         # round of a space it never entered.
         self._state.pending_proposals.clear()
+
+        if pbar_proposals:
+            pbar_proposals.close()
 
     async def _attribute_allocation(self, records: list[Record]) -> None:
         """Re-allocate after measuring, before S10 decides (R19 allocator)."""
@@ -716,6 +756,7 @@ class PipelineRunner:
     async def _execute_batch_with_isolation(
         self,
         proposals: list[Proposal],
+        progress_bar: tqdm | None = None,
     ) -> list[Record]:
         """Execute a batch of proposals with failure isolation (WP19).
 
@@ -725,6 +766,7 @@ class PipelineRunner:
 
         Args:
             proposals: List of proposals to evaluate
+            progress_bar: Optional tqdm progress bar to update
 
         Returns:
             List of successfully evaluated Records.
@@ -746,6 +788,8 @@ class PipelineRunner:
         stored = self._persist_results(batch_items, results)
         for record in stored:
             self._observe(record)
+        if progress_bar:
+            progress_bar.update(len(stored))
         return stored
 
     def _persist_results(

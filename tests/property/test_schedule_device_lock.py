@@ -29,6 +29,8 @@ def test_schedule_device_field_roundtrip() -> None:
         task_id="digits",
         param_budget=10000,
         device="cuda",
+        deterministic=False,
+        num_workers=0,
     )
     # Round-trip
     restored = Schedule.from_dict(sched.to_dict())
@@ -55,6 +57,8 @@ def test_schedule_device_field_roundtrip() -> None:
         task_id="digits",
         param_budget=10000,
         device="cpu",
+        deterministic=False,
+        num_workers=0,
     )
     key2 = coord.measurement_key(sched_cpu)
     assert key1 != key2, "measurement_key must differ by device"
@@ -123,6 +127,8 @@ def test_device_cuda_recorded_in_store(tmp_path) -> None:
             task_id="digits",
             param_budget=10000,
             device="cuda",
+            deterministic=False,
+            num_workers=0,
         ),
         provenance=Provenance(
             env={},
@@ -174,6 +180,8 @@ def test_device_auto_defaults_to_cpu_when_no_cuda(tmp_path, monkeypatch) -> None
                 task_id="digits",
                 param_budget=10000,
                 device="auto",
+                deterministic=False,
+                num_workers=0,
             ),
             provenance=Provenance(
                 env={},
