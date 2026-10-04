@@ -50,7 +50,7 @@ _MAX_SCAN: Final = 10_000
 _search_space_cache: dict[tuple, SearchSpace] = {}
 
 # Module-level cache for _filter_axes_for_validity
-_filter_axes_cache: dict[tuple, list] = {}
+_filter_axes_cache: dict[tuple, dict[str, list[str]]] = {}
 
 
 def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple:

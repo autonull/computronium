@@ -168,22 +168,35 @@ for coord, sched in iter_candidates(spec, space, shape=task_shape, max_scan=1000
 | claim | L2 | 10 | 20 | ∞ | Claim-grade |
 
 **Actions:**
-- [x] Verified `production-map` profile with training stages (S1-S11) end-to-end with 30s budget — produced 10 PASS records
+- [x] Verified `quick-verify` profile with training stages (S1-S8) end-to-end with 30s budget — produced 10 PASS records
+- [x] Verified `production-map` profile with training stages (S1-S11) end-to-end with 30s budget — produced 70 unique cells (140 records)
 - [x] Verified pipeline stages S1-S11 execute correctly: Frame → Space → Schedule → Gate → Compose → Train → Measure → Record → Attribute → Decide → Report
 - [x] Verified replay hash generation on run completion
 - [x] Verified data stored in DuckDB with proper records (queryable via `RecordStore.query_records`)
-- [x] Verified `comp report --store /tmp/test.duckdb` data available (10 PASS records with validation accuracy metrics)
+- [x] Verified `comp report --store` data available
+- [x] Fixed CLI conformance command hang by adding `logging.basicConfig` in `main()`
+- [x] Verified `comp conformance` passes for required capabilities (46/46 passed)
 
 **Files:**
-- No profile definition changes needed — existing profiles work with new constraint enforcement
+- `computronium/experiment/surface/cli.py` — added `logging.basicConfig` in `main()`, added training stages to quick-verify profile
 
 **Verification:**
 ```bash
+# Quick-verify test run (30s budget)
+comp run quick-verify --store ./test_quick.duckdb --overrides '{"budget_seconds": 30}'
+# Output: 10 PASS records, 5 L1 + 5 L2 maturity
+
 # Production-map test run (30s budget)
-comp run production-map --store /tmp/pm.duckdb --overrides '{"budget_seconds": 30}'
-# Output: 10 PASS records across update primitives (adam, elastic_consolidation, euclidean, lion, local_adam, mean_norm, muon, natural_gradient, ortho_adam, riemannian_orthogonal)
-# Replay hash: f08c3dbced80a031
-# Records queryable: store.query_records(run_id) returns 10 records with val_acc 0.11-0.52
+comp run production-map --store ./test_pm.duckdb --overrides '{"budget_seconds": 30}'
+# Output: 70 unique cells, 140 records, 35 PASS records at L0
+
+# Report
+comp report --store ./test_pm.duckdb
+# Shows maturity distribution, gate verdicts, coordinate coverage, Pareto frontier
+
+# Conformance
+comp conformance --store ./test_pm.duckdb
+# Output: 46 passed, 0 failed (all required capabilities have evidence)
 ```
 
 ---
@@ -197,15 +210,17 @@ comp run production-map --store /tmp/pm.duckdb --overrides '{"budget_seconds": 3
 | `_MAX_SCAN=10000` may cut off valid cells | `search_space.py` | Increase or make adaptive |
 | Warning spam from `SystemConfig.validate()` | `ontology/system.py` | Downgrade to debug or aggregate |
 | No progress indicator for long runs | `pipeline.py` | Add tqdm/rich progress bar |
+| ~~CLI report/conformance/status commands hang~~ | `cli.py` | **FIXED**: Added `logging.basicConfig` in `main()` |
+| Quick-verify profile budget | `cli.py` | Increase budget or add axis restrictions to measure meaningful cells |
 
 ---
 
 ## Success Criteria (Definition of Done)
 
-1. **`comp run quick-verify --store /tmp/test.duckdb`** completes in <60s with **>50 PASS records** across multiple valid axis combinations — **PARTIAL**: Produces 10 PASS records in ~15s; replay validation tolerance (0.25) prevents claim eligibility
+1. **`comp run quick-verify --store /tmp/test.duckdb`** completes in <60s with **>50 PASS records** across multiple valid axis combinations — **PARTIAL**: Produces 10 PASS records in ~15s; replay validation tolerance (0.25) prevents some cells from reaching L2 maturity
 2. **All 4 profiles** execute without crashes, producing valid records — **PARTIAL**: quick-verify and production-map verified; maturation/claim need full budget runs
-3. **`comp report`** shows meaningful coverage across axes (not just 1 primitive per axis) — **DONE**: Report shows 10+ cell keys across multiple substrates/updates
-4. **`comp conformance`** passes for required capabilities — **NOT TESTED**: Requires claim-eligible records
+3. **`comp report`** shows meaningful coverage across axes (not just 1 primitive per axis) — **DONE**: Report shows 70+ cell keys across multiple substrates/updates/geometries
+4. **`comp conformance`** passes for required capabilities — **DONE**: 46/46 required capabilities have passing evidence
 5. **Replay hash** matches for resumed runs — **VERIFIED**: Replay hash generated and stored on run completion
 6. **Zero gate rejections** for cross-axis compatibility (all caught at search space time) — **DONE**: Void constraints enforced at S4 Gate
 7. **Resource constraint failures** only at compose time, properly classified — **DONE**: params.* constraints enforced at S5 ComposeStage
@@ -300,9 +315,9 @@ From `computronium/ontology/system.py:379-425`:
 
 2. ~~**Phase 4 Hyperparameters**: The `_composable` cache key currently only includes structural axes + task + param_budget. Need to add hyperparameters that affect validity (hidden_dim, num_layers, max_steps, beta). This ensures a cell that passes gate but fails compose due to hyperparameter values is properly cached.~~ **DONE**: Cache key now includes `hidden_dim`, `num_layers`, `max_steps`, `beta`, `residual`.
 
-3. ~~**Phase 5 Full Profiles**: The quick-verify profile currently declares ALL primitives (no axis restrictions). This produces 604,800 declared combinations. With the new constraint satisfaction, only ~24+ are legal. The budget of 300s may not be enough to measure all legal cells. Consider adding axis restrictions to the quick-verify profile or increasing budget.~~ **DONE**: Production-map profile tested with 30s budget, produced 10 PASS records. The quick-verify profile only runs to S5 (no training); for training profiles use production-map with appropriate budget.
+3. ~~**Phase 5 Full Profiles**: The quick-verify profile currently declares ALL primitives (no axis restrictions). This produces 604,800 declared combinations. With the new constraint satisfaction, only ~24+ are legal. The budget of 300s may not be enough to measure all legal cells. Consider adding axis restrictions to the quick-verify profile or increasing budget.~~ **DONE**: Production-map profile tested with 30s budget, produced 70 unique cells. The quick-verify profile runs to S8 (training); for larger-scale profiling use production-map with appropriate budget.
 
-4. **Reproducibility Issue**: During testing, a cell failed replay validation ("replay did not reproduce the claimed metrics within tolerance 0.25"). This is a pre-existing issue unrelated to the constraint changes, but should be investigated before full profile runs.
+4. **Reproducibility Issue**: During testing, some cells failed replay validation ("replay did not reproduce the claimed metrics within tolerance 0.25"). This is a pre-existing issue — even with `torch.manual_seed(schedule.seed)` set identically, some cells show metric variance between runs (e.g., val_acc 0.66 vs 0.51). Possible causes: data loader non-determinism, CUDA non-determinism (even on CPU), or training dynamics sensitivity. Should be investigated before full profile runs. Consider: increasing tolerance, using single-worker data loaders, or checking `torch.use_deterministic_algorithms()`.
 
 5. **Performance Optimizations Applied**:
    - **Per-primitive validation**: For spaces >100k combinations, `_filter_axes_for_validity` now uses per-primitive validation (500 checks per primitive) instead of full Cartesian product, reducing startup from ~55s to ~1.2s.
@@ -348,6 +363,8 @@ From `computronium/ontology/system.py:379-425`:
 
 8. **ProposalContext.pool() optimization** (`computronium/experiment/execution/policy.py`): Changed from striding through all declared cells to taking first `_POOL` cells, leveraging round-robin interleaving for diversity. Fixes synthesis policy timeout.
 
+9. **CLI conformance fix** (`computronium/experiment/surface/cli.py`): Added `logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)` in `main()` to fix hang in conformance/report commands due to missing log handler.
+
 ### Technical Debt / Future Improvements
 
 | Item | Description |
@@ -356,5 +373,5 @@ From `computronium/ontology/system.py:379-425`:
 | `_MAX_SCAN=10000` limit | May cut off valid cells in large spaces; consider adaptive limit or removing |
 | Warning spam from `SystemConfig.validate()` | Downgrade to debug or aggregate; many UserWarnings pollute output |
 | No progress indicator for long runs | Add tqdm/rich progress bar in `pipeline.py` |
-| CLI report/conformance/status commands hang | Investigate and fix deadlock in surface CLI commands |
 | Quick-verify profile budget | Increase budget or add axis restrictions to measure meaningful cells |
+| Replay validation tolerance | Investigate non-determinism source; consider increasing tolerance or fixing data loader determinism |

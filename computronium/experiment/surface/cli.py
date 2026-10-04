@@ -466,7 +466,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # If S10 Decide stage is not in the pipeline, limit to 1 round to avoid
         # infinite loop (no decision to continue/stop without S10)
         max_rounds = None
-        if StageId.S10_DECIDE not in spec.stages:
+        if spec.stages and StageId.S10_DECIDE not in spec.stages:
             max_rounds = 1
 
         pipeline_config = PipelineConfig(
@@ -719,6 +719,9 @@ def _print_detailed_status(summary: RunSummary) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for surface CLI."""
+    import logging
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     args = _build_parser().parse_args(argv)
     command_handlers = {
         "run": _cmd_run,
