@@ -59,10 +59,28 @@ comp run claim --store pm.duckdb
 
 **Decision point**: RESOLVED — bit-exact reproducibility achieved with `deterministic=True, num_workers=0`. Level 4 fallback no longer needed for CPU runs.
 
-### 3. `expr_from_string` → AST Builders (Technical Debt)
+### 3. `expr_from_string` → AST Builders (Technical Debt) ✅ COMPLETED
 **Location**: `computronium/experiment/schema/seed_registries.py`
 **Scope**: ~15 non-void constraints (HARD, OPERATING_POINT, FAIRNESS kinds)
 **Benefit**: Machine-checkable evaluation, removes string-parsing fragility
+
+**Fix Applied**:
+- Added `Implies`, `Add`, `Sub`, `Mul`, `Div` expression types to DSL (`computronium/experiment/legality/dsl.py`)
+- Added builder functions: `implies()`, `add()`, `sub()`, `mul()`, `div()`
+- Added JSON serialization/deserialization for new expression types
+- Added evaluation logic for arithmetic operations and logical implication
+- Replaced all 9 `expr_from_string` calls in `CONSTRAINTS` with direct AST builder calls:
+  - `gpu_memory_budget`: `le(var("estimated_gpu_memory_gb"), var("max_gpu_memory_gb"))`
+  - `training_time_budget`: `le(var("estimated_hours"), var("max_hours"))`
+  - `fidelity_schedule_consistency`: `implies(eq(var("fidelity"), const("L2")), ge(var("n_seeds"), const(5)))`
+  - `param_budget_fairness`: `le(var("param_count"), mul(var("param_budget"), const(1.0 + PARAM_BUDGET_TOLERANCE)))`
+  - `operating_point_min_seeds`: `ge(var("n_seeds"), const(3))`
+  - `operating_point_max_epochs`: `le(var("epochs"), const(100))`
+  - `apply_constraints_max_hidden`: `le(var("hidden_dim"), const(4096))`
+  - `apply_constraints_max_layers`: `le(var("num_layers"), const(32))`
+  - `apply_constraints_max_steps`: `le(var("max_steps"), const(500))`
+
+**Verification**: All property lock tests pass (`test_axes_capabilities_totality_lock.py`, `test_legality_boundary_lock.py`, `test_experiment_registries_wiring_lock.py`).
 
 ---
 
@@ -163,6 +181,7 @@ comp run claim --store pm.duckdb
 - [x] `torch.use_deterministic_algorithms()` flag in RunSpec/Schedule
 - [x] Gallery export via `comp gallery` command
 - [x] `--axis-coverage` CLI flag for report
+- [x] `expr_from_string` → AST Builders for non-void constraints in seed_registries.py
 
 ---
 
@@ -190,12 +209,25 @@ Fixed the root cause of non-deterministic replay validation failures. The issue 
 - `tests/acceleration/test_defect_class_audit.py` - Updated UNCALLED census for new Triton helpers
 - `tests/acceleration/test_triton_availability.py` - Added TP/DFA kernels to GPU_TESTED
 - `tests/acceleration/test_grid_convention.py` - Updated census count to 14
+- `computronium/experiment/legality/dsl.py` - Added Implies, Add, Sub, Mul, Div expression types, builders, JSON serialization, and evaluation logic
+- `computronium/experiment/schema/seed_registries.py` - Replaced 9 expr_from_string calls with AST builders
 
 ### Quick Wins Completed (This Session)
 - **Progress bar**: Added tqdm progress bars to pipeline round loop (`_run_round_loop`) and cell training (`_train_pending`) in `computronium/experiment/execution/pipeline.py`
 - **Determinism**: Added `deterministic` and `num_workers` fields to `Schedule` (coordinate.py), `RunSpec` (run_spec.py), and `DataConfig` (unified.py). Updated `_task()` cache key and `evaluate_cell()` to use these fields. Updated `SystemTrainerConfig` to receive `deterministic` flag. DuckDB schema updated to store new schedule fields.
 - **Gallery export**: Added `comp gallery` command to render gallery figures from demo records in `docs/figures/run_records/` to `docs/figures/gallery/`.
 - **Axis coverage**: Added `--axis-coverage` flag to `comp report` command to show per-axis stratification of records.
+
+### expr_from_string → AST Builders Completed (This Session)
+- **DSL Extensions** (`computronium/experiment/legality/dsl.py`):
+  - Added `Implies`, `Add`, `Sub`, `Mul`, `Div` expression types with JSON serialization
+  - Added builder functions: `implies()`, `add()`, `sub()`, `mul()`, `div()`
+  - Added evaluation logic for arithmetic operations and logical implication
+- **Seed Registries** (`computronium/experiment/schema/seed_registries.py`):
+  - Replaced all 9 `expr_from_string` calls in `CONSTRAINTS` with direct AST builder calls
+  - Constraints converted: `gpu_memory_budget`, `training_time_budget`, `fidelity_schedule_consistency`, `param_budget_fairness`, `operating_point_min_seeds`, `operating_point_max_epochs`, `apply_constraints_max_hidden`, `apply_constraints_max_layers`, `apply_constraints_max_steps`
+  - Removed `expr_from_string` import from seed_registries.py
+- **Verification**: All property lock tests pass (`test_axes_capabilities_totality_lock.py`, `test_legality_boundary_lock.py`, `test_experiment_registries_wiring_lock.py`).
 
 ### Test Commands
 ```bash

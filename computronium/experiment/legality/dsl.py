@@ -232,6 +232,82 @@ class Call(Expr):
         }
 
 
+@dataclass(frozen=True, slots=True)
+class Implies(Expr):
+    """Logical implication: left implies right"""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Implies",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Add(Expr):
+    """Addition"""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Add",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Sub(Expr):
+    """Subtraction"""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Sub",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Mul(Expr):
+    """Multiplication"""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Mul",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class Div(Expr):
+    """Division"""
+
+    left: Expr
+    right: Expr
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "type": "Div",
+            "left": self.left.to_json(),
+            "right": self.right.to_json(),
+        }
+
+
+_ARITHMETIC_OPS = frozenset({Add, Sub, Mul, Div})
 _BINARY_OPS = frozenset({Eq, Ne, Lt, Le, Gt, Ge, In, NotIn})
 
 
@@ -268,6 +344,11 @@ def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-retur
         "NotIn": NotIn,
         "HasKey": HasKey,
         "Call": Call,
+        "Implies": Implies,
+        "Add": Add,
+        "Sub": Sub,
+        "Mul": Mul,
+        "Div": Div,
     }
     cls = type_map.get(data["type"])
     if cls is None:
@@ -285,10 +366,14 @@ def expr_from_json(data: dict[str, Any]) -> Expr:  # ruff: ignore[too-many-retur
         return Or(expr_from_json(data["left"]), expr_from_json(data["right"]))
     if cls in _BINARY_OPS:
         return cls(expr_from_json(data["left"]), expr_from_json(data["right"]))
+    if cls in _ARITHMETIC_OPS:
+        return cls(expr_from_json(data["left"]), expr_from_json(data["right"]))
     if cls is HasKey:
         return HasKey(expr_from_json(data["obj"]), expr_from_json(data["key"]))
     if cls is Call:
         return Call(data["func"], tuple(expr_from_json(arg) for arg in data["args"]))
+    if cls is Implies:
+        return Implies(expr_from_json(data["left"]), expr_from_json(data["right"]))
 
     raise ValueError(f"Unhandled expression type: {data['type']}")
 
@@ -487,11 +572,38 @@ def _eval_value(expr: Expr, ctx: CoordinateContext) -> Any:  # ruff: ignore[comp
                     # Unknown function - return None
                     return None
 
+        case Add(left, right):
+            left_val = _eval_value(left, ctx)
+            right_val = _eval_value(right, ctx)
+            return left_val + right_val
+
+        case Sub(left, right):
+            left_val = _eval_value(left, ctx)
+            right_val = _eval_value(right, ctx)
+            return left_val - right_val
+
+        case Mul(left, right):
+            left_val = _eval_value(left, ctx)
+            right_val = _eval_value(right, ctx)
+            return left_val * right_val
+
+        case Div(left, right):
+            left_val = _eval_value(left, ctx)
+            right_val = _eval_value(right, ctx)
+            if right_val == 0:
+                return float("inf")
+            return left_val / right_val
+
+        case Implies(left, right):
+            left_val = _eval_value(left, ctx)
+            right_val = _eval_value(right, ctx)
+            return (not bool(left_val)) or bool(right_val)
+
         case _:
             raise ValueError(f"Unknown expression type: {type(expr)}")
 
 
-def evaluate(expr: Expr, ctx: CoordinateContext) -> bool:  # noqa: C901,PLR0911,PLR0912 - match/case evaluator
+def evaluate(expr: Expr, ctx: CoordinateContext) -> bool:  # ruff: ignore[complex-structure,too-many-return-statements,too-many-branches] - match/case evaluator
     """Evaluate an expression as a predicate (coerced to bool)."""
     return bool(_eval_value(expr, ctx))
 
@@ -605,27 +717,54 @@ def call(func: str, *args: Expr) -> Call:
     return Call(func, args)
 
 
+def implies(left: Expr, right: Expr) -> Implies:
+    return Implies(left, right)
+
+
+def add(left: Expr, right: Expr) -> Add:
+    return Add(left, right)
+
+
+def sub(left: Expr, right: Expr) -> Sub:
+    return Sub(left, right)
+
+
+def mul(left: Expr, right: Expr) -> Mul:
+    return Mul(left, right)
+
+
+def div(left: Expr, right: Expr) -> Div:
+    return Div(left, right)
+
+
 __all__ = [
+    "Add",
     "Call",
     "Const",
     "CoordinateContext",
+    "Div",
     "Eq",
     "EvaluationContext",
     "Expr",
     "Ge",
     "Gt",
     "HasKey",
+    "Implies",
     "In",
     "Le",
     "Lt",
+    "Mul",
     "Ne",
     "Not",
     "NotIn",
     "Or",
+    "Sub",
     "Var",
+    "add",
     "and_",
     "call",
     "const",
+    "div",
     "eq",
     "evaluate",
     "expr_from_json",
@@ -635,12 +774,15 @@ __all__ = [
     "ge",
     "gt",
     "has_key",
+    "implies",
     "in_",
     "le",
     "lt",
+    "mul",
     "ne",
     "not_",
     "not_in",
     "or_",
+    "sub",
     "var",
 ]
