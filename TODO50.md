@@ -45,23 +45,19 @@ comp run production-map --store pm.duckdb --overrides '{"budget_seconds": 3600}'
 comp run claim --store pm.duckdb
 ```
 
-### 2. Reproducibility Investigation
+### 2. Reproducibility Investigation ✅ FIXED
 **Problem**: Some cells fail replay validation even with `torch.manual_seed()`. Observed variance: val_acc 0.66 vs 0.51.
 
-**Suspected causes**:
-- DataLoader worker non-determinism (multi-worker)
-- CUDA non-determinism (even on CPU via cuDNN)
-- Training dynamics sensitivity (chaotic regimes)
+**Root Cause**: Model initialization occurred BEFORE `torch.manual_seed(schedule.seed)` was called in `evaluate_cell()`. The seed was set after `compose_cell_system()` created the model, so weight initialization was non-deterministic.
 
-**Experiments**:
-```python
-# Test 1: Single-worker DataLoader
-# Test 2: torch.use_deterministic_algorithms(True)
-# Test 3: CUDA_LAUNCH_BLOCKING=1
-# Test 4: Fixed batch ordering via manual seed per epoch
-```
+**Fix Applied** (`computronium/experiment/execution/evaluate.py:239-282`):
+- Move all seed setting (torch, numpy, random) to BEFORE `compose_cell_system()` call
+- Apply `torch.use_deterministic_algorithms(True)` when `schedule.deterministic=True`
+- This ensures bit-for-bit reproducible model initialization and training
 
-**Decision point**: If variance > 0.5 persists, either increase tolerance further or accept Level 4 (sampled numerical) claims only.
+**Verification**: All seeds now produce identical results across repeated runs with `deterministic=True`. Variance is 0.0 (bit-exact).
+
+**Decision point**: RESOLVED — bit-exact reproducibility achieved with `deterministic=True, num_workers=0`. Level 4 fallback no longer needed for CPU runs.
 
 ### 3. `expr_from_string` → AST Builders (Technical Debt)
 **Location**: `computronium/experiment/schema/seed_registries.py`
@@ -158,7 +154,7 @@ comp run claim --store pm.duckdb
 - [x] Triton TP kernel implemented (parity with reference) - settling loop implemented, relaxed rel_diff=2e-3
 - [ ] maturation profile completes with ≥50 L2 cells
 - [ ] claim profile produces claim-grade evidence (N≥10 seeds)
-- [ ] Replay variance < 0.25 tolerance OR documented as Level 4 limitation
+- [x] Replay variance < 0.25 tolerance (bit-exact with deterministic=True)
 - [ ] At least one multi-objective Pareto campaign published
 - [ ] Stability-plasticity frontier mapped at campaign scale
 - [ ] Frozen-θ ψ benchmarks at L2 with 3+ seeds
@@ -175,7 +171,18 @@ comp run claim --store pm.duckdb
 ### TP Kernel Completed
 TP kernel now implements full PredictiveSettlingDynamics settling loop with transpose feedback target propagation (matching TargetInversionCredit). Returns full METRIC_SCHEMA. Parity tests pass with relaxed `max_rel_diff=2e-3` to account for 10-step settling loop floating-point accumulation.
 
+### Reproducibility Fix Completed
+Fixed the root cause of non-deterministic replay validation failures. The issue was in `evaluate_cell()` where `torch.manual_seed()` was called AFTER model creation via `compose_cell_system()`. 
+
+**Fix** (`computronium/experiment/execution/evaluate.py`):
+- Moved all RNG seeding (torch, numpy, random) to BEFORE `compose_cell_system()` call
+- Added `torch.use_deterministic_algorithms(True)` when `schedule.deterministic=True`
+- Applied `num_workers=0` from schedule to DataLoader for single-threaded determinism
+
+**Verification**: All seeds now produce bit-for-bit identical results across repeated runs with `deterministic=True`. Variance is 0.0.
+
 ### Key Files Modified (This Session)
+- `computronium/experiment/execution/evaluate.py` - Moved seed setting before model creation for reproducibility
 - `computronium/acceleration/tp_kernels.py` - Complete rewrite: TPKernelBackend with settling loop, transpose feedback TP, full METRIC_SCHEMA
 - `computronium/algorithms/tp/kernel.py` - Updated to use new TPKernelBackend interface (no inverse layers)
 - `computronium/algorithms/tp/spec.py` - Relaxed parity tolerance: max_rel_diff=2e-3

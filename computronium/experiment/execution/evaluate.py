@@ -255,7 +255,17 @@ def evaluate_cell(
     Raises:
         EvaluationError: The task, the composition, or the training run failed.
     """
+    import random
+
+    import numpy as np
     import torch
+
+    # Set all seeds BEFORE model creation for reproducible initialization
+    torch.manual_seed(schedule.seed)
+    if schedule.deterministic:
+        torch.use_deterministic_algorithms(True)
+    np.random.seed(schedule.seed)
+    random.seed(schedule.seed)
 
     task = _task(schedule.task_id, schedule.device, schedule.num_workers)
     shape = _task_shape(task)
@@ -279,7 +289,6 @@ def evaluate_cell(
         track_memory=False,
         deterministic=schedule.deterministic,
     )
-    torch.manual_seed(schedule.seed)
 
     start = time.monotonic()
     try:
