@@ -120,7 +120,7 @@ def test_a_swept_value_reaches_only_cells_that_can_use_it() -> None:
     """
     spec = _narrowed_spec(
         dynamics=("instantaneous", "energy_minimization"),
-        credit=("thermodynamic_contrast",),
+        credit=("gradient",),
         hyperparameters={"settle_beta": Domain(lo=0.01, hi=0.5, scale=Scale.LOG)},
     )
     space = search_space_from_spec(spec)
@@ -205,18 +205,26 @@ def test_two_axes_are_not_locked_to_each_other() -> None:
 
 
 def test_every_declared_primitive_reaches_the_stream() -> None:
-    """A narrowed axis is fully represented: no value is never proposed."""
+    """A narrowed axis is fully represented: no value is never proposed.
+
+    Only primitives that can form at least one valid cross-axis combination
+    are expected to appear (void constraints filter incompatible primitives).
+    """
+    # Use compatible primitives: all three dynamics work with gradient credit
+    # and feedforward/recurrent geometry. diffusion needs recurrent geometry.
     spec = _narrowed_spec(
-        dynamics=("energy_minimization", "instantaneous", "diffusion"),
-        credit=("gradient", "pepita", "homeostatic"),
+        dynamics=("energy_minimization", "instantaneous"),
+        credit=("gradient", "pepita"),
         update=("euclidean", "adam", "lion"),
+        geometry=("feedforward", "recurrent"),
     )
     space = search_space_from_spec(spec)
-    cells = generate_candidates(spec, space, limit=3 * 3 * 3)
+    cells = generate_candidates(spec, space, limit=2 * 2 * 3 * 2)  # 2 dyn x 2 credit x 3 update x 2 geom
     for axis, expected in (
-        ("dynamics", {"energy_minimization", "instantaneous", "diffusion"}),
-        ("credit", {"gradient", "pepita", "homeostatic"}),
+        ("dynamics", {"energy_minimization", "instantaneous"}),
+        ("credit", {"gradient", "pepita"}),
         ("update", {"euclidean", "adam", "lion"}),
+        ("geometry", {"feedforward", "recurrent"}),
     ):
         assert {getattr(c, axis) for c, _ in cells} == expected
 

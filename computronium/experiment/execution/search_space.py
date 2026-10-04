@@ -46,6 +46,35 @@ type ShapeResolver = Callable[[str], TaskShape]
 # admits nothing, which would otherwise make the candidate stream unbounded.
 _MAX_SCAN: Final = 10_000
 
+# Module-level cache for search_space_from_spec
+_search_space_cache: dict[tuple, SearchSpace] = {}
+
+# Module-level cache for _filter_axes_for_validity
+_filter_axes_cache: dict[tuple, list] = {}
+
+
+def _search_space_cache_key(spec: RunSpec, tasks: Sequence[str] | None) -> tuple:
+    """Create a cache key for search_space_from_spec."""
+    # Key includes: selected primitives per axis, tasks, objectives
+    axes_key = tuple(
+        (axis.value, tuple(sorted(spec.selected_primitives(axis))))
+        for axis in StructuralAxis
+    )
+    tasks_key = tuple(sorted(tasks or spec.task_names))
+    objectives_key = tuple(sorted(spec.objectives))
+    return (axes_key, tasks_key, objectives_key)
+
+
+def _filter_axes_cache_key(axes_snapshot: list, spec: RunSpec) -> tuple:
+    """Create a cache key for _filter_axes_for_validity."""
+    # Key includes: axis names per axis kind, task
+    axes_key = tuple(
+        tuple(sorted(s.name for s in axes_snapshot if s.axis_kind == axis))
+        for axis in StructuralAxis
+    )
+    task_key = spec.task_names[0] if spec.task_names else None
+    return (axes_key, task_key)
+
 
 @dataclass(frozen=True, slots=True)
 class SearchSpace:
@@ -84,6 +113,11 @@ def search_space_from_spec(
         OBJECTIVES_REGISTRY,
     )
 
+    # Check cache
+    cache_key = _search_space_cache_key(spec, tasks)
+    if cache_key in _search_space_cache:
+        return _search_space_cache[cache_key]
+
     axes_snapshot: list[AxisSpec] = []
     for axis in StructuralAxis:
         for name in spec.selected_primitives(axis):
@@ -101,12 +135,16 @@ def search_space_from_spec(
         if name in OBJECTIVES_REGISTRY
     ) or tuple(OBJECTIVES_REGISTRY.values())
 
-    return SearchSpace(
+    space = SearchSpace(
         axes_snapshot=tuple(axes_snapshot),
         constraints=tuple(CONSTRAINTS_REGISTRY.values()),
         objectives=objectives,
         tasks=tuple(tasks or spec.task_names),
     )
+
+    # Cache the result
+    _search_space_cache[cache_key] = space
+    return space
 
 
 def _filter_axes_for_validity(
@@ -117,6 +155,9 @@ def _filter_axes_for_validity(
 
     Computes valid 6-tuples from all void constraints in CONSTRAINTS_REGISTRY,
     then derives per-axis valid primitives from the valid tuples.
+
+    For large spaces (>100k combinations), uses per-primitive validation
+    instead of full Cartesian product to avoid 50s+ startup.
     """
     from computronium.experiment.legality.dsl import (
         CoordinateContext,
@@ -126,6 +167,20 @@ def _filter_axes_for_validity(
     )
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.registries import CONSTRAINTS_REGISTRY
+
+    # Check cache
+    cache_key = _filter_axes_cache_key(axes_snapshot, spec)
+    if cache_key in _filter_axes_cache:
+        # Convert cached names back to AxisSpec objects
+        valid_names_by_axis: dict[StructuralAxis, set[str]] = {}
+        for axis in StructuralAxis:
+            valid_names_by_axis[axis] = set(_filter_axes_cache[cache_key][axis.value])
+        
+        filtered_snapshot = []
+        for axis_spec in axes_snapshot:
+            if axis_spec.name in valid_names_by_axis.get(axis_spec.axis_kind, set()) or not valid_names_by_axis.get(axis_spec.axis_kind):
+                filtered_snapshot.append(axis_spec)
+        return filtered_snapshot
 
     def _references_params(expr: Expr) -> bool:
         """Check if expression references params.* variables."""
@@ -164,8 +219,6 @@ def _filter_axes_for_validity(
     if not void_constraints:
         return axes_snapshot
 
-    # Build all combinations and evaluate void constraints
-    # This is the constraint satisfaction layer: find all valid 6-tuples
     axes_order = list(StructuralAxis)
     axis_primitives = [primitives_by_axis.get(axis, []) for axis in axes_order]
 
@@ -173,36 +226,119 @@ def _filter_axes_for_validity(
     if not all(axis_primitives):
         return axes_snapshot
 
-    valid_tuples: set[tuple[str, ...]] = set()
+    total_combos = math.prod(len(p) for p in axis_primitives)
 
-    # Iterate all combinations and check void constraints
-    for values in product(*axis_primitives):
-        selection = {
-            axis.value: name for axis, name in zip(axes_order, values, strict=True)
-        }
-        coordinate = Coordinate(**selection, params={})
-        ctx = CoordinateContext(
-            coordinate, task=spec.task_names[0] if spec.task_names else None
-        )
+    # For small spaces, use full Cartesian product (exact)
+    # For large spaces, use per-primitive validation (approximate but fast)
+    if total_combos <= 100_000:
+        # Exact: enumerate all combinations
+        valid_tuples: set[tuple[str, ...]] = set()
+        for values in product(*axis_primitives):
+            selection = {
+                axis.value: name for axis, name in zip(axes_order, values, strict=True)
+            }
+            coordinate = Coordinate(**selection, params={})
+            ctx = CoordinateContext(
+                coordinate, task=spec.task_names[0] if spec.task_names else None
+            )
 
-        # Check all void constraints
-        all_pass = True
-        for constraint in void_constraints:
-            pred = constraint.predicate
-            if pred is None:
-                continue  # Should not happen, filtered above
-            if not evaluate(pred, ctx):
-                all_pass = False
-                break
+            all_pass = True
+            for constraint in void_constraints:
+                pred = constraint.predicate
+                if pred is None:
+                    continue
+                if not evaluate(pred, ctx):
+                    all_pass = False
+                    break
 
-        if all_pass:
-            valid_tuples.add(values)
+            if all_pass:
+                valid_tuples.add(values)
 
-    # Derive per-axis valid primitives from valid tuples
-    valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
-    for tup in valid_tuples:
-        for axis, name in zip(axes_order, tup, strict=True):
-            valid_by_axis[axis].add(name)
+        valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
+        for tup in valid_tuples:
+            for axis, name in zip(axes_order, tup, strict=True):
+                valid_by_axis[axis].add(name)
+    else:
+        # Approximate: for each primitive, check if it can be part of ANY valid combination
+        # by searching combinations with that primitive fixed
+        valid_by_axis: dict[StructuralAxis, set[str]] = {axis: set() for axis in axes_order}
+        
+        # Pre-compute default values for other axes (first primitive each)
+        default_selection = {}
+        for axis in axes_order:
+            primitives = primitives_by_axis.get(axis, [])
+            default_selection[axis.value] = primitives[0] if primitives else ""
+        
+        # Max combinations to check per primitive
+        max_checks_per_primitive = 500
+        
+        for axis in axes_order:
+            for primitive in primitives_by_axis.get(axis, []):
+                # Try to find a valid combination with this primitive fixed
+                found = False
+                
+                # Build list of other axes' primitives
+                other_axes = [a for a in axes_order if a != axis]
+                other_primitives = [primitives_by_axis.get(a, []) for a in other_axes]
+                
+                if not all(other_primitives):
+                    # Some axis has no primitives - skip
+                    continue
+                
+                # Quick check: try default combination first
+                test_selection = default_selection.copy()
+                test_selection[axis.value] = primitive
+                coordinate = Coordinate(**test_selection, params={})
+                ctx = CoordinateContext(
+                    coordinate, task=spec.task_names[0] if spec.task_names else None
+                )
+                
+                all_pass = True
+                for constraint in void_constraints:
+                    pred = constraint.predicate
+                    if pred is None:
+                        continue
+                    if not evaluate(pred, ctx):
+                        all_pass = False
+                        break
+                
+                if all_pass:
+                    valid_by_axis[axis].add(primitive)
+                    continue
+                
+                # If default failed, search other combinations (limited)
+                checks = 0
+                for values in product(*other_primitives):
+                    if checks >= max_checks_per_primitive:
+                        break
+                    test_selection = default_selection.copy()
+                    test_selection[axis.value] = primitive
+                    for other_axis, val in zip(other_axes, values, strict=True):
+                        test_selection[other_axis.value] = val
+                    coordinate = Coordinate(**test_selection, params={})
+                    ctx = CoordinateContext(
+                        coordinate, task=spec.task_names[0] if spec.task_names else None
+                    )
+                    
+                    all_pass = True
+                    for constraint in void_constraints:
+                        pred = constraint.predicate
+                        if pred is None:
+                            continue
+                        if not evaluate(pred, ctx):
+                            all_pass = False
+                            break
+                    
+                    if all_pass:
+                        valid_by_axis[axis].add(primitive)
+                        found = True
+                        break
+                    checks += 1
+
+    # Cache the result (store as dict of axis -> set of names)
+    _filter_axes_cache[cache_key] = {
+        axis.value: list(names) for axis, names in valid_by_axis.items()
+    }
 
     # Filter axes_snapshot to only primitives that appear in at least one valid tuple
     filtered_snapshot = []
@@ -469,6 +605,7 @@ def iter_candidates(
     cost_model: CostModel | None = None,
     shape: ShapeResolver | None = None,
     max_scan: int | None = None,
+    check_composable: bool = True,
 ) -> Iterator[tuple[Coordinate, Schedule]]:
     """Walk the harvested schema under the spec, yielding legal cells.
 
@@ -491,6 +628,9 @@ def iter_candidates(
             candidates are the expensive majority — bounds the examination; a
             caller that walks the space for what it can measure leaves it
             ``None`` and takes the module's own scan bound.
+        check_composable: If True (default), verify that configs compose and
+            validate via ``_composable``. If False, skip this check for faster
+            candidate generation (validation will happen at Gate/Compose stages).
 
     Yields:
         ``(coordinate, schedule)`` pairs, in a deterministic order.
@@ -554,7 +694,7 @@ def iter_candidates(
             if failed:
                 continue
 
-        if shape is not None and not _composable(
+        if check_composable and shape is not None and not _composable(
             coordinate, schedule.task_id, shape, schedule.param_budget
         ):
             continue

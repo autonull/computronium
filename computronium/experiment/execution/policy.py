@@ -236,6 +236,7 @@ class ProposalContext:
                 budget=self.budget,
                 cost_model=self.cost_model,
                 shape=self.shape,
+                check_composable=False,  # Fast mode: Gate/Compose stages validate
             )
             if self.fresh(coordinate, schedule, measured)
         )
@@ -260,14 +261,11 @@ class ProposalContext:
 
         The generator screens the cells it walks, so this exists for the
         policies that build their own — a mutated cell is a cell nobody has
-        composed yet, and an uncompposable cell is discovered by training.
+        composed yet, and an uncomposable cell is discovered by training.
+        
+        Note: Full composition validation is deferred to GateStage (S4) and
+        ComposeStage (S5). This method only checks budget affordability.
         """
-        from computronium.experiment.execution.search_space import _composable
-
-        if self.shape is not None and not _composable(
-            coordinate, schedule.task_id, self.shape, schedule.param_budget
-        ):
-            return False
         return bool(_affordable([(coordinate, schedule)], self.budget, self.cost_model))
 
 

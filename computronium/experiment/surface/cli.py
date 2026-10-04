@@ -29,6 +29,7 @@ from computronium.experiment.execution.policy import (
     create_policy,
     policy_context,
 )
+from computronium.experiment.execution.stage import StageId
 from computronium.experiment.schema.registries import (
     CAPABILITIES_REGISTRY,
     CapabilitySpec,
@@ -453,6 +454,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
 
         # Create pipeline config — the spec supplies stages, seed and policy
+        # If S10 Decide stage is not in the pipeline, limit to 1 round to avoid
+        # infinite loop (no decision to continue/stop without S10)
+        max_rounds = None
+        if StageId.S10_DECIDE not in spec.stages:
+            max_rounds = 1
+
         pipeline_config = PipelineConfig(
             run_id=run_id,
             run_spec=spec,
@@ -461,6 +468,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             policy=policy,
             backend=LocalBackend(),
             seed=spec.seed,
+            max_rounds=max_rounds,
         )
 
         # Run pipeline
