@@ -113,15 +113,20 @@ class TPKernelBackend:
         """Execute one training step using Target Propagation."""
         # Forward pass
         output, fwd_acts = self.forward_forward(x)
-        # Compute targets
-        targets = self.compute_targets(y, fwd_acts)
-        # Inverse pass
-        inv_acts = self.forward_inverse(targets, fwd_acts)
+        # Compute targets: output_target is one-hot labels
+        if y.dim() == 1:
+            output_target = (
+                torch.nn.functional.one_hot(y, num_classes=output.shape[1])
+                .float()
+                .to(device=output.device, dtype=output.dtype)
+            )
+        else:
+            output_target = y.to(device=output.device, dtype=output.dtype)
+        targets = self.compute_targets(fwd_acts, output_target)
         # Compute weight updates
-        gradients = self.compute_updates(fwd_acts, inv_acts)
-        # Apply updates
-        self.update_weights(gradients, self._target_lr)
-        self.update_inverse_weights(gradients, self._inverse_lr)
+        gradients = self.backward(fwd_acts, targets)
+        # Apply updates (lr already baked in)
+        self.update_weights(gradients)
         # Return metrics
         with torch.no_grad():
             loss = torch.nn.functional.cross_entropy(output, y).item()
@@ -453,3 +458,192 @@ def _get_activation(name: str) -> torch.nn.Module:
 
 
 __all__ = ["TPKernelBackend"]
+
+
+# Triton kernels for fused TP operations
+try:  # noqa: PLR0915
+    import math
+    import triton
+    import triton.language as tl
+
+    from computronium.acceleration import grid
+    from computronium.acceleration.grid import grid_2d
+
+    @triton.jit
+    def _tp_transpose_feedback_kernel(
+        target_ptr,
+        weight_ptr,
+        out_ptr,
+        B,
+        D_in,
+        D_out,
+        BLOCK_B: tl.constexpr,
+        BLOCK_D: tl.constexpr,
+    ):
+        """Fused transpose feedback projection: target @ W^T.
+
+        Weight matrix has shape [D_out, D_in] (row-major).
+        Computes target @ W^T where target: [B, D_out], weight: [D_out, D_in].
+        This is equivalent to target @ weight.T -> [B, D_in]
+        """
+        pid_b = tl.program_id(0)
+        pid_d = tl.program_id(1)
+
+        offs_b = pid_b * BLOCK_B + tl.arange(0, BLOCK_B)
+        offs_d = pid_d * BLOCK_D + tl.arange(0, BLOCK_D)
+
+        mask_b = offs_b < B
+        mask_d = offs_d < D_in
+
+        acc = tl.zeros((BLOCK_B, BLOCK_D), dtype=tl.float32)
+        for k in range(0, D_out, BLOCK_D):
+            offs_k = k + tl.arange(0, BLOCK_D)
+            mask_k = offs_k < D_out
+
+            target_tile = tl.load(
+                target_ptr + offs_b[:, None] * D_out + offs_k[None, :],
+                mask=mask_b[:, None] & mask_k[None, :],
+                other=0.0,
+            )
+
+            w_tile = tl.load(
+                weight_ptr + offs_k[:, None] * D_in + offs_d[None, :],
+                mask=mask_k[:, None] & mask_d[None, :],
+                other=0.0,
+            )
+
+            acc += tl.dot(target_tile, w_tile, input_precision="ieee")
+
+        tl.store(
+            out_ptr + offs_b[:, None] * D_in + offs_d[None, :],
+            acc,
+            mask=mask_b[:, None] & mask_d[None, :],
+        )
+
+    @triton.jit
+    def _tp_batched_outer_kernel(
+        pre_ptr,
+        post_ptr,
+        grad_ptr,
+        B,
+        D_in,
+        D_out,
+        BLOCK_IN: tl.constexpr,
+        BLOCK_OUT: tl.constexpr,
+    ):
+        """Fused batched outer product for weight gradients."""
+        offs_out, offs_in, mask_out, mask_in = grid.tile_2d(
+            D_out, D_in, BLOCK_OUT, BLOCK_IN
+        )
+
+        acc = tl.zeros((BLOCK_OUT, BLOCK_IN), dtype=tl.float32)
+
+        for b in range(B):
+            pre = tl.load(
+                pre_ptr + b * D_in + offs_in[None, :],
+                mask=mask_in[None, :],
+                other=0.0,
+            )
+            post = tl.load(
+                post_ptr + b * D_out + offs_out[:, None],
+                mask=mask_out[:, None],
+                other=0.0,
+            )
+            acc += post * pre
+
+        acc /= B
+        grid.store_2d(grad_ptr, acc, D_in, offs_out, offs_in, mask_out, mask_in)
+
+    TRITON_IMPORTED_TP = True
+except ImportError:
+    TRITON_IMPORTED_TP = False
+
+
+def tp_transpose_feedback_triton(
+    target: torch.Tensor,
+    weight: torch.Tensor,
+) -> torch.Tensor:
+    """Compute target @ W^T using Triton.
+
+    Args:
+        target: [B, D_out]
+        weight: [D_out, D_in] (forward weight matrix)
+
+    Returns:
+        [B, D_in]
+    """
+    if not TRITON_IMPORTED_TP or not target.is_cuda:
+        return target @ weight.T
+
+    B, D_out = target.shape
+    D_in = weight.shape[1]
+    if weight.shape[0] != D_out:
+        raise ValueError(
+            f"weight projection must map D_out={D_out}, got {weight.shape[0]}"
+        )
+
+    out = torch.empty(B, D_in, device=target.device, dtype=target.dtype)
+
+    BLOCK_B = 32
+    BLOCK_D = 64
+    grid = (math.ceil(B / BLOCK_B), math.ceil(D_in / BLOCK_D))
+
+    _tp_transpose_feedback_kernel[grid](
+        target,
+        weight,
+        out,
+        B,
+        D_in,
+        D_out,
+        BLOCK_B=32,
+        BLOCK_D=64,
+    )
+    return out
+
+
+def tp_batched_outer_triton(
+    pre: torch.Tensor,
+    post: torch.Tensor,
+) -> torch.Tensor:
+    """Compute batched outer product using Triton.
+
+    Args:
+        pre: [B, D_in]
+        post: [B, D_out]
+
+    Returns:
+        [D_out, D_in] (averaged over batch)
+    """
+    if not TRITON_IMPORTED_TP or not pre.is_cuda:
+        return (post.T @ pre) / pre.shape[0]
+
+    B, D_in = pre.shape
+    D_out = post.shape[1]
+    if post.shape[0] != B:
+        raise ValueError(f"post-activation must have B={B} rows, got {post.shape[0]}")
+
+    out = torch.empty(D_out, D_in, device=pre.device, dtype=pre.dtype)
+
+    BLOCK_IN = 64
+    BLOCK_OUT = 64
+    grid = grid_2d(D_out, D_in, BLOCK_OUT, BLOCK_IN)
+
+    _tp_batched_outer_kernel[grid](
+        pre,
+        post,
+        out,
+        B,
+        D_in,
+        D_out,
+        BLOCK_IN=64,
+        BLOCK_OUT=64,
+    )
+    return out
+
+
+__all__ += [
+    "TRITON_IMPORTED_TP",
+    "tp_transpose_feedback_triton",
+    "tp_batched_outer_triton",
+    "_transposed_inverse",
+]
