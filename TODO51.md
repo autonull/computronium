@@ -196,93 +196,142 @@ commands do.
 
 ---
 
-## Acceptance criteria
+## Reprioritisation (2026-10-05)
 
-- [ ] **Axis-Aligned Pareto**: needs a spec whose objectives all resolve to
-      measurements, then a run. `axis_frontiers` is ready for the analysis.
-- [ ] **Stability-Plasticity**: 240/243 records collected; phase diagram
-      measured but not yet discriminating. **Re-run required** — the campaign
-      predates the drift metrics that give the axis resolution.
-- [x] **Frozen-theta psi**: L2 complete, `theta_audit` passes for all, scope
-      verified. (Carried forward unchanged.)
-- [ ] **I(C,U)**: ingestion built and locked; blocked on a credit x update
-      campaign, which no current command generates.
-- [x] **Hardware-Aware energy**: 9/9 substrate models validated against their
-      own arithmetic and the literature's ordering. Co-design still open.
+The five campaigns are consumers of the measurement layer, not the work. Every
+long run on the old list was either blocked behind a general fix or would be
+invalidated by one — twice over, in fact: 240 records were spent discovering
+`rho^N` was wrong, and 30 more discovering `rho_step` resolves nothing. So the
+remaining work is ordered by **generality first, campaigns last**, and every
+long-running experiment is deferred indefinitely rather than queued.
+
+The distinction that makes this work: *deferring experiments is not deferring
+measurement*. The dynamics-coverage question took ~30 seconds and exposed a
+missing axis; the 240-cell campaign it answered could never have. Cheap probes
+stay in scope; compute-bound runs do not.
 
 ---
 
-## Next steps, in order
+## Part A — General capability (do first; unblocks three criteria at once)
 
-1. **Finish the stability-plasticity drift re-run.** Started, 30/108 records,
-   then stopped to wrap up. It confirms the fix works:
+**A1. Stop pinning axes in the campaign commands.** `stability-plasticity`
+fixes `substrate=digital`, `dynamics=energy_minimization`,
+`plasticity=null`, `credit=thermodynamic_contrast`, `update=euclidean`; the
+frozen-theta command likewise. Five of six axes hardcoded, which is why §1, §4
+and §5 are all blocked on the same thing: §5 needs substrate variation, §4 needs
+credit x update variation, §1 needs a run at all. Once commands declare axes
+instead of fixing them, every campaign in this file becomes declarable rather
+than bespoke. **This is the single highest-leverage item.**
 
-   ```
-   metric                    distinct   min        median     max
-   spectral_radius               30   1.0011     1.0029    1.0042   (0.31% spread)
-   drift_spectral_radius         30   2.0341     2.0929    2.1340   (4.78% spread)
-   drift_max_singular_value      30   2.1615     2.2113    2.2554   (4.24% spread)
-   contraction_rate              30   0.93252    0.93382   0.93568
-   ```
+**A2. A test that a declared multi-axis campaign works end-to-end.** Sweep 3+
+axes, assert records land carrying every axis's metrics and every declared
+objective resolves to a measurement. This repo has no such test, which is why
+defects A1 describes survived: pinning axes and pinning objectives both produce
+schema-valid runs. It belongs immediately after A1, since A1 is what makes it
+expressible.
 
-   17x the relative spread of `rho_step`, and `sigma_max(drift) > rho_drift` on
-   every cell, so the drift operator is nonnormal too. The remaining run is
-   just budget: `uv run comp stability-plasticity --store sta51_drift.duckdb
-   --run --seeds 3 --epochs 3 --budget-seconds 7200 --rho 0.5,0.9,1.05
-   --feedback-scale 0.1,0.5,1.0 --precision float32 --noise-level 0.0,0.01
-   --convergence-start 1,5`.
+**A3. Close the run on SIGTERM.** `setsid` detaches a background campaign from
+the terminal, so `execute_spec`'s KeyboardInterrupt path never fires and a
+terminated campaign leaves `status=running`, `finished_at=NULL`,
+`budget_consumed_s=NULL`. Every store a long run touched has an untrustworthy
+run row. Either handle SIGTERM the way SIGINT is handled, or keep
+`hard_seconds` low enough that the budget terminates the run on its own.
 
-   **Caveat carried forward:** `contraction_rate = 1 - eta*rho_drift` is linear
-   theory, not a measurement. It predicts 0.934 while the measured
-   `spectral_radius` reads 1.003 — the two disagree because complex eigenpairs
-   do not follow `rho(J) = 1 - eta*rho(D)`. It is reported as a prediction and
-   labelled as one; it must not be quoted as the observed contraction.
-2. **Launch background campaigns with a reachable shutdown.** `setsid` detaches
-   the process from the terminal, so `execute_spec`'s KeyboardInterrupt path
-   never fires and the run row stays `running`. Either keep a `hard_seconds`
-   budget low enough to terminate on its own, or teach the CLI to close the run
-   on SIGTERM. Until then, a terminated campaign leaves an unclosed run row.
-3. **Give the campaign commands a substrate and a credit x update axis.**
-   Criterion 5 needs substrate variation and criterion 4 needs credit x update
-   variation; both commands currently pin those axes to single primitives. This
-   is the shared blocker for §1, §4 and §5.
-4. **Restart the L3 frozen-theta psi run** — now resumable, so it picks up at
-   coordinate 5 rather than coordinate 1.
-5. **Audit the remaining flat metrics.** `val_acc` spans 0.008-0.203 with 41
-   distinct values over 240 records at 3 epochs — near-chance on a 10-class
-   task. `settle_converged` is 0 everywhere. Both may be genuine at L1/3-epoch
-   fidelity, but "be skeptical of low-performing experiments" applies: a
-   learning signal that does not move over 240 cells is worth a probe before it
-   is reported as a result.
-6. **Widen the campaign off one dynamics primitive.** Every number in §2 —
-   including the 17x drift-spread confirmation — comes from
-   `dynamics=energy_minimization` + `credit=thermodynamic_contrast`, one cell
-   out of 8 dynamics x 9 credit. The metrics themselves are not energy-gated: a
-   coverage probe over the registered dynamics produced the full stability set
-   for `energy_minimization`, `error_predictive_coding`, `pc_alm` and
-   `predictive_settling`. The four that raised did so on the framework's own
-   validity rules, not on metric failures — `diffusion` requires recurrent
-   geometry, `spike_integration` requires `temporal_trace`/`target_inversion`
-   credit, `instantaneous` rejects `thermodynamic_contrast`, `lazy` has its own
-   pairing rule. So the evidence base is narrower than the metric, and widening
-   the dynamics axis is what makes §2's conclusion about settling systems
-   rather than about EqProp.
+**A4. Decide the four unmeasured objectives.** `energy_efficiency`,
+`latency_ms`, `spike_rate`, `ir_drop_variance` are registered with no
+measurement behind them, which is what makes the §1 spec unrunnable. Either
+implement them or let the registry say so honestly — a registered objective with
+no measurement is a claim a run makes and then withdraws.
 
-   Two things follow. `free_energy` cannot be treated as one quantity across
-   the axis: the `StateDynamics` Protocol has `compute_energy` return a
-   Lyapunov function for energy-based dynamics and "a proxy" otherwise, so it
-   must not sit unqualified in a cross-dynamics objective set. And
-   `test_stability_energy_metrics_lock.py` asserts nothing about dynamics
-   coverage, so nothing would catch a regression that made these metrics
-   energy-only again.
+---
 
-   `scripts/probes/t51_metric_coverage_probe.py` (uncommitted, one lint error,
-   runs legal pairings only) is the starting point for both.
-7. **Reconcile the `min_singular_value` anomaly.** It is 0.93 on every cell
-   while `sigma_max` is 1.005, a condition number of only 1.08 — mild for an
-   operator measured to sit on the unit circle. Worth confirming against an
-   independently constructed nonnormal operator before the nonnormality ratio
-   is treated as evidence.
+## Part B — Specific defects (bounded; each has a named failure)
+
+**B1. `free_energy` is not one quantity across the dynamics axis.** The
+`StateDynamics` Protocol has `compute_energy` return a Lyapunov function for
+energy-based dynamics and "a proxy" otherwise. Reporting it as a single
+stability objective across a multi-dynamics campaign compares a Lyapunov
+function with a heuristic. Either split the metric per family or exclude it from
+cross-dynamics objective sets. Found by review, not by a failing test.
+
+**B2. The stability metrics lock asserts nothing about dynamics coverage.** A
+regression that made `compute_stability_metrics` energy-only again would pass
+every current lock. The metrics are demonstrably not energy-gated — a coverage
+probe produced the full stability set for `energy_minimization`,
+`error_predictive_coding`, `pc_alm` and `predictive_settling`, and the four
+primitives that raised did so on the framework's own validity rules
+(`diffusion` needs recurrent geometry, `spike_integration` needs
+`temporal_trace`/`target_inversion`, `instantaneous` rejects
+`thermodynamic_contrast`, `lazy` has its own pairing rule) — but that is a
+conclusion in a probe, not a test.
+
+**B3. The evidence base is one cell of 8 x 9.** Every §2 number, including the
+17x drift-spread confirmation, comes from `energy_minimization` +
+`thermodynamic_contrast`. The metric generalises; the evidence does not. Fixed by
+A1, recorded here so it is not lost: `scripts/probes/t51_metric_coverage_probe.py`
+(uncommitted, one lint error, runs legal pairings only) is the starting point.
+
+**B4. Two flat results are suspect, not established.** `val_acc` spans
+0.008-0.203 over 240 records at 3 epochs — near-chance on a 10-class task — and
+`settle_converged` is 0 on every cell. Both may be genuine at L1 fidelity, but
+AGENTS.md says a low-performing experiment is suspect for a defect. A cheap probe
+on whether learning moves at all is a **fix candidate**, not an experiment, and
+belongs in this part.
+
+**B5. `min_singular_value` = 0.93 against `sigma_max` = 1.005.** A condition
+number of 1.08 is mild for an operator measured to sit on the unit circle. If the
+Jacobian is subtly wrong, every metric in Part A's campaigns is wrong with it; if
+the operator is genuinely only mildly nonnormal, this is a footnote. Cheap to
+settle against an independently constructed nonnormal operator.
+
+---
+
+## Part C — Deferred indefinitely (long-running compute)
+
+Nothing here blocks anything in A or B. Each is data collection, and each would
+have to be re-run if a Part A change lands first — which is the whole argument
+for deferring.
+
+**C1. Stability-plasticity drift re-run.** 30/108 records collected, paused.
+Confirms the fix (4.78% spread vs `rho_step`'s 0.31%; `sigma_max(drift) >
+rho_drift` on every cell). The general value — the drift metrics and their lock
+— is already banked; finishing this only fills in numbers for one campaign.
+Command is in git history. Resume with `--run-id`.
+
+**C2. Axis-Aligned Pareto campaign.** Blocked on A4 (unmeasured objectives) and
+A1 (pinned axes). `report.axis_frontiers` is built, tested, and waiting.
+
+**C3. I(C,U) model training.** `ingest_measurements` and `held_out_accuracy` are
+built and locked; no store has more than 2 distinct credit x update pairs
+(`pm.duckdb`: 745 records, 2 pairs), so there is nothing to fit. Blocked on A1.
+
+**C4. Hardware-Aware co-design frontiers.** Energy half is done — 9/9 substrate
+models validated against their own arithmetic and the literature's ordering.
+Co-design needs substrate variation, i.e. A1.
+
+**C5. L3 frozen-theta psi restart.** Resumable, so it picks up at coordinate 5.
+One benchmark's data; no capability depends on it.
+
+**C6. Re-pin `docs/figures/manifest.json`.** Demo runs restamp each figure
+record's `git_commit`, moving its sha256 and invalidating the manifest while
+leaving every measurement byte-identical. Reverted the churn rather than leave a
+re-pin half-done; blocked on `tests/integration/test_gallery_lock.py` reporting
+"no tests ran" under a direct file invocation. Round-close item.
+
+---
+
+## Acceptance criteria, re-scoped
+
+- [ ] **Axis-Aligned Pareto** — no experiment needed. Needs A4, then A1, then a run.
+- [ ] **Stability-Plasticity** — the measurement question is **answered**: rho^N
+      was wrong, the relaxation radius resolves nothing, the drift radius is the
+      discriminating quantity (17x spread, confirmed on 30 records). What remains
+      is evidence breadth (B3/A1) and campaign scale (C1).
+- [x] **Frozen-theta psi** — L2 complete, `theta_audit` passes for all, scope
+      verified. (Carried forward unchanged.)
+- [ ] **I(C,U)** — infrastructure complete and locked. Blocked on A1 alone.
+- [x] **Hardware-Aware energy** — 9/9 substrate models validated. Co-design is
+      C4.
 
 ## Files changed this session
 
@@ -305,22 +354,19 @@ commands do.
   Pareto copy
 * `scripts/probes/t51_stability_operator_probe.py`,
   `scripts/probes/t51_energy_model_probe.py` (new)
+* `scripts/probes/t51_metric_coverage_probe.py` (new, uncommitted — see B2/B3)
 * `tests/property/test_stability_energy_metrics_lock.py` (new, 23),
   `test_axis_frontier_lock.py` (new, 6),
   `test_icu_ingestion_lock.py` (new, 5)
 
-## Loose ends from this session
+## Housekeeping
 
-* `docs/figures/run_records/*.json` are rewritten by every demo-gate run with a
-  fresh `git_commit` provenance stamp, which changes each file's sha256 and so
-  invalidates `docs/figures/manifest.json`. The measurements in those files are
-  byte-identical; only the stamp moves. I reverted the churn rather than leave a
-  re-pinning half-done, and `tests/integration/test_gallery_lock.py` did not
-  collect under `uv run python -m pytest tests/integration/test_gallery_lock.py`
-  (reports "no tests ran" with no error), so the re-pin needs that investigated
-  first. Round-close item, not a per-commit one.
 * The `stability_error.log` the old metric path wrote into the cwd is gone; the
   file that predated this session was removed rather than committed.
+* Background campaigns are launched with `setsid nohup ... &`. That is what
+  makes A3 necessary: the same detachment that keeps a run alive across a
+  session boundary stops it receiving SIGINT, and `pgrep -f <store-name>` will
+  match the invoking shell and kill it (use a pattern that cannot self-match).
 
 ## Tests
 
