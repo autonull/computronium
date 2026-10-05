@@ -41,7 +41,7 @@ __all__ = [
 ]
 
 
-class BackendType(StrEnum):  # noqa: UP042
+class BackendType(StrEnum):  # ruff: ignore[replace-str-enum]
     """Compute backend types in priority order."""
 
     TRITON = "triton"

@@ -95,8 +95,6 @@ class DFAKernelBackend:
             return
         if not self._layers:
             return
-        device = self._layers[0].weight.device
-        dtype = self._layers[0].weight.dtype
         self._feedback_weights = [
             torch.randn_like(layer.weight) * self._feedback_scale
             for layer in self._layers
@@ -120,8 +118,7 @@ class DFAKernelBackend:
         beta = getattr(self, "_beta", 0.5)
 
         # Phase 1: FREE phase (no target) - forward pass
-        _, free_activations = self.forward(x)
-        free_output = free_activations[-1]
+        _, _free_activations = self.forward(x)
 
         # Phase 2: NUDGED phase (with target) - forward + beta nudge
         _, nudged_activations = self.forward(x)
@@ -142,7 +139,7 @@ class DFAKernelBackend:
         nudged_output_nudged = nudged_output + beta * (target_vec - nudged_output)
 
         # Replace the last activation with the nudged output for backward pass
-        nudged_activations_nudged = nudged_activations[:-1] + [nudged_output_nudged]
+        nudged_activations_nudged = [*nudged_activations[:-1], nudged_output_nudged]
 
         # Cross-entropy gradient: (softmax - one_hot) / batch
         batch_size = nudged_output_nudged.shape[0]
@@ -341,7 +338,7 @@ def _apply_activation_derivative(
 
 
 # Triton kernels for fused DFA operations
-try:  # noqa: PLR0915
+try:  # ruff: ignore[too-many-statements]
     import triton
     import triton.language as tl
 

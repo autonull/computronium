@@ -480,3 +480,10 @@ All TODO50 acceptance criteria verified as COMPLETE in this session:
 
 ### Remaining Work (Not in TODO50 Scope)
 The "Next High-Value Opportunities" section above lists 5 major campaigns that would extend the validated foundation. These are research campaigns, not infrastructure gaps.
+
+### Code Quality Improvements (This Session)
+- Fixed lint issues in `computronium/acceleration/dfa_kernels.py`: removed unused `device`/`dtype` variables, unused `free_activations`/`free_output`, improved list concatenation, updated suppression comments to `ruff: ignore` format
+- Fixed lint issues in `computronium/acceleration/backends.py`: updated suppression comment to `ruff: ignore[replace-str-enum]`
+- Fixed lint issues in `computronium/acceleration/compile.py`: updated suppression comment to `ruff: ignore[too-many-statements]`
+- Added `tests/__init__.py` to fix pytest module import for property tests
+- All DFA and TP kernel parity tests pass; all property lock tests pass; all demo tests pass; CLI commands verified

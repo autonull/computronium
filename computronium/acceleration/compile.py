@@ -427,7 +427,7 @@ class EqPropTritonFunction(Function):
     @staticmethod
     def _init_triton():
         if EqPropTritonFunction._triton_kernel is None and TRITON_IMPORTED:
-            try:  # noqa: PLR0915
+            try:  # ruff: ignore[too-many-statements]
                 import triton
                 import triton.language as tl
 
