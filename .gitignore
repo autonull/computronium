@@ -49,3 +49,6 @@ autoscientist_campaigns
 
 # probe-local dataset caches (tiny-shakespeare etc.)
 scripts/probes/data/
+
+*.duckdb*
+

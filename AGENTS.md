@@ -154,4 +154,4 @@
    informed.
 
 ## Documentation
-- Don't edit README.md directly; see docs/readme/* to edit individual sections or the generator
+- Don't edit README.md directly; in `docs/readme/*`, edit individual sections or the generator script
