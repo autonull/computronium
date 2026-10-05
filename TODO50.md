@@ -426,3 +426,57 @@ Ran production-map profile with NSGA-II sampler on 3 objectives:
 3. **Frozen-θ ψ benchmarks at scale** — Extend structural_robustness to more substrates (memristive, neuromorphic), plasticity types (fast_weights, substrate_coupled), and L3 fidelity
 4. **I(C,U) model refinement** — Add substrate dimension, predict ψ modulation effect (measured 2.0pp avg, 9.1pp max)
 5. **Hardware-aware campaigns** — Energy estimation per substrate, co-design optimization
+
+---
+
+## Verification Summary (2026-10-04 Session 2)
+
+All TODO50 acceptance criteria verified as COMPLETE in this session:
+
+### Core Infrastructure Verified
+- ✅ **Protobuf conflict resolved**: P2P tests (`test_dht.py`, `test_grpc_seam.py`) collect and pass
+- ✅ **Triton DFA kernel**: Parity tests pass (`max_abs_diff=1e-4`, `max_rel_diff=1e-3`, `min_cosine=0.999`)
+- ✅ **Triton TP kernel**: Parity tests pass (`max_abs_diff=1e-4`, `max_rel_diff=2e-3`, `min_cosine=0.999`) — settling loop implemented with transpose feedback
+
+### Profile Validation Verified (param_budget=50000)
+- ✅ **production-map**: Dry-run shows 22680 declared cells, 9 substrates, legal cells across all
+- ✅ **maturation**: Dry-run shows 22680 declared cells, L2 fidelity (5 seeds, 10 epochs)
+- ✅ **claim**: Dry-run shows 22680 declared cells, L2 fidelity (10 seeds, 20 epochs)
+
+### Reproducibility Verified
+- ✅ Bit-exact reproducibility with `deterministic=True, num_workers=0`
+- ✅ All property lock tests pass (`test_ontology_locks.py`, `test_dynamics_wiring_lock.py`, `test_axes_capabilities_totality_lock.py`, `test_legality_boundary_lock.py`, `test_experiment_registries_wiring_lock.py`)
+
+### DSL Extensions Verified
+- ✅ **AST Builders**: All 9 `expr_from_string` calls in `seed_registries.py` replaced with direct builder calls (`Implies`, `Add`, `Sub`, `Mul`, `Div`, `le`, `ge`, `implies`, `mul`)
+- ✅ **Phase 1**: `ForAll`, `Exists` quantifiers; `Mean`, `Max`, `Min`, `Std` aggregations with `group_by`
+- ✅ **Phase 1**: `Diff`, `Ratio` comparative operations
+- ✅ **Phase 2**: `Template`, `Bind` for parameterized hypothesis templates
+- ✅ **Phase 3**: `Eventually`, `Always`, `Monotonic` trajectory operators
+- ✅ **CampaignContext**: Evaluates all population-level expressions over DuckDB records
+- ✅ **CLI**: `comp hypothesis-campaign` command functional (tested on `pm.duckdb`)
+
+### CLI Tools Verified
+- ✅ `comp gallery`: Renders 21 figures from `docs/figures/run_records/` to `docs/figures/gallery/`
+- ✅ `comp report --axis-coverage`: Shows per-axis stratification (tested on `pm.duckdb`)
+- ✅ `comp run` profiles: All three broad-substrate profiles dry-run successfully
+
+### Campaign Results Verified
+- ✅ **Pareto campaign** (`pareto.duckdb`): 340 records, 17 rounds, NSGA-II on 3 objectives
+- ✅ **Stability-plasticity probe** (`x_sta_001.py`): c=0.5 gives ρ≈0.86, σ_max≈1.21, settles in ~240 steps on all 3 seeds
+- ✅ **Frozen-θ ψ benchmark**: 3 seeds × {null, routing} plasticity; routing shows `psi_engaged` with `theta_audit.invariant=true`, `psi_moved=true`
+
+### Test Suite Health
+- Property locks: 15+ test files pass (ontology, joint, legality, registries, wiring)
+- Integration: Demo tests pass (`test_demo_compose_6axis`, `test_demo_swap_credit`, `test_gallery_lock`)
+- Acceleration: 372 tests pass (kernel parity, defect audit, availability)
+- P2P: `test_grpc_seam.py` passes
+- Algorithms: DFA (19 passed), TP (9 passed) kernel parity tests pass
+
+### Key Artifacts Available
+- `pm.duckdb` — Production-map + maturation + claim store (745 records for run `5130cf79...`)
+- `pareto.duckdb` — Pareto campaign store (340 records, 17 rounds)
+- `benchmark_results/structural_robustness_L2/` — Frozen-θ ψ benchmark results (3 seeds × 2 plasticity types)
+
+### Remaining Work (Not in TODO50 Scope)
+The "Next High-Value Opportunities" section above lists 5 major campaigns that would extend the validated foundation. These are research campaigns, not infrastructure gaps.
