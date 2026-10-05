@@ -285,6 +285,19 @@ commands do.
   `test_axis_frontier_lock.py` (new, 6),
   `test_icu_ingestion_lock.py` (new, 5)
 
+## Loose ends from this session
+
+* `docs/figures/run_records/*.json` are rewritten by every demo-gate run with a
+  fresh `git_commit` provenance stamp, which changes each file's sha256 and so
+  invalidates `docs/figures/manifest.json`. The measurements in those files are
+  byte-identical; only the stamp moves. I reverted the churn rather than leave a
+  re-pinning half-done, and `tests/integration/test_gallery_lock.py` did not
+  collect under `uv run python -m pytest tests/integration/test_gallery_lock.py`
+  (reports "no tests ran" with no error), so the re-pin needs that investigated
+  first. Round-close item, not a per-commit one.
+* The `stability_error.log` the old metric path wrote into the cwd is gone; the
+  file that predated this session was removed rather than committed.
+
 ## Tests
 
 * New locks: 34 passed
