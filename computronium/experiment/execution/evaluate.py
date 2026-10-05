@@ -56,7 +56,7 @@ logger = get_logger(__name__)
 # Tasks are reused within a process: setup costs ~1s, and a campaign evaluates
 # hundreds of cells against a handful of tasks. The lock is required under
 # free-threaded CPython — several workers ask for the same task at once.
-_TASK_CACHE: dict[tuple[str, str], Any] = {}
+_TASK_CACHE: dict[tuple[str, str, int], Any] = {}
 _TASK_LOCK: Final[threading.Lock] = threading.Lock()
 
 
@@ -276,15 +276,13 @@ def compute_stability_metrics(
 
                 # Compute Jacobian: [1, out_dim, 1, in_dim] -> [out_dim, in_dim]
                 J_full = jacobian(settle_fn, x_single)
-                if J_full.dim() == 4:
-                    J = J_full[0, :, 0, :]  # [out_dim, in_dim]
-                elif J_full.dim() == 2:
-                    J = J_full
-                else:
-                    raise ValueError(f"Unexpected Jacobian shape: {J_full.shape}")
+                # Squeeze batch dimensions to get [out_dim, in_dim]
+                J = J_full.squeeze(0).squeeze(1) if J_full.dim() == 4 else J_full
+                if J.dim() != 2:
+                    raise ValueError(f"Unexpected Jacobian shape after squeeze: {J.shape}")
 
                 # Compute singular values
-                U, S, Vh = torch.linalg.svd(J, full_matrices=False)
+                _, S, _ = torch.linalg.svd(J, full_matrices=False)
                 metrics["max_singular_value"] = float(S.max().item())
                 metrics["min_singular_value"] = float(S.min().item())
 

@@ -1163,8 +1163,24 @@ def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:
         run_structural_robustness_suite,
     )
 
-    substrates = tuple(args.substrates.split(","))
-    plasticity_types = tuple(args.plasticity_types.split(","))
+    substrates = (
+        tuple(args.substrates.split(","))
+        if args.substrates
+        else (
+            "digital",
+            "memristive",
+            "neuromorphic",
+            "photonic",
+            "complex",
+            "analog",
+            "quantum",
+        )
+    )
+    plasticity_types = (
+        tuple(args.plasticity_types.split(","))
+        if args.plasticity_types
+        else ("null", "routing", "fast_weights", "substrate_coupled")
+    )
 
     # Generate coordinates for all combinations
     coordinates = []

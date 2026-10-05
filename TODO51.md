@@ -185,43 +185,49 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 
 **Known Issue (FIXED)**: Stability metrics computation (spectral_radius, max_singular_value, settle_steps, lyapunov_exponent, free_energy) was failing silently in LocalBackend thread pool due to PyTorch device mismatch. The training ran on CUDA (device='auto' resolved to 'cuda'), but the stability metrics computation created tensors on CPU, causing "Expected all tensors to be on the same device" errors. **Fix applied**: Modified `compute_stability_metrics()` in `evaluate.py` to determine the device from the system's parameters (`next(system.geometry.parameters()).device`) rather than from the input tensor. Also added early device resolution in `evaluate_cell()` using `_resolve_device()` before any PyTorch operations. Both energy and stability metrics now work correctly in the thread pool.
 
+**Known Issue (NEW)**: Campaign processes (Pareto, Stability-Plasticity) die with "leaked semaphore objects" warning from `multiprocessing.resource_tracker` after completing rounds. This appears to be a loky/backend cleanup issue in the LocalBackend thread pool. The campaigns make progress but don't persist long enough to complete. **Workaround**: Run campaigns with smaller batches or investigate loky backend configuration.
+
 ---
 
 ## Campaign Execution Progress (This Session)
 
 ### 1. Axis-Aligned Multi-Objective Pareto Campaigns
-**Status**: 🟡 INFRASTRUCTURE COMPLETE, CAMPAIGN RUNNING
+**Status**: 🟡 INFRASTRUCTURE COMPLETE, CAMPAIGN RUNNING (intermittent)
 - Created RunSpec with axis_objectives for task (validation_accuracy, validation_loss), cost (walltime_total, param_count, energy_per_step), stability (spectral_radius, max_singular_value, settle_steps, free_energy, lyapunov_exponent)
 - Test campaign ran on `digits` task with 6-axis space (digital substrate, feedforward/recurrent geometry, 3 dynamics, 5 credit, 3 update)
 - Energy metrics (energy_per_sample, energy_per_batch, forward_energy_per_batch, update_energy_per_batch) recorded successfully in pipeline
 - Stability metrics (settle_steps, spectral_radius, max_singular_value, lyapunov_exponent, free_energy) now computed correctly in LocalBackend thread pool after device resolution fix
-- Campaign running with sweep_steps=50, param_budget=100000, declares ~50 cells per round
-- **Next**: Let campaign complete, then scale to larger budget
+- Campaign ran 2 rounds (20 cells), started round 3 but process died with loky semaphore leak
+- Database: 10 records from failed run, 0 from current run (axis_pareto.duckdb)
+- **Next**: Restart campaign, address semaphore leak in LocalBackend thread pool
 
 ### 2. Full Stability-Plasticity Frontier Campaign
-**Status**: 🟡 RUNNING (0 records collected, 243 cells declared)
+**Status**: 🟡 RUNNING (intermittent, 5 records collected)
 - CLI command working with full parameterization (rho, feedback_scale, precision, noise_level, convergence_start, hidden_dim)
 - Campaign running at L1 fidelity, 1 seed, 3 epochs, sweep_steps=243, param_budget=500000
-- 243 cells declared (3×3×3×3×3 hyperparameter combinations), first round proposes 20 cells
-- Training in progress (3 epochs × 30 settle steps per cell)
-- **Remaining**: Complete full 243-cell campaign at L1/L2 fidelity with stability objectives
+- 243 cells declared (3×3×3×3×3 hyperparameter combinations)
+- Completed some cells but process died with loky semaphore leak
+- Database: 5 records from current run (sta_campaign3.duckdb)
+- **Remaining**: Complete full 243-cell campaign at L1/L2 fidelity with stability objectives, address semaphore leak
 
 ### 3. Frozen-θ ψ Benchmarks at Scale
-**Status**: ✅ L2 CAMPAIGN COMPLETE (2026-10-05)
+**Status**: ✅ L2 CAMPAIGN COMPLETE (2026-10-05) | 🟡 L3 FIDELITY RUNNING
 - **Full multi-substrate × multi-plasticity matrix complete at L2 fidelity**: 24 coordinates (7 substrates × 4 plasticity types, minus invalid combos) × 3 seeds × 10 epochs
 - All 7 substrates tested: digital, memristive, neuromorphic, photonic, complex, analog, quantum
 - All 4 plasticity types tested: null, routing, fast_weights, substrate_coupled (invalid combos filtered)
 - **Key Result Confirmed**: routing plasticity shows `psi_engaged` (theta_audit.invariant=true, psi_moved=true) across ALL 7 substrates and ALL 3 seeds
 - Null, fast_weights, substrate_coupled show `psi_wired_uncontrolled` (theta_audit.invariant=true, psi_moved=false)
 - Results saved to `benchmark_results/frozen_theta_psi_full/structural_robustness_results.json`
-- **L3 Fidelity Test**: 2 substrates × 2 plasticity types × 2 seeds × 20 epochs completed successfully
-  - routing plasticity recovery_ratio > 1.0 (psi_engaged), null recovery_ratio < 1.0
-- **Remaining**: L3 fidelity (10 seeds, 20 epochs) for claim-grade validation on all 24 coordinates
+- **L3 Fidelity Campaign STARTED (2026-10-05)**: 24 coordinates × 10 seeds × 20 epochs running in background (logs/frozen_theta_psi_L3.log)
+  - First coordinate (digital/null) completed 10 seeds, currently processing digital/routing
+  - routing plasticity recovery_ratio > 1.0 (psi_engaged), null recovery_ratio ~1.0
+- **Remaining**: Wait for L3 fidelity completion on all 24 coordinates
 
 ### 4. I(C,U) Predictive Model Refinement
 **Status**: ⏳ PENDING CAMPAIGN DATA
 - Infrastructure complete, awaiting training data from campaigns above
 - I(C,U) model auto-created in policy_context when credit×update axes restricted
+- Can be trained once Pareto and Stability-Plasticity campaigns produce sufficient records
 
 ### 5. Hardware-Aware Campaigns
 **Status**: ⏳ ENERGY METRICS WORKING IN PIPELINE
@@ -267,11 +273,12 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 2. ✅ **Fix constraint variable names** in seed_registries.py — **DONE**
 3. ✅ **Add sweep_steps field** to RunSpec for hyperparameter sweep control — **DONE**
 4. ✅ **Add hidden_dim constraint** to stability-plasticity campaign — **DONE**
-5. **Complete Stability-Plasticity 243-cell campaign** at L1/L2 fidelity (running, slow)
-6. **Run Frozen-θ ψ at L3 fidelity** (10 seeds, 20 epochs) for claim-grade validation on all 24 coordinates
-7. **Run Axis-Aligned Pareto campaign** with full axis objectives at scale (running, slow)
-8. **Collect I(C,U) training data** from completed campaigns and train model
-9. **Run Hardware-Aware Pareto campaigns** with energy objectives
+5. 🟡 **Fix loky semaphore leak** in LocalBackend thread pool — campaigns die after completing rounds
+6. **Complete Stability-Plasticity 243-cell campaign** at L1/L2 fidelity (5/243 records collected, process unstable)
+7. **Complete Frozen-θ ψ L3 fidelity** (10 seeds, 20 epochs) for claim-grade validation on all 24 coordinates (RUNNING in background)
+8. **Complete Axis-Aligned Pareto campaign** with full axis objectives at scale (10/500+ records, process unstable)
+9. **Collect I(C,U) training data** from completed campaigns and train model
+10. **Run Hardware-Aware Pareto campaigns** with energy objectives
 
 ---
 

@@ -30,10 +30,10 @@ from computronium.experiment.execution.search_space import (
     iter_candidates,
 )
 from computronium.experiment.execution.stage import Proposal
+from computronium.experiment.schema.axis import StructuralAxis
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.metrics import objective_metric, objective_values
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
-from computronium.experiment.schema.axis import StructuralAxis
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -741,6 +741,7 @@ class ModelBasedPolicy:
         """
         from computronium.experiment.learning.icu import ICUFeatureVector
 
+        assert self._icu_model is not None, "ICU model must be set for icu_guided sampler"
         # Get all available coordinates from context
         all_coords = list(ctx.cells())
 
@@ -758,7 +759,7 @@ class ModelBasedPolicy:
             if (credit, update) in cu_to_coords:
                 # Create feature vector for prediction
                 # Use a representative coordinate from this pair
-                rep_coord, _ = cu_to_coords[(credit, update)][0]
+                rep_coord, _ = cu_to_coords[credit, update][0]
                 fv = ICUFeatureVector.from_coordinate(rep_coord)
                 try:
                     mean_pred, uncertainty = self._icu_model.predict(fv)
@@ -1232,12 +1233,11 @@ def _create_icu_model_from_spec(
         Tuple of (icu_model, credit_update_pairs) or (None, []) if not applicable.
     """
     try:
+
         from computronium.experiment.learning.icu import (
             ICUModel,
             create_icu_prior_surrogate,
         )
-        from computronium.experiment.evidence.store import RecordStore, StoreConfig
-        from pathlib import Path
 
         # Get credit and update primitives from spec
         credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
