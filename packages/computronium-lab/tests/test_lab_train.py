@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 from computronium_lab import Lab
+
 from computronium.core.system_trainer import compose_joint_system
 from computronium.ontology import (
     DigitalSubstrate,

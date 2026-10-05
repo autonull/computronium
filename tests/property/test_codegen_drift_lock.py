@@ -4,6 +4,7 @@ These tests exercise the codegen surface and are slow (~100s each).
 """
 
 from pathlib import Path
+
 import pytest
 
 from computronium.experiment.surface.codegen import (

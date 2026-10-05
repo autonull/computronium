@@ -4,7 +4,6 @@ Asserts every surviving lab module has an importer outside itself.
 """
 
 import ast
-import sys
 from pathlib import Path
 
 import pytest

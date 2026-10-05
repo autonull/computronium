@@ -4,14 +4,13 @@ Uses Triton-accelerated DFAKernelBackend when available.
 Provides uniform `step(case)` interface.
 """
 
-from typing import Any
 
 import torch
 
 from computronium.acceleration.backends import kernel_available
 from computronium.acceleration.dfa_kernels import (
-    DFAKernelBackend,
     TRITON_IMPORTED_DFA,
+    DFAKernelBackend,
 )
 from computronium.acceleration.kernel_backend import (
     AlgorithmFamily,

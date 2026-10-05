@@ -10,14 +10,13 @@ from pathlib import Path
 import pytest
 
 from computronium.experiment.execution.compose import compose_configs
+from computronium.experiment.execution.evaluate import task_shape
 from computronium.experiment.execution.search_space import (
     iter_candidates,
     search_space_from_spec,
 )
-from computronium.experiment.execution.evaluate import task_shape
 from computronium.experiment.schema.run_spec import RunSpec
 from computronium.experiment.schema.seed_registries import seed_all_registries
-
 
 EXAMPLE = Path(__file__).resolve().parents[2] / "examples"
 CAMPAIGN = EXAMPLE / "learning-rules-and-geometry-digits.yaml"

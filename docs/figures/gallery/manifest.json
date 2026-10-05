@@ -149,7 +149,7 @@
       "provenance": {
         "config_sha256": "e1800586b27a7e5f52afef208b484082abca05f8f104589a9e703941096b8dde",
         "env_sha256": "20f99b9252062ca455c39c2451900833cdf891a3761d4fa316060cd83e44294d",
-        "git_commit": "c754a6059b59d77113cc1a9d4caa39bd5d64a51a",
+        "git_commit": "f8831a886e5c8e55bbfe6a633fddd86464c9ba3f",
         "torch_threads": 1
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
@@ -191,7 +191,7 @@
       "provenance": {
         "config_sha256": "7e432b4c43fb4fc6d92bec7b16e34639462bf4b4944a258577eee92e71ce5060",
         "env_sha256": "20f99b9252062ca455c39c2451900833cdf891a3761d4fa316060cd83e44294d",
-        "git_commit": "c754a6059b59d77113cc1a9d4caa39bd5d64a51a",
+        "git_commit": "f8831a886e5c8e55bbfe6a633fddd86464c9ba3f",
         "torch_threads": 1
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"

@@ -257,130 +257,130 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "E501",   # line-too-long — disabled forever (user directive 2026-09-03): the formatter handles what it can, the rest is noise
-    "PLR2004", # magic-value-comparison — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
-    "PLR6301", # no-self-use — protocol implementations keep a uniform method surface (self unused by design)
-    "ARG001",  # unused-function-argument — math notation (W, G, V, X) is the domain's naming convention
-    "ARG002",  # unused-method-argument — ditto
-    "N806",    # non-lowercase-variable-in-function — ditto for local math variables
-    "N803",    # invalid-argument-name — ditto for argument names, plus Triton's DSL-mandated kernel params (BLOCK_*, *_ptr)
-    "B904",    # unnecessary-paren-on-raise-exception — long messages in raise calls are the sanctioned error style (AGENTS.md)
-    "TRY003",  # raise-vanilla-args — ditto; long descriptive messages stay at the raise site
-    "RUF001",  # ambiguous-unicode-character-string — Greek/math symbols (β, θ, ≈) in strings are the domain language
-    "RUF002",  # ambiguous-unicode-character-docstring — ditto
-    "RUF003",  # ambiguous-unicode-character-comment — ditto
-    "RUF069",  # float-equality-comparison — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs are load-bearing (bitwise L5 locks)
-    "ERA001",  # commented-out-code — eradicate false positive on `# ruff: file-ignore[...]` directives in __init__.py
+    "line-too-long",   # line-too-long — disabled forever (user directive 2026-09-03): the formatter handles what it can, the rest is noise
+    "magic-value-comparison", # magic-value-comparison — numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
+    "no-self-use", # no-self-use — protocol implementations keep a uniform method surface (self unused by design)
+    "unused-function-argument",  # unused-function-argument — math notation (W, G, V, X) is the domain's naming convention
+    "unused-method-argument",  # unused-method-argument — ditto
+    "non-lowercase-variable-in-function",    # non-lowercase-variable-in-function — ditto for local math variables
+    "invalid-argument-name",    # invalid-argument-name — ditto for argument names, plus Triton's DSL-mandated kernel params (BLOCK_*, *_ptr)
+    "raise-without-from-inside-except",    # unnecessary-paren-on-raise-exception — long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "raise-vanilla-args",  # raise-vanilla-args — ditto; long descriptive messages stay at the raise site
+    "ambiguous-unicode-character-string",  # ambiguous-unicode-character-string — Greek/math symbols (β, θ, ≈) in strings are the domain language
+    "ambiguous-unicode-character-docstring",  # ambiguous-unicode-character-docstring — ditto
+    "ambiguous-unicode-character-comment",  # ambiguous-unicode-character-comment — ditto
+    "float-equality-comparison",  # float-equality-comparison — exact sentinel comparisons (== 0.0, != 2.0) against exactly-assigned configs are load-bearing (bitwise L5 locks)
+    "commented-out-code",  # commented-out-code — eradicate false positive on `# ruff: file-ignore[...]` directives in __init__.py
     # Suppression-comment style rules (ruff 0.15 directive family): the repo
     # uses ~1.5k legacy `# ruff: ignore[rule-name]` guard-rail comments;
     # RUF100 marks them unused, RUF105/106 want the other directive form and
     # RUF103 rejects it back. Canonical-form migration is Register C work;
     # enabling these rules only churns guard-rails without lint signal.
-    "RUF100",  # unused-noqa
-    "RUF103",  # invalid-suppression-comment
+    "unused-noqa",  # unused-noqa
+    "invalid-suppression-comment",  # invalid-suppression-comment
     # "RUF105",  # noqa-comments — new preview rule prefers `ruff: ignore`; canonical directive migration is Register C
     # "RUF201",  # rule-codes-in-selectors — codes are the enforced canonical selector form (2026-09-16 mid-flight fix)
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/**" = [
-    "S101",  # assert — demos exit 0 only when the demonstrated property holds
-    "TC001", # demos are scripts: runtime imports keep the dependency explicit
-    "TC003",
+    "assert",  # assert — demos exit 0 only when the demonstrated property holds
+    "typing-only-first-party-import", # demos are scripts: runtime imports keep the dependency explicit
+    "typing-only-standard-library-import",
 ]
 "computronium/__init__.py" = [
-    "RUF004",  # invalid-all-format — undefined-export — __all__ names resolve through the _LAZY import map
+    "star-arg-unpacking-after-keyword-arg",  # invalid-all-format — undefined-export — __all__ names resolve through the _LAZY import map
 ]
 "computronium/ontology/dynamics/__init__.py" = [
-    "RUF012",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
-    "RUF013",  # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)
+    "mutable-class-default",  # implicit-namespace-package — DYNAMICS_REGISTRY lives beside its classes (R1.1)
+    "implicit-optional",  # non-empty-init-module — the registry is the single-source wiring point by design (TODO18 wiring lock)
 ]
 "computronium/acceleration/pc_kernels.py" = [
-    "PLR0915",
+    "too-many-statements",
 ]
 "computronium/acceleration/{fa_kernels,ff_kernels,hebbian_kernels,kernels,snn_kernels,tile_kernels,triton_kernels,compile,kernel_backend}.py" = [
     # too-many-statements-in-try-clause — guarded Triton import ladder
-    "RUF100",  # noqa-comments — the noqa is on a guarded import ladder
+    "unused-noqa",  # noqa-comments — the noqa is on a guarded import ladder
 ]
 "computronium/acceleration/triton_kernels.py" = [
-    "RUF100",
-    "PLR0913", # too-many-arguments — kernel parameter surfaces are wide by design
-    "PLR0914", # too-many-locals — ditto
-    "PLR0911", # too-many-positional-arguments — ditto
+    "unused-noqa",
+    "too-many-arguments", # too-many-arguments — kernel parameter surfaces are wide by design
+    "too-many-locals", # too-many-locals — ditto
+    "too-many-return-statements", # too-many-positional-arguments — ditto
 ]
-"computronium/acceleration/microbench.py" = ["RUF100"]
-"computronium/acceleration/backends.py" = ["RUF100"]
-"computronium/ontology/system.py" = ["SIM102"] # collapsible-if — validation clarity over brevity
+"computronium/acceleration/microbench.py" = ["unused-noqa"]
+"computronium/acceleration/backends.py" = ["unused-noqa"]
+"computronium/ontology/system.py" = ["collapsible-if"] # collapsible-if — validation clarity over brevity
 "computronium/ontology/credit.py" = [
-    "ARG002", # unused-method-argument — protocol surface uniformity
-    "PLR6104", "PLW2901",
+    "unused-method-argument", # unused-method-argument — protocol surface uniformity
+    "non-augmented-assignment", "redefined-loop-name",
 ]
-"computronium/ontology/geometry.py" = ["ARG002"]
-"computronium/ontology/substrate/_substrate.py" = ["ARG002"]
-"computronium/ontology/update.py" = ["ARG002"]
-"computronium/state/transitions.py" = ["ARG002"]
+"computronium/ontology/geometry.py" = ["unused-method-argument"]
+"computronium/ontology/substrate/_substrate.py" = ["unused-method-argument"]
+"computronium/ontology/update.py" = ["unused-method-argument"]
+"computronium/state/transitions.py" = ["unused-method-argument"]
 "computronium/domains/trainer.py" = [
-    "PLR0913", # too-many-arguments — trainer config is necessarily wide
-    "PLR0911", # too-many-positional-arguments — ditto
-    "S101",    # assert — internal invariant guard
+    "too-many-arguments", # too-many-arguments — trainer config is necessarily wide
+    "too-many-return-statements", # too-many-positional-arguments — ditto
+    "assert",    # assert — internal invariant guard
 ]
 "computronium/experiment/evidence/store.py" = [
-    "RUF100",
-    "S608",    # hardcoded-sql-expression — parameterized queries by design
+    "unused-noqa",
+    "hardcoded-sql-expression",    # hardcoded-sql-expression — parameterized queries by design
 ]
 "computronium/experiment/execution/search_space.py" = [
-    "RUF100", "E402", "TC001", "TC002", "TC003",
-    "PLR0912", "PLR0915", "PLR0914", "PLR1702", "C401", "F841",
+    "unused-noqa", "module-import-not-at-top-of-file", "typing-only-first-party-import", "typing-only-third-party-import", "typing-only-standard-library-import",
+    "too-many-branches", "too-many-statements", "too-many-locals", "too-many-nested-blocks", "unnecessary-generator-set", "unused-variable",
 ]
 "computronium/experiment/execution/stages_impl.py" = [
-    "RUF100", "E402", "TC001", "TC003",
-    "PLR0912", "PLR0915", "PLR0914", "C901",
-    "SIM105", "SIM110", "PLR1730", "F841",
+    "unused-noqa", "module-import-not-at-top-of-file", "typing-only-first-party-import", "typing-only-standard-library-import",
+    "too-many-branches", "too-many-statements", "too-many-locals", "complex-structure",
+    "suppressible-exception", "reimplemented-builtin", "if-stmt-min-max", "unused-variable",
 ]
-"computronium/experiment/execution/compose.py" = ["RUF100"]
+"computronium/experiment/execution/compose.py" = ["unused-noqa"]
 "computronium/experiment/execution/policy.py" = []
 "computronium/experiment/execution/sysctx.py" = []
-"computronium/experiment/execution/optuna_adapter.py" = ["PLR0911", "PGH003"]
+"computronium/experiment/execution/optuna_adapter.py" = ["too-many-return-statements", "blanket-type-ignore"]
 "computronium/experiment/legality/engine.py" = []
-"computronium/experiment/legality/dsl.py" = ["RUF100"]
-"computronium/experiment/schema/primitives.py" = ["E402"]
-"computronium/experiment/schema/harvest.py" = ["PLR0912", "SIM105", "TRY300", "PLW2901"]
-"computronium/experiment/surface/conformance.py" = ["S404", "S603", "S607", "SIM108", "F841"]
+"computronium/experiment/legality/dsl.py" = ["unused-noqa"]
+"computronium/experiment/schema/primitives.py" = ["module-import-not-at-top-of-file"]
+"computronium/experiment/schema/harvest.py" = ["too-many-branches", "suppressible-exception", "try-consider-else", "redefined-loop-name"]
+"computronium/experiment/surface/conformance.py" = ["suspicious-subprocess-import", "subprocess-without-shell-equals-true", "start-process-with-partial-path", "if-else-block-instead-of-if-exp", "unused-variable"]
 "computronium/experiment/surface/operations.py" = []
-"computronium/experiment/surface/report.py" = ["RUF100"]
+"computronium/experiment/surface/report.py" = ["unused-noqa"]
 "computronium/cli/joint_validate.py" = []
-"computronium/core/continual/runner.py" = ["PLR0913", "PLR0911", "PLW2901", "E741"]
-"computronium/core/continual/training.py" = ["TC001", "PLR0914"]
-"computronium/core/local_learning/settling.py" = ["PLR0913", "RUF059"]
-"computronium/core/presets.py" = ["PLR0915"]
-"computronium/core/substrates/complex_substrate.py" = ["RUF100"]
-"computronium/core/system_trainer/factory.py" = ["C901"]
-"computronium/core/system_trainer/joint.py" = ["PLR0912"]
-"computronium/core/tile/topology.py" = ["PLR0912", "C901"]
-"computronium/data/lm.py" = ["RUF100"]
-"computronium/deployment/serialization.py" = ["RUF100", "SIM117"]
-"computronium/models/deployments/config.py" = ["PLR0913"]
+"computronium/core/continual/runner.py" = ["too-many-arguments", "too-many-return-statements", "redefined-loop-name", "ambiguous-variable-name"]
+"computronium/core/continual/training.py" = ["typing-only-first-party-import", "too-many-locals"]
+"computronium/core/local_learning/settling.py" = ["too-many-arguments", "unused-unpacked-variable"]
+"computronium/core/presets.py" = ["too-many-statements"]
+"computronium/core/substrates/complex_substrate.py" = ["unused-noqa"]
+"computronium/core/system_trainer/factory.py" = ["complex-structure"]
+"computronium/core/system_trainer/joint.py" = ["too-many-branches"]
+"computronium/core/tile/topology.py" = ["too-many-branches", "complex-structure"]
+"computronium/data/lm.py" = ["unused-noqa"]
+"computronium/deployment/serialization.py" = ["unused-noqa", "multiple-with-statements"]
+"computronium/models/deployments/config.py" = ["too-many-arguments"]
 "computronium/ontology/dynamics/_dynamics.py" = [
-    "PLR6104",
-    "PLR0913", "SIM105", "SIM108", "RUF100",
+    "non-augmented-assignment",
+    "too-many-arguments", "suppressible-exception", "if-else-block-instead-of-if-exp", "unused-noqa",
 ]
-"computronium/p2p/grpc_service.py" = ["RUF100"]
-"computronium/utils.py" = ["S404", "SIM105"]
-"computronium/validation/notebook.py" = ["RUF100"]
-"computronium/validation/tracks/hardware_tracks.py" = ["PLR6104"]
-"computronium/validation/tracks/_signal_probe.py" = ["RUF100"]
-"computronium/validation/tracks/signal_tracks.py" = ["RUF100"]
+"computronium/p2p/grpc_service.py" = ["unused-noqa"]
+"computronium/utils.py" = ["suspicious-subprocess-import", "suppressible-exception"]
+"computronium/validation/notebook.py" = ["unused-noqa"]
+"computronium/validation/tracks/hardware_tracks.py" = ["non-augmented-assignment"]
+"computronium/validation/tracks/_signal_probe.py" = ["unused-noqa"]
+"computronium/validation/tracks/signal_tracks.py" = ["unused-noqa"]
 "computronium/validation/tracks/track_registry.py" = []
-"computronium/validation/verifier.py" = ["PLR0914", "PLR0915", "C901", "SIM108", "PLR1730", "SIM118"]
+"computronium/validation/verifier.py" = ["too-many-locals", "too-many-statements", "complex-structure", "if-else-block-instead-of-if-exp", "if-stmt-min-max", "in-dict-keys"]
 "computronium/ontology/_settle_kernel.py" = [
-    "PLR6104", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics
+    "non-augmented-assignment", # non-augmented-assignment — out-of-place adds are the settle graph-safety idiom (R5.3); `+=` on a graph tensor changes autograd semantics
 ]
 "packages/*/tests/**/*.py" = [
-    "S101",   # assert in standalone-package tests
+    "assert",   # assert in standalone-package tests
 ]
 "scripts/probes/x_*.py" = [
-    "I001",  # unsorted-imports — module-import-not-at-top-of-file — sys.path bootstrap before computronium imports
-    "ISC001", # single-line-implicit-string-concatenation — import block follows the sys.path insert by design
+    "unsorted-imports",  # unsorted-imports — module-import-not-at-top-of-file — sys.path bootstrap before computronium imports
+    "single-line-implicit-string-concatenation", # single-line-implicit-string-concatenation — import block follows the sys.path insert by design
 ]
 "scripts/{probes/**,audit_*.py}" = [
     # Research probes and the audit_* diagnostics are sanctioned throwaways
@@ -391,55 +391,55 @@ ignore = [
     # place, and the correctness of that depends on the line above staying
     # unaliased -- TODO34 Pass 2 recorded the same decision for the
     # production kernel.
-    "S101",    # assert — asserts are the probe's sanity gates
-    "S324",    # hashlib-insecure-hash-function — md5 for non-cognitive cache keys
-    "PLR0911", # too-many-return-statements — complexity budgets don't apply to one-off sweeps
-    "PLR0912", # too-many-branches — ditto
-    "PLR0914", # too-many-locals — ditto
-    "PLR0915", # too-many-statements — ditto
-    "PLW0603", # global-statement — probe-level module state by design
-    "PLW2901", # redefined-loop-name — loop-var overwrite is a common probe idiom
-    "PLW2901", # redefined-argument-from-local — manual counters read clearer in sweep loops
-    "RUF006",  # asyncio-dangling-task — fire-and-forget probe tasks
-    "E741",    # ambiguous-variable-name — single-letter math names (l, n) are the domain language
-    "F841",    # unused-variable — assignments kept for side effects / future inspection
-    "ARG005",  # unused-lambda-argument — lambda placeholders in tracker callbacks
-    "PLR6104",  # non-augmented-assignment — ditto; probes accumulate torch tensors out-of-place for the same graph-safety reason
+    "assert",    # assert — asserts are the probe's sanity gates
+    "hashlib-insecure-hash-function",    # hashlib-insecure-hash-function — md5 for non-cognitive cache keys
+    "too-many-return-statements", # too-many-return-statements — complexity budgets don't apply to one-off sweeps
+    "too-many-branches", # too-many-branches — ditto
+    "too-many-locals", # too-many-locals — ditto
+    "too-many-statements", # too-many-statements — ditto
+    "global-statement", # global-statement — probe-level module state by design
+    "redefined-loop-name", # redefined-loop-name — loop-var overwrite is a common probe idiom
+    "redefined-loop-name", # redefined-argument-from-local — manual counters read clearer in sweep loops
+    "asyncio-dangling-task",  # asyncio-dangling-task — fire-and-forget probe tasks
+    "ambiguous-variable-name",    # ambiguous-variable-name — single-letter math names (l, n) are the domain language
+    "unused-variable",    # unused-variable — assignments kept for side effects / future inspection
+    "unused-lambda-argument",  # unused-lambda-argument — lambda placeholders in tracker callbacks
+    "non-augmented-assignment",  # non-augmented-assignment — ditto; probes accumulate torch tensors out-of-place for the same graph-safety reason
 ]
 "computronium/primitives/substrate/noisy/reference.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/sparse/reference.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/complex/reference.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/ternary/reference.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/geometry/spatial_lattice_3d/reference.py" = [
-    "TC001", # FeedforwardGeometry used in function signature and body; false positive
+    "typing-only-first-party-import", # FeedforwardGeometry used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/noisy/kernel.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/sparse/kernel.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/complex/kernel.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "computronium/primitives/substrate/ternary/kernel.py" = [
-    "TC001", # SubstrateSpec used in function signature and body; false positive
+    "typing-only-first-party-import", # SubstrateSpec used in function signature and body; false positive
 ]
 "tests/**/*.py" = [
-    "S101",   # assert in tests
-    "S404",   # suspicious-subprocess-import — subprocess CLI smoke / wheel-acceptance tests
-    "S603",   # subprocess-without-shell-equals-true — ditto
-    "S607",   # start-process-with-partial-path — subprocess CLI smoke tests; partial-path executables (uv)
-    "S311",   # suspicious-non-cryptographic-random-usage — random.Random in test samplers/fixtures
-    "PLR2004", # magic-value-comparison — literal expected values in assertions
+    "assert",   # assert in tests
+    "suspicious-subprocess-import",   # suspicious-subprocess-import — subprocess CLI smoke / wheel-acceptance tests
+    "subprocess-without-shell-equals-true",   # subprocess-without-shell-equals-true — ditto
+    "start-process-with-partial-path",   # start-process-with-partial-path — subprocess CLI smoke tests; partial-path executables (uv)
+    "suspicious-non-cryptographic-random-usage",   # suspicious-non-cryptographic-random-usage — random.Random in test samplers/fixtures
+    "magic-value-comparison", # magic-value-comparison — literal expected values in assertions
 ]
 
 [tool.ruff.lint.flake8-type-checking]

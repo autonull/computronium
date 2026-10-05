@@ -27,9 +27,14 @@ from computronium_lab.training import (
 # Minimal CEEC profile for exploratory synthesis recording (T23.1.7)
 try:
     from ceec.constraints import ConstraintResult
-    from ceec.profile import CORE_CONSTRAINTS, CORE_QUALITY, Constraint, Profile
+    from ceec.profile import (
+        CORE_CONSTRAINTS,
+        CORE_QUALITY,
+        Constraint,
+        LedgerRole,
+        Profile,
+    )
     from ceec.session import ledger
-    from ceec.profile import LedgerRole
 
     def _frozen_theta_audit(store, experiment, _profile) -> ConstraintResult:
         design = experiment.design
@@ -79,7 +84,6 @@ except ImportError:
     LedgerRole = None
 
 if TYPE_CHECKING:
-    from pathlib import Path
 
     from computronium_lab.adaptation import (
         AdaptationMode,
