@@ -1,341 +1,278 @@
 # TODO51: High-Value Research Campaigns
 
 ## Context
-TODO50 completed all infrastructure and validation work. The pipeline runs end-to-end across all 604,800 combinations with proper constraint enforcement. Profiles validated, reproducibility fixed, DSL extended, Pareto/probe/benchmark results published.
+
+TODO50 delivered the pipeline and its validation. TODO51's five campaigns were
+blocked behind measurement defects that produced schema-valid constants: four
+of them are fixed and committed, two campaigns produced their first real
+numbers, and three acceptance criteria are still open. What follows is what the
+data says, not what the infrastructure was hoped to say.
 
 ---
 
-## Research Campaigns (In Scope)
+## The defects this session found
 
-### 1. Axis-Aligned Multi-Objective Pareto Campaigns ✅ INFRASTRUCTURE COMPLETE
-**Goal**: Run campaigns with full objective sets per axis to demonstrate the framework's core differentiator.
-**Current**: Pareto campaign on 3 objectives (val_acc, walltime, param_count) — 340 records, 17 rounds.
-**Target Objectives per Axis**:
-| Axis | Objectives (all to maximize unless noted) |
-|------|-------------------------------------------|
-| Substrate | energy_efficiency, latency (min), precision |
-| Geometry | param_count (min), FLOPs (min), memory (min) |
-| Dynamics | settling_time (min), spectral_radius (min) |
-| Credit | alignment, local_complexity (min) |
-| Update | stability, orthogonality |
+None of these were schema violations. Every payload validated, every run row
+existed, every gate passed. Four quantities were constant or wrong.
 
-**Infrastructure Implemented**:
-- ✅ `axis_objectives` field added to `RunSpec` with validation against OBJECTIVES_REGISTRY axis tags
-- ✅ `ModelBasedPolicy` updated to support axis-aligned objectives (flattens all axis objectives for combined study)
-- ✅ CLI support for specifying axis-aligned objectives in run profiles
-- ✅ Objectives registry already contains axis-tagged objectives (task, cost, substrate, ruler, stability, plasticity, composite)
-- ✅ `sweep_steps` field added to `RunSpec` for controlling hyperparameter sweep resolution (default 5, set to 50 for factorial-like coverage)
+### 1. `spectral_radius` measured rho^N, not rho
 
-**Remaining**: Run actual campaigns with axis-aligned objectives, add missing measured objectives (energy_efficiency, spectral_radius, max_singular_value, etc. need measurement implementation)
+`compute_stability_metrics` differentiated the **whole settle** with respect to
+the input, so it reported the N-step composite Jacobian. A settling loop runs
+`N = max_steps = 30` steps, so a genuinely contracting step read as
+`rho^30`. Measured: `rho = 0.0087` where the step operator is `rho = 0.997,
+sigma_max = 1.003` — the frontier's entire subject (contracting yet transiently
+amplifying) was erased by the horizon.
 
----
+Fix: `computronium/experiment/execution/settle_operator.py` exposes the step
+over the flattened hidden activation stack, which is the state the step
+actually updates. Probe (`scripts/probes/t51_stability_operator_probe.py`):
 
-### 2. Full Stability-Plasticity Frontier Campaign ✅ INFRASTRUCTURE COMPLETE
-**Hypothesis**: `adaptive computation ↔ controlled departure from contraction`
-**Probe Result (X-STA-001)**: c=0.5 gives ρ≈0.86, σ_max≈1.21, settles in ~240 steps (<500 budget) on ALL 3 seeds — **CONFIRMED**
-**Campaign Scale**: 648 cells × contraction {0.5, 0.9, 1.05} × gate {selective, ungated} × coupling × precision × noise × delay
+```
+whole-settle d(out)/dx   shape=(10, 64)   rho=nan     sigma_max=0.1820
+one-step dh/dh           shape=(64, 64)   rho=0.9000  sigma_max=0.9000
+horizon=30  rho_step^N = 4.239e-02
+```
 
-**Infrastructure Implemented**:
-- ✅ `comp stability-plasticity` CLI command with full parameterization
-- ✅ Generates RunSpec with valid hyperparameters (rho, feedback_scale, precision, noise_level, convergence_start, hidden_dim)
-- ✅ Supports dry-run, spec output, and full campaign execution
-- ✅ Axis-aligned objectives for stability (spectral_radius, max_singular_value, settle_steps), task (validation_accuracy), cost (walltime_total)
-- ✅ Model-based policy with NSGA-II sampler support
-- ✅ `sweep_steps=243` for full factorial hyperparameter coverage (3×3×3×3×3 = 243 combinations)
-- ✅ `hidden_dim` constrained to [32, 256] LOG scale to respect param_budget
-- ✅ `param_budget=500000` for adequate parameter ceiling
+### 2. The relaxation radius then resolved nothing
 
-**Remaining**: Run full 243-cell campaign at L1/L2 fidelity (648-cell target requires additional gate/coupling sweep parameters)
+Fixing (1) was not enough. The 240-record campaign came back with
+`rho = 1.003` on **every** cell — across 80 `feedback_scale` values, every
+noise level, both precisions, every `convergence_start`. A point, not a phase
+diagram. The cause is arithmetic: a relaxation step is `h <- h + eta*(f(h)-h)`,
+so `J = I + eta*D`, and the identity pins `rho(J)` at 1 for any small `eta`.
+Over a 500x range of `eta`:
 
----
+| eta | rho_step | rho_drift | sigma_max(drift) |
+|-----|----------|-----------|------------------|
+| 0.5 | 1.02272 | 2.04543 | 2.13135 |
+| 0.2 | 0.97442 | 1.87212 | 2.00903 |
+| 0.03 | 0.99990 | 1.99649 | 2.09380 |
+| 0.001 | 0.99997 | 1.96851 | 2.06956 |
 
-### 3. Frozen-θ ψ Benchmarks at Scale ✅ INFRASTRUCTURE COMPLETE
-**Probe Result (structural_robustness L2)**: routing plasticity shows `psi_engaged` with `theta_audit.invariant=true`, `psi_moved=true` across 3 seeds — **CONFIRMED**
-**Scale Targets**:
-- Substrates: digital, memristive, neuromorphic, photonic, complex, analog, quantum
-- Plasticity types: null, routing, fast_weights, substrate_coupled
-- Fidelity: L2 (5 seeds, 10 epochs) → L3 (10 seeds, 20 epochs)
-- Damage types: zero_weights, remove_nodes, noise, weight_perturbation
-- Recovery steps: 20, 50, 100
+`rho_step` spans 1.0000 +/- 0.0003 across that whole range; `rho_drift` spans
+2.00 +/- 0.09. The drift operator `D = (J - I)/eta` is exact algebra on a
+Jacobian already built — one subtraction, no extra autograd pass — and it is
+the quantity a frontier is about. `rho_drift < 1` is a contracting network;
+`rho_step > 1` at `eta = 1/rho_drift` is the same fact in the loop's units.
+Both are now reported.
 
-**Infrastructure Implemented**:
-- ✅ `comp frozen-theta-psi` CLI command with full parameterization
-- ✅ Generates coordinates for all substrate × plasticity combinations
-- ✅ Filters invalid combinations (neuromorphic only null/routing, photonic/quantum no substrate_coupled)
-- ✅ Integrates with existing `structural_robustness` benchmark suite
-- ✅ ThetaInvarianceAudit and CLAIMS_SCOPE_PSI_ENGAGED verification built-in
-- ✅ L3 fidelity tested with 2 substrates × 2 plasticity types × 2 seeds (works correctly)
+### 3. Energy came from a weight shape that was not the cell's
 
-**Remaining**: Run full multi-substrate × multi-plasticity matrix at L3 fidelity (10 seeds, 20 epochs)
+`compute_energy_metrics` was handed a hardcoded `weight_shape=(output_dim,
+input_dim)`, so a 13k-parameter cell and a 305k-parameter one reported
+byte-identical joules. Now charged per layer over the geometry's own shapes,
+plus `macs_per_step` and `energy_per_mac`. All 9 substrate models validated
+(`scripts/probes/t51_energy_model_probe.py`):
 
----
+| substrate | pJ/MAC | batch 8->64 | width 64->256 |
+|-----------|--------|-------------|---------------|
+| digital | 2.0000 | 8.00 | 4.00 |
+| analog | 0.1156 | 8.00 | 4.00 |
+| memristive | 0.0022 | 4.11 | 4.00 |
+| neuromorphic | 0.0021 | 8.00 | 4.00 |
+| optical | 0.0007 | 1.00 | 3.86 |
+| quantum | 0.1563 | 8.00 | 4.00 |
+| complex | 2.0000 | 8.00 | 4.00 |
+| sparse | 0.2750 | 8.00 | 4.00 |
+| ternary | 0.1000 | 8.00 | 4.00 |
 
-### 4. I(C,U) Predictive Model Refinement ✅ INFRASTRUCTURE COMPLETE
-**Current**: 0.944 held-out lattice accuracy (C×U only)
-**Targets**:
-- Add substrate dimension (S×C×U tensor)
-- Predict ψ modulation effect (measured avg 2.0pp, max 9.1pp improvement)
-- Use for policy warm-start (surrogate-driven acquisition)
+Layer width is strict (the MAC term). Batch is deliberately non-strict: optical
+laser power is batch-independent and memristive programming is paid once per
+weight. Only the coarse literature claim is locked (digital >10x dearer per MAC
+than a device substrate); comparing neuromorphic-per-event against
+memristive-per-programming per MAC compares two units, not two devices.
 
-**Infrastructure Implemented**:
-- ✅ `ICUModel` class with leakage guard (data_origin tagging per WP5.5)
-- ✅ `SurrogatePolicy` wrapper with acquisition functions (EI, UCB, PI, LogEI)
-- ✅ `GaussianProcessSurrogate` using sklearn
-- ✅ `ModelBasedPolicy` now supports `icu_guided` sampler for I(C,U) warm-start
-- ✅ `policy_context` automatically creates I(C,U) model when credit×update axes are restricted
-- ✅ Credit family and update family mappings for feature encoding
-- ✅ Calibration audit and leakage check methods
+### 4. `walltime_total` measured contention, not the cell
 
-**Remaining**: Collect training data from campaigns, train model, validate held-out accuracy
+`submit_batch` ignored its own `max_workers` knob and ran every item on the
+default thread pool, so a ten-cell round trained ten cells at once on one
+device and each reported the walltime of all ten. Admission is now bounded at
+`_CELL_WORKERS = 4`. After the fix, all 240 records carry a distinct
+`walltime_s` (40.8 - 132.4s); before it, every cell in a batch read the same
+~77s.
 
----
+### Also fixed
 
-### 5. Hardware-Aware Campaigns ✅ INFRASTRUCTURE COMPLETE
-**Substrate Models Ready**: Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitaries)
-**Missing**:
-- Energy estimation per substrate (simulated energy only)
-- Co-design: optimize geometry+dynamics per substrate
-
-**Infrastructure Implemented**:
-- ✅ `estimate_energy()` method added to `Substrate` protocol
-- ✅ Implemented for all 11 substrate types:
-  - DigitalSubstrate: ~1 pJ/MAC (GPU FP32)
-  - AnalogSubstrate: ~0.1 pJ/MAC + ADC/DAC overhead
-  - MemristiveSubstrate: ~1 fJ/MAC + programming energy
-  - NeuromorphicSubstrate: ~0.01 pJ/event (sparse, event-driven)
-  - OpticalSubstrate: Passive interference + phase shifter tuning + laser power
-  - QuantumSubstrate: Gate energy + control/readout + error correction overhead
-  - ComplexSubstrate: 4x real MACs (emulated)
-  - SparseSubstrate: Sparsity-proportional + indexing overhead
-  - TernarySubstrate: Addition-only ~0.1 pJ/MAC
-  - NoisySubstrate: Digital + 5% noise overhead
-  - QuantizedSubstrate: INT8 ~0.2 pJ/MAC
-- ✅ Factory function `substrate_from_config` works for all types
-- ✅ Returns per-batch and per-sample energy estimates
-
-**Remaining**: Run Pareto campaigns with energy as objective, validate energy models
+* `settle_converged` read a counter that the next settle had already reset;
+  telemetry is now read from a settle the caller owns.
+* Both metric paths wrote `stability_error.log` into the cwd on failure at
+  `debug` level — a side effect that hid the failures it was recording.
+* Pareto fronts were hardcoded to **two** objectives. The stability axis
+  declares six, so `_pareto_subset` was reporting the (rho, sigma_max)
+  projection and calling it the axis's front. Now N-arity
+  (`report.non_dominated`), with `report.axis_frontiers` reading the run's own
+  `axis_objectives`.
+* `ICUModel.load_from_store` read only records the model wrote itself
+  (`payload["icu"]`), so I(C,U) could only ever learn from its own output.
+  `ingest_measurements` now builds `ICURecord` from a campaign's measurements,
+  inheriting the train/evaluate split from each record's
+  `provenance.data_origin` rather than choosing it at ingest time.
+* Every demo calling `make_pipeline_config` raised `TypeError` — the helper
+  still passed `checkpoint_dir`, removed from `PipelineConfig`. Five demos were
+  dead.
+* `demo_multi_objective` carried a third copy of the domination logic whose
+  tie rule dropped a duplicate of a non-dominated point, and recomputed
+  `param_count` from `hidden_dim` instead of reading the payload.
+* `structural_robustness` wrote its results once at the end; the L3 run died at
+  4/24 coordinates and lost all four. Now persists per coordinate and resumes.
 
 ---
 
-## Suggested Execution Order
+## Campaign results
 
-| Week | Campaign | Prerequisites |
-|------|----------|---------------|
-| 1 | Axis-Aligned Pareto | Pareto infra exists |
-| 2 | Stability-Plasticity | Probe infra exists |
-| 3 | Frozen-θ ψ Scale | Benchmark infra exists |
-| 4 | I(C,U) Refinement | Campaign data exists |
-| 5 | Hardware-Aware | Substrate models ready |
+### 2. Stability-Plasticity frontier — FIRST REAL DATA
 
----
+`sta51.duckdb`, 240 records, 3 seeds, 3 epochs, 80 distinct `hidden_dim`.
+Swept: `feedback_scale` x80, `noise_level` x80, `convergence_start` x5,
+`precision` x2.
 
-## Acceptance Criteria for TODO51
+```
+metric                       min        median         max      distinct
+spectral_radius        0.99988         1.003      1.007          240
+max_singular_value     1.00270       1.0054      1.009          239
+min_singular_value     0.92823      0.93149     0.9342          240
+lyapunov_exponent   -0.00012357     0.0029577  0.0069564          240
+settle_steps                  30           30          30            1
+energy_per_sample     3.4048e-08     1.7114e-07    1.5495e-06         61
+macs_per_step         5.4477e+05     2.7382e+06    2.4792e+07         61
+walltime_s                 40.76          70.01       132.4          240
+```
 
-- [ ] **Axis-Aligned Pareto**: Campaign completes with ≥500 records, all 5 axis objective sets computed, Pareto frontiers identified per axis
-- [ ] **Stability-Plasticity**: 243-cell campaign completes (648-cell target needs gate/coupling params), phase diagram (ρ, σ_max) mapped, hypothesis tested with statistical rigor
-- [x] **Frozen-θ ψ Scale**: Multi-substrate × multi-plasticity matrix complete, L2 fidelity, theta_audit passes for all, CLAIMS_SCOPE_PSI_ENGAGED verified
-- [ ] **I(C,U) Model**: S×C×U×ψ model trained, held-out accuracy ≥0.90, predicts ψ modulation within 2pp, integrated with policy
-- [ ] **Hardware-Aware**: Energy estimation per substrate, co-design Pareto frontiers, at least 2 substrates with validated energy models
+**What the data says.** `sigma_max > 1` on all 240 cells while `rho` straddles
+1: the operator sits on the unit circle with transient gain above it, and
+`sigma_min = 0.93` makes it strongly nonnormal. That is the *shape* the
+stability-plasticity hypothesis predicts, and it is now measurable for the
+first time. But `rho` and `sigma_max` are **flat to within 0.7% across the
+entire sweep** — the axis is measured, and it does not discriminate. Cause
+identified and fixed in defect (2); the drift metrics that discriminate are
+committed but the campaign predates them, so it must be re-run.
 
----
+**`settle_converged = 0` and `settle_steps = 30 = horizon` on all 240 cells.**
+No cell converges in budget at `settle_step ~ 0.03`. That is a real result
+about these coordinates, not a measurement artifact — the telemetry now comes
+from a settle that ran.
 
-## Implementation Summary (This Session)
+**The space is budget-bounded, not exhaustion-bounded.** `hidden_dim` and four
+other hyperparameters are declared as continuous domains, so the declared cell
+count is ~243^6 and the run ends on budget, not on a finished space. The
+campaign was stopped after 240 records (past the 216 target); all 240 survived
+because DuckDB commits transactionally. The run row reads `status=running` with
+`budget_consumed_s=NULL` because the process was SIGTERMed — `setsid` detaches
+the campaign from the terminal, so SIGINT never arrives and the clean-shutdown
+path in `execute_spec` is unreachable from a background launch.
 
-### Files Modified/Created:
-1. **`computronium/experiment/schema/run_spec.py`**: Added `axis_objectives` field with validation, added `sweep_steps` field for hyperparameter sweep resolution
-2. **`computronium/experiment/execution/policy.py`**: 
-   - Updated `ModelBasedPolicy` for axis-aligned objectives
-   - Added `icu_guided` sampler with I(C,U) warm-start
-   - Added `_propose_icu_guided` method
-   - Updated `policy_context` to auto-create I(C,U) model
-3. **`computronium/experiment/surface/cli.py`**: 
-   - Added `stability-plasticity` command
-   - Added `frozen-theta-psi` command
-   - Fixed `hidden_dim` constraint, `param_budget`, `sweep_steps` for stability-plasticity
-   - Fixed `apply_constraints` variable names (params.hidden_dim, params.num_layers, params.max_steps)
-4. **`computronium/cli/__main__.py`**: Registered new CLI commands
-5. **`computronium/ontology/substrate/_substrate.py`**: 
-   - Added `estimate_energy` to `Substrate` protocol
-   - Implemented for all 11 substrate classes
-6. **`computronium/experiment/execution/evaluate.py`**:
-   - Added `compute_stability_metrics()` for spectral_radius, max_singular_value, settle_steps, lyapunov_exponent, free_energy
-   - Added `compute_energy_metrics()` using substrate.estimate_energy()
-   - Integrated into `evaluate_cell()` for automatic metric collection
-   - **Fixed thread pool device resolution for stability metrics**
-7. **`computronium/experiment/schema/seed_registries.py`**:
-   - Fixed `apply_constraints_max_hidden`, `apply_constraints_max_layers`, `apply_constraints_max_steps` to use `params.` prefix
-8. **`computronium/experiment/execution/search_space.py`**:
-   - Modified `_swept` to use `spec.sweep_steps` instead of module constant `_SWEEP_STEPS`
+### 3. Frozen-theta psi — L2 COMPLETE, L3 resumable
 
-### Tests Verified:
-- Property locks: `test_ontology_locks.py` (15 passed), `test_dynamics_wiring_lock.py`, `test_legality_boundary_lock.py`, `test_experiment_registries_wiring_lock.py` (23 passed, 4 skipped)
-- Acceleration: `test_triton_availability.py`, `test_grid_convention.py` (45 passed), `test_defect_class_audit.py` (72 passed)
-- CLI commands: `comp stability-plasticity --help`, `comp frozen-theta-psi --help` work correctly
-- Dry-run tests for both new commands generate valid RunSpecs
-- Direct `evaluate_cell()` call produces all new metrics correctly
-- Stability-plasticity campaign declares 243 cells with sweep_steps=243
-- Axis-aligned Pareto campaign declares 50 cells with sweep_steps=50
+L2 remains complete at `benchmark_results/frozen_theta_psi_full/` (24
+coordinates x 3 seeds x 10 epochs; `psi_engaged` for routing plasticity across
+all 7 substrates and all seeds). The L3 run (10 seeds, 20 epochs) died at
+4/24 and lost its work to the write-once-at-end defect; that defect is fixed
+and the run is now resumable, so it can be restarted without repeating the four
+completed coordinates.
 
----
+### 1. Axis-Aligned Pareto — BLOCKED ON THE FRONT FIX
 
-## Notes
- 
- All infrastructure is in place. These are pure research execution campaigns leveraging the validated TODO50 foundation.
- The "outside scope" condition has been removed - all 5 campaigns are now in scope with infrastructure complete.
- 
- **Known Issue (FIXED)**: Stability metrics computation (spectral_radius, max_singular_value, settle_steps, lyapunov_exponent, free_energy) was failing silently in LocalBackend thread pool due to PyTorch device mismatch. The training ran on CUDA (device='auto' resolved to 'cuda'), but the stability metrics computation created tensors on CPU, causing "Expected all tensors to be on the same device" errors. **Fix applied**: Modified `compute_stability_metrics()` in `evaluate.py` to determine the device from the system's parameters (`next(system.geometry.parameters()).device`) rather than from the input tensor. Also added early device resolution in `evaluate_cell()` using `_resolve_device()` before any PyTorch operations. Both energy and stability metrics now work correctly in the thread pool.
- 
- **Known Issue (FIXED)**: Campaign processes (Pareto, Stability-Plasticity) die with "leaked semaphore objects" warning from `multiprocessing.resource_tracker` after completing rounds. This was a loky/backend cleanup issue in the LocalBackend thread pool. **Fix applied**: Set `joblib.parallel.DEFAULT_BACKEND = 'threading'` and shutdown reusable loky executor in `finally` block in `computronium/cli/__main__.py`. Test campaigns now complete without semaphore leaks.
- 
- ---
- 
- ## Campaign Execution Progress (This Session)
- 
- ### 1. Axis-Aligned Multi-Objective Pareto Campaigns
- **Status**: 🟢 RUNNING (semaphore leak fixed, campaign in progress)
- - Created RunSpec with axis_objectives for task (validation_accuracy, validation_loss), cost (walltime_total, param_count, energy_per_step), stability (spectral_radius, max_singular_value, settle_steps, free_energy, lyapunov_exponent)
- - Test campaign ran on `digits` task with 6-axis space (digital substrate, feedforward/recurrent geometry, 3 dynamics, 5 credit, 3 update)
- - Energy metrics (energy_per_step) and stability metrics (settle_steps, spectral_radius, max_singular_value, lyapunov_exponent, free_energy) now computed correctly in LocalBackend thread pool after device resolution fix
- - **Full campaign STARTED (2026-10-05)**: axis_pareto_spec.json with sweep_steps=50, 6-axis space, 9 measured objectives, 3 axis objective sets (task, cost, stability)
- - Campaign running in background, completed round 1 (10 cells), continuing to round 2
- - Database: axis_pareto_full.duckdb (in progress)
- - **Next**: Wait for campaign completion, then analyze Pareto frontiers per axis
- 
- ### 2. Full Stability-Plasticity Frontier Campaign
- **Status**: 🟢 SEMAPHORE LEAK FIXED, READY FOR FULL CAMPAIGN
- - CLI command working with full parameterization (rho, feedback_scale, precision, noise_level, convergence_start, hidden_dim)
- - **Semaphore leak fix verified**: Small test (1 coordinate, 1 seed, 1 epoch) completed 6 records in 6 rounds. Medium test (4 coordinates, 1 seed, 1 epoch) completed 30 records in 3 rounds — no semaphore leak warnings
- - Campaign at L1 fidelity, 1 seed, 3 epochs, sweep_steps=243, param_budget=500000
- - 243 cells declared (3×3×3×3×3 hyperparameter combinations: rho, feedback_scale, precision, noise_level, convergence_start)
- - **Remaining**: Run full 243-cell campaign at L1/L2 fidelity with stability objectives
- 
- ### 3. Frozen-θ ψ Benchmarks at Scale
- **Status**: ✅ L2 CAMPAIGN COMPLETE (2026-10-05) | 🟡 L3 FIDELITY RUNNING
- - **Full multi-substrate × multi-plasticity matrix complete at L2 fidelity**: 24 coordinates (7 substrates × 4 plasticity types, minus invalid combos) × 3 seeds × 10 epochs
- - All 7 substrates tested: digital, memristive, neuromorphic, photonic, complex, analog, quantum
- - All 4 plasticity types tested: null, routing, fast_weights, substrate_coupled (invalid combos filtered)
- - **Key Result Confirmed**: routing plasticity shows `psi_engaged` (theta_audit.invariant=true, psi_moved=true) across ALL 7 substrates and ALL 3 seeds
- - Null, fast_weights, substrate_coupled show `psi_wired_uncontrolled` (theta_audit.invariant=true, psi_moved=false)
- - Results saved to `benchmark_results/frozen_theta_psi_full/structural_robustness_results.json`
- - **L3 Fidelity Campaign STARTED (2026-10-05)**: 24 coordinates × 10 seeds × 20 epochs running in background (logs/frozen_theta_psi_L3.log)
-   - Completed 3/24 coordinates: digital/null, digital/routing, digital/fast_weights
-   - Currently processing: digital/substrate_coupled
-   - routing plasticity recovery_ratio > 1.0 (psi_engaged), null recovery_ratio ~1.0
- - **Remaining**: Wait for L3 fidelity completion on all 24 coordinates
- 
- ### 4. I(C,U) Predictive Model Refinement
- **Status**: ⏳ PENDING CAMPAIGN DATA
- - Infrastructure complete, awaiting training data from campaigns above
- - I(C,U) model auto-created in policy_context when credit×update axes restricted
- - Can be trained once Pareto and Stability-Plasticity campaigns produce sufficient records
- 
- ### 5. Hardware-Aware Campaigns
- **Status**: ⏳ ENERGY METRICS WORKING IN PIPELINE
- - estimate_energy() implemented for all 11 substrate types
- - Energy metrics (energy_per_sample, energy_per_batch, forward_energy_per_batch, update_energy_per_batch) recorded successfully in pipeline
- - Axis-aligned Pareto campaign includes energy_per_step as cost objective
- - **Remaining**: Run Pareto campaigns with energy as objective, validate energy models
- 
- ### Bugs Fixed During Execution (This Session):
- 1. **`computronium/experiment/surface/cli.py`**: 
-    - Fixed `Budget` constructor to use `soft_seconds`/`hard_seconds` instead of `max_walltime_seconds`
-    - Added `import time`
-    - Fixed single-value Domain handling (categorical with native types)
-    - Added `store.create_run()` before pipeline execution
-    - Added policy creation via `policy_context()` and `create_policy()`
-    - Used `asyncio.run(runner.run())` for async pipeline
-    - Wrapped store in context manager
-    - Fixed `hidden_dim` constraint, `param_budget`, `sweep_steps` for stability-plasticity
-    - Fixed `apply_constraints` variable names (params.hidden_dim, params.num_layers, params.max_steps)
- 
- 2. **`computronium/experiment/schema/axis.py`**:
-    - Changed `Domain.members` type from `tuple[str, ...]` to `tuple[Any, ...]` to support native int/float members
- 
- 3. **`computronium/core/construction.py`**:
-    - Fixed `_as_int()` and `_as_float()` to handle string-to-numeric conversion for hyperparameter values
- 
- 4. **`computronium/experiment/execution/evaluate.py`**:
-    - Added `compute_stability_metrics()` and `compute_energy_metrics()` functions
-    - Integrated into `evaluate_cell()` for automatic metric collection
-    - Added `_resolve_device()` helper for device string resolution
-    - **Fixed thread pool device resolution for stability metrics**: Modified `compute_stability_metrics()` to get device from system parameters (`next(system.geometry.parameters()).device`) instead of input tensor. Added early device resolution in `evaluate_cell()` using `_resolve_device(schedule.device)` before config creation. Both fixes ensure all tensors are on the same device (CUDA when available) when running in LocalBackend thread pool.
- 
- 5. **`computronium/experiment/schema/seed_registries.py`**:
-    - Fixed `apply_constraints_max_hidden`, `apply_constraints_max_layers`, `apply_constraints_max_steps` to use `params.` prefix for hyperparameter variables
- 
- 6. **`computronium/experiment/execution/search_space.py`**:
-    - Modified `_swept` to use `spec.sweep_steps` instead of module constant `_SWEEP_STEPS`
- 
- 7. **`computronium/cli/__main__.py`**:
-    - Set `joblib.parallel.DEFAULT_BACKEND = 'threading'` before any joblib usage
-    - Added `finally` block to shutdown reusable loky executor (`get_reusable_executor().shutdown(wait=True)`)
-    - This fixes the semaphore leak that was causing campaign processes to die
+`report.axis_frontiers` exists and the three declared axis sets resolve
+correctly (task 2 axes, cost 3, stability 6, directions read per objective).
+The campaign itself never ran at scale: `axis_pareto_full.duckdb` holds 10
+records, and its spec names objectives (`energy_efficiency`, `latency_ms`,
+`spike_rate`, `ir_drop_variance`) with no measurement behind them.
+
+### 4. I(C,U) — INGESTION BUILT, NO CAMPAIGN DATA
+
+`ingest_measurements` and `held_out_accuracy` are committed and locked. No
+store in the repo has more than 2 distinct credit x update pairs (`pm.duckdb`:
+745 records, 2 pairs), so there is nothing to fit. This needs a campaign that
+*varies* credit and update — the stability-plasticity campaign fixes both to
+single primitives, so it cannot produce I(C,U) data by construction.
+
+### 5. Hardware-Aware — ENERGY MODELS VALIDATED, CO-DESIGN NOT RUN
+
+Criterion "at least 2 substrates with validated energy models" is **met for
+all 9** (table above). Co-design Pareto frontiers per substrate have not been
+run; that needs a campaign that varies substrate, which none of the current
+commands do.
 
 ---
 
-## Next Steps
- 
- 1. ✅ **Fix thread pool device resolution** for stability metrics in LocalBackend (high priority) — **DONE**
- 2. ✅ **Fix constraint variable names** in seed_registries.py — **DONE**
- 3. ✅ **Add sweep_steps field** to RunSpec for hyperparameter sweep control — **DONE**
- 4. ✅ **Add hidden_dim constraint** to stability-plasticity campaign — **DONE**
- 5. ✅ **Fix loky semaphore leak** in joblib reusable executor — set DEFAULT_BACKEND=threading and shutdown executor in finally block (in computronium/cli/__main__.py) — **VERIFIED WORKING**
- 6. **Complete Stability-Plasticity 243-cell campaign** at L1/L2 fidelity (semaphore leak fixed, ready for full run)
- 7. **Complete Frozen-θ ψ L3 fidelity** (10 seeds, 20 epochs) for claim-grade validation on all 24 coordinates (RUNNING in background, 3/24 done)
- 8. **Complete Axis-Aligned Pareto campaign** with full axis objectives at scale (RUNNING in background, round 1 done)
- 9. **Collect I(C,U) training data** from completed campaigns and train model
- 10. **Run Hardware-Aware Pareto campaigns** with energy objectives
+## Acceptance criteria
+
+- [ ] **Axis-Aligned Pareto**: needs a spec whose objectives all resolve to
+      measurements, then a run. `axis_frontiers` is ready for the analysis.
+- [ ] **Stability-Plasticity**: 240/243 records collected; phase diagram
+      measured but not yet discriminating. **Re-run required** — the campaign
+      predates the drift metrics that give the axis resolution.
+- [x] **Frozen-theta psi**: L2 complete, `theta_audit` passes for all, scope
+      verified. (Carried forward unchanged.)
+- [ ] **I(C,U)**: ingestion built and locked; blocked on a credit x update
+      campaign, which no current command generates.
+- [x] **Hardware-Aware energy**: 9/9 substrate models validated against their
+      own arithmetic and the literature's ordering. Co-design still open.
 
 ---
- 
- ## Progress This Session (2026-10-05)
- 
- ### Campaign Execution
- 
- 1. **Semaphore leak fix verified**: The joblib loky semaphore leak fix in `computronium/cli/__main__.py` works. Test campaigns complete without semaphore warnings:
-    - Stability-plasticity small test (1 coordinate, 1 seed, 1 epoch): 6 records, 6 rounds ✓
-    - Stability-plasticity medium test (4 coordinates, 1 seed, 1 epoch): 30 records, 3 rounds ✓
-    - Axis-aligned Pareto campaign: Started, completed round 1 (10 cells), continuing ✓
- 
- 2. **Axis-Aligned Pareto Campaign LAUNCHED**: 
-    - Spec: `axis_pareto_spec.json` with sweep_steps=50
-    - 6-axis space: digital substrate, feedforward/recurrent geometry, 3 dynamics, null plasticity, 5 credit, 3 update
-    - 9 measured objectives: validation_accuracy, walltime_total, param_count, energy_per_step, spectral_radius, max_singular_value, settle_steps, free_energy, lyapunov_exponent
-    - 3 axis objective sets: task, cost, stability
-    - Running in background (PID 2086248), database: axis_pareto_full.duckdb
- 
- 3. **Frozen-θ ψ L3 Campaign IN PROGRESS**:
-    - 24 coordinates × 10 seeds × 20 epochs
-    - 3/24 coordinates completed (digital/null, digital/routing, digital/fast_weights)
-    - Currently on digital/substrate_coupled
-    - Routing plasticity shows psi_engaged (recovery_ratio > 1.0) consistently
- 
- ### Infrastructure Fixes
- 
- - Fixed `credit_norm` domain to use valid harvested members: ['none', 'relative', 'rms', 'beta_adaptive', 'spectral']
- - Fixed `local_objective` domain to use valid harvested members: ['ff', 'lemma'] (pepita not in harvested domain)
- - Axis-aligned Pareto spec uses only measured objectives (10 available in MEASURED_OBJECTIVES)
- - Semaphore leak fix: DEFAULT_BACKEND=threading + executor shutdown in finally block
- 
- ---
- 
-## Files Changed This Session
- 
- - `computronium/experiment/schema/run_spec.py` - axis_objectives field, sweep_steps field
- - `computronium/experiment/execution/policy.py` - ModelBasedPolicy updates, icu_guided sampler
- - `computronium/experiment/surface/cli.py` - stability-plasticity, frozen-theta-psi commands, hidden_dim constraint, param_budget, sweep_steps, apply_constraints fixes
- - `computronium/cli/__main__.py` - CLI command registration, joblib semaphore leak fix (DEFAULT_BACKEND=threading, executor shutdown in finally)
- - `computtonium/ontology/substrate/_substrate.py` - estimate_energy for all 11 substrates
- - `computronium/experiment/execution/evaluate.py` - compute_stability_metrics, compute_energy_metrics, thread pool device resolution fix for stability metrics
- - `computronium/experiment/schema/metrics.py` - MEASURED_OBJECTIVES and MEASURED_METRICS updated
- - `computronium/experiment/schema/axis.py` - Domain.members type fix
- - `computronium/core/construction.py` - _as_int/_as_float fixes
- - `computronium/experiment/execution/search_space.py` - _swept uses spec.sweep_steps
- - `computronium/experiment/schema/seed_registries.py` - apply_constraints variable name fixes
- - `computronium/experiment/learning/surrogate.py` - n_optimizer_restarts=0 default to avoid joblib parallel
- - `computronium/experiment/learning/icu.py` - n_optimizer_restarts=0 in create_icu_prior_surrogate
- - `axis_pareto_spec.json` - Axis-aligned Pareto campaign spec with sweep_steps=50, 3 axis objective sets
- 
- ### New Files This Session
- 
- - `axis_pareto_spec.json` - Campaign specification for axis-aligned Pareto campaign
+
+## Next steps, in order
+
+1. **Re-run the stability-plasticity campaign** (`sta51.duckdb` ->
+   `sta51_drift.duckdb`) now that `drift_spectral_radius` is recorded. Same
+   command; expect `rho_drift` to vary across `hidden_dim` where `rho_step`
+   did not. This is the single highest-value step: it is the difference
+   between a measured axis and a constant one.
+2. **Launch background campaigns with a reachable shutdown.** `setsid` detaches
+   the process from the terminal, so `execute_spec`'s KeyboardInterrupt path
+   never fires and the run row stays `running`. Either keep a `hard_seconds`
+   budget low enough to terminate on its own, or teach the CLI to close the run
+   on SIGTERM. Until then, a terminated campaign leaves an unclosed run row.
+3. **Give the campaign commands a substrate and a credit x update axis.**
+   Criterion 5 needs substrate variation and criterion 4 needs credit x update
+   variation; both commands currently pin those axes to single primitives. This
+   is the shared blocker for §1, §4 and §5.
+4. **Restart the L3 frozen-theta psi run** — now resumable, so it picks up at
+   coordinate 5 rather than coordinate 1.
+5. **Audit the remaining flat metrics.** `val_acc` spans 0.008-0.203 with 41
+   distinct values over 240 records at 3 epochs — near-chance on a 10-class
+   task. `settle_converged` is 0 everywhere. Both may be genuine at L1/3-epoch
+   fidelity, but "be skeptical of low-performing experiments" applies: a
+   learning signal that does not move over 240 cells is worth a probe before it
+   is reported as a result.
+6. **Reconcile the `min_singular_value` anomaly.** It is 0.93 on every cell
+   while `sigma_max` is 1.005, a condition number of only 1.08 — mild for an
+   operator measured to sit on the unit circle. Worth confirming against an
+   independently constructed nonnormal operator before the nonnormality ratio
+   is treated as evidence.
+
+## Files changed this session
+
+* `computronium/experiment/execution/settle_operator.py` (new) — the settle
+  step as a differentiable operator; real per-layer weight shapes
+* `computronium/experiment/execution/evaluate.py` — per-step Jacobian, drift
+  metrics, per-layer energy, settle telemetry from an owned settle
+* `computronium/experiment/execution/backends.py` — bounded admission
+* `computronium/experiment/schema/metrics.py`, `seed_registries.py` — 6 new
+  measured metrics, 7 new objectives
+* `computronium/experiment/surface/cli.py` — `execute_spec` extracted; campaign
+  commands delegate to it (closed runs, `--run-id` resume)
+* `computronium/experiment/surface/report.py` — `non_dominated` at any arity,
+  `axis_frontiers`
+* `computronium/experiment/learning/icu.py` — `ingest_measurements`,
+  `held_out_accuracy`
+* `computronium/benchmarks/joint/structural_robustness.py` — per-coordinate
+  persistence and resume
+* `scripts/demos/_support.py`, `demo_multi_objective.py` — dead demos, third
+  Pareto copy
+* `scripts/probes/t51_stability_operator_probe.py`,
+  `scripts/probes/t51_energy_model_probe.py` (new)
+* `tests/property/test_stability_energy_metrics_lock.py` (new, 23),
+  `test_axis_frontier_lock.py` (new, 6),
+  `test_icu_ingestion_lock.py` (new, 5)
+
+## Tests
+
+* New locks: 34 passed
+* `test_claim_report_lock.py` 26 passed (point shape updated for N-arity fronts)
+* `test_experiment_registries_wiring_lock.py` 12 passed (count is a floor now)
+* Demo gate: 25 passed
+* Pre-existing failures unchanged, none introduced: 5 in
+  `test_sampler_lock.py` (`step_size` key, `icu_guided` name, RunSpec
+  validation), 7 pyright errors in `structural_robustness.py`
