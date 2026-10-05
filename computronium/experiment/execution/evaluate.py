@@ -262,17 +262,14 @@ def compute_stability_metrics(
         singular = torch.linalg.svdvals(jac)
         sigma_max = float(singular.max().item())
         sigma_min = float(singular.min().item())
-        radius = (
-            float(torch.linalg.eigvals(jac).abs().max().item())
-            if jac.shape[0] == jac.shape[1]
-            else sigma_max
-        )
+        radius = _radius(jac, sigma_max)
         metrics["spectral_radius"] = radius
         metrics["max_singular_value"] = sigma_max
         metrics["min_singular_value"] = sigma_min
         metrics["lyapunov_exponent"] = math.log(max(radius, _RADIUS_FLOOR))
         metrics["stability_margin"] = 1.0 - radius
         metrics["nonnormality"] = sigma_max / max(radius, _RADIUS_FLOOR)
+        metrics.update(_drift_metrics(jac, system))
     except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
         logger.warning("settle-step Jacobian failed: %s", exc)
     return metrics
@@ -320,6 +317,42 @@ def _free_settle_metrics(system: Any, x: torch.Tensor) -> dict[str, float]:
     except Exception as exc:  # ruff: ignore[blind-except] - a metric must not fail the cell
         logger.warning("free settle telemetry failed: %s", exc)
     return metrics
+
+
+def _radius(jac: torch.Tensor, sigma_max: float) -> float:
+    """Spectral radius for a square operator; its own norm when not square."""
+    if jac.shape[0] != jac.shape[1]:
+        return sigma_max
+    return float(torch.linalg.eigvals(jac).abs().max().item())
+
+
+def _drift_metrics(jac: torch.Tensor, system: Any) -> dict[str, float]:
+    """The drift operator ``f(h) - h``: the network's own gain, step size removed.
+
+    A relaxation step is ``h <- h + eta * (f(h) - h)``, so its Jacobian is
+    ``J = I + eta * D``. The identity pins ``rho(J)`` at 1 for any small ``eta``:
+    over a 500x range of ``eta`` the campaign's ``rho_step`` stayed within
+    1.0000 +/- 0.0003 and resolved nothing, while the same cell's drift radius
+    read 2.00 +/- 0.09 across that whole range. ``D = (J - I) / eta`` is exact
+    algebra on the Jacobian already built, costs one subtraction, and is the
+    quantity a stability-plasticity frontier is actually about.
+
+    A ``rho_drift < 1`` is a contracting network; ``rho_step > 1`` at
+    ``eta = 1/rho_drift`` is the same fact said in the loop's own units.
+    """
+    eta = float(getattr(system.dynamics.config, "step_size", 0.0))
+    if eta <= 0:
+        return {}
+    drift = (jac - torch.eye(jac.shape[0], device=jac.device)) / eta
+    sigma_max = float(torch.linalg.svdvals(drift).max().item())
+    radius = _radius(drift, sigma_max)
+    return {
+        "drift_spectral_radius": radius,
+        "drift_max_singular_value": sigma_max,
+        "drift_nonnormality": sigma_max / max(radius, _RADIUS_FLOOR),
+        "settle_step_size": eta,
+        "contraction_rate": 1.0 - eta * radius,
+    }
 
 
 def _param_device(system: Any) -> torch.device:

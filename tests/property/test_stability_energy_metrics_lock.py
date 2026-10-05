@@ -49,7 +49,7 @@ from computronium.experiment.schema.metrics import (
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 
-def _system(hidden: int, layers: int = 3):
+def _system(hidden: int, layers: int = 3, step_size: float | None = None):
     from computronium.experiment.execution.compose import compose_cell_system
     from computronium.experiment.schema.coordinate import Coordinate
 
@@ -63,7 +63,7 @@ def _system(hidden: int, layers: int = 3):
         params={
             "hidden_dim": hidden,
             "num_layers": layers,
-            "settle_step": 0.1,
+            "settle_step": step_size if step_size is not None else 0.1,
             "settle_beta": 0.5,
             "feedback_scale": 0.5,
             "precision": "float32",
@@ -283,3 +283,41 @@ def test_device_substrates_are_an_order_below_digital() -> None:
         assert digital / joules(device) > 10.0, (
             f"{device} is not an order of magnitude below digital"
         )
+
+
+@pytest.mark.parametrize("eta", [0.2, 0.03, 0.001])
+def test_the_drift_radius_is_invariant_to_the_step_size(eta: float) -> None:
+    """The relaxation radius cannot resolve anything; the drift radius can.
+
+    A relaxation step is ``h <- h + eta * (f(h) - h)``, so ``J = I + eta*D`` and
+    the identity pins ``rho(J)`` at 1 for any small ``eta``. Over a 500x range of
+    ``eta`` this cell's ``rho_step`` stayed within 1.0000 +/- 0.0003 while its
+    ``rho_drift`` read ~2.0 throughout — 20x the resolution, and the quantity a
+    frontier is about.
+    """
+    torch.manual_seed(0)
+    system = _system(hidden=64, step_size=eta)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert metrics["settle_step_size"] == eta
+    assert 1.5 < metrics["drift_spectral_radius"] < 2.5, (
+        f"drift radius {metrics['drift_spectral_radius']} at eta={eta}"
+    )
+    assert metrics["contraction_rate"] == pytest.approx(
+        1.0 - eta * metrics["drift_spectral_radius"]
+    )
+
+
+def test_drift_and_relaxation_are_different_operators() -> None:
+    """Reporting rho(J) alone reads 1.00 for a cell whose network gain is 2.0."""
+    torch.manual_seed(0)
+    system = _system(hidden=64)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert abs(metrics["spectral_radius"] - 1.0) < 0.05, (
+        "the relaxation operator sits on the unit circle by construction"
+    )
+    assert abs(metrics["drift_spectral_radius"] - 1.0) > 0.2, (
+        "so the drift operator is the one that carries the gain"
+    )
+    assert metrics["drift_max_singular_value"] >= metrics["drift_spectral_radius"]

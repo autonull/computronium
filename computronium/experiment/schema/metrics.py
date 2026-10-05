@@ -62,6 +62,11 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "lyapunov_exponent",
     "stability_margin",
     "nonnormality",
+    "drift_spectral_radius",
+    "drift_max_singular_value",
+    "drift_nonnormality",
+    "settle_step_size",
+    "contraction_rate",
     "free_energy",
     "energy_per_batch",
     "energy_per_sample",
@@ -87,6 +92,9 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "macs_per_step": "macs_per_step",
     "stability_margin": "stability_margin",
     "nonnormality": "nonnormality",
+    "drift_spectral_radius": "drift_spectral_radius",
+    "drift_max_singular_value": "drift_max_singular_value",
+    "contraction_rate": "contraction_rate",
 })
 
 
