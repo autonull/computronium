@@ -94,7 +94,7 @@ class SurrogateConfig:
     n_features: int = (
         6  # Embedding dims (registry Range subspace, shared with benchmark)
     )
-    n_optimizer_restarts: int = 2  # Kernel optimizer restarts (fit cost control)
+    n_optimizer_restarts: int = 0  # Kernel optimizer restarts (0 = no parallel joblib)
     refit_interval: int = 25  # New observations before a refit (fit cost control)
     # RF/GBT-specific
     n_estimators: int = 100
@@ -623,6 +623,7 @@ def create_tpe_policy(
     config = SurrogateConfig(
         kind=SurrogateKind.TPE,
         acquisition=AcquisitionFunction.EI,
+        n_optimizer_restarts=0,  # Avoid joblib parallel processing (loky semaphore leak)
     )
     # TPE would use a different surrogate implementation
     # For now, fall back to GP

@@ -105,6 +105,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         The adapter's exit code (``0`` when it returns ``None``).
     """
+    # Use threading backend for joblib to avoid loky semaphore leaks
+    # This must be done before any joblib.Parallel usage (e.g., in sklearn)
+    import joblib
+    joblib.parallel.DEFAULT_BACKEND = 'threading'
+
     args = list(sys.argv[1:] if argv is None else argv)
     parser = _build_parser()
     if not args:
@@ -132,6 +137,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(_load(command)() or 0)
     except SystemExit as exc:
         return int(exc.code or 0)
+    finally:
+        # Shutdown joblib's reusable loky executor to avoid semaphore leaks
+        try:
+            from joblib.externals.loky import get_reusable_executor
+            executor = get_reusable_executor()
+            executor.shutdown(wait=True)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

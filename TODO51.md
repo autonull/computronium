@@ -273,7 +273,7 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 2. ✅ **Fix constraint variable names** in seed_registries.py — **DONE**
 3. ✅ **Add sweep_steps field** to RunSpec for hyperparameter sweep control — **DONE**
 4. ✅ **Add hidden_dim constraint** to stability-plasticity campaign — **DONE**
-5. 🟡 **Fix loky semaphore leak** in LocalBackend thread pool — campaigns die after completing rounds
+5. ✅ **Fix loky semaphore leak** in joblib reusable executor — set DEFAULT_BACKEND=threading and shutdown executor in finally block (in computronium/cli/__main__.py)
 6. **Complete Stability-Plasticity 243-cell campaign** at L1/L2 fidelity (5/243 records collected, process unstable)
 7. **Complete Frozen-θ ψ L3 fidelity** (10 seeds, 20 epochs) for claim-grade validation on all 24 coordinates (RUNNING in background)
 8. **Complete Axis-Aligned Pareto campaign** with full axis objectives at scale (10/500+ records, process unstable)
@@ -287,7 +287,7 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 - `computronium/experiment/schema/run_spec.py` - axis_objectives field, sweep_steps field
 - `computronium/experiment/execution/policy.py` - ModelBasedPolicy updates, icu_guided sampler
 - `computronium/experiment/surface/cli.py` - stability-plasticity, frozen-theta-psi commands, hidden_dim constraint, param_budget, sweep_steps, apply_constraints fixes
-- `computronium/cli/__main__.py` - CLI command registration
+- `computronium/cli/__main__.py` - CLI command registration, joblib semaphore leak fix (DEFAULT_BACKEND=threading, executor shutdown in finally)
 - `computtonium/ontology/substrate/_substrate.py` - estimate_energy for all 11 substrates
 - `computronium/experiment/execution/evaluate.py` - compute_stability_metrics, compute_energy_metrics, thread pool device resolution fix for stability metrics
 - `computronium/experiment/schema/metrics.py` - MEASURED_OBJECTIVES and MEASURED_METRICS updated
@@ -295,3 +295,5 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 - `computronium/core/construction.py` - _as_int/_as_float fixes
 - `computronium/experiment/execution/search_space.py` - _swept uses spec.sweep_steps
 - `computronium/experiment/schema/seed_registries.py` - apply_constraints variable name fixes
+- `computronium/experiment/learning/surrogate.py` - n_optimizer_restarts=0 default to avoid joblib parallel
+- `computronium/experiment/learning/icu.py` - n_optimizer_restarts=0 in create_icu_prior_surrogate

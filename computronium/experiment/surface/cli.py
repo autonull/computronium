@@ -1149,7 +1149,10 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
     with store:
         store.create_run(run_id, spec)
         runner = PipelineRunner(pipeline_config, store)
-        asyncio.run(runner.run())
+        try:
+            asyncio.run(runner.run())
+        finally:
+            runner.shutdown()
 
     print("Campaign complete.")
     return 0

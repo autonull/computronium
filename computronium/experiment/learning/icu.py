@@ -684,6 +684,7 @@ def create_icu_prior_surrogate() -> SurrogateModel:
         kind=SurrogateKind.GAUSSIAN_PROCESS,
         acquisition=AcquisitionFunction.EI,
         n_initial_points=5,
+        n_optimizer_restarts=0,  # Avoid joblib parallel processing (loky semaphore leak)
     )
     return GaussianProcessSurrogate(config)
 
