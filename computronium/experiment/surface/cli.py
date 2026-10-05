@@ -400,6 +400,37 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
         default=None,
         help="Resume an existing run instead of starting a new one",
     )
+    # Axis selection overrides (optional; defaults to stability-plasticity subset)
+    p_sta.add_argument(
+        "--axis-substrate",
+        default=None,
+        help="Substrate primitives (comma-separated; default: digital)",
+    )
+    p_sta.add_argument(
+        "--axis-geometry",
+        default=None,
+        help="Geometry primitives (comma-separated; default: recurrent)",
+    )
+    p_sta.add_argument(
+        "--axis-dynamics",
+        default=None,
+        help="Dynamics primitives (comma-separated; default: energy_minimization)",
+    )
+    p_sta.add_argument(
+        "--axis-plasticity",
+        default=None,
+        help="Plasticity primitives (comma-separated; default: null)",
+    )
+    p_sta.add_argument(
+        "--axis-credit",
+        default=None,
+        help="Credit primitives (comma-separated; default: thermodynamic_contrast)",
+    )
+    p_sta.add_argument(
+        "--axis-update",
+        default=None,
+        help="Update primitives (comma-separated; default: euclidean)",
+    )
 
     # Frozen-θ ψ benchmark command
     p_frozen = sub.add_parser(
@@ -659,6 +690,8 @@ def execute_spec(
     Returns:
         Process exit code: 0 completed, 1 failed, 130 interrupted.
     """
+    import signal
+
     policy_name = spec.policy or "round_robin_grid"
 
     with RecordStore(StoreConfig(path=Path(store_path))) as store:
@@ -698,6 +731,19 @@ def execute_spec(
             ),
             store,
         )
+
+        # Handle both SIGINT (Ctrl-C) and SIGTERM (setsid background termination)
+        # so that background campaigns close their run row properly.
+        interrupted = {"flag": False}
+
+        def _signal_handler(signum, _frame):
+            logger.info("Received signal %s; finishing run %s", signum, run)
+            interrupted["flag"] = True
+            # The runner will be stopped on the next loop iteration
+
+        old_sigint = signal.signal(signal.SIGINT, _signal_handler)
+        old_sigterm = signal.signal(signal.SIGTERM, _signal_handler)
+
         try:
             outcomes = asyncio.run(runner.run())
         except KeyboardInterrupt:
@@ -708,6 +754,14 @@ def execute_spec(
             logger.error("Pipeline failed: %s", exc, exc_info=True)
             store.finish_run(run, "failed", budget_consumed_s=_consumed(runner))
             return 1
+        finally:
+            signal.signal(signal.SIGINT, old_sigint)
+            signal.signal(signal.SIGTERM, old_sigterm)
+
+        if interrupted["flag"]:
+            logger.info("Run interrupted by signal; resume with --run-id %s", run)
+            store.finish_run(run, "interrupted", budget_consumed_s=_consumed(runner))
+            return 130
 
         _settle_maturity(store, run, spec)
 
@@ -999,14 +1053,36 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
     noise_level_vals = tuple(max(v, 1e-6) for v in noise_level_vals)
     convergence_start_vals = tuple(int(x) for x in args.convergence_start.split(","))
 
-    # Calculate total cells
-    total_cells = (
+    # Create axis selections - use CLI overrides or defaults
+    def _parse_axis(arg_value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
+        if arg_value is None:
+            return default
+        return tuple(x.strip() for x in arg_value.split(","))
+
+    substrate_prims = _parse_axis(args.axis_substrate, ("digital",))
+    geometry_prims = _parse_axis(args.axis_geometry, ("recurrent",))
+    dynamics_prims = _parse_axis(args.axis_dynamics, ("energy_minimization",))
+    plasticity_prims = _parse_axis(args.axis_plasticity, ("null",))
+    credit_prims = _parse_axis(args.axis_credit, ("thermodynamic_contrast",))
+    update_prims = _parse_axis(args.axis_update, ("euclidean",))
+
+    # Calculate total cells (axis primitive combinations × hyperparameter sweep)
+    axis_combinations = (
+        len(substrate_prims)
+        * len(geometry_prims)
+        * len(dynamics_prims)
+        * len(plasticity_prims)
+        * len(credit_prims)
+        * len(update_prims)
+    )
+    hyperparameter_combinations = (
         len(rho_vals)
         * len(feedback_scale_vals)
         * len(precision_vals)
         * len(noise_level_vals)
         * len(convergence_start_vals)
     )
+    total_cells = axis_combinations * hyperparameter_combinations
 
     print("Stability-Plasticity Campaign")
     print(f"  Rho (contraction): {rho_vals}")
@@ -1014,27 +1090,25 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
     print(f"  Precision: {precision_vals}")
     print(f"  Noise level: {noise_level_vals}")
     print(f"  Convergence start (delay proxy): {convergence_start_vals}")
+    print(
+        f"  Axis primitives: substrate={substrate_prims}, geometry={geometry_prims}, "
+        f"dynamics={dynamics_prims}, plasticity={plasticity_prims}, "
+        f"credit={credit_prims}, update={update_prims}"
+    )
+    print(f"  Axis combinations: {axis_combinations}")
+    print(f"  Hyperparameter combinations: {hyperparameter_combinations}")
     print(f"  Total coordinates: {total_cells}")
     print(f"  Seeds per coordinate: {args.seeds}")
     print(f"  Epochs: {args.epochs}")
     print(f"  Budget: {args.budget_seconds}s")
 
-    # Create axis selections - restrict to relevant primitives
-    # For stability-plasticity, we focus on digital substrate, recurrent geometry,
-    # energy_minimization dynamics, and thermodynamic_contrast credit
     axes = (
-        AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=("digital",)),
-        AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=("recurrent",)),
-        AxisSelection(
-            axis=StructuralAxis.DYNAMICS, primitives=("energy_minimization",)
-        ),
-        AxisSelection(
-            axis=StructuralAxis.PLASTICITY, primitives=("null",)
-        ),  # No plasticity for stability test
-        AxisSelection(
-            axis=StructuralAxis.CREDIT, primitives=("thermodynamic_contrast",)
-        ),
-        AxisSelection(axis=StructuralAxis.UPDATE, primitives=("euclidean",)),
+        AxisSelection(axis=StructuralAxis.SUBSTRATE, primitives=substrate_prims),
+        AxisSelection(axis=StructuralAxis.GEOMETRY, primitives=geometry_prims),
+        AxisSelection(axis=StructuralAxis.DYNAMICS, primitives=dynamics_prims),
+        AxisSelection(axis=StructuralAxis.PLASTICITY, primitives=plasticity_prims),
+        AxisSelection(axis=StructuralAxis.CREDIT, primitives=credit_prims),
+        AxisSelection(axis=StructuralAxis.UPDATE, primitives=update_prims),
     )
 
     # Hyperparameters for the stability-plasticity sweep

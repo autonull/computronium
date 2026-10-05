@@ -74,6 +74,7 @@ MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "macs_per_step",
     "forward_energy_per_batch",
     "update_energy_per_batch",
+    "energy_efficiency",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -95,6 +96,7 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "drift_spectral_radius": "drift_spectral_radius",
     "drift_max_singular_value": "drift_max_singular_value",
     "contraction_rate": "contraction_rate",
+    "energy_efficiency": "energy_efficiency",
 })
 
 

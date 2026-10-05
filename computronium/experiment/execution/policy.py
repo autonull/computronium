@@ -741,7 +741,9 @@ class ModelBasedPolicy:
         """
         from computronium.experiment.learning.icu import ICUFeatureVector
 
-        assert self._icu_model is not None, "ICU model must be set for icu_guided sampler"
+        assert self._icu_model is not None, (
+            "ICU model must be set for icu_guided sampler"
+        )
         # Get all available coordinates from context
         all_coords = list(ctx.cells())
 
@@ -1233,7 +1235,6 @@ def _create_icu_model_from_spec(
         Tuple of (icu_model, credit_update_pairs) or (None, []) if not applicable.
     """
     try:
-
         from computronium.experiment.learning.icu import (
             ICUModel,
             create_icu_prior_surrogate,

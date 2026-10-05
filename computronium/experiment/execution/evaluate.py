@@ -546,6 +546,13 @@ def evaluate_cell(
     metrics.update(compute_stability_metrics(cell.system, sample_x))
     metrics.update(compute_energy_metrics(cell.system, batch_size=sample_x.shape[0]))
 
+    # Derived metric: energy_efficiency = validation_accuracy / energy_per_sample
+    # Higher is better (more accuracy per joule)
+    val_acc = metrics.get("val_acc")
+    energy_per_sample = metrics.get("energy_per_sample")
+    if val_acc is not None and energy_per_sample is not None and energy_per_sample > 0:
+        metrics["energy_efficiency"] = float(val_acc) / float(energy_per_sample)
+
     if not _finite(metrics):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)

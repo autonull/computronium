@@ -27,6 +27,7 @@ from computronium.experiment.schema.axis import (
     StructuralAxis,
 )
 from computronium.experiment.schema.harvest import harvest_schema
+from computronium.experiment.schema.metrics import MEASURED_OBJECTIVES
 from computronium.experiment.schema.registries import validate_rate_value
 
 logger = logging.getLogger(__name__)
@@ -204,6 +205,20 @@ class RunSpec(BaseModel):
             msg = (
                 f"unknown objective(s) {unknown}; "
                 f"available: {sorted(OBJECTIVES_REGISTRY.keys())}"
+            )
+            raise ValueError(msg)
+
+        # Reject unmeasured objectives in the main objectives list.
+        # They can only appear in axis_objectives (for documentation/planning).
+        # A run that declares an objective it cannot measure makes a claim it withdraws silently.
+        unmeasured = [
+            o for o in self.objectives if OBJECTIVES_REGISTRY[o].metric_key is None
+        ]
+        if unmeasured:
+            msg = (
+                f"objective(s) {unmeasured} have no measurement (metric_key is None); "
+                f"they cannot be used in the main objectives list. "
+                f"Measured objectives: {sorted(MEASURED_OBJECTIVES.keys())}"
             )
             raise ValueError(msg)
         if self.stages is not None:

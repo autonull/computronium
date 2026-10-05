@@ -229,6 +229,7 @@ and §5 are all blocked on the same thing: §5 needs substrate variation, §4 ne
 credit x update variation, §1 needs a run at all. Once commands declare axes
 instead of fixing them, every campaign in this file becomes declarable rather
 than bespoke. **This is the single highest-leverage item.**
+- **DONE** — `stability-plasticity` command now accepts `--axis-substrate`, `--axis-geometry`, `--axis-dynamics`, `--axis-plasticity`, `--axis-credit`, `--axis-update` CLI arguments. Defaults preserved for backward compatibility. `frozen-theta-psi` already had per-axis CLI args.
 
 **A2. A test that a declared multi-axis campaign works end-to-end.** Sweep 3+
 axes, assert records land carrying every axis's metrics and every declared
@@ -236,6 +237,12 @@ objective resolves to a measurement. This repo has no such test, which is why
 defects A1 describes survived: pinning axes and pinning objectives both produce
 schema-valid runs. It belongs immediately after A1, since A1 is what makes it
 expressible.
+- **DONE** — Added `tests/property/test_multi_axis_campaign_lock.py` with 5 tests:
+  - `test_multi_axis_campaign_sweeps_declared_axes` — verifies search space includes all declared axis combinations
+  - `test_multi_axis_campaign_objectives_resolve_to_measurements` — verifies every declared objective has a measurement
+  - `test_multi_axis_campaign_run_completes_and_closes` — runs a small campaign and verifies run row closes properly
+  - `test_axis_frontiers_resolve_per_axis_objectives` — verifies axis_objectives validation
+  - `test_multi_axis_campaign_unmeasured_objectives_fail_at_use` — verifies unmeasured objectives are rejected at spec validation
 
 **A3. Close the run on SIGTERM.** `setsid` detaches a background campaign from
 the terminal, so `execute_spec`'s KeyboardInterrupt path never fires and a
@@ -243,12 +250,14 @@ terminated campaign leaves `status=running`, `finished_at=NULL`,
 `budget_consumed_s=NULL`. Every store a long run touched has an untrustworthy
 run row. Either handle SIGTERM the way SIGINT is handled, or keep
 `hard_seconds` low enough that the budget terminates the run on its own.
+- **DONE** — Added SIGTERM handler in `execute_spec` that finishes the run row with `status=interrupted` and preserves `budget_consumed_s`, same as SIGINT. Background campaigns can now be resumed with `--run-id`.
 
 **A4. Decide the four unmeasured objectives.** `energy_efficiency`,
 `latency_ms`, `spike_rate`, `ir_drop_variance` are registered with no
 measurement behind them, which is what makes the §1 spec unrunnable. Either
 implement them or let the registry say so honestly — a registered objective with
 no measurement is a claim a run makes and then withdraws.
+- **DONE** — `energy_efficiency` implemented as derived metric (validation_accuracy / energy_per_sample) in evaluator, added to MEASURED_METRICS and MEASURED_OBJECTIVES. RunSpec validation now rejects unmeasured objectives in the main `objectives` list (they can only appear in `axis_objectives` for documentation). `latency_ms`, `spike_rate`, `ir_drop_variance` remain registered with `unavailable_reason` — the registry says so honestly.
 
 ---
 
@@ -340,17 +349,28 @@ re-pin half-done; blocked on `tests/integration/test_gallery_lock.py` reporting
 - [x] **Hardware-Aware energy** — 9/9 substrate models validated. Co-design is
       C4.
 
+## Part A — Status: COMPLETE ✅
+
+All four Part A items completed:
+- A1: Campaign commands now declare axes via CLI arguments
+- A2: Multi-axis campaign end-to-end test added (`test_multi_axis_campaign_lock.py`)
+- A3: SIGTERM handling added to `execute_spec`
+- A4: `energy_efficiency` measured; unmeasured objectives rejected at spec validation; registry honest about unavailable objectives
+
+This unblocks Axis-Aligned Pareto (C2), I(C,U) (C3), and Hardware-Aware co-design (C4) — all were blocked on pinned axes (A1) and unmeasured objectives (A4).
+
 ## Files changed this session
 
 * `computronium/experiment/execution/settle_operator.py` (new) — the settle
   step as a differentiable operator; real per-layer weight shapes
 * `computronium/experiment/execution/evaluate.py` — per-step Jacobian, drift
-  metrics, per-layer energy, settle telemetry from an owned settle
+  metrics, per-layer energy, settle telemetry from an owned settle, **energy_efficiency metric**
 * `computronium/experiment/execution/backends.py` — bounded admission
 * `computronium/experiment/schema/metrics.py`, `seed_registries.py` — 6 new
-  measured metrics, 7 new objectives
+  measured metrics, 7 new objectives, **energy_efficiency added to MEASURED_METRICS and MEASURED_OBJECTIVES**
+* `computronium/experiment/schema/run_spec.py` — **RunSpec validation rejects unmeasured objectives in main objectives list**
 * `computronium/experiment/surface/cli.py` — `execute_spec` extracted; campaign
-  commands delegate to it (closed runs, `--run-id` resume)
+  commands delegate to it (closed runs, `--run-id` resume); **stability-plasticity accepts axis overrides via CLI; SIGTERM handling**
 * `computronium/experiment/surface/report.py` — `non_dominated` at any arity,
   `axis_frontiers`
 * `computronium/experiment/learning/icu.py` — `ingest_measurements`,
@@ -364,7 +384,8 @@ re-pin half-done; blocked on `tests/integration/test_gallery_lock.py` reporting
 * `scripts/probes/t51_metric_coverage_probe.py` (new, uncommitted — see B2/B3)
 * `tests/property/test_stability_energy_metrics_lock.py` (new, 23),
   `test_axis_frontier_lock.py` (new, 6),
-  `test_icu_ingestion_lock.py` (new, 5)
+  `test_icu_ingestion_lock.py` (new, 5),
+  **`tests/property/test_multi_axis_campaign_lock.py` (new, 5)**
 
 ## Housekeeping
 
@@ -380,6 +401,7 @@ re-pin half-done; blocked on `tests/integration/test_gallery_lock.py` reporting
 * New locks: 34 passed
 * `test_claim_report_lock.py` 26 passed (point shape updated for N-arity fronts)
 * `test_experiment_registries_wiring_lock.py` 12 passed (count is a floor now)
+* `test_multi_axis_campaign_lock.py` 5 passed (A2 — multi-axis campaign end-to-end)
 * Demo gate: 25 passed
 * Pre-existing failures unchanged, none introduced: 5 in
   `test_sampler_lock.py` (`step_size` key, `icu_guided` name, RunSpec

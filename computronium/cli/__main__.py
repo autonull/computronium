@@ -108,7 +108,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Use threading backend for joblib to avoid loky semaphore leaks
     # This must be done before any joblib.Parallel usage (e.g., in sklearn)
     import joblib
-    joblib.parallel.DEFAULT_BACKEND = 'threading'
+
+    joblib.parallel.DEFAULT_BACKEND = "threading"
 
     args = list(sys.argv[1:] if argv is None else argv)
     parser = _build_parser()
@@ -141,6 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Shutdown joblib's reusable loky executor to avoid semaphore leaks
         try:
             from joblib.externals.loky import get_reusable_executor
+
             executor = get_reusable_executor()
             executor.shutdown(wait=True)
         except Exception:
