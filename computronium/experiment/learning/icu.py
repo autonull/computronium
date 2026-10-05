@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from computronium.core.logging import get_logger
 from computronium.experiment.evidence.store import DuplicateMeasurementError
 from computronium.experiment.learning.surrogate import (
     AcquisitionFunction,
@@ -41,6 +42,8 @@ from computronium.experiment.schema.record import (
     Status,
 )
 from computronium.experiment.schema.registries import ASSESSMENT_PROCEDURE_VERSION
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -304,6 +307,100 @@ class ICUModel:
         """Add multiple records."""
         for r in records:
             self.add_record(r)
+
+    def ingest_measurements(
+        self,
+        store: RecordStore,
+        run_id: str,
+        metric_key: str = "val_acc",
+    ) -> int:
+        """Train on a campaign's own measurements.
+
+        ``load_from_store`` reads records this model wrote; the records a
+        campaign actually measured are the ones it must learn from, and until
+        this existed there was no path between them — so I(C,U) could only ever
+        be trained on its own output.
+
+        The train/evaluate split is inherited, not chosen: each record's
+        ``provenance.data_origin`` decides it, which is the same tag the
+        leakage guard reads. Re-deciding the split here would let a caller train
+        on its own held-out set by picking a different moment.
+
+        Args:
+            store: The store holding the campaign's records.
+            run_id: The campaign to learn from.
+            metric_key: Payload key to learn. Defaults to validation accuracy.
+
+        Returns:
+            Number of records ingested; those without the metric are skipped.
+        """
+        ingested = 0
+        for record in store.query_records(run_id=run_id):
+            value = record.payload.get(metric_key)
+            if value is None:
+                continue
+            self.add_record(
+                ICURecord(
+                    feature_vector=ICUFeatureVector.from_coordinate(
+                        Coordinate(
+                            substrate=record.substrate,
+                            geometry=record.geometry,
+                            dynamics=record.dynamics,
+                            plasticity=record.plasticity,
+                            credit=record.credit,
+                            update=record.update,
+                            params=dict(record.params),
+                        )
+                    ),
+                    primary_metric=float(value),
+                    secondary_metrics={
+                        key: float(record.payload[key])
+                        for key in ("val_loss", "param_count", "walltime_s")
+                        if isinstance(record.payload.get(key), int | float)
+                    },
+                    data_origin=record.provenance.data_origin,
+                    record_id=record.record_id,
+                    task=record.schedule.task_id,
+                    seed=record.schedule.seed,
+                )
+            )
+            ingested += 1
+        logger.info(
+            "I(C,U) ingested %d measurement(s) from run %s over %s",
+            ingested,
+            run_id,
+            metric_key,
+        )
+        return ingested
+
+    def held_out_accuracy(self) -> dict[str, Any]:
+        """Predict accuracy on the records the fit never saw.
+
+        The number TODO51 §4's acceptance criterion names. Reported on the
+        evaluation origins only — accuracy on the training origins is the fit
+        reading itself back.
+        """
+        evaluation = self.evaluation_records
+        if not evaluation:
+            return {"status": "no_evaluation_data", "n": 0}
+        if not self._fitted:
+            self.fit()
+        exact = sum(
+            1
+            for record in evaluation
+            if abs(self.predict(record.feature_vector)[0] - record.primary_metric)
+            < 0.01
+        )
+        errors = [
+            abs(self.predict(record.feature_vector)[0] - record.primary_metric)
+            for record in evaluation
+        ]
+        return {
+            "status": "ok",
+            "n": len(evaluation),
+            "exact_match_rate": exact / len(evaluation),
+            "mean_absolute_error": sum(errors) / len(errors),
+        }
 
     def load_from_store(
         self,
