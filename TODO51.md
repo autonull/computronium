@@ -198,6 +198,13 @@ commands do.
 
 ## Reprioritisation (2026-10-05)
 
+> **Operating constraint for the next session.** Parts A and B only. Do not
+> start, resume or extend anything in Part C, and do not launch a campaign to
+> "just check" a hypothesis — a probe that trains one cell is a probe, a run
+> that trains a sweep is Part C. If a task seems to need a long run to
+> complete, that is the signal it belongs in Part C, not a reason to start one.
+> If a Part A change lands, every Part C number becomes stale anyway.
+
 The five campaigns are consumers of the measurement layer, not the work. Every
 long run on the old list was either blocked behind a general fix or would be
 invalidated by one — twice over, in fact: 240 records were spent discovering
