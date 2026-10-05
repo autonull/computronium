@@ -212,3 +212,74 @@ def test_every_evaluator_metric_is_nameable_by_an_objective() -> None:
     )
     assert MEASURED_OBJECTIVES["spectral_radius"] == "spectral_radius"
     assert MEASURED_OBJECTIVES["energy_per_step"] == "energy_per_sample"
+
+
+@pytest.mark.parametrize(
+    ("name", "factory"),
+    [
+        ("digital", "digital"),
+        ("analog", "analog"),
+        ("memristive", "memristive"),
+        ("neuromorphic", "neuromorphic"),
+        ("optical", "optical"),
+        ("quantum", "quantum"),
+        ("complex", "complex"),
+        ("sparse", "sparse"),
+        ("ternary", "ternary"),
+    ],
+)
+def test_every_substrate_energy_model_scales_with_layer_width(
+    name: str, factory: str
+) -> None:
+    """A substrate whose joules ignore the layer size is a constant axis.
+
+    Batch monotonicity is deliberately non-strict: an optical substrate's laser
+    power does not scale with the batch and a memristive one's programming cost
+    is paid once per weight. Layer width is the MAC-driven term and must.
+    """
+    from computronium.ontology.substrate._substrate import (
+        SubstrateConfig,
+        substrate_from_config,
+    )
+
+    substrate = substrate_from_config(getattr(SubstrateConfig, factory)())
+
+    def joules(batch: int, out: int) -> float:
+        return float(
+            substrate.estimate_energy(
+                input_shape=(batch, 64),
+                weight_shape=(out, 64),
+                batch_size=batch,
+            )["total_energy_per_step"]
+        )
+
+    assert joules(64, 256) / joules(8, 64) > 3.0, (
+        f"{name}: quadrupling the layer width must raise the joules"
+    )
+    assert joules(64, 64) >= joules(8, 64), f"{name}: energy falls as the batch grows"
+
+
+def test_device_substrates_are_an_order_below_digital() -> None:
+    """The coarse literature claim: a digital MAC is >10x dearer than a device's.
+
+    Not the finer ordering among the device substrates — neuromorphic charges
+    per event and memristive per programming op, so comparing those two per MAC
+    compares two units rather than two devices.
+    """
+    from computronium.ontology.substrate._substrate import (
+        SubstrateConfig,
+        substrate_from_config,
+    )
+
+    def joules(factory: str) -> float:
+        return float(
+            substrate_from_config(getattr(SubstrateConfig, factory)()).estimate_energy(
+                input_shape=(8, 64), weight_shape=(64, 64), batch_size=8
+            )["total_energy_per_step"]
+        )
+
+    digital = joules("digital")
+    for device in ("memristive", "neuromorphic", "optical"):
+        assert digital / joules(device) > 10.0, (
+            f"{device} is not an order of magnitude below digital"
+        )
