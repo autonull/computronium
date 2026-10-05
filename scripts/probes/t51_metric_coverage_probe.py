@@ -1,0 +1,114 @@
+"""Probe: do the new stability metrics work outside the energy-based family?
+
+Written because the stability-plasticity campaign pins `energy_minimization` +
+`thermodynamic_contrast`, so every number in TODO51 §2 came from one dynamics
+primitive out of eight. `compute_stability_metrics` builds a
+`SubstrateSettleKernel` to get a relaxation step, which is an EqProp-shaped
+assumption; this probe runs the metrics across the whole registered dynamics
+and geometry space and reports which cells produce a measurement and which
+silently produce nothing.
+
+The question is not "does it work for energy_minimization" - it does. It is
+whether a metric that only answers for the family the campaign happened to pin
+is a bias in the campaign's conclusions, or a gap in the metric.
+
+Run: uv run python -m scripts.probes.t51_metric_coverage_probe
+"""
+
+from __future__ import annotations
+
+from computronium.experiment.execution.evaluate import compute_stability_metrics
+from computronium.experiment.schema.coordinate import Coordinate
+
+# Each dynamics with a credit/geometry the framework accepts for it. Probing an
+# illegal pairing measures the validity check, not the metric: diffusion demands
+# recurrent geometry, spike integration demands temporal-trace or
+# target-inversion credit, and thermodynamic contrast demands an energy-based or
+# PC-family dynamics. Those are real constraints, and a coverage number that
+# counted them as metric failures would overstate the gap.
+_LEGAL = {
+    "energy_minimization": ("thermodynamic_contrast", "feedforward"),
+    "error_predictive_coding": ("thermodynamic_contrast", "feedforward"),
+    "pc_alm": ("thermodynamic_contrast", "feedforward"),
+    "predictive_settling": ("thermodynamic_contrast", "feedforward"),
+    "instantaneous": ("gradient", "feedforward"),
+    "diffusion": ("gradient", "recurrent"),
+    "lazy": ("gradient", "feedforward"),
+    "spike_integration": ("temporal_trace", "feedforward"),
+}
+
+_STABILITY = (
+    "spectral_radius",
+    "max_singular_value",
+    "drift_spectral_radius",
+    "contraction_rate",
+)
+
+
+def _system(dynamics: str, geometry: str, credit: str):
+    from computronium.experiment.execution.compose import compose_cell_system
+
+    return compose_cell_system(
+        coordinate=Coordinate(
+            substrate="digital",
+            geometry=geometry,
+            dynamics=dynamics,
+            plasticity="null",
+            credit=credit,
+            update="euclidean",
+            params={"hidden_dim": 64, "num_layers": 3},
+        ),
+        geometry={},
+        input_shape=(64,),
+        output_dim=10,
+        param_budget=2_000_000,
+    ).system
+
+
+def main() -> None:
+    import torch
+
+    torch.manual_seed(0)
+    print(
+        f"{'dynamics':<24}{'credit':<22}{'rho':>9}{'sigma':>9}"
+        f"{'rho_drift':>11}{'sigma_dr':>10}"
+    )
+    print("-" * 85)
+
+    gaps: list[str] = []
+    for dynamics in sorted(_LEGAL):
+        credit, geometry = _LEGAL[dynamics]
+        try:
+            metrics = compute_stability_metrics(
+                _system(dynamics, geometry, credit), torch.randn(4, 64)
+            )
+        except Exception as exc:  # ruff: ignore[blind-except] - the probe reports, never raises
+            gaps.append(f"{dynamics}/{credit}/{geometry}: {type(exc).__name__}: {exc}")
+            print(f"{dynamics:<24}{credit:<22}{'RAISED':>39}")
+            continue
+        keys = (
+            "spectral_radius",
+            "max_singular_value",
+            "drift_spectral_radius",
+            "drift_max_singular_value",
+        )
+        row = [f"{metrics[k]:.4f}" if k in metrics else "--" for k in keys]
+        if any(cell == "--" for cell in row):
+            gaps.append(
+                f"{dynamics}: missing {[k for k, c in zip(keys, row, strict=True) if c == '--']}"
+            )
+        print(
+            f"{dynamics:<24}{credit:<22}{row[0]:>9}{row[1]:>9}{row[2]:>11}{row[3]:>10}"
+        )
+
+    print(f"\ndynamics probed: {len(_LEGAL)}")
+    if gaps:
+        print(f"gaps ({len(gaps)}):")
+        for gap in gaps:
+            print(f"  {gap}")
+    else:
+        print("no gaps: every dynamics produced every stability metric")
+
+
+if __name__ == "__main__":
+    main()
