@@ -35,10 +35,15 @@ def _seed_registries() -> None:
 
 
 def test_objectives_registry_seeded() -> None:
-    """Objectives registry exists and is seeded with 36 objectives."""
+    """Objectives registry exists and is seeded with the full B.7 union.
+
+    TODO51 added the four objectives the new measurements back
+    (stability_margin, nonnormality, energy_per_mac, macs_per_step), so the
+    count is a floor on the union, not a frozen tally.
+    """
     _seed_registries()
     assert OBJECTIVES_REGISTRY is not None
-    assert len(OBJECTIVES_REGISTRY) == 36  # Full B.7 union (36 objectives)
+    assert len(OBJECTIVES_REGISTRY) >= 36  # Full B.7 union + TODO51 additions
 
 
 def test_constraints_registry_seeded() -> None:

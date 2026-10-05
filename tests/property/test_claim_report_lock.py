@@ -392,10 +392,10 @@ class TestPerMetricClaims:
         assert axes == ("val_acc", "walltime_s")
         assert front, "no claim-eligible record carried both objectives"
         for point in front:
-            assert point["primary"] == pytest.approx(
-                float(point["primary"])  # the val_acc the front ranked on
+            assert point["objectives"]["val_acc"] == pytest.approx(
+                float(point["objectives"]["val_acc"])  # what the front ranked on
             )
-            assert point["secondary"] > 0
+            assert point["objectives"]["walltime_s"] > 0
 
     def test_a_trade_off_keeps_every_non_dominated_point(
         self, tmp_path_factory: pytest.TempPathFactory
@@ -447,7 +447,9 @@ class TestPerMetricClaims:
                 points, ("val_acc", "walltime_s"), (True, False)
             )
 
-        assert [(p["primary"], p["secondary"]) for p in front] == [
+        assert [
+            (p["objectives"]["val_acc"], p["objectives"]["walltime_s"]) for p in front
+        ] == [
             (0.9, 1.0),
             (0.8, 0.5),
         ]
@@ -460,6 +462,9 @@ class TestPerMetricClaims:
             report = generate_run_report(store, run_id)
 
         assert "val_acc vs walltime_s" in report
+        assert "Axis-Aligned Pareto Frontiers" not in report, (
+            "a run that declared no axis_objectives has no axis fronts to name"
+        )
 
 
 class TestLimitations:

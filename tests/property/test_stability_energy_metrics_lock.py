@@ -1,0 +1,214 @@
+"""Lock: the stability and energy metrics describe the cell they measured.
+
+TODO51's campaigns are Pareto frontiers over (rho, sigma_max) and joules, so a
+metric that does not respond to the cell is not a noisy frontier — it is a
+constant line, and no schema check catches it. Three defects shipped behind
+schema-valid payloads:
+
+* **The horizon, not the step.** ``compute_stability_metrics`` differentiated
+  the whole ``settle()`` with respect to the input, so it reported rho^N. A
+  contracting cell (rho=0.998) read as rho=0.0087, and a transient
+  amplification sigma_max > 1 — the entire subject of the frontier — was
+  invisible. The step Jacobian and the whole-settle Jacobian disagree by a
+  factor of ``max_steps``, so the lock asserts they do.
+* **A weight shape that was not the cell's.** Energy was estimated from a
+  hardcoded ``(output_dim, input_dim)``, so a 13k-parameter cell and an 88k
+  one reported byte-identical joules. Widening the network must move the
+  joules.
+* **Walltime under unbounded fan-out.** Ten cells trained simultaneously on
+  one device each reported the walltime of all ten. Bounded admission must
+  make a cell's walltime its own.
+
+Also: every metric the evaluator writes must be a metric the objectives
+registry can name, or an objective a run declares resolves to nothing.
+"""
+
+from __future__ import annotations
+
+import inspect
+from typing import cast
+
+import pytest
+import torch
+from torch.autograd.functional import jacobian
+
+from computronium.experiment.execution.backends import LocalBackend
+from computronium.experiment.execution.evaluate import (
+    compute_energy_metrics,
+    compute_stability_metrics,
+)
+from computronium.experiment.execution.settle_operator import (
+    layer_weight_shapes,
+    settle_step_operator,
+)
+from computronium.experiment.schema.metrics import (
+    MEASURED_METRICS,
+    MEASURED_OBJECTIVES,
+)
+
+pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
+
+
+def _system(hidden: int, layers: int = 3):
+    from computronium.experiment.execution.compose import compose_cell_system
+    from computronium.experiment.schema.coordinate import Coordinate
+
+    coordinate = Coordinate(
+        substrate="digital",
+        geometry="feedforward",
+        dynamics="energy_minimization",
+        plasticity="null",
+        credit="thermodynamic_contrast",
+        update="euclidean",
+        params={
+            "hidden_dim": hidden,
+            "num_layers": layers,
+            "settle_step": 0.1,
+            "settle_beta": 0.5,
+            "feedback_scale": 0.5,
+            "precision": "float32",
+        },
+    )
+    cell = compose_cell_system(
+        coordinate=coordinate,
+        geometry={},
+        input_shape=(64,),
+        output_dim=10,
+        param_budget=2_000_000,
+    )
+    return cell.system
+
+
+def _radius(jac: torch.Tensor) -> float:
+    singular = torch.linalg.svdvals(jac)
+    if jac.shape[0] == jac.shape[1]:
+        return float(torch.linalg.eigvals(jac).abs().max().item())
+    return float(singular.max().item())
+
+
+def test_the_step_and_the_whole_settle_are_different_operators() -> None:
+    """The gap is the horizon: rho_step^N is what the old code reported.
+
+    Without this assertion the two can be swapped again and every frontier
+    still looks plausible.
+    """
+    torch.manual_seed(0)
+    system = _system(hidden=64)
+    x = torch.randn(4, 64)
+    horizon = system.dynamics.config.max_steps
+
+    operator = settle_step_operator(system, x)
+    assert operator is not None, "a layered geometry must expose its settle step"
+    step, width = operator
+
+    def whole_settle(x_in: torch.Tensor) -> torch.Tensor:
+        from computronium.ontology import SystemState
+
+        settled = system.dynamics.settle(
+            SystemState(x=x_in, y=None), system.geometry, system.substrate
+        )
+        return settled.activations[-1]
+
+    per_step = _radius(jacobian(step, torch.zeros(width)))
+    composed = _radius(cast("torch.Tensor", jacobian(whole_settle, x[:1])[0, :, 0, :]))
+
+    assert horizon > 1
+    assert composed < 0.5 * per_step, (
+        f"whole-settle radius {composed:.4f} vs step radius {per_step:.4f}: "
+        "the horizon must not be inside the reported spectral radius"
+    )
+    metrics = compute_stability_metrics(system, x)
+    assert metrics["spectral_radius"] == pytest.approx(per_step, rel=0.2), (
+        "the reported radius must be the step's, which a horizon-inflated "
+        "Jacobian cannot be"
+    )
+
+
+def test_spectral_radius_is_near_one_not_collapsed_by_the_horizon() -> None:
+    """rho in [0.5, 2) on a settling cell; the old value was 0.0087."""
+    torch.manual_seed(0)
+    system = _system(hidden=64)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert "spectral_radius" in metrics
+    radius = metrics["spectral_radius"]
+    assert 0.5 < radius < 2.0, f"settle-step rho {radius} is not a settling operator"
+
+
+def test_nonnormality_is_separable_from_contraction() -> None:
+    """sigma_max is reported apart from rho, which is the frontier's subject.
+
+    A metric that collapses sigma_max onto rho cannot express "contracts
+    eventually, amplifies transiently" at all — which is the hypothesis
+    TODO51 §2 exists to test.
+    """
+    torch.manual_seed(0)
+    system = _system(hidden=96, layers=4)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert metrics["min_singular_value"] <= metrics["max_singular_value"]
+    assert "nonnormality" in metrics
+    assert metrics["lyapunov_exponent"] == pytest.approx(
+        torch.log(torch.tensor(metrics["spectral_radius"])).item(), abs=1e-5
+    )
+
+
+def test_settling_telemetry_is_read_from_a_settle_that_ran() -> None:
+    """settle_converged must reflect a settle, not a counter left at zero."""
+    torch.manual_seed(0)
+    system = _system(hidden=64)
+    metrics = compute_stability_metrics(system, torch.randn(4, 64))
+
+    assert metrics["settle_steps"] > 0
+    assert metrics["settle_horizon"] >= metrics["settle_steps"]
+    assert metrics["settle_converged"] in {0.0, 1.0}
+
+
+@pytest.mark.parametrize("hidden", [64, 128])
+def test_energy_responds_to_the_cell_not_to_a_hardcoded_shape(hidden: int) -> None:
+    """More weights must cost more joules. The defect: one number for all cells."""
+    torch.manual_seed(0)
+    narrow = compute_energy_metrics(_system(hidden), batch_size=8)
+    wide = compute_energy_metrics(_system(hidden * 2), batch_size=8)
+
+    assert wide["macs_per_step"] > narrow["macs_per_step"]
+    assert wide["energy_per_batch"] > narrow["energy_per_batch"]
+    assert wide["energy_per_sample"] > narrow["energy_per_sample"]
+    assert narrow["energy_per_mac"] == pytest.approx(wide["energy_per_mac"])
+
+
+def test_weight_shapes_are_the_geometrys_own() -> None:
+    system = _system(hidden=64, layers=3)
+    shapes = layer_weight_shapes(system.geometry)
+
+    assert len(shapes) >= 3, "one shape per linear layer, plus the recurrent one"
+    assert all(out > 0 and inn > 0 for out, inn in shapes)
+    assert shapes[0] == (64, 64)
+    assert shapes[-1] == (10, 64), "the last layer is the output projection"
+
+
+def test_backend_bounds_its_own_concurrency() -> None:
+    """max_workers is a declaration; it must reach the submission path."""
+    source = inspect.getsource(LocalBackend.__mro__[1].submit_batch)
+    assert "_admission" in source, (
+        "submit_batch no longer gates on max_workers, so every cell in a round "
+        "trains at once and walltime_total measures contention"
+    )
+
+
+def test_every_evaluator_metric_is_nameable_by_an_objective() -> None:
+    """A payload key the objectives registry cannot name reaches no study."""
+    from computronium.experiment.execution import evaluate
+
+    source = inspect.getsource(evaluate)
+    written = {
+        line.split('"')[1]
+        for line in source.splitlines()
+        if 'metrics["' in line and '"' in line.split("metrics[")[1]
+    }
+    unregistered = sorted(written - MEASURED_METRICS)
+    assert not unregistered, (
+        f"evaluator writes metrics no objective can name: {unregistered}"
+    )
+    assert MEASURED_OBJECTIVES["spectral_radius"] == "spectral_radius"
+    assert MEASURED_OBJECTIVES["energy_per_step"] == "energy_per_sample"

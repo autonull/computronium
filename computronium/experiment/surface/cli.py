@@ -13,7 +13,6 @@ import argparse
 import asyncio
 import json
 import sys
-import time
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -396,6 +395,11 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     p_sta.add_argument(
         "--dry-run", action="store_true", help="Show plan without running"
     )
+    p_sta.add_argument(
+        "--run-id",
+        default=None,
+        help="Resume an existing run instead of starting a new one",
+    )
 
     # Frozen-θ ψ benchmark command
     p_frozen = sub.add_parser(
@@ -457,6 +461,12 @@ def _build_parser() -> argparse.ArgumentParser:  # ruff: ignore[too-many-stateme
     )
 
     return parser
+
+
+# Cells trained concurrently. Above this, cells contend for one device and each
+# reports the walltime of all of them, which turns ``walltime_total`` into a
+# measurement of the batch rather than of the cell.
+_CELL_WORKERS = 4
 
 
 def _duration_str(seconds: float) -> str:
@@ -627,20 +637,33 @@ def _resolve_spec(args: argparse.Namespace) -> RunSpec:
     )
 
 
-def _cmd_run(args: argparse.Namespace) -> int:
-    """Execute a run from a spec file or a named profile."""
-    spec = _resolve_spec(args)
+def execute_spec(
+    spec: RunSpec,
+    *,
+    store_path: str,
+    run_id: str | None = None,
+) -> int:
+    """Execute one declared spec into one store, and close the run.
+
+    The single execution path. A campaign command that builds its own runner
+    duplicates this and drops the parts it did not copy: TODO51\'s
+    ``stability-plasticity`` left every run row at ``status=running`` with no
+    ``finished_at``, and minted a fresh ``run_id`` per launch so an interrupted
+    campaign could not be resumed.
+
+    Args:
+        spec: The run declaration; the only source of policy and objectives.
+        store_path: DuckDB path to run into.
+        run_id: Resume an existing run instead of creating one.
+
+    Returns:
+        Process exit code: 0 completed, 1 failed, 130 interrupted.
+    """
     policy_name = spec.policy or "round_robin_grid"
 
-    # A dry run writes nothing: not a store, not a run row, not a checkpoint.
-    if args.dry_run:
-        print(_dry_run_report(spec, policy_name=policy_name))
-        return 0
-
-    store_config = StoreConfig(path=Path(args.store))
-    with RecordStore(store_config) as store:
-        run_id = args.run_id or store.create_run(spec=spec)
-        logger.info(f"Run ID: {run_id}")
+    with RecordStore(StoreConfig(path=Path(store_path))) as store:
+        run = run_id or store.create_run(spec=spec)
+        logger.info("Run ID: %s", run)
 
         budget = (
             Budget.from_duration(_duration_str(spec.budget_seconds))
@@ -648,90 +671,98 @@ def _cmd_run(args: argparse.Namespace) -> int:
             else None
         )
 
-        # The spec is the only place a policy's arguments come from, so the
-        # sampler learns on the run's objectives and its own swept domains.
+        # The spec is the only place a policy\'s arguments come from, so the
+        # sampler learns on the run\'s objectives and its own swept domains.
         from computronium.experiment.execution.evaluate import task_shape
 
         policy = create_policy(
             policy_name, **policy_context(spec, policy_name, shape=task_shape)
         )
 
-        # Create pipeline config — the spec supplies stages, seed and policy
-        # If S10 Decide stage is not in the pipeline, limit to 1 round to avoid
-        # infinite loop (no decision to continue/stop without S10)
+        # Without S10 Decide there is no decision to continue or stop on, so
+        # the loop would run until the space is exhausted by some other means.
         max_rounds = None
         if spec.stages and StageId.S10_DECIDE not in spec.stages:
             max_rounds = 1
 
-        pipeline_config = PipelineConfig(
-            run_id=run_id,
-            run_spec=spec,
-            budget=budget,
-            cost_model=SimpleCostModel(),
-            policy=policy,
-            backend=LocalBackend(),
-            seed=spec.seed,
-            max_rounds=max_rounds,
+        runner = PipelineRunner(
+            PipelineConfig(
+                run_id=run,
+                run_spec=spec,
+                budget=budget,
+                cost_model=SimpleCostModel(),
+                policy=policy,
+                backend=LocalBackend(max_workers=_CELL_WORKERS),
+                seed=spec.seed,
+                max_rounds=max_rounds,
+            ),
+            store,
         )
-
-        # Run pipeline
-        runner = PipelineRunner(pipeline_config, store)
         try:
             outcomes = asyncio.run(runner.run())
         except KeyboardInterrupt:
-            logger.info("Interrupted; run can be resumed with --run-id %s", run_id)
-            if runner._state.budget is not None:
-                budget_consumed = runner._state.budget.elapsed_seconds()
-                store.finish_run(
-                    run_id, "interrupted", budget_consumed_s=budget_consumed
-                )
+            logger.info("Interrupted; resume with --run-id %s", run)
+            store.finish_run(run, "interrupted", budget_consumed_s=_consumed(runner))
             return 130
-        except Exception as e:
-            logger.error("Pipeline failed: %s", e, exc_info=True)
-            if runner._state.budget is not None:
-                budget_consumed = runner._state.budget.elapsed_seconds()
-                store.finish_run(run_id, "failed", budget_consumed_s=budget_consumed)
-            else:
-                store.finish_run(run_id, "failed")
+        except Exception as exc:
+            logger.error("Pipeline failed: %s", exc, exc_info=True)
+            store.finish_run(run, "failed", budget_consumed_s=_consumed(runner))
             return 1
 
-        # The promotion stage runs after measuring, on the run's own store:
-        # maturity is earned from what landed, not declared up front.
-        from computronium.experiment.execution.promotion import promote_run
-        from computronium.experiment.schema.record import Maturity
-        from computronium.experiment.schema.registries import (
-            REPLAY_METRIC_TOLERANCE,
-        )
+        _settle_maturity(store, run, spec)
 
-        history = promote_run(store, run_id, spec, tolerance=REPLAY_METRIC_TOLERANCE)
+        budget_consumed = _consumed(runner)
+        store.finish_run(run, "completed", budget_consumed_s=budget_consumed)
         logger.info(
-            "Promotion: %d cell(s) assessed, %d earned L2",
-            len(history),
-            sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
-        )
-
-        # E1: Compute and store uncertainty from across-seed measurements
-        from computronium.experiment.evidence.claims import (
-            compute_and_store_uncertainty,
-        )
-
-        uncertainty = compute_and_store_uncertainty(
-            store, run_id, min_seeds=spec.n_seeds
-        )
-        logger.info(
-            "Uncertainty: computed for %d cell(s) with >=%d seeds",
-            len(uncertainty),
-            spec.n_seeds,
-        )
-
-        budget_consumed = (
-            runner._state.budget.elapsed_seconds() if runner._state.budget else None
-        )
-        store.finish_run(run_id, "completed", budget_consumed_s=budget_consumed)
-        logger.info(
-            f"Run {run_id} completed with {len(outcomes)} outcomes in {budget_consumed:.1f}s"
+            "Run %s completed with %d records in %s",
+            run,
+            len(outcomes),
+            f"{budget_consumed:.1f}s" if budget_consumed is not None else "no budget",
         )
         return 0
+
+
+def _consumed(runner: PipelineRunner) -> float | None:
+    """Seconds the run's budget reports it spent, or ``None`` if it had none."""
+    budget = runner._state.budget
+    return budget.elapsed_seconds() if budget is not None else None
+
+
+def _settle_maturity(store: RecordStore, run_id: str, spec: RunSpec) -> None:
+    """Post-measurement bookkeeping: promotion, then across-seed uncertainty.
+
+    Maturity is earned from what landed, not declared up front, so this runs
+    on the run\'s own store after the rounds are done.
+    """
+    from computronium.experiment.evidence.claims import compute_and_store_uncertainty
+    from computronium.experiment.execution.promotion import promote_run
+    from computronium.experiment.schema.record import Maturity
+    from computronium.experiment.schema.registries import REPLAY_METRIC_TOLERANCE
+
+    history = promote_run(store, run_id, spec, tolerance=REPLAY_METRIC_TOLERANCE)
+    logger.info(
+        "Promotion: %d cell(s) assessed, %d earned L2",
+        len(history),
+        sum(1 for entry in history if entry["maturity"] == Maturity.L2.value),
+    )
+    uncertainty = compute_and_store_uncertainty(store, run_id, min_seeds=spec.n_seeds)
+    logger.info(
+        "Uncertainty: computed for %d cell(s) with >=%d seeds",
+        len(uncertainty),
+        spec.n_seeds,
+    )
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    """Execute a run from a spec file or a named profile."""
+    spec = _resolve_spec(args)
+
+    # A dry run writes nothing: not a store, not a run row, not a checkpoint.
+    if args.dry_run:
+        print(_dry_run_report(spec, policy_name=spec.policy or "round_robin_grid"))
+        return 0
+
+    return execute_spec(spec, store_path=args.store, run_id=args.run_id)
 
 
 def _cmd_report(args: argparse.Namespace) -> int:  # ruff: ignore[complex-structure, too-many-return-statements, too-many-branches]
@@ -951,17 +982,6 @@ def _cmd_gallery(args: argparse.Namespace) -> int:
 
 def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[too-many-statements, too-many-locals]
     """Generate and optionally run a stability-plasticity frontier campaign."""
-    import json
-    from pathlib import Path
-
-    from computronium.experiment.evidence.store import RecordStore, StoreConfig
-    from computronium.experiment.execution.backends import LocalBackend
-    from computronium.experiment.execution.budget import Budget, SimpleCostModel
-    from computronium.experiment.execution.pipeline import (
-        PipelineConfig,
-        PipelineRunner,
-    )
-    from computronium.experiment.execution.policy import create_policy, policy_context
     from computronium.experiment.schema.axis import StructuralAxis
     from computronium.experiment.schema.run_spec import (
         AxisSelection,
@@ -1053,20 +1073,28 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         "convergence_start_sweep": list(convergence_start_vals),
     }
 
-    # Objectives for stability-plasticity - use only measured objectives for now
-    objectives = (
-        "validation_accuracy",
-        "walltime_total",
-        "param_count",
-    )
-
-    # Axis-aligned objectives - only measured objectives
+    # Axis-aligned objectives. The stability set is the campaign's subject:
+    # rho, sigma_max and their ratio are the frontier's three axes, and
+    # settle_steps is the horizon the step was measured against.
     axis_objectives = {
         "task": ("validation_accuracy",),
-        "cost": ("walltime_total", "param_count"),
+        "stability": (
+            "spectral_radius",
+            "max_singular_value",
+            "nonnormality",
+            "stability_margin",
+            "lyapunov_exponent",
+            "settle_steps",
+        ),
+        "cost": ("walltime_total", "param_count", "energy_per_step"),
     }
 
-    # Create RunSpec
+    # Create RunSpec. `objectives` is the union of the axis sets: the combined
+    # study needs a direction per name, and the per-axis studies read the sets.
+    objectives = tuple(
+        dict.fromkeys(o for objs in axis_objectives.values() for o in objs)
+    )
+
     spec = RunSpec(
         version=2,
         profile="stability-plasticity",
@@ -1113,49 +1141,10 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         print("Spec generated. Use --run to execute or --dry-run to preview.")
         return 0
 
-    # Run the campaign
+    # Run the campaign. Same executor every run uses, so the run row is closed,
+    # maturity is settled, and --run-id resumes an interrupted campaign.
     print("Running campaign...")
-    import uuid
-
-    run_id = str(uuid.uuid4())
-    store = RecordStore(StoreConfig(path=Path(args.store)))
-    backend = LocalBackend()
-    cost_model = SimpleCostModel()
-    budget = Budget(
-        started_at=time.monotonic(),
-        soft_seconds=args.budget_seconds,
-        hard_seconds=args.budget_seconds,
-    )
-
-    # Create policy from spec
-    from computronium.experiment.execution.evaluate import task_shape
-
-    policy_name = spec.policy
-    if policy_name is None:
-        raise ValueError("RunSpec.policy must be set for campaign execution")
-    policy_kwargs = policy_context(spec, policy_name, shape=task_shape)
-    policy = create_policy(policy_name, **policy_kwargs)
-
-    # Create pipeline config
-    pipeline_config = PipelineConfig(
-        run_id=run_id,
-        run_spec=spec,
-        budget=budget,
-        cost_model=cost_model,
-        backend=backend,
-        policy=policy,
-    )
-
-    with store:
-        store.create_run(run_id, spec)
-        runner = PipelineRunner(pipeline_config, store)
-        try:
-            asyncio.run(runner.run())
-        finally:
-            runner.shutdown()
-
-    print("Campaign complete.")
-    return 0
+    return execute_spec(spec, store_path=args.store, run_id=args.run_id)
 
 
 def _cmd_frozen_theta_psi(args: argparse.Namespace) -> int:

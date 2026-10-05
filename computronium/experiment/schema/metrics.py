@@ -50,17 +50,23 @@ HISTORY_METRICS: Final[frozenset[str]] = frozenset({
 # What a record's payload offers an objective: the history plus the cost the
 # evaluator itself timed and counted.
 MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
+    "epochs_run",
     "walltime_s",
     "param_count",
     "settle_steps",
     "settle_converged",
+    "settle_horizon",
     "spectral_radius",
     "max_singular_value",
     "min_singular_value",
     "lyapunov_exponent",
+    "stability_margin",
+    "nonnormality",
     "free_energy",
     "energy_per_batch",
     "energy_per_sample",
+    "energy_per_mac",
+    "macs_per_step",
     "forward_energy_per_batch",
     "update_energy_per_batch",
 }
@@ -77,6 +83,10 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "lyapunov_exponent": "lyapunov_exponent",
     "free_energy": "free_energy",
     "energy_per_step": "energy_per_sample",
+    "energy_per_mac": "energy_per_mac",
+    "macs_per_step": "macs_per_step",
+    "stability_margin": "stability_margin",
+    "nonnormality": "nonnormality",
 })
 
 

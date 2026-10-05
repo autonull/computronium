@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from computronium.experiment.evidence.store import RecordStore
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
@@ -106,10 +108,86 @@ def _maximizes(metric_key: str) -> bool:
     return optimizes(name) if name is not None else False
 
 
-def _directions(objectives: tuple[str, str]) -> tuple[bool, bool]:
-    """Whether each of a front's two payload keys is maximized."""
-    primary, secondary = objectives
-    return _maximizes(primary), _maximizes(secondary)
+def _numeric_vector(
+    record: Record, objectives: tuple[str, ...]
+) -> dict[str, float] | None:
+    """A record's objective values as floats, or ``None`` if it lacks one.
+
+    ``None`` rather than a default: a record missing an objective cannot be
+    placed on that front, and a substituted zero would place it there wrongly.
+    """
+    values: dict[str, float] = {}
+    for key in objectives:
+        raw = record.payload.get(key)
+        if raw is None:
+            return None
+        try:
+            values[key] = float(raw)
+        except ValueError, TypeError:
+            return None
+    return values
+
+
+def _directions(objectives: tuple[str, ...]) -> tuple[bool, ...]:
+    """Whether each of a front's payload keys is maximized, in order.
+
+    Read per objective from its declared direction, because a front that
+    maximizes accuracy and minimizes walltime needs to know which is which
+    before it can say what dominates what.
+    """
+    return tuple(_maximizes(key) for key in objectives)
+
+
+def non_dominated(
+    points: Sequence[Mapping[str, float]],
+    axes: Sequence[str],
+    maximize: Sequence[bool],
+) -> list[int]:
+    """Indices of the points no other point dominates, over any arity.
+
+    A point is dominated when another is at least as good on every axis and
+    strictly better on one. Two objectives is the special case a two-axis front
+    needs; six is the case TODO51\'s stability axis needs. A two-objective filter
+    silently projected that six-name set onto its first two, so the front it
+    reported was a front over (rho, sigma_max) with the other four unconstrained.
+
+    Args:
+        points: Candidates, each mapping axis name to value.
+        axes: The axis names, in the order ``maximize`` describes them. Named
+            explicitly rather than read from the first point, because a point
+            carries bookkeeping fields that are not axes.
+        maximize: Per axis, whether larger is better.
+
+    Returns:
+        Indices into ``points``, ascending.
+    """
+    if len(axes) != len(maximize):
+        msg = f"{len(axes)} axes but {len(maximize)} directions"
+        raise ValueError(msg)
+
+    def _better(candidate: float, incumbent: float, axis: int) -> bool:
+        return candidate > incumbent if maximize[axis] else candidate < incumbent
+
+    vectors = [[point[axis] for axis in axes] for point in points]
+    keep: list[int] = []
+    for i, vector in enumerate(vectors):
+        dominated = False
+        for j, rival in enumerate(vectors):
+            if i == j:
+                continue
+            at_least_as_good = all(
+                _better(rival[a], vector[a], a) or rival[a] == vector[a]
+                for a in range(len(axes))
+            )
+            strictly_better = any(
+                _better(rival[a], vector[a], a) for a in range(len(axes))
+            )
+            if at_least_as_good and strictly_better:
+                dominated = True
+                break
+        if not dominated:
+            keep.append(i)
+    return keep
 
 
 class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read method per report section, by design
@@ -195,19 +273,19 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def pareto_frontier(
         self,
         run_id: str,
-        objectives: tuple[str, str] | None = None,
-        maximize: tuple[bool, bool] | None = None,
+        objectives: tuple[str, ...] | None = None,
+        maximize: tuple[bool, ...] | None = None,
     ) -> list[dict[str, Any]]:
         """Compute the Pareto frontier over a run's claim-eligible cells.
 
         Args:
             run_id: Run filter.
-            objectives: Primary and secondary payload keys. Defaults to the
-                run's own first two measured objectives — a front over a key no
+            objectives: Payload keys, one per front axis. Defaults to the run's
+                own first two measured objectives — a front over a key no
                 measurement emits is an empty section, not a finding.
-            maximize: Tuple of (maximize_primary, maximize_secondary). Read
-                from each objective's declared direction when omitted, because a
-                front that maximizes accuracy and walltime together is empty.
+            maximize: Per axis, whether larger is better. Read from each
+                objective's declared direction when omitted, because a front that
+                maximizes accuracy and walltime together is empty.
 
         Returns:
             List of dicts with record_id, coordinate, and objective values.
@@ -363,19 +441,19 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
         spec = self._spec(run_id)
         return spec.n_seeds if spec else DEFAULT_MIN_SEEDS
 
-    def front_objectives(self, run_id: str) -> tuple[str, str]:
-        """The two payload keys a Pareto front defaults to.
+    def front_objectives(self, run_id: str, limit: int = 2) -> tuple[str, ...]:
+        """The payload keys a whole-run front defaults to.
 
-        The run's first two *measured* objectives. Parameter count is the
+        The run's first *limit* measured objectives. Parameter count is the
         fallback for a run that measured only one thing, because a front needs
         two axes; it is not the second axis by default, since comparing an
         outcome against size when the run declared a second outcome discards the
         outcome.
         """
         metrics = self.claim_metrics(run_id)
-        if len(metrics) >= 2:
-            return metrics[0], metrics[1]
-        return (metrics[0] if metrics else "param_count", "param_count")
+        if len(metrics) >= limit:
+            return metrics[:limit]
+        return (metrics[0] if metrics else "param_count",) * limit
 
     def claim_metrics(self, run_id: str) -> tuple[str, ...]:
         """The payload keys the run's measured objectives resolve to, in order."""
@@ -410,8 +488,8 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def fronts_by_fidelity(
         self,
         run_id: str,
-        objectives: tuple[str, str] | None = None,
-        maximize: tuple[bool, bool] | None = None,
+        objectives: tuple[str, ...] | None = None,
+        maximize: tuple[bool, ...] | None = None,
     ) -> dict[str, list[dict[str, Any]]]:
         """Pareto frontier per fidelity level (R86 fronts-by-fidelity)."""
         objectives = objectives or self.front_objectives(run_id)
@@ -483,61 +561,63 @@ class ReportGenerator:  # ruff: ignore[too-many-public-methods] - one read metho
     def _pareto_subset(
         self,
         records: list[Record],
-        objectives: tuple[str, str],
-        maximize: tuple[bool, bool],
+        objectives: tuple[str, ...],
+        maximize: tuple[bool, ...],
     ) -> list[dict[str, Any]]:
-        """Pareto filter over a record subset (shared by frontier methods)."""
+        """Pareto filter over a record subset, at the arity asked for.
+
+        Any number of axes: an axis-aligned front has as many as its axis
+        declares. A record missing one of them cannot be placed on the front at
+        all, so it is dropped rather than scored against a default.
+        """
         points: list[dict[str, Any]] = []
         for record in records:
-            try:
-                primary_val = record.payload.get(objectives[0])
-                secondary_val = record.payload.get(objectives[1])
-                if primary_val is None or secondary_val is None:
-                    continue
-                points.append({
-                    "record_id": record.record_id,
-                    "cell_key": record.cell_key,
-                    "primary": float(primary_val),
-                    "secondary": float(secondary_val),
-                    "coordinate": {
-                        "substrate": record.substrate,
-                        "geometry": record.geometry,
-                        "dynamics": record.dynamics,
-                        "plasticity": record.plasticity,
-                        "credit": record.credit,
-                        "update": record.update,
-                    },
-                })
-            except ValueError, TypeError:
+            values = _numeric_vector(record, objectives)
+            if values is None:
                 continue
+            points.append({
+                "record_id": record.record_id,
+                "cell_key": record.cell_key,
+                "objectives": values,
+                "coordinate": {
+                    "substrate": record.substrate,
+                    "geometry": record.geometry,
+                    "dynamics": record.dynamics,
+                    "plasticity": record.plasticity,
+                    "credit": record.credit,
+                    "update": record.update,
+                },
+            })
 
         if not points:
             return []
+        vectors = [point["objectives"] for point in points]
+        return [points[i] for i in non_dominated(vectors, objectives, maximize)]
 
-        def _is_dominated(p: dict[str, Any], q: dict[str, Any]) -> bool:
-            primary_better = (
-                q["primary"] > p["primary"]
-                if maximize[0]
-                else q["primary"] < p["primary"]
-            )
-            secondary_better = (
-                q["secondary"] > p["secondary"]
-                if maximize[1]
-                else q["secondary"] < p["secondary"]
-            )
-            primary_equal = q["primary"] == p["primary"]
-            secondary_equal = q["secondary"] == p["secondary"]
-            return (
-                (primary_better or primary_equal)
-                and (secondary_better or secondary_equal)
-                and (primary_better or secondary_better)
-            )
+    def axis_frontiers(self, run_id: str) -> dict[str, list[dict[str, Any]]]:
+        """One Pareto front per structural axis, from the run's own declaration.
 
-        return [
-            p
-            for i, p in enumerate(points)
-            if not any(_is_dominated(p, q) for j, q in enumerate(points) if i != j)
-        ]
+        The axis-aligned campaign declares a full objective set per axis — six
+        objectives for stability, three for cost. Reporting one front over the
+        run's first two objectives instead answers a question nobody asked: the
+        stability axis is defined by rho, sigma_max and the four other names
+        that constrain them jointly, and a two-axis filter leaves those four
+        unconstrained while calling the result a front.
+
+        Returns:
+            Axis name to its front. An axis with no claim-eligible cell
+            carrying every one of its objectives is absent, not empty.
+        """
+        spec = self._spec(run_id)
+        declared = dict(spec.axis_objectives) if spec else {}
+        if not declared:
+            return {}
+        eligible = self.claim_eligible_records(run_id)
+        return {
+            axis: self._pareto_subset(eligible, tuple(names), _directions(names))
+            for axis, names in declared.items()
+            if names
+        }
 
 
 def _section(title: str) -> list[str]:
@@ -624,13 +704,35 @@ def _pareto_section(generator: ReportGenerator, run_id: str) -> list[str]:
     return [
         *lines,
         *(
-            f"  {point['record_id'][:16]}... {primary}={point['primary']:.4f} "
-            f"{secondary}={point['secondary']:.4f} "
-            f"[{point['coordinate']['dynamics']}/{point['coordinate']['credit']}/"
+            f"  {point['record_id'][:16]}... "
+            + " ".join(
+                f"{key}={value:.4g}" for key, value in point["objectives"].items()
+            )
+            + f" [{point['coordinate']['dynamics']}/{point['coordinate']['credit']}/"
             f"{point['coordinate']['update']}]"
             for point in pareto[:10]
         ),
     ]
+
+
+def _axis_frontiers_section(generator: ReportGenerator, run_id: str) -> list[str]:
+    """One front per declared structural axis, over that axis's full objective set."""
+    fronts = generator.axis_frontiers(run_id)
+    if not fronts:
+        return []
+    lines = _section("Axis-Aligned Pareto Frontiers:")
+    for axis in sorted(fronts):
+        names = ", ".join(fronts[axis][0]["objectives"]) if fronts[axis] else "-"
+        lines.append(f"  {axis} ({names}): {len(fronts[axis])} non-dominated")
+        for point in fronts[axis][:5]:
+            cell = point["coordinate"]
+            values = " ".join(
+                f"{key}={value:.4g}" for key, value in point["objectives"].items()
+            )
+            lines.append(
+                f"    {cell['dynamics']}/{cell['credit']}/{cell['update']} {values}"
+            )
+    return lines
 
 
 def _alerts_section(generator: ReportGenerator, run_id: str) -> list[str]:
@@ -731,6 +833,7 @@ def generate_run_report(store: RecordStore, run_id: str) -> str:
         *_claims_section(generator, run_id),
         *_limitations_section(generator, run_id),
         *_pareto_section(generator, run_id),
+        *_axis_frontiers_section(generator, run_id),
         *_alerts_section(generator, run_id),
     ]
     return "\n".join(lines)

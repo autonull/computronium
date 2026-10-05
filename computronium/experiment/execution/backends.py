@@ -135,6 +135,7 @@ class _ThreadedBackend:
     def __init__(self, *, max_workers: int = 4) -> None:
         self._max_workers = max_workers
         self._shutdown = False
+        self._admission = asyncio.Semaphore(max_workers)
 
     def _evaluate(
         self,
@@ -169,7 +170,13 @@ class _ThreadedBackend:
         items: list[tuple[Coordinate, Schedule, Provenance, dict[str, Any]]],
         store: RecordStore,
     ) -> list[EvaluationResult]:
-        """Evaluate a batch with per-item failure isolation (WP19)."""
+        """Evaluate a batch with per-item failure isolation (WP19).
+
+        Concurrency is capped at ``max_workers``. Unbounded, a round of ten
+        cells trains ten cells simultaneously on one device: every cell then
+        reports the walltime of all ten, and ``walltime_total`` — a Pareto
+        axis — measures contention rather than the cell.
+        """
 
         async def submit_one(
             coord: Coordinate,
@@ -177,19 +184,22 @@ class _ThreadedBackend:
             prov: Provenance,
             params: dict[str, Any],
         ) -> EvaluationResult:
-            try:
-                records = await self.submit(coord, sched, prov, params, store)
-                if records:
-                    return Success(records=tuple(records))
-                return Failure(
-                    failure_event=self._create_failure_event(
-                        coord, sched, prov, "No records returned"
+            async with self._admission:
+                try:
+                    records = await self.submit(coord, sched, prov, params, store)
+                except Exception as e:
+                    return Failure(
+                        failure_event=self._create_failure_event(
+                            coord, sched, prov, str(e)
+                        )
                     )
+            if records:
+                return Success(records=tuple(records))
+            return Failure(
+                failure_event=self._create_failure_event(
+                    coord, sched, prov, "No records returned"
                 )
-            except Exception as e:
-                return Failure(
-                    failure_event=self._create_failure_event(coord, sched, prov, str(e))
-                )
+            )
 
         async with asyncio.TaskGroup() as tg:
             tasks = [

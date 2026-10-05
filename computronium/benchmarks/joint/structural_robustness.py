@@ -26,8 +26,11 @@ from computronium.benchmarks.joint._plasticity_wiring import (
     modulate_hidden,
     step_psi,
 )
+from computronium.core.logging import get_logger
 from computronium.core.profiling import measure_suite_resources
 from computronium.core.utils.device import get_device
+
+logger = get_logger(__name__)
 
 
 def create_damage_scenarios(
@@ -423,6 +426,39 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     }
 
 
+_RESULTS_FILENAME = "structural_robustness_results.json"
+
+
+def _load_completed(results_file: Path) -> dict[str, dict]:
+    """Coordinates this suite already measured, keyed by coordinate.
+
+    An unreadable or partial file yields ``{}``: a resumed suite re-measures
+    rather than reporting a truncated matrix as complete.
+    """
+    if not results_file.exists():
+        return {}
+    try:
+        measured = json.loads(results_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("unreadable results at %s (%s); re-measuring", results_file, exc)
+        return {}
+    if not isinstance(measured, list):
+        return {}
+    return {
+        entry["coordinate"]: entry
+        for entry in measured
+        if isinstance(entry, dict) and entry.get("seeds")
+    }
+
+
+def _persist(results_file: Path, results: list[dict]) -> None:
+    """Write the suite's results atomically, one coordinate at a time."""
+    results_file.parent.mkdir(parents=True, exist_ok=True)
+    scratch = results_file.with_suffix(".json.partial")
+    scratch.write_text(json.dumps(results, indent=2), encoding="utf-8")
+    scratch.replace(results_file)
+
+
 def run_structural_robustness_suite(
     coordinates: list[str],
     output_dir: Path,
@@ -433,12 +469,25 @@ def run_structural_robustness_suite(
     seeds: int = 3,
     device: str = "auto",
 ) -> list[dict]:
-    """Run structural robustness benchmark suite."""
-    device = get_device(device)
+    """Run structural robustness benchmark suite.
 
-    all_results = []
+    Every coordinate is persisted as soon as it finishes, and a coordinate
+    already in the results file is skipped. The suite is 24 coordinates x 10
+    seeds of real training — long enough that a session boundary ends it — and
+    a suite that writes once at the end throws away everything it measured. The
+    resume seam is the file the measurements already landed in.
+    """
+    device = get_device(device)
+    results_file = output_dir / _RESULTS_FILENAME
+    done = _load_completed(results_file)
+    if done:
+        print(f"Resuming: {len(done)} coordinate(s) already measured")
+    all_results = list(done.values())
 
     for coord in coordinates:
+        if coord in done:
+            print(f"\nSkipping (already measured): {coord}")
+            continue
         print(f"\nEvaluating: {coord}")
         coord_results = {"coordinate": coord, "seeds": []}
 
@@ -480,13 +529,9 @@ def run_structural_robustness_suite(
             coord_results["mean_final_accuracy"] = sum(final_accs) / len(final_accs)
 
         all_results.append(coord_results)
+        _persist(results_file, all_results)
 
-    # Save results
-    output_dir.mkdir(parents=True, exist_ok=True)
-    results_file = output_dir / "structural_robustness_results.json"
-    with results_file.open("w") as f:
-        json.dump(all_results, f, indent=2)
-
+    _persist(results_file, all_results)
     print(f"\nResults saved to {results_file}")
 
     # Print summary
