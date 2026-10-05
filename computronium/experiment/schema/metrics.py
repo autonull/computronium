@@ -52,6 +52,17 @@ HISTORY_METRICS: Final[frozenset[str]] = frozenset({
 MEASURED_METRICS: Final[frozenset[str]] = HISTORY_METRICS | {
     "walltime_s",
     "param_count",
+    "settle_steps",
+    "settle_converged",
+    "spectral_radius",
+    "max_singular_value",
+    "min_singular_value",
+    "lyapunov_exponent",
+    "free_energy",
+    "energy_per_batch",
+    "energy_per_sample",
+    "forward_energy_per_batch",
+    "update_energy_per_batch",
 }
 
 # Objective name -> the payload key that satisfies it.
@@ -60,6 +71,12 @@ MEASURED_OBJECTIVES: Final[Mapping[str, str]] = MappingProxyType({
     "validation_loss": "val_loss",
     "walltime_total": "walltime_s",
     "param_count": "param_count",
+    "settle_steps": "settle_steps",
+    "spectral_radius": "spectral_radius",
+    "max_singular_value": "max_singular_value",
+    "lyapunov_exponent": "lyapunov_exponent",
+    "free_energy": "free_energy",
+    "energy_per_step": "energy_per_sample",
 })
 
 

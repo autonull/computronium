@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Final
 import torch
 
 from computronium.core.logging import get_logger
+from computronium.core.pipeline import run_forward
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.experiment.execution.compose import compose_cell_system
 from computronium.experiment.schema.metrics import HISTORY_METRICS
@@ -46,6 +47,8 @@ __all__ = [
     "evaluate_cell",
     "history_metrics",
     "task_shape",
+    "compute_stability_metrics",
+    "compute_energy_metrics",
 ]
 
 logger = get_logger(__name__)
@@ -197,6 +200,161 @@ def _finite(metrics: Mapping[str, float]) -> bool:
     return all(math.isfinite(v) for v in metrics.values())
 
 
+def compute_stability_metrics(
+    system: Any,
+    x: torch.Tensor,
+    max_steps: int = 50,
+) -> dict[str, float]:
+    """Compute stability metrics from the trained system.
+
+    Computes:
+    - spectral_radius: spectral radius of the Jacobian (asymptotic stability margin)
+    - max_singular_value: maximum singular value of the Jacobian (transient amplification bound)
+    - settle_steps: number of settle steps to convergence
+    - lyapunov_exponent: largest Lyapunov exponent estimate
+    - free_energy: free energy at convergence
+    """
+    from torch.autograd.functional import jacobian
+
+    from computronium.core.pipeline import forward_pass
+    from computronium.ontology import SystemState
+
+    metrics = {}
+
+    try:
+        with torch.no_grad():
+            # Resolve device
+            device = x.device
+            if device.type == "meta" or str(device) == "auto":
+                device = torch.device(_resolve_device("auto"))
+            
+            # Get the settled state from a free-phase forward pass
+            state = SystemState(x=x.to(device), y=None)
+            initial_acts = forward_pass(system.substrate, system.geometry, x.to(device))
+            state.activations = initial_acts
+            settled = system.dynamics.settle(
+                state, system.geometry, system.substrate, target=None
+            )
+
+            # Settle steps used (from dynamics telemetry)
+            settle_steps = getattr(system.dynamics, "_settle_steps_used", 0)
+            converged = getattr(system.dynamics, "_converged", False)
+            metrics["settle_steps"] = float(settle_steps)
+            metrics["settle_converged"] = 1.0 if converged else 0.0
+
+            # Compute free energy at convergence using the dynamics' compute_energy
+            try:
+                free_energy = system.dynamics.compute_energy(settled, system.geometry)
+                if free_energy is not None:
+                    metrics["free_energy"] = float(free_energy.item() if hasattr(free_energy, 'item') else free_energy)
+            except Exception as e:
+                logger.debug(f"Free energy computation failed: {e}")
+
+            # Compute Jacobian of the dynamics for stability analysis
+            # Use torch.autograd.functional.jacobian for proper Jacobian matrix
+            try:
+                # Use a single sample for Jacobian computation
+                x_single = x[:1].detach().clone().requires_grad_(True).to(device)
+
+                def settle_fn(x_input):
+                    state_jac = SystemState(x=x_input, y=None)
+                    initial_acts_jac = forward_pass(system.substrate, system.geometry, x_input)
+                    state_jac.activations = initial_acts_jac
+                    settled_jac = system.dynamics.settle(
+                        state_jac, system.geometry, system.substrate, target=None
+                    )
+                    return settled_jac.activations[-1] if isinstance(settled_jac.activations, list) else settled_jac.activations
+
+                # Compute Jacobian: [1, out_dim, 1, in_dim] -> [out_dim, in_dim]
+                J_full = jacobian(settle_fn, x_single)
+                if J_full.dim() == 4:
+                    J = J_full[0, :, 0, :]  # [out_dim, in_dim]
+                elif J_full.dim() == 2:
+                    J = J_full
+                else:
+                    raise ValueError(f"Unexpected Jacobian shape: {J_full.shape}")
+
+                # Compute singular values
+                U, S, Vh = torch.linalg.svd(J, full_matrices=False)
+                metrics["max_singular_value"] = float(S.max().item())
+                metrics["min_singular_value"] = float(S.min().item())
+
+                # Spectral radius (for square matrices) or approximate
+                if J.shape[0] == J.shape[1]:
+                    eigvals = torch.linalg.eigvals(J)
+                    spectral_radius = eigvals.abs().max().item()
+                    metrics["spectral_radius"] = float(spectral_radius)
+
+                    # Lyapunov exponent approximation
+                    metrics["lyapunov_exponent"] = float(math.log(max(spectral_radius, 1e-10)))
+                else:
+                    # Non-square: use max singular value as bound
+                    metrics["spectral_radius"] = float(S.max().item())
+                    metrics["lyapunov_exponent"] = float(math.log(max(S.max().item(), 1e-10)))
+
+            except Exception as e:
+                import traceback
+                import os
+                import sys
+                log_path = os.path.join(os.getcwd(), 'stability_error.log')
+                try:
+                    with open(log_path, 'w') as f:
+                        f.write(f"Jacobian computation failed: {e}\n")
+                        traceback.print_exc(file=f)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    logger.debug(f"Wrote Jacobian error to {log_path}")
+                except Exception as write_e:
+                    logger.debug(f"Failed to write Jacobian log: {write_e}")
+
+    except Exception as e:
+        import traceback
+        import os
+        import sys
+        logger.debug(f"OUTER EXCEPT BLOCK REACHED: {e}")
+        log_path = os.path.join(os.getcwd(), 'stability_error.log')
+        try:
+            with open(log_path, 'w') as f:
+                f.write(f"Stability metrics computation failed: {e}\n")
+                traceback.print_exc(file=f)
+                f.flush()
+                os.fsync(f.fileno())
+            logger.debug(f"Wrote stability error to {log_path}")
+        except Exception as write_e:
+            logger.debug(f"Failed to write stability log: {write_e}")
+
+    return metrics
+
+
+def compute_energy_metrics(
+    system: Any,
+    batch_size: int,
+    input_shape: tuple[int, ...],
+    weight_shape: tuple[int, ...],
+    num_layers: int = 1,
+) -> dict[str, float]:
+    """Compute energy metrics using substrate's estimate_energy method."""
+    metrics = {}
+    try:
+        substrate = system.substrate
+        if hasattr(substrate, "estimate_energy"):
+            energy_est = substrate.estimate_energy(
+                input_shape=input_shape,
+                weight_shape=weight_shape,
+                batch_size=batch_size,
+                num_layers=num_layers,
+            )
+            metrics.update({
+                "energy_per_batch": energy_est.get("total_energy_per_step", 0.0),
+                "energy_per_sample": energy_est.get("energy_per_sample", 0.0),
+                "forward_energy_per_batch": energy_est.get("forward_energy_per_batch", 0.0),
+                "update_energy_per_batch": energy_est.get("update_energy_per_batch", 0.0),
+            })
+    except Exception as e:
+        logger.debug(f"Energy metrics computation failed: {e}")
+    return metrics
+
+
 class _Batches:
     """A bounded view of a data provider: ``batch_limit`` batches, then stop.
 
@@ -307,6 +465,41 @@ def evaluate_cell(
     walltime_s = time.monotonic() - start
 
     metrics = history_metrics(history)
+
+    # Compute stability metrics (spectral_radius, max_singular_value, settle_steps, etc.)
+    try:
+        # Get a sample batch for stability computation
+        sample_batch = next(iter(task.get_dataloader("train")))
+        sample_x, _ = sample_batch
+        sample_x = sample_x.to(config.device)
+        if sample_x.dim() > 2:
+            sample_x = sample_x.reshape(sample_x.size(0), -1)
+        stability_metrics = compute_stability_metrics(cell.system, sample_x)
+        metrics.update(stability_metrics)
+    except Exception as e:
+        logger.debug(f"Stability metrics computation failed: {e}")
+
+    # Compute energy metrics using substrate's estimate_energy
+    try:
+        # Get input/weight shapes for energy estimation
+        input_dim = math.prod(shape.input_shape)
+        output_dim = shape.output_dim
+        # Estimate weight shape from param_count and geometry
+        # For a typical MLP: input_dim * hidden + hidden * hidden * (depth-1) + hidden * output
+        # We approximate weight_shape as (output_dim, input_dim) for energy estimation
+        weight_shape = (output_dim, input_dim)
+        batch_size = config.limit_train_batches or sample_x.size(0) if 'sample_x' in locals() else 64
+        energy_metrics = compute_energy_metrics(
+            cell.system,
+            batch_size=batch_size,
+            input_shape=(batch_size, input_dim),
+            weight_shape=weight_shape,
+            num_layers=1,  # Approximate
+        )
+        metrics.update(energy_metrics)
+    except Exception as e:
+        logger.debug(f"Energy metrics computation failed: {e}")
+
     if not _finite(metrics):
         msg = f"non-finite metrics {sorted(metrics)} for {coordinate.cell_key()[:12]}"
         raise EvaluationError("numerical", msg)

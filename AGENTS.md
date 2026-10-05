@@ -155,3 +155,5 @@
 
 ## Documentation
 - Don't edit README.md directly; in `docs/readme/*`, edit individual sections or the generator script
+
+## `pkill`: do not use, it hangs.
