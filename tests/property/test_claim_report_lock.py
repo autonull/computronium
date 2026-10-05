@@ -575,18 +575,34 @@ class TestReport:
             claim.metric == objective_metric("validation_accuracy") for claim in claims
         )
 
-    def test_a_run_naming_only_unmeasured_objectives_makes_no_claim(
+    def test_unmeasured_objectives_are_rejected_at_spec_validation(self) -> None:
+        """Unmeasured objectives cannot be in the main objectives list (A4)."""
+        import pydantic_core
+
+        with pytest.raises(
+            pydantic_core.ValidationError,
+            match="have no measurement.*metric_key is None",
+        ):
+            _spec(objectives=("flops",))
+
+    def test_unmeasured_objectives_in_axis_objectives_do_not_trigger_limitation(
         self, tmp_path: Path
     ) -> None:
-        path = tmp_path / "unmeasured.duckdb"
+        """axis_objectives can name unmeasured objectives (documentation only);
+        they are not checked for measurement status."""
+        path = tmp_path / "unmeasured_axis.duckdb"
         with RecordStore(StoreConfig(path=path)) as store:
-            run_id = store.create_run(spec=_spec(objectives=("flops",)))
+            run_id = store.create_run(spec=_spec(axis_objectives={"cost": ("flops",)}))
             generator = ReportGenerator(store)
             claims = generator.claims(run_id)
             limitations = generator.limitations(run_id)
 
         assert claims == ()
-        assert LimitationKind.UNMEASURED_OBJECTIVES in {l.kind for l in limitations}
+        # UNMEASURED_OBJECTIVES limitation only checks spec.objectives (main list),
+        # not axis_objectives. With A4 validation, unmeasured objectives are
+        # rejected in the main list, so this limitation kind is unreachable
+        # for valid RunSpecs.
+        assert LimitationKind.UNMEASURED_OBJECTIVES not in {l.kind for l in limitations}
 
     def test_claim_eligibility_is_decided_per_cell_not_per_record(
         self, measured_run: tuple[str, Path]

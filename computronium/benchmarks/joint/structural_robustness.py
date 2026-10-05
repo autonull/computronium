@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 
 import torch
+from torch import Tensor
 
 from computronium.benchmarks.joint import (
     CLAIMS_SCOPE_PSI_ENGAGED,
@@ -113,7 +114,7 @@ def evaluate_recovery(  # ruff: ignore[complex-structure, too-many-statements]
             total += y.shape[0]
     initial_accuracy = correct / total
 
-    psi_before = {k: v.detach().clone() for k, v in model.psi.items()}
+    psi_before = {k: v.detach().clone() for k, v in model.psi.items()}  # type: ignore[attr-defined]
 
     if frozen_theta:
         for p in model.parameters():
@@ -123,10 +124,10 @@ def evaluate_recovery(  # ruff: ignore[complex-structure, too-many-statements]
         return any(
             not torch.equal(
                 psi_before[k],
-                model.psi[k].detach().to(psi_before[k].device),
+                model.psi[k].detach().to(psi_before[k].device),  # type: ignore[index]
             )
             for k in psi_before
-            if k in model.psi
+            if k in model.psi  # type: ignore[attr-defined]
         )
 
     # Recovery training
@@ -146,12 +147,12 @@ def evaluate_recovery(  # ruff: ignore[complex-structure, too-many-statements]
                 x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
                 psi = step_psi(
                     model.plasticity,
-                    model.psi,
+                    model.psi,  # type: ignore[arg-type]
                     x,
                     training=True,
                     live_param=next(model.parameters()),
                 )
-                model.psi = psi
+                model.psi = psi  # type: ignore[assignment]
                 logits = model(x)
                 loss = criterion(logits, y)
                 if not frozen_theta:
@@ -213,7 +214,7 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     output_dim: int = 10,
     recovery_steps: int = 20,
     damage_severity: float = 0.3,
-    device: torch.device | str = "cpu",
+    device: str | torch.device = "cpu",
     seed: int = 42,
 ) -> dict:
     """Evaluate structural robustness for a coordinate."""
@@ -264,7 +265,8 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 
-    psi = {k: v.to(device) for k, v in plasticity.initial_psi(None, batch_size).items()}
+    # SystemContext is not needed for initial_psi in benchmark harness; None is accepted
+    psi = {k: v.to(device) for k, v in plasticity.initial_psi(None, batch_size).items()}  # type: ignore[arg-type]
 
     # Simple MLP model. Hidden activations are modulated by the
     # coordinate's plasticity state ψ (stepped per batch in the loops
@@ -279,7 +281,7 @@ def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-
                 nn.ReLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
-            self.psi: dict = {}
+            self.psi: dict[str, Tensor] = {}
             self.plasticity = plasticity
 
         def forward(self, x):
@@ -467,7 +469,7 @@ def run_structural_robustness_suite(
     recovery_steps: int = 20,
     damage_severity: float = 0.3,
     seeds: int = 3,
-    device: str = "auto",
+    device: str | torch.device = "auto",
 ) -> list[dict]:
     """Run structural robustness benchmark suite.
 

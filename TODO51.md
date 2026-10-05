@@ -456,4 +456,6 @@ This unblocks Axis-Aligned Pareto (C2), I(C,U) (C3), and Hardware-Aware co-desig
 * Demo gate: 25 passed
 * Pre-existing failures unchanged, none introduced: 5 in
   `test_sampler_lock.py` (`step_size` key, `icu_guided` name, RunSpec
-  validation), 7 pyright errors in `structural_robustness.py`
+  validation). `structural_robustness.py` pyright errors **fixed** (now 0).
+* `test_claim_report_lock.py` updated to match A4 validation behavior (2 new
+  tests replacing 1 old test; 27 total pass).
