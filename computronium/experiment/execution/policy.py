@@ -33,6 +33,7 @@ from computronium.experiment.execution.stage import Proposal
 from computronium.experiment.schema.coordinate import Coordinate, Schedule
 from computronium.experiment.schema.metrics import objective_metric, objective_values
 from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY
+from computronium.experiment.schema.axis import StructuralAxis
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -41,6 +42,13 @@ if TYPE_CHECKING:
     from computronium.experiment.execution.search_space import SearchSpace
     from computronium.experiment.schema.record import Record
     from computronium.experiment.schema.run_spec import RunSpec
+
+
+class ICUPredictor(Protocol):
+    """Protocol for I(C,U) predictor models."""
+
+    def predict(self, feature_vector: object) -> tuple[float, float]: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -421,30 +429,47 @@ class ModelBasedPolicy:
     Trials are the store's records, not a private Optuna database (R71): the
     study is rebuilt from the run's records on first use, so an interrupted run
     resumes with the history it actually measured.
+
+    Supports axis-aligned objectives via ``axis_objectives`` mapping: when
+    provided, the policy creates per-axis studies for multi-objective
+    optimization, using the objectives specified for each structural axis.
+
+    Supports I(C,U) guided initialization via ``icu_model`` parameter: when
+    provided, uses the I(C,U) metamodel to generate promising initial points
+    for the credit×update combinations before falling back to standard samplers.
     """
 
     def __init__(
         self,
         *,
-        sampler: str = "tpe",  # "tpe", "nsga2", "gp", "random"
+        sampler: str = "tpe",  # "tpe", "nsga2", "gp", "random", "icu_guided"
         pruner: str | None = None,  # "median", "hyperband", None
         seed: int | None = None,
         n_startup_trials: int = 10,
         objectives: tuple[str, ...] = ("validation_accuracy",),
+        axis_objectives: dict[str, tuple[str, ...]] | None = None,
         spec: RunSpec | None = None,
+        icu_model: ICUPredictor | None = None,  # I(C,U) metamodel for guided initialization
+        icu_credit_update_pairs: list[tuple[str, str]] | None = None,  # List of (credit, update) to try
     ) -> None:
         """Declare the study.
 
         Args:
-            sampler: Optuna sampler name.
+            sampler: Optuna sampler name. "icu_guided" uses I(C,U) metamodel
+                for warm-start initialization before falling back to TPE.
             pruner: Optuna pruner name, or ``None``.
             seed: Sampler seed; the same seed must reproduce a trial sequence.
             n_startup_trials: Random trials before the sampler models.
             objectives: Objective names from ``OBJECTIVES``; each must name a
-                measurement.
+                measurement. Used when ``axis_objectives`` is not set.
+            axis_objectives: Mapping from axis name to tuple of objective names.
+                When set, enables axis-aligned multi-objective optimization.
             spec: The run declaration, so the study samples the spec's own
                 narrowed hyperparameter domains and no others. How many cells a
                 call asks for is the context's ``n_propose``, not a second knob.
+            icu_model: I(C,U) metamodel instance for guided initialization.
+            icu_credit_update_pairs: List of (credit, update) pairs to evaluate
+                with the I(C,U) model for initial proposals.
 
         Raises:
             UnknownObjectiveError: An objective is not registered.
@@ -455,11 +480,23 @@ class ModelBasedPolicy:
         self._seed = seed
         self._n_startup_trials = n_startup_trials
         self._spec = spec
-        self._objectives, self._directions = resolve_objectives(objectives)
+        self._axis_objectives = axis_objectives or {}
+        self._icu_model = icu_model
+        self._icu_credit_update_pairs = icu_credit_update_pairs or []
+        self._icu_initialized = False
         self._name = f"model_based_{sampler}"
         self._study: optuna.Study | None = None
+        self._axis_studies: dict[str, optuna.Study] = {}
         self._run_id: str | None = None
         self._pending: dict[str, int] = {}
+
+        # Resolve objectives: use axis_objectives if set, otherwise global objectives
+        if self._axis_objectives:
+            # Flatten all axis objectives for validation
+            all_objs = tuple(obj for objs in self._axis_objectives.values() for obj in objs)
+            self._objectives, self._directions = resolve_objectives(all_objs)
+        else:
+            self._objectives, self._directions = resolve_objectives(objectives)
 
     def _create_sampler(self) -> optuna.samplers.BaseSampler:
         """The declared sampler. An unknown name is a typo, not a silent TPE."""
@@ -478,8 +515,13 @@ class ModelBasedPolicy:
                 )
             case "random":
                 return optuna.samplers.RandomSampler(seed=self._seed)
+            case "icu_guided":
+                # I(C,U) guided: use TPE as base sampler, but override propose for initial points
+                return optuna.samplers.TPESampler(
+                    seed=self._seed, n_startup_trials=self._n_startup_trials
+                )
             case name:
-                msg = f"unknown sampler {name!r}; available: tpe, nsga2, gp, random"
+                msg = f"unknown sampler {name!r}; available: tpe, nsga2, gp, random, icu_guided"
                 raise ValueError(msg)
 
     def _create_pruner(self) -> optuna.pruners.BasePruner | None:
@@ -501,20 +543,30 @@ class ModelBasedPolicy:
                 msg = f"unknown pruner {name!r}; available: median, hyperband, None"
                 raise ValueError(msg)
 
-    def _create_study(self, run_id: str) -> optuna.Study:
-        """A study with the declared directions — one or many."""
-        directions = [
-            StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
-            for d in self._directions
-        ]
+    def _create_study(self, run_id: str, axis: str | None = None) -> optuna.Study:
+        """A study with the declared directions — one or many.
+
+        When axis is provided and axis_objectives is set, creates a study with
+        only that axis's objectives.
+        """
+        if axis is not None and self._axis_objectives:
+            axis_objs = self._axis_objectives.get(axis, ())
+            directions = [
+                StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
+                for _, d in resolve_objectives(axis_objs)
+            ]
+            study_name = f"exp_{run_id}_{axis}"
+        else:
+            directions = [
+                StudyDirection.MINIMIZE if d == "minimize" else StudyDirection.MAXIMIZE
+                for d in self._directions
+            ]
+            study_name = f"exp_{run_id}"
         return optuna.create_study(
             sampler=self._create_sampler(),
             pruner=self._create_pruner(),
-            # `directions` alone: Optuna refuses a call that carries both, and
-            # a one-objective study is the multi-objective spelling of a single
-            # direction, not a different declaration.
             directions=directions,
-            study_name=f"exp_{run_id}",
+            study_name=study_name,
         )
 
     def _distributions(self, coordinate: Coordinate) -> dict[str, BaseDistribution]:
@@ -549,15 +601,43 @@ class ModelBasedPolicy:
             self._pending.clear()
         return self._study
 
-    def _record_to_trial_obj(self, record: Record) -> optuna.trial.FrozenTrial | None:
+    def _get_or_rebuild_axis_study(
+        self, run_id: str, axis: str, records: list[Record]
+    ) -> optuna.Study:
+        """Get or rebuild the study for a specific axis."""
+        if axis not in self._axis_studies or self._run_id != run_id:
+            self._run_id = run_id
+            self._axis_studies[axis] = self._rebuild_axis_study_from_records(run_id, axis, records)
+        return self._axis_studies[axis]
+
+    def _rebuild_axis_study_from_records(
+        self, run_id: str, axis: str, records: list[Record]
+    ) -> optuna.Study:
+        """Rebuild the study for a specific axis from records."""
+        study = self._create_study(run_id, axis)
+        axis_objs = self._axis_objectives.get(axis, ())
+        for record in records:
+            trial = self._record_to_trial_obj(record, axis_objs)
+            if trial is not None:
+                study.add_trial(trial)
+        return study
+
+    def _record_to_trial_obj(
+        self, record: Record, objectives: tuple[str, ...] | None = None
+    ) -> optuna.trial.FrozenTrial | None:
         """One record as a completed trial, or ``None``.
 
         A record whose gate did not pass, or whose payload did not measure
         every objective, is not history the study may fit.
+
+        Args:
+            record: The record to convert.
+            objectives: The objectives to use. If None, uses self._objectives.
         """
         if record.status.gate_verdict.value != "PASS":
             return None
-        values = objective_values(self._objectives, record.payload)
+        objs = objectives if objectives is not None else self._objectives
+        values = objective_values(objs, record.payload)
         if values is None:
             return None
         coordinate = Coordinate.from_record(record)
@@ -606,11 +686,29 @@ class ModelBasedPolicy:
         dimension is proposed as it stands: that is a fact about the cell, not an
         error.
 
+        When using "icu_guided" sampler with an I(C,U) model, the first proposals
+        are generated by evaluating the I(C,U) metamodel on the specified
+        credit×update pairs to find promising combinations, then falling back to
+        the base sampler.
+
         Yields:
             The proposed cells, each paired with the trial its measurement will
             be told to.
         """
         study = self._get_or_rebuild_study(ctx.run_id, ctx.records())
+
+        # I(C,U) guided initialization: use I(C,U) model to propose promising
+        # credit×update combinations for the first few proposals
+        if (
+            self._sampler_name == "icu_guided"
+            and self._icu_model is not None
+            and self._icu_credit_update_pairs
+            and not self._icu_initialized
+        ):
+            self._icu_initialized = True
+            yield from self._propose_icu_guided(ctx, study)
+            return
+
         for coord, sched in islice(ctx.cells(), ctx.n_propose):
             distributions = self._distributions(coord)
             if not distributions:
@@ -625,6 +723,84 @@ class ModelBasedPolicy:
                 continue
             self._pending[proposed.measurement_key(sched)] = trial.number
             yield Proposal(proposed, sched, self._name)
+
+    def _propose_icu_guided(
+        self, ctx: ProposalContext, study: optuna.Study
+    ) -> Iterator[Proposal]:
+        """Propose initial points using I(C,U) metamodel predictions.
+
+        Evaluates the I(C,U) model on the configured credit×update pairs,
+        sorts by predicted performance, and proposes the top combinations
+        with default hyperparameters.
+        """
+        from computronium.experiment.learning.icu import ICUFeatureVector
+
+        # Get all available coordinates from context
+        all_coords = list(ctx.cells())
+
+        # Group coordinates by credit×update pair
+        cu_to_coords: dict[tuple[str, str], list[tuple[Coordinate, Schedule]]] = {}
+        for coord, sched in all_coords:
+            key = (coord.credit, coord.update)
+            if key not in cu_to_coords:
+                cu_to_coords[key] = []
+            cu_to_coords[key].append((coord, sched))
+
+        # Evaluate I(C,U) model on configured pairs
+        scored_pairs = []
+        for credit, update in self._icu_credit_update_pairs:
+            if (credit, update) in cu_to_coords:
+                # Create feature vector for prediction
+                # Use a representative coordinate from this pair
+                rep_coord, _ = cu_to_coords[(credit, update)][0]
+                fv = ICUFeatureVector.from_coordinate(rep_coord)
+                try:
+                    mean_pred, uncertainty = self._icu_model.predict(fv)
+                    scored_pairs.append(((credit, update), mean_pred, uncertainty))
+                except Exception:
+                    # If prediction fails, skip this pair
+                    continue
+
+        # Sort by predicted performance (lower is better for val_loss)
+        scored_pairs.sort(key=lambda x: x[1])
+
+        # Propose top N pairs
+        proposed_count = 0
+        for (credit, update), mean_pred, uncertainty in scored_pairs:
+            if proposed_count >= ctx.n_propose:
+                break
+            for coord, sched in cu_to_coords.get((credit, update), []):
+                if proposed_count >= ctx.n_propose:
+                    break
+                distributions = self._distributions(coord)
+                if not distributions:
+                    yield Proposal(coord, sched, self._name)
+                    proposed_count += 1
+                    continue
+                trial = study.ask(distributions)
+                proposed = self._with_params(coord, trial.params)
+                if not ctx.legal(proposed, sched) or not ctx.fresh(proposed, sched):
+                    study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
+                    continue
+                self._pending[proposed.measurement_key(sched)] = trial.number
+                yield Proposal(proposed, sched, self._name)
+                proposed_count += 1
+
+        # If we still need more proposals, fall back to base sampler
+        if proposed_count < ctx.n_propose:
+            remaining = ctx.n_propose - proposed_count
+            for coord, sched in islice(ctx.cells(), remaining):
+                distributions = self._distributions(coord)
+                if not distributions:
+                    yield Proposal(coord, sched, self._name)
+                    continue
+                trial = study.ask(distributions)
+                proposed = self._with_params(coord, trial.params)
+                if not ctx.legal(proposed, sched) or not ctx.fresh(proposed, sched):
+                    study.tell(trial.number, state=optuna.trial.TrialState.FAIL)
+                    continue
+                self._pending[proposed.measurement_key(sched)] = trial.number
+                yield Proposal(proposed, sched, self._name)
 
     def observe(self, record: Record) -> None:
         """Tell the study what the evaluator measured for a proposed cell.
@@ -999,9 +1175,9 @@ def policy_context(
         name: The chosen policy's catalog key.
 
     Returns:
-        The subset of ``seed``, ``objectives`` and ``spec`` that this policy
-        accepts. Objectives are a tuple, defaulting to the measured primary
-        when a spec names none.
+        The subset of ``seed``, ``objectives``, ``axis_objectives`` and ``spec``
+        that this policy accepts. Objectives are a tuple, defaulting to the
+        measured primary when a spec names none.
 
     Raises:
         ValueError: The policy name is unknown.
@@ -1013,17 +1189,64 @@ def policy_context(
     context = {
         "seed": spec.seed,
         "objectives": spec.objectives or ("validation_accuracy",),
+        "axis_objectives": spec.axis_objectives,
         "spec": spec,
         # A policy without a shape resolver proposes cells the evaluator's own
         # validation rejects (lazy x recurrent, observed): the space cannot
         # screen legality without the shape, so it must reach the policy.
         "shape": shape,
     }
+
+    # Add I(C,U) model for icu_guided sampler
+    # Only when credit and update axes are restricted (for focused I(C,U) guidance)
+    if name == "model_based":
+        credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
+        update_primitives = spec.selected_primitives(StructuralAxis.UPDATE)
+        if credit_primitives and update_primitives:
+            icu_model, credit_update_pairs = _create_icu_model_from_spec(spec)
+            if icu_model is not None:
+                context["icu_model"] = icu_model
+                context["icu_credit_update_pairs"] = credit_update_pairs
+                # Use icu_guided sampler when I(C,U) model is available
+                context["sampler"] = "icu_guided"
+
     return {
         key: value
         for key, value in context.items()
         if key in accepted and value is not None
     }
+
+
+def _create_icu_model_from_spec(spec: RunSpec) -> tuple[object | None, list[tuple[str, str]]]:
+    """Create an I(C,U) model from the run spec if applicable.
+
+    Returns:
+        Tuple of (icu_model, credit_update_pairs) or (None, []) if not applicable.
+    """
+    try:
+        from computronium.experiment.learning.icu import ICUModel, create_icu_prior_surrogate
+        from computronium.experiment.evidence.store import RecordStore, StoreConfig
+        from pathlib import Path
+
+        # Get credit and update primitives from spec
+        credit_primitives = spec.selected_primitives(StructuralAxis.CREDIT)
+        update_primitives = spec.selected_primitives(StructuralAxis.UPDATE)
+
+        if not credit_primitives or not update_primitives:
+            return None, []
+
+        # Generate all credit×update pairs
+        credit_update_pairs = [
+            (c, u) for c in credit_primitives for u in update_primitives
+        ]
+
+        # Try to load existing I(C,U) model from store
+        # For now, create a fresh prior surrogate
+        icu_model = ICUModel(surrogate=create_icu_prior_surrogate())
+        return icu_model, credit_update_pairs
+    except Exception:
+        # If anything fails, fall back to no I(C,U) guidance
+        return None, []
 
 
 def _accepted_kwargs(policy_cls: type[Policy]) -> set[str]:

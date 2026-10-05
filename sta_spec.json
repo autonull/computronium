@@ -1,0 +1,148 @@
+{
+  "version": 2,
+  "profile": "stability-plasticity",
+  "task": "digits",
+  "tasks": [],
+  "objectives": [
+    "validation_accuracy",
+    "spectral_radius",
+    "max_singular_value",
+    "settle_steps",
+    "walltime_total"
+  ],
+  "stages": null,
+  "fidelity": "L1",
+  "n_seeds": 3,
+  "epochs": 3,
+  "batch_limit": 0,
+  "seed": 0,
+  "budget_seconds": 3600.0,
+  "param_budget": 50000,
+  "policy": "model_based",
+  "axes": [
+    {
+      "axis": "substrate",
+      "primitives": [
+        "digital"
+      ]
+    },
+    {
+      "axis": "geometry",
+      "primitives": [
+        "recurrent"
+      ]
+    },
+    {
+      "axis": "dynamics",
+      "primitives": [
+        "energy_minimization"
+      ]
+    },
+    {
+      "axis": "plasticity",
+      "primitives": [
+        "null"
+      ]
+    },
+    {
+      "axis": "credit",
+      "primitives": [
+        "thermodynamic_contrast"
+      ]
+    },
+    {
+      "axis": "update",
+      "primitives": [
+        "euclidean"
+      ]
+    }
+  ],
+  "hyperparameters": {
+    "rho": {
+      "members": null,
+      "lo": 0.5,
+      "hi": 1.05,
+      "scale": "log"
+    },
+    "feedback_scale": {
+      "members": null,
+      "lo": 0.1,
+      "hi": 1.0,
+      "scale": "log"
+    },
+    "precision": {
+      "members": [
+        "float32",
+        "float16",
+        "bfloat16"
+      ],
+      "lo": null,
+      "hi": null,
+      "scale": "linear"
+    },
+    "noise_level": {
+      "members": null,
+      "lo": 1e-06,
+      "hi": 0.1,
+      "scale": "log"
+    },
+    "convergence_start": {
+      "members": null,
+      "lo": 1.0,
+      "hi": 10.0,
+      "scale": "linear"
+    },
+    "hidden_dim": {
+      "members": null,
+      "lo": 8.0,
+      "hi": 2631.0,
+      "scale": "log"
+    }
+  },
+  "operating_points": {
+    "rho_sweep": [
+      0.5,
+      0.9,
+      1.05
+    ],
+    "feedback_scale_sweep": [
+      0.1,
+      0.5,
+      1.0
+    ],
+    "precision_sweep": [
+      "float32",
+      "float16",
+      "bfloat16"
+    ],
+    "noise_level_sweep": [
+      1e-06,
+      0.01,
+      0.1
+    ],
+    "convergence_start_sweep": [
+      1,
+      5,
+      10
+    ]
+  },
+  "dataset": "unknown",
+  "dataset_version": "1.0",
+  "code_sha": "unknown",
+  "device": "auto",
+  "deterministic": true,
+  "num_workers": 0,
+  "axis_objectives": {
+    "stability": [
+      "spectral_radius",
+      "max_singular_value",
+      "settle_steps"
+    ],
+    "task": [
+      "validation_accuracy"
+    ],
+    "cost": [
+      "walltime_total"
+    ]
+  }
+}

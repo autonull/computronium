@@ -177,6 +177,10 @@ class RunSpec(BaseModel):
     deterministic: bool = False
     # DataLoader num_workers (0 for single-threaded determinism)
     num_workers: int = 0
+    # Axis-aligned objective sets: mapping from axis name to tuple of objective names.
+    # When set, the policy will use per-axis objective sets for multi-objective optimization.
+    # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}
+    axis_objectives: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -214,6 +218,25 @@ class RunSpec(BaseModel):
         if self.num_workers < 0:
             msg = f"num_workers must be non-negative, got {self.num_workers}"
             raise ValueError(msg)
+
+        # Validate axis_objectives
+        from computronium.experiment.schema.registries import OBJECTIVES_REGISTRY as OBJ_REG
+        axis_tags = sorted({spec.axis_tag for spec in OBJ_REG.values() if spec.axis_tag is not None})
+        for axis_name, obj_names in self.axis_objectives.items():
+            for obj_name in obj_names:
+                if obj_name not in OBJ_REG:
+                    msg = (
+                        f"axis_objectives[{axis_name!r}] names unknown objective {obj_name!r}; "
+                        f"available: {sorted(OBJ_REG.keys())}"
+                    )
+                    raise ValueError(msg)
+            # Ensure axis name is a valid axis tag from objectives registry
+            if axis_name not in axis_tags:
+                msg = (
+                    f"axis_objectives names unknown axis tag {axis_name!r}; "
+                    f"available: {axis_tags}"
+                )
+                raise ValueError(msg)
 
         harvested = harvest_schema().by_name()
         unknown = [h for h in self.hyperparameters if h not in harvested]
