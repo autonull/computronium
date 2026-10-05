@@ -1036,6 +1036,11 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         "convergence_start": _make_domain(
             convergence_start_vals, Scale.LINEAR, is_int=True
         ),
+        # Constrain hidden_dim to respect param_budget for recurrent geometry
+        # With param_budget=200000 and 25% tolerance, max params = 250000
+        # For recurrent: 64*H + H + (L-1)*(H*H + H) + H*10 + 10
+        # Max at L=4: 3*H^2 + 85*H + 10 <= 250000 => H <= ~270
+        "hidden_dim": Domain(lo=32.0, hi=256.0, scale=Scale.LOG),
     }
 
     # Gate is a categorical sweep - we'll handle it via the grid
@@ -1071,7 +1076,7 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         n_seeds=args.seeds,
         epochs=args.epochs,
         budget_seconds=args.budget_seconds,
-        param_budget=50000,
+        param_budget=500000,
         policy="model_based",
         axes=axes,
         hyperparameters=hyperparameters,
@@ -1079,6 +1084,7 @@ def _cmd_stability_plasticity(args: argparse.Namespace) -> int:  # ruff: ignore[
         axis_objectives=axis_objectives,
         deterministic=True,
         num_workers=0,
+        sweep_steps=243,
     )
 
     # Output spec if requested

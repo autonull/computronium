@@ -490,10 +490,12 @@ def _swept(
 
         effective_domains["hidden_dim"] = Domain(lo=8, hi=max_h, scale=Scale.LOG)
 
+    sweep_steps = getattr(spec, "sweep_steps", 5)
     return {
         name: _ladder(
             narrow_domain(domain, specs_by_name[name].domain, name),
             specs_by_name[name].axis_kind,
+            steps=sweep_steps,
         )
         for name, domain in effective_domains.items()
     }

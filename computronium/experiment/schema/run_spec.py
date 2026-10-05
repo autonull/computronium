@@ -181,6 +181,9 @@ class RunSpec(BaseModel):
     # When set, the policy will use per-axis objective sets for multi-objective optimization.
     # Format: {"substrate": ("energy_efficiency", "latency_ms", "precision"), ...}
     axis_objectives: dict[str, tuple[str, ...]] = Field(default_factory=dict)
+    # Hyperparameter sweep steps: number of diagonal steps through the hyperparameter space.
+    # Default 5; increase for finer coverage (e.g., 50 for factorial-like sweep).
+    sweep_steps: _POSITIVE = 5
 
     @model_validator(mode="after")
     def _check(self) -> Self:
