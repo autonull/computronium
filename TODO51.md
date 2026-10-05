@@ -254,7 +254,31 @@ commands do.
    fidelity, but "be skeptical of low-performing experiments" applies: a
    learning signal that does not move over 240 cells is worth a probe before it
    is reported as a result.
-6. **Reconcile the `min_singular_value` anomaly.** It is 0.93 on every cell
+6. **Widen the campaign off one dynamics primitive.** Every number in §2 —
+   including the 17x drift-spread confirmation — comes from
+   `dynamics=energy_minimization` + `credit=thermodynamic_contrast`, one cell
+   out of 8 dynamics x 9 credit. The metrics themselves are not energy-gated: a
+   coverage probe over the registered dynamics produced the full stability set
+   for `energy_minimization`, `error_predictive_coding`, `pc_alm` and
+   `predictive_settling`. The four that raised did so on the framework's own
+   validity rules, not on metric failures — `diffusion` requires recurrent
+   geometry, `spike_integration` requires `temporal_trace`/`target_inversion`
+   credit, `instantaneous` rejects `thermodynamic_contrast`, `lazy` has its own
+   pairing rule. So the evidence base is narrower than the metric, and widening
+   the dynamics axis is what makes §2's conclusion about settling systems
+   rather than about EqProp.
+
+   Two things follow. `free_energy` cannot be treated as one quantity across
+   the axis: the `StateDynamics` Protocol has `compute_energy` return a
+   Lyapunov function for energy-based dynamics and "a proxy" otherwise, so it
+   must not sit unqualified in a cross-dynamics objective set. And
+   `test_stability_energy_metrics_lock.py` asserts nothing about dynamics
+   coverage, so nothing would catch a regression that made these metrics
+   energy-only again.
+
+   `scripts/probes/t51_metric_coverage_probe.py` (uncommitted, one lint error,
+   runs legal pairings only) is the starting point for both.
+7. **Reconcile the `min_singular_value` anomaly.** It is 0.93 on every cell
    while `sigma_max` is 1.005, a condition number of only 1.08 — mild for an
    operator measured to sit on the unit circle. Worth confirming against an
    independently constructed nonnormal operator before the nonnormality ratio
