@@ -24,7 +24,7 @@ def main() -> int:
         with store:
             for policy in policies:
                 run_id = store.create_run(spec=run_spec)
-                config = make_pipeline_config(run_id, run_spec, policy, 2, Path(tmp))
+                config = make_pipeline_config(run_id, run_spec, policy, 2)
                 records = run_pipeline(config, store)
                 counts[policy] = len(records)
                 assert records, f"{policy} produced no records"

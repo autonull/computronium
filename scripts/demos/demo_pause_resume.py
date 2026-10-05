@@ -27,17 +27,13 @@ def main() -> int:
         run_spec = make_run_spec("digits")
         with store:
             run_id = store.create_run(spec=run_spec)
-            config = make_pipeline_config(
-                run_id, run_spec, "stratified_random", 2, Path(tmp)
-            )
+            config = make_pipeline_config(run_id, run_spec, "stratified_random", 2)
             run_pipeline(config, store)
             store.finish_run(run_id, "completed")
             round1 = len(store.query_records(run_id=run_id))
 
         with open_store(store_path) as store:
-            config = make_pipeline_config(
-                run_id, run_spec, "stratified_random", 4, Path(tmp)
-            )
+            config = make_pipeline_config(run_id, run_spec, "stratified_random", 4)
             run_pipeline(config, store)
             store.finish_run(run_id, "completed")
             round2 = len(store.query_records(run_id=run_id))

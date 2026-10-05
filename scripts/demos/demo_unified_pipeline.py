@@ -21,7 +21,7 @@ def main() -> int:
         with store:
             run_spec = make_run_spec("digits")
             run_id = store.create_run(spec=run_spec)
-            config = make_pipeline_config(run_id, run_spec, "synthesis", 2, Path(tmp))
+            config = make_pipeline_config(run_id, run_spec, "synthesis", 2)
             records = run_pipeline(config, store)
             stored = store.query_records(run_id=run_id)
             store.finish_run(run_id, "completed")

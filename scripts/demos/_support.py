@@ -62,7 +62,6 @@ def make_pipeline_config(
     run_spec: RunSpec,
     policy_name: str,
     max_rounds: int,
-    checkpoint_root: Path | None,
 ) -> PipelineConfig:
     return PipelineConfig(
         run_id=run_id,
@@ -72,7 +71,6 @@ def make_pipeline_config(
         policy=make_policy(policy_name),
         allocator=EvidenceDrivenAllocator(promotion_threshold=0.05),
         backend=LocalBackend(),
-        checkpoint_dir=checkpoint_root / run_id if checkpoint_root else None,
         seed=run_spec.seed,
         max_rounds=max_rounds,
         min_rounds=1,
