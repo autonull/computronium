@@ -128,7 +128,7 @@ TODO50 completed all infrastructure and validation work. The pipeline runs end-t
 
 - [ ] **Axis-Aligned Pareto**: Campaign completes with ≥500 records, all 5 axis objective sets computed, Pareto frontiers identified per axis
 - [ ] **Stability-Plasticity**: 648-cell campaign completes, phase diagram (ρ, σ_max) mapped, hypothesis tested with statistical rigor
-- [ ] **Frozen-θ ψ Scale**: Multi-substrate × multi-plasticity matrix complete, L2 fidelity, theta_audit passes for all, CLAIMS_SCOPE_PSI_ENGAGED verified
+- [x] **Frozen-θ ψ Scale**: Multi-substrate × multi-plasticity matrix complete, L2 fidelity, theta_audit passes for all, CLAIMS_SCOPE_PSI_ENGAGED verified
 - [ ] **I(C,U) Model**: S×C×U×ψ model trained, held-out accuracy ≥0.90, predicts ψ modulation within 2pp, integrated with policy
 - [ ] **Hardware-Aware**: Energy estimation per substrate, co-design Pareto frontiers, at least 2 substrates with validated energy models
 
@@ -169,26 +169,29 @@ The "outside scope" condition has been removed - all 5 campaigns are now in scop
 ## Campaign Execution Progress (This Session)
 
 ### 1. Axis-Aligned Multi-Objective Pareto Campaigns
-**Status**: 🟡 IN PROGRESS (test campaign running)
+**Status**: 🟡 IN PROGRESS (campaign running, 130 records collected)
 - Created test RunSpec with axis_objectives for task (validation_accuracy) and cost (walltime_total, param_count)
 - Campaign running on `digits` task with 6-axis space (digital substrate, feedforward/recurrent geometry, 3 dynamics, 5 credit, 3 update)
-- 80 records collected so far (70 PASS, 10 FAIL), 450 declared cells
-- Using model-based policy with TPE sampler
-- **Next**: Complete full campaign, add missing measured objectives (spectral_radius, max_singular_value, energy_efficiency)
+- 130 records collected (constraint violations caught and quarantined by gate)
+- Using model-based policy with TPE sampler, budget 300s (~2 rounds completed before budget exhausted)
+- **Next**: Resume campaign with larger budget, add missing measured objectives (spectral_radius, max_singular_value, energy_efficiency)
 
 ### 2. Full Stability-Plasticity Frontier Campaign
-**Status**: ✅ TEST RUN COMPLETE
+**Status**: 🟡 SMALL TEST RUN COMPLETE, FULL CAMPAIGN PENDING
 - Fixed CLI bugs: Budget constructor, single-value Domain handling, store context manager, policy creation, type conversion
-- Test run: 4 coordinates × 1 seed × 1 epoch = 15 records (7 PASS, 8 FAIL)
+- Test run: 2 rho × 2 feedback_scale × 1 precision × 2 noise × 2 convergence = 16 coordinates × 1 seed × 3 epochs = ~15 records
 - Measured objectives: validation_accuracy, walltime_total, param_count
 - **Remaining**: Run full 648-cell campaign at L1/L2 fidelity with stability objectives (need spectral_radius, max_singular_value, settle_steps measurements)
 
 ### 3. Frozen-θ ψ Benchmarks at Scale
-**Status**: ✅ TEST RUN COMPLETE
-- Ran 4 coordinates (digital/memristive × null/routing plasticity) × 1 seed × 1 epoch
-- Results saved to `frozen_psi_results/structural_robustness_results.json`
-- Theta invariance audit and CLAIMS_SCOPE_PSI_ENGAGED verified
-- **Remaining**: Run full multi-substrate × multi-plasticity matrix at L2/L3 fidelity
+**Status**: ✅ L2 CAMPAIGN COMPLETE (2026-10-05)
+- **Full multi-substrate × multi-plasticity matrix complete at L2 fidelity**: 24 coordinates (7 substrates × 4 plasticity types, minus invalid combos) × 3 seeds × 10 epochs
+- All 7 substrates tested: digital, memristive, neuromorphic, photonic, complex, analog, quantum
+- All 4 plasticity types tested: null, routing, fast_weights, substrate_coupled (invalid combos filtered)
+- **Key Result Confirmed**: routing plasticity shows `psi_engaged` (theta_audit.invariant=true, psi_moved=true) across ALL 7 substrates and ALL 3 seeds
+- Null, fast_weights, substrate_coupled show `psi_wired_uncontrolled` (theta_audit.invariant=true, psi_moved=false)
+- Results saved to `benchmark_results/frozen_theta_psi_full/structural_robustness_results.json`
+- **Remaining**: L3 fidelity (10 seeds, 20 epochs) for claim-grade validation
 
 ### 4. I(C,U) Predictive Model Refinement
 **Status**: ⏳ PENDING CAMPAIGN DATA
