@@ -214,11 +214,29 @@ commands do.
 
 ## Next steps, in order
 
-1. **Re-run the stability-plasticity campaign** (`sta51.duckdb` ->
-   `sta51_drift.duckdb`) now that `drift_spectral_radius` is recorded. Same
-   command; expect `rho_drift` to vary across `hidden_dim` where `rho_step`
-   did not. This is the single highest-value step: it is the difference
-   between a measured axis and a constant one.
+1. **Finish the stability-plasticity drift re-run.** Started, 30/108 records,
+   then stopped to wrap up. It confirms the fix works:
+
+   ```
+   metric                    distinct   min        median     max
+   spectral_radius               30   1.0011     1.0029    1.0042   (0.31% spread)
+   drift_spectral_radius         30   2.0341     2.0929    2.1340   (4.78% spread)
+   drift_max_singular_value      30   2.1615     2.2113    2.2554   (4.24% spread)
+   contraction_rate              30   0.93252    0.93382   0.93568
+   ```
+
+   17x the relative spread of `rho_step`, and `sigma_max(drift) > rho_drift` on
+   every cell, so the drift operator is nonnormal too. The remaining run is
+   just budget: `uv run comp stability-plasticity --store sta51_drift.duckdb
+   --run --seeds 3 --epochs 3 --budget-seconds 7200 --rho 0.5,0.9,1.05
+   --feedback-scale 0.1,0.5,1.0 --precision float32 --noise-level 0.0,0.01
+   --convergence-start 1,5`.
+
+   **Caveat carried forward:** `contraction_rate = 1 - eta*rho_drift` is linear
+   theory, not a measurement. It predicts 0.934 while the measured
+   `spectral_radius` reads 1.003 — the two disagree because complex eigenpairs
+   do not follow `rho(J) = 1 - eta*rho(D)`. It is reported as a prediction and
+   labelled as one; it must not be quoted as the observed contraction.
 2. **Launch background campaigns with a reachable shutdown.** `setsid` detaches
    the process from the terminal, so `execute_spec`'s KeyboardInterrupt path
    never fires and the run row stays `running`. Either keep a `hard_seconds`

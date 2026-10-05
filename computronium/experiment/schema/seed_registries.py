@@ -647,7 +647,7 @@ OBJECTIVES = _measured([
     ),
     ObjectiveSpec(
         name="contraction_rate",
-        description="1 - eta*ρ(f(h)-h): per-step contraction the settle loop actually realises",
+        description="1 - eta*ρ(f(h)-h): the contraction linear theory predicts, not the measured ρ_step",
         direction="maximize",
         weight=1.0,
         normalizer="minmax",

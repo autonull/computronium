@@ -337,8 +337,12 @@ def _drift_metrics(jac: torch.Tensor, system: Any) -> dict[str, float]:
     algebra on the Jacobian already built, costs one subtraction, and is the
     quantity a stability-plasticity frontier is actually about.
 
-    A ``rho_drift < 1`` is a contracting network; ``rho_step > 1`` at
-    ``eta = 1/rho_drift`` is the same fact said in the loop's own units.
+    ``contraction_rate`` is the *prediction* linear theory makes, and it is not
+    the measurement: ``rho(J) = 1 - eta*rho(D)`` holds only for a real dominant
+    eigenvalue, and with complex eigenpairs the measured ``rho_step`` disagrees
+    (at eta=0.03 it reads 1.003 where this predicts 0.94). Reported because that
+    prediction is what a stability budget is reasoned about; not reported as an
+    observed rate, because it is not one.
     """
     eta = float(getattr(system.dynamics.config, "step_size", 0.0))
     if eta <= 0:
